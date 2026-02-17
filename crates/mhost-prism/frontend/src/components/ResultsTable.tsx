@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal } from 'solid-js';
+import { ServerComparison } from './ServerComparison';
 
 // ---------------------------------------------------------------------------
 // Types — mirrors the mhost-lib Serialize output
@@ -27,7 +28,7 @@ interface NxDomainResult {
 
 // mhost error variants: Timeout, QueryRefused, ServerFailure, NoRecordsFound,
 // ResolveError { reason }, ProtoError { reason }, CancelledError, RuntimePanicError
-type LookupResult = ResponseResult | NxDomainResult | Record<string, unknown>;
+export type LookupResult = ResponseResult | NxDomainResult | Record<string, unknown>;
 
 export interface Lookup {
   query: {
@@ -71,15 +72,19 @@ export interface DoneStats {
   total_queries: number;
   duration_ms: number;
   warnings: string[];
+  transport?: string;
+  dnssec?: boolean;
 }
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
+type ActiveTab = 'results' | 'servers' | 'json';
 
 interface ResultsTableProps {
   results: BatchEvent[];
   stats: DoneStats | null;
   status: Status;
   error: string | null;
+  activeTab: ActiveTab;
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +139,12 @@ function formatServer(ns: string): string {
   return ns;
 }
 
+/** Extract the transport protocol from a name_server string. */
+function extractTransport(ns: string): string {
+  const match = ns.match(/^(\w+):/);
+  return match ? match[1].toUpperCase() : '';
+}
+
 /** CSS custom property name for a record type color. */
 function typeColorVar(recordType: string): string {
   const rt = recordType.toLowerCase();
@@ -168,6 +179,96 @@ function formatLookupError(result: LookupResult): string {
     return `${key}: ${(val as { reason: string }).reason}`;
   }
   return key;
+}
+
+/** Human-readable interpretation of specific record types. */
+function interpretRecord(rtype: string, data: Record<string, unknown>): string | null {
+  const keys = Object.keys(data);
+  if (keys.length === 0) return null;
+  const value = data[keys[0]];
+
+  if (typeof value === 'string') {
+    // TXT record interpretations
+    if (rtype === 'TXT' || keys[0] === 'TXT') {
+      if (value.startsWith('v=spf1')) return interpretSPF(value);
+      if (value.startsWith('v=DMARC1')) return interpretDMARC(value);
+      if (value.startsWith('v=DKIM1')) return 'DKIM public key record';
+      if (value.includes('google-site-verification')) return 'Google site verification';
+      if (value.includes('MS=')) return 'Microsoft domain verification';
+      if (value.includes('docusign=')) return 'DocuSign domain verification';
+      if (value.includes('apple-domain-verification')) return 'Apple domain verification';
+      if (value.includes('facebook-domain-verification')) return 'Facebook domain verification';
+    }
+  }
+
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (rtype === 'CAA' || keys[0] === 'CAA') {
+      return interpretCAA(obj);
+    }
+    if (rtype === 'MX' || keys[0] === 'MX') {
+      const pref = obj.preference;
+      if (typeof pref === 'number') {
+        if (pref === 0) return 'Highest priority mail server';
+        if (pref <= 10) return 'High priority mail server';
+        if (pref <= 20) return 'Normal priority mail server';
+        return 'Backup mail server';
+      }
+    }
+    if (rtype === 'SOA' || keys[0] === 'SOA') {
+      return interpretSOA(obj);
+    }
+  }
+
+  return null;
+}
+
+function interpretSPF(txt: string): string {
+  const mechanisms: string[] = [];
+  if (txt.includes('+all') || txt.endsWith(' all')) mechanisms.push('WARNING: allows all senders');
+  else if (txt.includes('-all')) mechanisms.push('strict: reject unauthorized senders');
+  else if (txt.includes('~all')) mechanisms.push('soft fail: mark unauthorized as suspicious');
+  else if (txt.includes('?all')) mechanisms.push('neutral: no assertion about unauthorized');
+  const includes = txt.match(/include:(\S+)/g);
+  if (includes) mechanisms.push(`${includes.length} include(s)`);
+  const ips = txt.match(/ip[46]:(\S+)/g);
+  if (ips) mechanisms.push(`${ips.length} IP range(s)`);
+  return `SPF: ${mechanisms.join(', ')}`;
+}
+
+function interpretDMARC(txt: string): string {
+  const parts: string[] = [];
+  const policyMatch = txt.match(/p=(\w+)/);
+  if (policyMatch) {
+    const p = policyMatch[1];
+    if (p === 'reject') parts.push('policy: reject failures');
+    else if (p === 'quarantine') parts.push('policy: quarantine failures');
+    else if (p === 'none') parts.push('policy: monitoring only');
+  }
+  const spMatch = txt.match(/sp=(\w+)/);
+  if (spMatch) parts.push(`subdomain: ${spMatch[1]}`);
+  const pctMatch = txt.match(/pct=(\d+)/);
+  if (pctMatch && pctMatch[1] !== '100') parts.push(`${pctMatch[1]}% of messages`);
+  return `DMARC: ${parts.join(', ')}`;
+}
+
+function interpretCAA(obj: Record<string, unknown>): string {
+  const tag = obj.tag as string | undefined;
+  const val = obj.value as string | undefined;
+  if (tag === 'issue') return `CA authorized to issue certificates: ${val}`;
+  if (tag === 'issuewild') return `CA authorized for wildcard certificates: ${val}`;
+  if (tag === 'iodef') return `Incident reports sent to: ${val}`;
+  return `CAA ${tag}: ${val}`;
+}
+
+function interpretSOA(obj: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (obj.serial) parts.push(`serial ${obj.serial}`);
+  if (obj.refresh) parts.push(`refresh ${obj.refresh}s`);
+  if (obj.retry) parts.push(`retry ${obj.retry}s`);
+  if (obj.expire) parts.push(`expire ${obj.expire}s`);
+  if (obj.minimum) parts.push(`min TTL ${obj.minimum}s`);
+  return parts.join(', ');
 }
 
 // ---------------------------------------------------------------------------
@@ -238,7 +339,7 @@ function RecordGroup(props: { group: GroupedResult }) {
           </thead>
           <tbody>
             <For each={props.group.lookups}>
-              {(lookup) => <LookupRows lookup={lookup} />}
+              {(lookup) => <LookupRows lookup={lookup} recordType={props.group.recordType} />}
             </For>
           </tbody>
         </table>
@@ -251,8 +352,10 @@ function RecordGroup(props: { group: GroupedResult }) {
 // LookupRows — rows for a single lookup (may have multiple records)
 // ---------------------------------------------------------------------------
 
-function LookupRows(props: { lookup: Lookup }) {
+function LookupRows(props: { lookup: Lookup; recordType: string }) {
+  const [expanded, setExpanded] = createSignal<number | null>(null);
   const server = createMemo(() => formatServer(props.lookup.name_server));
+  const transport = createMemo(() => extractTransport(props.lookup.name_server));
 
   return (
     <>
@@ -261,15 +364,60 @@ function LookupRows(props: { lookup: Lookup }) {
           const resp = (props.lookup.result as ResponseResult).Response;
           return (
             <For each={resp.records}>
-              {(record, i) => (
-                <tr>
-                  <td>{record.name}</td>
-                  <td class="ttl-value">{record.ttl}s</td>
-                  <td class="record-value">{formatRecordData(record.data)}</td>
-                  <td>{i() === 0 ? server() : ''}</td>
-                  <td>{i() === 0 ? formatResponseTime(resp.response_time) : ''}</td>
-                </tr>
-              )}
+              {(record, i) => {
+                const interpretation = createMemo(() => interpretRecord(props.recordType, record.data));
+                const isExpanded = createMemo(() => expanded() === i());
+
+                return (
+                  <>
+                    <tr
+                      class={`expandable-row ${isExpanded() ? 'expanded' : ''}`}
+                      onClick={() => setExpanded(isExpanded() ? null : i())}
+                    >
+                      <td>{record.name}</td>
+                      <td class="ttl-value">{record.ttl}s</td>
+                      <td class="record-value">{formatRecordData(record.data)}</td>
+                      <td>{i() === 0 ? server() : ''}</td>
+                      <td>{i() === 0 ? formatResponseTime(resp.response_time) : ''}</td>
+                    </tr>
+                    <Show when={isExpanded()}>
+                      <tr class="detail-row">
+                        <td colSpan={5}>
+                          <div class="detail-content">
+                            <div class="detail-grid">
+                              <div class="detail-section">
+                                <h4>Record Details</h4>
+                                <dl class="detail-list">
+                                  <dt>Name</dt><dd>{record.name}</dd>
+                                  <dt>Type</dt><dd>{record.type ?? props.recordType}</dd>
+                                  <dt>TTL</dt><dd>{record.ttl}s ({formatTTLHuman(record.ttl)})</dd>
+                                  <dt>Data</dt><dd class="detail-data">{JSON.stringify(record.data, null, 2)}</dd>
+                                </dl>
+                              </div>
+                              <div class="detail-section">
+                                <h4>Server Info</h4>
+                                <dl class="detail-list">
+                                  <dt>Server</dt><dd>{server()}</dd>
+                                  <Show when={transport()}>
+                                    <dt>Transport</dt><dd>{transport()}</dd>
+                                  </Show>
+                                  <dt>Response Time</dt><dd>{formatResponseTime(resp.response_time)}</dd>
+                                  <dt>Raw Name Server</dt><dd class="detail-data">{props.lookup.name_server}</dd>
+                                </dl>
+                              </div>
+                            </div>
+                            <Show when={interpretation()}>
+                              <div class="detail-interpretation">
+                                {interpretation()}
+                              </div>
+                            </Show>
+                          </div>
+                        </td>
+                      </tr>
+                    </Show>
+                  </>
+                );
+              }}
             </For>
           );
         }}
@@ -301,6 +449,24 @@ function LookupRows(props: { lookup: Lookup }) {
   );
 }
 
+/** Format TTL as human-readable duration. */
+function formatTTLHuman(ttl: number): string {
+  if (ttl < 60) return `${ttl} seconds`;
+  if (ttl < 3600) {
+    const m = Math.floor(ttl / 60);
+    const s = ttl % 60;
+    return s > 0 ? `${m}m ${s}s` : `${m} minute${m > 1 ? 's' : ''}`;
+  }
+  if (ttl < 86400) {
+    const h = Math.floor(ttl / 3600);
+    const m = Math.floor((ttl % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h} hour${h > 1 ? 's' : ''}`;
+  }
+  const d = Math.floor(ttl / 86400);
+  const h = Math.floor((ttl % 86400) / 3600);
+  return h > 0 ? `${d}d ${h}h` : `${d} day${d > 1 ? 's' : ''}`;
+}
+
 // ---------------------------------------------------------------------------
 // JSON View
 // ---------------------------------------------------------------------------
@@ -325,7 +491,7 @@ function JsonView(props: { results: BatchEvent[]; stats: DoneStats | null }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export function ResultsTable(props: ResultsTableProps & { activeTab: 'results' | 'json' }) {
+export function ResultsTable(props: ResultsTableProps) {
   const groups = createMemo(() => groupByRecordType(props.results));
 
   return (
@@ -338,10 +504,7 @@ export function ResultsTable(props: ResultsTableProps & { activeTab: 'results' |
         </div>
       </Show>
 
-      <Show
-        when={props.activeTab === 'results'}
-        fallback={<JsonView results={props.results} stats={props.stats} />}
-      >
+      <Show when={props.activeTab === 'results'}>
         {/* Loading indicator */}
         <Show when={props.status === 'loading' && props.results.length === 0}>
           <div class="loading">
@@ -378,6 +541,14 @@ export function ResultsTable(props: ResultsTableProps & { activeTab: 'results' |
         </Show>
       </Show>
 
+      <Show when={props.activeTab === 'servers'}>
+        <ServerComparison results={props.results} />
+      </Show>
+
+      <Show when={props.activeTab === 'json'}>
+        <JsonView results={props.results} stats={props.stats} />
+      </Show>
+
       {/* Status bar */}
       <Show when={props.status === 'done' && props.stats}>
         <div class="status-bar">
@@ -386,9 +557,17 @@ export function ResultsTable(props: ResultsTableProps & { activeTab: 'results' |
           <span>{props.results.length} batches</span>
           <span class="status-separator">/</span>
           <span>{props.stats!.duration_ms}ms</span>
+          <Show when={props.stats!.transport && props.stats!.transport !== 'udp'}>
+            <span class="status-separator">/</span>
+            <span class="status-badge transport-badge">{props.stats!.transport!.toUpperCase()}</span>
+          </Show>
+          <Show when={props.stats!.dnssec}>
+            <span class="status-separator">/</span>
+            <span class="status-badge dnssec-badge">DNSSEC</span>
+          </Show>
           <Show when={props.stats!.warnings.length > 0}>
             <span class="status-separator">/</span>
-            <span class="status-errors">{props.stats!.warnings.length} warnings</span>
+            <span class="status-warnings">{props.stats!.warnings.length} warnings</span>
           </Show>
         </div>
       </Show>

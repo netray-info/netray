@@ -3,7 +3,7 @@ import { QueryInput } from './components/QueryInput';
 import { ResultsTable, parseBatchEvent, type BatchEvent, type DoneStats } from './components/ResultsTable';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
-type ActiveTab = 'results' | 'json';
+type ActiveTab = 'results' | 'servers' | 'json';
 
 export default function App() {
   const [query, setQuery] = createSignal('');
@@ -133,6 +133,12 @@ export default function App() {
               onClick={() => setActiveTab('results')}
             >
               Results
+            </button>
+            <button
+              class={`tab ${activeTab() === 'servers' ? 'active' : ''}`}
+              onClick={() => setActiveTab('servers')}
+            >
+              Servers
             </button>
             <button
               class={`tab ${activeTab() === 'json' ? 'active' : ''}`}

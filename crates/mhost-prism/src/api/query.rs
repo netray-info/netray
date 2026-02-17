@@ -51,6 +51,10 @@ struct DoneEvent {
     total_queries: u32,
     duration_ms: u64,
     warnings: Vec<String>,
+    /// Transport used for this query (e.g., "udp", "tls").
+    transport: String,
+    /// Whether DNSSEC mode was requested.
+    dnssec: bool,
 }
 
 #[derive(Serialize)]
@@ -203,7 +207,7 @@ fn parse_server_spec(name: &str) -> Result<ServerSpec, ApiError> {
 // ---------------------------------------------------------------------------
 
 async fn execute_query(
-    parsed: ParsedQuery,
+    mut parsed: ParsedQuery,
     state: AppState,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let request_id = uuid::Uuid::now_v7().to_string();
@@ -215,6 +219,17 @@ async fn execute_query(
     // Determine per-query timeout (clamped to config max, default 10s).
     let timeout_secs = state.config.limits.max_timeout_secs.min(10);
     let timeout = Duration::from_secs(timeout_secs);
+
+    // When DNSSEC mode is requested, ensure DNSKEY and DS are queried so
+    // DNSSEC records are visible in results. This is additive — explicit
+    // record types from the user are preserved.
+    if parsed.dnssec {
+        for rt in [RecordType::DNSKEY, RecordType::DS] {
+            if !parsed.record_types.contains(&rt) {
+                parsed.record_types.push(rt);
+            }
+        }
+    }
 
     // Build resolver group.
     let resolver_group = build_resolver_group(&parsed, &state.config, timeout).await?;
@@ -232,6 +247,15 @@ async fn execute_query(
     let domain = parsed.domain.clone();
     let rid = request_id;
     let circuit_breakers = state.circuit_breakers.clone();
+    let transport_name = match parsed.transport {
+        Some(Transport::Udp) => "udp",
+        Some(Transport::Tcp) => "tcp",
+        Some(Transport::Tls) => "tls",
+        Some(Transport::Https) => "https",
+        None => "udp",
+    }
+    .to_owned();
+    let dnssec_requested = parsed.dnssec;
 
     tokio::spawn(async move {
         let start = Instant::now();
@@ -299,6 +323,8 @@ async fn execute_query(
             total_queries: total,
             duration_ms: start.elapsed().as_millis() as u64,
             warnings,
+            transport: transport_name,
+            dnssec: dnssec_requested,
         };
         let event = Event::default()
             .event("done")
