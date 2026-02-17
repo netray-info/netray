@@ -1,5 +1,6 @@
 import { For, Show, createMemo } from 'solid-js';
 import type { BatchEvent, Lookup, LookupResult } from './ResultsTable';
+import { responseTimeMs, responseTimeColor } from './ResultsTable';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,6 +71,18 @@ function getResponseTime(lookup: Lookup): string {
     return formatResponseTime((result as { NxDomain: { response_time: { secs: number; nanos: number } } }).NxDomain.response_time);
   }
   return '-';
+}
+
+/** Extract response time in ms from a lookup, or null for errors. */
+function getResponseTimeMs(lookup: Lookup): number | null {
+  const result = lookup.result;
+  if ('Response' in result) {
+    return responseTimeMs((result as { Response: { response_time: { secs: number; nanos: number } } }).Response.response_time);
+  }
+  if ('NxDomain' in result) {
+    return responseTimeMs((result as { NxDomain: { response_time: { secs: number; nanos: number } } }).NxDomain.response_time);
+  }
+  return null;
 }
 
 function getRecordCount(lookup: Lookup): number {
@@ -178,7 +191,7 @@ function buildComparisons(batches: BatchEvent[]): RecordTypeComparison[] {
 // Components
 // ---------------------------------------------------------------------------
 
-function ServerColumn(props: { server: ServerGroup }) {
+function ServerColumn(props: { server: ServerGroup; maxMs: number }) {
   return (
     <div class="sc-server-column">
       <div class="sc-server-name">{props.server.serverName}</div>
@@ -186,11 +199,29 @@ function ServerColumn(props: { server: ServerGroup }) {
         {(lookup) => {
           const status = getStatusLabel(lookup);
           const time = getResponseTime(lookup);
+          const ms = () => getResponseTimeMs(lookup);
+          const barWidth = () => {
+            const m = ms();
+            if (m === null || props.maxMs <= 0) return 0;
+            return Math.max(2, (m / props.maxMs) * 100);
+          };
+          const barColor = () => {
+            const m = ms();
+            return m !== null ? responseTimeColor(m) : 'transparent';
+          };
           return (
             <div class="sc-server-result">
               <div class="sc-result-header">
                 <span class={`sc-status ${status.className}`}>{status.text}</span>
-                <span class="sc-time">{time}</span>
+                <div class="sc-time-container">
+                  <span class="sc-time">{time}</span>
+                  <Show when={ms() !== null}>
+                    <div
+                      class="time-bar"
+                      style={{ width: `${barWidth()}%`, 'background-color': barColor() }}
+                    />
+                  </Show>
+                </div>
               </div>
               <Show when={isResponse(lookup.result)}>
                 <div class="sc-records">
@@ -222,6 +253,17 @@ function ServerColumn(props: { server: ServerGroup }) {
 }
 
 function ComparisonRow(props: { comparison: RecordTypeComparison }) {
+  const maxMs = createMemo(() => {
+    let max = 0;
+    for (const server of props.comparison.servers) {
+      for (const lookup of server.lookups) {
+        const ms = getResponseTimeMs(lookup);
+        if (ms !== null && ms > max) max = ms;
+      }
+    }
+    return max;
+  });
+
   return (
     <div class="sc-type-group">
       <div class="sc-type-header">
@@ -234,7 +276,7 @@ function ComparisonRow(props: { comparison: RecordTypeComparison }) {
       </div>
       <div class="sc-server-grid" style={{ 'grid-template-columns': `repeat(${props.comparison.servers.length}, 1fr)` }}>
         <For each={props.comparison.servers}>
-          {(server) => <ServerColumn server={server} />}
+          {(server) => <ServerColumn server={server} maxMs={maxMs()} />}
         </For>
       </div>
     </div>

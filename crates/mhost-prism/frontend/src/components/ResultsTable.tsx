@@ -97,6 +97,30 @@ function formatResponseTime(rt: { secs: number; nanos: number }): string {
   return `${Math.round(ms)}ms`;
 }
 
+/** Convert {secs, nanos} to milliseconds, or null if undefined. */
+export function responseTimeMs(rt: { secs: number; nanos: number } | undefined): number | null {
+  if (!rt) return null;
+  return rt.secs * 1000 + rt.nanos / 1_000_000;
+}
+
+/** Color CSS var based on absolute latency: green <50ms, yellow 50-200ms, red >200ms. */
+export function responseTimeColor(ms: number): string {
+  if (ms < 50) return 'var(--success)';
+  if (ms <= 200) return 'var(--warning)';
+  return 'var(--error)';
+}
+
+/** Extract response_time from a lookup result (Response or NxDomain). */
+function lookupResponseTime(lookup: Lookup): { secs: number; nanos: number } | undefined {
+  if (isResponse(lookup.result)) {
+    return (lookup.result as ResponseResult).Response.response_time;
+  }
+  if (isNxDomain(lookup.result)) {
+    return (lookup.result as NxDomainResult).NxDomain.response_time;
+  }
+  return undefined;
+}
+
 function formatRecordData(data: Record<string, unknown>): string {
   // mhost serializes record data as e.g. {"A": "1.2.3.4"} or {"MX": {"preference": 10, "exchange": "mail.example.com."}}
   const keys = Object.keys(data);
@@ -304,6 +328,27 @@ function isExpandableKey(key: string): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// TimeCell — response time with relative bar
+// ---------------------------------------------------------------------------
+
+function TimeCell(props: { rt: { secs: number; nanos: number }; maxMs: number }) {
+  const ms = () => responseTimeMs(props.rt) ?? 0;
+  const text = () => formatResponseTime(props.rt);
+  const color = () => responseTimeColor(ms());
+  const widthPct = () => props.maxMs > 0 ? Math.max(2, (ms() / props.maxMs) * 100) : 0;
+
+  return (
+    <div class="time-cell">
+      <span class="time-text">{text()}</span>
+      <div
+        class="time-bar"
+        style={{ width: `${widthPct()}%`, 'background-color': color() }}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // RecordGroup (collapsible section)
 // ---------------------------------------------------------------------------
 
@@ -325,6 +370,15 @@ function RecordGroup(props: {
       }
     }
     return count;
+  });
+
+  const maxResponseTimeMs = createMemo(() => {
+    let max = 0;
+    for (const lookup of props.group.lookups) {
+      const ms = responseTimeMs(lookupResponseTime(lookup));
+      if (ms !== null && ms > max) max = ms;
+    }
+    return max;
   });
 
   return (
@@ -361,6 +415,7 @@ function RecordGroup(props: {
                   focusedKey={props.focusedKey}
                   expandedKeys={props.expandedKeys}
                   onRowClick={props.onRowClick}
+                  maxResponseTimeMs={maxResponseTimeMs()}
                 />
               )}
             </For>
@@ -382,6 +437,7 @@ function LookupRows(props: {
   focusedKey: string | null;
   expandedKeys: Set<string>;
   onRowClick: (key: string) => void;
+  maxResponseTimeMs: number;
 }) {
   const server = createMemo(() => formatServer(props.lookup.name_server));
   const transport = createMemo(() => extractTransport(props.lookup.name_server));
@@ -406,11 +462,13 @@ function LookupRows(props: {
                       class={`expandable-row navigable-row ${isExpanded() ? 'expanded' : ''} ${isFocused() ? 'row-focused' : ''}`}
                       onClick={() => props.onRowClick(rowKey())}
                     >
-                      <td>{record.name}</td>
-                      <td class="ttl-value">{record.ttl}s</td>
-                      <td class="record-value">{formatRecordData(record.data)}</td>
-                      <td>{i() === 0 ? server() : ''}</td>
-                      <td>{i() === 0 ? formatResponseTime(resp.response_time) : ''}</td>
+                      <td data-label="Name">{record.name}</td>
+                      <td data-label="TTL" class="ttl-value">{record.ttl}s</td>
+                      <td data-label="Value" class="record-value">{formatRecordData(record.data)}</td>
+                      <td data-label="Server" class={i() > 0 ? 'card-hide-empty' : ''}>{i() === 0 ? server() : ''}</td>
+                      <td data-label="Time" class={i() > 0 ? 'card-hide-empty' : ''}>
+                        {i() === 0 ? <TimeCell rt={resp.response_time} maxMs={props.maxResponseTimeMs} /> : ''}
+                      </td>
                     </tr>
                     <Show when={isExpanded()}>
                       <tr class="detail-row">
@@ -464,11 +522,11 @@ function LookupRows(props: {
               class={`row-nxdomain navigable-row ${props.focusedKey === rowKey ? 'row-focused' : ''}`}
               onClick={() => props.onRowClick(rowKey)}
             >
-              <td>{props.lookup.query.name}</td>
-              <td>-</td>
-              <td class="nxdomain-value">NXDOMAIN</td>
-              <td>{server()}</td>
-              <td>{formatResponseTime(nx.response_time)}</td>
+              <td data-label="Name">{props.lookup.query.name}</td>
+              <td data-label="TTL">-</td>
+              <td data-label="Value" class="nxdomain-value">NXDOMAIN</td>
+              <td data-label="Server">{server()}</td>
+              <td data-label="Time"><TimeCell rt={nx.response_time} maxMs={props.maxResponseTimeMs} /></td>
             </tr>
           );
         }}
@@ -482,11 +540,11 @@ function LookupRows(props: {
               class={`row-error navigable-row ${props.focusedKey === rowKey ? 'row-focused' : ''}`}
               onClick={() => props.onRowClick(rowKey)}
             >
-              <td>{props.lookup.query.name}</td>
-              <td>-</td>
-              <td class="error-value">{formatLookupError(props.lookup.result)}</td>
-              <td>{server()}</td>
-              <td>-</td>
+              <td data-label="Name">{props.lookup.query.name}</td>
+              <td data-label="TTL">-</td>
+              <td data-label="Value" class="error-value">{formatLookupError(props.lookup.result)}</td>
+              <td data-label="Server">{server()}</td>
+              <td data-label="Time">-</td>
             </tr>
           );
         }}

@@ -451,6 +451,35 @@ body {
   text-align: right;
 }
 
+/* Time cell with relative bar */
+.time-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.time-text {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.time-bar {
+  height: 3px;
+  max-width: 60px;
+  border-radius: 1.5px;
+  opacity: 0.7;
+  transition: width 300ms ease;
+}
+
+/* Server comparison time container */
+.sc-time-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 .ttl-value {
   color: var(--text-secondary);
 }
@@ -1131,21 +1160,92 @@ body {
     padding: 10px;
   }
 
-  .results-table {
-    font-size: 11px;
-  }
-
-  .results-table th,
-  .results-table td {
-    padding: 4px 6px;
-  }
-
-  /* Hide server and time columns on tablets */
-  .results-table th:nth-child(4),
-  .results-table td:nth-child(4),
-  .results-table th:nth-child(5),
-  .results-table td:nth-child(5) {
+  /* Card layout — replace table with stacked cards */
+  .results-table thead {
     display: none;
+  }
+
+  .results-table,
+  .results-table tbody {
+    display: block;
+  }
+
+  .results-table tr {
+    display: block;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+  }
+
+  .results-table tr.row-nxdomain {
+    border-left: 3px solid var(--warning);
+  }
+
+  .results-table tr.row-error {
+    border-left: 3px solid var(--error);
+  }
+
+  .results-table td {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 2px 0;
+    border-bottom: none;
+    width: 100% !important;
+    text-align: left;
+  }
+
+  .results-table td[data-label]::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    width: 52px;
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .results-table td.card-hide-empty {
+    display: none;
+  }
+
+  /* Expanded card + detail row: connected visually */
+  .results-table tr.expandable-row.expanded {
+    margin-bottom: 0;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .results-table tr.detail-row {
+    margin-top: 0;
+    margin-bottom: 8px;
+    border-top: none;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    padding: 0;
+  }
+
+  .results-table tr.detail-row td {
+    display: block;
+    padding: 0;
+  }
+
+  /* Row focus on mobile: border-color instead of inset shadow */
+  .results-table tr.row-focused {
+    border-color: var(--accent);
+  }
+
+  .row-focused > td:first-child {
+    box-shadow: none;
+  }
+
+  /* Time bar alignment in cards */
+  .time-cell {
+    align-items: flex-start;
   }
 
   .detail-grid {
@@ -1176,9 +1276,18 @@ body {
 }
 
 @media (max-width: 480px) {
-  .results-table th:nth-child(2),
-  .results-table td:nth-child(2) {
-    display: none;
+  /* Tighter card layout on small phones */
+  .results-table tr {
+    padding: 8px 10px;
+  }
+
+  .results-table td[data-label]::before {
+    width: 44px;
+    font-size: 9px;
+  }
+
+  .time-bar {
+    max-width: 36px;
   }
 
   .header-actions {
