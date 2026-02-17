@@ -1,0 +1,325 @@
+import { onMount, onCleanup } from 'solid-js';
+import { EditorView, keymap, placeholder as cmPlaceholder, ViewPlugin, Decoration, type DecorationSet } from '@codemirror/view';
+import { EditorState } from '@codemirror/state';
+import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
+import { tokenize, TokenType } from '../lib/tokenizer';
+
+// ---------------------------------------------------------------------------
+// Autocomplete data
+// ---------------------------------------------------------------------------
+
+const RECORD_TYPES = [
+  { label: 'A', detail: 'IPv4 address' },
+  { label: 'AAAA', detail: 'IPv6 address' },
+  { label: 'MX', detail: 'Mail exchange' },
+  { label: 'TXT', detail: 'Text record' },
+  { label: 'NS', detail: 'Name server' },
+  { label: 'SOA', detail: 'Start of authority' },
+  { label: 'CNAME', detail: 'Canonical name' },
+  { label: 'CAA', detail: 'Certification authority' },
+  { label: 'SRV', detail: 'Service locator' },
+  { label: 'PTR', detail: 'Pointer (reverse DNS)' },
+  { label: 'HTTPS', detail: 'HTTPS service binding' },
+  { label: 'SVCB', detail: 'Service binding' },
+  { label: 'SSHFP', detail: 'SSH fingerprint' },
+  { label: 'TLSA', detail: 'TLS association (DANE)' },
+  { label: 'NAPTR', detail: 'Naming authority pointer' },
+  { label: 'HINFO', detail: 'Host information' },
+  { label: 'OPENPGPKEY', detail: 'OpenPGP public key' },
+  { label: 'DNSKEY', detail: 'DNSSEC key' },
+  { label: 'DS', detail: 'Delegation signer' },
+];
+
+const SERVERS = [
+  { label: '@cloudflare', detail: '1.1.1.1 / 1.0.0.1' },
+  { label: '@google', detail: '8.8.8.8 / 8.8.4.4' },
+  { label: '@quad9', detail: '9.9.9.9' },
+  { label: '@mullvad', detail: 'Mullvad DNS' },
+  { label: '@wikimedia', detail: 'Wikimedia DNS' },
+  { label: '@dns4eu', detail: 'DNS4EU' },
+  { label: '@system', detail: 'System resolvers (/etc/resolv.conf)' },
+];
+
+const FLAGS = [
+  { label: '+udp', detail: 'UDP transport (default)' },
+  { label: '+tcp', detail: 'TCP transport' },
+  { label: '+tls', detail: 'DNS-over-TLS' },
+  { label: '+https', detail: 'DNS-over-HTTPS' },
+  { label: '+dnssec', detail: 'DNSSEC validation' },
+];
+
+function prismCompletions(context: CompletionContext): CompletionResult | null {
+  // Match the current word being typed. We look for word chars, @, or +.
+  const word = context.matchBefore(/[@+]?\w*/);
+  if (!word || (word.from === word.to && !context.explicit)) return null;
+
+  const text = word.text;
+  const options: Array<{ label: string; detail: string; type: string }> = [];
+
+  if (text.startsWith('@')) {
+    for (const s of SERVERS) {
+      options.push({ ...s, type: 'variable' });
+    }
+  } else if (text.startsWith('+')) {
+    for (const f of FLAGS) {
+      options.push({ ...f, type: 'keyword' });
+    }
+  } else {
+    // Offer record types (only after the first token — the domain)
+    const fullLine = context.state.doc.toString();
+    const beforeCursor = fullLine.slice(0, word.from);
+    const hasDomain = /\S/.test(beforeCursor);
+    if (hasDomain) {
+      for (const rt of RECORD_TYPES) {
+        options.push({ ...rt, type: 'type' });
+      }
+    }
+    // Also offer servers and flags after domain
+    if (hasDomain) {
+      for (const s of SERVERS) {
+        options.push({ ...s, type: 'variable' });
+      }
+      for (const f of FLAGS) {
+        options.push({ ...f, type: 'keyword' });
+      }
+    }
+  }
+
+  return {
+    from: word.from,
+    options,
+    validFor: /^[@+]?\w*$/,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Syntax highlighting via ViewPlugin + Decorations
+// ---------------------------------------------------------------------------
+
+const tokenDecorations: Record<string, Decoration> = {
+  [TokenType.Domain]: Decoration.mark({ class: 'cm-domain' }),
+  [TokenType.RecordType]: Decoration.mark({ class: 'cm-record-type' }),
+  [TokenType.Server]: Decoration.mark({ class: 'cm-server' }),
+  [TokenType.Flag]: Decoration.mark({ class: 'cm-flag' }),
+  [TokenType.Unknown]: Decoration.mark({ class: 'cm-unknown' }),
+};
+
+const highlightPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+
+    constructor(view: EditorView) {
+      this.decorations = this.buildDecorations(view);
+    }
+
+    update(update: { docChanged: boolean; view: EditorView }) {
+      if (update.docChanged) {
+        this.decorations = this.buildDecorations(update.view);
+      }
+    }
+
+    buildDecorations(view: EditorView): DecorationSet {
+      const doc = view.state.doc.toString();
+      const tokens = tokenize(doc);
+      const ranges = tokens
+        .map((t) => {
+          const deco = tokenDecorations[t.type];
+          return deco ? deco.range(t.from, t.to) : null;
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null);
+
+      return Decoration.set(ranges, true);
+    }
+  },
+  {
+    decorations: (v) => v.decorations,
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Dark theme
+// ---------------------------------------------------------------------------
+
+const darkTheme = EditorView.theme(
+  {
+    '&': {
+      backgroundColor: 'var(--bg-secondary)',
+      color: 'var(--text-primary)',
+      fontSize: '15px',
+      fontFamily: 'var(--font-mono)',
+      borderRadius: 'var(--radius)',
+      border: '1px solid var(--border)',
+      transition: 'border-color var(--transition)',
+    },
+    '&.cm-focused': {
+      outline: 'none',
+      borderColor: 'var(--accent)',
+    },
+    '.cm-scroller': {
+      overflow: 'hidden',
+      lineHeight: '1.6',
+      padding: '8px 12px',
+    },
+    '.cm-content': {
+      caretColor: 'var(--accent)',
+      padding: '0',
+      minHeight: 'auto',
+    },
+    '.cm-line': {
+      padding: '0',
+    },
+    '.cm-cursor': {
+      borderLeftColor: 'var(--accent)',
+      borderLeftWidth: '2px',
+    },
+    '.cm-selectionBackground': {
+      backgroundColor: 'rgba(0, 212, 255, 0.15) !important',
+    },
+    '&.cm-focused .cm-selectionBackground': {
+      backgroundColor: 'rgba(0, 212, 255, 0.25) !important',
+    },
+    '.cm-placeholder': {
+      color: 'var(--text-muted)',
+      fontStyle: 'italic',
+    },
+    // Autocomplete panel
+    '.cm-tooltip': {
+      backgroundColor: 'var(--bg-secondary)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
+    },
+    '.cm-tooltip-autocomplete': {
+      '& > ul': {
+        fontFamily: 'var(--font-mono)',
+        fontSize: '13px',
+      },
+      '& > ul > li': {
+        padding: '4px 8px',
+        color: 'var(--text-primary)',
+      },
+      '& > ul > li[aria-selected]': {
+        backgroundColor: 'var(--bg-tertiary)',
+        color: 'var(--text-primary)',
+      },
+    },
+    '.cm-completionLabel': {
+      color: 'var(--accent)',
+    },
+    '.cm-completionDetail': {
+      color: 'var(--text-secondary)',
+      marginLeft: '8px',
+      fontStyle: 'italic',
+    },
+    // Token highlight classes
+    '.cm-domain': {
+      color: 'var(--text-primary)',
+      fontWeight: '600',
+    },
+    '.cm-record-type': {
+      color: 'var(--rt-a)',
+      fontWeight: '600',
+    },
+    '.cm-server': {
+      color: 'var(--rt-ns)',
+    },
+    '.cm-flag': {
+      color: 'var(--rt-soa)',
+    },
+    '.cm-unknown': {
+      color: 'var(--text-secondary)',
+      textDecoration: 'underline wavy var(--warning)',
+    },
+  },
+  { dark: true },
+);
+
+// ---------------------------------------------------------------------------
+// Single-line enforcement: filter out newlines
+// ---------------------------------------------------------------------------
+
+const singleLine = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr;
+  const newDoc = tr.newDoc.toString();
+  if (newDoc.includes('\n')) {
+    // Replace newlines with spaces
+    return {
+      changes: { from: 0, to: tr.startState.doc.length, insert: newDoc.replace(/\n/g, ' ') },
+      sequential: true,
+    };
+  }
+  return tr;
+});
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+interface QueryInputProps {
+  onSubmit: (query: string) => void;
+  initialValue?: string;
+}
+
+export function QueryInput(props: QueryInputProps) {
+  let containerRef: HTMLDivElement | undefined;
+  let view: EditorView | undefined;
+
+  onMount(() => {
+    if (!containerRef) return;
+
+    const submitKeymap = keymap.of([
+      {
+        key: 'Enter',
+        run: (v) => {
+          const query = v.state.doc.toString().trim();
+          if (query) {
+            props.onSubmit(query);
+          }
+          return true;
+        },
+      },
+    ]);
+
+    const state = EditorState.create({
+      doc: props.initialValue ?? '',
+      extensions: [
+        submitKeymap,
+        cmPlaceholder('example.com A AAAA @google +tls'),
+        darkTheme,
+        highlightPlugin,
+        autocompletion({
+          override: [prismCompletions],
+          activateOnTyping: true,
+          defaultKeymap: true,
+        }),
+        singleLine,
+        EditorView.lineWrapping,
+      ],
+    });
+
+    view = new EditorView({
+      state,
+      parent: containerRef,
+    });
+  });
+
+  onCleanup(() => {
+    view?.destroy();
+  });
+
+  const handleSubmitClick = () => {
+    if (!view) return;
+    const query = view.state.doc.toString().trim();
+    if (query) {
+      props.onSubmit(query);
+    }
+  };
+
+  return (
+    <div class="query-bar">
+      <div class="query-editor" ref={containerRef} />
+      <button class="query-button" onClick={handleSubmitClick} title="Run query (Enter)">
+        Query
+      </button>
+    </div>
+  );
+}

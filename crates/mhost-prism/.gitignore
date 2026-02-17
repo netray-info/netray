@@ -3,8 +3,8 @@
 **/*.rs.bk
 
 # Frontend
-prism/frontend/node_modules/
-prism/frontend/dist/
+frontend/node_modules/
+frontend/dist/
 
 # IDE
 .idea/

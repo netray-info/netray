@@ -1,0 +1,593 @@
+/* ===================================================================
+   prism — global styles
+   Dark-mode-by-default DNS debugging tool aesthetic.
+   =================================================================== */
+
+:root {
+  /* Dark theme (default) */
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --text-muted: #606060;
+  --accent: #00d4ff;
+  --accent-dim: #0088aa;
+  --accent-glow: rgba(0, 212, 255, 0.15);
+  --error: #ff4444;
+  --error-dim: rgba(255, 68, 68, 0.1);
+  --warning: #ffaa00;
+  --success: #44ff44;
+  --border: #2a2a4a;
+  --border-subtle: #222240;
+
+  /* Record type colors (from mhost palette) */
+  --rt-a: #5cb3ff;
+  --rt-aaaa: #7b68ee;
+  --rt-mx: #ff6b6b;
+  --rt-txt: #ffd93d;
+  --rt-ns: #6bcb77;
+  --rt-soa: #ff8c42;
+  --rt-cname: #a78bfa;
+  --rt-caa: #f472b6;
+  --rt-srv: #38bdf8;
+  --rt-ptr: #c084fc;
+  --rt-default: #94a3b8;
+
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+  --radius: 6px;
+  --radius-lg: 10px;
+  --transition: 150ms ease;
+}
+
+/* ===================================================================
+   Reset
+   =================================================================== */
+
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ===================================================================
+   App Layout
+   =================================================================== */
+
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 24px 48px;
+  min-height: 100vh;
+}
+
+/* ===================================================================
+   Header
+   =================================================================== */
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.logo {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--accent);
+  background: linear-gradient(135deg, var(--accent) 0%, #7b68ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tagline {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* ===================================================================
+   Query Bar
+   =================================================================== */
+
+.query-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.query-editor {
+  flex: 1;
+  min-width: 0;
+}
+
+.query-button {
+  flex-shrink: 0;
+  padding: 8px 20px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bg-primary);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), box-shadow var(--transition);
+  white-space: nowrap;
+}
+
+.query-button:hover {
+  background: #00e5ff;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.query-button:active {
+  background: var(--accent-dim);
+}
+
+/* ===================================================================
+   Tabs
+   =================================================================== */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tab {
+  padding: 8px 16px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition);
+  position: relative;
+  bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ===================================================================
+   Results Container
+   =================================================================== */
+
+.results-container {
+  min-height: 100px;
+}
+
+.results-empty {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--text-secondary);
+}
+
+.results-empty p {
+  margin-bottom: 8px;
+}
+
+.results-empty .hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.results-empty code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-dim);
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+/* ===================================================================
+   Record Group (collapsible section)
+   =================================================================== */
+
+.record-group {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.record-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition);
+  text-align: left;
+}
+
+.record-group-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bg-primary);
+  border-radius: 4px;
+  min-width: 48px;
+  text-align: center;
+  letter-spacing: 0.5px;
+}
+
+.record-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.collapse-indicator {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--text-muted);
+  width: 20px;
+  text-align: center;
+}
+
+/* ===================================================================
+   Results Table
+   =================================================================== */
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.results-table th {
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.15);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.results-table td {
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+  word-break: break-all;
+}
+
+.results-table tr:last-child td {
+  border-bottom: none;
+}
+
+.results-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Column widths */
+.results-table th:nth-child(1),
+.results-table td:nth-child(1) {
+  width: 22%;
+}
+
+.results-table th:nth-child(2),
+.results-table td:nth-child(2) {
+  width: 8%;
+}
+
+.results-table th:nth-child(3),
+.results-table td:nth-child(3) {
+  width: 40%;
+}
+
+.results-table th:nth-child(4),
+.results-table td:nth-child(4) {
+  width: 18%;
+}
+
+.results-table th:nth-child(5),
+.results-table td:nth-child(5) {
+  width: 12%;
+  text-align: right;
+}
+
+.ttl-value {
+  color: var(--text-secondary);
+}
+
+.record-value {
+  color: var(--text-primary);
+}
+
+.nxdomain-value {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.error-value {
+  color: var(--error);
+}
+
+.row-nxdomain td {
+  background: rgba(255, 170, 0, 0.04);
+}
+
+.row-error td {
+  background: var(--error-dim);
+}
+
+/* ===================================================================
+   Error Banner
+   =================================================================== */
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: var(--error-dim);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  border-radius: var(--radius);
+  color: var(--error);
+  font-size: 14px;
+}
+
+.error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-weight: 700;
+  font-size: 13px;
+  background: var(--error);
+  color: var(--bg-primary);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ===================================================================
+   Loading
+   =================================================================== */
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.loading-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.loading-spinner.small {
+  width: 14px;
+  height: 14px;
+  border-width: 1.5px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===================================================================
+   Status Bar
+   =================================================================== */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.status-separator {
+  color: var(--text-muted);
+}
+
+.status-errors {
+  color: var(--error);
+}
+
+/* ===================================================================
+   JSON View
+   =================================================================== */
+
+.json-view {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: auto;
+  max-height: 70vh;
+}
+
+.json-view pre {
+  padding: 16px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ===================================================================
+   CodeMirror overrides (structural)
+   =================================================================== */
+
+/* Ensure the editor fills its container */
+.query-editor .cm-editor {
+  height: auto;
+}
+
+/* Remove the default focus outline since our theme handles it */
+.query-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+/* Autocomplete tooltip positioning */
+.cm-tooltip-autocomplete {
+  z-index: 100;
+}
+
+/* ===================================================================
+   Responsive
+   =================================================================== */
+
+@media (max-width: 768px) {
+  .app {
+    padding: 16px 12px 32px;
+  }
+
+  .header {
+    margin-bottom: 20px;
+  }
+
+  .logo {
+    font-size: 22px;
+  }
+
+  .query-bar {
+    flex-direction: column;
+  }
+
+  .query-button {
+    width: 100%;
+    padding: 10px;
+  }
+
+  .results-table {
+    font-size: 11px;
+  }
+
+  .results-table th,
+  .results-table td {
+    padding: 4px 6px;
+  }
+
+  /* Stack table on very small screens */
+  .results-table th:nth-child(4),
+  .results-table td:nth-child(4),
+  .results-table th:nth-child(5),
+  .results-table td:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .results-table th:nth-child(2),
+  .results-table td:nth-child(2) {
+    display: none;
+  }
+}
+
+/* ===================================================================
+   Scrollbar styling
+   =================================================================== */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ===================================================================
+   Selection
+   =================================================================== */
+
+::selection {
+  background: rgba(0, 212, 255, 0.25);
+  color: var(--text-primary);
+}

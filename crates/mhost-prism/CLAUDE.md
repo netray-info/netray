@@ -77,24 +77,28 @@ Phased delivery as defined in SDD §14:
 
 ## Build & Test
 
+Use `make` targets for all build and test operations.
+
 ```sh
 # Prerequisites: Node.js (for frontend), Rust toolchain
 
+# Full production build (frontend + backend)
+make                                  # or: make all
+
+# Individual targets
+make check                            # cargo check (fast compile check)
+make test                             # cargo test
+make clippy                           # cargo clippy -- -D warnings
+make fmt                              # cargo fmt
+make fmt-check                        # cargo fmt -- --check
+make lint                             # clippy + fmt-check
+make frontend                         # cd frontend && npm ci && npm run build
+make clean                            # remove target/ + frontend/dist/ + node_modules/
+make ci                               # lint + test + frontend + build (full CI pipeline)
+
 # Development (two terminals)
-cd frontend && npm run dev            # Vite dev server :5173 (proxies /api/* to :8080)
-cargo run                             # axum server :8080, reads frontend from disk
-
-# Production build
-cd frontend && npm ci && npm run build  # outputs to frontend/dist/
-cargo build --release                   # rust-embed bakes dist/ into binary
-
-# Testing
-cargo test                            # All tests
-cargo clippy                          # Lint
-cargo fmt -- --check                  # Format check
-
-# Full build (sequences frontend + backend)
-just build-web                        # or: cd frontend && npm ci && npm run build && cd .. && cargo build --release
+make frontend-dev                     # Vite dev server :5173 (proxies /api/* to :8080)
+make dev                              # cargo run (axum server :8080)
 ```
 
 ### Test Guidelines

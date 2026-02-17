@@ -1,0 +1,54 @@
+[package]
+name = "prism"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Web-based DNS debugging service powered by mhost"
+
+[dependencies]
+mhost = { version = "0.9.0", default-features = false }
+
+# Web framework
+axum = { version = "0.8", features = ["json"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tower = { version = "0.5", features = ["limit"] }
+tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
+tower_governor = "0.5"
+governor = "0.8"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Configuration
+config = "0.15"
+
+# Error handling
+thiserror = "2"
+
+# Logging / tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Metrics
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+
+# Embedded frontend
+rust-embed = "8"
+mime_guess = "2"
+
+# Request IDs
+uuid = { version = "1", features = ["v7"] }
+
+# Time
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
