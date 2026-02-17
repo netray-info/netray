@@ -103,49 +103,63 @@ impl CircuitBreaker {
         }
     }
 
-    fn check(&mut self, now: Instant) -> Result<(), BreakerState> {
+    /// Check whether this breaker allows a request through.
+    ///
+    /// Returns `Ok(Some((Open, HalfOpen)))` on a state transition,
+    /// `Ok(None)` when no transition occurs, or `Err(Open)` when blocked.
+    fn check(&mut self, now: Instant) -> Result<Option<(BreakerState, BreakerState)>, BreakerState> {
         match self.state {
-            BreakerState::Closed => Ok(()),
+            BreakerState::Closed => Ok(None),
             BreakerState::Open => {
                 let opened_at = self
                     .opened_at
                     .expect("opened_at must be set when state is Open");
                 if now.duration_since(opened_at) >= self.cooldown {
                     self.state = BreakerState::HalfOpen;
-                    Ok(())
+                    Ok(Some((BreakerState::Open, BreakerState::HalfOpen)))
                 } else {
                     Err(BreakerState::Open)
                 }
             }
-            BreakerState::HalfOpen => Ok(()),
+            BreakerState::HalfOpen => Ok(None),
         }
     }
 
-    fn record_success(&mut self, now: Instant) {
+    fn record_success(&mut self, now: Instant) -> Option<(BreakerState, BreakerState)> {
         self.window.record_success(now);
         if self.state == BreakerState::HalfOpen {
+            let old = self.state;
             self.state = BreakerState::Closed;
             self.opened_at = None;
             self.window.reset();
+            Some((old, self.state))
+        } else {
+            None
         }
     }
 
-    fn record_failure(&mut self, now: Instant) {
+    fn record_failure(&mut self, now: Instant) -> Option<(BreakerState, BreakerState)> {
         self.window.record_failure(now);
         match self.state {
             BreakerState::HalfOpen => {
+                let old = self.state;
                 self.state = BreakerState::Open;
                 self.opened_at = Some(now);
+                Some((old, self.state))
             }
             BreakerState::Closed => {
                 if self.window.total() >= self.min_requests
                     && self.window.error_rate() > self.failure_threshold
                 {
+                    let old = self.state;
                     self.state = BreakerState::Open;
                     self.opened_at = Some(now);
+                    Some((old, self.state))
+                } else {
+                    None
                 }
             }
-            BreakerState::Open => {}
+            BreakerState::Open => None,
         }
     }
 }
@@ -237,7 +251,19 @@ impl CircuitBreakerRegistry {
         let breakers = self.breakers.read().expect("breaker lock poisoned");
         let mutex = breakers.get(provider).expect("breaker just inserted");
         let mut breaker = mutex.lock().expect("breaker lock poisoned");
-        breaker.check(now)
+        match breaker.check(now) {
+            Ok(Some((from, to))) => {
+                tracing::warn!(
+                    provider,
+                    from = ?from,
+                    to = ?to,
+                    "circuit breaker state transition"
+                );
+                Ok(())
+            }
+            Ok(None) => Ok(()),
+            Err(state) => Err(state),
+        }
     }
 
     fn record_success_at(&self, provider: &str, now: Instant) {
@@ -245,7 +271,14 @@ impl CircuitBreakerRegistry {
         let breakers = self.breakers.read().expect("breaker lock poisoned");
         let mutex = breakers.get(provider).expect("breaker just inserted");
         let mut breaker = mutex.lock().expect("breaker lock poisoned");
-        breaker.record_success(now);
+        if let Some((from, to)) = breaker.record_success(now) {
+            tracing::warn!(
+                provider,
+                from = ?from,
+                to = ?to,
+                "circuit breaker state transition"
+            );
+        }
     }
 
     fn record_failure_at(&self, provider: &str, now: Instant) {
@@ -253,7 +286,14 @@ impl CircuitBreakerRegistry {
         let breakers = self.breakers.read().expect("breaker lock poisoned");
         let mutex = breakers.get(provider).expect("breaker just inserted");
         let mut breaker = mutex.lock().expect("breaker lock poisoned");
-        breaker.record_failure(now);
+        if let Some((from, to)) = breaker.record_failure(now) {
+            tracing::warn!(
+                provider,
+                from = ?from,
+                to = ?to,
+                "circuit breaker state transition"
+            );
+        }
     }
 
     /// Lazily insert a breaker for `provider` if one does not already exist.

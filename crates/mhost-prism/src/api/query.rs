@@ -251,8 +251,9 @@ async fn execute_query(
     let cost = (parsed.record_types.len() as u32) * (effective_servers.len().max(1) as u32);
     let stream_guard = state.rate_limiter.check_query_cost(client_ip, &target_keys, cost)?;
 
-    // Build resolver group.
-    let resolver_group = build_resolver_group(&parsed, &state.config, timeout).await?;
+    // Build resolver group and parallel circuit breaker keys.
+    let (resolver_group, breaker_keys) =
+        build_resolver_group(&parsed, &state.config, timeout).await?;
 
     // Extract individual resolvers from the group. We call Resolver::lookup()
     // per record type (which is Send — it uses tokio::task::spawn internally)
@@ -296,8 +297,22 @@ async fn execute_query(
 
             // Fan out this single-type query across all resolvers concurrently.
             // Each Resolver::lookup() spawns its own tokio task internally.
+            // Circuit breaker pre-check: skip resolvers whose provider is in
+            // the Open state to avoid hammering degraded servers.
             let mut handles = Vec::with_capacity(resolvers.len());
-            for resolver in &resolvers {
+            for (idx, resolver) in resolvers.iter().enumerate() {
+                let breaker_key = &breaker_keys[idx];
+                if let Err(crate::circuit_breaker::BreakerState::Open) =
+                    circuit_breakers.check(breaker_key)
+                {
+                    let _ = tx
+                        .send(Ok(make_error_event(
+                            "PROVIDER_DEGRADED",
+                            &format!("circuit breaker open for {breaker_key}, skipping"),
+                        )))
+                        .await;
+                    continue;
+                }
                 let r = resolver.clone();
                 let q = query.clone();
                 handles.push(tokio::spawn(async move { r.lookup(q).await }));
@@ -417,29 +432,24 @@ fn target_keys_from_servers(servers: &[ServerSpec]) -> Vec<String> {
 /// (default UDP) and IPv4 only — this avoids hanging on unreachable IPv6 or
 /// slow TLS/HTTPS connections. Each provider contributes its primary + secondary
 /// IPv4 addresses for the selected transport (typically 2 resolvers).
+///
+/// Returns the resolver group and a parallel `Vec<String>` of circuit breaker keys
+/// (one per resolver, in the same order as `resolvers()`).
 async fn build_resolver_group(
     parsed: &ParsedQuery,
     config: &Config,
     timeout: Duration,
-) -> Result<ResolverGroup, ApiError> {
-    let servers: Vec<ServerSpec> = if parsed.servers.is_empty() {
-        config
-            .dns
-            .default_servers
-            .iter()
-            .filter_map(|s| PredefinedProvider::from_str(s).ok())
-            .map(ServerSpec::Predefined)
-            .collect()
-    } else {
-        parsed.servers.clone()
-    };
+) -> Result<(ResolverGroup, Vec<String>), ApiError> {
+    let servers = effective_server_specs(parsed, config);
 
     let mut builder = ResolverGroupBuilder::new().timeout(timeout);
+    let mut breaker_keys: Vec<String> = Vec::new();
 
     for server in &servers {
         match server {
             ServerSpec::Predefined(provider) => {
                 let transport = parsed.transport.unwrap_or(Transport::Udp);
+                let key = provider.to_string().to_ascii_lowercase();
                 for ns_config in provider.configs() {
                     if !matches_transport(&ns_config, transport) {
                         continue;
@@ -448,10 +458,12 @@ async fn build_resolver_group(
                         continue;
                     }
                     builder = builder.nameserver(ns_config);
+                    breaker_keys.push(key.clone());
                 }
             }
             ServerSpec::System => {
                 builder = builder.system();
+                breaker_keys.push("system".to_string());
             }
             ServerSpec::Ip { addr, port } => {
                 let sock = SocketAddr::new(*addr, *port);
@@ -462,14 +474,17 @@ async fn build_resolver_group(
                     Some(Transport::Udp) | None => NameServerConfig::udp(sock),
                 };
                 builder = builder.nameserver(ns_config);
+                breaker_keys.push(format!("{addr}:{port}"));
             }
         }
     }
 
-    builder
+    let group = builder
         .build()
         .await
-        .map_err(|e| ApiError::ResolverError(e.to_string()))
+        .map_err(|e| ApiError::ResolverError(e.to_string()))?;
+
+    Ok((group, breaker_keys))
 }
 
 /// Check if a nameserver config uses the specified transport.
