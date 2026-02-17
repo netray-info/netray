@@ -317,7 +317,7 @@ export default function App() {
                 </Show>
                 <Show when={stats()!.dnssec}>
                   <span class="status-separator">/</span>
-                  <span class="status-badge dnssec-badge" title="DNSSEC validation was requested for this query">
+                  <span class="status-badge dnssec-badge" title="DNSSEC records (DNSKEY, DS) were included in this query">
                     DNSSEC
                   </span>
                 </Show>
