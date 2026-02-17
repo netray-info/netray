@@ -1,7 +1,7 @@
 # Software Design Document: `prism`
 
 **Feature**: Web-based DNS debugging service powered by mhost-lib
-**Status**: In Progress (Phases 1–3 implemented)
+**Status**: In Progress (Phases 1–3 complete, Phase 4 next)
 **Date**: 2026-02-17
 **Roadmap**: To be added to `ROADMAP.md` upon acceptance of this SDD.
 
@@ -422,6 +422,7 @@ Key elements:
 - **Grouped by record type** with collapsible sections, color-coded type badges (reusing mhost's `record_type_color` palette)
 - **Progressive population**: Rows appear as SSE events arrive. Skeleton placeholders for pending types.
 - **Server agreement column**: Shows "N/M agree" for each unique record value. Divergence highlighted in yellow/red.
+- **Response time bars**: Each server result displays a color-coded bar indicating response latency (green <50ms, yellow 50–200ms, red >200ms). Bars appear in both the Results tab (expanded row detail) and the Servers comparison tab.
 - **Expandable row detail**: Click a row to see full rdata fields, responding servers with latency, DNSSEC status, and human-readable interpretation (SPF mechanism breakdown, DMARC policy, etc.)
 - **Tabs**: Results (default), Servers (per-server comparison view), JSON (raw serialized output). Completion stats (query count, batch count, duration, transport badge, DNSSEC badge) are displayed inline in the tab bar, right-aligned, as subtle muted text with tooltips explaining each metric.
 - **DNSSEC badge**: Neutral color (gray) since `+dnssec` only fetches DNSKEY/DS records — no trust chain validation is performed. Tooltip clarifies this distinction.
@@ -432,7 +433,7 @@ Key elements:
 - **System theme by default**: Follows the browser/OS `prefers-color-scheme` preference automatically. A manual toggle in the header saves the explicit choice to `localStorage`, overriding system detection until cleared. Reacts to live system theme changes (via `matchMedia` listener) when no explicit preference is saved.
 - **Monospaced font** for all DNS data (domain names, IPs, record values). Proportional font for UI chrome.
 - **Color palette**: Inherit from mhost's existing `record_type_color` (`app/common/styles.rs`) constants, adapted to CSS custom properties.
-- **Mobile**: Responsive layout — stacked cards instead of wide tables on narrow screens. Query input full-width. Not optimized for mobile but not broken.
+- **Mobile**: Responsive card-based layout below 768px — record type sections switch from tables to stacked cards, the query bar stacks vertically, and server comparison uses a single-column layout. Further tightened at 480px with reduced spacing. Fully functional on mobile, not just "not broken."
 
 ### 6.5 Keyboard Shortcuts
 
@@ -1048,7 +1049,9 @@ All items implemented:
 - ✓ Server comparison tab (multi-server divergence view)
 - ✓ Expandable row details (NxDomain details, error details with click-to-expand)
 
-### Phase 3 — Polish (mostly complete)
+### Phase 3 — Polish ✓
+
+All items implemented except GDPR log rotation (deferred — operational concern, not a feature blocker):
 
 - ✓ `POST /api/parse` for server-side tokenization and autocomplete
 - ✓ Keyboard shortcuts: `/` focus, `j`/`k` row navigation, `Enter` expand/collapse, `?` help modal, `Escape` dismiss/blur, `↑`/`↓` history
@@ -1056,9 +1059,9 @@ All items implemented:
 - ✓ System theme by default with manual toggle (localStorage only on explicit choice)
 - ✓ Terms of Service modal
 - ✓ Inline status info in tab bar (query count, batches, duration, transport/DNSSEC badges with tooltips)
-- ○ Per-server response time display (not yet implemented)
-- ○ Mobile-responsive layout (not yet implemented)
-- ○ GDPR-compliant log rotation (not yet implemented)
+- ✓ Per-server response time bars (color-coded: green <50ms, yellow 50–200ms, red >200ms) in both Results and Servers tabs
+- ✓ Mobile-responsive layout (card-based below 768px, stacked query bar, single-column server comparison, tighter spacing at 480px)
+- ○ GDPR-compliant log rotation (not yet implemented — deferred to operational deployment)
 
 ### Phase 4 — Library Extraction & Check/Trace
 
