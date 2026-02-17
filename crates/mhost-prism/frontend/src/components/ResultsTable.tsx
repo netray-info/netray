@@ -710,28 +710,6 @@ export function ResultsTable(props: ResultsTableProps) {
         <JsonView results={props.results} stats={props.stats} />
       </Show>
 
-      {/* Status bar */}
-      <Show when={props.status === 'done' && props.stats}>
-        <div class="status-bar">
-          <span>{props.stats!.total_queries} queries</span>
-          <span class="status-separator">/</span>
-          <span>{props.results.length} batches</span>
-          <span class="status-separator">/</span>
-          <span>{props.stats!.duration_ms}ms</span>
-          <Show when={props.stats!.transport && props.stats!.transport !== 'udp'}>
-            <span class="status-separator">/</span>
-            <span class="status-badge transport-badge">{props.stats!.transport!.toUpperCase()}</span>
-          </Show>
-          <Show when={props.stats!.dnssec}>
-            <span class="status-separator">/</span>
-            <span class="status-badge dnssec-badge">DNSSEC</span>
-          </Show>
-          <Show when={props.stats!.warnings.length > 0}>
-            <span class="status-separator">/</span>
-            <span class="status-warnings">{props.stats!.warnings.length} warnings</span>
-          </Show>
-        </div>
-      </Show>
     </div>
   );
 }

@@ -257,6 +257,40 @@ export default function App() {
           }}
         />
 
+        <Show when={status() === 'done' && stats()}>
+          <div class="status-bar">
+            <span title="Total DNS queries sent across all servers and record types">
+              {stats()!.total_queries} queries
+            </span>
+            <span class="status-separator">/</span>
+            <span title="Record type batches received from the server">
+              {results().length} batches
+            </span>
+            <span class="status-separator">/</span>
+            <span title="Total wall-clock time for the query">
+              {stats()!.duration_ms}ms
+            </span>
+            <Show when={stats()!.transport && stats()!.transport !== 'udp'}>
+              <span class="status-separator">/</span>
+              <span class="status-badge transport-badge" title="DNS transport protocol used for this query">
+                {stats()!.transport!.toUpperCase()}
+              </span>
+            </Show>
+            <Show when={stats()!.dnssec}>
+              <span class="status-separator">/</span>
+              <span class="status-badge dnssec-badge" title="DNSSEC validation was requested for this query">
+                DNSSEC
+              </span>
+            </Show>
+            <Show when={stats()!.warnings.length > 0}>
+              <span class="status-separator">/</span>
+              <span class="status-warnings" title={stats()!.warnings.join('; ')}>
+                {stats()!.warnings.length} warning{stats()!.warnings.length !== 1 ? 's' : ''}
+              </span>
+            </Show>
+          </div>
+        </Show>
+
         <Show when={status() !== 'idle' || results().length > 0}>
           <div class="tabs">
             <button

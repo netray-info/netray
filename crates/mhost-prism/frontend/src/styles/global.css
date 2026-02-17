@@ -557,14 +557,18 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 14px;
-  margin-top: 12px;
+  padding: 8px 14px;
+  margin-bottom: 16px;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--text-secondary);
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius);
+}
+
+.status-bar > span[title] {
+  cursor: help;
 }
 
 .status-separator {
