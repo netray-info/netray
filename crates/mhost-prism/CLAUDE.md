@@ -30,8 +30,8 @@
 **prism** is a web-based DNS debugging service powered by mhost-lib. It serves an embedded SPA and exposes mhost-lib's capabilities (multi-server fan-out, streaming results, DNSSEC validation) through an HTTP API with Server-Sent Events streaming.
 
 - **Author**: Lukas Pustina | **License**: MIT / Apache-2.0
-- **Parent project**: [mhost](https://github.com/lukaspustina/mhost.git)
-- **SDD**: `docs/sdd.md` — the authoritative design document for all architecture decisions.
+- **Repository**: Standalone repo (separate from mhost). Depends on `mhost` as a published crate (no `app` feature).
+- **SDD**: `docs/sdd.md` — the authoritative design document for all architecture decisions. Note: the SDD was written assuming a workspace member; this repo diverges to a standalone crate with a crates.io dependency. Structural references (§3 workspace layout) are adapted accordingly.
 
 prism provides and all functionality must adhere to these core principles:
 
@@ -51,11 +51,24 @@ The Software Design Document (`docs/sdd.md`) is the source of truth for architec
 - **§9** Configuration (TOML + env vars)
 - **§14** Phased delivery plan
 
+## Technology Decisions
+
+Decisions made during project setup, supplementing the SDD:
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Repository** | Standalone repo, `mhost` via crates.io | Independent release cadence; gaps in mhost-lib addressed upstream separately |
+| **CSS** | Plain CSS with custom properties | Frontend is ~3 components; custom properties map directly to mhost's color palette and dark mode toggle; zero build config |
+| **Config parsing** | `config` crate | Built-in layering (TOML file + env vars + defaults); handles `PRISM_` prefix and `__` section separators natively |
+| **Error handling** | `thiserror` | Structured `ApiError` enum maps to specific HTTP status + error codes (§5.6); no need for `anyhow`'s erased types |
+| **Request IDs** | `uuid` crate with `v7` feature | Time-ordered UUIDs per SDD §8.5; universally recognized in headers/logs/JSON |
+| **TypeScript** | Strict mode (`strict: true`) | Frontend is thin — low ceremony cost, catches bugs at compile time |
+
 ## Roadmap
 
 Phased delivery as defined in SDD §14:
 
-- **Phase 0**: Workspace conversion (mhost repo)
+- ~~**Phase 0**: Workspace conversion (mhost repo)~~ — N/A (standalone repo)
 - **Phase 1**: MVP — query endpoint, parser, results table, rate limiting, circuit breaker, metrics
 - **Phase 1.5**: Library extraction (lint/trace logic from app/ to library)
 - **Phase 2**: Check + trace endpoints, transport flags, DNSSEC, server comparison
@@ -68,20 +81,20 @@ Phased delivery as defined in SDD §14:
 # Prerequisites: Node.js (for frontend), Rust toolchain
 
 # Development (two terminals)
-cd prism/frontend && npm run dev      # Vite dev server :5173 (proxies /api/* to :8080)
-cd prism && cargo run                 # axum server :8080, reads frontend from disk
+cd frontend && npm run dev            # Vite dev server :5173 (proxies /api/* to :8080)
+cargo run                             # axum server :8080, reads frontend from disk
 
 # Production build
-cd prism/frontend && npm ci && npm run build  # outputs to frontend/dist/
-cargo build --release -p prism                # rust-embed bakes dist/ into binary
+cd frontend && npm ci && npm run build  # outputs to frontend/dist/
+cargo build --release                   # rust-embed bakes dist/ into binary
 
 # Testing
-cargo test -p prism                   # All prism tests
-cargo clippy -p prism                 # Lint
-cargo fmt -p prism -- --check         # Format check
+cargo test                            # All tests
+cargo clippy                          # Lint
+cargo fmt -- --check                  # Format check
 
 # Full build (sequences frontend + backend)
-just build-web                        # or: cd prism/frontend && npm ci && npm run build && cd ../.. && cargo build -p prism
+just build-web                        # or: cd frontend && npm ci && npm run build && cd .. && cargo build --release
 ```
 
 ### Test Guidelines
@@ -97,36 +110,39 @@ just build-web                        # or: cd prism/frontend && npm ci && npm r
 ## Architecture
 
 ```
-prism/
+mhost-prism/                  # standalone crate (not a workspace member)
+  Cargo.toml                  # depends on mhost = "<version>" (crates.io)
   src/
-    main.rs                 # Entry point, axum server setup, graceful shutdown
+    main.rs                   # Entry point, axum server setup, graceful shutdown
     api/
-      mod.rs                # Route definitions
-      query.rs              # GET/POST /api/query → SSE stream
-      check.rs              # POST /api/check → SSE stream (Phase 2)
-      trace.rs              # POST /api/trace → SSE stream (Phase 2)
-      parse.rs              # POST /api/parse → completion hints (Phase 3)
-      meta.rs               # GET /api/servers, /api/record-types, /api/health
+      mod.rs                  # Route definitions
+      query.rs                # GET/POST /api/query → SSE stream
+      check.rs                # POST /api/check → SSE stream (Phase 2)
+      trace.rs                # POST /api/trace → SSE stream (Phase 2)
+      parse.rs                # POST /api/parse → completion hints (Phase 3)
+      meta.rs                 # GET /api/servers, /api/record-types, /api/health
     security/
-      mod.rs                # Middleware composition
-      rate_limit.rs         # tower-governor layers (per-IP, per-target, global)
-      ip_extract.rs         # Real client IP from proxy headers
-      query_policy.rs       # Target validation, type restrictions
-    config.rs               # TOML + env var configuration
-  frontend/                 # SolidJS + Vite
+      mod.rs                  # Middleware composition
+      rate_limit.rs           # tower-governor layers (per-IP, per-target, global)
+      ip_extract.rs           # Real client IP from proxy headers
+      query_policy.rs         # Target validation, type restrictions
+    config.rs                 # config crate: TOML + env vars (PRISM_ prefix)
+    error.rs                  # thiserror ApiError enum → HTTP status + error codes
+  frontend/                   # SolidJS + Vite (strict TypeScript)
     src/
       App.tsx
       components/
-        QueryInput.tsx      # CodeMirror 6 single-line input
-        ResultsTable.tsx    # Streaming results table
+        QueryInput.tsx        # CodeMirror 6 single-line input
+        ResultsTable.tsx      # Streaming results table
         ServerComparison.tsx
       lib/
-        tokenizer.ts        # Syntax highlighting (cosmetic only)
-    dist/                   # Build output, .gitignored, embedded via rust-embed
+        tokenizer.ts          # Syntax highlighting (cosmetic only)
+      styles/                 # Plain CSS with custom properties
+    dist/                     # Build output, .gitignored, embedded via rust-embed
 ```
 
 **Dependency rules**:
-- prism depends on `mhost` as a library (no `app` feature).
+- prism depends on `mhost` as a published crate (no `app` feature). If mhost-lib lacks needed API surface, address upstream separately.
 - prism never imports CLI parsing, terminal formatting, or TUI code.
 - The Rust query language parser is the **single source of truth** — the frontend never parses queries into structured JSON.
 - The TypeScript tokenizer is cosmetic only (syntax highlighting) — misclassification produces wrong colors, not wrong queries.
@@ -143,12 +159,15 @@ prism/
 ## Key Dependencies
 
 ### Rust
-- `mhost` (path dep) — DNS library
+- `mhost` (crates.io) — DNS library (no `app` feature)
 - `axum` 0.8 — Web framework (routes, extractors, SSE)
 - `tower-http` 0.6 — CORS, compression, tracing, security headers
 - `tower-governor` — Rate limiting (GCRA)
 - `rust-embed` 8 — Embed frontend assets
 - `tokio`, `tokio-stream` — Async runtime, `ReceiverStream` for SSE
+- `config` — Layered configuration (TOML + env vars)
+- `thiserror` — Structured error enums
+- `uuid` (v7 feature) — Time-ordered request IDs
 - `metrics` + `metrics-exporter-prometheus` — Prometheus metrics
 
 ### Frontend
