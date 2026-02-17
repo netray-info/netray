@@ -1,7 +1,7 @@
 import { onMount, onCleanup } from 'solid-js';
 import { EditorView, keymap, placeholder as cmPlaceholder, ViewPlugin, Decoration, type DecorationSet } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
-import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
+import { acceptCompletion, autocompletion, startCompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { tokenize, TokenType } from '../lib/tokenizer';
 
 // ---------------------------------------------------------------------------
@@ -137,10 +137,10 @@ const highlightPlugin = ViewPlugin.fromClass(
 );
 
 // ---------------------------------------------------------------------------
-// Dark theme
+// Editor theme (uses CSS custom properties — works for both light and dark)
 // ---------------------------------------------------------------------------
 
-const darkTheme = EditorView.theme(
+const editorTheme = EditorView.theme(
   {
     '&': {
       backgroundColor: 'var(--bg-secondary)',
@@ -173,10 +173,10 @@ const darkTheme = EditorView.theme(
       borderLeftWidth: '2px',
     },
     '.cm-selectionBackground': {
-      backgroundColor: 'rgba(0, 212, 255, 0.15) !important',
+      backgroundColor: 'var(--selection-bg) !important',
     },
     '&.cm-focused .cm-selectionBackground': {
-      backgroundColor: 'rgba(0, 212, 255, 0.25) !important',
+      backgroundColor: 'var(--selection-bg-focused) !important',
     },
     '.cm-placeholder': {
       color: 'var(--text-muted)',
@@ -257,11 +257,15 @@ const singleLine = EditorState.transactionFilter.of((tr) => {
 interface QueryInputProps {
   onSubmit: (query: string) => void;
   initialValue?: string;
+  history: string[];
+  onReady?: (api: { focus: () => void }) => void;
 }
 
 export function QueryInput(props: QueryInputProps) {
   let containerRef: HTMLDivElement | undefined;
   let view: EditorView | undefined;
+  let historyIndex = -1;
+  let savedInput = '';
 
   onMount(() => {
     if (!containerRef) return;
@@ -272,7 +276,60 @@ export function QueryInput(props: QueryInputProps) {
         run: (v) => {
           const query = v.state.doc.toString().trim();
           if (query) {
+            historyIndex = -1;
             props.onSubmit(query);
+          }
+          return true;
+        },
+      },
+      {
+        // Trap Tab: accept autocomplete if open, otherwise trigger it.
+        // Never let Tab leave the single-line editor.
+        key: 'Tab',
+        run: (v) => {
+          if (acceptCompletion(v)) return true;
+          startCompletion(v);
+          return true;
+        },
+      },
+    ]);
+
+    // History navigation via Up/Down arrows.
+    // Placed after autocompletion so autocomplete gets first dibs when its
+    // panel is open. When the panel is closed, autocomplete's keymap passes
+    // through and our handler fires.
+    const historyKeymap = keymap.of([
+      {
+        key: 'ArrowUp',
+        run: (v) => {
+          const hist = props.history;
+          if (hist.length === 0) return false;
+          if (historyIndex === -1) {
+            savedInput = v.state.doc.toString();
+          }
+          if (historyIndex < hist.length - 1) {
+            historyIndex++;
+            v.dispatch({
+              changes: { from: 0, to: v.state.doc.length, insert: hist[historyIndex] },
+            });
+          }
+          return true;
+        },
+      },
+      {
+        key: 'ArrowDown',
+        run: (v) => {
+          if (historyIndex <= -1) return false;
+          if (historyIndex > 0) {
+            historyIndex--;
+            v.dispatch({
+              changes: { from: 0, to: v.state.doc.length, insert: props.history[historyIndex] },
+            });
+          } else {
+            historyIndex = -1;
+            v.dispatch({
+              changes: { from: 0, to: v.state.doc.length, insert: savedInput },
+            });
           }
           return true;
         },
@@ -284,13 +341,14 @@ export function QueryInput(props: QueryInputProps) {
       extensions: [
         submitKeymap,
         cmPlaceholder('example.com A AAAA @google +tls'),
-        darkTheme,
+        editorTheme,
         highlightPlugin,
         autocompletion({
           override: [prismCompletions],
           activateOnTyping: true,
           defaultKeymap: true,
         }),
+        historyKeymap,
         singleLine,
         EditorView.lineWrapping,
       ],
@@ -300,6 +358,13 @@ export function QueryInput(props: QueryInputProps) {
       state,
       parent: containerRef,
     });
+
+    // Reset history index when user types.
+    view.contentDOM.addEventListener('beforeinput', () => {
+      historyIndex = -1;
+    });
+
+    props.onReady?.({ focus: () => view?.focus() });
   });
 
   onCleanup(() => {
@@ -310,6 +375,7 @@ export function QueryInput(props: QueryInputProps) {
     if (!view) return;
     const query = view.state.doc.toString().trim();
     if (query) {
+      historyIndex = -1;
       props.onSubmit(query);
     }
   };

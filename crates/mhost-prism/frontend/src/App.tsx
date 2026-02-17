@@ -4,6 +4,34 @@ import { ResultsTable, parseBatchEvent, type BatchEvent, type DoneStats } from '
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'results' | 'servers' | 'json';
+type Theme = 'dark' | 'light';
+
+const HISTORY_KEY = 'prism_history';
+const THEME_KEY = 'prism_theme';
+const MAX_HISTORY = 50;
+
+function loadHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveHistory(history: string[]) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+  } catch { /* ignore */ }
+}
+
+function loadTheme(): Theme {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch { /* ignore */ }
+  if (window.matchMedia?.('(prefers-color-scheme: light)').matches) return 'light';
+  return 'dark';
+}
 
 export default function App() {
   const [query, setQuery] = createSignal('');
@@ -12,10 +40,33 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [stats, setStats] = createSignal<DoneStats | null>(null);
   const [activeTab, setActiveTab] = createSignal<ActiveTab>('results');
+  const [history, setHistory] = createSignal<string[]>(loadHistory());
+  const [theme, setTheme] = createSignal<Theme>(loadTheme());
+  const [showHelp, setShowHelp] = createSignal(false);
+  const [showTos, setShowTos] = createSignal(false);
 
   let eventSource: EventSource | null = null;
+  let focusEditor: (() => void) | undefined;
 
-  /** Close any active SSE connection. */
+  // ---------------------------------------------------------------------------
+  // Theme
+  // ---------------------------------------------------------------------------
+
+  function applyTheme(t: Theme) {
+    document.documentElement.setAttribute('data-theme', t);
+    try { localStorage.setItem(THEME_KEY, t); } catch { /* ignore */ }
+  }
+
+  function toggleTheme() {
+    const next = theme() === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    applyTheme(next);
+  }
+
+  // ---------------------------------------------------------------------------
+  // SSE connection
+  // ---------------------------------------------------------------------------
+
   function closeEventSource() {
     if (eventSource) {
       eventSource.close();
@@ -23,24 +74,37 @@ export default function App() {
     }
   }
 
-  /** Submit a query: connect to SSE and stream results. */
+  // ---------------------------------------------------------------------------
+  // History
+  // ---------------------------------------------------------------------------
+
+  function addToHistory(q: string) {
+    setHistory((prev) => {
+      const filtered = prev.filter((h) => h !== q);
+      const updated = [q, ...filtered].slice(0, MAX_HISTORY);
+      saveHistory(updated);
+      return updated;
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Submit query
+  // ---------------------------------------------------------------------------
+
   function submitQuery(q: string) {
-    // Close previous connection
     closeEventSource();
 
-    // Reset state
     setQuery(q);
     setResults([]);
     setError(null);
     setStats(null);
     setStatus('loading');
+    addToHistory(q);
 
-    // Update URL
     const url = new URL(window.location.href);
     url.searchParams.set('q', q);
     window.history.pushState(null, '', url.toString());
 
-    // Open SSE connection
     const sseUrl = `/api/query?q=${encodeURIComponent(q)}`;
     const es = new EventSource(sseUrl);
     eventSource = es;
@@ -55,7 +119,6 @@ export default function App() {
     });
 
     es.addEventListener('error', (event) => {
-      // SSE error event — could be a connection error or a server-sent error
       if (event instanceof MessageEvent && event.data) {
         try {
           const errorData = JSON.parse(event.data);
@@ -64,9 +127,6 @@ export default function App() {
           setError(event.data);
         }
       }
-      // Note: we do NOT close here or set status to error yet.
-      // The 'done' event is always sent after errors, so we wait for it.
-      // If the connection itself drops, the onerror handler below fires.
     });
 
     es.addEventListener('done', (event) => {
@@ -80,21 +140,13 @@ export default function App() {
       closeEventSource();
     });
 
-    // EventSource onerror fires on connection failure or when the server closes
     es.onerror = () => {
-      // If we already received 'done', this fires because we closed — ignore.
       if (status() === 'done') return;
-
-      // If readyState is CLOSED, the server closed the connection unexpectedly
       if (es.readyState === EventSource.CLOSED) {
-        if (!error()) {
-          setError('Connection closed unexpectedly');
-        }
+        if (!error()) setError('Connection closed unexpectedly');
         setStatus('error');
         closeEventSource();
       }
-      // If readyState is CONNECTING, EventSource is auto-reconnecting.
-      // We let it retry a few times, but if we already have an error, give up.
       if (es.readyState === EventSource.CONNECTING && error()) {
         setStatus('error');
         closeEventSource();
@@ -102,29 +154,108 @@ export default function App() {
     };
   }
 
-  // On mount: check URL for initial query
+  // ---------------------------------------------------------------------------
+  // Keyboard shortcuts
+  // ---------------------------------------------------------------------------
+
+  function handleKeyDown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement;
+    const isEditing =
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable ||
+      !!target.closest('.cm-editor');
+
+    // ? — toggle help (always works outside editor)
+    if (e.key === '?' && !isEditing) {
+      e.preventDefault();
+      setShowHelp((v) => !v);
+      return;
+    }
+
+    // Escape — dismiss modals or blur editor
+    if (e.key === 'Escape') {
+      if (showHelp()) {
+        setShowHelp(false);
+        e.preventDefault();
+        return;
+      }
+      if (showTos()) {
+        setShowTos(false);
+        e.preventDefault();
+        return;
+      }
+      if (isEditing) {
+        const cmContent = (target.closest('.cm-editor') as HTMLElement | null)?.querySelector<HTMLElement>('.cm-content');
+        cmContent?.blur();
+        e.preventDefault();
+        return;
+      }
+    }
+
+    // / — focus query input
+    if (e.key === '/' && !isEditing) {
+      e.preventDefault();
+      focusEditor?.();
+      return;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
   onMount(() => {
+    applyTheme(theme());
+
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
-    if (q) {
-      submitQuery(q);
-    }
+    if (q) submitQuery(q);
+
+    document.addEventListener('keydown', handleKeyDown);
   });
 
-  // Cleanup on unmount
   onCleanup(() => {
     closeEventSource();
+    document.removeEventListener('keydown', handleKeyDown);
   });
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <div class="app">
       <header class="header">
         <h1 class="logo">prism</h1>
         <span class="tagline">DNS, refracted</span>
+        <div class="header-actions">
+          <button
+            class="header-btn"
+            onClick={toggleTheme}
+            title={`Switch to ${theme() === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            {theme() === 'dark' ? '\u2600' : '\u263E'}
+          </button>
+          <button
+            class="header-btn"
+            onClick={() => setShowHelp((v) => !v)}
+            title="Keyboard shortcuts (?)"
+          >
+            ?
+          </button>
+        </div>
       </header>
 
       <main>
-        <QueryInput onSubmit={submitQuery} initialValue={query()} />
+        <QueryInput
+          onSubmit={submitQuery}
+          initialValue={query()}
+          history={history()}
+          onReady={(api) => {
+            focusEditor = api.focus;
+          }}
+        />
 
         <Show when={status() !== 'idle' || results().length > 0}>
           <div class="tabs">
@@ -157,6 +288,103 @@ export default function App() {
           activeTab={activeTab()}
         />
       </main>
+
+      <footer class="footer">
+        <button class="footer-link" onClick={() => setShowTos(true)}>Terms of Service</button>
+        <span class="footer-sep">&middot;</span>
+        <span class="footer-text">Powered by mhost</span>
+      </footer>
+
+      {/* Help modal */}
+      <Show when={showHelp()}>
+        <div class="modal-overlay" onClick={() => setShowHelp(false)}>
+          <div class="modal" onClick={(e) => e.stopPropagation()}>
+            <div class="modal-header">
+              <h2>Keyboard Shortcuts</h2>
+              <button class="modal-close" onClick={() => setShowHelp(false)}>
+                &times;
+              </button>
+            </div>
+            <table class="shortcuts-table">
+              <tbody>
+                <tr>
+                  <td class="shortcut-key">/</td>
+                  <td>Focus query input</td>
+                </tr>
+                <tr>
+                  <td class="shortcut-key">Enter</td>
+                  <td>Submit query (when input focused)</td>
+                </tr>
+                <tr>
+                  <td class="shortcut-key">Tab</td>
+                  <td>Accept autocomplete suggestion</td>
+                </tr>
+                <tr>
+                  <td class="shortcut-key">Escape</td>
+                  <td>Dismiss autocomplete / blur input</td>
+                </tr>
+                <tr>
+                  <td class="shortcut-key">j / k</td>
+                  <td>Navigate result rows</td>
+                </tr>
+                <tr>
+                  <td class="shortcut-key">Enter</td>
+                  <td>Expand/collapse focused row</td>
+                </tr>
+                <tr>
+                  <td class="shortcut-key">&uarr; / &darr;</td>
+                  <td>Browse query history (in input)</td>
+                </tr>
+                <tr>
+                  <td class="shortcut-key">?</td>
+                  <td>Toggle this help</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Show>
+
+      {/* Terms of Service modal */}
+      <Show when={showTos()}>
+        <div class="modal-overlay" onClick={() => setShowTos(false)}>
+          <div class="modal modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div class="modal-header">
+              <h2>Terms of Service</h2>
+              <button class="modal-close" onClick={() => setShowTos(false)}>
+                &times;
+              </button>
+            </div>
+            <div class="modal-body">
+              <p>
+                <strong>prism</strong> is a DNS debugging tool provided for diagnostic and
+                educational purposes.
+              </p>
+              <ul>
+                <li>
+                  <strong>Fair use:</strong> Queries are rate-limited. Automated bulk querying,
+                  scraping, or abuse may result in temporary or permanent blocks.
+                </li>
+                <li>
+                  <strong>No warranty:</strong> DNS results are returned as-is from upstream
+                  resolvers. This service makes no guarantee of accuracy, availability, or
+                  completeness.
+                </li>
+                <li>
+                  <strong>Privacy:</strong> Query domain names and client IP addresses may be
+                  logged for rate-limiting and abuse prevention. Logs are rotated and not shared
+                  with third parties. Full DNS response content is not logged.
+                </li>
+                <li>
+                  <strong>No sensitive queries:</strong> Do not query domains that reveal personal
+                  or sensitive information. All queries are sent to third-party public DNS
+                  resolvers.
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

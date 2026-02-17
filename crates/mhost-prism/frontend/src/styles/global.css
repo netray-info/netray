@@ -21,6 +21,10 @@
   --border: #2a2a4a;
   --border-subtle: #222240;
 
+  /* Selection */
+  --selection-bg: rgba(0, 212, 255, 0.15);
+  --selection-bg-focused: rgba(0, 212, 255, 0.25);
+
   /* Record type colors (from mhost palette) */
   --rt-a: #5cb3ff;
   --rt-aaaa: #7b68ee;
@@ -40,6 +44,44 @@
   --radius: 6px;
   --radius-lg: 10px;
   --transition: 150ms ease;
+}
+
+/* ===================================================================
+   Light theme
+   =================================================================== */
+
+[data-theme="light"] {
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #edf0f5;
+  --text-primary: #1a1a2e;
+  --text-secondary: #4a4a6a;
+  --text-muted: #8888a0;
+  --accent: #0077cc;
+  --accent-dim: #005599;
+  --accent-glow: rgba(0, 119, 204, 0.12);
+  --error: #cc0000;
+  --error-dim: rgba(204, 0, 0, 0.06);
+  --warning: #b86e00;
+  --success: #008800;
+  --border: #d0d4dc;
+  --border-subtle: #e4e8ee;
+
+  --selection-bg: rgba(0, 119, 204, 0.15);
+  --selection-bg-focused: rgba(0, 119, 204, 0.25);
+
+  /* Slightly deeper record type colors for light backgrounds */
+  --rt-a: #2b6cb0;
+  --rt-aaaa: #5b48c8;
+  --rt-mx: #c53030;
+  --rt-txt: #b7791f;
+  --rt-ns: #2f855a;
+  --rt-soa: #c05621;
+  --rt-cname: #6b46c1;
+  --rt-caa: #b83280;
+  --rt-srv: #2b6cb0;
+  --rt-ptr: #805ad5;
+  --rt-default: #4a5568;
 }
 
 /* ===================================================================
@@ -76,6 +118,12 @@ body {
   margin: 0 auto;
   padding: 24px 24px 48px;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app main {
+  flex: 1;
 }
 
 /* ===================================================================
@@ -107,6 +155,35 @@ body {
   font-size: 14px;
   color: var(--text-muted);
   font-weight: 400;
+}
+
+.header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.header-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-glow);
 }
 
 /* ===================================================================
@@ -142,6 +219,14 @@ body {
 .query-button:hover {
   background: #00e5ff;
   box-shadow: 0 0 12px var(--accent-glow);
+}
+
+[data-theme="light"] .query-button {
+  color: #ffffff;
+}
+
+[data-theme="light"] .query-button:hover {
+  background: #0088dd;
 }
 
 .query-button:active {
@@ -225,7 +310,9 @@ body {
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--bg-secondary);
+  transition: border-color var(--transition);
 }
+
 
 .record-group-header {
   display: flex;
@@ -247,6 +334,10 @@ body {
   background: rgba(255, 255, 255, 0.03);
 }
 
+[data-theme="light"] .record-group-header:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
 .type-badge {
   display: inline-block;
   padding: 2px 8px;
@@ -258,6 +349,10 @@ body {
   min-width: 48px;
   text-align: center;
   letter-spacing: 0.5px;
+}
+
+[data-theme="light"] .type-badge {
+  color: #ffffff;
 }
 
 .record-count {
@@ -298,6 +393,10 @@ body {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+[data-theme="light"] .results-table th {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .results-table td {
   padding: 5px 12px;
   font-family: var(--font-mono);
@@ -313,6 +412,10 @@ body {
 
 .results-table tr:hover td {
   background: rgba(255, 255, 255, 0.02);
+}
+
+[data-theme="light"] .results-table tr:hover td {
+  background: rgba(0, 0, 0, 0.02);
 }
 
 /* Column widths */
@@ -396,6 +499,10 @@ body {
   color: var(--bg-primary);
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+[data-theme="light"] .error-icon {
+  color: #ffffff;
 }
 
 /* ===================================================================
@@ -482,10 +589,20 @@ body {
   border: 1px solid rgba(0, 212, 255, 0.3);
 }
 
+[data-theme="light"] .transport-badge {
+  background: rgba(0, 119, 204, 0.1);
+  border-color: rgba(0, 119, 204, 0.3);
+}
+
 .dnssec-badge {
   background: rgba(68, 255, 68, 0.1);
   color: var(--success);
   border: 1px solid rgba(68, 255, 68, 0.25);
+}
+
+[data-theme="light"] .dnssec-badge {
+  background: rgba(0, 136, 0, 0.08);
+  border-color: rgba(0, 136, 0, 0.25);
 }
 
 /* ===================================================================
@@ -524,9 +641,17 @@ body {
   background: rgba(0, 212, 255, 0.04);
 }
 
+[data-theme="light"] .expandable-row:hover td {
+  background: rgba(0, 119, 204, 0.04);
+}
+
 .expandable-row.expanded td {
   background: rgba(0, 212, 255, 0.06);
   border-bottom-color: transparent;
+}
+
+[data-theme="light"] .expandable-row.expanded td {
+  background: rgba(0, 119, 204, 0.06);
 }
 
 .detail-row td {
@@ -538,6 +663,10 @@ body {
   padding: 12px 16px;
   background: rgba(0, 0, 0, 0.12);
   border-top: 1px solid var(--border-subtle);
+}
+
+[data-theme="light"] .detail-content {
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .detail-grid {
@@ -591,6 +720,27 @@ body {
   font-size: 12px;
   color: var(--accent);
   line-height: 1.5;
+}
+
+[data-theme="light"] .detail-interpretation {
+  background: rgba(0, 119, 204, 0.06);
+  border-color: rgba(0, 119, 204, 0.12);
+}
+
+/* ===================================================================
+   Row-level keyboard navigation
+   =================================================================== */
+
+.navigable-row {
+  cursor: pointer;
+}
+
+.row-focused > td {
+  background: var(--accent-glow) !important;
+}
+
+.row-focused > td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* ===================================================================
@@ -707,9 +857,17 @@ body {
   background: rgba(68, 255, 68, 0.08);
 }
 
+[data-theme="light"] .sc-status.status-ok {
+  background: rgba(0, 136, 0, 0.08);
+}
+
 .sc-status.status-nxdomain {
   color: var(--warning);
   background: rgba(255, 170, 0, 0.08);
+}
+
+[data-theme="light"] .sc-status.status-nxdomain {
+  background: rgba(184, 110, 0, 0.08);
 }
 
 .sc-status.status-error {
@@ -742,6 +900,180 @@ body {
 
 .sc-record-value.sc-error {
   color: var(--error);
+}
+
+/* ===================================================================
+   Modal (shared for Help and ToS)
+   =================================================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fade-in 150ms ease;
+}
+
+[data-theme="light"] .modal-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 460px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: modal-in 150ms ease;
+}
+
+.modal-wide {
+  max-width: 560px;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal-header h2 {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 20px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.modal-body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.modal-body p {
+  margin-bottom: 12px;
+}
+
+.modal-body ul {
+  list-style: none;
+  padding: 0;
+}
+
+.modal-body li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.modal-body li:last-child {
+  border-bottom: none;
+}
+
+.modal-body strong {
+  color: var(--text-primary);
+}
+
+/* Shortcuts table */
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shortcuts-table td {
+  padding: 8px 4px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.shortcuts-table tr:last-child td {
+  border-bottom: none;
+}
+
+.shortcut-key {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  width: 80px;
+}
+
+/* ===================================================================
+   Footer
+   =================================================================== */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 0 0;
+  margin-top: 32px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.footer-link {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color var(--transition);
+}
+
+.footer-link:hover {
+  color: var(--text-secondary);
+}
+
+.footer-sep {
+  color: var(--border);
+}
+
+.footer-text {
+  font-family: var(--font-sans);
 }
 
 /* ===================================================================
@@ -780,6 +1112,10 @@ body {
     font-size: 22px;
   }
 
+  .tagline {
+    display: none;
+  }
+
   .query-bar {
     flex-direction: column;
   }
@@ -798,7 +1134,7 @@ body {
     padding: 4px 6px;
   }
 
-  /* Stack table on very small screens */
+  /* Hide server and time columns on tablets */
   .results-table th:nth-child(4),
   .results-table td:nth-child(4),
   .results-table th:nth-child(5),
@@ -822,12 +1158,31 @@ body {
   .sc-server-column:last-child {
     border-bottom: none;
   }
+
+  .modal {
+    width: 95vw;
+    padding: 16px;
+  }
+
+  .status-bar {
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 480px) {
   .results-table th:nth-child(2),
   .results-table td:nth-child(2) {
     display: none;
+  }
+
+  .header-actions {
+    gap: 4px;
+  }
+
+  .header-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
   }
 }
 
@@ -858,6 +1213,6 @@ body {
    =================================================================== */
 
 ::selection {
-  background: rgba(0, 212, 255, 0.25);
+  background: var(--selection-bg-focused);
   color: var(--text-primary);
 }

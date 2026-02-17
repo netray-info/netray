@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { ServerComparison } from './ServerComparison';
 
 // ---------------------------------------------------------------------------
@@ -295,10 +295,24 @@ function groupByRecordType(batches: BatchEvent[]): GroupedResult[] {
 }
 
 // ---------------------------------------------------------------------------
+// Row key helpers
+// ---------------------------------------------------------------------------
+
+/** Check if a row key refers to an expandable row (Response record, not NxDomain/Error). */
+function isExpandableKey(key: string): boolean {
+  return !key.endsWith(':nx') && !key.endsWith(':err');
+}
+
+// ---------------------------------------------------------------------------
 // RecordGroup (collapsible section)
 // ---------------------------------------------------------------------------
 
-function RecordGroup(props: { group: GroupedResult }) {
+function RecordGroup(props: {
+  group: GroupedResult;
+  focusedKey: string | null;
+  expandedKeys: Set<string>;
+  onRowClick: (key: string) => void;
+}) {
   const [collapsed, setCollapsed] = createSignal(false);
 
   const totalRecords = createMemo(() => {
@@ -339,7 +353,16 @@ function RecordGroup(props: { group: GroupedResult }) {
           </thead>
           <tbody>
             <For each={props.group.lookups}>
-              {(lookup) => <LookupRows lookup={lookup} recordType={props.group.recordType} />}
+              {(lookup, i) => (
+                <LookupRows
+                  lookup={lookup}
+                  recordType={props.group.recordType}
+                  lookupIndex={i()}
+                  focusedKey={props.focusedKey}
+                  expandedKeys={props.expandedKeys}
+                  onRowClick={props.onRowClick}
+                />
+              )}
             </For>
           </tbody>
         </table>
@@ -352,8 +375,14 @@ function RecordGroup(props: { group: GroupedResult }) {
 // LookupRows — rows for a single lookup (may have multiple records)
 // ---------------------------------------------------------------------------
 
-function LookupRows(props: { lookup: Lookup; recordType: string }) {
-  const [expanded, setExpanded] = createSignal<number | null>(null);
+function LookupRows(props: {
+  lookup: Lookup;
+  recordType: string;
+  lookupIndex: number;
+  focusedKey: string | null;
+  expandedKeys: Set<string>;
+  onRowClick: (key: string) => void;
+}) {
   const server = createMemo(() => formatServer(props.lookup.name_server));
   const transport = createMemo(() => extractTransport(props.lookup.name_server));
 
@@ -365,14 +394,17 @@ function LookupRows(props: { lookup: Lookup; recordType: string }) {
           return (
             <For each={resp.records}>
               {(record, i) => {
+                const rowKey = () => `${props.recordType}:${props.lookupIndex}:${i()}`;
                 const interpretation = createMemo(() => interpretRecord(props.recordType, record.data));
-                const isExpanded = createMemo(() => expanded() === i());
+                const isExpanded = () => props.expandedKeys.has(rowKey());
+                const isFocused = () => props.focusedKey === rowKey();
 
                 return (
                   <>
                     <tr
-                      class={`expandable-row ${isExpanded() ? 'expanded' : ''}`}
-                      onClick={() => setExpanded(isExpanded() ? null : i())}
+                      data-row-key={rowKey()}
+                      class={`expandable-row navigable-row ${isExpanded() ? 'expanded' : ''} ${isFocused() ? 'row-focused' : ''}`}
+                      onClick={() => props.onRowClick(rowKey())}
                     >
                       <td>{record.name}</td>
                       <td class="ttl-value">{record.ttl}s</td>
@@ -425,8 +457,13 @@ function LookupRows(props: { lookup: Lookup; recordType: string }) {
       <Show when={isNxDomain(props.lookup.result)}>
         {(_) => {
           const nx = (props.lookup.result as NxDomainResult).NxDomain;
+          const rowKey = `${props.recordType}:${props.lookupIndex}:nx`;
           return (
-            <tr class="row-nxdomain">
+            <tr
+              data-row-key={rowKey}
+              class={`row-nxdomain navigable-row ${props.focusedKey === rowKey ? 'row-focused' : ''}`}
+              onClick={() => props.onRowClick(rowKey)}
+            >
               <td>{props.lookup.query.name}</td>
               <td>-</td>
               <td class="nxdomain-value">NXDOMAIN</td>
@@ -437,13 +474,22 @@ function LookupRows(props: { lookup: Lookup; recordType: string }) {
         }}
       </Show>
       <Show when={isLookupError(props.lookup.result)}>
-        <tr class="row-error">
-          <td>{props.lookup.query.name}</td>
-          <td>-</td>
-          <td class="error-value">{formatLookupError(props.lookup.result)}</td>
-          <td>{server()}</td>
-          <td>-</td>
-        </tr>
+        {(_) => {
+          const rowKey = `${props.recordType}:${props.lookupIndex}:err`;
+          return (
+            <tr
+              data-row-key={rowKey}
+              class={`row-error navigable-row ${props.focusedKey === rowKey ? 'row-focused' : ''}`}
+              onClick={() => props.onRowClick(rowKey)}
+            >
+              <td>{props.lookup.query.name}</td>
+              <td>-</td>
+              <td class="error-value">{formatLookupError(props.lookup.result)}</td>
+              <td>{server()}</td>
+              <td>-</td>
+            </tr>
+          );
+        }}
       </Show>
     </>
   );
@@ -493,9 +539,117 @@ function JsonView(props: { results: BatchEvent[]; stats: DoneStats | null }) {
 
 export function ResultsTable(props: ResultsTableProps) {
   const groups = createMemo(() => groupByRecordType(props.results));
+  const [focusedKey, setFocusedKey] = createSignal<string | null>(null);
+  const [expandedKeys, setExpandedKeys] = createSignal<Set<string>>(new Set());
+  let containerRef: HTMLDivElement | undefined;
+
+  // -------------------------------------------------------------------------
+  // Row navigation helpers
+  // -------------------------------------------------------------------------
+
+  /** Query the DOM for all visible navigable row keys, in document order. */
+  function getVisibleRowKeys(): string[] {
+    if (!containerRef) return [];
+    const rows = containerRef.querySelectorAll<HTMLElement>('[data-row-key]');
+    return Array.from(rows).map((r) => r.dataset.rowKey!);
+  }
+
+  function toggleExpanded(key: string) {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function handleRowClick(key: string) {
+    setFocusedKey(key);
+    if (isExpandableKey(key)) {
+      toggleExpanded(key);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Keyboard navigation (j/k/Enter/Escape)
+  // -------------------------------------------------------------------------
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.defaultPrevented) return;
+    if (props.activeTab !== 'results') return;
+
+    const target = e.target as HTMLElement;
+    const isEditing =
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable ||
+      !!target.closest('.cm-editor');
+    if (isEditing) return;
+
+    if (e.key === 'j' || e.key === 'k') {
+      e.preventDefault();
+      const keys = getVisibleRowKeys();
+      if (keys.length === 0) return;
+
+      const current = focusedKey();
+      const currentIdx = current ? keys.indexOf(current) : -1;
+
+      let nextIdx: number;
+      if (e.key === 'j') {
+        nextIdx = currentIdx < keys.length - 1 ? currentIdx + 1 : currentIdx;
+        if (currentIdx === -1) nextIdx = 0;
+      } else {
+        if (currentIdx === -1) return; // k with no focus does nothing
+        nextIdx = currentIdx > 0 ? currentIdx - 1 : 0;
+      }
+
+      const nextKey = keys[nextIdx];
+      setFocusedKey(nextKey);
+      requestAnimationFrame(() => {
+        containerRef
+          ?.querySelector(`[data-row-key="${nextKey}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+      return;
+    }
+
+    if (e.key === 'Enter' && focusedKey()) {
+      e.preventDefault();
+      if (isExpandableKey(focusedKey()!)) {
+        toggleExpanded(focusedKey()!);
+      }
+      return;
+    }
+
+    if (e.key === 'Escape' && focusedKey()) {
+      e.preventDefault();
+      setFocusedKey(null);
+      return;
+    }
+  }
+
+  // Reset navigation state when results are cleared (new query)
+  createEffect(() => {
+    if (props.results.length === 0) {
+      setFocusedKey(null);
+      setExpandedKeys(new Set<string>());
+    }
+  });
+
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
 
   return (
-    <div class="results-container">
+    <div class="results-container" ref={containerRef}>
       {/* Error banner */}
       <Show when={props.error}>
         <div class="error-banner">
@@ -525,7 +679,14 @@ export function ResultsTable(props: ResultsTableProps) {
 
         {/* Record groups */}
         <For each={groups()}>
-          {(group) => <RecordGroup group={group} />}
+          {(group) => (
+            <RecordGroup
+              group={group}
+              focusedKey={focusedKey()}
+              expandedKeys={expandedKeys()}
+              onRowClick={handleRowClick}
+            />
+          )}
         </For>
 
         {/* Progress bar during loading */}
