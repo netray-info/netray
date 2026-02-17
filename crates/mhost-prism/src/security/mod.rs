@@ -9,9 +9,11 @@
 
 pub mod ip_extract;
 pub mod query_policy;
+pub mod rate_limit;
 
 pub use ip_extract::IpExtractor;
 pub use query_policy::QueryPolicy;
+pub use rate_limit::RateLimitState;
 
 use axum::extract::Request;
 use axum::middleware::Next;

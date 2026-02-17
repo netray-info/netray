@@ -221,7 +221,7 @@ fn parse_server_spec(name: &str) -> Result<ServerSpec, ApiError> {
 async fn execute_query(
     mut parsed: ParsedQuery,
     state: AppState,
-    _client_ip: IpAddr,
+    client_ip: IpAddr,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let request_id = uuid::Uuid::now_v7().to_string();
 
@@ -243,6 +243,13 @@ async fn execute_query(
             }
         }
     }
+
+    // Rate limiting: compute cost and check budget before building resolvers.
+    // Cost = record_types × effective_servers (matches SDD §8.2 query cost model).
+    let effective_servers = effective_server_specs(&parsed, &state.config);
+    let target_keys = target_keys_from_servers(&effective_servers);
+    let cost = (parsed.record_types.len() as u32) * (effective_servers.len().max(1) as u32);
+    let stream_guard = state.rate_limiter.check_query_cost(client_ip, &target_keys, cost)?;
 
     // Build resolver group.
     let resolver_group = build_resolver_group(&parsed, &state.config, timeout).await?;
@@ -271,6 +278,9 @@ async fn execute_query(
     let dnssec_requested = parsed.dnssec;
 
     tokio::spawn(async move {
+        // Hold stream guard for the lifetime of this task so the active stream
+        // count is decremented when the SSE connection ends.
+        let _stream_guard = stream_guard;
         let start = Instant::now();
         let total = record_types.len() as u32;
         for (completed, rt) in (0_u32..).zip(record_types.iter()) {
@@ -365,6 +375,39 @@ fn record_breaker_outcomes(cb: &Arc<CircuitBreakerRegistry>, lookups: &Lookups) 
             cb.record_success(&server_name);
         }
     }
+}
+
+/// Resolve the effective server specs for a query, applying config defaults
+/// when no servers are specified.
+fn effective_server_specs(parsed: &ParsedQuery, config: &Config) -> Vec<ServerSpec> {
+    if parsed.servers.is_empty() {
+        config
+            .dns
+            .default_servers
+            .iter()
+            .filter_map(|s| PredefinedProvider::from_str(s).ok())
+            .map(ServerSpec::Predefined)
+            .collect()
+    } else {
+        parsed.servers.clone()
+    }
+}
+
+/// Derive rate-limiting target keys from server specs.
+///
+/// Each unique server produces a key for per-target rate limiting:
+/// - Predefined provider → lowercase provider name (e.g., `"cloudflare"`)
+/// - System → `"system"`
+/// - IP → address string (e.g., `"1.1.1.1"`)
+fn target_keys_from_servers(servers: &[ServerSpec]) -> Vec<String> {
+    servers
+        .iter()
+        .map(|s| match s {
+            ServerSpec::Predefined(p) => p.to_string().to_ascii_lowercase(),
+            ServerSpec::System => "system".to_string(),
+            ServerSpec::Ip { addr, .. } => addr.to_string(),
+        })
+        .collect()
 }
 
 /// Build a [`ResolverGroup`] from the parsed query's server specs.

@@ -45,9 +45,10 @@ async fn main() {
 
     // 3. Build shared application state.
     let state = api::AppState {
-        config: Arc::new(config.clone()),
         circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new()),
         ip_extractor: Arc::new(security::IpExtractor::new(&config.server.trusted_proxies)),
+        rate_limiter: Arc::new(security::RateLimitState::new(&config.limits)),
+        config: Arc::new(config.clone()),
     };
 
     // 4. Compose the application router.
