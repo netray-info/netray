@@ -106,7 +106,8 @@ fn default_per_ip_per_minute() -> u32 {
 }
 
 fn default_per_ip_burst() -> u32 {
-    10
+    // Must accommodate the maximum single-query cost: max_record_types × max_servers = 10 × 4.
+    40
 }
 
 fn default_per_target_per_minute() -> u32 {

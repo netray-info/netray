@@ -71,7 +71,8 @@ impl RateLimitState {
     /// Check whether a query with the given cost is allowed.
     ///
     /// `target_keys` are derived from the server specs (provider name, "system", or IP string).
-    /// `cost` is `record_types × servers` — the number of DNS lookups that will be issued.
+    /// `total_cost` is `record_types × servers` — the total number of DNS lookups.
+    /// `per_target_cost` is `record_types` — the lookups charged to each individual target.
     ///
     /// Returns `Ok(StreamGuard)` if allowed (caller must hold the guard for the stream's
     /// lifetime), or `Err(ApiError::RateLimited)` if any limiter rejects.
@@ -79,10 +80,11 @@ impl RateLimitState {
         &self,
         client_ip: IpAddr,
         target_keys: &[String],
-        cost: u32,
+        total_cost: u32,
+        per_target_cost: u32,
     ) -> Result<StreamGuard, ApiError> {
-        // Ensure cost is at least 1.
-        let cost_nz = NonZeroU32::new(cost.max(1)).expect("max(1) is non-zero");
+        let total_nz = NonZeroU32::new(total_cost.max(1)).expect("max(1) is non-zero");
+        let target_nz = NonZeroU32::new(per_target_cost.max(1)).expect("max(1) is non-zero");
 
         // 1. Check active stream count for this IP.
         {
@@ -97,16 +99,16 @@ impl RateLimitState {
             }
         }
 
-        // 2. Per-IP rate limit.
-        check_keyed_cost(&self.per_ip, &client_ip, cost_nz, "per_ip")?;
+        // 2. Per-IP rate limit (total cost: all lookups charged to this client).
+        check_keyed_cost(&self.per_ip, &client_ip, total_nz, "per_ip")?;
 
-        // 3. Per-target rate limit (check each target).
+        // 3. Per-target rate limit (each target only charged its share: record_types).
         for key in target_keys {
-            check_keyed_cost(&self.per_target, key, cost_nz, "per_target")?;
+            check_keyed_cost(&self.per_target, key, target_nz, "per_target")?;
         }
 
-        // 4. Global rate limit.
-        check_direct_cost(&self.global, cost_nz)?;
+        // 4. Global rate limit (total cost).
+        check_direct_cost(&self.global, total_nz)?;
 
         // All checks passed — increment active stream count.
         let guard = StreamGuard::new(Arc::clone(&self.active_streams), client_ip);
@@ -201,7 +203,7 @@ mod tests {
     fn test_config() -> LimitsConfig {
         LimitsConfig {
             per_ip_per_minute: 30,
-            per_ip_burst: 10,
+            per_ip_burst: 40,
             per_target_per_minute: 30,
             global_per_minute: 500,
             max_concurrent_connections: 256,
@@ -218,7 +220,8 @@ mod tests {
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
         let targets = vec!["cloudflare".to_string()];
 
-        let guard = state.check_query_cost(ip, &targets, 4);
+        // 4 record types × 1 server = total 4, per-target 4.
+        let guard = state.check_query_cost(ip, &targets, 4, 4);
         assert!(guard.is_ok());
     }
 
@@ -228,10 +231,10 @@ mod tests {
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
         let targets = vec!["cloudflare".to_string()];
 
-        // Burst is 10 — first call with cost 10 should succeed.
-        assert!(state.check_query_cost(ip, &targets, 10).is_ok());
+        // Burst is 40 — first call with cost 40 should succeed.
+        assert!(state.check_query_cost(ip, &targets, 40, 10).is_ok());
         // Second call should be rejected (burst exhausted).
-        assert!(state.check_query_cost(ip, &targets, 1).is_err());
+        assert!(state.check_query_cost(ip, &targets, 1, 1).is_err());
     }
 
     #[test]
@@ -243,9 +246,9 @@ mod tests {
         let targets1 = vec!["cloudflare".to_string()];
         let targets2 = vec!["google".to_string()];
 
-        assert!(state.check_query_cost(ip1, &targets1, 10).is_ok());
+        assert!(state.check_query_cost(ip1, &targets1, 10, 10).is_ok());
         // ip2 has its own per-IP budget.
-        assert!(state.check_query_cost(ip2, &targets2, 10).is_ok());
+        assert!(state.check_query_cost(ip2, &targets2, 10, 10).is_ok());
     }
 
     #[test]
@@ -255,12 +258,12 @@ mod tests {
         let targets = vec!["cloudflare".to_string()];
 
         // Hold 3 guards (max_streams = 3).
-        let _g1 = state.check_query_cost(ip, &targets, 1).unwrap();
-        let _g2 = state.check_query_cost(ip, &targets, 1).unwrap();
-        let _g3 = state.check_query_cost(ip, &targets, 1).unwrap();
+        let _g1 = state.check_query_cost(ip, &targets, 1, 1).unwrap();
+        let _g2 = state.check_query_cost(ip, &targets, 1, 1).unwrap();
+        let _g3 = state.check_query_cost(ip, &targets, 1, 1).unwrap();
 
         // 4th should be rejected.
-        assert!(state.check_query_cost(ip, &targets, 1).is_err());
+        assert!(state.check_query_cost(ip, &targets, 1, 1).is_err());
     }
 
     #[test]
@@ -269,28 +272,29 @@ mod tests {
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
         let targets = vec!["cloudflare".to_string()];
 
-        let g1 = state.check_query_cost(ip, &targets, 1).unwrap();
-        let _g2 = state.check_query_cost(ip, &targets, 1).unwrap();
-        let _g3 = state.check_query_cost(ip, &targets, 1).unwrap();
+        let g1 = state.check_query_cost(ip, &targets, 1, 1).unwrap();
+        let _g2 = state.check_query_cost(ip, &targets, 1, 1).unwrap();
+        let _g3 = state.check_query_cost(ip, &targets, 1, 1).unwrap();
 
         // At max streams — 4th rejected.
-        assert!(state.check_query_cost(ip, &targets, 1).is_err());
+        assert!(state.check_query_cost(ip, &targets, 1, 1).is_err());
 
         // Drop one guard — now 4th should succeed.
         drop(g1);
-        assert!(state.check_query_cost(ip, &targets, 1).is_ok());
+        assert!(state.check_query_cost(ip, &targets, 1, 1).is_ok());
     }
 
     #[test]
     fn cost_calculation_matches_query_shape() {
-        // 4 record types × 2 servers = cost 8
+        // 4 record types × 2 servers = total cost 8, per-target cost 4.
         let state = RateLimitState::new(&test_config());
         let ip: IpAddr = "198.51.100.1".parse().unwrap();
         let targets = vec!["cloudflare".to_string(), "google".to_string()];
 
-        // Burst is 10, cost 8 should succeed.
-        assert!(state.check_query_cost(ip, &targets, 8).is_ok());
-        // Remaining burst is 2, cost 4 should fail.
-        assert!(state.check_query_cost(ip, &targets, 4).is_err());
+        // Per-IP burst is 40, total cost 8 should succeed.
+        assert!(state.check_query_cost(ip, &targets, 8, 4).is_ok());
+        // Remaining per-IP burst is 32, but per-target burst is 10 and we used 4.
+        // Total cost 32 with per-target 16 exceeds per-target burst (10) → rejected.
+        assert!(state.check_query_cost(ip, &targets, 32, 16).is_err());
     }
 }

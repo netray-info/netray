@@ -245,13 +245,17 @@ async fn execute_query(
     }
 
     // Rate limiting: compute cost and check budget before building resolvers.
-    // Cost = record_types × effective_servers (matches SDD §8.2 query cost model).
+    // Total cost = record_types × servers (SDD §8.2 query cost model).
+    // Per-target cost = record_types (each target is only charged its share).
     let effective_servers = effective_server_specs(&parsed, &state.config);
     let target_keys = target_keys_from_servers(&effective_servers);
-    let cost = (parsed.record_types.len() as u32) * (effective_servers.len().max(1) as u32);
-    let stream_guard = state
-        .rate_limiter
-        .check_query_cost(client_ip, &target_keys, cost)?;
+    let num_types = parsed.record_types.len() as u32;
+    let num_servers = effective_servers.len().max(1) as u32;
+    let total_cost = num_types * num_servers;
+    let stream_guard =
+        state
+            .rate_limiter
+            .check_query_cost(client_ip, &target_keys, total_cost, num_types)?;
 
     // Build resolver group and parallel circuit breaker keys.
     let (resolver_group, breaker_keys) =
