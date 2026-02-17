@@ -51,7 +51,7 @@ Browser                     prism binary
 
 - **Different dependency profile.** prism pulls in `axum`, `tower-http`, `tower-governor`, `rust-embed`, and frontend build artifacts. These have no business in the mhost CLI or library.
 - **Independent release cadence.** The web service can iterate on UI and API changes without cutting a new mhost release.
-- **Clean library dependency.** `prism` depends on `mhost` as a library (no `app` feature) plus a thin layer of shared types. It does not inherit CLI parsing, terminal formatting, or TUI code. **Note**: The lint functions (`check_spf`, `check_mx_sync`, `check_caa`, etc.) and trace/delegation logic currently live in `src/app/modules/check/lints/` and `src/app/modules/trace/`, gated behind the `app` feature. Phase 2 (check + trace endpoints) is blocked on extracting this logic into the library layer — see section 14 for scoping.
+- **Clean library dependency.** `prism` depends on `mhost` as a library (no `app` feature) plus a thin layer of shared types. It does not inherit CLI parsing, terminal formatting, or TUI code. **Note**: The lint functions (`check_spf`, `check_mx_sync`, `check_caa`, etc.) and trace/delegation logic currently live in `src/app/modules/check/lints/` and `src/app/modules/trace/`, gated behind the `app` feature. Phase 4 (check + trace endpoints) is blocked on extracting this logic into the library layer — see section 14 for scoping.
 - **Precedent.** This mirrors how many Rust projects separate their library from their server binary (e.g., `tantivy` vs. `quickwit`).
 
 ### 3.1 Workspace Conversion
@@ -161,8 +161,8 @@ example.com A AAAA @cloudflare @google +tls +dnssec
 | `example.com` (bare domain) | `A AAAA CNAME MX` with configured default servers | Matches mhost CLI defaults |
 | `example.com ALL` | Rejected with 422 `TOO_MANY_RECORD_TYPES` | `ALL` expands to ~27 types (all standard types minus blocked), which exceeds `max_record_types` (10). The error message explains the limit and suggests specifying types explicitly. `ALL` is not a `RecordType` variant — the parser expands it before validation. |
 | `192.0.2.1` (IP address) | `PTR` query with in-addr.arpa | Auto-detect reverse lookup |
-| `+trace` | Overrides to trace mode (Phase 2) | Switches backend to trace subcommand. Returns 422 `FEATURE_NOT_AVAILABLE` until implemented. |
-| `+check` | Overrides to check mode (Phase 2) | Switches backend to check subcommand. Returns 422 `FEATURE_NOT_AVAILABLE` until implemented. |
+| `+trace` | Overrides to trace mode (Phase 4) | Switches backend to trace subcommand. Returns 422 `FEATURE_NOT_AVAILABLE` until implemented. |
+| `+check` | Overrides to check mode (Phase 4) | Switches backend to check subcommand. Returns 422 `FEATURE_NOT_AVAILABLE` until implemented. |
 | No `@server` specified | Configured `default_servers` (see §9) | Configurable per deployment |
 
 ### 4.5 Blocked Query Types
@@ -1042,24 +1042,8 @@ The TypeScript code in the frontend is limited to **UI concerns**: tokenizing th
 - `GET /api/health` (exempt from rate limiting)
 - Prometheus metrics on separate port (`:9090`, localhost-only)
 
-### Phase 1.5 — Library Extraction (prerequisite for Phase 2)
+### Phase 2 — Transport & UI Enhancements
 
-This is the highest-risk prerequisite for Phase 2 and should be completed independently before any Phase 2 web work begins. The lint functions and trace logic currently live in the `app` layer, gated behind `feature = "app"`. They must be extracted to the library so prism can use them without pulling in CLI dependencies.
-
-**Scope:**
-- **Lint extraction**: Move 13 lint modules from `src/app/modules/check/lints/` to a new `src/check/lints/` library module: `spf.rs`, `mx.rs`, `caa.rs`, `ns.rs`, `soa.rs`, `dmarc.rs`, `dnssec_lint.rs`, `open_resolver.rs`, `delegation.rs`, `cnames.rs`, `https_svcb.rs`, `axfr.rs`, `ttl.rs`. The `CheckResult` type and lint runner move with them. CLI-specific formatting (`SummaryFormatter` for check results) stays in `app/`.
-- **Trace extraction**: Move delegation-walking logic from `src/app/modules/trace/trace.rs` to a new `src/trace/` library module. The `TraceHop` type and recursive resolution logic move with it. CLI-specific output stays in `app/`.
-- **Consumer migration**: Update `app/modules/check/` and `app/modules/trace/` to re-export from the library modules. Update mdive TUI imports (`src/bin/mdive/lints.rs`) to use the new library paths. Both consumers must continue working unchanged.
-- **Feature gate semantics**: The new library modules have no feature gate — they are available in all builds. The `app` feature continues to gate only CLI-specific code.
-- **Testing**: All existing check and trace tests must pass. New unit tests for the extracted modules (without app dependencies) confirm library-only usability.
-
-This refactoring benefits all three consumers (CLI, TUI, web) and reduces the `app` feature's surface area.
-
-### Phase 2 — Check and Trace
-
-- `POST /api/check` with lint results (depends on Phase 1.5)
-- `POST /api/trace` with hop-by-hop delegation visualization (depends on Phase 1.5)
-- `+check` and `+trace` flags in query language
 - Transport selection (`+tls`, `+https`, `+tcp`, `+udp`)
 - `+dnssec` flag
 - Server comparison tab (multi-server divergence view)
@@ -1076,7 +1060,23 @@ This refactoring benefits all three consumers (CLI, TUI, web) and reduces the `a
 - Terms of Service page
 - GDPR-compliant log rotation
 
-### Phase 4 — Future (not committed)
+### Phase 4 — Library Extraction & Check/Trace
+
+This phase requires extracting lint and trace logic from the mhost `app` layer into the library before the web endpoints can be built.
+
+**Library extraction scope:**
+- **Lint extraction**: Move 13 lint modules from `src/app/modules/check/lints/` to a new `src/check/lints/` library module: `spf.rs`, `mx.rs`, `caa.rs`, `ns.rs`, `soa.rs`, `dmarc.rs`, `dnssec_lint.rs`, `open_resolver.rs`, `delegation.rs`, `cnames.rs`, `https_svcb.rs`, `axfr.rs`, `ttl.rs`. The `CheckResult` type and lint runner move with them. CLI-specific formatting (`SummaryFormatter` for check results) stays in `app/`.
+- **Trace extraction**: Move delegation-walking logic from `src/app/modules/trace/trace.rs` to a new `src/trace/` library module. The `TraceHop` type and recursive resolution logic move with it. CLI-specific output stays in `app/`.
+- **Consumer migration**: Update `app/modules/check/` and `app/modules/trace/` to re-export from the library modules. Update mdive TUI imports (`src/bin/mdive/lints.rs`) to use the new library paths. Both consumers must continue working unchanged.
+- **Feature gate semantics**: The new library modules have no feature gate — they are available in all builds. The `app` feature continues to gate only CLI-specific code.
+- **Testing**: All existing check and trace tests must pass. New unit tests for the extracted modules (without app dependencies) confirm library-only usability.
+
+**Web endpoints (depend on library extraction above):**
+- `POST /api/check` with lint results
+- `POST /api/trace` with hop-by-hop delegation visualization
+- `+check` and `+trace` flags in query language
+
+### Phase 5 — Future (not committed)
 
 - Authentication (API keys for higher rate limits)
 - DNSSEC chain visualization
@@ -1107,7 +1107,7 @@ This refactoring benefits all three consumers (CLI, TUI, web) and reduces the `a
 
 1. **Workspace conversion.** mhost is currently a single crate, not a Cargo workspace. Converting to a workspace (Phase 0) is a prerequisite that touches the root `Cargo.toml`, CI workflows, and release automation. The migration itself is low-risk (the mhost crate's public API is unchanged), but it must be validated end-to-end before any prism development begins. See §3.1 for the detailed scope.
 
-2. **Library extraction for check/trace.** Phase 1.5 requires moving 13 lint modules and the trace logic from `app/` to the library layer. This is the highest-risk prerequisite — it changes module boundaries, requires updating three consumers (CLI, TUI, web), and must maintain feature-gate semantics. See §14 Phase 1.5 for the detailed scope. Failure or delay here blocks all of Phase 2.
+2. **Library extraction for check/trace.** Phase 4 requires moving 13 lint modules and the trace logic from `app/` to the library layer. This is the highest-risk item — it changes module boundaries, requires updating three consumers (CLI, TUI, web), and must maintain feature-gate semantics. See §14 Phase 4 for the detailed scope. The extraction must be completed before the check/trace web endpoints can be built.
 
 3. **Frontend build dependency.** The Rust binary requires `frontend/dist/` to exist at compile time. CI must run `npm run build` before `cargo build`. This adds Node.js as a build-time dependency. Mitigation: `build.rs` checks for `frontend/dist/index.html` and emits an actionable compile error if missing. A `just build-web` recipe sequences the full build (npm + cargo). `frontend/dist/` is `.gitignored` — it is never checked into the repository.
 

@@ -70,10 +70,10 @@ Phased delivery as defined in SDD §14:
 
 - ~~**Phase 0**: Workspace conversion (mhost repo)~~ — N/A (standalone repo)
 - **Phase 1**: MVP — query endpoint, parser, results table, rate limiting, circuit breaker, metrics
-- **Phase 1.5**: Library extraction (lint/trace logic from app/ to library)
-- **Phase 2**: Check + trace endpoints, transport flags, DNSSEC, server comparison
+- **Phase 2**: Transport & UI enhancements — transport flags, DNSSEC, server comparison, expandable rows
 - **Phase 3**: Polish — server-side autocomplete, keyboard shortcuts, history, mobile
-- **Phase 4**: Future — auth, DNSSEC visualization, propagation map
+- **Phase 4**: Library extraction + check/trace endpoints (lint/trace logic from app/ to library, then web endpoints)
+- **Phase 5**: Future — auth, DNSSEC visualization, propagation map
 
 ## Build & Test
 
@@ -121,8 +121,8 @@ mhost-prism/                  # standalone crate (not a workspace member)
     api/
       mod.rs                  # Route definitions
       query.rs                # GET/POST /api/query → SSE stream
-      check.rs                # POST /api/check → SSE stream (Phase 2)
-      trace.rs                # POST /api/trace → SSE stream (Phase 2)
+      check.rs                # POST /api/check → SSE stream (Phase 4)
+      trace.rs                # POST /api/trace → SSE stream (Phase 4)
       parse.rs                # POST /api/parse → completion hints (Phase 3)
       meta.rs                 # GET /api/servers, /api/record-types, /api/health
     security/
