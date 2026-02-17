@@ -24,13 +24,16 @@ function saveHistory(history: string[]) {
   } catch { /* ignore */ }
 }
 
-function loadTheme(): Theme {
+function getSystemTheme(): Theme {
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function getSavedTheme(): Theme | null {
   try {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved === 'light' || saved === 'dark') return saved;
   } catch { /* ignore */ }
-  if (window.matchMedia?.('(prefers-color-scheme: light)').matches) return 'light';
-  return 'dark';
+  return null;
 }
 
 export default function App() {
@@ -41,7 +44,7 @@ export default function App() {
   const [stats, setStats] = createSignal<DoneStats | null>(null);
   const [activeTab, setActiveTab] = createSignal<ActiveTab>('results');
   const [history, setHistory] = createSignal<string[]>(loadHistory());
-  const [theme, setTheme] = createSignal<Theme>(loadTheme());
+  const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? getSystemTheme());
   const [showHelp, setShowHelp] = createSignal(false);
   const [showTos, setShowTos] = createSignal(false);
 
@@ -54,13 +57,13 @@ export default function App() {
 
   function applyTheme(t: Theme) {
     document.documentElement.setAttribute('data-theme', t);
-    try { localStorage.setItem(THEME_KEY, t); } catch { /* ignore */ }
   }
 
   function toggleTheme() {
     const next = theme() === 'dark' ? 'light' : 'dark';
     setTheme(next);
     applyTheme(next);
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
   }
 
   // ---------------------------------------------------------------------------
@@ -205,8 +208,21 @@ export default function App() {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
+  // Track system theme changes when no explicit user preference is saved.
+  let mediaQuery: MediaQueryList | undefined;
+  const onSystemThemeChange = () => {
+    if (!getSavedTheme()) {
+      const sys = getSystemTheme();
+      setTheme(sys);
+      applyTheme(sys);
+    }
+  };
+
   onMount(() => {
     applyTheme(theme());
+
+    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    mediaQuery.addEventListener('change', onSystemThemeChange);
 
     const params = new URLSearchParams(window.location.search);
     const q = params.get('q');
@@ -217,6 +233,7 @@ export default function App() {
 
   onCleanup(() => {
     closeEventSource();
+    mediaQuery?.removeEventListener('change', onSystemThemeChange);
     document.removeEventListener('keydown', handleKeyDown);
   });
 
@@ -257,60 +274,61 @@ export default function App() {
           }}
         />
 
-        <Show when={status() === 'done' && stats()}>
-          <div class="status-bar">
-            <span title="Total DNS queries sent across all servers and record types">
-              {stats()!.total_queries} queries
-            </span>
-            <span class="status-separator">/</span>
-            <span title="Record type batches received from the server">
-              {results().length} batches
-            </span>
-            <span class="status-separator">/</span>
-            <span title="Total wall-clock time for the query">
-              {stats()!.duration_ms}ms
-            </span>
-            <Show when={stats()!.transport && stats()!.transport !== 'udp'}>
-              <span class="status-separator">/</span>
-              <span class="status-badge transport-badge" title="DNS transport protocol used for this query">
-                {stats()!.transport!.toUpperCase()}
-              </span>
-            </Show>
-            <Show when={stats()!.dnssec}>
-              <span class="status-separator">/</span>
-              <span class="status-badge dnssec-badge" title="DNSSEC validation was requested for this query">
-                DNSSEC
-              </span>
-            </Show>
-            <Show when={stats()!.warnings.length > 0}>
-              <span class="status-separator">/</span>
-              <span class="status-warnings" title={stats()!.warnings.join('; ')}>
-                {stats()!.warnings.length} warning{stats()!.warnings.length !== 1 ? 's' : ''}
-              </span>
-            </Show>
-          </div>
-        </Show>
-
         <Show when={status() !== 'idle' || results().length > 0}>
           <div class="tabs">
-            <button
-              class={`tab ${activeTab() === 'results' ? 'active' : ''}`}
-              onClick={() => setActiveTab('results')}
-            >
-              Results
-            </button>
-            <button
-              class={`tab ${activeTab() === 'servers' ? 'active' : ''}`}
-              onClick={() => setActiveTab('servers')}
-            >
-              Servers
-            </button>
-            <button
-              class={`tab ${activeTab() === 'json' ? 'active' : ''}`}
-              onClick={() => setActiveTab('json')}
-            >
-              JSON
-            </button>
+            <div class="tabs-left">
+              <button
+                class={`tab ${activeTab() === 'results' ? 'active' : ''}`}
+                onClick={() => setActiveTab('results')}
+              >
+                Results
+              </button>
+              <button
+                class={`tab ${activeTab() === 'servers' ? 'active' : ''}`}
+                onClick={() => setActiveTab('servers')}
+              >
+                Servers
+              </button>
+              <button
+                class={`tab ${activeTab() === 'json' ? 'active' : ''}`}
+                onClick={() => setActiveTab('json')}
+              >
+                JSON
+              </button>
+            </div>
+            <Show when={status() === 'done' && stats()}>
+              <div class="status-info">
+                <span title="Total DNS queries sent across all servers and record types">
+                  {stats()!.total_queries} queries
+                </span>
+                <span class="status-separator">/</span>
+                <span title="Record type batches received from the server">
+                  {results().length} batches
+                </span>
+                <span class="status-separator">/</span>
+                <span title="Total wall-clock time for the query">
+                  {stats()!.duration_ms}ms
+                </span>
+                <Show when={stats()!.transport && stats()!.transport !== 'udp'}>
+                  <span class="status-separator">/</span>
+                  <span class="status-badge transport-badge" title="DNS transport protocol used for this query">
+                    {stats()!.transport!.toUpperCase()}
+                  </span>
+                </Show>
+                <Show when={stats()!.dnssec}>
+                  <span class="status-separator">/</span>
+                  <span class="status-badge dnssec-badge" title="DNSSEC validation was requested for this query">
+                    DNSSEC
+                  </span>
+                </Show>
+                <Show when={stats()!.warnings.length > 0}>
+                  <span class="status-separator">/</span>
+                  <span class="status-warnings" title={stats()!.warnings.join('; ')}>
+                    {stats()!.warnings.length} warning{stats()!.warnings.length !== 1 ? 's' : ''}
+                  </span>
+                </Show>
+              </div>
+            </Show>
           </div>
         </Show>
 
