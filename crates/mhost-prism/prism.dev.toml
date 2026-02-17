@@ -1,0 +1,13 @@
+# Development configuration — relaxed limits for local testing.
+# Used by `make dev`.
+
+[limits]
+per_ip_per_minute = 600
+per_ip_burst = 40
+per_target_per_minute = 300
+global_per_minute = 5000
+per_ip_max_streams = 20
+
+[dns]
+allow_system_resolvers = true
+allow_arbitrary_servers = true

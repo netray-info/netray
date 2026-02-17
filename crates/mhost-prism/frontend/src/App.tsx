@@ -202,6 +202,16 @@ export default function App() {
       focusEditor?.();
       return;
     }
+
+    // r — re-run current query
+    if (e.key === 'r' && !isEditing) {
+      const q = query();
+      if (q) {
+        e.preventDefault();
+        submitQuery(q);
+      }
+      return;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -386,6 +396,10 @@ export default function App() {
                 <tr>
                   <td class="shortcut-key">&uarr; / &darr;</td>
                   <td>Browse query history (in input)</td>
+                </tr>
+                <tr>
+                  <td class="shortcut-key">r</td>
+                  <td>Re-run current query</td>
                 </tr>
                 <tr>
                   <td class="shortcut-key">?</td>

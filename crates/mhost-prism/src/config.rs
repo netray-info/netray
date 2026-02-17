@@ -102,7 +102,7 @@ fn default_metrics_bind() -> SocketAddr {
 }
 
 fn default_per_ip_per_minute() -> u32 {
-    30
+    120
 }
 
 fn default_per_ip_burst() -> u32 {
@@ -111,11 +111,11 @@ fn default_per_ip_burst() -> u32 {
 }
 
 fn default_per_target_per_minute() -> u32 {
-    30
+    60
 }
 
 fn default_global_per_minute() -> u32 {
-    500
+    1000
 }
 
 fn default_max_concurrent() -> usize {

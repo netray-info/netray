@@ -30,7 +30,7 @@ frontend-dev:
 
 # Combined
 dev:
-	cargo run
+	cargo run -- prism.dev.toml
 
 lint: clippy fmt-check
 
