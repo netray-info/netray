@@ -1,7 +1,7 @@
 # Software Design Document: `prism`
 
 **Feature**: Web-based DNS debugging service powered by mhost-lib
-**Status**: Proposal
+**Status**: In Progress (Phases 1–3 implemented)
 **Date**: 2026-02-17
 **Roadmap**: To be added to `ROADMAP.md` upon acceptance of this SDD.
 
@@ -45,59 +45,56 @@ Browser                     prism binary
   |                              |
 ```
 
-## 3. Placement: Separate Crate
+## 3. Placement: Standalone Repository
 
-`prism` is a new workspace member, not a feature flag in the existing mhost crate. Rationale:
+> **Implementation note**: prism was implemented as a standalone repository (not a workspace member of the mhost repo), depending on `mhost` as a published crate from crates.io. This diverges from the original proposal below but preserves all the stated benefits — different dependency profile, independent release cadence, and clean library dependency — with the added benefit of a fully independent release pipeline. References to "workspace member" in this section are historical; §3.2 is updated to reflect the actual layout.
+
+`prism` is a ~~new workspace member~~ standalone crate, not a feature flag in the existing mhost crate. Rationale:
 
 - **Different dependency profile.** prism pulls in `axum`, `tower-http`, `tower-governor`, `rust-embed`, and frontend build artifacts. These have no business in the mhost CLI or library.
 - **Independent release cadence.** The web service can iterate on UI and API changes without cutting a new mhost release.
 - **Clean library dependency.** `prism` depends on `mhost` as a library (no `app` feature) plus a thin layer of shared types. It does not inherit CLI parsing, terminal formatting, or TUI code. **Note**: The lint functions (`check_spf`, `check_mx_sync`, `check_caa`, etc.) and trace/delegation logic currently live in `src/app/modules/check/lints/` and `src/app/modules/trace/`, gated behind the `app` feature. Phase 4 (check + trace endpoints) is blocked on extracting this logic into the library layer — see section 14 for scoping.
 - **Precedent.** This mirrors how many Rust projects separate their library from their server binary (e.g., `tantivy` vs. `quickwit`).
 
-### 3.1 Workspace Conversion
+### 3.1 ~~Workspace Conversion~~ Standalone Repository
 
-mhost is currently a single crate, not a Cargo workspace. Converting to a workspace is a prerequisite for adding prism. This involves:
+> **Superseded**: prism was implemented as a standalone repository instead of a workspace member. The workspace conversion described below was not needed. This section is retained for historical context.
 
-1. **Root `Cargo.toml` restructure**: Add `[workspace]` section with `members = [".", "prism"]`. The existing `[package]` stays in the same file (Cargo supports `[workspace]` + `[package]` in the root when the root is itself a member via `"."`).
-2. **Shared workspace settings**: Extract common `[workspace.dependencies]` for crates used by both members (tokio, serde, tracing). This avoids version drift.
-3. **CI updates**: `cargo test` at the workspace root runs tests for all members. The release workflow must build `--bin mhost` and `--bin mdive` explicitly (or via `-p mhost`), since `cargo build --release` in a workspace builds all members.
-4. **Feature flag verification**: Ensure `feature = "app"` and `feature = "tui"` still gate correctly when mhost is a workspace member. The `build.rs` (shell completions) runs only for the mhost package.
-
-This is a low-risk migration — the mhost crate's public API and binary outputs are unchanged. But it must be completed before any prism development begins. See §16 risk #1.
+~~mhost is currently a single crate, not a Cargo workspace. Converting to a workspace is a prerequisite for adding prism.~~ N/A — prism is a standalone repo depending on `mhost` via crates.io (`mhost = "<version>"`). No workspace conversion was required.
 
 ### 3.2 Directory Layout
 
 ```
-mhost/                            # workspace root (existing repo)
-  Cargo.toml                      # [workspace] + [package] for mhost
-  src/lib.rs                      # library: resolver, nameserver, resources, ...
-  prism/                      # new workspace member
-    Cargo.toml                    # depends on mhost = { path = ".." }
+mhost-prism/                      # standalone repository
+  Cargo.toml                      # depends on mhost = "<version>" (crates.io)
+  src/
+    main.rs                       # entry point, axum server setup
+    api/
+      mod.rs                      # route definitions
+      query.rs                    # GET /api/query -> SSE stream
+      parse.rs                    # POST /api/parse -> completion hints
+      meta.rs                     # GET /api/servers, GET /api/record-types, GET /api/health
+    security/
+      mod.rs                      # middleware composition
+      rate_limit.rs               # tower-governor layers
+      ip_extract.rs               # real client IP from proxy headers
+      query_policy.rs             # target validation, type restrictions
+    config.rs                     # server configuration (bind addr, limits, etc.)
+    error.rs                      # thiserror ApiError enum -> HTTP status + error codes
+    circuit_breaker.rs            # per-provider circuit breaker
+  frontend/                       # SolidJS + Vite project (strict TypeScript)
     src/
-      main.rs                     # entry point, axum server setup
-      api/
-        mod.rs                    # route definitions
-        query.rs                  # GET/POST /api/query -> SSE stream
-        check.rs                  # POST /api/check -> SSE stream
-        trace.rs                  # POST /api/trace -> SSE stream
-        parse.rs                  # POST /api/parse -> completion hints
-        meta.rs                   # GET /api/servers, GET /api/record-types
-      security/
-        mod.rs                    # middleware composition
-        rate_limit.rs             # tower-governor layers
-        ip_extract.rs             # real client IP from proxy headers
-        query_policy.rs           # target validation, type restrictions
-      config.rs                   # server configuration (bind addr, limits, etc.)
-    frontend/                     # SolidJS + Vite project
-      src/
-        App.tsx
-        components/
-          QueryInput.tsx          # CodeMirror 6 single-line input
-          ResultsTable.tsx        # streaming results table
-          ServerComparison.tsx    # multi-server diff view
-        lib/
-          tokenizer.ts            # syntax highlighting tokenizer (cosmetic only, see §13.7)
-      dist/                       # build output, .gitignored, embedded via rust-embed
+      App.tsx                     # main app: SSE, theme, history, keyboard shortcuts
+      components/
+        QueryInput.tsx            # CodeMirror 6 single-line input with autocomplete
+        ResultsTable.tsx          # streaming results table with row-level keyboard nav
+      lib/
+        tokenizer.ts              # syntax highlighting tokenizer (cosmetic only, see §13.7)
+      styles/
+        global.css                # plain CSS with custom properties, dark/light themes
+    dist/                         # build output, .gitignored, embedded via rust-embed
+  docs/
+    sdd.md                        # this document
 ```
 
 ## 4. Query Language
@@ -136,7 +133,8 @@ provider    ::= <any name in PredefinedProvider::all()>
                 -- not a PredefinedProvider. See §9 for allow_system_resolvers.
 flag        ::= "+" flag_name
 flag_name   ::= "udp" | "tcp" | "tls" | "https"           -- transport
-              | "dnssec" | "trace" | "check"               -- mode/options
+              | "dnssec"                                   -- add DNSKEY + DS record types
+              | "trace" | "check"                          -- mode (Phase 4)
 ```
 
 ### 4.3 Examples
@@ -148,7 +146,7 @@ example.com A @8.8.8.8               # specific server
 example.com AAAA @cloudflare         # predefined provider
 example.com A @google @quad9         # multi-server comparison
 example.com MX +tls                  # DNS-over-TLS transport
-example.com A +dnssec               # DNSSEC chain verification mode
+example.com A +dnssec               # include DNSKEY and DS record types (no chain validation)
 example.com +check                   # health check mode
 example.com +trace                   # delegation trace mode
 example.com A AAAA @cloudflare @google +tls +dnssec
@@ -161,6 +159,7 @@ example.com A AAAA @cloudflare @google +tls +dnssec
 | `example.com` (bare domain) | `A AAAA CNAME MX` with configured default servers | Matches mhost CLI defaults |
 | `example.com ALL` | Rejected with 422 `TOO_MANY_RECORD_TYPES` | `ALL` expands to ~27 types (all standard types minus blocked), which exceeds `max_record_types` (10). The error message explains the limit and suggests specifying types explicitly. `ALL` is not a `RecordType` variant — the parser expands it before validation. |
 | `192.0.2.1` (IP address) | `PTR` query with in-addr.arpa | Auto-detect reverse lookup |
+| `+dnssec` | Adds `DNSKEY` and `DS` to requested record types | Fetches DNSSEC-related records for inspection. Does **not** perform chain-of-trust validation — the records are returned as-is for manual review. |
 | `+trace` | Overrides to trace mode (Phase 4) | Switches backend to trace subcommand. Returns 422 `FEATURE_NOT_AVAILABLE` until implemented. |
 | `+check` | Overrides to check mode (Phase 4) | Switches backend to check subcommand. Returns 422 `FEATURE_NOT_AVAILABLE` until implemented. |
 | No `@server` specified | Configured `default_servers` (see §9) | Configurable per deployment |
@@ -221,10 +220,10 @@ event: batch
 data: {"request_id":"019...","lookups":[{"query":{"name":"example.com","type":"MX"},"server":"1.1.1.1:853","result":{"Response":{"records":[...],"response_time_ms":15}}},{"query":{"name":"example.com","type":"MX"},"server":"8.8.8.8:53","result":{"Response":{"records":[...],"response_time_ms":20}}}],"completed":2,"total":3}
 
 event: done
-data: {"request_id":"019...","total_queries":6,"responses":3,"errors":0,"duration_ms":234}
+data: {"request_id":"019...","total_queries":6,"responses":3,"errors":0,"duration_ms":234,"transport":"tls","dnssec":false,"warnings":[]}
 ```
 
-`total_queries` is the total DNS lookups issued (3 record types x 2 servers = 6). `responses` is the number of completed batches (3, one per record type). `errors` counts batch-level failures.
+`total_queries` is the total DNS lookups issued (3 record types x 2 servers = 6). `responses` is the number of completed batches (3, one per record type). `errors` counts batch-level failures. `transport` is the protocol used (omitted or `"udp"` for default). `dnssec` indicates whether DNSKEY/DS record types were requested. `warnings` collects parser warnings (unknown tokens, etc.).
 
 The frontend accumulates batches progressively, populating each record-type section as its batch arrives.
 
@@ -379,7 +378,7 @@ Vanilla JS was considered but rejected: the autocomplete input with token highli
 A single-line CodeMirror 6 editor configured as a search bar:
 
 - **Syntax highlighting**: Tokens colored by type — domain (neutral), record types (blue), servers (green), flags (orange), errors (red underline)
-- **Autocomplete**: Context-aware dropdown triggered by `@`, `+`, or after whitespace following the domain. Grouped into categories: Record Types, Servers, Transport, Options. Each item includes a short description ("MX — Mail exchange record"). Phase 1 uses a static completion list embedded in the frontend. Phase 3 adds server-side completions via `/api/parse` — the frontend shows static completions immediately and replaces them with server completions when they arrive, with graceful fallback to the static list if `/api/parse` is slow or fails.
+- **Autocomplete**: Context-aware dropdown triggered by `@`, `+`, or after whitespace following the domain. Grouped into categories: Record Types, Servers, Transport, Options. Each item includes a short description ("MX — Mail exchange record"). Uses a static completion list embedded in the frontend. `Tab` accepts the top suggestion. Server-side `/api/parse` endpoint is available for future enhanced completions.
 - **Placeholder**: `example.com A AAAA @google +tls`
 - **Submit**: Enter key or button. Submitting a new query while results are still streaming closes the previous `EventSource` connection before opening a new one (analogous to mdive's `JoinHandle::abort()` pattern).
 - **History**: Up/Down arrows cycle previous queries (localStorage)
@@ -424,28 +423,30 @@ Key elements:
 - **Progressive population**: Rows appear as SSE events arrive. Skeleton placeholders for pending types.
 - **Server agreement column**: Shows "N/M agree" for each unique record value. Divergence highlighted in yellow/red.
 - **Expandable row detail**: Click a row to see full rdata fields, responding servers with latency, DNSSEC status, and human-readable interpretation (SPF mechanism breakdown, DMARC policy, etc.)
-- **Tabs**: Results (default), Servers (per-server comparison view), JSON (raw serialized output)
-- **Status bar**: Live query progress, completion stats
+- **Tabs**: Results (default), Servers (per-server comparison view), JSON (raw serialized output). Completion stats (query count, batch count, duration, transport badge, DNSSEC badge) are displayed inline in the tab bar, right-aligned, as subtle muted text with tooltips explaining each metric.
+- **DNSSEC badge**: Neutral color (gray) since `+dnssec` only fetches DNSKEY/DS records — no trust chain validation is performed. Tooltip clarifies this distinction.
 - **Connection error banner**: If the SSE connection fails (CORS preflight rejection, network error, non-2xx response), a prominent error banner replaces the results area with the error details and a retry button. SSE connections that fail CORS preflight produce no browser error message — the frontend must detect the failed `fetch()` and render the error explicitly.
 
 ### 6.4 Visual Design
 
-- **Dark mode by default** (with system-preference detection and manual toggle). Developer debugging tool aesthetic.
+- **System theme by default**: Follows the browser/OS `prefers-color-scheme` preference automatically. A manual toggle in the header saves the explicit choice to `localStorage`, overriding system detection until cleared. Reacts to live system theme changes (via `matchMedia` listener) when no explicit preference is saved.
 - **Monospaced font** for all DNS data (domain names, IPs, record values). Proportional font for UI chrome.
 - **Color palette**: Inherit from mhost's existing `record_type_color` (`app/common/styles.rs`) constants, adapted to CSS custom properties.
 - **Mobile**: Responsive layout — stacked cards instead of wide tables on narrow screens. Query input full-width. Not optimized for mobile but not broken.
 
 ### 6.5 Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `/` | Focus query input |
-| `Enter` | Submit query (when input focused) |
-| `Tab` | Accept top autocomplete suggestion |
-| `Escape` | Dismiss autocomplete / clear focus |
-| `j` / `k` | Navigate result rows (when input not focused) |
-| `Enter` | Expand/collapse selected row |
-| `?` | Show keyboard shortcut help |
+| Key | Context | Action |
+|-----|---------|--------|
+| `/` | Global | Focus query input |
+| `Enter` | Input focused | Submit query |
+| `Tab` | Input focused | Accept autocomplete suggestion |
+| `Escape` | Input focused | Dismiss autocomplete / blur input |
+| `↑` / `↓` | Input focused | Browse query history |
+| `j` / `k` | Results area | Navigate individual result rows (DOM-based via `data-row-key`) |
+| `Enter` | Results area | Expand/collapse focused row (NxDomain, error details) |
+| `Escape` | Results area | Clear row focus |
+| `?` | Global | Toggle keyboard shortcuts help modal |
 
 ## 7. Backend Architecture
 
@@ -866,7 +867,7 @@ Public deployments should set `allow_system_resolvers = false` and configure `de
 
 | Crate | Version | Purpose | Weight |
 |-------|---------|---------|--------|
-| `mhost` | path dep | DNS library (resolver, resources, nameserver) | existing |
+| `mhost` | crates.io | DNS library (resolver, resources, nameserver) | existing |
 | `axum` | 0.8 | Web framework (routes, extractors, SSE) | ~hyper + tower |
 | `tower-http` | 0.6 | CORS, compression, tracing, security headers | light |
 | `tower-governor` | latest | Rate limiting (GCRA via governor) | light |
@@ -894,27 +895,23 @@ Estimated frontend bundle: ~60KB gzipped (Solid 7KB + CodeMirror 6 ~40KB + appli
 
 ## 11. Build Process
 
+All build operations use `make` targets (see `Makefile` in repo root):
+
 ```sh
 # Development (two terminals)
-cd prism/frontend && npm run dev    # Vite dev server with HMR on :5173 (proxies /api/* to :8080)
-cd prism && cargo run               # axum server on :8080, reads frontend from disk
+make frontend-dev                   # Vite dev server :5173 (proxies /api/* to :8080)
+make dev                            # cargo run (axum server :8080)
 
 # Production build
-cd prism/frontend && npm run build  # outputs to frontend/dist/
-cd prism && cargo build --release   # rust-embed bakes dist/ into binary
+make                                # or: make all — builds frontend + backend
+make frontend                       # cd frontend && npm ci && npm run build
+make clean                          # remove target/ + frontend/dist/ + node_modules/
 
-# Result: single binary with embedded frontend
-./target/release/prism              # serves everything on :8080
+# CI pipeline
+make ci                             # lint + test + frontend + build
 ```
 
-The `cargo build` step for prism depends on `frontend/dist/` existing. The `build.rs` script checks for `frontend/dist/index.html` and emits a clear compile error if missing:
-
-```
-error: frontend/dist/index.html not found.
-  Run 'cd prism/frontend && npm ci && npm run build' before 'cargo build -p prism'.
-```
-
-A `just` recipe (or Makefile target) sequences the full build: `just build-web` runs `npm ci && npm run build` in `frontend/`, then `cargo build -p prism`. CI uses this recipe. Developers running bare `cargo build -p prism` after a fresh clone get the actionable error above.
+The `cargo build` step depends on `frontend/dist/` existing. `rust-embed` reads from the filesystem in debug builds (enabling Vite HMR during development) and embeds assets into the binary in release builds.
 
 ### 11.1 Docker
 
@@ -923,10 +920,10 @@ prism uses a multi-stage Dockerfile:
 ```dockerfile
 # Stage 1: Build frontend
 FROM node:22-alpine AS frontend
-WORKDIR /app/prism/frontend
-COPY prism/frontend/package*.json ./
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
 RUN npm ci
-COPY prism/frontend/ ./
+COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Rust binary (musl for fully static binary)
@@ -935,10 +932,8 @@ RUN apk add --no-cache musl-dev
 WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY src/ src/
-COPY build.rs ./
-COPY prism/ prism/
-COPY --from=frontend /app/prism/frontend/dist prism/frontend/dist
-RUN cargo build --release -p prism
+COPY --from=frontend /app/frontend/dist frontend/dist
+RUN cargo build --release
 
 # Stage 3: Minimal runtime (static binary, no glibc needed)
 FROM alpine:3
@@ -948,9 +943,9 @@ EXPOSE 8080
 ENTRYPOINT ["prism"]
 ```
 
-The image is published as `lukaspustina/prism` alongside the existing `lukaspustina/mhost` image. Expected image size: ~20MB (statically-linked musl binary + Alpine base + ca-certificates).
+Expected image size: ~20MB (statically-linked musl binary + Alpine base + ca-certificates).
 
-**CI optimization**: The Dockerfile above copies all source before building, invalidating the cargo build cache on every source change. After workspace conversion, both `Cargo.toml` (root) and `prism/Cargo.toml` must be in the build context at the right paths for layer caching. For faster CI rebuilds, use `cargo-chef` to cache dependency compilation in a separate layer. This is a CI optimization, not a functional requirement — deferred to when build times become painful.
+**CI optimization**: For faster CI rebuilds, use `cargo-chef` to cache dependency compilation in a separate layer. This is a CI optimization, not a functional requirement — deferred to when build times become painful.
 
 ## 12. URL Design and Shareability
 
@@ -1018,47 +1013,52 @@ The TypeScript code in the frontend is limited to **UI concerns**: tokenizing th
 
 ## 14. Phased Delivery
 
-### Phase 0 — Workspace Conversion
+### Phase 0 — ~~Workspace Conversion~~ Skipped
 
-- Convert mhost from single crate to Cargo workspace (see §3.1)
-- Verify CI, release workflow, and feature flags work correctly
-- Add prism as empty workspace member with skeleton `main.rs`
+> N/A — prism was implemented as a standalone repository. No workspace conversion was needed.
 
-### Phase 1 — MVP
+### Phase 1 — MVP ✓
 
-- axum server with embedded SPA
-- `GET /api/query?q=` (native EventSource) and `POST /api/query` (structured JSON) with SSE streaming
-- Rust query language parser with record types and `@server` support
-- CodeMirror 6 input with autocomplete for record types and predefined servers
-- Results table grouped by record type, progressive population
-- Rate limiting (per-IP, per-target, global) with query cost model and pre-check enforcement
-- Per-provider circuit breaker for upstream degradation
-- Query restrictions (blocked types, blocked target IPs)
-- Security headers, CORS
-- Config validation at startup
-- JSON tab for raw output
-- URL shareability via `?q=` parameter
-- Dark mode
-- `GET /api/health` (exempt from rate limiting)
-- Prometheus metrics on separate port (`:9090`, localhost-only)
+All items implemented:
 
-### Phase 2 — Transport & UI Enhancements
+- ✓ axum server with embedded SPA (rust-embed)
+- ✓ `GET /api/query?q=` with SSE streaming (native EventSource)
+- ✓ Rust query language parser with record types and `@server` support
+- ✓ CodeMirror 6 input with static autocomplete for record types and predefined servers
+- ✓ Results table grouped by record type, progressive population
+- ✓ Rate limiting (per-IP, per-target, global) with query cost model and pre-check enforcement
+- ✓ Per-provider circuit breaker for upstream degradation
+- ✓ Query restrictions (blocked types, blocked target IPs)
+- ✓ Security headers, CORS
+- ✓ Config validation at startup
+- ✓ JSON tab for raw output
+- ✓ URL shareability via `?q=` parameter
+- ✓ Dark mode
+- ✓ `GET /api/health` (exempt from rate limiting)
+- ✓ Prometheus metrics on separate port (`:9090`, localhost-only)
 
-- Transport selection (`+tls`, `+https`, `+tcp`, `+udp`)
-- `+dnssec` flag
-- Server comparison tab (multi-server divergence view)
-- Expandable row details (rdata fields, server latency, human-readable interpretation)
+> **Implementation note**: POST `/api/query` (structured JSON) was not implemented — GET with `?q=` covers all current use cases (browser, shareable URLs, curl). POST can be added later if programmatic clients need it.
 
-### Phase 3 — Polish
+### Phase 2 — Transport & UI Enhancements ✓
 
-- `POST /api/parse` for server-side autocomplete
-- Per-server response time display
-- Keyboard shortcuts (j/k navigation, ? help)
-- Query history (localStorage)
-- Light mode toggle
-- Mobile-responsive layout
-- Terms of Service page
-- GDPR-compliant log rotation
+All items implemented:
+
+- ✓ Transport selection (`+tls`, `+https`, `+tcp`, `+udp`)
+- ✓ `+dnssec` flag (adds DNSKEY + DS record types; no chain validation — see §4.3)
+- ✓ Server comparison tab (multi-server divergence view)
+- ✓ Expandable row details (NxDomain details, error details with click-to-expand)
+
+### Phase 3 — Polish (mostly complete)
+
+- ✓ `POST /api/parse` for server-side tokenization and autocomplete
+- ✓ Keyboard shortcuts: `/` focus, `j`/`k` row navigation, `Enter` expand/collapse, `?` help modal, `Escape` dismiss/blur, `↑`/`↓` history
+- ✓ Query history (localStorage, up to 50 entries, `↑`/`↓` in input)
+- ✓ System theme by default with manual toggle (localStorage only on explicit choice)
+- ✓ Terms of Service modal
+- ✓ Inline status info in tab bar (query count, batches, duration, transport/DNSSEC badges with tooltips)
+- ○ Per-server response time display (not yet implemented)
+- ○ Mobile-responsive layout (not yet implemented)
+- ○ GDPR-compliant log rotation (not yet implemented)
 
 ### Phase 4 — Library Extraction & Check/Trace
 
@@ -1105,7 +1105,7 @@ This phase requires extracting lint and trace logic from the mhost `app` layer i
 
 ## 16. Risks and Open Questions
 
-1. **Workspace conversion.** mhost is currently a single crate, not a Cargo workspace. Converting to a workspace (Phase 0) is a prerequisite that touches the root `Cargo.toml`, CI workflows, and release automation. The migration itself is low-risk (the mhost crate's public API is unchanged), but it must be validated end-to-end before any prism development begins. See §3.1 for the detailed scope.
+1. ~~**Workspace conversion.**~~ **Resolved** — prism was implemented as a standalone repository, eliminating this risk entirely. No changes to the mhost repo were needed.
 
 2. **Library extraction for check/trace.** Phase 4 requires moving 13 lint modules and the trace logic from `app/` to the library layer. This is the highest-risk item — it changes module boundaries, requires updating three consumers (CLI, TUI, web), and must maintain feature-gate semantics. See §14 Phase 4 for the detailed scope. The extraction must be completed before the check/trace web endpoints can be built.
 
