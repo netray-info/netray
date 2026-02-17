@@ -10,10 +10,8 @@ mhost = { version = "0.9.0", default-features = false }
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }
-axum-extra = { version = "0.10", features = ["typed-header"] }
 tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
-tower_governor = "0.5"
 governor = "0.8"
 
 # Async runtime
@@ -45,9 +43,6 @@ mime_guess = "2"
 
 # Request IDs
 uuid = { version = "1", features = ["v7"] }
-
-# Time
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

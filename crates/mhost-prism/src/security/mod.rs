@@ -3,7 +3,7 @@
 //! Implements the four-layer defense-in-depth model from SDD SS8:
 //!
 //! - **Layer 1**: Query restrictions (hardcoded) — via [`QueryPolicy`]
-//! - **Layer 2**: Rate limiting (tower-governor) — configured externally via `tower_governor`
+//! - **Layer 2**: Rate limiting (governor GCRA) — via [`RateLimitState`]
 //! - **Layer 3**: Client IP extraction — via [`IpExtractor`]
 //! - **Layer 4**: HTTP security headers — via [`security_headers`] middleware
 
