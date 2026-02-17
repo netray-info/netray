@@ -1,0 +1,23 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Frontend
+prism/frontend/node_modules/
+prism/frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+prism.toml
+
+# Claude Code
+.claude/settings.local.json
