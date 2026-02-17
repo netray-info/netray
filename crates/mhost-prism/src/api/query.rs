@@ -249,7 +249,9 @@ async fn execute_query(
     let effective_servers = effective_server_specs(&parsed, &state.config);
     let target_keys = target_keys_from_servers(&effective_servers);
     let cost = (parsed.record_types.len() as u32) * (effective_servers.len().max(1) as u32);
-    let stream_guard = state.rate_limiter.check_query_cost(client_ip, &target_keys, cost)?;
+    let stream_guard = state
+        .rate_limiter
+        .check_query_cost(client_ip, &target_keys, cost)?;
 
     // Build resolver group and parallel circuit breaker keys.
     let (resolver_group, breaker_keys) =
@@ -282,6 +284,7 @@ async fn execute_query(
         // Hold stream guard for the lifetime of this task so the active stream
         // count is decremented when the SSE connection ends.
         let _stream_guard = stream_guard;
+        metrics::gauge!("prism_active_queries").increment(1.0);
         let start = Instant::now();
         let total = record_types.len() as u32;
         for (completed, rt) in (0_u32..).zip(record_types.iter()) {
@@ -320,6 +323,7 @@ async fn execute_query(
 
             // Collect results from all resolvers for this record type.
             let mut merged = Lookups::empty();
+            let mut had_error = false;
             for handle in handles {
                 match handle.await {
                     Ok(Ok(lookups)) => {
@@ -327,17 +331,22 @@ async fn execute_query(
                         merged = merged.merge(lookups);
                     }
                     Ok(Err(e)) => {
+                        had_error = true;
                         let _ = tx
                             .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
                             .await;
                     }
                     Err(e) => {
+                        had_error = true;
                         let _ = tx
                             .send(Ok(make_error_event("INTERNAL_ERROR", &e.to_string())))
                             .await;
                     }
                 }
             }
+
+            let status = if had_error { "error" } else { "ok" };
+            metrics::counter!("prism_queries_total", "status" => status, "record_type" => rt.to_string()).increment(1);
 
             let batch = BatchEvent {
                 request_id: rid.clone(),
@@ -356,10 +365,11 @@ async fn execute_query(
         }
 
         // Send done event.
+        let elapsed = start.elapsed();
         let done = DoneEvent {
             request_id: rid,
             total_queries: total,
-            duration_ms: start.elapsed().as_millis() as u64,
+            duration_ms: elapsed.as_millis() as u64,
             warnings,
             transport: transport_name,
             dnssec: dnssec_requested,
@@ -369,6 +379,9 @@ async fn execute_query(
             .json_data(&done)
             .unwrap_or_else(|_| Event::default().event("done").data("{}"));
         let _ = tx.send(Ok(event)).await;
+
+        metrics::histogram!("prism_query_duration_seconds").record(elapsed.as_secs_f64());
+        metrics::gauge!("prism_active_queries").decrement(1.0);
     });
 
     let stream = ReceiverStream::new(rx);

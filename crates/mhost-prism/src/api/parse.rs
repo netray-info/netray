@@ -100,7 +100,10 @@ pub async fn parse_handler(Json(body): Json<ParseRequest>) -> Json<ParseResponse
     let tokens = tokenize(input);
     let completions = completions_at(input, cursor_pos, &tokens);
 
-    Json(ParseResponse { tokens, completions })
+    Json(ParseResponse {
+        tokens,
+        completions,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -204,10 +207,10 @@ fn completions_at(input: &str, cursor_pos: usize, tokens: &[TokenInfo]) -> Vec<C
         .find(|t| t.from <= cursor_pos && cursor_pos <= t.to);
 
     // If cursor is on the domain token, no completions.
-    if let Some(t) = token_at_cursor {
-        if t.kind == "domain" {
-            return Vec::new();
-        }
+    if let Some(t) = token_at_cursor
+        && t.kind == "domain"
+    {
+        return Vec::new();
     }
 
     let prefix = match token_at_cursor {

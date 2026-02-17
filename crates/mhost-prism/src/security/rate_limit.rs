@@ -23,7 +23,8 @@ use crate::config::LimitsConfig;
 use crate::error::ApiError;
 
 /// Keyed rate limiter type alias for readability.
-type KeyedLimiter<K> = RateLimiter<K, governor::state::keyed::DefaultKeyedStateStore<K>, DefaultClock>;
+type KeyedLimiter<K> =
+    RateLimiter<K, governor::state::keyed::DefaultKeyedStateStore<K>, DefaultClock>;
 
 /// Rate limiting state shared across all request handlers.
 pub struct RateLimitState {
@@ -41,9 +42,7 @@ impl RateLimitState {
             Quota::per_minute(
                 NonZeroU32::new(config.per_ip_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(
-                NonZeroU32::new(config.per_ip_burst).expect("validated non-zero"),
-            ),
+            .allow_burst(NonZeroU32::new(config.per_ip_burst).expect("validated non-zero")),
         );
 
         let per_target = RateLimiter::keyed(
@@ -90,7 +89,8 @@ impl RateLimitState {
             let streams = self.active_streams.lock().expect("streams lock poisoned");
             let count = streams.get(&client_ip).copied().unwrap_or(0);
             if count >= self.per_ip_max_streams as usize {
-                metrics::counter!("prism_rate_limit_hits_total", "scope" => "max_streams").increment(1);
+                metrics::counter!("prism_rate_limit_hits_total", "scope" => "max_streams")
+                    .increment(1);
                 return Err(ApiError::RateLimited {
                     retry_after_secs: 1,
                 });
@@ -124,7 +124,8 @@ fn check_keyed_cost<K: std::hash::Hash + Eq + Clone>(
     let result = match limiter.check_key_n(key, cost) {
         Ok(Ok(())) => return Ok(()),
         Ok(Err(not_until)) => {
-            let wait = not_until.wait_time_from(governor::clock::Clock::now(&DefaultClock::default()));
+            let wait =
+                not_until.wait_time_from(governor::clock::Clock::now(&DefaultClock::default()));
             wait.as_secs()
         }
         // InsufficientCapacity: cost exceeds burst size entirely.
@@ -145,7 +146,8 @@ fn check_direct_cost(
     let result = match limiter.check_n(cost) {
         Ok(Ok(())) => return Ok(()),
         Ok(Err(not_until)) => {
-            let wait = not_until.wait_time_from(governor::clock::Clock::now(&DefaultClock::default()));
+            let wait =
+                not_until.wait_time_from(governor::clock::Clock::now(&DefaultClock::default()));
             wait.as_secs()
         }
         Err(_) => 60,

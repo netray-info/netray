@@ -27,6 +27,7 @@ pub enum ApiError {
     AmbiguousInput,
 
     #[error("blocked query type: {0}")]
+    #[allow(dead_code)] // Used when query type blocking is wired (Phase 2)
     BlockedQueryType(String),
 
     #[error("blocked target IP: {ip} ({reason})")]
@@ -54,6 +55,7 @@ pub enum ApiError {
     ResolverError(String),
 
     #[error("internal error: {0}")]
+    #[allow(dead_code)]
     Internal(String),
 }
 

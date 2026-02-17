@@ -107,7 +107,10 @@ impl CircuitBreaker {
     ///
     /// Returns `Ok(Some((Open, HalfOpen)))` on a state transition,
     /// `Ok(None)` when no transition occurs, or `Err(Open)` when blocked.
-    fn check(&mut self, now: Instant) -> Result<Option<(BreakerState, BreakerState)>, BreakerState> {
+    fn check(
+        &mut self,
+        now: Instant,
+    ) -> Result<Option<(BreakerState, BreakerState)>, BreakerState> {
         match self.state {
             BreakerState::Closed => Ok(None),
             BreakerState::Open => {
@@ -194,6 +197,7 @@ impl CircuitBreakerRegistry {
     }
 
     /// Create a registry with custom parameters (useful for testing).
+    #[cfg(test)]
     pub fn with_params(
         window: Duration,
         cooldown: Duration,
@@ -233,6 +237,7 @@ impl CircuitBreakerRegistry {
 
     /// Get the current breaker state for `provider`. Returns `Closed` for
     /// unknown providers (no breaker allocated yet).
+    #[cfg(test)]
     pub fn state(&self, provider: &str) -> BreakerState {
         let breakers = self.breakers.read().expect("breaker lock poisoned");
         match breakers.get(provider) {
@@ -259,6 +264,7 @@ impl CircuitBreakerRegistry {
                     to = ?to,
                     "circuit breaker state transition"
                 );
+                emit_breaker_metrics(provider, to);
                 Ok(())
             }
             Ok(None) => Ok(()),
@@ -278,6 +284,7 @@ impl CircuitBreakerRegistry {
                 to = ?to,
                 "circuit breaker state transition"
             );
+            emit_breaker_metrics(provider, to);
         }
     }
 
@@ -293,6 +300,7 @@ impl CircuitBreakerRegistry {
                 to = ?to,
                 "circuit breaker state transition"
             );
+            emit_breaker_metrics(provider, to);
         }
     }
 
@@ -315,6 +323,24 @@ impl CircuitBreakerRegistry {
                 self.min_requests,
             ))
         });
+    }
+}
+
+/// Emit Prometheus metrics for a circuit breaker state transition.
+///
+/// - `prism_circuit_breaker_state`: gauge (0=Closed, 1=Open, 2=HalfOpen)
+/// - `prism_circuit_breaker_trips_total`: counter incremented on transitions to Open
+fn emit_breaker_metrics(provider: &str, new_state: BreakerState) {
+    let state_value = match new_state {
+        BreakerState::Closed => 0.0,
+        BreakerState::Open => 1.0,
+        BreakerState::HalfOpen => 2.0,
+    };
+    metrics::gauge!("prism_circuit_breaker_state", "provider" => provider.to_owned())
+        .set(state_value);
+    if new_state == BreakerState::Open {
+        metrics::counter!("prism_circuit_breaker_trips_total", "provider" => provider.to_owned())
+            .increment(1);
     }
 }
 
