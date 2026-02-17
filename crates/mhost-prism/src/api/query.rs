@@ -8,13 +8,14 @@
 //! resolvers concurrently, and stream batch results as SSE events.
 
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::Json;
-use axum::extract::{Query, State};
+use axum::extract::{ConnectInfo, Query, State};
+use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::stream::Stream;
 use mhost::RecordType;
@@ -74,6 +75,8 @@ pub struct QueryParams {
 
 pub async fn get_handler(
     State(state): State<AppState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Query(params): Query<QueryParams>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let q = params
@@ -82,7 +85,10 @@ pub async fn get_handler(
 
     let parsed = parser::parse(&q).map_err(|e| ApiError::ParseError(e.to_string()))?;
 
-    execute_query(parsed, state).await
+    let client_ip = state.ip_extractor.extract(&headers, peer_addr);
+    tracing::debug!(%client_ip, %peer_addr, "query GET");
+
+    execute_query(parsed, state, client_ip).await
 }
 
 // ---------------------------------------------------------------------------
@@ -110,6 +116,8 @@ pub enum PostServerSpec {
 
 pub async fn post_handler(
     State(state): State<AppState>,
+    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     raw_query: axum::extract::RawQuery,
     Json(body): Json<PostQueryRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
@@ -119,7 +127,11 @@ pub async fn post_handler(
     }
 
     let parsed = convert_post_body(body)?;
-    execute_query(parsed, state).await
+
+    let client_ip = state.ip_extractor.extract(&headers, peer_addr);
+    tracing::debug!(%client_ip, %peer_addr, "query POST");
+
+    execute_query(parsed, state, client_ip).await
 }
 
 /// Convert a structured POST body into a [`ParsedQuery`].
@@ -209,6 +221,7 @@ fn parse_server_spec(name: &str) -> Result<ServerSpec, ApiError> {
 async fn execute_query(
     mut parsed: ParsedQuery,
     state: AppState,
+    _client_ip: IpAddr,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let request_id = uuid::Uuid::now_v7().to_string();
 
