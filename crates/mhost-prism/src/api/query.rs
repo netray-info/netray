@@ -110,7 +110,7 @@ pub struct PostQueryRequest {
 
 #[derive(Deserialize)]
 #[serde(untagged)]
-pub enum PostServerSpec {
+pub(crate) enum PostServerSpec {
     Named(String),
 }
 
@@ -193,7 +193,7 @@ fn convert_post_body(body: PostQueryRequest) -> Result<ParsedQuery, ApiError> {
     })
 }
 
-fn parse_server_spec(name: &str) -> Result<ServerSpec, ApiError> {
+pub(crate) fn parse_server_spec(name: &str) -> Result<ServerSpec, ApiError> {
     if name.eq_ignore_ascii_case("system") {
         return Ok(ServerSpec::System);
     }
@@ -229,8 +229,7 @@ async fn execute_query(
     let policy = QueryPolicy::new(&state.config);
     policy.validate(&parsed)?;
 
-    // Determine per-query timeout (clamped to config max, default 10s).
-    let timeout_secs = state.config.limits.max_timeout_secs.min(10);
+    let timeout_secs = state.config.limits.max_timeout_secs;
     let timeout = Duration::from_secs(timeout_secs);
 
     // When DNSSEC mode is requested, ensure DNSKEY and DS are queried so
@@ -398,7 +397,7 @@ async fn execute_query(
 }
 
 /// Record circuit breaker outcomes from lookup results.
-fn record_breaker_outcomes(cb: &Arc<CircuitBreakerRegistry>, lookups: &Lookups) {
+pub(crate) fn record_breaker_outcomes(cb: &Arc<CircuitBreakerRegistry>, lookups: &Lookups) {
     for lookup in lookups.iter() {
         let server_name = lookup.name_server().to_string();
         if lookup.result().is_err() {
@@ -411,7 +410,7 @@ fn record_breaker_outcomes(cb: &Arc<CircuitBreakerRegistry>, lookups: &Lookups) 
 
 /// Resolve the effective server specs for a query, applying config defaults
 /// when no servers are specified.
-fn effective_server_specs(parsed: &ParsedQuery, config: &Config) -> Vec<ServerSpec> {
+pub(crate) fn effective_server_specs(parsed: &ParsedQuery, config: &Config) -> Vec<ServerSpec> {
     if parsed.servers.is_empty() {
         config
             .dns
@@ -431,7 +430,7 @@ fn effective_server_specs(parsed: &ParsedQuery, config: &Config) -> Vec<ServerSp
 /// - Predefined provider → lowercase provider name (e.g., `"cloudflare"`)
 /// - System → `"system"`
 /// - IP → address string (e.g., `"1.1.1.1"`)
-fn target_keys_from_servers(servers: &[ServerSpec]) -> Vec<String> {
+pub(crate) fn target_keys_from_servers(servers: &[ServerSpec]) -> Vec<String> {
     servers
         .iter()
         .map(|s| match s {
@@ -452,7 +451,7 @@ fn target_keys_from_servers(servers: &[ServerSpec]) -> Vec<String> {
 ///
 /// Returns the resolver group and a parallel `Vec<String>` of circuit breaker keys
 /// (one per resolver, in the same order as `resolvers()`).
-async fn build_resolver_group(
+pub(crate) async fn build_resolver_group(
     parsed: &ParsedQuery,
     config: &Config,
     timeout: Duration,
@@ -526,7 +525,7 @@ fn is_ipv4_config(config: &NameServerConfig) -> bool {
     ip.is_ipv4()
 }
 
-fn make_error_event(code: &str, message: &str) -> Event {
+pub(crate) fn make_error_event(code: &str, message: &str) -> Event {
     let payload = ErrorEvent {
         code: code.to_owned(),
         message: message.to_owned(),

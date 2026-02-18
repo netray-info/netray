@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
-mhost = { version = "0.9.0", default-features = false }
+mhost = { version = "0.10.0", default-features = false }
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }

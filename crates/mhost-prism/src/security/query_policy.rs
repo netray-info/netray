@@ -30,6 +30,18 @@ impl<'a> QueryPolicy<'a> {
         Ok(())
     }
 
+    /// Validate a check request against server policy rules.
+    ///
+    /// Skips mode and record-type-count checks (irrelevant for the dedicated
+    /// check endpoint which uses a fixed set of 15+1 record types).
+    pub fn validate_for_check(&self, query: &ParsedQuery) -> Result<(), ApiError> {
+        self.check_server_count(query)?;
+        self.check_system_resolvers(query)?;
+        self.check_arbitrary_servers(query)?;
+        self.check_server_ips(query)?;
+        Ok(())
+    }
+
     fn check_record_type_count(&self, query: &ParsedQuery) -> Result<(), ApiError> {
         let count = query.record_types.len();
         let max = self.config.limits.max_record_types;
