@@ -8,6 +8,8 @@ pub use config::ConfigError;
 const HARD_CAP_TIMEOUT_SECS: u64 = 10;
 const HARD_CAP_RECORD_TYPES: usize = 10;
 const HARD_CAP_SERVERS: usize = 4;
+const HARD_CAP_TRACE_HOPS: u32 = 20;
+const HARD_CAP_TRACE_QUERY_TIMEOUT: u64 = 10;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -19,6 +21,8 @@ pub struct Config {
     pub circuit_breaker: CircuitBreakerConfig,
     #[serde(default = "default_dns")]
     pub dns: DnsConfig,
+    #[serde(default = "default_trace")]
+    pub trace: TraceConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -74,6 +78,16 @@ pub struct CircuitBreakerConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct TraceConfig {
+    /// Maximum delegation hops before stopping (hard cap: 20).
+    #[serde(default = "default_trace_max_hops")]
+    pub max_hops: u32,
+    /// Per-query timeout for each raw DNS request in the trace (hard cap: 10s).
+    #[serde(default = "default_trace_query_timeout")]
+    pub query_timeout_secs: u64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct DnsConfig {
     #[serde(default = "default_servers_list")]
     pub default_servers: Vec<String>,
@@ -115,6 +129,13 @@ fn default_circuit_breaker() -> CircuitBreakerConfig {
         cooldown_secs: default_cb_cooldown_secs(),
         failure_threshold: default_cb_failure_threshold(),
         min_requests: default_cb_min_requests(),
+    }
+}
+
+fn default_trace() -> TraceConfig {
+    TraceConfig {
+        max_hops: default_trace_max_hops(),
+        query_timeout_secs: default_trace_query_timeout(),
     }
 }
 
@@ -203,6 +224,14 @@ fn default_servers_list() -> Vec<String> {
     vec!["cloudflare".to_owned()]
 }
 
+fn default_trace_max_hops() -> u32 {
+    10
+}
+
+fn default_trace_query_timeout() -> u64 {
+    3
+}
+
 fn default_true() -> bool {
     true
 }
@@ -268,6 +297,24 @@ impl Config {
             self.limits.max_servers = HARD_CAP_SERVERS;
         }
 
+        if self.trace.max_hops > HARD_CAP_TRACE_HOPS {
+            tracing::warn!(
+                configured = self.trace.max_hops,
+                clamped = HARD_CAP_TRACE_HOPS,
+                "trace.max_hops exceeds hard cap, clamping"
+            );
+            self.trace.max_hops = HARD_CAP_TRACE_HOPS;
+        }
+
+        if self.trace.query_timeout_secs > HARD_CAP_TRACE_QUERY_TIMEOUT {
+            tracing::warn!(
+                configured = self.trace.query_timeout_secs,
+                clamped = HARD_CAP_TRACE_QUERY_TIMEOUT,
+                "trace.query_timeout_secs exceeds hard cap, clamping"
+            );
+            self.trace.query_timeout_secs = HARD_CAP_TRACE_QUERY_TIMEOUT;
+        }
+
         // Reject zero values — these would disable protections or cause division-by-zero.
         reject_zero("per_ip_per_minute", self.limits.per_ip_per_minute)?;
         reject_zero("per_ip_burst", self.limits.per_ip_burst)?;
@@ -283,6 +330,8 @@ impl Config {
         reject_zero("max_timeout_secs", self.limits.max_timeout_secs)?;
         reject_zero("max_record_types", self.limits.max_record_types)?;
         reject_zero("max_servers", self.limits.max_servers)?;
+        reject_zero("trace.max_hops", self.trace.max_hops)?;
+        reject_zero("trace.query_timeout_secs", self.trace.query_timeout_secs)?;
         reject_zero("circuit_breaker.window_secs", self.circuit_breaker.window_secs)?;
         reject_zero("circuit_breaker.cooldown_secs", self.circuit_breaker.cooldown_secs)?;
         reject_zero("circuit_breaker.min_requests", self.circuit_breaker.min_requests)?;

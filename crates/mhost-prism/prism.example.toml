@@ -83,6 +83,17 @@
 #min_requests = 5
 
 # ---------------------------------------------------------------------------
+# [trace] — DNS delegation trace settings
+# ---------------------------------------------------------------------------
+[trace]
+
+# Maximum number of delegation hops before stopping (hard cap: 20).
+#max_hops = 10
+
+# Per-query timeout (seconds) for each raw DNS request in the trace (hard cap: 10).
+#query_timeout_secs = 3
+
+# ---------------------------------------------------------------------------
 # [dns] — DNS resolver settings
 # ---------------------------------------------------------------------------
 [dns]

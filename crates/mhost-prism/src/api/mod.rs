@@ -4,6 +4,7 @@ pub mod check;
 pub mod meta;
 pub mod parse;
 pub mod query;
+pub mod trace;
 
 use std::sync::Arc;
 
@@ -35,6 +36,7 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api/servers", get(meta::servers))
         .route("/api/record-types", get(meta::record_types))
         .route("/api/check", post(check::post_handler))
+        .route("/api/trace", post(trace::post_handler))
         .route("/api/parse", post(parse::parse_handler))
         .with_state(state)
 }
