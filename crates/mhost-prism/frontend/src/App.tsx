@@ -2,9 +2,10 @@ import { createSignal, onMount, onCleanup, Show } from 'solid-js';
 import { QueryInput } from './components/QueryInput';
 import { ResultsTable, parseBatchEvent, type BatchEvent, type DoneStats } from './components/ResultsTable';
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
+import { TraceView, type TraceHop, type TraceDoneStats } from './components/TraceView';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
-type ActiveTab = 'lint' | 'results' | 'servers' | 'json';
+type ActiveTab = 'trace' | 'lint' | 'results' | 'servers' | 'json';
 type Theme = 'dark' | 'light';
 
 const HISTORY_KEY = 'prism_history';
@@ -38,12 +39,17 @@ function getSavedTheme(): Theme | null {
 }
 
 // ---------------------------------------------------------------------------
-// Check mode helpers
+// Check / trace mode helpers
 // ---------------------------------------------------------------------------
 
 /** Returns true if the query string contains the +check flag. */
 function hasCheckFlag(q: string): boolean {
   return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+check');
+}
+
+/** Returns true if the query string contains the +trace flag. */
+function hasTraceFlag(q: string): boolean {
+  return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+trace');
 }
 
 /** Extract domain (first token) and @server specs from a query string. */
@@ -57,20 +63,30 @@ function extractCheckParams(q: string): { domain: string; servers: string[] } {
   return { domain, servers };
 }
 
+/** Strip the +trace flag, returning the base query for a regular DNS lookup. */
+function stripTraceFlag(q: string): string {
+  return q.trim().split(/\s+/).filter((t) => t.toLowerCase() !== '+trace').join(' ');
+}
+
+/** Extract domain (first token) and record_type from a query string for trace. */
+function extractTraceParams(q: string): { domain: string; record_type: string } {
+  const tokens = q.trim().split(/\s+/);
+  const domain = tokens[0] ?? '';
+  // Pick the first token that looks like a record type (uppercase letters, e.g. MX, AAAA)
+  const recordTypeToken = tokens.slice(1).find((t) => /^[A-Za-z0-9]+$/.test(t) && !t.startsWith('@') && !t.startsWith('+'));
+  const record_type = recordTypeToken?.toUpperCase() ?? 'A';
+  return { domain, record_type };
+}
+
 // ---------------------------------------------------------------------------
 // Fetch-based SSE parser for POST endpoints
 // ---------------------------------------------------------------------------
 
-interface SSEHandlers {
-  onBatch: (data: unknown) => void;
-  onLint:  (data: unknown) => void;
-  onDone:  (data: unknown) => void;
-  onError: (data: unknown) => void;
-}
+type SSEEventHandler = (eventType: string, data: unknown) => void;
 
-async function readCheckStream(
+async function readPostStream(
   response: Response,
-  handlers: SSEHandlers,
+  onEvent: SSEEventHandler,
   signal: AbortSignal,
 ): Promise<void> {
   const reader = response.body!.getReader();
@@ -107,10 +123,7 @@ async function readCheckStream(
 
         try {
           const parsed = JSON.parse(raw);
-          if      (eventType === 'batch') handlers.onBatch(parsed);
-          else if (eventType === 'lint')  handlers.onLint(parsed);
-          else if (eventType === 'done')  handlers.onDone(parsed);
-          else if (eventType === 'error') handlers.onError(parsed);
+          onEvent(eventType, parsed);
         } catch (e) {
           console.error('Failed to parse SSE event data:', e, raw);
         }
@@ -142,8 +155,14 @@ export default function App() {
   const [lintCategories, setLintCategories] = createSignal<LintCategory[]>([]);
   const [checkStats, setCheckStats] = createSignal<CheckDoneStats | null>(null);
 
+  // Trace mode state
+  const [isTraceMode, setIsTraceMode] = createSignal(false);
+  const [traceHops, setTraceHops] = createSignal<TraceHop[]>([]);
+  const [traceDoneStats, setTraceDoneStats] = createSignal<TraceDoneStats | null>(null);
+
   let eventSource: EventSource | null = null;
   let checkAbortController: AbortController | null = null;
+  let traceAbortController: AbortController | null = null;
   let focusEditor: (() => void) | undefined;
 
   // ---------------------------------------------------------------------------
@@ -179,9 +198,17 @@ export default function App() {
     }
   }
 
+  function abortTrace() {
+    if (traceAbortController) {
+      traceAbortController.abort();
+      traceAbortController = null;
+    }
+  }
+
   function closeConnections() {
     closeEventSource();
     abortCheck();
+    abortTrace();
   }
 
   // ---------------------------------------------------------------------------
@@ -254,36 +281,271 @@ export default function App() {
       return;
     }
 
-    await readCheckStream(
+    await readPostStream(
       response,
-      {
-        onBatch: (data) => {
+      (eventType, data) => {
+        if (eventType === 'batch') {
           try {
             const batch = parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0]);
             setResults((prev) => [...prev, batch]);
           } catch (e) {
             console.error('Failed to parse batch event:', e);
           }
-        },
-        onLint: (data) => {
+        } else if (eventType === 'lint') {
           try {
             const ev = data as { category: string; results: LintCategory['results'] };
             setLintCategories((prev) => [...prev, { category: ev.category, results: ev.results }]);
           } catch (e) {
             console.error('Failed to parse lint event:', e);
           }
-        },
-        onDone: (data) => {
+        } else if (eventType === 'done') {
           setCheckStats(data as CheckDoneStats);
           setStatus('done');
-        },
-        onError: (data) => {
+        } else if (eventType === 'error') {
           const ev = data as { message?: string; code?: string };
           setError(ev.message ?? ev.code ?? 'Unknown error');
-        },
+        }
       },
       controller.signal,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Background query — populates Results/Servers/JSON tabs during a trace
+  // ---------------------------------------------------------------------------
+
+  function startBackgroundQuery(q: string) {
+    const sseUrl = `/api/query?q=${encodeURIComponent(q)}`;
+    const es = new EventSource(sseUrl);
+    eventSource = es;
+
+    es.addEventListener('batch', (event) => {
+      try {
+        const batch = parseBatchEvent(JSON.parse(event.data));
+        setResults((prev) => [...prev, batch]);
+      } catch (e) {
+        console.error('Failed to parse batch event:', e);
+      }
+    });
+
+    es.addEventListener('done', (event) => {
+      try {
+        setStats(JSON.parse(event.data) as DoneStats);
+      } catch (e) {
+        console.error('Failed to parse done event:', e);
+      }
+      closeEventSource();
+    });
+
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) closeEventSource();
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Submit — trace mode (POST /api/trace)
+  // ---------------------------------------------------------------------------
+
+  async function submitTrace(q: string) {
+    closeConnections();
+
+    const { domain, record_type } = extractTraceParams(q);
+    if (!domain) return;
+
+    setQuery(q);
+    setTraceHops([]);
+    setTraceDoneStats(null);
+    setError(null);
+    setIsTraceMode(true);
+    setIsCheckMode(false);
+    setResults([]);
+    setStats(null);
+    setLintCategories([]);
+    setCheckStats(null);
+    setStatus('loading');
+    setActiveTab('trace');
+    addToHistory(q);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('q', q);
+    window.history.pushState(null, '', url.toString());
+
+    // Run the base query (without +trace) in the background to populate Results.
+    startBackgroundQuery(stripTraceFlag(q));
+
+    const controller = new AbortController();
+    traceAbortController = controller;
+
+    let response: Response;
+    try {
+      response = await fetch('/api/trace', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify({ domain, record_type }),
+        signal: controller.signal,
+      });
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') return;
+      setError(e instanceof Error ? e.message : 'Network error');
+      setStatus('error');
+      return;
+    }
+
+    if (!response.ok) {
+      try {
+        const body = await response.json();
+        setError(body?.error?.message ?? `HTTP ${response.status}`);
+      } catch {
+        setError(`HTTP ${response.status}`);
+      }
+      setStatus('error');
+      return;
+    }
+
+    await readPostStream(
+      response,
+      (eventType, data) => {
+        if (eventType === 'hop') {
+          try {
+            const ev = data as { request_id: string; hop: TraceHop };
+            setTraceHops((prev) => [...prev, ev.hop]);
+          } catch (e) {
+            console.error('Failed to parse hop event:', e);
+          }
+        } else if (eventType === 'done') {
+          setTraceDoneStats(data as TraceDoneStats);
+          setStatus('done');
+        } else if (eventType === 'error') {
+          const ev = data as { message?: string; code?: string };
+          setError(ev.message ?? ev.code ?? 'Unknown error');
+        }
+      },
+      controller.signal,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Submit — combined trace + check mode
+  // ---------------------------------------------------------------------------
+
+  function submitTraceAndCheck(q: string) {
+    closeConnections();
+
+    const { domain, record_type } = extractTraceParams(q);
+    const { domain: checkDomain, servers } = extractCheckParams(q);
+    if (!domain) return;
+
+    setQuery(q);
+    setTraceHops([]);
+    setTraceDoneStats(null);
+    setResults([]);
+    setStats(null);
+    setLintCategories([]);
+    setCheckStats(null);
+    setError(null);
+    setIsTraceMode(true);
+    setIsCheckMode(true);
+    setStatus('loading');
+    setActiveTab('trace');
+    addToHistory(q);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('q', q);
+    window.history.pushState(null, '', url.toString());
+
+    let doneCount = 0;
+    function onStreamDone() {
+      doneCount++;
+      if (doneCount >= 2) setStatus('done');
+    }
+
+    const checkController = new AbortController();
+    checkAbortController = checkController;
+
+    const traceController = new AbortController();
+    traceAbortController = traceController;
+
+    // Check stream (provides batch + lint events)
+    (async () => {
+      let response: Response;
+      try {
+        response = await fetch('/api/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+          body: JSON.stringify({ domain: checkDomain, servers }),
+          signal: checkController.signal,
+        });
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') return;
+        setError(e instanceof Error ? e.message : 'Network error');
+        onStreamDone();
+        return;
+      }
+      if (!response.ok) {
+        try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
+        catch { setError(`HTTP ${response.status}`); }
+        onStreamDone();
+        return;
+      }
+      await readPostStream(response, (eventType, data) => {
+        if (eventType === 'batch') {
+          try { setResults((prev) => [...prev, parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0])]); }
+          catch (e) { console.error('Failed to parse batch event:', e); }
+        } else if (eventType === 'lint') {
+          try {
+            const ev = data as { category: string; results: LintCategory['results'] };
+            setLintCategories((prev) => [...prev, { category: ev.category, results: ev.results }]);
+          } catch (e) { console.error('Failed to parse lint event:', e); }
+        } else if (eventType === 'done') {
+          setCheckStats(data as CheckDoneStats);
+          onStreamDone();
+        } else if (eventType === 'error') {
+          const ev = data as { message?: string; code?: string };
+          setError(ev.message ?? ev.code ?? 'Unknown error');
+        }
+      }, checkController.signal);
+    })();
+
+    // Trace stream (provides hop events)
+    (async () => {
+      let response: Response;
+      try {
+        response = await fetch('/api/trace', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+          body: JSON.stringify({ domain, record_type }),
+          signal: traceController.signal,
+        });
+      } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') return;
+        setError(e instanceof Error ? e.message : 'Network error');
+        onStreamDone();
+        return;
+      }
+      if (!response.ok) {
+        try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
+        catch { setError(`HTTP ${response.status}`); }
+        onStreamDone();
+        return;
+      }
+      await readPostStream(response, (eventType, data) => {
+        if (eventType === 'hop') {
+          try {
+            const ev = data as { request_id: string; hop: TraceHop };
+            setTraceHops((prev) => [...prev, ev.hop]);
+          } catch (e) { console.error('Failed to parse hop event:', e); }
+        } else if (eventType === 'done') {
+          setTraceDoneStats(data as TraceDoneStats);
+          onStreamDone();
+        } else if (eventType === 'error') {
+          const ev = data as { message?: string; code?: string };
+          setError(ev.message ?? ev.code ?? 'Unknown error');
+        }
+      }, traceController.signal);
+    })();
   }
 
   // ---------------------------------------------------------------------------
@@ -291,8 +553,16 @@ export default function App() {
   // ---------------------------------------------------------------------------
 
   function submitQuery(q: string) {
+    if (hasCheckFlag(q) && hasTraceFlag(q)) {
+      submitTraceAndCheck(q);
+      return;
+    }
     if (hasCheckFlag(q)) {
       submitCheck(q);
+      return;
+    }
+    if (hasTraceFlag(q)) {
+      submitTrace(q);
       return;
     }
 
@@ -303,6 +573,9 @@ export default function App() {
     setError(null);
     setStats(null);
     setIsCheckMode(false);
+    setIsTraceMode(false);
+    setTraceHops([]);
+    setTraceDoneStats(null);
     setLintCategories([]);
     setCheckStats(null);
     setStatus('loading');
@@ -439,7 +712,8 @@ export default function App() {
   // Derived display state
   // ---------------------------------------------------------------------------
 
-  const hasContent = () => status() !== 'idle' || results().length > 0 || lintCategories().length > 0;
+  const hasContent = () =>
+    status() !== 'idle' || results().length > 0 || lintCategories().length > 0 || traceHops().length > 0;
   const isLoading  = () => status() === 'loading';
 
   // Lint tab badge text: show worst status count when done.
@@ -489,7 +763,16 @@ export default function App() {
         <Show when={hasContent()}>
           <div class="tabs">
             <div class="tabs-left">
-              {/* Lint tab — first, only visible in check mode */}
+              {/* Trace tab — only visible in trace mode */}
+              <Show when={isTraceMode()}>
+                <button
+                  class={`tab${activeTab() === 'trace' ? ' active' : ''}`}
+                  onClick={() => setActiveTab('trace')}
+                >
+                  Trace
+                </button>
+              </Show>
+              {/* Lint tab — only visible in check mode */}
               <Show when={isCheckMode()}>
                 <button
                   class={`tab${activeTab() === 'lint' ? ' active' : ''}${
@@ -521,7 +804,7 @@ export default function App() {
             </div>
 
             {/* Status bar — query mode */}
-            <Show when={!isCheckMode() && status() === 'done' && stats()}>
+            <Show when={!isCheckMode() && !isTraceMode() && status() === 'done' && stats()}>
               <div class="status-info">
                 <span title="Total DNS queries sent across all servers and record types">
                   {stats()!.total_queries} queries
@@ -555,13 +838,36 @@ export default function App() {
               </div>
             </Show>
 
-            {/* Status bar — check mode (loading) */}
-            <Show when={isCheckMode() && isLoading()}>
+            {/* Status bar — loading (check / trace / both) */}
+            <Show when={(isCheckMode() || isTraceMode()) && isLoading()}>
               <div class="status-info">
-                <span class="status-loading-text">Checking…</span>
+                <span class="status-loading-text">
+                  {isCheckMode() && isTraceMode() ? 'Tracing + Checking…'
+                    : isCheckMode() ? 'Checking…'
+                    : 'Tracing…'}
+                </span>
+              </div>
+            </Show>
+
+            {/* Status bar — trace mode (done) */}
+            <Show when={isTraceMode() && status() === 'done' && traceDoneStats()}>
+              <div class="status-info">
+                <span>{traceDoneStats()!.hops} hop{traceDoneStats()!.hops !== 1 ? 's' : ''}</span>
+                <span class="status-separator">/</span>
+                <span>{traceDoneStats()!.duration_ms}ms</span>
               </div>
             </Show>
           </div>
+        </Show>
+
+        {/* Trace tab content */}
+        <Show when={isTraceMode() && activeTab() === 'trace'}>
+          <TraceView
+            hops={traceHops()}
+            doneStats={traceDoneStats()}
+            isLoading={isLoading()}
+            activeTab={activeTab()}
+          />
         </Show>
 
         {/* Lint tab content */}
@@ -574,7 +880,7 @@ export default function App() {
         </Show>
 
         {/* Results / Servers / JSON — always rendered via ResultsTable */}
-        <Show when={activeTab() !== 'lint'}>
+        <Show when={activeTab() !== 'lint' && activeTab() !== 'trace'}>
           <ResultsTable
             results={results()}
             stats={stats()}
