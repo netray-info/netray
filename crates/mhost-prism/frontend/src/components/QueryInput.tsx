@@ -46,6 +46,7 @@ const FLAGS = [
   { label: '+tls', detail: 'DNS-over-TLS' },
   { label: '+https', detail: 'DNS-over-HTTPS' },
   { label: '+dnssec', detail: 'DNSSEC validation' },
+  { label: '+check', detail: 'DNS health check (lint all record types)' },
 ];
 
 function prismCompletions(context: CompletionContext): CompletionResult | null {

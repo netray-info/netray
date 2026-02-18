@@ -1302,6 +1302,245 @@ body {
 }
 
 /* ===================================================================
+   Lint Tab
+   =================================================================== */
+
+.lint-tab {
+  min-height: 100px;
+}
+
+.lint-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.lint-summary-sep {
+  color: var(--text-muted);
+}
+
+.lint-summary-total {
+  color: var(--text-muted);
+}
+
+.lint-summary-passed {
+  color: var(--success);
+}
+
+.lint-summary-warning {
+  color: var(--warning);
+}
+
+.lint-summary-failed {
+  color: var(--error);
+}
+
+.lint-summary-duration {
+  color: var(--text-muted);
+}
+
+/* Grid: 3 columns on desktop */
+.lint-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* Individual lint card */
+.lint-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: border-color var(--transition);
+}
+
+.lint-card--failed {
+  border-color: rgba(255, 68, 68, 0.45);
+}
+
+.lint-card--warning {
+  border-color: rgba(255, 170, 0, 0.4);
+}
+
+.lint-card--ok {
+  border-color: rgba(68, 255, 68, 0.2);
+}
+
+.lint-card--not_found {
+  border-color: var(--border-subtle);
+  opacity: 0.7;
+}
+
+.lint-card--pending {
+  border-color: var(--border-subtle);
+  opacity: 0.45;
+}
+
+[data-theme="light"] .lint-card--failed {
+  border-color: rgba(204, 0, 0, 0.35);
+}
+
+[data-theme="light"] .lint-card--warning {
+  border-color: rgba(184, 110, 0, 0.35);
+}
+
+[data-theme="light"] .lint-card--ok {
+  border-color: rgba(0, 136, 0, 0.25);
+}
+
+.lint-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .lint-card-header {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.lint-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.lint-status-icon--failed {
+  color: var(--error);
+  background: rgba(255, 68, 68, 0.12);
+}
+
+.lint-status-icon--warning {
+  color: var(--warning);
+  background: rgba(255, 170, 0, 0.12);
+}
+
+.lint-status-icon--ok {
+  color: var(--success);
+  background: rgba(68, 255, 68, 0.08);
+}
+
+.lint-status-icon--not_found {
+  color: var(--text-muted);
+  background: rgba(128, 128, 128, 0.1);
+}
+
+.lint-status-icon--pending {
+  color: var(--text-muted);
+  background: rgba(128, 128, 128, 0.08);
+}
+
+[data-theme="light"] .lint-status-icon--failed {
+  background: rgba(204, 0, 0, 0.08);
+}
+
+[data-theme="light"] .lint-status-icon--warning {
+  background: rgba(184, 110, 0, 0.08);
+}
+
+[data-theme="light"] .lint-status-icon--ok {
+  background: rgba(0, 136, 0, 0.06);
+}
+
+.lint-card-label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.2px;
+}
+
+.lint-results-list {
+  list-style: none;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lint-result {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 2px 0;
+}
+
+.lint-result--ok {
+  color: var(--text-secondary);
+}
+
+.lint-result--warning {
+  color: var(--warning);
+}
+
+.lint-result--failed {
+  color: var(--error);
+}
+
+.lint-result--not_found {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.lint-card-pending-text {
+  padding: 8px 14px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Lint badge colors on the tab button */
+.tab.tab--failed {
+  color: var(--error);
+}
+
+.tab.tab--failed.active {
+  border-bottom-color: var(--error);
+}
+
+.tab.tab--warning {
+  color: var(--warning);
+}
+
+.tab.tab--warning.active {
+  border-bottom-color: var(--warning);
+}
+
+/* "Checking…" text in the status bar during check loading */
+.status-loading-text {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Lint grid — 2 columns on tablet */
+@media (max-width: 900px) {
+  .lint-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Lint grid — 1 column on mobile */
+@media (max-width: 600px) {
+  .lint-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===================================================================
    Scrollbar styling
    =================================================================== */
 
