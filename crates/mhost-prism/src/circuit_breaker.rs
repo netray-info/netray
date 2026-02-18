@@ -184,15 +184,13 @@ pub struct CircuitBreakerRegistry {
 }
 
 impl CircuitBreakerRegistry {
-    /// Create a registry with production defaults (60 s window, 30 s cooldown,
-    /// 50 % failure threshold, 5 minimum requests).
-    pub fn new() -> Self {
+    pub fn new(config: &crate::config::CircuitBreakerConfig) -> Self {
         Self {
             breakers: RwLock::new(HashMap::new()),
-            window: Duration::from_secs(60),
-            cooldown: Duration::from_secs(30),
-            failure_threshold: 0.5,
-            min_requests: 5,
+            window: Duration::from_secs(config.window_secs),
+            cooldown: Duration::from_secs(config.cooldown_secs),
+            failure_threshold: config.failure_threshold,
+            min_requests: config.min_requests as usize,
         }
     }
 
@@ -578,13 +576,13 @@ mod tests {
 
     #[test]
     fn unknown_provider_returns_closed() {
-        let reg = CircuitBreakerRegistry::new();
+        let reg = test_registry(Duration::from_secs(60), Duration::from_secs(30), 0.5, 5);
         assert_eq!(reg.state("never-seen"), BreakerState::Closed);
     }
 
     #[test]
     fn check_creates_breaker_lazily() {
-        let reg = CircuitBreakerRegistry::new();
+        let reg = test_registry(Duration::from_secs(60), Duration::from_secs(30), 0.5, 5);
         assert!(reg.check("new-provider").is_ok());
         assert_eq!(reg.state("new-provider"), BreakerState::Closed);
     }

@@ -49,14 +49,16 @@ impl RateLimitState {
             Quota::per_minute(
                 NonZeroU32::new(config.per_target_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(10).expect("non-zero literal")),
+            .allow_burst(
+                NonZeroU32::new(config.per_target_burst).expect("validated non-zero"),
+            ),
         );
 
         let global = RateLimiter::direct(
             Quota::per_minute(
                 NonZeroU32::new(config.global_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(50).expect("non-zero literal")),
+            .allow_burst(NonZeroU32::new(config.global_burst).expect("validated non-zero")),
         );
 
         Self {
@@ -205,7 +207,9 @@ mod tests {
             per_ip_per_minute: 30,
             per_ip_burst: 40,
             per_target_per_minute: 30,
+            per_target_burst: 20,
             global_per_minute: 500,
+            global_burst: 50,
             max_concurrent_connections: 256,
             per_ip_max_streams: 3,
             max_timeout_secs: 10,
@@ -293,8 +297,7 @@ mod tests {
 
         // Per-IP burst is 40, total cost 8 should succeed.
         assert!(state.check_query_cost(ip, &targets, 8, 4).is_ok());
-        // Remaining per-IP burst is 32, but per-target burst is 10 and we used 4.
-        // Total cost 32 with per-target 16 exceeds per-target burst (10) → rejected.
-        assert!(state.check_query_cost(ip, &targets, 32, 16).is_err());
+        // Per-target burst is 20; cost 21 exceeds it entirely (InsufficientCapacity) → rejected.
+        assert!(state.check_query_cost(ip, &targets, 42, 21).is_err());
     }
 }

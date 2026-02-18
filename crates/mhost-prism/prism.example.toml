@@ -40,8 +40,15 @@
 # Each target is only charged its share: record_types (not the full query cost).
 #per_target_per_minute = 60
 
+# Per-target burst size. Must be >= the largest single-request per-target cost:
+#   regular queries: up to max_record_types (10); check endpoint: 16 (15 types + DMARC).
+#per_target_burst = 20
+
 # GCRA rate limit: total query-cost tokens across all clients per minute.
 #global_per_minute = 1000
+
+# Global burst size.
+#global_burst = 50
 
 # Maximum concurrent TCP connections to the API server.
 #max_concurrent_connections = 256
@@ -57,6 +64,23 @@
 
 # Maximum number of servers per query (hard cap: 4).
 #max_servers = 4
+
+# ---------------------------------------------------------------------------
+# [circuit_breaker] — Per-provider circuit breaker
+# ---------------------------------------------------------------------------
+[circuit_breaker]
+
+# Sliding window duration for error-rate tracking.
+#window_secs = 60
+
+# How long the breaker stays open before allowing a probe request.
+#cooldown_secs = 30
+
+# Error rate (exclusive, in (0.0, 1.0]) at which the breaker trips.
+#failure_threshold = 0.5
+
+# Minimum requests in the window before the threshold is evaluated.
+#min_requests = 5
 
 # ---------------------------------------------------------------------------
 # [dns] — DNS resolver settings

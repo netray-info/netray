@@ -15,6 +15,8 @@ pub struct Config {
     pub server: ServerConfig,
     #[serde(default = "default_limits")]
     pub limits: LimitsConfig,
+    #[serde(default = "default_circuit_breaker")]
+    pub circuit_breaker: CircuitBreakerConfig,
     #[serde(default = "default_dns")]
     pub dns: DnsConfig,
 }
@@ -37,8 +39,12 @@ pub struct LimitsConfig {
     pub per_ip_burst: u32,
     #[serde(default = "default_per_target_per_minute")]
     pub per_target_per_minute: u32,
+    #[serde(default = "default_per_target_burst")]
+    pub per_target_burst: u32,
     #[serde(default = "default_global_per_minute")]
     pub global_per_minute: u32,
+    #[serde(default = "default_global_burst")]
+    pub global_burst: u32,
     #[serde(default = "default_max_concurrent")]
     pub max_concurrent_connections: usize,
     #[serde(default = "default_per_ip_max_streams")]
@@ -49,6 +55,22 @@ pub struct LimitsConfig {
     pub max_record_types: usize,
     #[serde(default = "default_max_servers")]
     pub max_servers: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CircuitBreakerConfig {
+    /// Sliding window length for error-rate tracking.
+    #[serde(default = "default_cb_window_secs")]
+    pub window_secs: u64,
+    /// How long the breaker stays open before allowing a probe request.
+    #[serde(default = "default_cb_cooldown_secs")]
+    pub cooldown_secs: u64,
+    /// Error rate (0.0–1.0, exclusive on both ends) at which the breaker trips.
+    #[serde(default = "default_cb_failure_threshold")]
+    pub failure_threshold: f64,
+    /// Minimum number of requests in the window before the threshold is evaluated.
+    #[serde(default = "default_cb_min_requests")]
+    pub min_requests: u32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -76,12 +98,23 @@ fn default_limits() -> LimitsConfig {
         per_ip_per_minute: default_per_ip_per_minute(),
         per_ip_burst: default_per_ip_burst(),
         per_target_per_minute: default_per_target_per_minute(),
+        per_target_burst: default_per_target_burst(),
         global_per_minute: default_global_per_minute(),
+        global_burst: default_global_burst(),
         max_concurrent_connections: default_max_concurrent(),
         per_ip_max_streams: default_per_ip_max_streams(),
         max_timeout_secs: default_max_timeout(),
         max_record_types: default_max_record_types(),
         max_servers: default_max_servers(),
+    }
+}
+
+fn default_circuit_breaker() -> CircuitBreakerConfig {
+    CircuitBreakerConfig {
+        window_secs: default_cb_window_secs(),
+        cooldown_secs: default_cb_cooldown_secs(),
+        failure_threshold: default_cb_failure_threshold(),
+        min_requests: default_cb_min_requests(),
     }
 }
 
@@ -114,8 +147,36 @@ fn default_per_target_per_minute() -> u32 {
     60
 }
 
+fn default_per_target_burst() -> u32 {
+    // Must accommodate the largest per-target cost in a single request:
+    // - Regular queries: up to max_record_types (10) per target.
+    // - Check endpoint: CHECK_TOTAL_STEPS (16) per target.
+    // 20 gives headroom above both.
+    20
+}
+
 fn default_global_per_minute() -> u32 {
     1000
+}
+
+fn default_global_burst() -> u32 {
+    50
+}
+
+fn default_cb_window_secs() -> u64 {
+    60
+}
+
+fn default_cb_cooldown_secs() -> u64 {
+    30
+}
+
+fn default_cb_failure_threshold() -> f64 {
+    0.5
+}
+
+fn default_cb_min_requests() -> u32 {
+    5
 }
 
 fn default_max_concurrent() -> usize {
@@ -211,7 +272,9 @@ impl Config {
         reject_zero("per_ip_per_minute", self.limits.per_ip_per_minute)?;
         reject_zero("per_ip_burst", self.limits.per_ip_burst)?;
         reject_zero("per_target_per_minute", self.limits.per_target_per_minute)?;
+        reject_zero("per_target_burst", self.limits.per_target_burst)?;
         reject_zero("global_per_minute", self.limits.global_per_minute)?;
+        reject_zero("global_burst", self.limits.global_burst)?;
         reject_zero(
             "max_concurrent_connections",
             self.limits.max_concurrent_connections,
@@ -220,6 +283,17 @@ impl Config {
         reject_zero("max_timeout_secs", self.limits.max_timeout_secs)?;
         reject_zero("max_record_types", self.limits.max_record_types)?;
         reject_zero("max_servers", self.limits.max_servers)?;
+        reject_zero("circuit_breaker.window_secs", self.circuit_breaker.window_secs)?;
+        reject_zero("circuit_breaker.cooldown_secs", self.circuit_breaker.cooldown_secs)?;
+        reject_zero("circuit_breaker.min_requests", self.circuit_breaker.min_requests)?;
+        if self.circuit_breaker.failure_threshold <= 0.0
+            || self.circuit_breaker.failure_threshold > 1.0
+        {
+            return Err(ConfigError::Message(
+                "invalid configuration: circuit_breaker.failure_threshold must be in (0.0, 1.0]"
+                    .to_owned(),
+            ));
+        }
 
         Ok(())
     }
