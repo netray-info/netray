@@ -261,7 +261,7 @@ interface QueryInputProps {
   initialValue?: string;
   history: string[];
   onReset?: () => void;
-  onReady?: (api: { focus: () => void; clear: () => void }) => void;
+  onReady?: (api: { focus: () => void; clear: () => void; setValue: (v: string) => void }) => void;
 }
 
 export function QueryInput(props: QueryInputProps) {
@@ -382,6 +382,11 @@ export function QueryInput(props: QueryInputProps) {
       clear: () => {
         if (!view) return;
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } });
+      },
+      setValue: (v: string) => {
+        if (!view) return;
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: v } });
+        view.focus();
       },
     });
   });

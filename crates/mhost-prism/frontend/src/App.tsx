@@ -165,6 +165,11 @@ export default function App() {
   let traceAbortController: AbortController | null = null;
   let focusEditor: (() => void) | undefined;
   let clearEditor: (() => void) | undefined;
+  let setEditorValue: ((v: string) => void) | undefined;
+
+  function fillQuery(q: string) {
+    setEditorValue?.(q);
+  }
 
   // ---------------------------------------------------------------------------
   // Theme
@@ -775,7 +780,7 @@ export default function App() {
           <button
             class="header-btn"
             onClick={() => setShowHelp((v) => !v)}
-            title="Keyboard shortcuts (?)"
+            title="Help (?)"
           >
             ?
           </button>
@@ -788,8 +793,58 @@ export default function App() {
           initialValue={query()}
           history={history()}
           onReset={hasContent() ? resetAll : undefined}
-          onReady={(api) => { focusEditor = api.focus; clearEditor = api.clear; }}
+          onReady={(api) => { focusEditor = api.focus; clearEditor = api.clear; setEditorValue = api.setValue; }}
         />
+
+        {/* Empty state — shown on landing before any query */}
+        <Show when={!hasContent()}>
+          <div class="welcome">
+            <p class="welcome-tagline">
+              Multi-resolver DNS queries, health checks, and delegation traces — right in your browser.
+            </p>
+            <div class="welcome-cards">
+              <div class="welcome-card">
+                <div class="welcome-card-title">Query</div>
+                <p class="welcome-card-desc">
+                  Fan out to multiple resolvers at once. See who answers differently, who's faster, and where results diverge.
+                </p>
+                <button
+                  class="welcome-example"
+                  onClick={() => fillQuery('example.com A AAAA @cloudflare @google')}
+                  title="Click to fill query"
+                >
+                  example.com A AAAA @cloudflare @google
+                </button>
+              </div>
+              <div class="welcome-card">
+                <div class="welcome-card-title">Check</div>
+                <p class="welcome-card-desc">
+                  Full domain health audit in one shot — 15 record types plus DMARC lint. Surfaces missing SPF, broken DMARC, DNSSEC mismatches, and more.
+                </p>
+                <button
+                  class="welcome-example"
+                  onClick={() => fillQuery('example.com +check')}
+                  title="Click to fill query"
+                >
+                  example.com +check
+                </button>
+              </div>
+              <div class="welcome-card">
+                <div class="welcome-card-title">Trace</div>
+                <p class="welcome-card-desc">
+                  Walk the delegation chain from root servers to authoritative, hop by hop. Find broken delegations, stale glue, and split-brain DNS.
+                </p>
+                <button
+                  class="welcome-example"
+                  onClick={() => fillQuery('example.com A +trace')}
+                  title="Click to fill query"
+                >
+                  example.com A +trace
+                </button>
+              </div>
+            </div>
+          </div>
+        </Show>
 
         <Show when={hasContent()}>
           <div class="tabs">
@@ -945,24 +1000,69 @@ export default function App() {
       {/* Help modal */}
       <Show when={showHelp()}>
         <div class="modal-overlay" onClick={() => setShowHelp(false)}>
-          <div class="modal" onClick={(e) => e.stopPropagation()}>
+          <div class="modal modal-help" onClick={(e) => e.stopPropagation()}>
             <div class="modal-header">
-              <h2>Keyboard Shortcuts</h2>
+              <h2>Help</h2>
               <button class="modal-close" onClick={() => setShowHelp(false)}>&times;</button>
             </div>
-            <table class="shortcuts-table">
-              <tbody>
-                <tr><td class="shortcut-key">/</td><td>Focus query input</td></tr>
-                <tr><td class="shortcut-key">Enter</td><td>Submit query (when input focused)</td></tr>
-                <tr><td class="shortcut-key">Tab</td><td>Accept autocomplete suggestion</td></tr>
-                <tr><td class="shortcut-key">Escape</td><td>Dismiss autocomplete / blur input</td></tr>
-                <tr><td class="shortcut-key">j / k</td><td>Navigate result rows</td></tr>
-                <tr><td class="shortcut-key">Enter</td><td>Expand/collapse focused row</td></tr>
-                <tr><td class="shortcut-key">&uarr; / &darr;</td><td>Browse query history (in input)</td></tr>
-                <tr><td class="shortcut-key">r</td><td>Re-run current query</td></tr>
-                <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
-              </tbody>
-            </table>
+
+            <div class="help-section">
+              <div class="help-section-title">Query syntax</div>
+              <code class="help-syntax">domain [TYPE...] [@server...] [+flag...]</code>
+              <p class="help-syntax-desc">Tokens are space-separated. Order within each group doesn't matter.</p>
+            </div>
+
+            <div class="help-section">
+              <div class="help-section-title">Predefined servers</div>
+              <table class="help-ref-table">
+                <tbody>
+                  <tr><td class="help-token">@cloudflare</td><td>1.1.1.1 / 1.0.0.1</td></tr>
+                  <tr><td class="help-token">@google</td><td>8.8.8.8 / 8.8.4.4</td></tr>
+                  <tr><td class="help-token">@quad9</td><td>9.9.9.9</td></tr>
+                  <tr><td class="help-token">@mullvad</td><td>Mullvad DNS</td></tr>
+                  <tr><td class="help-token">@wikimedia</td><td>Wikimedia DNS</td></tr>
+                  <tr><td class="help-token">@dns4eu</td><td>DNS4EU</td></tr>
+                  <tr><td class="help-token">@system</td><td>/etc/resolv.conf</td></tr>
+                  <tr><td class="help-token">@1.2.3.4</td><td>Custom IP (if enabled by operator)</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="help-section">
+              <div class="help-section-title">Flags</div>
+              <table class="help-ref-table">
+                <tbody>
+                  <tr><td class="help-token">+udp</td><td>UDP transport (default)</td></tr>
+                  <tr><td class="help-token">+tcp</td><td>TCP transport</td></tr>
+                  <tr><td class="help-token">+tls</td><td>DNS-over-TLS</td></tr>
+                  <tr><td class="help-token">+https</td><td>DNS-over-HTTPS</td></tr>
+                  <tr><td class="help-token">+dnssec</td><td>Request DNSSEC records</td></tr>
+                  <tr><td class="help-token">+check</td><td>Domain health check (15 types + DMARC lint)</td></tr>
+                  <tr><td class="help-token">+trace</td><td>Delegation trace (root → authoritative)</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="help-section">
+              <div class="help-section-title">Record types</div>
+              <p class="help-types">A &nbsp;AAAA &nbsp;MX &nbsp;TXT &nbsp;NS &nbsp;SOA &nbsp;CAA &nbsp;CNAME &nbsp;DNSKEY &nbsp;DS &nbsp;HTTPS &nbsp;SVCB &nbsp;SRV &nbsp;SSHFP &nbsp;TLSA &nbsp;NAPTR &nbsp;PTR &nbsp;HINFO &nbsp;OPENPGPKEY</p>
+            </div>
+
+            <div class="help-section">
+              <div class="help-section-title">Keyboard shortcuts</div>
+              <table class="shortcuts-table">
+                <tbody>
+                  <tr><td class="shortcut-key">/</td><td>Focus query input</td></tr>
+                  <tr><td class="shortcut-key">Enter</td><td>Submit query (when input focused)</td></tr>
+                  <tr><td class="shortcut-key">Tab</td><td>Accept autocomplete suggestion</td></tr>
+                  <tr><td class="shortcut-key">Escape</td><td>Dismiss autocomplete / blur input</td></tr>
+                  <tr><td class="shortcut-key">j / k</td><td>Navigate result rows</td></tr>
+                  <tr><td class="shortcut-key">&uarr; / &darr;</td><td>Browse query history (in input)</td></tr>
+                  <tr><td class="shortcut-key">r</td><td>Re-run current query</td></tr>
+                  <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </Show>
