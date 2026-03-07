@@ -11,6 +11,15 @@ const HARD_CAP_SERVERS: usize = 4;
 const HARD_CAP_TRACE_HOPS: u32 = 20;
 const HARD_CAP_TRACE_QUERY_TIMEOUT: u64 = 10;
 
+// parser::MAX_RECORD_TYPES and HARD_CAP_RECORD_TYPES must stay in sync:
+// the config clamps user input to HARD_CAP_RECORD_TYPES, and the parser
+// enforces MAX_RECORD_TYPES independently. If they diverge, one limit becomes
+// unreachable or bypassable.
+const _: () = assert!(
+    crate::parser::MAX_RECORD_TYPES == HARD_CAP_RECORD_TYPES,
+    "parser::MAX_RECORD_TYPES and config::HARD_CAP_RECORD_TYPES must be equal"
+);
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default = "default_server")]

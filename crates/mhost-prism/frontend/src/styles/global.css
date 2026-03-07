@@ -10,14 +10,14 @@
   --bg-tertiary: #0f3460;
   --text-primary: #e0e0e0;
   --text-secondary: #a0a0a0;
-  --text-muted: #606060;
+  --text-muted: #888888; /* was #606060 (~2.7:1 on --bg-primary); #888 gives ~4.8:1 — WCAG AA */
   --accent: #00d4ff;
   --accent-dim: #0088aa;
   --accent-glow: rgba(0, 212, 255, 0.15);
   --error: #ff4444;
   --error-dim: rgba(255, 68, 68, 0.1);
   --warning: #ffaa00;
-  --success: #44ff44;
+  --success: #44ff44; /* ~11.7:1 on --bg-primary — WCAG AA pass */
   --border: #2a2a4a;
   --border-subtle: #222240;
 
@@ -1088,6 +1088,18 @@ body {
   border-collapse: collapse;
 }
 
+.shortcuts-table th {
+  padding: 4px 4px 8px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
 .shortcuts-table td {
   padding: 8px 4px;
   font-family: var(--font-sans);
@@ -1658,6 +1670,13 @@ body {
 [data-theme="light"] .welcome-example:hover {
   background: rgba(0, 119, 204, 0.15);
   border-color: rgba(0, 119, 204, 0.4);
+}
+
+.example-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 @media (max-width: 768px) {

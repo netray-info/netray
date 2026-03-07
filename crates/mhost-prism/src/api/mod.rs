@@ -74,7 +74,6 @@ pub struct AppState {
     ),
     components(schemas(
         query::PostQueryRequest,
-        query::PostServerSpec,
         check::CheckRequest,
         trace::TraceRequest,
         parse::ParseRequest,
@@ -188,7 +187,10 @@ mod tests {
         let config = Config::load(None).expect("default config must be valid");
         AppState {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
-            ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
+            ip_extractor: Arc::new(
+                IpExtractor::new(&config.server.trusted_proxies)
+                    .expect("invalid trusted_proxies configuration"),
+            ),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             config: Arc::new(config),
         }
@@ -475,7 +477,10 @@ mod tests {
 
         let state = AppState {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
-            ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
+            ip_extractor: Arc::new(
+                IpExtractor::new(&config.server.trusted_proxies)
+                    .expect("invalid trusted_proxies configuration"),
+            ),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             config: Arc::new(config),
         };

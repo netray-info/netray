@@ -162,20 +162,13 @@ pub struct PostQueryRequest {
     record_types: Vec<String>,
     /// DNS servers to use (e.g. `["cloudflare", "8.8.8.8"]`). Defaults to config default_servers.
     #[serde(default)]
-    servers: Vec<PostServerSpec>,
+    servers: Vec<String>,
     /// Transport: `udp` (default), `tcp`, `tls`, or `https`.
     #[serde(default)]
     transport: Option<String>,
     /// Enable DNSSEC mode (adds DNSKEY and DS record types).
     #[serde(default)]
     dnssec: bool,
-}
-
-/// A DNS server specifier: a predefined provider name (e.g. `"cloudflare"`) or IP address.
-#[derive(Deserialize, utoipa::ToSchema)]
-#[serde(untagged)]
-pub(crate) enum PostServerSpec {
-    Named(String),
 }
 
 /// Convert a structured POST body into a [`ParsedQuery`].
@@ -208,8 +201,7 @@ fn convert_post_body(body: PostQueryRequest) -> Result<ParsedQuery, ApiError> {
     }
 
     let mut servers = Vec::new();
-    for spec in &body.servers {
-        let PostServerSpec::Named(name) = spec;
+    for name in &body.servers {
         let server = parse_server_spec(name)?;
         servers.push(server);
     }
@@ -335,6 +327,13 @@ async fn execute_query(
         let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
         let total = record_types.len() as u32;
 
+        // TODO: consider shared fan-out helper — check.rs already extracts
+        // fan_out_lookup(), but query.rs returns a (RecordType, Lookups, had_error)
+        // tuple and emits per-type metrics, while check.rs returns Lookups
+        // directly and uses a bool tag for the DMARC lookup. The signatures
+        // diverge enough that a shared abstraction would add indirection without
+        // simplifying either call site.
+        //
         // Build one future per record type. Each future fans out across all
         // resolvers concurrently and returns (RecordType, Lookups, had_error).
         // FuturesUnordered drives them all in parallel and yields each result

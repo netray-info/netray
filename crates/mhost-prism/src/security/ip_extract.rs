@@ -13,6 +13,7 @@ use axum::http::HeaderMap;
 /// **Safe default**: When `trusted_proxies` is empty, all proxy headers are ignored
 /// and the peer address is returned directly. This prevents IP spoofing when no
 /// proxy is configured.
+#[derive(Debug)]
 pub struct IpExtractor {
     trusted_proxies: Vec<IpAddr>,
 }
@@ -20,9 +21,17 @@ pub struct IpExtractor {
 impl IpExtractor {
     /// Create a new extractor from a list of trusted proxy IP strings.
     ///
-    /// Invalid IP strings are skipped with a warning. Phase 1 supports exact IP
-    /// matches only; CIDR ranges are not supported yet.
-    pub fn new(trusted_proxy_strs: &[String]) -> Self {
+    /// Returns an error if any entry looks like a CIDR range (contains `/`).
+    /// Only individual IP addresses are supported; CIDR ranges are not.
+    /// Other invalid IP strings are skipped with a warning.
+    pub fn new(trusted_proxy_strs: &[String]) -> Result<Self, String> {
+        for s in trusted_proxy_strs {
+            if s.contains('/') {
+                return Err(format!(
+                    "trusted_proxies entry {s:?} looks like a CIDR range — only individual IP addresses are supported"
+                ));
+            }
+        }
         let trusted_proxies = trusted_proxy_strs
             .iter()
             .filter_map(|s| {
@@ -31,7 +40,7 @@ impl IpExtractor {
                 }).ok()
             })
             .collect();
-        Self { trusted_proxies }
+        Ok(Self { trusted_proxies })
     }
 
     /// Extract the real client IP from headers and peer address.
@@ -100,7 +109,7 @@ mod tests {
     }
 
     fn extractor(proxies: &[&str]) -> IpExtractor {
-        IpExtractor::new(&proxies.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+        IpExtractor::new(&proxies.iter().map(|s| s.to_string()).collect::<Vec<_>>()).unwrap()
     }
 
     // ---- No trusted proxies (safe default) ----
@@ -359,7 +368,25 @@ mod tests {
             "not-an-ip".to_string(),
             "".to_string(),
             "10.0.0.2".to_string(),
-        ]);
+        ])
+        .unwrap();
         assert_eq!(ext.trusted_proxies.len(), 2);
+    }
+
+    #[test]
+    fn cidr_entry_returns_error() {
+        let err = IpExtractor::new(&[
+            "10.0.0.1".to_string(),
+            "10.0.0.0/8".to_string(),
+        ])
+        .unwrap_err();
+        assert!(err.contains("CIDR range"), "unexpected error: {err}");
+        assert!(err.contains("10.0.0.0/8"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn ipv6_cidr_entry_returns_error() {
+        let err = IpExtractor::new(&["2001:db8::/32".to_string()]).unwrap_err();
+        assert!(err.contains("CIDR range"), "unexpected error: {err}");
     }
 }

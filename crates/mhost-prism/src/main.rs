@@ -62,7 +62,10 @@ async fn main() {
         circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(
             &config.circuit_breaker,
         )),
-        ip_extractor: Arc::new(security::IpExtractor::new(&config.server.trusted_proxies)),
+        ip_extractor: Arc::new(
+            security::IpExtractor::new(&config.server.trusted_proxies)
+                .expect("invalid trusted_proxies configuration"),
+        ),
         rate_limiter: Arc::new(security::RateLimitState::new(&config.limits)),
         config: Arc::new(config.clone()),
     };
@@ -88,23 +91,31 @@ async fn main() {
             config.limits.max_concurrent_connections,
         ));
 
-    // 5. Start the metrics server on a separate port.
+    // 5. Single shutdown channel shared by both servers.
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        shutdown_signal().await;
+        let _ = shutdown_tx.send(true);
+    });
+
+    // 6. Start the metrics server on a separate port.
     //
     // SECURITY: The metrics endpoint must not be reachable from the public
     // internet. In production, bind to a loopback or private interface
     // (e.g. 127.0.0.1:9090) and restrict access at the network/firewall level.
     let metrics_addr = config.server.metrics_bind;
+    let metrics_shutdown = shutdown_rx.clone();
     tracing::info!(
         addr = %metrics_addr,
         "metrics server starting — ensure this address is NOT publicly reachable"
     );
     tokio::spawn(async move {
-        if let Err(e) = serve_metrics(metrics_addr).await {
+        if let Err(e) = serve_metrics(metrics_addr, metrics_shutdown).await {
             tracing::error!(error = %e, "metrics server failed");
         }
     });
 
-    // 6. Start the main server with graceful shutdown.
+    // 7. Start the main server with graceful shutdown.
     let listener = tokio::net::TcpListener::bind(config.server.bind)
         .await
         .expect("failed to bind server address");
@@ -114,7 +125,7 @@ async fn main() {
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .with_graceful_shutdown(shutdown_signal())
+    .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
     .await
     .expect("server error");
 }
@@ -135,7 +146,8 @@ async fn request_id_middleware(
     let mut response = next.run(request).await;
     response.headers_mut().insert(
         axum::http::HeaderName::from_static("x-request-id"),
-        axum::http::HeaderValue::from_str(&id).expect("UUID is valid header value"),
+        axum::http::HeaderValue::from_str(&id)
+            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("invalid")),
     );
     response
 }
@@ -234,11 +246,19 @@ async fn shutdown_signal() {
     tracing::info!("shutdown signal received");
 }
 
+/// Returns a future that resolves once the shutdown watch channel is set to `true`.
+async fn wait_for_shutdown(mut rx: tokio::sync::watch::Receiver<bool>) {
+    let _ = rx.wait_for(|v| *v).await;
+}
+
 // ---------------------------------------------------------------------------
 // Prometheus metrics server
 // ---------------------------------------------------------------------------
 
-async fn serve_metrics(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+async fn serve_metrics(
+    addr: SocketAddr,
+    shutdown: tokio::sync::watch::Receiver<bool>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
     let handle = builder.install_recorder()?;
 
@@ -254,7 +274,7 @@ async fn serve_metrics(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error
     tracing::info!(addr = %addr, "metrics server listening");
 
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(wait_for_shutdown(shutdown))
         .await?;
 
     Ok(())

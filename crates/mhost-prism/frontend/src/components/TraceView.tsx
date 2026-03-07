@@ -138,7 +138,16 @@ function HopCard(props: HopCardProps) {
     <div
       class={cardClass()}
       data-row-key={`hop-${props.index}`}
+      tabIndex={0}
+      role="button"
+      aria-label={`Hop ${props.index + 1}: ${hop.zone}${hop.is_final ? ', final answer' : ''}`}
       onClick={props.onClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          props.onClick();
+        }
+      }}
     >
       <div class="trace-hop-header">
         <span class="trace-hop-number">{props.index + 1}</span>
@@ -352,10 +361,10 @@ export function TraceView(props: TraceViewProps) {
         </For>
 
         <Show when={props.isLoading && props.hops.length === 0}>
-          <div class="trace-pending">
+          <div class="trace-pending" role="status" aria-label="Loading trace">
             <span class="trace-pending-dot" />
-            <span class="trace-pending-dot" />
-            <span class="trace-pending-dot" />
+            <span class="trace-pending-dot" aria-hidden="true" />
+            <span class="trace-pending-dot" aria-hidden="true" />
           </div>
         </Show>
       </div>

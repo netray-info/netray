@@ -260,6 +260,7 @@ interface QueryInputProps {
   onSubmit: (query: string) => void;
   initialValue?: string;
   history: string[];
+  disabled?: boolean;
   onReset?: () => void;
   onReady?: (api: { focus: () => void; clear: () => void; setValue: (v: string) => void }) => void;
 }
@@ -419,7 +420,12 @@ export function QueryInput(props: QueryInputProps) {
           </button>
         </Show>
       </div>
-      <button class="query-button" onClick={handleSubmitClick} title="Run query (Enter)">
+      <button
+        class="query-button"
+        onClick={handleSubmitClick}
+        disabled={props.disabled}
+        title="Run query (Enter)"
+      >
         Query
       </button>
     </div>

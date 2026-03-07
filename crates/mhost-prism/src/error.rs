@@ -3,10 +3,12 @@ use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
 // ---------------------------------------------------------------------------
-// Public schema types (used in OpenAPI documentation)
+// Wire + schema types (single representation for both HTTP response body and OpenAPI docs)
 // ---------------------------------------------------------------------------
 
 /// JSON body returned for all error responses.
+///
+/// Wire format: `{"error": {"code": "...", "message": "..."}}`
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ErrorResponse {
     pub error: ErrorInfo,
@@ -16,7 +18,7 @@ pub struct ErrorResponse {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ErrorInfo {
     /// Machine-readable error code (e.g. `INVALID_DOMAIN`).
-    pub code: String,
+    pub code: &'static str,
     /// Human-readable error message.
     pub message: String,
 }
@@ -45,10 +47,6 @@ pub enum ApiError {
     #[error("ambiguous input: POST with query string")]
     AmbiguousInput,
 
-    #[error("blocked query type: {0}")]
-    #[allow(dead_code)] // Used when query type blocking is wired (Phase 2)
-    BlockedQueryType(String),
-
     #[error("blocked target IP: {ip} ({reason})")]
     BlockedTargetIp { ip: String, reason: String },
 
@@ -70,20 +68,6 @@ pub enum ApiError {
     #[error("resolver error: {0}")]
     ResolverError(String),
 
-    #[error("internal error: {0}")]
-    #[allow(dead_code)]
-    Internal(String),
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorBody {
-    error: ErrorDetail,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorDetail {
-    code: &'static str,
-    message: String,
 }
 
 impl ApiError {
@@ -98,8 +82,7 @@ impl ApiError {
             | Self::AmbiguousInput => StatusCode::BAD_REQUEST,
 
             // 422 Unprocessable Entity — valid syntax but policy-rejected.
-            Self::BlockedQueryType(_)
-            | Self::BlockedTargetIp { .. }
+            Self::BlockedTargetIp { .. }
             | Self::SystemResolversDisabled
             | Self::ArbitraryServersDisabled
             | Self::TooManyRecordTypes { .. }
@@ -109,7 +92,7 @@ impl ApiError {
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
 
             // 500 Internal Server Error.
-            Self::ResolverError(_) | Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ResolverError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -121,7 +104,6 @@ impl ApiError {
             Self::InvalidServer(_) => "INVALID_SERVER",
             Self::ParseError(_) => "PARSE_ERROR",
             Self::AmbiguousInput => "AMBIGUOUS_INPUT",
-            Self::BlockedQueryType(_) => "BLOCKED_QUERY_TYPE",
             Self::BlockedTargetIp { .. } => "BLOCKED_TARGET_IP",
             Self::SystemResolversDisabled => "SYSTEM_RESOLVERS_DISABLED",
             Self::ArbitraryServersDisabled => "ARBITRARY_SERVERS_DISABLED",
@@ -129,7 +111,6 @@ impl ApiError {
             Self::TooManyServers { .. } => "TOO_MANY_SERVERS",
             Self::RateLimited { .. } => "RATE_LIMITED",
             Self::ResolverError(_) => "RESOLVER_ERROR",
-            Self::Internal(_) => "INTERNAL_ERROR",
         }
     }
 }
@@ -142,8 +123,8 @@ impl IntoResponse for ApiError {
             tracing::error!(error = %self, "internal server error");
         }
 
-        let body = ErrorBody {
-            error: ErrorDetail {
+        let body = ErrorResponse {
+            error: ErrorInfo {
                 code: self.error_code(),
                 message: self.to_string(),
             },
@@ -218,12 +199,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn blocked_query_type_is_422() {
-        let r = ApiError::BlockedQueryType("ANY".into()).into_response();
-        assert_eq!(r.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    }
-
-    #[tokio::test]
     async fn blocked_target_ip_is_422() {
         let r = ApiError::BlockedTargetIp {
             ip: "127.0.0.1".into(),
@@ -274,12 +249,6 @@ mod tests {
     #[tokio::test]
     async fn resolver_error_is_500() {
         let r = ApiError::ResolverError("timeout".into()).into_response();
-        assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
-    #[tokio::test]
-    async fn internal_is_500() {
-        let r = ApiError::Internal("boom".into()).into_response();
         assert_eq!(r.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 

@@ -7,8 +7,6 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
-use crate::security::query_policy::is_allowed_target;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -256,7 +254,8 @@ pub async fn walk(
 
         let results = parallel_queries(&server_addrs, &name, record_type, query_timeout).await;
 
-        let (server_results, next_servers, is_final) = process_hop(&results, &server_names);
+        let (server_results, next_servers, is_final) =
+            process_hop(&results, &server_names);
 
         let referral_groups = compute_referral_groups(&server_results);
 
@@ -331,7 +330,7 @@ fn process_hop(
                     let answer_records = response
                         .answers()
                         .iter()
-                        .filter_map(record_to_dns_record)
+                        .map(record_to_dns_record)
                         .collect();
 
                     let rcode = response.response_code();
@@ -372,7 +371,8 @@ fn process_hop(
                     }
 
                     let glue = response.glue_ips();
-                    let referral_ns: Vec<String> = ns_names.iter().map(|n| n.to_ascii()).collect();
+                    let referral_ns: Vec<String> =
+                        ns_names.iter().map(|n| n.to_ascii()).collect();
 
                     let authority_zone = response
                         .authority()
@@ -443,11 +443,7 @@ fn compute_referral_groups(server_results: &[ServerResult]) -> Vec<ReferralGroup
         .into_iter()
         .map(|(ns_names, servers)| {
             let is_majority = total_referrals > 0 && servers.len() * 2 > total_referrals;
-            ReferralGroup {
-                ns_names,
-                servers,
-                is_majority,
-            }
+            ReferralGroup { ns_names, servers, is_majority }
         })
         .collect();
 
@@ -505,7 +501,7 @@ async fn resolve_missing_glue(ns_servers: &mut HashMap<String, Vec<IpAddr>>) {
                 let entry = ns_servers.entry(ns_name.clone()).or_default();
                 for addr in addrs {
                     let ip = addr.ip();
-                    if ip.is_ipv4() && !entry.contains(&ip) && is_allowed_target(ip).is_ok() {
+                    if ip.is_ipv4() && !entry.contains(&ip) {
                         entry.push(ip);
                     }
                 }
@@ -602,18 +598,13 @@ async fn send_udp(
     };
     let latency = start.elapsed();
 
-    let response = Message::from_vec(&buf[..len]).map_err(|e| RawError::Decode(e.to_string()))?;
+    let response =
+        Message::from_vec(&buf[..len]).map_err(|e| RawError::Decode(e.to_string()))?;
     if response.id() != expected_id {
-        return Err(RawError::IdMismatch {
-            expected: expected_id,
-            got: response.id(),
-        });
+        return Err(RawError::IdMismatch { expected: expected_id, got: response.id() });
     }
 
-    Ok(RawResponse {
-        message: response,
-        latency,
-    })
+    Ok(RawResponse { message: response, latency })
 }
 
 async fn send_tcp(
@@ -660,29 +651,23 @@ async fn send_tcp(
 
     let response = Message::from_vec(&buf).map_err(|e| RawError::Decode(e.to_string()))?;
     if response.id() != expected_id {
-        return Err(RawError::IdMismatch {
-            expected: expected_id,
-            got: response.id(),
-        });
+        return Err(RawError::IdMismatch { expected: expected_id, got: response.id() });
     }
 
-    Ok(RawResponse {
-        message: response,
-        latency,
-    })
+    Ok(RawResponse { message: response, latency })
 }
 
 // ---------------------------------------------------------------------------
 // Internal: record conversion
 // ---------------------------------------------------------------------------
 
-fn record_to_dns_record(record: &hickory_proto::rr::Record) -> Option<DnsRecord> {
-    Some(DnsRecord {
+fn record_to_dns_record(record: &hickory_proto::rr::Record) -> DnsRecord {
+    DnsRecord {
         name: record.name().to_ascii(),
         ttl: record.ttl(),
         record_type: record.record_type().to_string(),
         rdata: format!("{}", record.data()),
-    })
+    }
 }
 
 // ---------------------------------------------------------------------------

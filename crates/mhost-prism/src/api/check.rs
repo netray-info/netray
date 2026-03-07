@@ -30,8 +30,8 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::api::query::{
-    PostServerSpec, build_resolver_group, effective_server_specs, make_error_event,
-    parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
+    build_resolver_group, effective_server_specs, make_error_event, parse_server_spec,
+    record_breaker_outcomes, target_keys_from_servers,
 };
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
@@ -96,7 +96,7 @@ pub struct CheckRequest {
     domain: String,
     /// DNS servers to use. Defaults to config default_servers.
     #[serde(default)]
-    servers: Vec<PostServerSpec>,
+    servers: Vec<String>,
     /// Query timeout in seconds. Clamped to config max (default 10).
     #[serde(default)]
     timeout_secs: Option<u64>,
@@ -144,8 +144,7 @@ pub async fn post_handler(
     }
 
     let mut servers = Vec::new();
-    for spec in &body.servers {
-        let PostServerSpec::Named(name) = spec;
+    for name in &body.servers {
         let server = parse_server_spec(name)?;
         servers.push(server);
     }

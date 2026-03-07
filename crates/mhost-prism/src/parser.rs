@@ -5,7 +5,8 @@ use mhost::RecordType;
 use mhost::nameserver::predefined::PredefinedProvider;
 
 /// Maximum number of record types allowed in a single query (SDD section 8).
-const MAX_RECORD_TYPES: usize = 10;
+/// Must equal `config::HARD_CAP_RECORD_TYPES` — enforced by a const assertion in config.rs.
+pub(crate) const MAX_RECORD_TYPES: usize = 10;
 
 /// Default record types when none are specified and the domain is not an IP address.
 const DEFAULT_RECORD_TYPES: [RecordType; 4] = [

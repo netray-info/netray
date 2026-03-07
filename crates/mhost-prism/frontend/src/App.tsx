@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { QueryInput } from './components/QueryInput';
 import { ResultsTable, parseBatchEvent, type BatchEvent, type DoneStats } from './components/ResultsTable';
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
@@ -165,10 +165,30 @@ export default function App() {
   let focusEditor: (() => void) | undefined;
   let clearEditor: (() => void) | undefined;
   let setEditorValue: ((v: string) => void) | undefined;
+  let modalCloseBtn: HTMLButtonElement | undefined;
+  let preModalFocus: HTMLElement | null = null;
 
   function fillQuery(q: string) {
     setEditorValue?.(q);
   }
+
+  // ---------------------------------------------------------------------------
+  // Help modal focus trap
+  // ---------------------------------------------------------------------------
+
+  createEffect(() => {
+    if (showHelp()) {
+      preModalFocus = document.activeElement as HTMLElement | null;
+      // Defer focus so the modal is in the DOM before we focus into it.
+      requestAnimationFrame(() => {
+        modalCloseBtn?.focus();
+      });
+      onCleanup(() => {
+        preModalFocus?.focus();
+        preModalFocus = null;
+      });
+    }
+  });
 
   // ---------------------------------------------------------------------------
   // Theme
@@ -703,7 +723,7 @@ export default function App() {
 
     if (e.key === 'r' && !isEditing) {
       const q = query();
-      if (q) { e.preventDefault(); submitQuery(q); }
+      if (q && status() !== 'loading') { e.preventDefault(); submitQuery(q); }
       return;
     }
   }
@@ -790,6 +810,7 @@ export default function App() {
           onSubmit={submitQuery}
           initialValue={query()}
           history={history()}
+          disabled={status() === 'loading'}
           onReset={hasContent() ? resetAll : undefined}
           onReady={(api) => { focusEditor = api.focus; clearEditor = api.clear; setEditorValue = api.setValue; }}
         />
@@ -813,6 +834,7 @@ export default function App() {
                 >
                   example.com A AAAA @cloudflare @google
                 </button>
+                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
               <div class="welcome-card">
                 <div class="welcome-card-title">Check</div>
@@ -826,6 +848,7 @@ export default function App() {
                 >
                   example.com +check
                 </button>
+                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
               <div class="welcome-card">
                 <div class="welcome-card-title">Trace</div>
@@ -839,6 +862,7 @@ export default function App() {
                 >
                   example.com A +trace
                 </button>
+                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
             </div>
           </div>
@@ -846,10 +870,12 @@ export default function App() {
 
         <Show when={hasContent()}>
           <div class="tabs">
-            <div class="tabs-left">
+            <div class="tabs-left" role="tablist">
               {/* Trace tab — only visible in trace mode */}
               <Show when={isTraceMode()}>
                 <button
+                  role="tab"
+                  aria-selected={activeTab() === 'trace'}
                   class={`tab${activeTab() === 'trace' ? ' active' : ''}`}
                   onClick={() => setActiveTab('trace')}
                 >
@@ -859,6 +885,8 @@ export default function App() {
               {/* Lint tab — only visible in check mode */}
               <Show when={isCheckMode()}>
                 <button
+                  role="tab"
+                  aria-selected={activeTab() === 'lint'}
                   class={`tab${activeTab() === 'lint' ? ' active' : ''}${
                     checkStats()?.failed ? ' tab--failed' : checkStats()?.warnings ? ' tab--warning' : ''
                   }`}
@@ -868,18 +896,24 @@ export default function App() {
                 </button>
               </Show>
               <button
+                role="tab"
+                aria-selected={activeTab() === 'results'}
                 class={`tab ${activeTab() === 'results' ? 'active' : ''}`}
                 onClick={() => setActiveTab('results')}
               >
                 Results
               </button>
               <button
+                role="tab"
+                aria-selected={activeTab() === 'servers'}
                 class={`tab ${activeTab() === 'servers' ? 'active' : ''}`}
                 onClick={() => setActiveTab('servers')}
               >
                 Servers
               </button>
               <button
+                role="tab"
+                aria-selected={activeTab() === 'json'}
                 class={`tab ${activeTab() === 'json' ? 'active' : ''}`}
                 onClick={() => setActiveTab('json')}
               >
@@ -1002,10 +1036,20 @@ export default function App() {
       {/* Help modal */}
       <Show when={showHelp()}>
         <div class="modal-overlay" onClick={() => setShowHelp(false)}>
-          <div class="modal modal-help" onClick={(e) => e.stopPropagation()}>
+          <div
+            class="modal modal-help"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="help-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div class="modal-header">
-              <h2>Help</h2>
-              <button class="modal-close" onClick={() => setShowHelp(false)}>&times;</button>
+              <h2 id="help-modal-title">Help</h2>
+              <button
+                class="modal-close"
+                ref={modalCloseBtn}
+                onClick={() => setShowHelp(false)}
+              >&times;</button>
             </div>
 
             <div class="help-section">
@@ -1053,6 +1097,9 @@ export default function App() {
             <div class="help-section">
               <div class="help-section-title">Keyboard shortcuts</div>
               <table class="shortcuts-table">
+                <thead>
+                  <tr><th>Key</th><th>Action</th></tr>
+                </thead>
                 <tbody>
                   <tr><td class="shortcut-key">/</td><td>Focus query input</td></tr>
                   <tr><td class="shortcut-key">Enter</td><td>Submit query (when input focused)</td></tr>

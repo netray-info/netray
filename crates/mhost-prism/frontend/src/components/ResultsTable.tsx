@@ -381,12 +381,15 @@ function RecordGroup(props: {
     return max;
   });
 
+  const tableId = `rg-table-${props.group.recordType.toLowerCase()}`;
+
   return (
     <div class="record-group">
       <button
         class="record-group-header"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed()}
+        aria-controls={tableId}
       >
         <span class="type-badge" style={{ 'background-color': typeColorVar(props.group.recordType) }}>
           {props.group.recordType}
@@ -395,7 +398,7 @@ function RecordGroup(props: {
         <span class="collapse-indicator">{collapsed() ? '+' : '\u2212'}</span>
       </button>
       <Show when={!collapsed()}>
-        <table class="results-table">
+        <table class="results-table" id={tableId}>
           <thead>
             <tr>
               <th>Name</th>
@@ -460,7 +463,16 @@ function LookupRows(props: {
                     <tr
                       data-row-key={rowKey()}
                       class={`expandable-row navigable-row ${isExpanded() ? 'expanded' : ''} ${isFocused() ? 'row-focused' : ''}`}
+                      tabIndex={0}
+                      role="row"
+                      aria-expanded={isExpanded()}
                       onClick={() => props.onRowClick(rowKey())}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          props.onRowClick(rowKey());
+                        }
+                      }}
                     >
                       <td data-label="Name">{record.name}</td>
                       <td data-label="TTL" class="ttl-value">{record.ttl}s</td>
@@ -719,7 +731,7 @@ export function ResultsTable(props: ResultsTableProps) {
       <Show when={props.activeTab === 'results'}>
         {/* Loading indicator */}
         <Show when={props.status === 'loading' && props.results.length === 0}>
-          <div class="loading">
+          <div class="loading" role="status" aria-live="polite">
             <div class="loading-spinner" />
             <span>Resolving...</span>
           </div>
