@@ -145,9 +145,9 @@ function formatStructuredRecord(rtype: string, value: Record<string, unknown>): 
       return `${value.mname} ${value.rname} (serial: ${value.serial})`;
     case 'TXT': {
       const txt = value as Record<string, unknown>;
-      if (typeof txt.txt_human === 'string') return txt.txt_human;
+      // Cell shows plain decoded text — compact, single line.
+      // txt_human (multi-line formatted) is reserved for the expanded detail view.
       if (typeof txt.txt_string === 'string') return txt.txt_string;
-      // Fallback: raw byte arrays (should not occur with enriched backend)
       if (Array.isArray(txt.txt_data)) return JSON.stringify(txt.txt_data);
       return JSON.stringify(value);
     }
@@ -220,11 +220,10 @@ function interpretRecord(rtype: string, data: Record<string, unknown>): string |
   // txt_human is the formatted human-readable string; use it as the interpretation.
   if (rtype === 'TXT' || keys[0] === 'TXT') {
     const txtObj = value as Record<string, unknown>;
-    const txtStr = typeof txtObj?.txt_string === 'string' ? txtObj.txt_string : null;
     const txtHuman = typeof txtObj?.txt_human === 'string' ? txtObj.txt_human : null;
-    // If txt_human differs from txt_string (i.e. it was parsed into a known format),
-    // surface it as the interpretation. Otherwise fall through to no interpretation.
-    if (txtHuman && txtStr && txtHuman !== txtStr) return txtHuman;
+    // Always show txt_human in the expanded detail — it's either the parsed structured
+    // output (SPF/DMARC/etc.) or the plain decoded string as a fallback.
+    if (txtHuman) return txtHuman;
     return null;
   }
 
