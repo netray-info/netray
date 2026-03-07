@@ -10,6 +10,8 @@ use tower_http::trace::TraceLayer;
 mod api;
 mod circuit_breaker;
 mod config;
+mod dns_dnssec;
+mod dns_raw;
 mod dns_trace;
 mod error;
 mod parser;

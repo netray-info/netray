@@ -1054,6 +1054,8 @@ All items implemented:
 - ✓ `+dnssec` flag (adds DNSKEY + DS record types; no chain validation — see §4.3)
 - ✓ Server comparison tab (multi-server divergence view)
 - ✓ Expandable row details (NxDomain details, error details with click-to-expand)
+- ✓ Server-side human-readable formatting for TXT, CAA, MX, SOA records (`record_format.rs`); frontend consumes `*_human` fields injected into SSE batch events
+- ✓ Order-insensitive record agreement detection (same records in different order no longer flagged as deviation)
 
 ### Phase 3 — Polish ✓
 

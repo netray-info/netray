@@ -317,6 +317,7 @@ src/
   config.rs            # Layered config (TOML + env vars)
   error.rs             # ApiError → HTTP status + error codes
   parser.rs            # Query language parser (source of truth)
+  record_format.rs     # Human-readable formatting (TXT, CAA, MX, SOA)
   dns_trace.rs         # Iterative delegation walker
   circuit_breaker.rs   # Per-provider sliding-window circuit breaker
   api/

@@ -20,7 +20,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 futures = "0.3"
 
 # DNS (used by the trace delegation walk)
-hickory-proto = "0.25"
+hickory-proto = { version = "0.25", features = ["dnssec-ring"] }
 rand = "0.9"
 
 # Serialization

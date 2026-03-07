@@ -1,6 +1,7 @@
 //! API route definitions and shared application state.
 
 pub mod check;
+pub mod dnssec;
 pub mod meta;
 pub mod parse;
 pub mod query;
@@ -66,6 +67,7 @@ pub struct AppState {
         query::post_handler,
         check::post_handler,
         trace::post_handler,
+        dnssec::post_handler,
         parse::parse_handler,
         meta::servers,
         meta::record_types,
@@ -76,6 +78,7 @@ pub struct AppState {
         query::PostQueryRequest,
         check::CheckRequest,
         trace::TraceRequest,
+        dnssec::DnssecRequest,
         parse::ParseRequest,
         parse::ParseResponse,
         parse::TokenInfo,
@@ -92,6 +95,7 @@ pub struct AppState {
         (name = "Query", description = "DNS lookups with multi-server fan-out"),
         (name = "Check", description = "Comprehensive DNS health check with lint analysis"),
         (name = "Trace", description = "DNS delegation chain walk from root to authoritative"),
+        (name = "DNSSEC", description = "DNSSEC chain-of-trust validation from root to authoritative"),
         (name = "Metadata", description = "Available servers and record types"),
         (name = "Probes", description = "Health check endpoint"),
     )
@@ -144,6 +148,7 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api/record-types", get(meta::record_types))
         .route("/api/check", post(check::post_handler))
         .route("/api/trace", post(trace::post_handler))
+        .route("/api/dnssec", post(dnssec::post_handler))
         .route("/api/parse", post(parse::parse_handler))
         .route("/api-docs/openapi.json", get(openapi_handler))
         .route("/docs", get(docs_handler))

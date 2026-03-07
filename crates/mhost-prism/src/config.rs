@@ -169,8 +169,9 @@ fn default_per_ip_per_minute() -> u32 {
 }
 
 fn default_per_ip_burst() -> u32 {
-    // Must accommodate the maximum single-query cost: max_record_types × max_servers = 10 × 4.
-    40
+    // Must accommodate combined mode costs: check(16) + trace(16) + dnssec(16) = 48,
+    // plus a background query (up to 10×4 = 40). Set to 64 for headroom.
+    64
 }
 
 fn default_per_target_per_minute() -> u32 {

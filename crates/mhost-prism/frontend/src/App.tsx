@@ -3,9 +3,10 @@ import { QueryInput } from './components/QueryInput';
 import { ResultsTable, parseBatchEvent, type BatchEvent, type DoneStats } from './components/ResultsTable';
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
 import { TraceView, type TraceHop, type TraceDoneStats } from './components/TraceView';
+import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/DnssecView';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
-type ActiveTab = 'trace' | 'lint' | 'results' | 'servers' | 'json';
+type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'json';
 type Theme = 'dark' | 'light' | 'system';
 
 const HISTORY_KEY = 'prism_history';
@@ -70,6 +71,11 @@ function hasTraceFlag(q: string): boolean {
   return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+trace');
 }
 
+/** Returns true if the query string contains the +dnssec flag. */
+function hasDnssecFlag(q: string): boolean {
+  return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+dnssec');
+}
+
 /** Extract domain (first token) and @server specs from a query string. */
 function extractCheckParams(q: string): { domain: string; servers: string[] } {
   const tokens = q.trim().split(/\s+/);
@@ -81,9 +87,12 @@ function extractCheckParams(q: string): { domain: string; servers: string[] } {
   return { domain, servers };
 }
 
-/** Strip the +trace flag, returning the base query for a regular DNS lookup. */
-function stripTraceFlag(q: string): string {
-  return q.trim().split(/\s+/).filter((t) => t.toLowerCase() !== '+trace').join(' ');
+/** Strip routing flags (+dnssec, +trace, +check) for background query. */
+function stripRoutingFlags(q: string): string {
+  return q.trim().split(/\s+/).filter((t) => {
+    const lower = t.toLowerCase();
+    return lower !== '+dnssec' && lower !== '+trace' && lower !== '+check';
+  }).join(' ');
 }
 
 /** Extract domain (first token) and record_type from a query string for trace. */
@@ -192,9 +201,15 @@ export default function App() {
   const [traceHops, setTraceHops] = createSignal<TraceHop[]>([]);
   const [traceDoneStats, setTraceDoneStats] = createSignal<TraceDoneStats | null>(null);
 
+  // DNSSEC mode state
+  const [isDnssecMode, setIsDnssecMode] = createSignal(false);
+  const [dnssecLevels, setDnssecLevels] = createSignal<ChainLevel[]>([]);
+  const [dnssecDoneStats, setDnssecDoneStats] = createSignal<DnssecDoneStats | null>(null);
+
   let eventSource: EventSource | null = null;
   let checkAbortController: AbortController | null = null;
   let traceAbortController: AbortController | null = null;
+  let dnssecAbortController: AbortController | null = null;
   let focusEditor: (() => void) | undefined;
   let clearEditor: (() => void) | undefined;
   let setEditorValue: ((v: string) => void) | undefined;
@@ -265,10 +280,18 @@ export default function App() {
     }
   }
 
+  function abortDnssec() {
+    if (dnssecAbortController) {
+      dnssecAbortController.abort();
+      dnssecAbortController = null;
+    }
+  }
+
   function closeConnections() {
     closeEventSource();
     abortCheck();
     abortTrace();
+    abortDnssec();
   }
 
   // ---------------------------------------------------------------------------
@@ -298,8 +321,11 @@ export default function App() {
     setActiveTab('results');
     setIsCheckMode(false);
     setIsTraceMode(false);
+    setIsDnssecMode(false);
     setTraceHops([]);
     setTraceDoneStats(null);
+    setDnssecLevels([]);
+    setDnssecDoneStats(null);
     setLintCategories([]);
     setCheckStats(null);
     clearEditor?.();
@@ -307,92 +333,6 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.delete('q');
     window.history.replaceState(null, '', url.toString());
-  }
-
-  // ---------------------------------------------------------------------------
-  // Submit — check mode (POST /api/check)
-  // ---------------------------------------------------------------------------
-
-  async function submitCheck(q: string) {
-    closeConnections();
-
-    const { domain, servers } = extractCheckParams(q);
-    if (!domain) return;
-
-    setQuery(q);
-    setResults([]);
-    setStats(null);
-    setLintCategories([]);
-    setCheckStats(null);
-    setError(null);
-    setIsCheckMode(true);
-    setStatus('loading');
-    setActiveTab('lint');
-    addToHistory(q);
-
-    const url = new URL(window.location.href);
-    url.searchParams.set('q', q);
-    window.history.pushState(null, '', url.toString());
-
-    const controller = new AbortController();
-    checkAbortController = controller;
-
-    let response: Response;
-    try {
-      response = await fetch('/api/check', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify({ domain, servers }),
-        signal: controller.signal,
-      });
-    } catch (e: unknown) {
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : 'Network error');
-      setStatus('error');
-      return;
-    }
-
-    if (!response.ok) {
-      try {
-        const body = await response.json();
-        setError(body?.error?.message ?? `HTTP ${response.status}`);
-      } catch {
-        setError(`HTTP ${response.status}`);
-      }
-      setStatus('error');
-      return;
-    }
-
-    await readPostStream(
-      response,
-      (eventType, data) => {
-        if (eventType === 'batch') {
-          try {
-            const batch = parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0]);
-            setResults((prev) => [...prev, batch]);
-          } catch (e) {
-            console.error('Failed to parse batch event:', e);
-          }
-        } else if (eventType === 'lint') {
-          try {
-            const ev = data as { category: string; results: LintCategory['results'] };
-            setLintCategories((prev) => [...prev, { category: ev.category, results: ev.results }]);
-          } catch (e) {
-            console.error('Failed to parse lint event:', e);
-          }
-        } else if (eventType === 'done') {
-          setCheckStats(data as CheckDoneStats);
-          setStatus('done');
-        } else if (eventType === 'error') {
-          const ev = data as { message?: string; code?: string };
-          setError(ev.message ?? ev.code ?? 'Unknown error');
-        }
-      },
-      controller.signal,
-    );
   }
 
   // ---------------------------------------------------------------------------
@@ -428,96 +368,15 @@ export default function App() {
   }
 
   // ---------------------------------------------------------------------------
-  // Submit — trace mode (POST /api/trace)
+  // Submit — combined mode (any combination of +check, +trace, +dnssec)
   // ---------------------------------------------------------------------------
 
-  async function submitTrace(q: string) {
+  function submitCombined(q: string) {
     closeConnections();
 
-    const { domain, record_type } = extractTraceParams(q);
-    if (!domain) return;
-
-    setQuery(q);
-    setTraceHops([]);
-    setTraceDoneStats(null);
-    setError(null);
-    setIsTraceMode(true);
-    setIsCheckMode(false);
-    setResults([]);
-    setStats(null);
-    setLintCategories([]);
-    setCheckStats(null);
-    setStatus('loading');
-    setActiveTab('trace');
-    addToHistory(q);
-
-    const url = new URL(window.location.href);
-    url.searchParams.set('q', q);
-    window.history.pushState(null, '', url.toString());
-
-    // Run the base query (without +trace) in the background to populate Results.
-    startBackgroundQuery(stripTraceFlag(q));
-
-    const controller = new AbortController();
-    traceAbortController = controller;
-
-    let response: Response;
-    try {
-      response = await fetch('/api/trace', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream',
-        },
-        body: JSON.stringify({ domain, record_type }),
-        signal: controller.signal,
-      });
-    } catch (e: unknown) {
-      if (e instanceof Error && e.name === 'AbortError') return;
-      setError(e instanceof Error ? e.message : 'Network error');
-      setStatus('error');
-      return;
-    }
-
-    if (!response.ok) {
-      try {
-        const body = await response.json();
-        setError(body?.error?.message ?? `HTTP ${response.status}`);
-      } catch {
-        setError(`HTTP ${response.status}`);
-      }
-      setStatus('error');
-      return;
-    }
-
-    await readPostStream(
-      response,
-      (eventType, data) => {
-        if (eventType === 'hop') {
-          try {
-            const ev = data as { request_id: string; hop: TraceHop };
-            setTraceHops((prev) => [...prev, ev.hop]);
-          } catch (e) {
-            console.error('Failed to parse hop event:', e);
-          }
-        } else if (eventType === 'done') {
-          setTraceDoneStats(data as TraceDoneStats);
-          setStatus('done');
-        } else if (eventType === 'error') {
-          const ev = data as { message?: string; code?: string };
-          setError(ev.message ?? ev.code ?? 'Unknown error');
-        }
-      },
-      controller.signal,
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Submit — combined trace + check mode
-  // ---------------------------------------------------------------------------
-
-  function submitTraceAndCheck(q: string) {
-    closeConnections();
+    const wantCheck = hasCheckFlag(q);
+    const wantTrace = hasTraceFlag(q);
+    const wantDnssec = hasDnssecFlag(q);
 
     const { domain, record_type } = extractTraceParams(q);
     const { domain: checkDomain, servers } = extractCheckParams(q);
@@ -526,111 +385,182 @@ export default function App() {
     setQuery(q);
     setTraceHops([]);
     setTraceDoneStats(null);
+    setDnssecLevels([]);
+    setDnssecDoneStats(null);
     setResults([]);
     setStats(null);
     setLintCategories([]);
     setCheckStats(null);
     setError(null);
-    setIsTraceMode(true);
-    setIsCheckMode(true);
+    setIsTraceMode(wantTrace);
+    setIsCheckMode(wantCheck);
+    setIsDnssecMode(wantDnssec);
     setStatus('loading');
-    setActiveTab('trace');
+    // Pick the first active tab: dnssec > trace > lint
+    setActiveTab(wantDnssec ? 'dnssec' : wantTrace ? 'trace' : 'lint');
     addToHistory(q);
 
     const url = new URL(window.location.href);
     url.searchParams.set('q', q);
     window.history.pushState(null, '', url.toString());
 
+    // Count how many streams we launch; status → done when all finish.
+    let streamCount = 0;
+    if (wantCheck) streamCount++;
+    if (wantTrace) streamCount++;
+    if (wantDnssec) streamCount++;
+
     let doneCount = 0;
     function onStreamDone() {
       doneCount++;
-      if (doneCount >= 2) setStatus('done');
+      if (doneCount >= streamCount) setStatus('done');
     }
 
-    const checkController = new AbortController();
-    checkAbortController = checkController;
-
-    const traceController = new AbortController();
-    traceAbortController = traceController;
+    // Background query to populate Results tab (strip all routing flags).
+    if (wantCheck) {
+      // Check already provides batch events — no separate background query needed.
+    } else {
+      startBackgroundQuery(stripRoutingFlags(q));
+    }
 
     // Check stream (provides batch + lint events)
-    (async () => {
-      let response: Response;
-      try {
-        response = await fetch('/api/check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-          body: JSON.stringify({ domain: checkDomain, servers }),
-          signal: checkController.signal,
-        });
-      } catch (e) {
-        if (e instanceof Error && e.name === 'AbortError') return;
-        setError(e instanceof Error ? e.message : 'Network error');
-        onStreamDone();
-        return;
-      }
-      if (!response.ok) {
-        try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
-        catch { setError(`HTTP ${response.status}`); }
-        onStreamDone();
-        return;
-      }
-      await readPostStream(response, (eventType, data) => {
-        if (eventType === 'batch') {
-          try { setResults((prev) => [...prev, parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0])]); }
-          catch (e) { console.error('Failed to parse batch event:', e); }
-        } else if (eventType === 'lint') {
-          try {
-            const ev = data as { category: string; results: LintCategory['results'] };
-            setLintCategories((prev) => [...prev, { category: ev.category, results: ev.results }]);
-          } catch (e) { console.error('Failed to parse lint event:', e); }
-        } else if (eventType === 'done') {
-          setCheckStats(data as CheckDoneStats);
+    if (wantCheck) {
+      const checkController = new AbortController();
+      checkAbortController = checkController;
+
+      (async () => {
+        let response: Response;
+        try {
+          response = await fetch('/api/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            body: JSON.stringify({ domain: checkDomain, servers }),
+            signal: checkController.signal,
+          });
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+          setError(e instanceof Error ? e.message : 'Network error');
           onStreamDone();
-        } else if (eventType === 'error') {
-          const ev = data as { message?: string; code?: string };
-          setError(ev.message ?? ev.code ?? 'Unknown error');
+          return;
         }
-      }, checkController.signal);
-    })();
+        if (!response.ok) {
+          try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
+          catch { setError(`HTTP ${response.status}`); }
+          onStreamDone();
+          return;
+        }
+        await readPostStream(response, (eventType, data) => {
+          if (eventType === 'batch') {
+            try { setResults((prev) => [...prev, parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0])]); }
+            catch (e) { console.error('Failed to parse batch event:', e); }
+          } else if (eventType === 'lint') {
+            try {
+              const ev = data as { category: string; results: LintCategory['results'] };
+              setLintCategories((prev) => [...prev, { category: ev.category, results: ev.results }]);
+            } catch (e) { console.error('Failed to parse lint event:', e); }
+          } else if (eventType === 'done') {
+            const checkDone = data as CheckDoneStats;
+            setCheckStats(checkDone);
+            // Populate query-level stats so the Results tab summary works.
+            setStats({
+              total_queries: checkDone.total_checks,
+              duration_ms: checkDone.duration_ms,
+              warnings: [],
+            });
+            onStreamDone();
+          } else if (eventType === 'error') {
+            const ev = data as { message?: string; code?: string };
+            setError(ev.message ?? ev.code ?? 'Unknown error');
+          }
+        }, checkController.signal);
+      })();
+    }
 
     // Trace stream (provides hop events)
-    (async () => {
-      let response: Response;
-      try {
-        response = await fetch('/api/trace', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-          body: JSON.stringify({ domain, record_type }),
-          signal: traceController.signal,
-        });
-      } catch (e) {
-        if (e instanceof Error && e.name === 'AbortError') return;
-        setError(e instanceof Error ? e.message : 'Network error');
-        onStreamDone();
-        return;
-      }
-      if (!response.ok) {
-        try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
-        catch { setError(`HTTP ${response.status}`); }
-        onStreamDone();
-        return;
-      }
-      await readPostStream(response, (eventType, data) => {
-        if (eventType === 'hop') {
-          try {
-            const ev = data as { request_id: string; hop: TraceHop };
-            setTraceHops((prev) => [...prev, ev.hop]);
-          } catch (e) { console.error('Failed to parse hop event:', e); }
-        } else if (eventType === 'done') {
-          setTraceDoneStats(data as TraceDoneStats);
+    if (wantTrace) {
+      const traceController = new AbortController();
+      traceAbortController = traceController;
+
+      (async () => {
+        let response: Response;
+        try {
+          response = await fetch('/api/trace', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            body: JSON.stringify({ domain, record_type }),
+            signal: traceController.signal,
+          });
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+          setError(e instanceof Error ? e.message : 'Network error');
           onStreamDone();
-        } else if (eventType === 'error') {
-          const ev = data as { message?: string; code?: string };
-          setError(ev.message ?? ev.code ?? 'Unknown error');
+          return;
         }
-      }, traceController.signal);
-    })();
+        if (!response.ok) {
+          try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
+          catch { setError(`HTTP ${response.status}`); }
+          onStreamDone();
+          return;
+        }
+        await readPostStream(response, (eventType, data) => {
+          if (eventType === 'hop') {
+            try {
+              const ev = data as { request_id: string; hop: TraceHop };
+              setTraceHops((prev) => [...prev, ev.hop]);
+            } catch (e) { console.error('Failed to parse hop event:', e); }
+          } else if (eventType === 'done') {
+            setTraceDoneStats(data as TraceDoneStats);
+            onStreamDone();
+          } else if (eventType === 'error') {
+            const ev = data as { message?: string; code?: string };
+            setError(ev.message ?? ev.code ?? 'Unknown error');
+          }
+        }, traceController.signal);
+      })();
+    }
+
+    // DNSSEC stream (provides chain events)
+    if (wantDnssec) {
+      const controller = new AbortController();
+      dnssecAbortController = controller;
+
+      (async () => {
+        let response: Response;
+        try {
+          response = await fetch('/api/dnssec', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            body: JSON.stringify({ domain }),
+            signal: controller.signal,
+          });
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+          setError(e instanceof Error ? e.message : 'Network error');
+          onStreamDone();
+          return;
+        }
+        if (!response.ok) {
+          try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
+          catch { setError(`HTTP ${response.status}`); }
+          onStreamDone();
+          return;
+        }
+        await readPostStream(response, (eventType, data) => {
+          if (eventType === 'chain') {
+            try {
+              const ev = data as { request_id: string; level: ChainLevel };
+              setDnssecLevels((prev) => [...prev, ev.level]);
+            } catch (e) { console.error('Failed to parse chain event:', e); }
+          } else if (eventType === 'done') {
+            setDnssecDoneStats(data as DnssecDoneStats);
+            onStreamDone();
+          } else if (eventType === 'error') {
+            const ev = data as { message?: string; code?: string };
+            setError(ev.message ?? ev.code ?? 'Unknown error');
+          }
+        }, controller.signal);
+      })();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -638,16 +568,13 @@ export default function App() {
   // ---------------------------------------------------------------------------
 
   function submitQuery(q: string) {
-    if (hasCheckFlag(q) && hasTraceFlag(q)) {
-      submitTraceAndCheck(q);
-      return;
-    }
-    if (hasCheckFlag(q)) {
-      submitCheck(q);
-      return;
-    }
-    if (hasTraceFlag(q)) {
-      submitTrace(q);
+    const wantCheck = hasCheckFlag(q);
+    const wantTrace = hasTraceFlag(q);
+    const wantDnssec = hasDnssecFlag(q);
+
+    // Any combination of routing flags → unified combined handler.
+    if (wantCheck || wantTrace || wantDnssec) {
+      submitCombined(q);
       return;
     }
 
@@ -659,8 +586,11 @@ export default function App() {
     setStats(null);
     setIsCheckMode(false);
     setIsTraceMode(false);
+    setIsDnssecMode(false);
     setTraceHops([]);
     setTraceDoneStats(null);
+    setDnssecLevels([]);
+    setDnssecDoneStats(null);
     setLintCategories([]);
     setCheckStats(null);
     setStatus('loading');
@@ -795,7 +725,7 @@ export default function App() {
   // ---------------------------------------------------------------------------
 
   const hasContent = () =>
-    status() !== 'idle' || results().length > 0 || lintCategories().length > 0 || traceHops().length > 0;
+    status() !== 'idle' || results().length > 0 || lintCategories().length > 0 || traceHops().length > 0 || dnssecLevels().length > 0;
   const isLoading  = () => status() === 'loading';
 
   // Lint tab badge text: show worst status count when done.
@@ -897,6 +827,27 @@ export default function App() {
                 </button>
                 <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
+              <div class="welcome-card">
+                <div class="welcome-card-title">DNSSEC</div>
+                <p class="welcome-card-desc">
+                  Validate the DNSSEC chain of trust from root to authoritative. Checks DNSKEY, DS, and RRSIG records at each delegation level.
+                </p>
+                <button
+                  class="welcome-example"
+                  onClick={() => fillQuery('dnssec-deployment.org +dnssec')}
+                  title="Click to fill query"
+                >
+                  dnssec-deployment.org +dnssec
+                </button>
+                <button
+                  class="welcome-example"
+                  onClick={() => fillQuery('dnssec-failed.org +dnssec')}
+                  title="Click to fill query"
+                >
+                  dnssec-failed.org +dnssec
+                </button>
+                <span class="example-hint">fills the query bar — press Enter to run</span>
+              </div>
             </div>
           </div>
         </Show>
@@ -904,6 +855,17 @@ export default function App() {
         <Show when={hasContent()}>
           <div class="tabs">
             <div class="tabs-left" role="tablist">
+              {/* DNSSEC tab — only visible in dnssec mode */}
+              <Show when={isDnssecMode()}>
+                <button
+                  role="tab"
+                  aria-selected={activeTab() === 'dnssec'}
+                  class={`tab${activeTab() === 'dnssec' ? ' active' : ''}`}
+                  onClick={() => setActiveTab('dnssec')}
+                >
+                  DNSSEC
+                </button>
+              </Show>
               {/* Trace tab — only visible in trace mode */}
               <Show when={isTraceMode()}>
                 <button
@@ -964,58 +926,15 @@ export default function App() {
               </div>
             </Show>
 
-            {/* Status bar — query mode */}
-            <Show when={!isCheckMode() && !isTraceMode() && status() === 'done' && stats()}>
-              <div class="status-info">
-                <span title="Total DNS queries sent across all servers and record types">
-                  {stats()!.total_queries} queries
-                </span>
-                <span class="status-separator">/</span>
-                <span title="Record type batches received from the server">
-                  {results().length} batches
-                </span>
-                <span class="status-separator">/</span>
-                <span title="Total wall-clock time for the query">
-                  {stats()!.duration_ms}ms
-                </span>
-                <Show when={stats()!.transport && stats()!.transport !== 'udp'}>
-                  <span class="status-separator">/</span>
-                  <span class="status-badge transport-badge" title="DNS transport protocol">
-                    {stats()!.transport!.toUpperCase()}
-                  </span>
-                </Show>
-                <Show when={stats()!.dnssec}>
-                  <span class="status-separator">/</span>
-                  <span class="status-badge dnssec-badge" title="DNSSEC records were included">
-                    DNSSEC
-                  </span>
-                </Show>
-                <Show when={stats()!.warnings.length > 0}>
-                  <span class="status-separator">/</span>
-                  <span class="status-warnings" title={stats()!.warnings.join('; ')}>
-                    {stats()!.warnings.length} warning{stats()!.warnings.length !== 1 ? 's' : ''}
-                  </span>
-                </Show>
-              </div>
-            </Show>
-
-            {/* Status bar — loading (check / trace / both) */}
-            <Show when={(isCheckMode() || isTraceMode()) && isLoading()}>
+            {/* Status bar — loading (check / trace / dnssec / combinations) */}
+            <Show when={(isCheckMode() || isTraceMode() || isDnssecMode()) && isLoading()}>
               <div class="status-info">
                 <span class="status-loading-text">
                   {isCheckMode() && isTraceMode() ? 'Tracing + Checking…'
+                    : isDnssecMode() ? 'Validating DNSSEC…'
                     : isCheckMode() ? 'Checking…'
                     : 'Tracing…'}
                 </span>
-              </div>
-            </Show>
-
-            {/* Status bar — trace mode (done) */}
-            <Show when={isTraceMode() && status() === 'done' && traceDoneStats()}>
-              <div class="status-info">
-                <span>{traceDoneStats()!.hops} hop{traceDoneStats()!.hops !== 1 ? 's' : ''}</span>
-                <span class="status-separator">/</span>
-                <span>{traceDoneStats()!.duration_ms}ms</span>
               </div>
             </Show>
           </div>
@@ -1028,6 +947,18 @@ export default function App() {
           as a visible page shift. Keeping all panes in the DOM and toggling
           display avoids that intermediate empty state entirely.
         */}
+
+        {/* DNSSEC tab pane — mounted once dnssec mode starts */}
+        <Show when={isDnssecMode()}>
+          <div style={{ display: activeTab() === 'dnssec' ? 'block' : 'none' }}>
+            <DnssecView
+              levels={dnssecLevels()}
+              doneStats={dnssecDoneStats()}
+              isLoading={isLoading()}
+              activeTab={activeTab()}
+            />
+          </div>
+        </Show>
 
         {/* Trace tab pane — mounted once trace mode starts */}
         <Show when={isTraceMode()}>
@@ -1054,7 +985,30 @@ export default function App() {
 
         {/* Results / Servers / JSON — always mounted, hidden when another pane is active */}
         <Show when={hasContent()}>
-          <div style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' ? 'block' : 'none' }}>
+          <div style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' && activeTab() !== 'dnssec' ? 'block' : 'none' }}>
+            <Show when={activeTab() === 'results' && stats()}>
+              <div class="results-summary">
+                <span class="results-summary-item">{stats()!.total_queries} queries</span>
+                <span class="results-summary-sep">/</span>
+                <span class="results-summary-item">{results().length} batches</span>
+                <span class="results-summary-sep">/</span>
+                <span class="results-summary-item">{stats()!.duration_ms}ms</span>
+                <Show when={stats()!.transport && stats()!.transport !== 'udp'}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item status-badge transport-badge">{stats()!.transport!.toUpperCase()}</span>
+                </Show>
+                <Show when={stats()!.dnssec}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item status-badge dnssec-badge">DNSSEC</span>
+                </Show>
+                <Show when={stats()!.warnings.length > 0}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item status-warnings" title={stats()!.warnings.join('; ')}>
+                    {stats()!.warnings.length} warning{stats()!.warnings.length !== 1 ? 's' : ''}
+                  </span>
+                </Show>
+              </div>
+            </Show>
             <ResultsTable
               results={results()}
               stats={stats()}
@@ -1129,7 +1083,7 @@ export default function App() {
                   <tr><td class="help-token">+tcp</td><td>TCP transport</td></tr>
                   <tr><td class="help-token">+tls</td><td>DNS-over-TLS</td></tr>
                   <tr><td class="help-token">+https</td><td>DNS-over-HTTPS</td></tr>
-                  <tr><td class="help-token">+dnssec</td><td>Request DNSSEC records</td></tr>
+                  <tr><td class="help-token">+dnssec</td><td>DNSSEC chain-of-trust validation</td></tr>
                   <tr><td class="help-token">+check</td><td>Domain health check (15 types + DMARC lint)</td></tr>
                   <tr><td class="help-token">+trace</td><td>Delegation trace (root → authoritative)</td></tr>
                 </tbody>

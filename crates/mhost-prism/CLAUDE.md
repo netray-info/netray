@@ -71,8 +71,8 @@ Phased delivery as defined in SDD §14:
 
 - ~~**Phase 0**: Workspace conversion (mhost repo)~~ — N/A (standalone repo)
 - ~~**Phase 1**: MVP — query endpoint, parser, results table, rate limiting, circuit breaker, metrics~~
-- **Phase 2**: Transport & UI enhancements — transport flags, DNSSEC, server comparison, expandable rows
-- **Phase 3**: Polish — server-side autocomplete, keyboard shortcuts, history, mobile
+- ~~**Phase 2**: Transport & UI enhancements — transport flags, DNSSEC, server comparison, expandable rows~~
+- ~~**Phase 3**: Polish — server-side autocomplete, keyboard shortcuts, history, mobile~~
 - ~~**Phase 4**: check/trace endpoints, stream timeouts, domain-length validation, `+check`/`+trace` routing~~
 - **Phase 5**: Future — auth, DNSSEC visualization, propagation map
 
@@ -135,6 +135,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
       query_policy.rs         # Target validation, type restrictions
     config.rs                 # config crate: TOML + env vars (PRISM_ prefix)
     error.rs                  # thiserror ApiError enum → HTTP status + error codes
+    record_format.rs          # Human-readable formatting for TXT, CAA, MX, SOA
   frontend/                   # SolidJS + Vite (strict TypeScript)
     src/
       App.tsx
