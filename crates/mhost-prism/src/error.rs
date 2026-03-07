@@ -137,6 +137,11 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = self.status_code();
+
+        if status == StatusCode::INTERNAL_SERVER_ERROR {
+            tracing::error!(error = %self, "internal server error");
+        }
+
         let body = ErrorBody {
             error: ErrorDetail {
                 code: self.error_code(),

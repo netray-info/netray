@@ -32,6 +32,7 @@ use crate::config::Config;
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::{self, ParsedQuery, ServerSpec, Transport};
 use crate::security::QueryPolicy;
+use crate::RequestId;
 
 // ---------------------------------------------------------------------------
 // SSE event payloads
@@ -91,6 +92,7 @@ pub async fn get_handler(
     State(state): State<AppState>,
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
+    axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
     Query(params): Query<QueryParams>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let q = params
@@ -102,7 +104,7 @@ pub async fn get_handler(
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::debug!(%client_ip, %peer_addr, "query GET");
 
-    execute_query(parsed, state, client_ip).await
+    execute_query(parsed, state, client_ip, request_id.0).await
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +136,7 @@ pub async fn post_handler(
     State(state): State<AppState>,
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
+    axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
     raw_query: axum::extract::RawQuery,
     Json(body): Json<PostQueryRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
@@ -147,7 +150,7 @@ pub async fn post_handler(
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::debug!(%client_ip, %peer_addr, "query POST");
 
-    execute_query(parsed, state, client_ip).await
+    execute_query(parsed, state, client_ip, request_id.0).await
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -262,8 +265,8 @@ async fn execute_query(
     mut parsed: ParsedQuery,
     state: AppState,
     client_ip: IpAddr,
+    request_id: String,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
-    let request_id = uuid::Uuid::now_v7().to_string();
 
     // Validate against query policy.
     let policy = QueryPolicy::new(&state.config);
@@ -460,6 +463,12 @@ async fn execute_query(
 
         if !timed_out {
             let elapsed = start.elapsed();
+            tracing::info!(
+                request_id = %rid,
+                domain = %domain,
+                duration_ms = elapsed.as_millis(),
+                "query completed"
+            );
             let done = DoneEvent {
                 request_id: rid,
                 total_queries: total,

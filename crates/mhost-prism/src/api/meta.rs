@@ -1,10 +1,14 @@
-//! Metadata endpoints: health, servers, record types.
+//! Metadata endpoints: health, ready, servers, record types.
 
 use axum::Json;
+use axum::extract::State;
+use axum::http::StatusCode;
 use mhost::RecordType;
 use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
 use serde::Serialize;
+
+use crate::api::AppState;
 
 // ---------------------------------------------------------------------------
 // GET /api/health
@@ -26,6 +30,47 @@ pub struct HealthResponse {
 )]
 pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/ready
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct ReadyResponse {
+    /// `"ready"` when all circuit breakers are closed; `"degraded"` when any is open.
+    status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<&'static str>,
+}
+
+/// Readiness probe. Returns 200 when no circuit breakers are open, 503 when degraded.
+#[utoipa::path(
+    get, path = "/api/ready",
+    tag = "Probes",
+    responses(
+        (status = 200, description = "Service is ready to handle traffic", body = ReadyResponse),
+        (status = 503, description = "Service is degraded (circuit breaker open)", body = ReadyResponse),
+    )
+)]
+pub async fn ready(State(state): State<AppState>) -> (StatusCode, Json<ReadyResponse>) {
+    if state.circuit_breakers.any_open() {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ReadyResponse {
+                status: "degraded",
+                reason: Some("circuit breaker open"),
+            }),
+        )
+    } else {
+        (
+            StatusCode::OK,
+            Json(ReadyResponse {
+                status: "ready",
+                reason: None,
+            }),
+        )
+    }
 }
 
 // ---------------------------------------------------------------------------

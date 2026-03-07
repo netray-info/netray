@@ -70,6 +70,7 @@ pub struct AppState {
         meta::servers,
         meta::record_types,
         meta::health,
+        meta::ready,
     ),
     components(schemas(
         query::PostQueryRequest,
@@ -81,6 +82,7 @@ pub struct AppState {
         parse::TokenInfo,
         parse::Completion,
         meta::HealthResponse,
+        meta::ReadyResponse,
         meta::ServerInfo,
         meta::ServerConfigInfo,
         meta::RecordTypeInfo,
@@ -138,6 +140,7 @@ pub fn api_router(state: AppState) -> Router {
             "/api/query",
             get(query::get_handler).post(query::post_handler),
         )
+        .route("/api/ready", get(meta::ready))
         .route("/api/servers", get(meta::servers))
         .route("/api/record-types", get(meta::record_types))
         .route("/api/check", post(check::post_handler))

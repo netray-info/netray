@@ -16,6 +16,16 @@ mod parser;
 mod security;
 
 // ---------------------------------------------------------------------------
+// Request ID newtype
+// ---------------------------------------------------------------------------
+
+/// Wraps the per-request UUID v7 so it can be stored in request extensions
+/// and extracted by SSE handlers to correlate the `X-Request-Id` response
+/// header with SSE event payloads.
+#[derive(Clone)]
+pub struct RequestId(pub String);
+
+// ---------------------------------------------------------------------------
 // Embedded frontend assets
 // ---------------------------------------------------------------------------
 
@@ -31,6 +41,7 @@ struct Assets;
 async fn main() {
     // 1. Initialize tracing.
     tracing_subscriber::fmt()
+        .json()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "prism=info,tower_http=info".into()),
@@ -66,6 +77,7 @@ async fn main() {
         .merge(api::health_router())
         .merge(api::api_router(state))
         .fallback(static_handler)
+        .layer(axum::middleware::from_fn(http_metrics_middleware))
         .layer(axum::middleware::from_fn(request_id_middleware))
         .layer(axum::middleware::from_fn(security::security_headers))
         .layer(security::cors_layer())
@@ -111,17 +123,44 @@ async fn main() {
 // Request ID middleware
 // ---------------------------------------------------------------------------
 
-/// Injects a `X-Request-Id` header (UUID v7) into every response.
+/// Injects a `X-Request-Id` header (UUID v7) into every response and stores
+/// the same ID in request extensions so SSE handlers can correlate the header
+/// with their `request_id` SSE field.
 async fn request_id_middleware(
-    request: axum::extract::Request,
+    mut request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
-    let request_id = uuid::Uuid::now_v7().to_string();
+    let id = uuid::Uuid::now_v7().to_string();
+    request.extensions_mut().insert(RequestId(id.clone()));
     let mut response = next.run(request).await;
     response.headers_mut().insert(
         axum::http::HeaderName::from_static("x-request-id"),
-        axum::http::HeaderValue::from_str(&request_id).expect("UUID is valid header value"),
+        axum::http::HeaderValue::from_str(&id).expect("UUID is valid header value"),
     );
+    response
+}
+
+// ---------------------------------------------------------------------------
+// HTTP metrics middleware
+// ---------------------------------------------------------------------------
+
+/// Increments `prism_http_requests_total{method, path, status}` for every
+/// HTTP request, enabling error-rate SLO calculations.
+async fn http_metrics_middleware(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let method = request.method().to_string();
+    let path = request.uri().path().to_owned();
+    let response = next.run(request).await;
+    let status = response.status().as_u16().to_string();
+    metrics::counter!(
+        "prism_http_requests_total",
+        "method" => method,
+        "path" => path,
+        "status" => status,
+    )
+    .increment(1);
     response
 }
 

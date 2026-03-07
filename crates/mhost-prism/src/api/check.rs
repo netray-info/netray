@@ -37,6 +37,7 @@ use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::ParsedQuery;
 use crate::security::QueryPolicy;
+use crate::RequestId;
 
 // ---------------------------------------------------------------------------
 // Record types queried for the base domain (15 types)
@@ -128,6 +129,7 @@ pub async fn post_handler(
     State(state): State<AppState>,
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
+    axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
     raw_query: axum::extract::RawQuery,
     Json(body): Json<CheckRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
@@ -190,7 +192,7 @@ pub async fn post_handler(
     let resolvers = resolver_group.resolvers().to_vec();
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
 
-    let rid = uuid::Uuid::now_v7().to_string();
+    let rid = request_id.0;
     let circuit_breakers = state.circuit_breakers.clone();
 
     tokio::spawn(async move {
@@ -355,6 +357,12 @@ pub async fn post_handler(
         // Phase 3: Done event
         // ------------------------------------------------------------------
         let elapsed = start.elapsed();
+        tracing::info!(
+            request_id = %rid,
+            domain = %domain,
+            duration_ms = elapsed.as_millis(),
+            "check completed"
+        );
         let done = CheckDoneEvent {
             request_id: rid,
             duration_ms: elapsed.as_millis() as u64,

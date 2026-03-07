@@ -233,6 +233,15 @@ impl CircuitBreakerRegistry {
         self.record_failure_at(provider, now);
     }
 
+    /// Returns `true` if any known breaker is currently in the `Open` state.
+    pub fn any_open(&self) -> bool {
+        let breakers = self.breakers.read().expect("breaker lock poisoned");
+        breakers.values().any(|mutex| {
+            let breaker = mutex.lock().expect("breaker lock poisoned");
+            breaker.state == BreakerState::Open
+        })
+    }
+
     /// Get the current breaker state for `provider`. Returns `Closed` for
     /// unknown providers (no breaker allocated yet).
     #[cfg(test)]

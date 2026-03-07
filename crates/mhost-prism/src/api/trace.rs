@@ -23,6 +23,7 @@ use crate::api::{AppState, STREAM_TIMEOUT_SECS};
 use crate::api::query::make_error_event;
 use crate::dns_trace;
 use crate::error::{ApiError, ErrorResponse};
+use crate::RequestId;
 
 // Cost charged against per-IP and global rate limiters per trace request.
 // Trace queries root/TLD/auth servers (public infrastructure), so we skip
@@ -90,6 +91,7 @@ pub async fn post_handler(
     State(state): State<AppState>,
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
+    axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
     raw_query: axum::extract::RawQuery,
     Json(body): Json<TraceRequest>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
@@ -144,7 +146,7 @@ pub async fn post_handler(
             .check_query_cost(client_ip, &[], TRACE_COST, TRACE_COST)?;
 
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
-    let rid = uuid::Uuid::now_v7().to_string();
+    let rid = request_id.0;
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
@@ -187,6 +189,12 @@ pub async fn post_handler(
         }
 
         let elapsed = start.elapsed();
+        tracing::info!(
+            request_id = %rid,
+            domain = %domain,
+            duration_ms = elapsed.as_millis(),
+            "trace completed"
+        );
         let done = TraceDoneEvent {
             request_id: rid,
             duration_ms: elapsed.as_millis() as u64,
