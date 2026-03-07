@@ -7,6 +7,8 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+use crate::security::query_policy::is_allowed_target;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
@@ -503,7 +505,7 @@ async fn resolve_missing_glue(ns_servers: &mut HashMap<String, Vec<IpAddr>>) {
                 let entry = ns_servers.entry(ns_name.clone()).or_default();
                 for addr in addrs {
                     let ip = addr.ip();
-                    if ip.is_ipv4() && !entry.contains(&ip) {
+                    if ip.is_ipv4() && !entry.contains(&ip) && is_allowed_target(ip).is_ok() {
                         entry.push(ip);
                     }
                 }

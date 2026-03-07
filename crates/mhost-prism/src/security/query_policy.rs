@@ -115,9 +115,9 @@ impl<'a> QueryPolicy<'a> {
 /// Validate that a target IP address is safe to query.
 ///
 /// Rejects loopback, unspecified, multicast, private (RFC 1918), link-local,
-/// CGNAT (RFC 6598), and documentation addresses. This prevents the service
-/// from being used to probe internal networks.
-fn is_allowed_target(ip: IpAddr) -> Result<(), ApiError> {
+/// CGNAT (RFC 6598), documentation, and IPv6 unique-local (ULA) addresses.
+/// This prevents the service from being used to probe internal networks.
+pub(crate) fn is_allowed_target(ip: IpAddr) -> Result<(), ApiError> {
     if ip.is_loopback() {
         return Err(blocked_ip(ip, "loopback address"));
     }
@@ -138,6 +138,9 @@ fn is_allowed_target(ip: IpAddr) -> Result<(), ApiError> {
     }
     if is_documentation(ip) {
         return Err(blocked_ip(ip, "documentation address"));
+    }
+    if is_ipv6_ula(ip) {
+        return Err(blocked_ip(ip, "IPv6 unique-local address (ULA, fc00::/7)"));
     }
     Ok(())
 }
@@ -187,6 +190,16 @@ fn is_cgnat(ip: IpAddr) -> bool {
             octets[0] == 100 && (octets[1] & 0xC0) == 64
         }
         IpAddr::V6(_) => false,
+    }
+}
+
+fn is_ipv6_ula(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V6(v6) => {
+            // fc00::/7 — first 7 bits are 1111_110x
+            (v6.segments()[0] & 0xfe00) == 0xfc00
+        }
+        IpAddr::V4(_) => false,
     }
 }
 
@@ -379,6 +392,26 @@ mod tests {
         assert!(
             is_allowed_target("2001:db8:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
         );
+    }
+
+    #[test]
+    fn rejects_ipv6_ula_fc00() {
+        assert!(is_allowed_target("fc00::1".parse().unwrap()).is_err());
+        assert!(is_allowed_target("fc00:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err());
+    }
+
+    #[test]
+    fn rejects_ipv6_ula_fd00() {
+        assert!(is_allowed_target("fd00::1".parse().unwrap()).is_err());
+        assert!(is_allowed_target("fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err());
+    }
+
+    #[test]
+    fn allows_ipv6_outside_ula() {
+        // fe00:: has first 7 bits = 1111_111x, outside fc00::/7
+        assert!(is_allowed_target("fe00::1".parse().unwrap()).is_ok());
+        // fb00:: has first 7 bits = 1111_101x, outside fc00::/7
+        assert!(is_allowed_target("fb00::1".parse().unwrap()).is_ok());
     }
 
     // ---- is_allowed_target: allowed public IPs ----

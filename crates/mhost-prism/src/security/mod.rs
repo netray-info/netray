@@ -18,23 +18,19 @@ pub use rate_limit::RateLimitState;
 use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::Response;
-use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 /// Create the CORS layer for the application.
 ///
-/// Configured for same-origin only: the SPA is served from the same origin
-/// (embedded via rust-embed), so CORS preflight never triggers for same-origin
-/// requests. This layer is a defense-in-depth measure against third-party sites
-/// attempting to use the API.
+/// No origin allowlist is configured, so `CorsLayer` rejects all cross-origin
+/// requests by default. Same-origin requests from the embedded SPA never
+/// trigger CORS preflight and are unaffected.
 ///
 /// Only GET and POST are permitted. No custom request headers are allowed
 /// (the frontend uses native `EventSource` for GET and standard `Content-Type`
 /// for POST).
 pub fn cors_layer() -> CorsLayer {
     CorsLayer::new()
-        .allow_origin(AllowOrigin::exact(
-            "null".parse().expect("valid header value"),
-        ))
         .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
         .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::ACCEPT])
         .max_age(std::time::Duration::from_secs(3600))

@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::api::AppState;
+use crate::api::{AppState, STREAM_TIMEOUT_SECS};
 use crate::api::query::make_error_event;
 use crate::dns_trace;
 use crate::error::{ApiError, ErrorResponse};
@@ -28,9 +28,6 @@ use crate::error::{ApiError, ErrorResponse};
 // Trace queries root/TLD/auth servers (public infrastructure), so we skip
 // per-target charging and apply a flat cost of 16 tokens — same as check.
 const TRACE_COST: u32 = 16;
-
-// Hard cap on total streaming time (SDD §8.1).
-const STREAM_TIMEOUT_SECS: u64 = 30;
 
 // ---------------------------------------------------------------------------
 // SSE event payloads

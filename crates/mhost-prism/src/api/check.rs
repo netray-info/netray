@@ -15,7 +15,7 @@ use axum::Json;
 use axum::extract::{ConnectInfo, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use futures::stream::Stream;
+use futures::stream::{FuturesUnordered, Stream, StreamExt};
 use mhost::RecordType;
 use mhost::lints::{
     CheckResult, check_caa, check_cname_apex, check_dmarc_records, check_dnssec,
@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::api::AppState;
+use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::api::query::{
     PostServerSpec, build_resolver_group, effective_server_specs, make_error_event,
     parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
@@ -63,21 +63,9 @@ const CHECK_RECORD_TYPES: [RecordType; 15] = [
 // Total SSE batch steps = 15 base types + 1 DMARC lookup.
 const CHECK_TOTAL_STEPS: u32 = 16;
 
-// Hard cap on total streaming time (SDD §8.1).
-const STREAM_TIMEOUT_SECS: u64 = 30;
-
 // ---------------------------------------------------------------------------
 // SSE event payloads
 // ---------------------------------------------------------------------------
-
-#[derive(Serialize)]
-struct BatchEvent {
-    request_id: String,
-    record_type: String,
-    lookups: Lookups,
-    completed: u32,
-    total: u32,
-}
 
 #[derive(Serialize)]
 struct LintEvent {
@@ -209,94 +197,103 @@ pub async fn post_handler(
         let _stream_guard = stream_guard;
         metrics::gauge!("prism_active_checks").increment(1.0);
         let start = Instant::now();
-        let stream_deadline = start + Duration::from_secs(STREAM_TIMEOUT_SECS);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
 
         // ------------------------------------------------------------------
-        // Phase 1: DNS lookups — base record types
+        // Phase 1: DNS lookups — all 16 types in parallel (FuturesUnordered)
         // ------------------------------------------------------------------
+        let dmarc_domain = format!("_dmarc.{domain}");
+
+        // Each future yields (record_type_label, Lookups, is_dmarc_lookup).
+        type LookupFut = std::pin::Pin<
+            Box<dyn std::future::Future<Output = (String, Lookups, bool)> + Send>,
+        >;
+        let futs: FuturesUnordered<LookupFut> = FuturesUnordered::new();
+        for rt in CHECK_RECORD_TYPES.iter() {
+            let rt = *rt;
+            let domain = domain.clone();
+            let resolvers = resolvers.clone();
+            let breaker_keys = breaker_keys.clone();
+            let circuit_breakers = Arc::clone(&circuit_breakers);
+            let tx_err = tx.clone();
+            futs.push(Box::pin(async move {
+                let lookups = fan_out_lookup(
+                    &domain,
+                    rt,
+                    &resolvers,
+                    &breaker_keys,
+                    &circuit_breakers,
+                    &tx_err,
+                )
+                .await;
+                (rt.to_string(), lookups, false)
+            }));
+        }
+        {
+            let resolvers = resolvers.clone();
+            let breaker_keys = breaker_keys.clone();
+            let circuit_breakers = Arc::clone(&circuit_breakers);
+            let tx_err = tx.clone();
+            futs.push(Box::pin(async move {
+                let lookups = fan_out_lookup(
+                    &dmarc_domain,
+                    RecordType::TXT,
+                    &resolvers,
+                    &breaker_keys,
+                    &circuit_breakers,
+                    &tx_err,
+                )
+                .await;
+                ("_dmarc".to_string(), lookups, true)
+            }));
+        }
+
+        tokio::pin!(futs);
         let mut all_lookups = Lookups::empty();
+        let mut dmarc_lookups = Lookups::empty();
         let mut completed: u32 = 0;
 
-        for rt in CHECK_RECORD_TYPES.iter() {
-            if Instant::now() >= stream_deadline {
-                let _ = tx
-                    .send(Ok(make_error_event(
-                        "STREAM_TIMEOUT",
-                        "stream deadline exceeded",
-                    )))
-                    .await;
-                metrics::gauge!("prism_active_checks").decrement(1.0);
-                return;
+        loop {
+            tokio::select! {
+                maybe = futs.next() => {
+                    match maybe {
+                        None => break,
+                        Some((label, lookups, is_dmarc_lookup)) => {
+                            completed += 1;
+                            let batch = BatchEvent {
+                                request_id: rid.clone(),
+                                record_type: label,
+                                lookups: lookups.clone(),
+                                completed,
+                                total: CHECK_TOTAL_STEPS,
+                            };
+                            let event = Event::default()
+                                .event("batch")
+                                .json_data(&batch)
+                                .unwrap_or_else(|_| Event::default().event("batch").data("{}"));
+                            if tx.send(Ok(event)).await.is_err() {
+                                metrics::gauge!("prism_active_checks").decrement(1.0);
+                                return;
+                            }
+                            if is_dmarc_lookup {
+                                dmarc_lookups = lookups;
+                            } else {
+                                all_lookups = all_lookups.merge(lookups);
+                            }
+                        }
+                    }
+                }
+                _ = tokio::time::sleep_until(deadline) => {
+                    let _ = tx
+                        .send(Ok(make_error_event(
+                            "STREAM_TIMEOUT",
+                            "stream deadline exceeded",
+                        )))
+                        .await;
+                    metrics::gauge!("prism_active_checks").decrement(1.0);
+                    return;
+                }
             }
-
-            let lookups = fan_out_lookup(
-                &domain,
-                *rt,
-                &resolvers,
-                &breaker_keys,
-                &circuit_breakers,
-                &tx,
-            )
-            .await;
-            completed += 1;
-
-            let batch = BatchEvent {
-                request_id: rid.clone(),
-                record_type: rt.to_string(),
-                lookups: lookups.clone(),
-                completed,
-                total: CHECK_TOTAL_STEPS,
-            };
-            let event = Event::default()
-                .event("batch")
-                .json_data(&batch)
-                .unwrap_or_else(|_| Event::default().event("batch").data("{}"));
-            if tx.send(Ok(event)).await.is_err() {
-                return;
-            }
-
-            all_lookups = all_lookups.merge(lookups);
-        }
-
-        // ------------------------------------------------------------------
-        // Phase 1 (cont.): DMARC TXT lookup for `_dmarc.<domain>`
-        // ------------------------------------------------------------------
-        if Instant::now() >= stream_deadline {
-            let _ = tx
-                .send(Ok(make_error_event(
-                    "STREAM_TIMEOUT",
-                    "stream deadline exceeded",
-                )))
-                .await;
-            metrics::gauge!("prism_active_checks").decrement(1.0);
-            return;
-        }
-
-        let dmarc_domain = format!("_dmarc.{domain}");
-        let dmarc_lookups = fan_out_lookup(
-            &dmarc_domain,
-            RecordType::TXT,
-            &resolvers,
-            &breaker_keys,
-            &circuit_breakers,
-            &tx,
-        )
-        .await;
-        completed += 1;
-
-        let dmarc_batch = BatchEvent {
-            request_id: rid.clone(),
-            record_type: "_dmarc".to_string(),
-            lookups: dmarc_lookups.clone(),
-            completed,
-            total: CHECK_TOTAL_STEPS,
-        };
-        let event = Event::default()
-            .event("batch")
-            .json_data(&dmarc_batch)
-            .unwrap_or_else(|_| Event::default().event("batch").data("{}"));
-        if tx.send(Ok(event)).await.is_err() {
-            return;
         }
 
         // Extract DMARC TXT strings for the dmarc lint.

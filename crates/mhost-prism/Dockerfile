@@ -47,7 +47,8 @@ COPY --from=builder /app/target/release/prism /usr/local/bin/prism
 
 # API + frontend
 EXPOSE 8080
-# Prometheus metrics
+# Prometheus metrics — must NOT be published externally (Prometheus scraper access only).
+# Do not use -p 9090:9090 or equivalent. Restrict access at the network/firewall level.
 EXPOSE 9090
 
 ENTRYPOINT ["/usr/local/bin/prism"]

@@ -11,12 +11,27 @@ use std::sync::Arc;
 use axum::Router;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
+use mhost::resolver::Lookups;
+use serde::Serialize;
 use utoipa::OpenApi;
 
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ErrorInfo, ErrorResponse};
 use crate::security::{IpExtractor, RateLimitState};
+
+/// Hard cap on total SSE stream duration (SDD §8.1).
+pub const STREAM_TIMEOUT_SECS: u64 = 30;
+
+/// SSE batch event emitted once per record type as DNS results arrive.
+#[derive(Serialize)]
+pub struct BatchEvent {
+    pub request_id: String,
+    pub record_type: String,
+    pub lookups: Lookups,
+    pub completed: u32,
+    pub total: u32,
+}
 
 /// Shared state passed to all API handlers via axum's `State` extractor.
 #[derive(Clone)]

@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::api::AppState;
+use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ApiError, ErrorResponse};
@@ -36,15 +36,6 @@ use crate::security::QueryPolicy;
 // ---------------------------------------------------------------------------
 // SSE event payloads
 // ---------------------------------------------------------------------------
-
-#[derive(Serialize)]
-struct BatchEvent {
-    request_id: String,
-    record_type: String,
-    lookups: Lookups,
-    completed: u32,
-    total: u32,
-}
 
 #[derive(Serialize)]
 struct DoneEvent {
@@ -331,9 +322,6 @@ async fn execute_query(
     }
     .to_owned();
     let dnssec_requested = parsed.dnssec;
-
-    // Hard cap: streams must complete within 30 seconds (SDD §8.1).
-    const STREAM_TIMEOUT_SECS: u64 = 30;
 
     tokio::spawn(async move {
         // Hold stream guard for the lifetime of this task so the active stream

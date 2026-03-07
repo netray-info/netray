@@ -77,7 +77,15 @@ async fn main() {
         ));
 
     // 5. Start the metrics server on a separate port.
+    //
+    // SECURITY: The metrics endpoint must not be reachable from the public
+    // internet. In production, bind to a loopback or private interface
+    // (e.g. 127.0.0.1:9090) and restrict access at the network/firewall level.
     let metrics_addr = config.server.metrics_bind;
+    tracing::info!(
+        addr = %metrics_addr,
+        "metrics server starting — ensure this address is NOT publicly reachable"
+    );
     tokio::spawn(async move {
         if let Err(e) = serve_metrics(metrics_addr).await {
             tracing::error!(error = %e, "metrics server failed");

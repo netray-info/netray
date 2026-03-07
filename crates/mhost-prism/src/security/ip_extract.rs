@@ -20,13 +20,16 @@ pub struct IpExtractor {
 impl IpExtractor {
     /// Create a new extractor from a list of trusted proxy IP strings.
     ///
-    /// Invalid IP strings are silently skipped (logged at warn level during config
-    /// validation). Phase 1 supports exact IP matches only; CIDR ranges are not
-    /// supported yet.
+    /// Invalid IP strings are skipped with a warning. Phase 1 supports exact IP
+    /// matches only; CIDR ranges are not supported yet.
     pub fn new(trusted_proxy_strs: &[String]) -> Self {
         let trusted_proxies = trusted_proxy_strs
             .iter()
-            .filter_map(|s| IpAddr::from_str(s).ok())
+            .filter_map(|s| {
+                IpAddr::from_str(s).map_err(|_| {
+                    tracing::warn!(entry = %s, "trusted_proxies entry is not a valid IP address — skipped");
+                }).ok()
+            })
             .collect();
         Self { trusted_proxies }
     }
