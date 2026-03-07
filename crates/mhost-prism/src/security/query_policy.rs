@@ -229,9 +229,44 @@ mod tests {
     // ---- domain length ----
 
     fn make_policy() -> QueryPolicy<'static> {
-        use crate::config::Config;
-        // Use a leaked default config so we get a 'static reference.
-        let config = Box::leak(Box::new(Config::load(None).expect("default config")));
+        use crate::config::{
+            CircuitBreakerConfig, Config, DnsConfig, LimitsConfig, ServerConfig, TraceConfig,
+        };
+        let config = Box::leak(Box::new(Config {
+            server: ServerConfig {
+                bind: ([127, 0, 0, 1], 8080).into(),
+                metrics_bind: ([127, 0, 0, 1], 9090).into(),
+                trusted_proxies: vec![],
+            },
+            limits: LimitsConfig {
+                per_ip_per_minute: 120,
+                per_ip_burst: 40,
+                per_target_per_minute: 60,
+                per_target_burst: 20,
+                global_per_minute: 1000,
+                global_burst: 50,
+                max_concurrent_connections: 256,
+                per_ip_max_streams: 10,
+                max_timeout_secs: 10,
+                max_record_types: 10,
+                max_servers: 4,
+            },
+            circuit_breaker: CircuitBreakerConfig {
+                window_secs: 60,
+                cooldown_secs: 30,
+                failure_threshold: 0.5,
+                min_requests: 5,
+            },
+            dns: DnsConfig {
+                default_servers: vec!["cloudflare".to_owned()],
+                allow_system_resolvers: true,
+                allow_arbitrary_servers: false,
+            },
+            trace: TraceConfig {
+                max_hops: 10,
+                query_timeout_secs: 3,
+            },
+        }));
         QueryPolicy::new(config)
     }
 

@@ -36,3 +36,7 @@ jobs:
       - name: frontend build
         run: npm ci && npm run build
         working-directory: frontend
+
+      - name: frontend test
+        run: npm test
+        working-directory: frontend

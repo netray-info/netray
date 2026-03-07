@@ -366,3 +366,185 @@ fn reject_zero<T: PartialEq + From<u8>>(name: &str, value: T) -> Result<(), Conf
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_config() -> Config {
+        Config {
+            server: default_server(),
+            limits: default_limits(),
+            circuit_breaker: default_circuit_breaker(),
+            dns: default_dns(),
+            trace: default_trace(),
+        }
+    }
+
+    // --- Valid defaults ---
+
+    #[test]
+    fn default_config_passes_validation() {
+        let mut cfg = valid_config();
+        assert!(cfg.validate().is_ok());
+    }
+
+    // --- Hard-cap clamping ---
+
+    #[test]
+    fn clamps_max_timeout_secs() {
+        let mut cfg = valid_config();
+        cfg.limits.max_timeout_secs = HARD_CAP_TIMEOUT_SECS + 99;
+        cfg.validate().unwrap();
+        assert_eq!(cfg.limits.max_timeout_secs, HARD_CAP_TIMEOUT_SECS);
+    }
+
+    #[test]
+    fn clamps_max_record_types() {
+        let mut cfg = valid_config();
+        cfg.limits.max_record_types = HARD_CAP_RECORD_TYPES + 99;
+        cfg.validate().unwrap();
+        assert_eq!(cfg.limits.max_record_types, HARD_CAP_RECORD_TYPES);
+    }
+
+    #[test]
+    fn clamps_max_servers() {
+        let mut cfg = valid_config();
+        cfg.limits.max_servers = HARD_CAP_SERVERS + 99;
+        cfg.validate().unwrap();
+        assert_eq!(cfg.limits.max_servers, HARD_CAP_SERVERS);
+    }
+
+    #[test]
+    fn clamps_trace_max_hops() {
+        let mut cfg = valid_config();
+        cfg.trace.max_hops = HARD_CAP_TRACE_HOPS + 99;
+        cfg.validate().unwrap();
+        assert_eq!(cfg.trace.max_hops, HARD_CAP_TRACE_HOPS);
+    }
+
+    #[test]
+    fn clamps_trace_query_timeout_secs() {
+        let mut cfg = valid_config();
+        cfg.trace.query_timeout_secs = HARD_CAP_TRACE_QUERY_TIMEOUT + 99;
+        cfg.validate().unwrap();
+        assert_eq!(cfg.trace.query_timeout_secs, HARD_CAP_TRACE_QUERY_TIMEOUT);
+    }
+
+    // Values at exactly the hard cap should not be clamped.
+    #[test]
+    fn hard_cap_exact_value_is_accepted() {
+        let mut cfg = valid_config();
+        cfg.limits.max_timeout_secs = HARD_CAP_TIMEOUT_SECS;
+        cfg.limits.max_record_types = HARD_CAP_RECORD_TYPES;
+        cfg.limits.max_servers = HARD_CAP_SERVERS;
+        cfg.trace.max_hops = HARD_CAP_TRACE_HOPS;
+        cfg.trace.query_timeout_secs = HARD_CAP_TRACE_QUERY_TIMEOUT;
+        cfg.validate().unwrap();
+        assert_eq!(cfg.limits.max_timeout_secs, HARD_CAP_TIMEOUT_SECS);
+        assert_eq!(cfg.limits.max_record_types, HARD_CAP_RECORD_TYPES);
+        assert_eq!(cfg.limits.max_servers, HARD_CAP_SERVERS);
+        assert_eq!(cfg.trace.max_hops, HARD_CAP_TRACE_HOPS);
+        assert_eq!(cfg.trace.query_timeout_secs, HARD_CAP_TRACE_QUERY_TIMEOUT);
+    }
+
+    // --- Zero-value rejection ---
+
+    macro_rules! zero_rejects {
+        ($name:ident, $field:expr) => {
+            #[test]
+            fn $name() {
+                let mut cfg = valid_config();
+                $field(&mut cfg);
+                let err = cfg.validate().unwrap_err().to_string();
+                assert!(
+                    err.contains("must not be zero"),
+                    "expected 'must not be zero' in: {err}"
+                );
+            }
+        };
+    }
+
+    zero_rejects!(rejects_zero_per_ip_per_minute, |c: &mut Config| {
+        c.limits.per_ip_per_minute = 0
+    });
+    zero_rejects!(rejects_zero_per_ip_burst, |c: &mut Config| {
+        c.limits.per_ip_burst = 0
+    });
+    zero_rejects!(rejects_zero_per_target_per_minute, |c: &mut Config| {
+        c.limits.per_target_per_minute = 0
+    });
+    zero_rejects!(rejects_zero_per_target_burst, |c: &mut Config| {
+        c.limits.per_target_burst = 0
+    });
+    zero_rejects!(rejects_zero_global_per_minute, |c: &mut Config| {
+        c.limits.global_per_minute = 0
+    });
+    zero_rejects!(rejects_zero_global_burst, |c: &mut Config| {
+        c.limits.global_burst = 0
+    });
+    zero_rejects!(
+        rejects_zero_max_concurrent_connections,
+        |c: &mut Config| { c.limits.max_concurrent_connections = 0 }
+    );
+    zero_rejects!(rejects_zero_per_ip_max_streams, |c: &mut Config| {
+        c.limits.per_ip_max_streams = 0
+    });
+    zero_rejects!(rejects_zero_max_timeout_secs, |c: &mut Config| {
+        c.limits.max_timeout_secs = 0
+    });
+    zero_rejects!(rejects_zero_max_record_types, |c: &mut Config| {
+        c.limits.max_record_types = 0
+    });
+    zero_rejects!(rejects_zero_max_servers, |c: &mut Config| {
+        c.limits.max_servers = 0
+    });
+    zero_rejects!(rejects_zero_trace_max_hops, |c: &mut Config| {
+        c.trace.max_hops = 0
+    });
+    zero_rejects!(rejects_zero_trace_query_timeout_secs, |c: &mut Config| {
+        c.trace.query_timeout_secs = 0
+    });
+    zero_rejects!(rejects_zero_cb_window_secs, |c: &mut Config| {
+        c.circuit_breaker.window_secs = 0
+    });
+    zero_rejects!(rejects_zero_cb_cooldown_secs, |c: &mut Config| {
+        c.circuit_breaker.cooldown_secs = 0
+    });
+    zero_rejects!(rejects_zero_cb_min_requests, |c: &mut Config| {
+        c.circuit_breaker.min_requests = 0
+    });
+
+    // --- failure_threshold range ---
+
+    #[test]
+    fn rejects_failure_threshold_zero() {
+        let mut cfg = valid_config();
+        cfg.circuit_breaker.failure_threshold = 0.0;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("failure_threshold"), "{err}");
+    }
+
+    #[test]
+    fn rejects_failure_threshold_below_zero() {
+        let mut cfg = valid_config();
+        cfg.circuit_breaker.failure_threshold = -0.1;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("failure_threshold"), "{err}");
+    }
+
+    #[test]
+    fn rejects_failure_threshold_above_one() {
+        let mut cfg = valid_config();
+        cfg.circuit_breaker.failure_threshold = 1.1;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(err.contains("failure_threshold"), "{err}");
+    }
+
+    #[test]
+    fn accepts_failure_threshold_exactly_one() {
+        let mut cfg = valid_config();
+        cfg.circuit_breaker.failure_threshold = 1.0;
+        assert!(cfg.validate().is_ok());
+    }
+}
