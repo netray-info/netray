@@ -58,17 +58,6 @@ pub enum Transport {
     Https,
 }
 
-/// Query execution mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QueryMode {
-    /// Standard DNS lookup.
-    Normal,
-    /// Health-check mode (Phase 2).
-    Check,
-    /// Delegation trace mode (Phase 2).
-    Trace,
-}
-
 /// The result of parsing a query string.
 #[derive(Debug, Clone)]
 pub struct ParsedQuery {
@@ -80,8 +69,6 @@ pub struct ParsedQuery {
     pub servers: Vec<ServerSpec>,
     /// Explicit transport override, if any.
     pub transport: Option<Transport>,
-    /// Query execution mode (normal, check, trace).
-    pub mode: QueryMode,
     /// Whether DNSSEC validation was requested.
     pub dnssec: bool,
     /// Non-fatal warnings accumulated during parsing.
@@ -121,7 +108,6 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
     let mut record_types = Vec::new();
     let mut servers = Vec::new();
     let mut transport = None;
-    let mut mode = QueryMode::Normal;
     let mut dnssec = false;
     let mut warnings = Vec::new();
     let mut has_all = false;
@@ -130,13 +116,7 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
         if let Some(server_name) = token.strip_prefix('@') {
             parse_server(server_name, &mut servers, &mut warnings);
         } else if let Some(flag_name) = token.strip_prefix('+') {
-            parse_flag(
-                flag_name,
-                &mut transport,
-                &mut mode,
-                &mut dnssec,
-                &mut warnings,
-            );
+            parse_flag(flag_name, &mut transport, &mut dnssec, &mut warnings);
         } else {
             parse_record_type(token, &mut record_types, &mut has_all, &mut warnings);
         }
@@ -178,7 +158,6 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
         record_types,
         servers,
         transport,
-        mode,
         dnssec,
         warnings,
     })
@@ -300,7 +279,6 @@ fn parse_ipv4_with_port(s: &str) -> Option<ServerSpec> {
 fn parse_flag(
     name: &str,
     transport: &mut Option<Transport>,
-    mode: &mut QueryMode,
     dnssec: &mut bool,
     warnings: &mut Vec<String>,
 ) {
@@ -310,8 +288,9 @@ fn parse_flag(
         "tls" => *transport = Some(Transport::Tls),
         "https" => *transport = Some(Transport::Https),
         "dnssec" => *dnssec = true,
-        "check" => *mode = QueryMode::Check,
-        "trace" => *mode = QueryMode::Trace,
+        // +check and +trace are routing hints for the frontend; the backend
+        // routes them via dedicated endpoints, not via query-string flags.
+        "check" | "trace" => {}
         _ => {
             warnings.push(format!("unrecognized flag: +{name}"));
         }
@@ -342,7 +321,6 @@ mod tests {
         assert_eq!(q.record_types, DEFAULT_RECORD_TYPES.to_vec());
         assert!(q.servers.is_empty());
         assert_eq!(q.transport, None);
-        assert_eq!(q.mode, QueryMode::Normal);
         assert!(!q.dnssec);
         assert!(q.warnings.is_empty());
     }
@@ -733,15 +711,17 @@ mod tests {
     }
 
     #[test]
-    fn flag_check() {
+    fn flag_check_parses_without_error() {
+        // +check is a routing hint; the parser accepts it silently.
         let q = parse("example.com +check").unwrap();
-        assert_eq!(q.mode, QueryMode::Check);
+        assert!(q.warnings.is_empty());
     }
 
     #[test]
-    fn flag_trace() {
+    fn flag_trace_parses_without_error() {
+        // +trace is a routing hint; the parser accepts it silently.
         let q = parse("example.com +trace").unwrap();
-        assert_eq!(q.mode, QueryMode::Trace);
+        assert!(q.warnings.is_empty());
     }
 
     #[test]
@@ -808,7 +788,6 @@ mod tests {
         );
         assert_eq!(q.transport, Some(Transport::Tls));
         assert!(q.dnssec);
-        assert_eq!(q.mode, QueryMode::Normal);
         assert!(q.warnings.is_empty());
     }
 
@@ -840,11 +819,11 @@ mod tests {
     }
 
     #[test]
-    fn check_mode_with_types_and_server() {
+    fn check_flag_with_types_and_server() {
         let q = parse("example.com MX TXT @system +check").unwrap();
-        assert_eq!(q.mode, QueryMode::Check);
         assert_eq!(q.record_types, vec![RecordType::MX, RecordType::TXT]);
         assert_eq!(q.servers, vec![ServerSpec::System]);
+        assert!(q.warnings.is_empty());
     }
 
     #[test]

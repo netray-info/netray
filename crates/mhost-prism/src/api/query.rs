@@ -17,7 +17,7 @@ use axum::Json;
 use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use futures::stream::Stream;
+use futures::stream::{FuturesUnordered, Stream, StreamExt};
 use mhost::RecordType;
 use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
@@ -187,7 +187,6 @@ fn convert_post_body(body: PostQueryRequest) -> Result<ParsedQuery, ApiError> {
         record_types,
         servers,
         transport,
-        mode: parser::QueryMode::Normal,
         dnssec: body.dnssec,
         warnings: Vec::new(),
     })
@@ -283,107 +282,173 @@ async fn execute_query(
     .to_owned();
     let dnssec_requested = parsed.dnssec;
 
+    // Hard cap: streams must complete within 30 seconds (SDD §8.1).
+    const STREAM_TIMEOUT_SECS: u64 = 30;
+
     tokio::spawn(async move {
         // Hold stream guard for the lifetime of this task so the active stream
         // count is decremented when the SSE connection ends.
         let _stream_guard = stream_guard;
         metrics::gauge!("prism_active_queries").increment(1.0);
         let start = Instant::now();
+        let deadline =
+            tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
         let total = record_types.len() as u32;
-        for (completed, rt) in (0_u32..).zip(record_types.iter()) {
-            let query = match MultiQuery::single(domain.as_str(), *rt) {
-                Ok(q) => q,
-                Err(e) => {
-                    let _ = tx
-                        .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
-                        .await;
-                    return;
-                }
-            };
 
-            // Fan out this single-type query across all resolvers concurrently.
-            // Each Resolver::lookup() spawns its own tokio task internally.
-            // Circuit breaker pre-check: skip resolvers whose provider is in
-            // the Open state to avoid hammering degraded servers.
-            let mut handles = Vec::with_capacity(resolvers.len());
-            for (idx, resolver) in resolvers.iter().enumerate() {
-                let breaker_key = &breaker_keys[idx];
-                if let Err(crate::circuit_breaker::BreakerState::Open) =
-                    circuit_breakers.check(breaker_key)
-                {
+        // Build one future per record type. Each future fans out across all
+        // resolvers concurrently and returns (RecordType, Lookups, had_error).
+        // FuturesUnordered drives them all in parallel and yields each result
+        // as it completes, so the total wall-clock time is bounded by the
+        // slowest single-type query rather than the sum.
+        let futs: FuturesUnordered<_> = record_types
+            .iter()
+            .map(|rt| {
+                let rt = *rt;
+                let domain = domain.clone();
+                let resolvers = resolvers.clone();
+                let breaker_keys = breaker_keys.clone();
+                let circuit_breakers = Arc::clone(&circuit_breakers);
+                let tx_err = tx.clone();
+                async move {
+                    let query = match MultiQuery::single(domain.as_str(), rt) {
+                        Ok(q) => q,
+                        Err(e) => {
+                            let _ = tx_err
+                                .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
+                                .await;
+                            return (rt, Lookups::empty(), true);
+                        }
+                    };
+
+                    // Circuit breaker pre-check and per-resolver spawn.
+                    let mut handles = Vec::with_capacity(resolvers.len());
+                    for (idx, resolver) in resolvers.iter().enumerate() {
+                        let breaker_key = &breaker_keys[idx];
+                        if let Err(crate::circuit_breaker::BreakerState::Open) =
+                            circuit_breakers.check(breaker_key)
+                        {
+                            let _ = tx_err
+                                .send(Ok(make_error_event(
+                                    "PROVIDER_DEGRADED",
+                                    &format!(
+                                        "circuit breaker open for {breaker_key}, skipping"
+                                    ),
+                                )))
+                                .await;
+                            continue;
+                        }
+                        let r = resolver.clone();
+                        let q = query.clone();
+                        handles.push(tokio::spawn(async move { r.lookup(q).await }));
+                    }
+
+                    let mut merged = Lookups::empty();
+                    let mut had_error = false;
+                    for handle in handles {
+                        match handle.await {
+                            Ok(Ok(lookups)) => {
+                                record_breaker_outcomes(&circuit_breakers, &lookups);
+                                merged = merged.merge(lookups);
+                            }
+                            Ok(Err(e)) => {
+                                had_error = true;
+                                let _ = tx_err
+                                    .send(Ok(make_error_event(
+                                        "RESOLVER_ERROR",
+                                        &e.to_string(),
+                                    )))
+                                    .await;
+                            }
+                            Err(e) => {
+                                had_error = true;
+                                let _ = tx_err
+                                    .send(Ok(make_error_event(
+                                        "INTERNAL_ERROR",
+                                        &e.to_string(),
+                                    )))
+                                    .await;
+                            }
+                        }
+                    }
+
+                    (rt, merged, had_error)
+                }
+            })
+            .collect();
+
+        tokio::pin!(futs);
+        let mut completed: u32 = 0;
+        let mut timed_out = false;
+
+        loop {
+            tokio::select! {
+                maybe = futs.next() => {
+                    match maybe {
+                        None => break, // all record types completed
+                        Some((rt, merged, had_error)) => {
+                            completed += 1;
+                            let status = if had_error { "error" } else { "ok" };
+                            metrics::counter!(
+                                "prism_queries_total",
+                                "status" => status,
+                                "record_type" => rt.to_string()
+                            )
+                            .increment(1);
+
+                            let batch = BatchEvent {
+                                request_id: rid.clone(),
+                                record_type: rt.to_string(),
+                                lookups: merged,
+                                completed,
+                                total,
+                            };
+                            let event = Event::default()
+                                .event("batch")
+                                .json_data(&batch)
+                                .unwrap_or_else(|_| {
+                                    Event::default().event("batch").data("{}")
+                                });
+                            if tx.send(Ok(event)).await.is_err() {
+                                // Client disconnected.
+                                metrics::gauge!("prism_active_queries").decrement(1.0);
+                                return;
+                            }
+                        }
+                    }
+                }
+                _ = tokio::time::sleep_until(deadline) => {
+                    timed_out = true;
                     let _ = tx
                         .send(Ok(make_error_event(
-                            "PROVIDER_DEGRADED",
-                            &format!("circuit breaker open for {breaker_key}, skipping"),
+                            "STREAM_TIMEOUT",
+                            "stream deadline exceeded",
                         )))
                         .await;
-                    continue;
+                    break;
                 }
-                let r = resolver.clone();
-                let q = query.clone();
-                handles.push(tokio::spawn(async move { r.lookup(q).await }));
-            }
-
-            // Collect results from all resolvers for this record type.
-            let mut merged = Lookups::empty();
-            let mut had_error = false;
-            for handle in handles {
-                match handle.await {
-                    Ok(Ok(lookups)) => {
-                        record_breaker_outcomes(&circuit_breakers, &lookups);
-                        merged = merged.merge(lookups);
-                    }
-                    Ok(Err(e)) => {
-                        had_error = true;
-                        let _ = tx
-                            .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
-                            .await;
-                    }
-                    Err(e) => {
-                        had_error = true;
-                        let _ = tx
-                            .send(Ok(make_error_event("INTERNAL_ERROR", &e.to_string())))
-                            .await;
-                    }
-                }
-            }
-
-            let status = if had_error { "error" } else { "ok" };
-            metrics::counter!("prism_queries_total", "status" => status, "record_type" => rt.to_string()).increment(1);
-
-            let batch = BatchEvent {
-                request_id: rid.clone(),
-                record_type: rt.to_string(),
-                lookups: merged,
-                completed: completed + 1,
-                total,
-            };
-            let event = Event::default()
-                .event("batch")
-                .json_data(&batch)
-                .unwrap_or_else(|_| Event::default().event("batch").data("{}"));
-            if tx.send(Ok(event)).await.is_err() {
-                return; // Client disconnected.
             }
         }
 
-        // Send done event.
-        let elapsed = start.elapsed();
-        let done = DoneEvent {
-            request_id: rid,
-            total_queries: total,
-            duration_ms: elapsed.as_millis() as u64,
-            warnings,
-            transport: transport_name,
-            dnssec: dnssec_requested,
-        };
-        let event = Event::default()
-            .event("done")
-            .json_data(&done)
-            .unwrap_or_else(|_| Event::default().event("done").data("{}"));
-        let _ = tx.send(Ok(event)).await;
+        if !timed_out {
+            let elapsed = start.elapsed();
+            let done = DoneEvent {
+                request_id: rid,
+                total_queries: total,
+                duration_ms: elapsed.as_millis() as u64,
+                warnings,
+                transport: transport_name,
+                dnssec: dnssec_requested,
+            };
+            let event = Event::default()
+                .event("done")
+                .json_data(&done)
+                .unwrap_or_else(|_| Event::default().event("done").data("{}"));
+            let _ = tx.send(Ok(event)).await;
 
-        metrics::histogram!("prism_query_duration_seconds").record(elapsed.as_secs_f64());
+            metrics::histogram!("prism_query_duration_seconds")
+                .record(start.elapsed().as_secs_f64());
+        }
+
         metrics::gauge!("prism_active_queries").decrement(1.0);
     });
 

@@ -35,7 +35,7 @@ use crate::api::query::{
 };
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::ApiError;
-use crate::parser::{ParsedQuery, QueryMode};
+use crate::parser::ParsedQuery;
 use crate::security::QueryPolicy;
 
 // ---------------------------------------------------------------------------
@@ -62,6 +62,9 @@ const CHECK_RECORD_TYPES: [RecordType; 15] = [
 
 // Total SSE batch steps = 15 base types + 1 DMARC lookup.
 const CHECK_TOTAL_STEPS: u32 = 16;
+
+// Hard cap on total streaming time (SDD §8.1).
+const STREAM_TIMEOUT_SECS: u64 = 30;
 
 // ---------------------------------------------------------------------------
 // SSE event payloads
@@ -138,7 +141,6 @@ pub async fn post_handler(
         record_types: Vec::new(),
         servers,
         transport: None,
-        mode: QueryMode::Normal,
         dnssec: false,
         warnings: Vec::new(),
     };
@@ -179,6 +181,7 @@ pub async fn post_handler(
         let _stream_guard = stream_guard;
         metrics::gauge!("prism_active_checks").increment(1.0);
         let start = Instant::now();
+        let stream_deadline = start + Duration::from_secs(STREAM_TIMEOUT_SECS);
 
         // ------------------------------------------------------------------
         // Phase 1: DNS lookups — base record types
@@ -187,6 +190,14 @@ pub async fn post_handler(
         let mut completed: u32 = 0;
 
         for rt in CHECK_RECORD_TYPES.iter() {
+            if Instant::now() >= stream_deadline {
+                let _ = tx
+                    .send(Ok(make_error_event("STREAM_TIMEOUT", "stream deadline exceeded")))
+                    .await;
+                metrics::gauge!("prism_active_checks").decrement(1.0);
+                return;
+            }
+
             let lookups =
                 fan_out_lookup(&domain, *rt, &resolvers, &breaker_keys, &circuit_breakers, &tx)
                     .await;
@@ -213,6 +224,14 @@ pub async fn post_handler(
         // ------------------------------------------------------------------
         // Phase 1 (cont.): DMARC TXT lookup for `_dmarc.<domain>`
         // ------------------------------------------------------------------
+        if Instant::now() >= stream_deadline {
+            let _ = tx
+                .send(Ok(make_error_event("STREAM_TIMEOUT", "stream deadline exceeded")))
+                .await;
+            metrics::gauge!("prism_active_checks").decrement(1.0);
+            return;
+        }
+
         let dmarc_domain = format!("_dmarc.{domain}");
         let dmarc_lookups = fan_out_lookup(
             &dmarc_domain,

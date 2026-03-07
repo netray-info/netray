@@ -38,7 +38,7 @@ async fn main() {
         .init();
 
     // 2. Load configuration.
-    let config_path = std::env::args().nth(1);
+    let config_path = std::env::args().nth(1).or_else(|| std::env::var("PRISM_CONFIG").ok());
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 

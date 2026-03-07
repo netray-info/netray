@@ -2,7 +2,7 @@ use std::net::IpAddr;
 
 use crate::config::Config;
 use crate::error::ApiError;
-use crate::parser::{ParsedQuery, QueryMode, ServerSpec};
+use crate::parser::{ParsedQuery, ServerSpec};
 
 /// Validates parsed queries against security restrictions.
 ///
@@ -21,9 +21,9 @@ impl<'a> QueryPolicy<'a> {
     ///
     /// Returns `Ok(())` if the query is allowed, or the first policy violation found.
     pub fn validate(&self, query: &ParsedQuery) -> Result<(), ApiError> {
+        self.check_domain_length(query)?;
         self.check_record_type_count(query)?;
         self.check_server_count(query)?;
-        self.check_mode(query)?;
         self.check_system_resolvers(query)?;
         self.check_arbitrary_servers(query)?;
         self.check_server_ips(query)?;
@@ -32,13 +32,25 @@ impl<'a> QueryPolicy<'a> {
 
     /// Validate a check request against server policy rules.
     ///
-    /// Skips mode and record-type-count checks (irrelevant for the dedicated
-    /// check endpoint which uses a fixed set of 15+1 record types).
+    /// Skips record-type-count check (irrelevant for the dedicated check
+    /// endpoint which uses a fixed set of 15+1 record types).
     pub fn validate_for_check(&self, query: &ParsedQuery) -> Result<(), ApiError> {
+        self.check_domain_length(query)?;
         self.check_server_count(query)?;
         self.check_system_resolvers(query)?;
         self.check_arbitrary_servers(query)?;
         self.check_server_ips(query)?;
+        Ok(())
+    }
+
+    fn check_domain_length(&self, query: &ParsedQuery) -> Result<(), ApiError> {
+        // DNS protocol limit (RFC 1035): max 253 octets for the text representation.
+        if query.domain.len() > 253 {
+            return Err(ApiError::InvalidDomain(format!(
+                "domain exceeds maximum length of 253 characters (got {})",
+                query.domain.len()
+            )));
+        }
         Ok(())
     }
 
@@ -64,18 +76,6 @@ impl<'a> QueryPolicy<'a> {
             });
         }
         Ok(())
-    }
-
-    fn check_mode(&self, query: &ParsedQuery) -> Result<(), ApiError> {
-        match query.mode {
-            QueryMode::Check => Err(ApiError::FeatureNotAvailable {
-                feature: "check".to_string(),
-            }),
-            QueryMode::Trace => Err(ApiError::FeatureNotAvailable {
-                feature: "trace".to_string(),
-            }),
-            QueryMode::Normal => Ok(()),
-        }
     }
 
     fn check_system_resolvers(&self, query: &ParsedQuery) -> Result<(), ApiError> {
@@ -212,6 +212,41 @@ fn is_documentation(ip: IpAddr) -> bool {
 mod tests {
     use super::*;
     use std::net::{Ipv4Addr, Ipv6Addr};
+
+    // ---- domain length ----
+
+    fn make_policy() -> QueryPolicy<'static> {
+        use crate::config::Config;
+        // Use a leaked default config so we get a 'static reference.
+        let config = Box::leak(Box::new(Config::load(None).expect("default config")));
+        QueryPolicy::new(config)
+    }
+
+    fn make_query(domain: &str) -> ParsedQuery {
+        ParsedQuery {
+            domain: domain.to_owned(),
+            record_types: vec![],
+            servers: vec![],
+            transport: None,
+            dnssec: false,
+            warnings: vec![],
+        }
+    }
+
+    #[test]
+    fn domain_length_exactly_253_is_allowed() {
+        let policy = make_policy();
+        // 253 'a' chars is at the limit.
+        let q = make_query(&"a".repeat(253));
+        assert!(policy.validate(&q).is_ok());
+    }
+
+    #[test]
+    fn domain_length_254_is_rejected() {
+        let policy = make_policy();
+        let q = make_query(&"a".repeat(254));
+        assert!(matches!(policy.validate(&q), Err(ApiError::InvalidDomain(_))));
+    }
 
     // ---- is_allowed_target: blocked ranges ----
 

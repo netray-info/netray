@@ -39,9 +39,6 @@ pub enum ApiError {
     #[error("arbitrary servers disabled")]
     ArbitraryServersDisabled,
 
-    #[error("feature not available: {feature}")]
-    FeatureNotAvailable { feature: String },
-
     #[error("too many record types: {requested} exceeds limit of {max}")]
     TooManyRecordTypes { requested: usize, max: usize },
 
@@ -86,7 +83,6 @@ impl ApiError {
             | Self::BlockedTargetIp { .. }
             | Self::SystemResolversDisabled
             | Self::ArbitraryServersDisabled
-            | Self::FeatureNotAvailable { .. }
             | Self::TooManyRecordTypes { .. }
             | Self::TooManyServers { .. } => StatusCode::UNPROCESSABLE_ENTITY,
 
@@ -110,7 +106,6 @@ impl ApiError {
             Self::BlockedTargetIp { .. } => "BLOCKED_TARGET_IP",
             Self::SystemResolversDisabled => "SYSTEM_RESOLVERS_DISABLED",
             Self::ArbitraryServersDisabled => "ARBITRARY_SERVERS_DISABLED",
-            Self::FeatureNotAvailable { .. } => "FEATURE_NOT_AVAILABLE",
             Self::TooManyRecordTypes { .. } => "TOO_MANY_RECORD_TYPES",
             Self::TooManyServers { .. } => "TOO_MANY_SERVERS",
             Self::RateLimited { .. } => "RATE_LIMITED",

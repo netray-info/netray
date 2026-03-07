@@ -20,6 +20,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::api::AppState;
+use crate::api::query::make_error_event;
 use crate::dns_trace;
 use crate::error::ApiError;
 
@@ -27,6 +28,9 @@ use crate::error::ApiError;
 // Trace queries root/TLD/auth servers (public infrastructure), so we skip
 // per-target charging and apply a flat cost of 16 tokens — same as check.
 const TRACE_COST: u32 = 16;
+
+// Hard cap on total streaming time (SDD §8.1).
+const STREAM_TIMEOUT_SECS: u64 = 30;
 
 // ---------------------------------------------------------------------------
 // SSE event payloads
@@ -78,6 +82,12 @@ pub async fn post_handler(
     if domain.is_empty() {
         return Err(ApiError::InvalidDomain("empty domain".into()));
     }
+    if domain.len() > 253 {
+        return Err(ApiError::InvalidDomain(format!(
+            "domain exceeds maximum length of 253 characters (got {})",
+            domain.len()
+        )));
+    }
 
     let name =
         dns_trace::parse_name(&domain).map_err(|e| ApiError::InvalidDomain(e.to_string()))?;
@@ -121,7 +131,21 @@ pub async fn post_handler(
         metrics::gauge!("prism_active_traces").increment(1.0);
         let start = Instant::now();
 
-        let hops = dns_trace::walk(name, record_type, max_hops, query_timeout).await;
+        let hops = match tokio::time::timeout(
+            Duration::from_secs(STREAM_TIMEOUT_SECS),
+            dns_trace::walk(name, record_type, max_hops, query_timeout),
+        )
+        .await
+        {
+            Ok(hops) => hops,
+            Err(_) => {
+                let _ = tx
+                    .send(Ok(make_error_event("STREAM_TIMEOUT", "stream deadline exceeded")))
+                    .await;
+                metrics::gauge!("prism_active_traces").decrement(1.0);
+                return;
+            }
+        };
         let hop_count = hops.len();
 
         for hop in hops {
