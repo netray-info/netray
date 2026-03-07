@@ -55,14 +55,22 @@ pub fn cors_layer() -> CorsLayer {
 ///
 /// Compatible with axum 0.8 `middleware::from_fn`.
 pub async fn security_headers(request: Request, next: Next) -> Response {
+    // Capture path before consuming the request.
+    let is_docs = request.uri().path().starts_with("/docs");
+
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
 
+    // The API docs page loads Scalar from a CDN, so it needs a relaxed script-src.
+    // All other pages keep the strict same-origin policy.
+    let csp = if is_docs {
+        "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'"
+    } else {
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'"
+    };
     headers.insert(
         axum::http::header::CONTENT_SECURITY_POLICY,
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'"
-            .parse()
-            .expect("valid CSP header value"),
+        csp.parse().expect("valid CSP header value"),
     );
 
     headers.insert(

@@ -29,7 +29,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::api::AppState;
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
-use crate::error::ApiError;
+use crate::error::{ApiError, ErrorResponse};
 use crate::parser::{self, ParsedQuery, ServerSpec, Transport};
 use crate::security::QueryPolicy;
 
@@ -68,11 +68,34 @@ struct ErrorEvent {
 // GET handler
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct QueryParams {
+    /// Query string in dig-inspired syntax: `domain [TYPE...] [@server...] [+flag...]`.
+    /// Example: `example.com MX @cloudflare +tls`
     q: Option<String>,
 }
 
+/// Run a DNS query using the dig-inspired query language.
+///
+/// Parses the `q` parameter, fans out per-record-type lookups across all specified
+/// resolvers concurrently, and streams results as Server-Sent Events.
+///
+/// ## SSE Events
+///
+/// - `batch` — one per record type: `{"request_id","record_type","lookups","completed","total"}`
+/// - `done` — final summary: `{"request_id","total_queries","duration_ms","warnings","transport","dnssec"}`
+/// - `error` — non-fatal error: `{"code","message"}`
+#[utoipa::path(
+    get, path = "/api/query",
+    tag = "Query",
+    params(QueryParams),
+    responses(
+        (status = 200, description = "SSE stream of DNS lookup results", content_type = "text/event-stream"),
+        (status = 400, description = "Bad request (invalid query syntax, domain, or server)", body = ErrorResponse),
+        (status = 422, description = "Query rejected by policy (blocked type, private IP, limits exceeded)", body = ErrorResponse),
+        (status = 429, description = "Rate limit exceeded", body = ErrorResponse),
+    )
+)]
 pub async fn get_handler(
     State(state): State<AppState>,
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
@@ -95,25 +118,27 @@ pub async fn get_handler(
 // POST handler
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
-pub struct PostQueryRequest {
-    domain: String,
-    #[serde(default)]
-    record_types: Vec<String>,
-    #[serde(default)]
-    servers: Vec<PostServerSpec>,
-    #[serde(default)]
-    transport: Option<String>,
-    #[serde(default)]
-    dnssec: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub(crate) enum PostServerSpec {
-    Named(String),
-}
-
+/// Run a DNS query using a structured JSON body.
+///
+/// Fans out per-record-type lookups across all specified resolvers concurrently
+/// and streams results as Server-Sent Events.
+///
+/// ## SSE Events
+///
+/// - `batch` — one per record type: `{"request_id","record_type","lookups","completed","total"}`
+/// - `done` — final summary: `{"request_id","total_queries","duration_ms","warnings","transport","dnssec"}`
+/// - `error` — non-fatal error: `{"code","message"}`
+#[utoipa::path(
+    post, path = "/api/query",
+    tag = "Query",
+    request_body = PostQueryRequest,
+    responses(
+        (status = 200, description = "SSE stream of DNS lookup results", content_type = "text/event-stream"),
+        (status = 400, description = "Bad request (invalid domain, record type, or server)", body = ErrorResponse),
+        (status = 422, description = "Query rejected by policy (blocked type, private IP, limits exceeded)", body = ErrorResponse),
+        (status = 429, description = "Rate limit exceeded", body = ErrorResponse),
+    )
+)]
 pub async fn post_handler(
     State(state): State<AppState>,
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
@@ -132,6 +157,31 @@ pub async fn post_handler(
     tracing::debug!(%client_ip, %peer_addr, "query POST");
 
     execute_query(parsed, state, client_ip).await
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct PostQueryRequest {
+    /// Domain name to query (e.g. `"example.com"`).
+    domain: String,
+    /// DNS record types to query (e.g. `["A", "MX"]`). Defaults to A, AAAA, CNAME, MX.
+    #[serde(default)]
+    record_types: Vec<String>,
+    /// DNS servers to use (e.g. `["cloudflare", "8.8.8.8"]`). Defaults to config default_servers.
+    #[serde(default)]
+    servers: Vec<PostServerSpec>,
+    /// Transport: `udp` (default), `tcp`, `tls`, or `https`.
+    #[serde(default)]
+    transport: Option<String>,
+    /// Enable DNSSEC mode (adds DNSKEY and DS record types).
+    #[serde(default)]
+    dnssec: bool,
+}
+
+/// A DNS server specifier: a predefined provider name (e.g. `"cloudflare"`) or IP address.
+#[derive(Deserialize, utoipa::ToSchema)]
+#[serde(untagged)]
+pub(crate) enum PostServerSpec {
+    Named(String),
 }
 
 /// Convert a structured POST body into a [`ParsedQuery`].

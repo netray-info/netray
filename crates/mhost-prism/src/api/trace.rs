@@ -22,7 +22,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::api::AppState;
 use crate::api::query::make_error_event;
 use crate::dns_trace;
-use crate::error::ApiError;
+use crate::error::{ApiError, ErrorResponse};
 
 // Cost charged against per-IP and global rate limiters per trace request.
 // Trace queries root/TLD/auth servers (public infrastructure), so we skip
@@ -53,11 +53,14 @@ struct TraceDoneEvent {
 // POST handler
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct TraceRequest {
+    /// Domain name to trace (e.g. `"example.com"`).
     domain: String,
+    /// DNS record type to trace (default: `"A"`).
     #[serde(default = "default_record_type")]
     record_type: String,
+    /// Query timeout per hop in seconds. Clamped to config max.
     #[serde(default)]
     timeout_secs: Option<u64>,
 }
@@ -66,6 +69,26 @@ fn default_record_type() -> String {
     "A".to_owned()
 }
 
+/// Walk the DNS delegation chain for a domain from root servers to authoritative.
+///
+/// Performs iterative, non-recursive resolution: queries root servers → TLD servers
+/// → authoritative servers, emitting one `hop` event per delegation level.
+///
+/// ## SSE Events
+///
+/// - `hop` — one per delegation level: `{"request_id","hop":{"level","nameservers","referrals","records","latency_ms"}}`
+/// - `done` — final summary: `{"request_id","duration_ms","hops"}`
+/// - `error` — non-fatal error: `{"code","message"}`
+#[utoipa::path(
+    post, path = "/api/trace",
+    tag = "Trace",
+    request_body = TraceRequest,
+    responses(
+        (status = 200, description = "SSE stream of delegation hops and done summary", content_type = "text/event-stream"),
+        (status = 400, description = "Bad request (invalid domain or record type)", body = ErrorResponse),
+        (status = 429, description = "Rate limit exceeded", body = ErrorResponse),
+    )
+)]
 pub async fn post_handler(
     State(state): State<AppState>,
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,

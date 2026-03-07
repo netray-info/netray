@@ -48,6 +48,9 @@ mime_guess = "2"
 # Request IDs
 uuid = { version = "1", features = ["v7"] }
 
+# OpenAPI
+utoipa = { version = "5", features = ["axum_extras"] }
+
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"

@@ -34,7 +34,7 @@ use crate::api::query::{
     parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
 };
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
-use crate::error::ApiError;
+use crate::error::{ApiError, ErrorResponse};
 use crate::parser::ParsedQuery;
 use crate::security::QueryPolicy;
 
@@ -101,15 +101,41 @@ struct CheckDoneEvent {
 // POST handler
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct CheckRequest {
+    /// Domain name to check (e.g. `"example.com"`).
     domain: String,
+    /// DNS servers to use. Defaults to config default_servers.
     #[serde(default)]
     servers: Vec<PostServerSpec>,
+    /// Query timeout in seconds. Clamped to config max (default 10).
     #[serde(default)]
     timeout_secs: Option<u64>,
 }
 
+/// Run a comprehensive DNS health check for a domain.
+///
+/// Queries 15 record types plus `_dmarc.<domain>` TXT, then runs 9 lint categories
+/// (CAA, CNAME apex, DNSSEC, HTTPS/SVCB, MX, NS count, SPF, TTL consistency, DMARC).
+/// Results stream as Server-Sent Events.
+///
+/// ## SSE Events
+///
+/// - `batch` — DNS results per step: `{"request_id","record_type","lookups","completed","total"}`
+/// - `lint` — lint category results: `{"request_id","category","results"}`
+/// - `done` — summary: `{"request_id","duration_ms","total_checks","passed","warnings","failed","not_found"}`
+/// - `error` — non-fatal error: `{"code","message"}`
+#[utoipa::path(
+    post, path = "/api/check",
+    tag = "Check",
+    request_body = CheckRequest,
+    responses(
+        (status = 200, description = "SSE stream of DNS batch events, lint results, and done summary", content_type = "text/event-stream"),
+        (status = 400, description = "Bad request (invalid domain or server)", body = ErrorResponse),
+        (status = 422, description = "Query rejected by policy (private IP, limits exceeded)", body = ErrorResponse),
+        (status = 429, description = "Rate limit exceeded", body = ErrorResponse),
+    )
+)]
 pub async fn post_handler(
     State(state): State<AppState>,
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,

@@ -2,6 +2,25 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 
+// ---------------------------------------------------------------------------
+// Public schema types (used in OpenAPI documentation)
+// ---------------------------------------------------------------------------
+
+/// JSON body returned for all error responses.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct ErrorResponse {
+    pub error: ErrorInfo,
+}
+
+/// Error detail contained in an error response.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct ErrorInfo {
+    /// Machine-readable error code (e.g. `INVALID_DOMAIN`).
+    pub code: String,
+    /// Human-readable error message.
+    pub message: String,
+}
+
 /// Structured API errors that map to specific HTTP status codes and error codes.
 ///
 /// Each variant corresponds to a documented error code (SDD §5.6). The `IntoResponse`

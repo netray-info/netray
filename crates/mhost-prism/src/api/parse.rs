@@ -17,31 +17,37 @@ use serde::{Deserialize, Serialize};
 // Request / Response types
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ParseRequest {
+    /// The query input string to tokenize.
     input: String,
+    /// Cursor position within the input (defaults to end of input).
     #[serde(default)]
     cursor_pos: Option<usize>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ParseResponse {
     tokens: Vec<TokenInfo>,
     completions: Vec<Completion>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct TokenInfo {
+    /// Token classification: `domain`, `record_type`, `server`, `server_partial`, `flag`, `flag_partial`, `unknown`.
     kind: &'static str,
     value: String,
+    /// Start byte offset of the token in the input string.
     from: usize,
+    /// End byte offset of the token in the input string.
     to: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct Completion {
     label: String,
     detail: String,
+    /// Completion category: `record_type`, `server`, `flag`.
     category: &'static str,
 }
 
@@ -93,6 +99,18 @@ const FLAG_INFO: &[(&str, &str)] = &[
 // Handler
 // ---------------------------------------------------------------------------
 
+/// Tokenize a partial query string and return context-aware completions.
+///
+/// Powers the editor's autocomplete. Classifies each token (domain, record type,
+/// server, flag) and returns completions relevant to the cursor position.
+#[utoipa::path(
+    post, path = "/api/parse",
+    tag = "Query",
+    request_body = ParseRequest,
+    responses(
+        (status = 200, description = "Tokenized input with completions", body = ParseResponse),
+    )
+)]
 pub async fn parse_handler(Json(body): Json<ParseRequest>) -> Json<ParseResponse> {
     let input = &body.input;
     let cursor_pos = body.cursor_pos.unwrap_or(input.len()).min(input.len());

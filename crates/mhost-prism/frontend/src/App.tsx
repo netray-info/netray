@@ -992,7 +992,7 @@ export default function App() {
       <footer class="footer">
         <a class="footer-link" href="https://github.com/lukaspustina/mhost-prism" target="_blank" rel="noopener noreferrer">GitHub</a>
         <span class="footer-sep">&middot;</span>
-        <a class="footer-link" href="https://github.com/lukaspustina/mhost-prism#api-reference" target="_blank" rel="noopener noreferrer">API Docs</a>
+        <a class="footer-link" href="/docs">API Docs</a>
         <span class="footer-sep">&middot;</span>
         <a class="footer-link" href="https://lukas.pustina.de" target="_blank" rel="noopener noreferrer">Author</a>
         <span class="footer-sep">&middot;</span>
