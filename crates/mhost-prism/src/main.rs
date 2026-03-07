@@ -38,7 +38,9 @@ async fn main() {
         .init();
 
     // 2. Load configuration.
-    let config_path = std::env::args().nth(1).or_else(|| std::env::var("PRISM_CONFIG").ok());
+    let config_path = std::env::args()
+        .nth(1)
+        .or_else(|| std::env::var("PRISM_CONFIG").ok());
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
@@ -46,7 +48,9 @@ async fn main() {
 
     // 3. Build shared application state.
     let state = api::AppState {
-        circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(&config.circuit_breaker)),
+        circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(
+            &config.circuit_breaker,
+        )),
         ip_extractor: Arc::new(security::IpExtractor::new(&config.server.trusted_proxies)),
         rate_limiter: Arc::new(security::RateLimitState::new(&config.limits)),
         config: Arc::new(config.clone()),

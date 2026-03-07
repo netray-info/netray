@@ -245,7 +245,10 @@ mod tests {
     fn domain_length_254_is_rejected() {
         let policy = make_policy();
         let q = make_query(&"a".repeat(254));
-        assert!(matches!(policy.validate(&q), Err(ApiError::InvalidDomain(_))));
+        assert!(matches!(
+            policy.validate(&q),
+            Err(ApiError::InvalidDomain(_))
+        ));
     }
 
     // ---- is_allowed_target: blocked ranges ----

@@ -140,7 +140,10 @@ pub async fn post_handler(
             Ok(hops) => hops,
             Err(_) => {
                 let _ = tx
-                    .send(Ok(make_error_event("STREAM_TIMEOUT", "stream deadline exceeded")))
+                    .send(Ok(make_error_event(
+                        "STREAM_TIMEOUT",
+                        "stream deadline exceeded",
+                    )))
                     .await;
                 metrics::gauge!("prism_active_traces").decrement(1.0);
                 return;

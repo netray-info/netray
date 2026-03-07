@@ -49,9 +49,7 @@ impl RateLimitState {
             Quota::per_minute(
                 NonZeroU32::new(config.per_target_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(
-                NonZeroU32::new(config.per_target_burst).expect("validated non-zero"),
-            ),
+            .allow_burst(NonZeroU32::new(config.per_target_burst).expect("validated non-zero")),
         );
 
         let global = RateLimiter::direct(

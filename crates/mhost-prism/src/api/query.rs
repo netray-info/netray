@@ -291,8 +291,7 @@ async fn execute_query(
         let _stream_guard = stream_guard;
         metrics::gauge!("prism_active_queries").increment(1.0);
         let start = Instant::now();
-        let deadline =
-            tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
         let total = record_types.len() as u32;
 
         // Build one future per record type. Each future fans out across all
@@ -330,9 +329,7 @@ async fn execute_query(
                             let _ = tx_err
                                 .send(Ok(make_error_event(
                                     "PROVIDER_DEGRADED",
-                                    &format!(
-                                        "circuit breaker open for {breaker_key}, skipping"
-                                    ),
+                                    &format!("circuit breaker open for {breaker_key}, skipping"),
                                 )))
                                 .await;
                             continue;
@@ -353,19 +350,13 @@ async fn execute_query(
                             Ok(Err(e)) => {
                                 had_error = true;
                                 let _ = tx_err
-                                    .send(Ok(make_error_event(
-                                        "RESOLVER_ERROR",
-                                        &e.to_string(),
-                                    )))
+                                    .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
                                     .await;
                             }
                             Err(e) => {
                                 had_error = true;
                                 let _ = tx_err
-                                    .send(Ok(make_error_event(
-                                        "INTERNAL_ERROR",
-                                        &e.to_string(),
-                                    )))
+                                    .send(Ok(make_error_event("INTERNAL_ERROR", &e.to_string())))
                                     .await;
                             }
                         }

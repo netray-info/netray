@@ -332,9 +332,18 @@ impl Config {
         reject_zero("max_servers", self.limits.max_servers)?;
         reject_zero("trace.max_hops", self.trace.max_hops)?;
         reject_zero("trace.query_timeout_secs", self.trace.query_timeout_secs)?;
-        reject_zero("circuit_breaker.window_secs", self.circuit_breaker.window_secs)?;
-        reject_zero("circuit_breaker.cooldown_secs", self.circuit_breaker.cooldown_secs)?;
-        reject_zero("circuit_breaker.min_requests", self.circuit_breaker.min_requests)?;
+        reject_zero(
+            "circuit_breaker.window_secs",
+            self.circuit_breaker.window_secs,
+        )?;
+        reject_zero(
+            "circuit_breaker.cooldown_secs",
+            self.circuit_breaker.cooldown_secs,
+        )?;
+        reject_zero(
+            "circuit_breaker.min_requests",
+            self.circuit_breaker.min_requests,
+        )?;
         if self.circuit_breaker.failure_threshold <= 0.0
             || self.circuit_breaker.failure_threshold > 1.0
         {

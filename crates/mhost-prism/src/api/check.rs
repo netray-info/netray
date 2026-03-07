@@ -21,8 +21,8 @@ use mhost::lints::{
     CheckResult, check_caa, check_cname_apex, check_dmarc_records, check_dnssec,
     check_https_svcb_mode, check_mx_sync, check_ns_count, check_spf, check_ttl, is_dmarc,
 };
-use mhost::resolver::{Lookups, MultiQuery, Resolver};
 use mhost::resolver::lookup::Uniquify;
+use mhost::resolver::{Lookups, MultiQuery, Resolver};
 use mhost::resources::rdata::TXT;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -163,10 +163,12 @@ pub async fn post_handler(
     let target_keys = target_keys_from_servers(&effective_servers);
     let num_servers = effective_servers.len().max(1) as u32;
     let total_cost = CHECK_TOTAL_STEPS * num_servers;
-    let stream_guard =
-        state
-            .rate_limiter
-            .check_query_cost(client_ip, &target_keys, total_cost, CHECK_TOTAL_STEPS)?;
+    let stream_guard = state.rate_limiter.check_query_cost(
+        client_ip,
+        &target_keys,
+        total_cost,
+        CHECK_TOTAL_STEPS,
+    )?;
 
     let (resolver_group, breaker_keys) =
         build_resolver_group(&parsed, &state.config, timeout).await?;
@@ -192,15 +194,24 @@ pub async fn post_handler(
         for rt in CHECK_RECORD_TYPES.iter() {
             if Instant::now() >= stream_deadline {
                 let _ = tx
-                    .send(Ok(make_error_event("STREAM_TIMEOUT", "stream deadline exceeded")))
+                    .send(Ok(make_error_event(
+                        "STREAM_TIMEOUT",
+                        "stream deadline exceeded",
+                    )))
                     .await;
                 metrics::gauge!("prism_active_checks").decrement(1.0);
                 return;
             }
 
-            let lookups =
-                fan_out_lookup(&domain, *rt, &resolvers, &breaker_keys, &circuit_breakers, &tx)
-                    .await;
+            let lookups = fan_out_lookup(
+                &domain,
+                *rt,
+                &resolvers,
+                &breaker_keys,
+                &circuit_breakers,
+                &tx,
+            )
+            .await;
             completed += 1;
 
             let batch = BatchEvent {
@@ -226,7 +237,10 @@ pub async fn post_handler(
         // ------------------------------------------------------------------
         if Instant::now() >= stream_deadline {
             let _ = tx
-                .send(Ok(make_error_event("STREAM_TIMEOUT", "stream deadline exceeded")))
+                .send(Ok(make_error_event(
+                    "STREAM_TIMEOUT",
+                    "stream deadline exceeded",
+                )))
                 .await;
             metrics::gauge!("prism_active_checks").decrement(1.0);
             return;
