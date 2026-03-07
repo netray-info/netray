@@ -31,6 +31,7 @@
 
 - **Author**: Lukas Pustina | **License**: MIT / Apache-2.0
 - **Repository**: Standalone repo (separate from mhost). Depends on `mhost` as a published crate (no `app` feature).
+- **README**: `README.md` — user-facing docs: features, query language, all three modes, API reference, configuration, security, dev setup.
 - **SDD**: `docs/sdd.md` — the authoritative design document for all architecture decisions. Note: the SDD was written assuming a workspace member; this repo diverges to a standalone crate with a crates.io dependency. Structural references (§3 workspace layout) are adapted accordingly.
 
 prism provides and all functionality must adhere to these core principles:
@@ -69,10 +70,10 @@ Decisions made during project setup, supplementing the SDD:
 Phased delivery as defined in SDD §14:
 
 - ~~**Phase 0**: Workspace conversion (mhost repo)~~ — N/A (standalone repo)
-- **Phase 1**: MVP — query endpoint, parser, results table, rate limiting, circuit breaker, metrics
+- ~~**Phase 1**: MVP — query endpoint, parser, results table, rate limiting, circuit breaker, metrics~~
 - **Phase 2**: Transport & UI enhancements — transport flags, DNSSEC, server comparison, expandable rows
 - **Phase 3**: Polish — server-side autocomplete, keyboard shortcuts, history, mobile
-- **Phase 4**: Library extraction + check/trace endpoints (lint/trace logic from app/ to library, then web endpoints)
+- ~~**Phase 4**: check/trace endpoints, stream timeouts, domain-length validation, `+check`/`+trace` routing~~
 - **Phase 5**: Future — auth, DNSSEC visualization, propagation map
 
 ## Build & Test
@@ -121,8 +122,8 @@ mhost-prism/                  # standalone crate (not a workspace member)
     api/
       mod.rs                  # Route definitions
       query.rs                # GET/POST /api/query → SSE stream
-      check.rs                # POST /api/check → SSE stream (Phase 4)
-      trace.rs                # POST /api/trace → SSE stream (Phase 4)
+      check.rs                # POST /api/check → SSE stream (15 types + DMARC lint)
+      trace.rs                # POST /api/trace → SSE stream (iterative delegation walk)
       parse.rs                # POST /api/parse → completion hints (Phase 3)
       meta.rs                 # GET /api/servers, /api/record-types, /api/health
     security/
@@ -138,6 +139,8 @@ mhost-prism/                  # standalone crate (not a workspace member)
       components/
         QueryInput.tsx        # CodeMirror 6 single-line input
         ResultsTable.tsx      # Streaming results table
+        LintTab.tsx           # Check mode lint results
+        TraceView.tsx         # Delegation hop visualization
         ServerComparison.tsx
       lib/
         tokenizer.ts          # Syntax highlighting (cosmetic only)
@@ -153,12 +156,13 @@ mhost-prism/                  # standalone crate (not a workspace member)
 
 ## Common Patterns
 
-- **SSE streaming**: Per-record-type queries via `FuturesUnordered`, each completed batch streamed as an SSE event (mirrors mdive's pattern).
+- **SSE streaming**: Per-record-type queries via `FuturesUnordered`, all record types in parallel; each completed batch streamed as a `batch` SSE event. All streams have a hard 30s deadline.
 - **Per-request ResolverGroup**: Fresh `ResolverGroup` per API request — no shared resolver pool.
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
-- **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution.
+- **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check/trace use a flat cost of 16 tokens.
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
-- **Config precedence**: CLI arg > env var (`PRISM_` prefix) > TOML file > built-in defaults. Hardcoded caps (§8.1) are upper bounds that config cannot exceed.
+- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed.
+- **Routing flags**: `+check` and `+trace` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
 
 ## Key Dependencies
 
