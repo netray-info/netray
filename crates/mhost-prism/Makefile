@@ -1,4 +1,4 @@
-.PHONY: all build check test clippy fmt frontend clean dev run
+.PHONY: all build check test clippy fmt frontend clean dev run pre-push
 
 all: frontend build
 
@@ -33,6 +33,9 @@ dev:
 	cargo run -- prism.dev.toml
 
 lint: clippy fmt-check
+
+# Matches .github/workflows/ci.yml — run before pushing
+pre-push: fmt-check clippy test frontend
 
 ci: lint test frontend build
 
