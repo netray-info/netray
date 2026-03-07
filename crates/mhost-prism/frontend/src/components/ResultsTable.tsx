@@ -143,9 +143,14 @@ function formatStructuredRecord(rtype: string, value: Record<string, unknown>): 
       return `${value.priority} ${value.weight} ${value.port} ${value.target}`;
     case 'SOA':
       return `${value.mname} ${value.rname} (serial: ${value.serial})`;
-    case 'TXT':
-      if (Array.isArray(value)) return value.join('');
+    case 'TXT': {
+      const txt = value as Record<string, unknown>;
+      if (typeof txt.txt_human === 'string') return txt.txt_human;
+      if (typeof txt.txt_string === 'string') return txt.txt_string;
+      // Fallback: raw byte arrays (should not occur with enriched backend)
+      if (Array.isArray(txt.txt_data)) return JSON.stringify(txt.txt_data);
       return JSON.stringify(value);
+    }
     case 'CAA':
       return `${value.issuer_critical ? '!' : ''}${value.tag} "${value.value}"`;
     case 'NAPTR':
@@ -211,18 +216,16 @@ function interpretRecord(rtype: string, data: Record<string, unknown>): string |
   if (keys.length === 0) return null;
   const value = data[keys[0]];
 
-  if (typeof value === 'string') {
-    // TXT record interpretations
-    if (rtype === 'TXT' || keys[0] === 'TXT') {
-      if (value.startsWith('v=spf1')) return interpretSPF(value);
-      if (value.startsWith('v=DMARC1')) return interpretDMARC(value);
-      if (value.startsWith('v=DKIM1')) return 'DKIM public key record';
-      if (value.includes('google-site-verification')) return 'Google site verification';
-      if (value.includes('MS=')) return 'Microsoft domain verification';
-      if (value.includes('docusign=')) return 'DocuSign domain verification';
-      if (value.includes('apple-domain-verification')) return 'Apple domain verification';
-      if (value.includes('facebook-domain-verification')) return 'Facebook domain verification';
-    }
+  // TXT record: backend enriches with txt_string and txt_human fields.
+  // txt_human is the formatted human-readable string; use it as the interpretation.
+  if (rtype === 'TXT' || keys[0] === 'TXT') {
+    const txtObj = value as Record<string, unknown>;
+    const txtStr = typeof txtObj?.txt_string === 'string' ? txtObj.txt_string : null;
+    const txtHuman = typeof txtObj?.txt_human === 'string' ? txtObj.txt_human : null;
+    // If txt_human differs from txt_string (i.e. it was parsed into a known format),
+    // surface it as the interpretation. Otherwise fall through to no interpretation.
+    if (txtHuman && txtStr && txtHuman !== txtStr) return txtHuman;
+    return null;
   }
 
   if (value && typeof value === 'object') {
@@ -247,34 +250,6 @@ function interpretRecord(rtype: string, data: Record<string, unknown>): string |
   return null;
 }
 
-function interpretSPF(txt: string): string {
-  const mechanisms: string[] = [];
-  if (txt.includes('+all') || txt.endsWith(' all')) mechanisms.push('WARNING: allows all senders');
-  else if (txt.includes('-all')) mechanisms.push('strict: reject unauthorized senders');
-  else if (txt.includes('~all')) mechanisms.push('soft fail: mark unauthorized as suspicious');
-  else if (txt.includes('?all')) mechanisms.push('neutral: no assertion about unauthorized');
-  const includes = txt.match(/include:(\S+)/g);
-  if (includes) mechanisms.push(`${includes.length} include(s)`);
-  const ips = txt.match(/ip[46]:(\S+)/g);
-  if (ips) mechanisms.push(`${ips.length} IP range(s)`);
-  return `SPF: ${mechanisms.join(', ')}`;
-}
-
-function interpretDMARC(txt: string): string {
-  const parts: string[] = [];
-  const policyMatch = txt.match(/p=(\w+)/);
-  if (policyMatch) {
-    const p = policyMatch[1];
-    if (p === 'reject') parts.push('policy: reject failures');
-    else if (p === 'quarantine') parts.push('policy: quarantine failures');
-    else if (p === 'none') parts.push('policy: monitoring only');
-  }
-  const spMatch = txt.match(/sp=(\w+)/);
-  if (spMatch) parts.push(`subdomain: ${spMatch[1]}`);
-  const pctMatch = txt.match(/pct=(\d+)/);
-  if (pctMatch && pctMatch[1] !== '100') parts.push(`${pctMatch[1]}% of messages`);
-  return `DMARC: ${parts.join(', ')}`;
-}
 
 function interpretCAA(obj: Record<string, unknown>): string {
   const tag = obj.tag as string | undefined;
