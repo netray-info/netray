@@ -95,7 +95,7 @@ make fmt-check                        # cargo fmt -- --check
 make lint                             # clippy + fmt-check
 make frontend                         # cd frontend && npm ci && npm run build
 make clean                            # remove target/ + frontend/dist/ + node_modules/
-make ci                               # lint + test + frontend + build (full CI pipeline)
+make ci                               # lint + test + frontend (CI pipeline; also use before pushing)
 
 # Development (two terminals)
 make frontend-dev                     # Vite dev server :5173 (proxies /api/* to :8080)
