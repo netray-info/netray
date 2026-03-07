@@ -1013,9 +1013,6 @@ body {
   animation: modal-in 150ms ease;
 }
 
-.modal-wide {
-  max-width: 560px;
-}
 
 @keyframes modal-in {
   from { opacity: 0; transform: scale(0.95) translateY(8px); }
@@ -1132,15 +1129,13 @@ body {
   font-family: var(--font-sans);
   font-size: 12px;
   color: var(--text-muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
+  text-decoration: none;
   transition: color var(--transition);
 }
 
 .footer-link:hover {
   color: var(--text-secondary);
+  text-decoration: underline;
 }
 
 .footer-sep {

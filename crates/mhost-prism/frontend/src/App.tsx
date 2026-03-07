@@ -148,7 +148,6 @@ export default function App() {
   const [history, setHistory] = createSignal<string[]>(loadHistory());
   const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
   const [showHelp, setShowHelp] = createSignal(false);
-  const [showTos, setShowTos] = createSignal(false);
 
   // Check mode state
   const [isCheckMode, setIsCheckMode] = createSignal(false);
@@ -688,7 +687,6 @@ export default function App() {
 
     if (e.key === 'Escape') {
       if (showHelp()) { setShowHelp(false); e.preventDefault(); return; }
-      if (showTos())  { setShowTos(false);  e.preventDefault(); return; }
       if (isEditing) {
         const cmContent = (target.closest('.cm-editor') as HTMLElement | null)?.querySelector<HTMLElement>('.cm-content');
         cmContent?.blur();
@@ -992,9 +990,13 @@ export default function App() {
       </main>
 
       <footer class="footer">
-        <button class="footer-link" onClick={() => setShowTos(true)}>Terms of Service</button>
+        <a class="footer-link" href="https://github.com/lukaspustina/mhost-prism" target="_blank" rel="noopener noreferrer">GitHub</a>
         <span class="footer-sep">&middot;</span>
-        <span class="footer-text">Powered by mhost</span>
+        <a class="footer-link" href="https://github.com/lukaspustina/mhost-prism#api-reference" target="_blank" rel="noopener noreferrer">API Docs</a>
+        <span class="footer-sep">&middot;</span>
+        <a class="footer-link" href="https://lukas.pustina.de" target="_blank" rel="noopener noreferrer">Author</a>
+        <span class="footer-sep">&middot;</span>
+        <span class="footer-text">v{__APP_VERSION__}</span>
       </footer>
 
       {/* Help modal */}
@@ -1067,44 +1069,6 @@ export default function App() {
         </div>
       </Show>
 
-      {/* Terms of Service modal */}
-      <Show when={showTos()}>
-        <div class="modal-overlay" onClick={() => setShowTos(false)}>
-          <div class="modal modal-wide" onClick={(e) => e.stopPropagation()}>
-            <div class="modal-header">
-              <h2>Terms of Service</h2>
-              <button class="modal-close" onClick={() => setShowTos(false)}>&times;</button>
-            </div>
-            <div class="modal-body">
-              <p>
-                <strong>prism</strong> is a DNS debugging tool provided for diagnostic and
-                educational purposes.
-              </p>
-              <ul>
-                <li>
-                  <strong>Fair use:</strong> Queries are rate-limited. Automated bulk querying,
-                  scraping, or abuse may result in temporary or permanent blocks.
-                </li>
-                <li>
-                  <strong>No warranty:</strong> DNS results are returned as-is from upstream
-                  resolvers. This service makes no guarantee of accuracy, availability, or
-                  completeness.
-                </li>
-                <li>
-                  <strong>Privacy:</strong> Query domain names and client IP addresses may be
-                  logged for rate-limiting and abuse prevention. Logs are rotated and not shared
-                  with third parties. Full DNS response content is not logged.
-                </li>
-                <li>
-                  <strong>No sensitive queries:</strong> Do not query domains that reveal personal
-                  or sensitive information. All queries are sent to third-party public DNS
-                  resolvers.
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </Show>
     </div>
   );
 }
