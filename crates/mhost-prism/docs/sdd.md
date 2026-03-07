@@ -1,7 +1,7 @@
 # Software Design Document: `prism`
 
 **Feature**: Web-based DNS debugging service powered by mhost-lib
-**Status**: In Progress (Phases 1–3 complete, Phase 4 next)
+**Status**: In Progress (Phases 1–4 complete, Phase 5 next)
 **Date**: 2026-02-17
 **Roadmap**: To be added to `ROADMAP.md` upon acceptance of this SDD.
 
@@ -70,8 +70,10 @@ mhost-prism/                      # standalone repository
   src/
     main.rs                       # entry point, axum server setup
     api/
-      mod.rs                      # route definitions
-      query.rs                    # GET /api/query -> SSE stream
+      mod.rs                      # route definitions, AppState
+      query.rs                    # GET/POST /api/query -> SSE stream
+      check.rs                    # POST /api/check -> SSE stream (batch + lint + done)
+      trace.rs                    # POST /api/trace -> SSE stream (hop + done)
       parse.rs                    # POST /api/parse -> completion hints
       meta.rs                     # GET /api/servers, GET /api/record-types, GET /api/health
     security/
@@ -81,13 +83,17 @@ mhost-prism/                      # standalone repository
       query_policy.rs             # target validation, type restrictions
     config.rs                     # server configuration (bind addr, limits, etc.)
     error.rs                      # thiserror ApiError enum -> HTTP status + error codes
-    circuit_breaker.rs            # per-provider circuit breaker
+    circuit_breaker.rs            # per-provider sliding window circuit breaker
+    dns_trace.rs                  # iterative DNS delegation walk (root -> TLD -> auth)
+    parser.rs                     # query language parser (single source of truth)
   frontend/                       # SolidJS + Vite project (strict TypeScript)
     src/
       App.tsx                     # main app: SSE, theme, history, keyboard shortcuts
       components/
         QueryInput.tsx            # CodeMirror 6 single-line input with autocomplete
         ResultsTable.tsx          # streaming results table with row-level keyboard nav
+        LintTab.tsx               # check mode lint results display
+        TraceView.tsx             # delegation hop visualization
       lib/
         tokenizer.ts              # syntax highlighting tokenizer (cosmetic only, see §13.7)
       styles/
@@ -220,10 +226,10 @@ event: batch
 data: {"request_id":"019...","lookups":[{"query":{"name":"example.com","type":"MX"},"server":"1.1.1.1:853","result":{"Response":{"records":[...],"response_time_ms":15}}},{"query":{"name":"example.com","type":"MX"},"server":"8.8.8.8:53","result":{"Response":{"records":[...],"response_time_ms":20}}}],"completed":2,"total":3}
 
 event: done
-data: {"request_id":"019...","total_queries":6,"responses":3,"errors":0,"duration_ms":234,"transport":"tls","dnssec":false,"warnings":[]}
+data: {"request_id":"019...","total_queries":3,"duration_ms":234,"warnings":[],"transport":"tls","dnssec":false}
 ```
 
-`total_queries` is the total DNS lookups issued (3 record types x 2 servers = 6). `responses` is the number of completed batches (3, one per record type). `errors` counts batch-level failures. `transport` is the protocol used (omitted or `"udp"` for default). `dnssec` indicates whether DNSKEY/DS record types were requested. `warnings` collects parser warnings (unknown tokens, etc.).
+`total_queries` is the number of record types queried (one per record type, regardless of server count). `duration_ms` is the wall-clock time from request start to completion. `warnings` collects parser warnings (unknown tokens, etc.). `transport` is the protocol used (`"udp"`, `"tcp"`, `"tls"`, or `"https"`). `dnssec` indicates whether DNSSEC mode was requested.
 
 The frontend accumulates batches progressively, populating each record-type section as its batch arrives.
 
@@ -251,7 +257,7 @@ event: lint
 data: {"category":"SPF","status":"warning","message":"Multiple SPF records found","records":["v=spf1 ...","v=spf1 ..."]}
 
 event: done
-data: {"checks":9,"passed":7,"warnings":1,"failed":1}
+data: {"request_id":"019...","duration_ms":412,"total_checks":9,"passed":7,"warnings":1,"failed":1,"not_found":0}
 ```
 
 ### 5.3 Trace Endpoint
@@ -271,16 +277,16 @@ Accept: text/event-stream
 
 ```
 event: hop
-data: {"depth":0,"server":"198.41.0.4","server_name":"a.root-servers.net","referral":"com.","response_time_ms":8}
+data: {"request_id":"019...","hop":{"level":0,"nameservers":["198.41.0.4"],"referrals":["com."],"records":[],"latency_ms":8}}
 
 event: hop
-data: {"depth":1,"server":"192.5.6.30","server_name":"a.gtld-servers.net","referral":"example.com.","response_time_ms":12}
+data: {"request_id":"019...","hop":{"level":1,"nameservers":["192.5.6.30"],"referrals":["example.com."],"records":[],"latency_ms":12}}
 
 event: hop
-data: {"depth":2,"server":"93.184.216.34","server_name":"ns1.example.com","answer":["93.184.216.34"],"response_time_ms":5}
+data: {"request_id":"019...","hop":{"level":2,"nameservers":["93.184.216.34"],"referrals":[],"records":["93.184.216.34"],"latency_ms":5}}
 
 event: done
-data: {"hops":3,"total_ms":25}
+data: {"request_id":"019...","duration_ms":25,"hops":3}
 ```
 
 ### 5.4 Parse Endpoint (for autocomplete)
@@ -330,8 +336,7 @@ All non-SSE error responses use a consistent JSON format:
 {
   "error": {
     "code": "INVALID_DOMAIN",
-    "message": "Domain name exceeds 253 characters",
-    "details": null
+    "message": "Domain name exceeds 253 characters"
   }
 }
 ```
@@ -457,7 +462,7 @@ Key elements:
 // main.rs (simplified)
 #[tokio::main]
 async fn main() {
-    let config = Config::from_env_and_args();
+    let config = Config::load(config_path.as_deref()).expect("failed to load configuration");
 
     // Health endpoint is outside rate limiting (used by load balancers)
     let health = Router::new()
@@ -708,10 +713,10 @@ Uses the GCRA (Generic Cell Rate Algorithm) via `tower-governor`, which provides
 
 | Scope | Limit | Burst | Key |
 |-------|-------|-------|-----|
-| Per source IP | 30 tokens/minute | 10 | Real client IP (see 8.3) |
+| Per source IP | 120 tokens/minute | 40 | Real client IP (see 8.3) |
 | Per source IP (connections) | 10 concurrent SSE streams | — | Real client IP |
-| Per target DNS server | 30 tokens/minute | 10 | Target server IP (across all users) |
-| Global | 500 tokens/minute | 50 | None (shared) |
+| Per target DNS server | 60 tokens/minute | 20 | Target provider/server (across all users) |
+| Global | 1000 tokens/minute | 50 | None (shared) |
 
 **Query cost model**: Each request consumes tokens proportional to its fan-out: `cost = record_types * servers`. A simple `example.com A @cloudflare` costs 1 token. A `example.com A AAAA MX TXT @cloudflare @google` costs 8 tokens (4 types x 2 servers). This prevents a single high-cardinality request from consuming the same rate-limit budget as a simple one-shot query.
 
@@ -810,11 +815,12 @@ A public instance requires a ToS page (served as part of the SPA) covering:
 
 prism is configured via environment variables and/or a TOML config file. All values are validated at startup — the server refuses to start with invalid configuration rather than silently using defaults.
 
-**Config discovery** (in precedence order, highest first):
-1. CLI argument: `prism --config /path/to/config.toml`
+**Config loading**: `Config::load(path)` accepts an optional file path. The path comes from the first CLI positional argument or the `PRISM_CONFIG` environment variable. If neither is provided, no config file is loaded and built-in defaults apply. There is no automatic path probing (no `./prism.toml` fallback).
+
+**Config source precedence** (highest first):
+1. CLI argument: first positional arg — `prism /path/to/config.toml`
 2. Environment variable: `PRISM_CONFIG=/path/to/config.toml`
-3. Default paths: `./prism.toml`, then `$XDG_CONFIG_HOME/prism/config.toml`
-4. Built-in defaults (no config file required)
+3. Built-in defaults (no config file required)
 
 **Environment overrides**: Individual values can be overridden via env vars prefixed with `PRISM_`, using `__` as the section separator: `PRISM_LIMITS__PER_IP_PER_MINUTE=60` overrides `[limits] per_ip_per_minute`. Env vars take precedence over TOML file values, enabling partial TOML configs with per-deployment overrides.
 
@@ -830,10 +836,10 @@ metrics_bind = "127.0.0.1:9090"   # separate port, localhost-only by default
 trusted_proxies = ["173.245.48.0/20", "103.21.244.0/22"]  # Cloudflare ranges
 
 [limits]
-per_ip_per_minute = 30
-per_ip_burst = 10
-per_target_per_minute = 30
-global_per_minute = 500
+per_ip_per_minute = 120
+per_ip_burst = 40
+per_target_per_minute = 60
+global_per_minute = 1000
 max_concurrent_connections = 256
 per_ip_max_streams = 10
 max_timeout_secs = 10
@@ -1063,21 +1069,14 @@ All items implemented except GDPR log rotation (deferred — operational concern
 - ✓ Mobile-responsive layout (card-based below 768px, stacked query bar, single-column server comparison, tighter spacing at 480px)
 - ○ GDPR-compliant log rotation (not yet implemented — deferred to operational deployment)
 
-### Phase 4 — Library Extraction & Check/Trace
+### Phase 4 — Library Extraction & Check/Trace ✓
 
-This phase requires extracting lint and trace logic from the mhost `app` layer into the library before the web endpoints can be built.
+All items implemented. The lint and trace logic was available in mhost-lib directly (under the `mhost::lints` and iterative resolution APIs), so no separate library extraction from the `app` layer was required.
 
-**Library extraction scope:**
-- **Lint extraction**: Move 13 lint modules from `src/app/modules/check/lints/` to a new `src/check/lints/` library module: `spf.rs`, `mx.rs`, `caa.rs`, `ns.rs`, `soa.rs`, `dmarc.rs`, `dnssec_lint.rs`, `open_resolver.rs`, `delegation.rs`, `cnames.rs`, `https_svcb.rs`, `axfr.rs`, `ttl.rs`. The `CheckResult` type and lint runner move with them. CLI-specific formatting (`SummaryFormatter` for check results) stays in `app/`.
-- **Trace extraction**: Move delegation-walking logic from `src/app/modules/trace/trace.rs` to a new `src/trace/` library module. The `TraceHop` type and recursive resolution logic move with it. CLI-specific output stays in `app/`.
-- **Consumer migration**: Update `app/modules/check/` and `app/modules/trace/` to re-export from the library modules. Update mdive TUI imports (`src/bin/mdive/lints.rs`) to use the new library paths. Both consumers must continue working unchanged.
-- **Feature gate semantics**: The new library modules have no feature gate — they are available in all builds. The `app` feature continues to gate only CLI-specific code.
-- **Testing**: All existing check and trace tests must pass. New unit tests for the extracted modules (without app dependencies) confirm library-only usability.
-
-**Web endpoints (depend on library extraction above):**
-- `POST /api/check` with lint results
-- `POST /api/trace` with hop-by-hop delegation visualization
-- `+check` and `+trace` flags in query language
+**Web endpoints implemented:**
+- ✓ `POST /api/check` — 15 DNS record types + `_dmarc` TXT lookup, 9 lint categories (CAA, CNAME apex, DNSSEC, HTTPS/SVCB, MX sync, NS count, SPF, TTL, DMARC), streaming `batch` + `lint` + `done` SSE events
+- ✓ `POST /api/trace` — iterative delegation walk from root servers, streaming `hop` + `done` SSE events; delegation logic in `dns_trace.rs`
+- ✓ `+check` and `+trace` flags recognized in query language (routing handled in the frontend)
 
 ### Phase 5 — Future (not committed)
 
@@ -1110,7 +1109,7 @@ This phase requires extracting lint and trace logic from the mhost `app` layer i
 
 1. ~~**Workspace conversion.**~~ **Resolved** — prism was implemented as a standalone repository, eliminating this risk entirely. No changes to the mhost repo were needed.
 
-2. **Library extraction for check/trace.** Phase 4 requires moving 13 lint modules and the trace logic from `app/` to the library layer. This is the highest-risk item — it changes module boundaries, requires updating three consumers (CLI, TUI, web), and must maintain feature-gate semantics. See §14 Phase 4 for the detailed scope. The extraction must be completed before the check/trace web endpoints can be built.
+2. ~~**Library extraction for check/trace.**~~ **Resolved** — The lint and trace logic was accessible directly via `mhost::lints` and the iterative resolver APIs without requiring a separate extraction from the `app` layer. `POST /api/check` and `POST /api/trace` are implemented in Phase 4.
 
 3. **Frontend build dependency.** The Rust binary requires `frontend/dist/` to exist at compile time. CI must run `npm run build` before `cargo build`. This adds Node.js as a build-time dependency. Mitigation: `build.rs` checks for `frontend/dist/index.html` and emits an actionable compile error if missing. A `just build-web` recipe sequences the full build (npm + cargo). `frontend/dist/` is `.gitignored` — it is never checked into the repository.
 
@@ -1124,4 +1123,4 @@ This phase requires extracting lint and trace logic from the mhost `app` layer i
 
 8. **ResolverGroup per-request cost.** Building a `ResolverGroup` for every request involves creating hickory-resolver instances. Benchmarking is needed to confirm this is fast enough under load. If it becomes a bottleneck, a cache of recently-used resolver configurations (keyed by server set + timeout) could be added.
 
-9. **Abuse via high-cardinality queries.** A single request with 10 record types across 4 servers generates 40 DNS queries. The query cost model (§8.2) charges this as 40 tokens instead of 1. Requests exceeding the remaining budget are rejected before execution (pre-check). This forces attackers to choose between query breadth and request volume. The per-target-server limit (30 tokens/min) provides a second line of defense.
+9. **Abuse via high-cardinality queries.** A single request with 10 record types across 4 servers generates 40 DNS queries. The query cost model (§8.2) charges this as 40 tokens instead of 1. Requests exceeding the remaining budget are rejected before execution (pre-check). This forces attackers to choose between query breadth and request volume. The per-target-server limit (60 tokens/min) provides a second line of defense.

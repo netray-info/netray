@@ -126,6 +126,8 @@ mhost-prism/                  # standalone crate (not a workspace member)
       trace.rs                # POST /api/trace → SSE stream (iterative delegation walk)
       parse.rs                # POST /api/parse → completion hints (Phase 3)
       meta.rs                 # GET /api/servers, /api/record-types, /api/health
+                              # GET /docs → Scalar API reference UI
+                              # GET /api-docs/openapi.json → OpenAPI spec
     security/
       mod.rs                  # Middleware composition
       rate_limit.rs           # tower-governor layers (per-IP, per-target, global)
@@ -159,7 +161,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - **SSE streaming**: Per-record-type queries via `FuturesUnordered`, all record types in parallel; each completed batch streamed as a `batch` SSE event. All streams have a hard 30s deadline.
 - **Per-request ResolverGroup**: Fresh `ResolverGroup` per API request — no shared resolver pool.
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
-- **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check/trace use a flat cost of 16 tokens.
+- **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens (no per-target charging — trace queries public root/TLD/auth infrastructure, not user-specified servers).
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
 - **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed.
 - **Routing flags**: `+check` and `+trace` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.

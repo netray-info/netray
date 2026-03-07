@@ -94,7 +94,7 @@ The results table shows each resolver's answer side by side. Mismatches stand ou
 ```sh
 curl -sN -X POST http://localhost:8080/api/query \
   -H 'Content-Type: application/json' \
-  -d '{"query": "example.com MX TXT @cloudflare @google"}'
+  -d '{"domain": "example.com", "record_types": ["MX", "TXT"], "servers": ["cloudflare", "google"]}'
 ```
 
 ### Check mode
@@ -111,7 +111,7 @@ Catches things like:
 ```sh
 curl -sN -X POST http://localhost:8080/api/check \
   -H 'Content-Type: application/json' \
-  -d '{"domain": "example.com", "servers": [{"predefined": "cloudflare"}]}'
+  -d '{"domain": "example.com", "servers": ["cloudflare"]}'
 ```
 
 ### Trace mode
@@ -140,7 +140,10 @@ All endpoints accept `application/json` and return `text/event-stream` (Server-S
 
 ```json
 {
-  "query": "example.com MX @cloudflare @google",
+  "domain": "example.com",
+  "record_types": ["A", "MX"],
+  "servers": ["cloudflare", "google"],
+  "transport": "udp",
   "dnssec": false
 }
 ```
@@ -164,7 +167,7 @@ Same as POST but the query string goes in `?q=example.com+MX+%40cloudflare`. Han
 ```json
 {
   "domain": "example.com",
-  "servers": [{"predefined": "cloudflare"}],
+  "servers": ["cloudflare"],
   "timeout_secs": 5
 }
 ```
@@ -196,6 +199,11 @@ data: {"request_id":"...","hop":{"level":1,"nameservers":["a.root-servers.net."]
 | `GET /api/servers` | List predefined resolvers and their IPs |
 | `GET /api/record-types` | List queryable record types |
 | `POST /api/parse` | Tokenize a query string, return completions |
+
+### Interactive API reference
+
+- `GET /docs` — Scalar API reference UI (browsable, try-it-out)
+- `GET /api-docs/openapi.json` — OpenAPI 3.1 schema
 
 ---
 
