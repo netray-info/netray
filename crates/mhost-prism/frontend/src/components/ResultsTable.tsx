@@ -125,7 +125,7 @@ function lookupResponseTime(lookup: Lookup): { secs: number; nanos: number } | u
   return undefined;
 }
 
-function formatRecordData(data: Record<string, unknown>): string {
+export function formatRecordData(data: Record<string, unknown>): string {
   // mhost serializes record data as e.g. {"A": "1.2.3.4"} or {"MX": {"preference": 10, "exchange": "mail.example.com."}}
   const keys = Object.keys(data);
   if (keys.length === 0) return '';
@@ -604,6 +604,8 @@ function formatTTLHuman(ttl: number): string {
 // ---------------------------------------------------------------------------
 
 function JsonView(props: { results: BatchEvent[]; stats: DoneStats | null }) {
+  const [copied, setCopied] = createSignal(false);
+
   const json = createMemo(() => {
     const data: { batches: BatchEvent[]; stats: DoneStats | null } = {
       batches: props.results,
@@ -612,8 +614,20 @@ function JsonView(props: { results: BatchEvent[]; stats: DoneStats | null }) {
     return JSON.stringify(data, null, 2);
   });
 
+  function copyToClipboard() {
+    navigator.clipboard.writeText(json()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
   return (
     <div class="json-view">
+      <div class="json-toolbar">
+        <button class="json-copy-btn" onClick={copyToClipboard} title="Copy JSON to clipboard">
+          {copied() ? '\u2713 Copied' : 'Copy'}
+        </button>
+      </div>
       <pre><code>{json()}</code></pre>
     </div>
   );

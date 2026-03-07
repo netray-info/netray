@@ -1,6 +1,6 @@
 import { For, Show, createMemo } from 'solid-js';
 import type { BatchEvent, Lookup, LookupResult } from './ResultsTable';
-import { responseTimeMs, responseTimeColor } from './ResultsTable';
+import { responseTimeMs, responseTimeColor, formatRecordData } from './ResultsTable';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -104,33 +104,6 @@ function getStatusLabel(lookup: Lookup): { text: string; className: string } {
   }
   const keys = Object.keys(result);
   return { text: keys[0] ?? 'Error', className: 'status-error' };
-}
-
-function formatRecordData(data: Record<string, unknown>): string {
-  const keys = Object.keys(data);
-  if (keys.length === 0) return '';
-  const value = data[keys[0]];
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number') return String(value);
-  if (value && typeof value === 'object') {
-    return formatStructuredRecord(keys[0], value as Record<string, unknown>);
-  }
-  return JSON.stringify(value);
-}
-
-function formatStructuredRecord(rtype: string, value: Record<string, unknown>): string {
-  switch (rtype) {
-    case 'MX':
-      return `${value.preference} ${value.exchange}`;
-    case 'SRV':
-      return `${value.priority} ${value.weight} ${value.port} ${value.target}`;
-    case 'SOA':
-      return `${value.mname} ${value.rname} (serial: ${value.serial})`;
-    case 'CAA':
-      return `${value.issuer_critical ? '!' : ''}${value.tag} "${value.value}"`;
-    default:
-      return JSON.stringify(value);
-  }
 }
 
 /** CSS custom property name for a record type color. */
