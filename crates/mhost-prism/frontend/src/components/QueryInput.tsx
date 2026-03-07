@@ -1,5 +1,5 @@
-import { onMount, onCleanup } from 'solid-js';
-import { EditorView, keymap, placeholder as cmPlaceholder, ViewPlugin, Decoration, type DecorationSet } from '@codemirror/view';
+import { onMount, onCleanup, createSignal, Show } from 'solid-js';
+import { EditorView, keymap, placeholder as cmPlaceholder, ViewPlugin, Decoration, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { acceptCompletion, autocompletion, startCompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { tokenize, TokenType } from '../lib/tokenizer';
@@ -47,6 +47,7 @@ const FLAGS = [
   { label: '+https', detail: 'DNS-over-HTTPS' },
   { label: '+dnssec', detail: 'DNSSEC validation' },
   { label: '+check', detail: 'DNS health check (lint all record types)' },
+  { label: '+trace', detail: 'Delegation trace (walk root → authoritative)' },
 ];
 
 function prismCompletions(context: CompletionContext): CompletionResult | null {
@@ -159,7 +160,7 @@ const editorTheme = EditorView.theme(
     '.cm-scroller': {
       overflow: 'hidden',
       lineHeight: '1.6',
-      padding: '8px 12px',
+      padding: '8px 28px 8px 12px',
     },
     '.cm-content': {
       caretColor: 'var(--accent)',
@@ -259,7 +260,8 @@ interface QueryInputProps {
   onSubmit: (query: string) => void;
   initialValue?: string;
   history: string[];
-  onReady?: (api: { focus: () => void }) => void;
+  onReset?: () => void;
+  onReady?: (api: { focus: () => void; clear: () => void }) => void;
 }
 
 export function QueryInput(props: QueryInputProps) {
@@ -267,6 +269,9 @@ export function QueryInput(props: QueryInputProps) {
   let view: EditorView | undefined;
   let historyIndex = -1;
   let savedInput = '';
+  const [hasContent, setHasContent] = createSignal(
+    (props.initialValue ?? '').trim().length > 0,
+  );
 
   onMount(() => {
     if (!containerRef) return;
@@ -337,6 +342,12 @@ export function QueryInput(props: QueryInputProps) {
       },
     ]);
 
+    const contentTracker = EditorView.updateListener.of((update: ViewUpdate) => {
+      if (update.docChanged) {
+        setHasContent(update.state.doc.length > 0);
+      }
+    });
+
     const state = EditorState.create({
       doc: props.initialValue ?? '',
       extensions: [
@@ -352,6 +363,7 @@ export function QueryInput(props: QueryInputProps) {
         historyKeymap,
         singleLine,
         EditorView.lineWrapping,
+        contentTracker,
       ],
     });
 
@@ -365,7 +377,13 @@ export function QueryInput(props: QueryInputProps) {
       historyIndex = -1;
     });
 
-    props.onReady?.({ focus: () => view?.focus() });
+    props.onReady?.({
+      focus: () => view?.focus(),
+      clear: () => {
+        if (!view) return;
+        view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } });
+      },
+    });
   });
 
   onCleanup(() => {
@@ -383,7 +401,19 @@ export function QueryInput(props: QueryInputProps) {
 
   return (
     <div class="query-bar">
-      <div class="query-editor" ref={containerRef} />
+      <div class="query-editor-wrap">
+        <div class="query-editor" ref={containerRef} />
+        <Show when={hasContent() && props.onReset}>
+          <button
+            class="query-clear-btn"
+            onClick={props.onReset}
+            title="Clear"
+            tabIndex={-1}
+          >
+            &times;
+          </button>
+        </Show>
+      </div>
       <button class="query-button" onClick={handleSubmitClick} title="Run query (Enter)">
         Query
       </button>

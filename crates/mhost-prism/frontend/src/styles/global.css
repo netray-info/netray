@@ -99,6 +99,17 @@
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Chrome/Firefox: reserve scrollbar gutter without forcing scrollbar visible. */
+  scrollbar-gutter: stable;
+}
+
+/* Safari does not support scrollbar-gutter. Force overflow-y: scroll so the
+   scrollbar is always present and the available width never changes between
+   tab switches (margin: 0 auto would otherwise recentre on scrollbar hide/show). */
+@supports not (scrollbar-gutter: stable) {
+  html {
+    overflow-y: scroll;
+  }
 }
 
 body {
@@ -196,9 +207,37 @@ body {
   margin-bottom: 24px;
 }
 
-.query-editor {
+.query-editor-wrap {
   flex: 1;
   min-width: 0;
+  position: relative;
+}
+
+.query-clear-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition), background var(--transition);
+  z-index: 10;
+}
+
+.query-clear-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
 }
 
 .query-button {
@@ -232,6 +271,7 @@ body {
 .query-button:active {
   background: var(--accent-dim);
 }
+
 
 /* ===================================================================
    Tabs

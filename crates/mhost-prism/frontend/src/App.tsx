@@ -6,7 +6,7 @@ import { TraceView, type TraceHop, type TraceDoneStats } from './components/Trac
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'trace' | 'lint' | 'results' | 'servers' | 'json';
-type Theme = 'dark' | 'light';
+type Theme = 'dark' | 'light' | 'system';
 
 const HISTORY_KEY = 'prism_history';
 const THEME_KEY = 'prism_theme';
@@ -33,7 +33,7 @@ function getSystemTheme(): Theme {
 function getSavedTheme(): Theme | null {
   try {
     const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark') return saved;
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
   } catch { /* ignore */ }
   return null;
 }
@@ -146,7 +146,7 @@ export default function App() {
   const [stats, setStats] = createSignal<DoneStats | null>(null);
   const [activeTab, setActiveTab] = createSignal<ActiveTab>('results');
   const [history, setHistory] = createSignal<string[]>(loadHistory());
-  const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? getSystemTheme());
+  const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
   const [showHelp, setShowHelp] = createSignal(false);
   const [showTos, setShowTos] = createSignal(false);
 
@@ -164,17 +164,20 @@ export default function App() {
   let checkAbortController: AbortController | null = null;
   let traceAbortController: AbortController | null = null;
   let focusEditor: (() => void) | undefined;
+  let clearEditor: (() => void) | undefined;
 
   // ---------------------------------------------------------------------------
   // Theme
   // ---------------------------------------------------------------------------
 
   function applyTheme(t: Theme) {
-    document.documentElement.setAttribute('data-theme', t);
+    const resolved = t === 'system' ? getSystemTheme() : t;
+    document.documentElement.setAttribute('data-theme', resolved);
   }
 
   function toggleTheme() {
-    const next = theme() === 'dark' ? 'light' : 'dark';
+    // Cycle: system → dark → light → system
+    const next: Theme = theme() === 'system' ? 'dark' : theme() === 'dark' ? 'light' : 'system';
     setTheme(next);
     applyTheme(next);
     try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
@@ -222,6 +225,31 @@ export default function App() {
       saveHistory(updated);
       return updated;
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Reset
+  // ---------------------------------------------------------------------------
+
+  function resetAll() {
+    closeConnections();
+    setQuery('');
+    setResults([]);
+    setStatus('idle');
+    setError(null);
+    setStats(null);
+    setActiveTab('results');
+    setIsCheckMode(false);
+    setIsTraceMode(false);
+    setTraceHops([]);
+    setTraceDoneStats(null);
+    setLintCategories([]);
+    setCheckStats(null);
+    clearEditor?.();
+    focusEditor?.();
+    const url = new URL(window.location.href);
+    url.searchParams.delete('q');
+    window.history.replaceState(null, '', url.toString());
   }
 
   // ---------------------------------------------------------------------------
@@ -683,10 +711,8 @@ export default function App() {
 
   let mediaQuery: MediaQueryList | undefined;
   const onSystemThemeChange = () => {
-    if (!getSavedTheme()) {
-      const sys = getSystemTheme();
-      setTheme(sys);
-      applyTheme(sys);
+    if (theme() === 'system') {
+      applyTheme('system');
     }
   };
 
@@ -738,9 +764,13 @@ export default function App() {
           <button
             class="header-btn"
             onClick={toggleTheme}
-            title={`Switch to ${theme() === 'dark' ? 'light' : 'dark'} mode`}
+            title={
+              theme() === 'system' ? 'Theme: System — click for Dark'
+              : theme() === 'dark'  ? 'Theme: Dark — click for Light'
+              :                       'Theme: Light — click for System'
+            }
           >
-            {theme() === 'dark' ? '\u2600' : '\u263E'}
+            {theme() === 'system' ? '\u25D0' : theme() === 'dark' ? '\u263E' : '\u2600'}
           </button>
           <button
             class="header-btn"
@@ -757,7 +787,8 @@ export default function App() {
           onSubmit={submitQuery}
           initialValue={query()}
           history={history()}
-          onReady={(api) => { focusEditor = api.focus; }}
+          onReset={hasContent() ? resetAll : undefined}
+          onReady={(api) => { focusEditor = api.focus; clearEditor = api.clear; }}
         />
 
         <Show when={hasContent()}>
@@ -860,34 +891,48 @@ export default function App() {
           </div>
         </Show>
 
-        {/* Trace tab content */}
-        <Show when={isTraceMode() && activeTab() === 'trace'}>
-          <TraceView
-            hops={traceHops()}
-            doneStats={traceDoneStats()}
-            isLoading={isLoading()}
-            activeTab={activeTab()}
-          />
+        {/*
+          Tab panes use CSS display toggling instead of <Show> unmount/remount.
+          Unmounting one pane before mounting another leaves a frame with no
+          content, which causes a layout-height collapse that Safari repaints
+          as a visible page shift. Keeping all panes in the DOM and toggling
+          display avoids that intermediate empty state entirely.
+        */}
+
+        {/* Trace tab pane — mounted once trace mode starts */}
+        <Show when={isTraceMode()}>
+          <div style={{ display: activeTab() === 'trace' ? 'block' : 'none' }}>
+            <TraceView
+              hops={traceHops()}
+              doneStats={traceDoneStats()}
+              isLoading={isLoading()}
+              activeTab={activeTab()}
+            />
+          </div>
         </Show>
 
-        {/* Lint tab content */}
-        <Show when={isCheckMode() && activeTab() === 'lint'}>
-          <LintTab
-            categories={lintCategories()}
-            doneStats={checkStats()}
-            isLoading={isLoading()}
-          />
+        {/* Lint tab pane — mounted once check mode starts */}
+        <Show when={isCheckMode()}>
+          <div style={{ display: activeTab() === 'lint' ? 'block' : 'none' }}>
+            <LintTab
+              categories={lintCategories()}
+              doneStats={checkStats()}
+              isLoading={isLoading()}
+            />
+          </div>
         </Show>
 
-        {/* Results / Servers / JSON — always rendered via ResultsTable */}
-        <Show when={activeTab() !== 'lint' && activeTab() !== 'trace'}>
-          <ResultsTable
-            results={results()}
-            stats={stats()}
-            status={status()}
-            error={error()}
-            activeTab={activeTab() as 'results' | 'servers' | 'json'}
-          />
+        {/* Results / Servers / JSON — always mounted, hidden when another pane is active */}
+        <Show when={hasContent()}>
+          <div style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' ? 'block' : 'none' }}>
+            <ResultsTable
+              results={results()}
+              stats={stats()}
+              status={status()}
+              error={error()}
+              activeTab={activeTab() as 'results' | 'servers' | 'json'}
+            />
+          </div>
         </Show>
       </main>
 
