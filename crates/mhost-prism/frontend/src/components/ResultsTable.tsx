@@ -500,7 +500,7 @@ function LookupRows(props: {
                   <>
                     <tr
                       data-row-key={rowKey()}
-                      class={`expandable-row navigable-row ${isExpanded() ? 'expanded' : ''} ${isFocused() ? 'row-focused' : ''}`}
+                      class={`expandable-row navigable-row ${isExpanded() ? 'expanded' : ''} ${isFocused() ? 'row-focused' : ''}${i() === 0 && props.lookupIndex > 0 ? ' lookup-separator' : ''}`}
                       tabIndex={0}
                       role="row"
                       aria-expanded={isExpanded()}
@@ -569,7 +569,7 @@ function LookupRows(props: {
           return (
             <tr
               data-row-key={rowKey}
-              class={`row-nxdomain navigable-row ${props.focusedKey === rowKey ? 'row-focused' : ''}`}
+              class={`row-nxdomain navigable-row ${props.focusedKey === rowKey ? 'row-focused' : ''}${props.lookupIndex > 0 ? ' lookup-separator' : ''}`}
               onClick={() => props.onRowClick(rowKey)}
             >
               <td data-label="Name">{props.lookup.query.name}</td>
@@ -587,7 +587,7 @@ function LookupRows(props: {
           return (
             <tr
               data-row-key={rowKey}
-              class={`row-error navigable-row ${props.focusedKey === rowKey ? 'row-focused' : ''}`}
+              class={`row-error navigable-row ${props.focusedKey === rowKey ? 'row-focused' : ''}${props.lookupIndex > 0 ? ' lookup-separator' : ''}`}
               onClick={() => props.onRowClick(rowKey)}
             >
               <td data-label="Name">{props.lookup.query.name}</td>

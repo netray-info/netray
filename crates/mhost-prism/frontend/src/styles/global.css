@@ -782,6 +782,10 @@ body {
    Expandable Row Details
    =================================================================== */
 
+.lookup-separator td {
+  border-top: 1.5px solid var(--border);
+}
+
 .expandable-row {
   cursor: pointer;
   transition: background var(--transition);
