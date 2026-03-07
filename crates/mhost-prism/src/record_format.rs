@@ -1,8 +1,8 @@
-//! TXT record human-readable decoding.
+//! Record human-readable formatting.
 //!
-//! Provides [`format_txt`] for producing a human-readable string from a TXT
-//! record, and [`enrich_lookups_json`] for injecting `txt_string` and
-//! `txt_human` fields into a serialized `BatchEvent` JSON value.
+//! Provides human-readable formatting for DNS record types (TXT, CAA, MX, SOA)
+//! and [`enrich_lookups_json`] for injecting `*_human` fields into serialized
+//! `BatchEvent` JSON values.
 
 use mhost::resources::rdata::TXT;
 use mhost::resources::rdata::parsed_txt::{Mechanism, Modifier, ParsedTxt, Qualifier, Word};
@@ -70,31 +70,31 @@ pub fn format_txt(txt: &TXT) -> String {
         Ok(ParsedTxt::Dmarc(dmarc)) => {
             let mut lines = vec![
                 format!("DMARC: v={}", dmarc.version()),
-                format!("  policy: {}", dmarc.policy()),
+                format!("  Policy: {}", dmarc.policy()),
             ];
             if let Some(sp) = dmarc.subdomain_policy() {
-                lines.push(format!("  subdomain policy: {sp}"));
+                lines.push(format!("  Subdomain Policy: {sp}"));
             }
             if let Some(rua) = dmarc.rua() {
-                lines.push(format!("  rua: {rua}"));
+                lines.push(format!("  Aggregate Reports: {}", strip_uri_scheme(rua)));
             }
             if let Some(ruf) = dmarc.ruf() {
-                lines.push(format!("  ruf: {ruf}"));
+                lines.push(format!("  Forensic Reports: {}", strip_uri_scheme(ruf)));
             }
             if let Some(adkim) = dmarc.adkim() {
-                lines.push(format!("  dkim alignment: {adkim}"));
+                lines.push(format!("  DKIM Alignment: {adkim}"));
             }
             if let Some(aspf) = dmarc.aspf() {
-                lines.push(format!("  spf alignment: {aspf}"));
+                lines.push(format!("  SPF Alignment: {aspf}"));
             }
             if let Some(pct) = dmarc.pct() {
-                lines.push(format!("  pct: {pct}"));
+                lines.push(format!("  Percentage: {pct}%"));
             }
             if let Some(fo) = dmarc.fo() {
-                lines.push(format!("  failure options: {fo}"));
+                lines.push(format!("  Failure Options: {fo}"));
             }
             if let Some(ri) = dmarc.ri() {
-                lines.push(format!("  report interval: {ri}"));
+                lines.push(format!("  Report Interval: {ri}s"));
             }
             lines.join("\n")
         }
@@ -126,18 +126,99 @@ pub fn format_txt(txt: &TXT) -> String {
     }
 }
 
-/// Walk a serialized `BatchEvent` JSON value and inject `txt_string` and
-/// `txt_human` fields into every TXT record object found within
-/// `lookups.lookups[*].result.Response.records[*].data.TXT`.
-///
-/// Only acts when `record_type` is `"TXT"` or `"_dmarc"` (check endpoint uses
-/// `"_dmarc"` as the label for the DMARC TXT lookup).
-pub fn enrich_lookups_json(value: &mut serde_json::Value, record_type: &str) {
-    if record_type != "TXT" && record_type != "_dmarc" {
-        return;
-    }
+/// Strip common URI schemes (`mailto:`, `https://`) for cleaner display.
+fn strip_uri_scheme(s: &str) -> &str {
+    s.strip_prefix("mailto:")
+        .or_else(|| s.strip_prefix("https://"))
+        .unwrap_or(s)
+}
 
-    // Count inner lookups first to iterate by index, avoiding nested &mut borrows.
+/// Format a CAA record as a human-readable policy string.
+pub fn format_caa_human(obj: &serde_json::Value) -> Option<String> {
+    let tag = obj.get("tag")?.as_str()?;
+    let value = obj.get("value")?.as_str().unwrap_or("");
+    let critical = obj
+        .get("issuer_critical")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let policy = match (tag, value) {
+        ("issue", "") => "No CA is allowed to issue certificates".to_string(),
+        ("issue", v) => format!("Allow {v} to issue certificates"),
+        ("issuewild", "") => {
+            "No CA is allowed to issue wildcard certificates".to_string()
+        }
+        ("issuewild", v) => format!("Allow {v} to issue wildcard certificates"),
+        ("iodef", v) => format!("Report policy violations to {}", strip_uri_scheme(v)),
+        (t, v) => format!("{t} {v}"),
+    };
+
+    if critical {
+        Some(format!("{policy} (critical)"))
+    } else {
+        Some(policy)
+    }
+}
+
+/// Format an MX record as a human-readable string.
+pub fn format_mx_human(obj: &serde_json::Value) -> Option<String> {
+    let preference = obj.get("preference")?;
+    let exchange = obj.get("exchange")?.as_str()?;
+    Some(format!("{exchange} with priority {preference}"))
+}
+
+/// Format a SOA record as a human-readable string.
+pub fn format_soa_human(obj: &serde_json::Value) -> Option<String> {
+    let mname = obj.get("mname")?.as_str()?;
+    let rname = obj.get("rname")?.as_str()?;
+    let contact = rname_to_email(rname);
+    let serial = obj.get("serial")?;
+    let refresh = obj.get("refresh")?;
+    let retry = obj.get("retry")?;
+    let expire = obj.get("expire")?;
+    let minimum = obj.get("minimum")?;
+    Some(format!(
+        "Primary NS: {mname}\nContact: {contact}\nSerial: {serial}\nRefresh: {refresh}\nRetry: {retry}\nExpire: {expire}\nMinimum TTL: {minimum}"
+    ))
+}
+
+/// Convert SOA `rname` DNS encoding to email format.
+///
+/// In SOA records the first `.` in `rname` represents `@`.
+/// E.g. `awsdns-hostmaster.amazon.com.` → `awsdns-hostmaster@amazon.com.`
+fn rname_to_email(rname: &str) -> String {
+    let rname = rname.strip_suffix('.').unwrap_or(rname);
+    match rname.find('.') {
+        Some(pos) => {
+            let (local, rest) = rname.split_at(pos);
+            format!("{local}@{}", &rest[1..])
+        }
+        None => rname.to_string(),
+    }
+}
+
+/// Walk a serialized `BatchEvent` JSON value and inject human-readable fields
+/// into record data objects within
+/// `lookups.lookups[*].result.Response.records[*].data.*`.
+///
+/// Enrichments by record type:
+/// - `"TXT"` / `"_dmarc"` → `txt_string` and `txt_human` into `data.TXT`
+/// - `"CAA"` → `caa_human` into `data.CAA`
+/// - `"MX"` → `mx_human` into `data.MX`
+/// - `"SOA"` → `soa_human` into `data.SOA`
+pub fn enrich_lookups_json(value: &mut serde_json::Value, record_type: &str) {
+    match record_type {
+        "TXT" | "_dmarc" => enrich_txt(value),
+        "CAA" => enrich_simple(value, "CAA", format_caa_human, "caa_human"),
+        "MX" => enrich_simple(value, "MX", format_mx_human, "mx_human"),
+        "SOA" => enrich_simple(value, "SOA", format_soa_human, "soa_human"),
+        _ => {}
+    }
+}
+
+/// Enrich TXT records by decoding `txt_data` bytes and injecting `txt_string`
+/// and `txt_human`.
+fn enrich_txt(value: &mut serde_json::Value) {
     let lookup_count = value
         .get("lookups")
         .and_then(|l| l.get("lookups"))
@@ -152,7 +233,6 @@ pub fn enrich_lookups_json(value: &mut serde_json::Value, record_type: &str) {
             .unwrap_or(0);
 
         for ri in 0..record_count {
-            // Read txt_data without a mutable borrow first.
             let txt_string = {
                 let txt_data = &value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]
                     ["data"]["TXT"]["txt_data"];
@@ -160,7 +240,6 @@ pub fn enrich_lookups_json(value: &mut serde_json::Value, record_type: &str) {
                     Some(arr) => arr,
                     None => continue,
                 };
-                // Decode each chunk (array of u8) as UTF-8 and join.
                 chunks
                     .iter()
                     .map(|chunk| {
@@ -178,17 +257,56 @@ pub fn enrich_lookups_json(value: &mut serde_json::Value, record_type: &str) {
                     .collect::<String>()
             };
 
-            // Build a TXT struct from the decoded string to run format_txt.
             let txt = TXT::new(vec![txt_string.clone()]);
             let txt_human = format_txt(&txt);
 
-            // Now mutably borrow to insert.
             if let Some(obj) = value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]
                 ["data"]["TXT"]
                 .as_object_mut()
             {
                 obj.insert("txt_string".to_string(), serde_json::Value::String(txt_string));
                 obj.insert("txt_human".to_string(), serde_json::Value::String(txt_human));
+            }
+        }
+    }
+}
+
+/// Enrich records of a simple structured type (CAA, MX, SOA) by reading the
+/// data object, formatting it, and injecting the result.
+fn enrich_simple(
+    value: &mut serde_json::Value,
+    data_key: &str,
+    formatter: fn(&serde_json::Value) -> Option<String>,
+    field_name: &str,
+) {
+    let lookup_count = value
+        .get("lookups")
+        .and_then(|l| l.get("lookups"))
+        .and_then(|l| l.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+
+    for li in 0..lookup_count {
+        let record_count = value["lookups"]["lookups"][li]["result"]["Response"]["records"]
+            .as_array()
+            .map(|a| a.len())
+            .unwrap_or(0);
+
+        for ri in 0..record_count {
+            let human = {
+                let data = &value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]
+                    ["data"][data_key];
+                match formatter(data) {
+                    Some(s) => s,
+                    None => continue,
+                }
+            };
+
+            if let Some(obj) = value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]
+                ["data"][data_key]
+                .as_object_mut()
+            {
+                obj.insert(field_name.to_string(), serde_json::Value::String(human));
             }
         }
     }
@@ -221,8 +339,11 @@ mod tests {
         let txt = make_txt("v=DMARC1; p=reject; rua=mailto:dmarc@example.com");
         let out = format_txt(&txt);
         assert!(out.starts_with("DMARC: v=DMARC1"), "got: {out}");
-        assert!(out.contains("policy: reject"), "got: {out}");
-        assert!(out.contains("rua: mailto:dmarc@example.com"), "got: {out}");
+        assert!(out.contains("Policy: reject"), "got: {out}");
+        assert!(
+            out.contains("Aggregate Reports: dmarc@example.com"),
+            "got: {out}"
+        );
     }
 
     #[test]
@@ -266,14 +387,14 @@ mod tests {
     }
 
     #[test]
-    fn enrich_noop_for_non_txt() {
+    fn enrich_noop_for_unhandled_type() {
         let mut value = json!({
             "lookups": {
                 "lookups": [{
                     "result": {
                         "Response": {
                             "records": [{
-                                "data": { "TXT": { "txt_data": [[104, 101, 108, 108, 111]] } }
+                                "data": { "A": "1.2.3.4" }
                             }]
                         }
                     }
@@ -396,5 +517,185 @@ mod tests {
         enrich_lookups_json(&mut value, "TXT");
         let txt_obj = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
         assert_eq!(txt_obj["txt_string"], "hello world");
+    }
+
+    // --- CAA formatting tests ---
+
+    #[test]
+    fn format_caa_issue_empty() {
+        let obj = json!({"issuer_critical": false, "tag": "issue", "value": ""});
+        let out = format_caa_human(&obj).unwrap();
+        assert_eq!(out, "No CA is allowed to issue certificates");
+    }
+
+    #[test]
+    fn format_caa_issue_ca() {
+        let obj = json!({"issuer_critical": false, "tag": "issue", "value": "letsencrypt.org"});
+        let out = format_caa_human(&obj).unwrap();
+        assert_eq!(out, "Allow letsencrypt.org to issue certificates");
+    }
+
+    #[test]
+    fn format_caa_issuewild_empty() {
+        let obj = json!({"issuer_critical": false, "tag": "issuewild", "value": ""});
+        let out = format_caa_human(&obj).unwrap();
+        assert_eq!(
+            out,
+            "No CA is allowed to issue wildcard certificates"
+        );
+    }
+
+    #[test]
+    fn format_caa_issuewild_ca() {
+        let obj = json!({"issuer_critical": false, "tag": "issuewild", "value": "letsencrypt.org"});
+        let out = format_caa_human(&obj).unwrap();
+        assert_eq!(
+            out,
+            "Allow letsencrypt.org to issue wildcard certificates"
+        );
+    }
+
+    #[test]
+    fn format_caa_iodef() {
+        let obj = json!({"issuer_critical": false, "tag": "iodef", "value": "mailto:security@example.com"});
+        let out = format_caa_human(&obj).unwrap();
+        assert_eq!(
+            out,
+            "Report policy violations to security@example.com"
+        );
+    }
+
+    #[test]
+    fn format_caa_critical() {
+        let obj = json!({"issuer_critical": true, "tag": "issue", "value": "letsencrypt.org"});
+        let out = format_caa_human(&obj).unwrap();
+        assert!(out.ends_with(" (critical)"), "got: {out}");
+    }
+
+    #[test]
+    fn format_caa_unknown_tag() {
+        let obj = json!({"issuer_critical": false, "tag": "contactemail", "value": "admin@example.com"});
+        let out = format_caa_human(&obj).unwrap();
+        assert_eq!(out, "contactemail admin@example.com");
+    }
+
+    // --- MX formatting tests ---
+
+    #[test]
+    fn format_mx_basic() {
+        let obj = json!({"preference": 10, "exchange": "mail.example.com."});
+        let out = format_mx_human(&obj).unwrap();
+        assert_eq!(out, "mail.example.com. with priority 10");
+    }
+
+    // --- SOA formatting tests ---
+
+    #[test]
+    fn format_soa_basic() {
+        let obj = json!({
+            "mname": "ns1.example.com.",
+            "rname": "admin.example.com.",
+            "serial": 2024010101u64,
+            "refresh": 3600,
+            "retry": 900,
+            "expire": 604800,
+            "minimum": 86400
+        });
+        let out = format_soa_human(&obj).unwrap();
+        assert!(out.contains("Primary NS: ns1.example.com."), "got: {out}");
+        assert!(out.contains("Contact: admin@example.com"), "got: {out}");
+        assert!(out.contains("Serial: 2024010101"), "got: {out}");
+        assert!(out.contains("Refresh: 3600"), "got: {out}");
+        assert!(out.contains("Retry: 900"), "got: {out}");
+        assert!(out.contains("Expire: 604800"), "got: {out}");
+        assert!(out.contains("Minimum TTL: 86400"), "got: {out}");
+    }
+
+    // --- enrich integration tests for CAA/MX/SOA ---
+
+    #[test]
+    fn enrich_caa_injects_human() {
+        let mut value = json!({
+            "lookups": {
+                "lookups": [{
+                    "result": {
+                        "Response": {
+                            "records": [{
+                                "data": {
+                                    "CAA": {
+                                        "issuer_critical": false,
+                                        "tag": "issue",
+                                        "value": "letsencrypt.org"
+                                    }
+                                }
+                            }]
+                        }
+                    }
+                }]
+            }
+        });
+        enrich_lookups_json(&mut value, "CAA");
+        let caa = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["CAA"];
+        assert_eq!(
+            caa["caa_human"],
+            "Allow letsencrypt.org to issue certificates"
+        );
+    }
+
+    #[test]
+    fn enrich_mx_injects_human() {
+        let mut value = json!({
+            "lookups": {
+                "lookups": [{
+                    "result": {
+                        "Response": {
+                            "records": [{
+                                "data": {
+                                    "MX": {
+                                        "preference": 10,
+                                        "exchange": "mail.example.com."
+                                    }
+                                }
+                            }]
+                        }
+                    }
+                }]
+            }
+        });
+        enrich_lookups_json(&mut value, "MX");
+        let mx = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["MX"];
+        assert_eq!(mx["mx_human"], "mail.example.com. with priority 10");
+    }
+
+    #[test]
+    fn enrich_soa_injects_human() {
+        let mut value = json!({
+            "lookups": {
+                "lookups": [{
+                    "result": {
+                        "Response": {
+                            "records": [{
+                                "data": {
+                                    "SOA": {
+                                        "mname": "ns1.example.com.",
+                                        "rname": "admin.example.com.",
+                                        "serial": 2024010101u64,
+                                        "refresh": 3600,
+                                        "retry": 900,
+                                        "expire": 604800,
+                                        "minimum": 86400
+                                    }
+                                }
+                            }]
+                        }
+                    }
+                }]
+            }
+        });
+        enrich_lookups_json(&mut value, "SOA");
+        let soa = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["SOA"];
+        let human = soa["soa_human"].as_str().unwrap();
+        assert!(human.contains("Primary NS: ns1.example.com."), "got: {human}");
+        assert!(human.contains("Serial: 2024010101"), "got: {human}");
     }
 }

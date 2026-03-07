@@ -142,10 +142,12 @@ function formatRecordData(data: Record<string, unknown>): string {
 function formatStructuredRecord(rtype: string, value: Record<string, unknown>): string {
   switch (rtype) {
     case 'MX':
+      if (typeof value.mx_human === 'string') return value.mx_human;
       return `${value.preference} ${value.exchange}`;
     case 'SRV':
       return `${value.priority} ${value.weight} ${value.port} ${value.target}`;
     case 'SOA':
+      if (typeof value.soa_human === 'string') return value.soa_human;
       return `${value.mname} ${value.rname} (serial: ${value.serial})`;
     case 'TXT': {
       const txt = value as Record<string, unknown>;
@@ -155,6 +157,7 @@ function formatStructuredRecord(rtype: string, value: Record<string, unknown>): 
       return JSON.stringify(value);
     }
     case 'CAA':
+      if (typeof value.caa_human === 'string') return value.caa_human;
       return `${value.issuer_critical ? '!' : ''}${value.tag} "${value.value}"`;
     case 'NAPTR':
       return `${value.order} ${value.preference} "${value.flags}" "${value.services}" "${value.regexp}" ${value.replacement}`;
@@ -233,43 +236,17 @@ function interpretRecord(rtype: string, data: Record<string, unknown>): string |
   if (value && typeof value === 'object') {
     const obj = value as Record<string, unknown>;
     if (rtype === 'CAA' || keys[0] === 'CAA') {
-      return interpretCAA(obj);
+      if (typeof obj.caa_human === 'string') return obj.caa_human;
     }
     if (rtype === 'MX' || keys[0] === 'MX') {
-      const pref = obj.preference;
-      if (typeof pref === 'number') {
-        if (pref === 0) return 'Highest priority mail server';
-        if (pref <= 10) return 'High priority mail server';
-        if (pref <= 20) return 'Normal priority mail server';
-        return 'Backup mail server';
-      }
+      if (typeof obj.mx_human === 'string') return obj.mx_human;
     }
     if (rtype === 'SOA' || keys[0] === 'SOA') {
-      return interpretSOA(obj);
+      if (typeof obj.soa_human === 'string') return obj.soa_human;
     }
   }
 
   return null;
-}
-
-
-function interpretCAA(obj: Record<string, unknown>): string {
-  const tag = obj.tag as string | undefined;
-  const val = obj.value as string | undefined;
-  if (tag === 'issue') return `CA authorized to issue certificates: ${val}`;
-  if (tag === 'issuewild') return `CA authorized for wildcard certificates: ${val}`;
-  if (tag === 'iodef') return `Incident reports sent to: ${val}`;
-  return `CAA ${tag}: ${val}`;
-}
-
-function interpretSOA(obj: Record<string, unknown>): string {
-  const parts: string[] = [];
-  if (obj.serial) parts.push(`serial ${obj.serial}`);
-  if (obj.refresh) parts.push(`refresh ${obj.refresh}s`);
-  if (obj.retry) parts.push(`retry ${obj.retry}s`);
-  if (obj.expire) parts.push(`expire ${obj.expire}s`);
-  if (obj.minimum) parts.push(`min TTL ${obj.minimum}s`);
-  return parts.join(', ');
 }
 
 
@@ -285,17 +262,18 @@ function lookupsAgree(lookups: Lookup[]): boolean {
   // All NxDomain → trivially agree
   if (lookups.every((l) => isNxDomain(l.result))) return true;
 
-  // All Response with same record data → agree (TTL may differ)
+  // All Response with same record data → agree (TTL may differ, order may differ)
   const responses = lookups.filter((l) => isResponse(l.result));
   if (responses.length !== lookups.length) return false; // mixed outcome
 
-  const ref = JSON.stringify(
-    (responses[0].result as ResponseResult).Response.records.map((r) => r.data),
-  );
-  return responses.every(
-    (l) =>
-      JSON.stringify((l.result as ResponseResult).Response.records.map((r) => r.data)) === ref,
-  );
+  const normalize = (l: Lookup) => {
+    const recs = (l.result as ResponseResult).Response.records.map((r) => JSON.stringify(r.data));
+    recs.sort();
+    return recs.join('\n');
+  };
+
+  const ref = normalize(responses[0]);
+  return responses.every((l) => normalize(l) === ref);
 }
 
 /** Returns true if servers returned different results for this group. */

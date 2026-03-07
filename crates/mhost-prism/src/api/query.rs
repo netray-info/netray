@@ -27,7 +27,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
-use crate::txt_format;
+use crate::record_format;
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ApiError, ErrorResponse};
@@ -437,7 +437,7 @@ async fn execute_query(
                             let event = {
                                 let mut v = serde_json::to_value(&batch)
                                     .unwrap_or(serde_json::Value::Null);
-                                txt_format::enrich_lookups_json(&mut v, &batch.record_type);
+                                record_format::enrich_lookups_json(&mut v, &batch.record_type);
                                 Event::default()
                                     .event("batch")
                                     .json_data(&v)
