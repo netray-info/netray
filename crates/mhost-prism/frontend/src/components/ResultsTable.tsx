@@ -145,8 +145,7 @@ function formatStructuredRecord(rtype: string, value: Record<string, unknown>): 
       return `${value.mname} ${value.rname} (serial: ${value.serial})`;
     case 'TXT': {
       const txt = value as Record<string, unknown>;
-      // Cell shows plain decoded text — compact, single line.
-      // txt_human (multi-line formatted) is reserved for the expanded detail view.
+      if (typeof txt.txt_human === 'string') return txt.txt_human;
       if (typeof txt.txt_string === 'string') return txt.txt_string;
       if (Array.isArray(txt.txt_data)) return JSON.stringify(txt.txt_data);
       return JSON.stringify(value);
