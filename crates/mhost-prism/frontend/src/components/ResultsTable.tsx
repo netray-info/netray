@@ -85,6 +85,10 @@ interface ResultsTableProps {
   status: Status;
   error: string | null;
   activeTab: ActiveTab;
+  hideNx: boolean;
+  compact: boolean;
+  devOnly: boolean;
+  sort: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -268,6 +272,45 @@ function interpretSOA(obj: Record<string, unknown>): string {
   return parts.join(', ');
 }
 
+
+// ---------------------------------------------------------------------------
+// Agreement detection
+// ---------------------------------------------------------------------------
+
+/** Returns true if all lookups in a group return identical results (all NxDomain or all
+ *  Response with the same record values). Used for compact rendering. */
+function lookupsAgree(lookups: Lookup[]): boolean {
+  if (lookups.length < 2) return false;
+
+  // All NxDomain → trivially agree
+  if (lookups.every((l) => isNxDomain(l.result))) return true;
+
+  // All Response with same record data → agree (TTL may differ)
+  const responses = lookups.filter((l) => isResponse(l.result));
+  if (responses.length !== lookups.length) return false; // mixed outcome
+
+  const ref = JSON.stringify(
+    (responses[0].result as ResponseResult).Response.records.map((r) => r.data),
+  );
+  return responses.every(
+    (l) =>
+      JSON.stringify((l.result as ResponseResult).Response.records.map((r) => r.data)) === ref,
+  );
+}
+
+/** Returns true if servers returned different results for this group. */
+function hasDeviation(lookups: Lookup[]): boolean {
+  if (lookups.length < 2) return false;
+  return !lookupsAgree(lookups);
+}
+
+/** Sort tier: 0 = deviation, 1 = normal records, 2 = all-NxDomain. */
+function groupTier(g: GroupedResult): number {
+  if (hasDeviation(g.lookups)) return 0;
+  if (g.lookups.every((l) => isNxDomain(l.result))) return 2;
+  return 1;
+}
+
 // ---------------------------------------------------------------------------
 // Grouped results
 // ---------------------------------------------------------------------------
@@ -330,8 +373,22 @@ function RecordGroup(props: {
   focusedKey: string | null;
   expandedKeys: Set<string>;
   onRowClick: (key: string) => void;
+  compact: boolean;
 }) {
   const [collapsed, setCollapsed] = createSignal(false);
+
+  const deviated = createMemo(() => hasDeviation(props.group.lookups));
+  const agreed = createMemo(() => props.compact && lookupsAgree(props.group.lookups));
+
+  // In compact+agree mode render only the first lookup; all others are identical.
+  const displayLookups = createMemo(() =>
+    agreed() ? [props.group.lookups[0]] : props.group.lookups,
+  );
+
+  // Label shown in the Server column when all servers agree.
+  const serverAgreementLabel = createMemo(() =>
+    agreed() ? `${props.group.lookups.length}/${props.group.lookups.length} servers` : null,
+  );
 
   const totalRecords = createMemo(() => {
     let count = 0;
@@ -368,6 +425,12 @@ function RecordGroup(props: {
           {props.group.recordType}
         </span>
         <span class="record-count">{totalRecords()} record{totalRecords() !== 1 ? 's' : ''}</span>
+        <Show when={deviated()}>
+          <span class="deviation-badge">differs</span>
+        </Show>
+        <Show when={agreed()}>
+          <span class="agree-badge">agree</span>
+        </Show>
         <span class="collapse-indicator">{collapsed() ? '+' : '\u2212'}</span>
       </button>
       <Show when={!collapsed()}>
@@ -382,7 +445,7 @@ function RecordGroup(props: {
             </tr>
           </thead>
           <tbody>
-            <For each={props.group.lookups}>
+            <For each={displayLookups()}>
               {(lookup, i) => (
                 <LookupRows
                   lookup={lookup}
@@ -392,6 +455,7 @@ function RecordGroup(props: {
                   expandedKeys={props.expandedKeys}
                   onRowClick={props.onRowClick}
                   maxResponseTimeMs={maxResponseTimeMs()}
+                  serverOverride={serverAgreementLabel()}
                 />
               )}
             </For>
@@ -414,8 +478,9 @@ function LookupRows(props: {
   expandedKeys: Set<string>;
   onRowClick: (key: string) => void;
   maxResponseTimeMs: number;
+  serverOverride?: string | null;
 }) {
-  const server = createMemo(() => formatServer(props.lookup.name_server));
+  const server = createMemo(() => props.serverOverride ?? formatServer(props.lookup.name_server));
   const transport = createMemo(() => extractTransport(props.lookup.name_server));
 
   return (
@@ -582,6 +647,26 @@ function JsonView(props: { results: BatchEvent[]; stats: DoneStats | null }) {
 
 export function ResultsTable(props: ResultsTableProps) {
   const groups = createMemo(() => groupByRecordType(props.results));
+
+  // Apply view filters and optional sort on top of the grouped data
+  const displayGroups = createMemo(() => {
+    let gs = groups();
+    if (props.hideNx) {
+      gs = gs.filter((g) => g.lookups.some((l) => !isNxDomain(l.result)));
+    }
+    if (props.devOnly) {
+      gs = gs.filter((g) => hasDeviation(g.lookups));
+    }
+    if (props.sort) {
+      gs = [...gs].sort((a, b) => {
+        const td = groupTier(a) - groupTier(b);
+        if (td !== 0) return td;
+        return a.recordType.localeCompare(b.recordType);
+      });
+    }
+    return gs;
+  });
+
   const [focusedKey, setFocusedKey] = createSignal<string | null>(null);
   const [expandedKeys, setExpandedKeys] = createSignal<Set<string>>(new Set());
   let containerRef: HTMLDivElement | undefined;
@@ -721,13 +806,14 @@ export function ResultsTable(props: ResultsTableProps) {
         </Show>
 
         {/* Record groups */}
-        <For each={groups()}>
+        <For each={displayGroups()}>
           {(group) => (
             <RecordGroup
               group={group}
               focusedKey={focusedKey()}
               expandedKeys={expandedKeys()}
               onRowClick={handleRowClick}
+              compact={props.compact}
             />
           )}
         </For>

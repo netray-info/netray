@@ -10,7 +10,25 @@ type Theme = 'dark' | 'light' | 'system';
 
 const HISTORY_KEY = 'prism_history';
 const THEME_KEY = 'prism_theme';
+const VIEW_PREFS_KEY = 'prism_view_prefs';
 const MAX_HISTORY = 50;
+
+interface ViewPrefs { hideNx: boolean; compact: boolean; devOnly: boolean; sort: boolean; }
+
+function loadViewPrefs(): ViewPrefs {
+  try {
+    const raw = localStorage.getItem(VIEW_PREFS_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      return { hideNx: Boolean(p.hideNx), compact: Boolean(p.compact), devOnly: Boolean(p.devOnly), sort: Boolean(p.sort) };
+    }
+  } catch { /* ignore */ }
+  return { hideNx: true, compact: true, devOnly: false, sort: true };
+}
+
+function saveViewPrefs(prefs: ViewPrefs) {
+  try { localStorage.setItem(VIEW_PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ }
+}
 
 function loadHistory(): string[] {
   try {
@@ -148,6 +166,21 @@ export default function App() {
   const [history, setHistory] = createSignal<string[]>(loadHistory());
   const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
   const [showHelp, setShowHelp] = createSignal(false);
+
+  // View options
+  const vp = loadViewPrefs();
+  const [hideNx, setHideNx] = createSignal(vp.hideNx);
+  const [compact, setCompact] = createSignal(vp.compact);
+  const [devOnly, setDevOnly] = createSignal(vp.devOnly);
+  const [sortView, setSortView] = createSignal(vp.sort);
+
+  function currentViewPrefs(): ViewPrefs {
+    return { hideNx: hideNx(), compact: compact(), devOnly: devOnly(), sort: sortView() };
+  }
+  function toggleHideNx() { const n = !hideNx(); setHideNx(n); saveViewPrefs({ ...currentViewPrefs(), hideNx: n }); }
+  function toggleCompact() { const n = !compact(); setCompact(n); saveViewPrefs({ ...currentViewPrefs(), compact: n }); }
+  function toggleDevOnly() { const n = !devOnly(); setDevOnly(n); saveViewPrefs({ ...currentViewPrefs(), devOnly: n }); }
+  function toggleSort()    { const n = !sortView(); setSortView(n); saveViewPrefs({ ...currentViewPrefs(), sort: n }); }
 
   // Check mode state
   const [isCheckMode, setIsCheckMode] = createSignal(false);
@@ -921,6 +954,16 @@ export default function App() {
               </button>
             </div>
 
+            {/* View option toggles — results tab only */}
+            <Show when={activeTab() === 'results' && results().length > 0}>
+              <div class="view-options">
+                <button class={`view-btn${hideNx() ? ' active' : ''}`} onClick={toggleHideNx} title="Hide groups where all servers returned NXDOMAIN">hide NX</button>
+                <button class={`view-btn${compact() ? ' active' : ''}`} onClick={toggleCompact} title="Collapse groups where all servers agree">compact</button>
+                <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only groups where servers diverge">deviations</button>
+                <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: deviations first, then records, then NXDOMAIN">sort</button>
+              </div>
+            </Show>
+
             {/* Status bar — query mode */}
             <Show when={!isCheckMode() && !isTraceMode() && status() === 'done' && stats()}>
               <div class="status-info">
@@ -1018,6 +1061,10 @@ export default function App() {
               status={status()}
               error={error()}
               activeTab={activeTab() as 'results' | 'servers' | 'json'}
+              hideNx={hideNx()}
+              compact={compact()}
+              devOnly={devOnly()}
+              sort={sortView()}
             />
           </div>
         </Show>
