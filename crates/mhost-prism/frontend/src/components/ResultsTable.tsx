@@ -276,7 +276,8 @@ function IpValue(props: { ip: string; ifconfigUrl?: string | null }) {
 /** Render small badge pills for IP enrichment metadata. */
 function IpBadges(props: { info: IpInfo }) {
   const badges: Array<{ label: string; cls: string }> = [];
-  if (props.info.cloud) badges.push({ label: props.info.cloud, cls: 'ip-badge--cloud' });
+  const cloud = props.info.cloud;
+  if (cloud?.provider) badges.push({ label: cloud.provider, cls: 'ip-badge--cloud' });
   else if (props.info.ip_type) badges.push({ label: props.info.ip_type, cls: props.info.ip_type === 'residential' ? 'ip-badge--residential' : 'ip-badge--datacenter' });
   if (props.info.is_tor) badges.push({ label: 'Tor', cls: 'ip-badge--threat' });
   if (props.info.is_vpn) badges.push({ label: 'VPN', cls: 'ip-badge--threat' });

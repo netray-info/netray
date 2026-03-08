@@ -11,6 +11,17 @@ use std::time::Duration;
 use futures::stream::{FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
 
+/// Cloud provider metadata from the ifconfig API.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CloudInfo {
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub region: Option<String>,
+    #[serde(default)]
+    pub service: Option<String>,
+}
+
 /// Metadata about a single IP address from the ifconfig API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpInfo {
@@ -18,20 +29,21 @@ pub struct IpInfo {
     pub asn: Option<u32>,
     #[serde(default)]
     pub org: Option<String>,
-    #[serde(default)]
+    /// IP type: "datacenter", "cloud", "residential", "mobile", etc.
+    #[serde(default, rename = "type")]
     pub ip_type: Option<String>,
     #[serde(default)]
-    pub cloud: Option<String>,
+    pub cloud: Option<CloudInfo>,
     #[serde(default)]
-    pub is_tor: Option<bool>,
+    pub is_tor: bool,
     #[serde(default)]
-    pub is_vpn: Option<bool>,
+    pub is_vpn: bool,
     #[serde(default)]
-    pub is_proxy: Option<bool>,
+    pub is_datacenter: bool,
     #[serde(default)]
-    pub is_spamhaus: Option<bool>,
+    pub is_spamhaus: bool,
     #[serde(default)]
-    pub is_c2: Option<bool>,
+    pub is_c2: bool,
 }
 
 /// Service for looking up IP metadata via an ifconfig-rs compatible API.

@@ -10,14 +10,20 @@ type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers';
 type Theme = 'dark' | 'light' | 'system';
 
+export interface CloudInfo {
+  provider?: string;
+  region?: string;
+  service?: string;
+}
+
 export interface IpInfo {
   asn?: number;
   org?: string;
-  ip_type?: string;
-  cloud?: string;
+  ip_type?: string;   // "type" in JSON, renamed by serde
+  cloud?: CloudInfo;
   is_tor?: boolean;
   is_vpn?: boolean;
-  is_proxy?: boolean;
+  is_datacenter?: boolean;
   is_spamhaus?: boolean;
   is_c2?: boolean;
 }

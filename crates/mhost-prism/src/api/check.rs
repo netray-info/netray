@@ -520,19 +520,19 @@ fn check_infrastructure(
     let mut has_concern = false;
 
     for (ip, info) in enrichments {
-        if info.is_spamhaus == Some(true) {
+        if info.is_spamhaus {
             results.push(CheckResult::Failed(format!(
                 "{ip} is listed on Spamhaus blocklists"
             )));
             has_concern = true;
         }
-        if info.is_c2 == Some(true) {
+        if info.is_c2 {
             results.push(CheckResult::Failed(format!(
                 "{ip} is associated with command-and-control infrastructure"
             )));
             has_concern = true;
         }
-        if info.is_tor == Some(true) {
+        if info.is_tor {
             results.push(CheckResult::Warning(format!(
                 "{ip} is a Tor exit node — unusual for DNS infrastructure"
             )));

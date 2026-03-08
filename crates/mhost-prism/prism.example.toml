@@ -108,3 +108,20 @@
 # Allow @<ip> to query arbitrary IP addresses.
 # When false, only predefined providers and @system are accepted.
 #allow_arbitrary_servers = false
+
+# ---------------------------------------------------------------------------
+# [ecosystem] — External service integration
+# ---------------------------------------------------------------------------
+[ecosystem]
+
+# Public URL for ifconfig-style IP lookups (frontend clickable IP links).
+# When set, A/AAAA record values and trace server IPs become clickable links.
+#ifconfig_url = "https://ip.pdt.sh"
+
+# Backend API URL for IP enrichment fetches. Defaults to ifconfig_url if unset.
+# Useful when the public URL differs from the internal API endpoint.
+#ifconfig_api_url = "https://ip.pdt.sh"
+
+# Timeout for enrichment HTTP requests in milliseconds (default: 500, hard cap: 2000).
+# Enrichment never blocks DNS results — it runs after all DNS queries complete.
+#enrichment_timeout_ms = 500
