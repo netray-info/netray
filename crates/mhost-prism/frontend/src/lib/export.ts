@@ -92,16 +92,54 @@ function extractRows(batches: BatchEvent[]): ExportRow[] {
 // Markdown
 // ---------------------------------------------------------------------------
 
-export function toMarkdown(batches: BatchEvent[]): string {
+export interface MarkdownContext {
+  query: string;
+  stats: DoneStats | null;
+  agreeCounts?: { agree: number; diverge: number };
+}
+
+export function toMarkdown(batches: BatchEvent[], ctx?: MarkdownContext): string {
   const rows = extractRows(batches);
   if (rows.length === 0) return '';
 
-  const header = '| Name | TTL | Type | Value | Server | Time |';
-  const separator = '|------|-----|------|-------|--------|------|';
-  const lines = rows.map(
-    (r) => `| ${r.name} | ${r.ttl} | ${r.type} | ${r.value} | ${r.server} | ${r.time} |`,
-  );
-  return [header, separator, ...lines].join('\n');
+  const parts: string[] = [];
+
+  // Header with context
+  if (ctx?.query) {
+    parts.push(`# DNS Results: \`${ctx.query}\``);
+    parts.push('');
+    const meta: string[] = [];
+    meta.push(`**Date:** ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`);
+    if (ctx.stats) {
+      const servers = new Set<string>();
+      for (const batch of batches) {
+        for (const lookup of batch.lookups) {
+          servers.add(formatServer(lookup.name_server));
+        }
+      }
+      if (servers.size > 0) meta.push(`**Servers:** ${[...servers].join(', ')}`);
+      const summary = [`${ctx.stats.total_queries} queries`, `${batches.length} batches`, `${ctx.stats.duration_ms}ms`];
+      if (ctx.stats.transport && ctx.stats.transport !== 'udp') summary.push(ctx.stats.transport.toUpperCase());
+      if (ctx.stats.dnssec) summary.push('DNSSEC');
+      if (ctx.agreeCounts) {
+        if (ctx.agreeCounts.agree > 0) summary.push(`${ctx.agreeCounts.agree} agree`);
+        if (ctx.agreeCounts.diverge > 0) summary.push(`${ctx.agreeCounts.diverge} diverge`);
+      }
+      meta.push(`**Summary:** ${summary.join(' / ')}`);
+    }
+    parts.push(meta.join('  \n'));
+    parts.push('');
+  }
+
+  // Table
+  const mdEscape = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  parts.push('| Name | TTL | Type | Value | Server | Time |');
+  parts.push('|------|-----|------|-------|--------|------|');
+  for (const r of rows) {
+    parts.push(`| ${mdEscape(r.name)} | ${r.ttl} | ${r.type} | ${mdEscape(r.value)} | ${mdEscape(r.server)} | ${r.time} |`);
+  }
+
+  return parts.join('\n');
 }
 
 // ---------------------------------------------------------------------------

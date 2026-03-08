@@ -4,10 +4,10 @@ import { ResultsTable, parseBatchEvent, groupByRecordType, lookupsAgree, hasDevi
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
 import { TraceView, type TraceHop, type TraceDoneStats } from './components/TraceView';
 import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/DnssecView';
-import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard } from './lib/export';
+import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
-type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'json';
+type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers';
 type Theme = 'dark' | 'light' | 'system';
 
 const HISTORY_KEY = 'prism_history';
@@ -823,7 +823,7 @@ export default function App() {
       if (isDnssecMode()) visibleTabs.push('dnssec');
       if (isTraceMode()) visibleTabs.push('trace');
       if (isCheckMode()) visibleTabs.push('lint');
-      visibleTabs.push('results', 'servers', 'json');
+      visibleTabs.push('results', 'servers');
       const idx = visibleTabs.indexOf(activeTab());
       if (idx === -1) return;
       const next = e.key === 'l'
@@ -1014,85 +1014,27 @@ export default function App() {
         </Show>
 
         <Show when={hasContent()}>
+          {/* Row 1: Tabs */}
           <div class="tabs">
             <div class="tabs-left" role="tablist">
-              {/* DNSSEC tab — only visible in dnssec mode */}
               <Show when={isDnssecMode()}>
-                <button
-                  role="tab"
-                  aria-selected={activeTab() === 'dnssec'}
-                  class={`tab${activeTab() === 'dnssec' ? ' active' : ''}`}
-                  onClick={() => setActiveTab('dnssec')}
-                >
-                  DNSSEC
-                </button>
+                <button role="tab" aria-selected={activeTab() === 'dnssec'} class={`tab${activeTab() === 'dnssec' ? ' active' : ''}`} onClick={() => setActiveTab('dnssec')}>DNSSEC</button>
               </Show>
-              {/* Trace tab — only visible in trace mode */}
               <Show when={isTraceMode()}>
-                <button
-                  role="tab"
-                  aria-selected={activeTab() === 'trace'}
-                  class={`tab${activeTab() === 'trace' ? ' active' : ''}`}
-                  onClick={() => setActiveTab('trace')}
-                >
-                  Trace
-                </button>
+                <button role="tab" aria-selected={activeTab() === 'trace'} class={`tab${activeTab() === 'trace' ? ' active' : ''}`} onClick={() => setActiveTab('trace')}>Trace</button>
               </Show>
-              {/* Lint tab — only visible in check mode */}
               <Show when={isCheckMode()}>
-                <button
-                  role="tab"
-                  aria-selected={activeTab() === 'lint'}
-                  class={`tab${activeTab() === 'lint' ? ' active' : ''}${
-                    checkStats()?.failed ? ' tab--failed' : checkStats()?.warnings ? ' tab--warning' : ''
-                  }`}
-                  onClick={() => setActiveTab('lint')}
-                >
-                  Lint{lintTabBadge()}
-                </button>
+                <button role="tab" aria-selected={activeTab() === 'lint'} class={`tab${activeTab() === 'lint' ? ' active' : ''}${checkStats()?.failed ? ' tab--failed' : checkStats()?.warnings ? ' tab--warning' : ''}`} onClick={() => setActiveTab('lint')}>Lint{lintTabBadge()}</button>
               </Show>
-              <button
-                role="tab"
-                aria-selected={activeTab() === 'results'}
-                class={`tab ${activeTab() === 'results' ? 'active' : ''}`}
-                onClick={() => setActiveTab('results')}
-              >
-                Results
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab() === 'servers'}
-                class={`tab ${activeTab() === 'servers' ? 'active' : ''}`}
-                onClick={() => setActiveTab('servers')}
-              >
-                Servers
-              </button>
-              <button
-                role="tab"
-                aria-selected={activeTab() === 'json'}
-                class={`tab ${activeTab() === 'json' ? 'active' : ''}`}
-                onClick={() => setActiveTab('json')}
-              >
-                JSON
-              </button>
+              <button role="tab" aria-selected={activeTab() === 'results'} class={`tab ${activeTab() === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Results</button>
+              <button role="tab" aria-selected={activeTab() === 'servers'} class={`tab ${activeTab() === 'servers' ? 'active' : ''}`} onClick={() => setActiveTab('servers')}>Servers</button>
+
             </div>
+          </div>
 
-            {/* View option toggles — results tab only */}
-            <Show when={activeTab() === 'results' && results().length > 0}>
-              <div class="view-options">
-                <button class={`view-btn${hideNx() ? ' active' : ''}`} onClick={toggleHideNx} title="Hide groups where all servers returned NXDOMAIN">hide NX</button>
-                <button class={`view-btn${compact() ? ' active' : ''}`} onClick={toggleCompact} title="Collapse groups where all servers agree">compact</button>
-                <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only groups where servers diverge">deviations</button>
-                <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: deviations first, then records, then NXDOMAIN">sort</button>
-                <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields in expanded rows">explain</button>
-                <span class="view-options-sep" />
-                <button class="view-btn" onClick={() => setExpandAllTrigger((n) => n + 1)} title="Expand all record rows">expand all</button>
-                <button class="view-btn" onClick={() => setCollapseAllTrigger((n) => n + 1)} title="Collapse all record rows">collapse all</button>
-              </div>
-            </Show>
-
-            {/* Status bar — loading (check / trace / dnssec / combinations) */}
-            <Show when={isLoading()}>
+          {/* Row 2: Summary + actions (or loading status) */}
+          <Show when={isLoading()}>
+            <div class="toolbar-row">
               <div class="status-info">
                 <span class="status-loading-text">
                   {isCheckMode() && isTraceMode() ? 'Tracing + Checking…'
@@ -1105,53 +1047,70 @@ export default function App() {
                 </span>
                 <button class="cancel-btn" onClick={cancelQuery} title="Cancel query">cancel</button>
               </div>
-            </Show>
-
-            {/* Export buttons — visible when results are available */}
-            <Show when={status() === 'done' && results().length > 0}>
-              <div class="export-buttons">
+            </div>
+          </Show>
+          <Show when={status() === 'done' && results().length > 0}>
+            <div class="toolbar-row">
+              <div class="results-summary">
+                <span class="results-summary-item">{stats()!.total_queries} queries</span>
+                <span class="results-summary-sep">/</span>
+                <span class="results-summary-item">{results().length} batches</span>
+                <span class="results-summary-sep">/</span>
+                <span class="results-summary-item">{stats()!.duration_ms}ms</span>
+                <Show when={stats()!.transport && stats()!.transport !== 'udp'}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item status-badge transport-badge">{stats()!.transport!.toUpperCase()}</span>
+                </Show>
+                <Show when={stats()!.dnssec}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item status-badge dnssec-badge">DNSSEC</span>
+                </Show>
+                <Show when={stats()!.warnings.length > 0}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item status-warnings" title={stats()!.warnings.join('; ')}>{stats()!.warnings.length} warning{stats()!.warnings.length !== 1 ? 's' : ''}</span>
+                </Show>
+                <Show when={agreementCounts().agree > 0}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item agree-badge" aria-label="All servers agree">{agreementCounts().agree} agree</span>
+                </Show>
+                <Show when={agreementCounts().diverge > 0}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item deviation-badge" aria-label="Results diverge">{agreementCounts().diverge} diverge</span>
+                </Show>
+              </div>
+              <div class="toolbar-actions">
                 <button
                   class="export-btn"
                   onClick={() => {
-                    copyToClipboard(toMarkdown(results())).then((ok) => {
-                      if (ok) {
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 1500);
-                      }
+                    const ctx: MarkdownContext = { query: query(), stats: stats(), agreeCounts: agreementCounts() };
+                    copyToClipboard(toMarkdown(results(), ctx)).then((ok) => {
+                      if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1500); }
                     });
                   }}
                   title="Copy results as Markdown table"
-                >
-                  {copied() ? 'Copied' : 'Copy MD'}
-                </button>
-                <button
-                  class="export-btn"
-                  onClick={() => downloadFile(toCsv(results()), 'dns-results.csv', 'text/csv')}
-                  title="Download results as CSV"
-                >
-                  CSV
-                </button>
-                <button
-                  class="export-btn"
-                  onClick={() => downloadFile(toJson(results(), stats()), 'dns-results.json', 'application/json')}
-                  title="Download results as JSON"
-                >
-                  JSON
-                </button>
+                >{copied() ? 'Copied' : 'Copy MD'}</button>
+                <button class="export-btn" onClick={() => downloadFile(toCsv(results()), 'dns-results.csv', 'text/csv')} title="Download results as CSV">CSV</button>
+                <button class="export-btn" onClick={() => downloadFile(toJson(results(), stats()), 'dns-results.json', 'application/json')} title="Download results as JSON">JSON</button>
+                <Show when={cacheKey()}>
+                  <button class="share-btn" onClick={copyShareLink} title="Copy shareable permalink to clipboard">{shareMessage() ?? 'Share'}</button>
+                </Show>
               </div>
-            </Show>
+            </div>
+          </Show>
 
-            {/* Share button */}
-            <Show when={status() === 'done' && cacheKey()}>
-              <button
-                class="share-btn"
-                onClick={copyShareLink}
-                title="Copy shareable permalink to clipboard"
-              >
-                {shareMessage() ?? 'Share'}
-              </button>
-            </Show>
-          </div>
+          {/* Row 3: View options — results tab only */}
+          <Show when={activeTab() === 'results' && results().length > 0}>
+            <div class="view-options">
+              <button class={`view-btn${hideNx() ? ' active' : ''}`} onClick={toggleHideNx} title="Hide groups where all servers returned NXDOMAIN">hide NX</button>
+              <button class={`view-btn${compact() ? ' active' : ''}`} onClick={toggleCompact} title="Collapse groups where all servers agree">compact</button>
+              <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only groups where servers diverge">deviations</button>
+              <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: deviations first, then records, then NXDOMAIN">sort</button>
+              <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields in expanded rows">explain</button>
+              <span class="view-options-spacer" />
+              <button class="view-btn" onClick={() => setExpandAllTrigger((n) => n + 1)} title="Expand all record rows">expand all</button>
+              <button class="view-btn" onClick={() => setCollapseAllTrigger((n) => n + 1)} title="Collapse all record rows">collapse all</button>
+            </div>
+          </Show>
         </Show>
 
         {/*
@@ -1200,43 +1159,12 @@ export default function App() {
         {/* Results / Servers / JSON — always mounted, hidden when another pane is active */}
         <Show when={hasContent()}>
           <div id="main-content" style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' && activeTab() !== 'dnssec' ? 'block' : 'none' }}>
-            <Show when={activeTab() === 'results' && stats()}>
-              <div class="results-summary">
-                <span class="results-summary-item">{stats()!.total_queries} queries</span>
-                <span class="results-summary-sep">/</span>
-                <span class="results-summary-item">{results().length} batches</span>
-                <span class="results-summary-sep">/</span>
-                <span class="results-summary-item">{stats()!.duration_ms}ms</span>
-                <Show when={stats()!.transport && stats()!.transport !== 'udp'}>
-                  <span class="results-summary-sep">/</span>
-                  <span class="results-summary-item status-badge transport-badge">{stats()!.transport!.toUpperCase()}</span>
-                </Show>
-                <Show when={stats()!.dnssec}>
-                  <span class="results-summary-sep">/</span>
-                  <span class="results-summary-item status-badge dnssec-badge">DNSSEC</span>
-                </Show>
-                <Show when={stats()!.warnings.length > 0}>
-                  <span class="results-summary-sep">/</span>
-                  <span class="results-summary-item status-warnings" title={stats()!.warnings.join('; ')}>
-                    {stats()!.warnings.length} warning{stats()!.warnings.length !== 1 ? 's' : ''}
-                  </span>
-                </Show>
-                <Show when={agreementCounts().agree > 0}>
-                  <span class="results-summary-sep">/</span>
-                  <span class="results-summary-item agree-badge" aria-label="All servers agree">{agreementCounts().agree} agree</span>
-                </Show>
-                <Show when={agreementCounts().diverge > 0}>
-                  <span class="results-summary-sep">/</span>
-                  <span class="results-summary-item deviation-badge" aria-label="Results diverge">{agreementCounts().diverge} diverge</span>
-                </Show>
-              </div>
-            </Show>
             <ResultsTable
               results={results()}
               stats={stats()}
               status={status()}
               error={error()}
-              activeTab={activeTab() as 'results' | 'servers' | 'json'}
+              activeTab={activeTab() as 'results' | 'servers'}
               hideNx={hideNx()}
               compact={compact()}
               devOnly={devOnly()}

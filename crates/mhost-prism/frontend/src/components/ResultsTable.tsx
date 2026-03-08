@@ -78,7 +78,7 @@ export interface DoneStats {
 }
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
-type ActiveTab = 'results' | 'servers' | 'json';
+type ActiveTab = 'results' | 'servers';
 
 interface ResultsTableProps {
   results: BatchEvent[];
@@ -604,40 +604,6 @@ function formatTTLHuman(ttl: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// JSON View
-// ---------------------------------------------------------------------------
-
-function JsonView(props: { results: BatchEvent[]; stats: DoneStats | null }) {
-  const [copied, setCopied] = createSignal(false);
-
-  const json = createMemo(() => {
-    const data: { batches: BatchEvent[]; stats: DoneStats | null } = {
-      batches: props.results,
-      stats: props.stats,
-    };
-    return JSON.stringify(data, null, 2);
-  });
-
-  function copyToClipboard() {
-    navigator.clipboard.writeText(json()).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }
-
-  return (
-    <div class="json-view">
-      <div class="json-toolbar">
-        <button class="json-copy-btn" onClick={copyToClipboard} title="Copy JSON to clipboard">
-          {copied() ? '\u2713 Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre><code>{json()}</code></pre>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -869,10 +835,6 @@ export function ResultsTable(props: ResultsTableProps) {
 
       <Show when={props.activeTab === 'servers'}>
         <ServerComparison results={props.results} activeTab={props.activeTab} />
-      </Show>
-
-      <Show when={props.activeTab === 'json'}>
-        <JsonView results={props.results} stats={props.stats} />
       </Show>
 
     </div>
