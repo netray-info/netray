@@ -33,18 +33,32 @@ pub fn format_txt_human(txt: &TXT) -> String {
                         };
                         let mech_str = match mechanism {
                             Mechanism::All => "all".to_string(),
-                            Mechanism::A { domain_spec, cidr_len } => {
+                            Mechanism::A {
+                                domain_spec,
+                                cidr_len,
+                            } => {
                                 let mut s = "a".to_string();
-                                if let Some(d) = domain_spec { s = format!("a:{d}"); }
-                                if let Some(c) = cidr_len { s = format!("{s}/{c}"); }
+                                if let Some(d) = domain_spec {
+                                    s = format!("a:{d}");
+                                }
+                                if let Some(c) = cidr_len {
+                                    s = format!("{s}/{c}");
+                                }
                                 s
                             }
                             Mechanism::IPv4(ip) => format!("ip4:{ip}"),
                             Mechanism::IPv6(ip) => format!("ip6:{ip}"),
-                            Mechanism::MX { domain_spec, cidr_len } => {
+                            Mechanism::MX {
+                                domain_spec,
+                                cidr_len,
+                            } => {
                                 let mut s = "mx".to_string();
-                                if let Some(d) = domain_spec { s = format!("mx:{d}"); }
-                                if let Some(c) = cidr_len { s = format!("{s}/{c}"); }
+                                if let Some(d) = domain_spec {
+                                    s = format!("mx:{d}");
+                                }
+                                if let Some(c) = cidr_len {
+                                    s = format!("{s}/{c}");
+                                }
                                 s
                             }
                             Mechanism::PTR(d) => match d {
@@ -104,10 +118,18 @@ pub fn format_txt_human(txt: &TXT) -> String {
             lines.join("\n")
         }
         Ok(ParsedTxt::MtaSts(mta_sts)) => {
-            format!("MTA-STS version {}\nid: {}", mta_sts.version(), mta_sts.id())
+            format!(
+                "MTA-STS version {}\nid: {}",
+                mta_sts.version(),
+                mta_sts.id()
+            )
         }
         Ok(ParsedTxt::TlsRpt(tls_rpt)) => {
-            format!("TLS-RPT version {}\nrua: {}", tls_rpt.version(), tls_rpt.rua())
+            format!(
+                "TLS-RPT version {}\nrua: {}",
+                tls_rpt.version(),
+                tls_rpt.rua()
+            )
         }
         Ok(ParsedTxt::Bimi(bimi)) => {
             let mut lines = vec![format!("BIMI version {}", bimi.version())];
@@ -382,7 +404,10 @@ pub fn format_svcb_explain(obj: &serde_json::Value) -> Option<String> {
         "Lower priority value is tried first.".to_string(),
     ];
 
-    let target = obj.get("target_name").and_then(|v| v.as_str()).unwrap_or("");
+    let target = obj
+        .get("target_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     if target == "." {
         lines.push("Target \".\" means the queried domain itself.".to_string());
     }
@@ -391,9 +416,15 @@ pub fn format_svcb_explain(obj: &serde_json::Value) -> Option<String> {
         for param in params {
             let key = param.get("key").and_then(|k| k.as_str()).unwrap_or("");
             let explanation = match key {
-                "alpn" => Some("ALPN advertises supported application protocols for the connection."),
-                "ipv4hint" | "ipv6hint" => Some("Address hints let clients skip extra A/AAAA lookups."),
-                "ech" => Some("Encrypted Client Hello hides the server name from network observers."),
+                "alpn" => {
+                    Some("ALPN advertises supported application protocols for the connection.")
+                }
+                "ipv4hint" | "ipv6hint" => {
+                    Some("Address hints let clients skip extra A/AAAA lookups.")
+                }
+                "ech" => {
+                    Some("Encrypted Client Hello hides the server name from network observers.")
+                }
                 _ => None,
             };
             if let Some(e) = explanation {
@@ -442,15 +473,25 @@ pub fn format_tlsa_explain(obj: &serde_json::Value) -> Option<String> {
     let matching = obj.get("matching")?.as_str()?;
 
     let usage_explain = match cert_usage {
-        "PKIX-TA" | "PkixTa" => "PKIX-TA: must chain to this CA and pass standard PKIX/WebPKI validation.",
-        "PKIX-EE" | "PkixEe" => "PKIX-EE: server must present this exact certificate, validated via PKIX.",
-        "DANE-TA" | "DaneTa" => "DANE-TA: must chain to this trust anchor (CA pinning via DNS, bypasses WebPKI).",
-        "DANE-EE" | "DaneEe" => "DANE-EE: pins the server's certificate directly via DNS (no CA chain needed).",
+        "PKIX-TA" | "PkixTa" => {
+            "PKIX-TA: must chain to this CA and pass standard PKIX/WebPKI validation."
+        }
+        "PKIX-EE" | "PkixEe" => {
+            "PKIX-EE: server must present this exact certificate, validated via PKIX."
+        }
+        "DANE-TA" | "DaneTa" => {
+            "DANE-TA: must chain to this trust anchor (CA pinning via DNS, bypasses WebPKI)."
+        }
+        "DANE-EE" | "DaneEe" => {
+            "DANE-EE: pins the server's certificate directly via DNS (no CA chain needed)."
+        }
         _ => "Unknown certificate usage mode.",
     };
     let selector_explain = match selector {
         "Full" => "Full: matches the entire certificate.",
-        "SPKI" | "Spki" => "SPKI: matches the Subject Public Key Info only (survives cert renewal if key is reused).",
+        "SPKI" | "Spki" => {
+            "SPKI: matches the Subject Public Key Info only (survives cert renewal if key is reused)."
+        }
         _ => "",
     };
     let matching_explain = match matching {
@@ -619,9 +660,7 @@ pub fn format_dnskey_explain(obj: &serde_json::Value) -> Option<String> {
     lines.push("The key tag is a numeric identifier used to match this key to DS records in the parent zone.".to_string());
 
     if flags & 0x0080 != 0 {
-        lines.push(
-            "REVOKED: this key has been marked as no longer trusted.".to_string(),
-        );
+        lines.push("REVOKED: this key has been marked as no longer trusted.".to_string());
     }
 
     Some(lines.join("\n"))
@@ -754,16 +793,86 @@ fn friendly_alpn(alpn: &str) -> String {
 pub fn enrich_lookups_json(value: &mut serde_json::Value, record_type: &str) {
     match record_type {
         "TXT" | "_dmarc" => enrich_txt(value),
-        "CAA" => enrich_dual(value, "CAA", format_caa_human, format_caa_explain, "caa_human", "caa_explain"),
-        "MX" => enrich_dual(value, "MX", format_mx_human, format_mx_explain, "mx_human", "mx_explain"),
-        "SOA" => enrich_dual(value, "SOA", format_soa_human, format_soa_explain, "soa_human", "soa_explain"),
-        "SVCB" => enrich_dual(value, "SVCB", format_svcb_human, format_svcb_explain, "svcb_human", "svcb_explain"),
-        "HTTPS" => enrich_dual(value, "HTTPS", format_svcb_human, format_svcb_explain, "svcb_human", "svcb_explain"),
-        "TLSA" => enrich_dual(value, "TLSA", format_tlsa_human, format_tlsa_explain, "tlsa_human", "tlsa_explain"),
-        "NAPTR" => enrich_dual(value, "NAPTR", format_naptr_human, format_naptr_explain, "naptr_human", "naptr_explain"),
-        "DNSKEY" => enrich_dual(value, "DNSKEY", format_dnskey_human, format_dnskey_explain, "dnskey_human", "dnskey_explain"),
-        "DS" => enrich_dual(value, "DS", format_ds_human, format_ds_explain, "ds_human", "ds_explain"),
-        "NSEC" => enrich_dual(value, "NSEC", format_nsec_human, format_nsec_explain, "nsec_human", "nsec_explain"),
+        "CAA" => enrich_dual(
+            value,
+            "CAA",
+            format_caa_human,
+            format_caa_explain,
+            "caa_human",
+            "caa_explain",
+        ),
+        "MX" => enrich_dual(
+            value,
+            "MX",
+            format_mx_human,
+            format_mx_explain,
+            "mx_human",
+            "mx_explain",
+        ),
+        "SOA" => enrich_dual(
+            value,
+            "SOA",
+            format_soa_human,
+            format_soa_explain,
+            "soa_human",
+            "soa_explain",
+        ),
+        "SVCB" => enrich_dual(
+            value,
+            "SVCB",
+            format_svcb_human,
+            format_svcb_explain,
+            "svcb_human",
+            "svcb_explain",
+        ),
+        "HTTPS" => enrich_dual(
+            value,
+            "HTTPS",
+            format_svcb_human,
+            format_svcb_explain,
+            "svcb_human",
+            "svcb_explain",
+        ),
+        "TLSA" => enrich_dual(
+            value,
+            "TLSA",
+            format_tlsa_human,
+            format_tlsa_explain,
+            "tlsa_human",
+            "tlsa_explain",
+        ),
+        "NAPTR" => enrich_dual(
+            value,
+            "NAPTR",
+            format_naptr_human,
+            format_naptr_explain,
+            "naptr_human",
+            "naptr_explain",
+        ),
+        "DNSKEY" => enrich_dual(
+            value,
+            "DNSKEY",
+            format_dnskey_human,
+            format_dnskey_explain,
+            "dnskey_human",
+            "dnskey_explain",
+        ),
+        "DS" => enrich_dual(
+            value,
+            "DS",
+            format_ds_human,
+            format_ds_explain,
+            "ds_human",
+            "ds_explain",
+        ),
+        "NSEC" => enrich_dual(
+            value,
+            "NSEC",
+            format_nsec_human,
+            format_nsec_explain,
+            "nsec_human",
+            "nsec_explain",
+        ),
         _ => {}
     }
 }
@@ -860,8 +969,8 @@ fn enrich_dual(
 
         for ri in 0..record_count {
             let (human, explain) = {
-                let data = &value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]
-                    ["data"][data_key];
+                let data = &value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]["data"]
+                    [data_key];
                 (human_fn(data), explain_fn(data))
             };
 
@@ -933,7 +1042,10 @@ mod tests {
     fn format_dmarc_explain_present() {
         let txt = make_txt("v=DMARC1; p=reject");
         let out = format_txt_explain(&txt).unwrap();
-        assert!(out.contains("Domain-based Message Authentication"), "got: {out}");
+        assert!(
+            out.contains("Domain-based Message Authentication"),
+            "got: {out}"
+        );
         assert!(out.contains("reject"), "got: {out}");
     }
 
@@ -1077,7 +1189,10 @@ mod tests {
             "minimum": 86400
         });
         let out = format_soa_human(&obj).unwrap();
-        assert!(out.contains("Primary nameserver: ns1.example.com."), "got: {out}");
+        assert!(
+            out.contains("Primary nameserver: ns1.example.com."),
+            "got: {out}"
+        );
         assert!(out.contains("Contact: admin@example.com"), "got: {out}");
         assert!(out.contains("Serial: 2024010101"), "got: {out}");
     }
@@ -1114,7 +1229,10 @@ mod tests {
         });
         let out = format_svcb_human(&obj).unwrap();
         assert!(out.contains("Priority: 1, Target: self"), "got: {out}");
-        assert!(out.contains("Protocols: h2 (HTTP/2), h3 (HTTP/3)"), "got: {out}");
+        assert!(
+            out.contains("Protocols: h2 (HTTP/2), h3 (HTTP/3)"),
+            "got: {out}"
+        );
         assert!(out.contains("Port: 443"), "got: {out}");
     }
 
@@ -1188,7 +1306,10 @@ mod tests {
         });
         let out = format_naptr_human(&obj).unwrap();
         assert!(out.contains("(non-terminal)"), "got: {out}");
-        assert!(out.contains("Replacement: _sip._tcp.example.com."), "got: {out}");
+        assert!(
+            out.contains("Replacement: _sip._tcp.example.com."),
+            "got: {out}"
+        );
     }
 
     #[test]
@@ -1296,7 +1417,10 @@ mod tests {
         });
         let out = format_nsec_human(&obj).unwrap();
         assert!(out.contains("Next: \\000.example.com."), "got: {out}");
-        assert!(out.contains("Types: A, NS, SOA, MX, TXT, AAAA, NSEC"), "got: {out}");
+        assert!(
+            out.contains("Types: A, NS, SOA, MX, TXT, AAAA, NSEC"),
+            "got: {out}"
+        );
     }
 
     #[test]
@@ -1381,7 +1505,10 @@ mod tests {
         let human = txt_obj["txt_human"].as_str().unwrap();
         assert!(human.contains("SPF version"), "got: {human}");
         let explain = txt_obj["txt_explain"].as_str().unwrap();
-        assert!(explain.contains("Sender Policy Framework"), "got: {explain}");
+        assert!(
+            explain.contains("Sender Policy Framework"),
+            "got: {explain}"
+        );
     }
 
     #[test]
@@ -1468,7 +1595,12 @@ mod tests {
         let caa =
             &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["CAA"];
         assert_eq!(caa["caa_human"], "issue: letsencrypt.org");
-        assert!(caa["caa_explain"].as_str().unwrap().contains("Certification Authority"));
+        assert!(
+            caa["caa_explain"]
+                .as_str()
+                .unwrap()
+                .contains("Certification Authority")
+        );
     }
 
     #[test]
@@ -1495,7 +1627,12 @@ mod tests {
         let mx = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["MX"];
         let human = mx["mx_human"].as_str().unwrap();
         assert_eq!(human, "mail.example.com. with priority 10");
-        assert!(mx["mx_explain"].as_str().unwrap().contains("Lower priority"));
+        assert!(
+            mx["mx_explain"]
+                .as_str()
+                .unwrap()
+                .contains("Lower priority")
+        );
     }
 
     #[test]
@@ -1523,7 +1660,12 @@ mod tests {
         let svcb =
             &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["SVCB"];
         assert!(svcb["svcb_human"].as_str().unwrap().contains("Alias mode"));
-        assert!(svcb["svcb_explain"].as_str().unwrap().contains("Alias mode"));
+        assert!(
+            svcb["svcb_explain"]
+                .as_str()
+                .unwrap()
+                .contains("Alias mode")
+        );
     }
 
     #[test]
@@ -1550,8 +1692,8 @@ mod tests {
             }
         });
         enrich_lookups_json(&mut value, "DNSKEY");
-        let dnskey = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]
-            ["DNSKEY"];
+        let dnskey =
+            &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["DNSKEY"];
         let human = dnskey["dnskey_human"].as_str().unwrap();
         assert!(human.contains("KSK"), "got: {human}");
         let explain = dnskey["dnskey_explain"].as_str().unwrap();
@@ -1607,9 +1749,15 @@ mod tests {
             }
         });
         enrich_lookups_json(&mut value, "NSEC");
-        let nsec = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["NSEC"];
+        let nsec =
+            &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["NSEC"];
         assert!(nsec["nsec_human"].as_str().unwrap().contains("A, NS, SOA"));
-        assert!(nsec["nsec_explain"].as_str().unwrap().contains("denial of existence"));
+        assert!(
+            nsec["nsec_explain"]
+                .as_str()
+                .unwrap()
+                .contains("denial of existence")
+        );
     }
 
     #[test]
@@ -1700,7 +1848,17 @@ mod tests {
         enrich_lookups_json(&mut value, "NAPTR");
         let naptr =
             &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["NAPTR"];
-        assert!(naptr["naptr_human"].as_str().unwrap().contains("Order: 100"));
-        assert!(naptr["naptr_explain"].as_str().unwrap().contains("Name Authority Pointer"));
+        assert!(
+            naptr["naptr_human"]
+                .as_str()
+                .unwrap()
+                .contains("Order: 100")
+        );
+        assert!(
+            naptr["naptr_explain"]
+                .as_str()
+                .unwrap()
+                .contains("Name Authority Pointer")
+        );
     }
 }
