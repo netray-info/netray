@@ -1169,6 +1169,171 @@ body {
 }
 
 /* ===================================================================
+   Transport Comparison
+   =================================================================== */
+
+.transport-comparison {
+  min-height: 100px;
+}
+
+.tc-empty {
+  text-align: center;
+  padding: 64px 24px;
+  color: var(--text-secondary);
+}
+
+.tc-empty p {
+  margin-bottom: 8px;
+}
+
+.tc-empty .hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tc-empty code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-dim);
+  background: var(--bg-secondary);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.tc-type-group {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.tc-type-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tc-agreement {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tc-agreement.agree {
+  color: var(--success);
+}
+
+.tc-agreement.diverge {
+  color: var(--warning);
+}
+
+.tc-transport-grid {
+  display: grid;
+  gap: 0;
+}
+
+.tc-transport-column {
+  padding: 10px 14px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.tc-transport-column:last-child {
+  border-right: none;
+}
+
+.tc-transport-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tc-transport-result {
+  margin-bottom: 8px;
+}
+
+.tc-transport-result:last-child {
+  margin-bottom: 0;
+}
+
+.tc-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.tc-status {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.tc-status.status-ok {
+  color: var(--success);
+  background: rgba(68, 255, 68, 0.08);
+}
+
+[data-theme="light"] .tc-status.status-ok {
+  background: rgba(0, 136, 0, 0.08);
+}
+
+.tc-status.status-nxdomain {
+  color: var(--warning);
+  background: rgba(255, 170, 0, 0.08);
+}
+
+[data-theme="light"] .tc-status.status-nxdomain {
+  background: rgba(184, 110, 0, 0.08);
+}
+
+.tc-status.status-error {
+  color: var(--error);
+  background: var(--error-dim);
+}
+
+.tc-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.tc-records {
+  padding-left: 4px;
+}
+
+.tc-record-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  padding: 1px 0;
+  word-break: break-all;
+  white-space: pre-line;
+}
+
+.tc-record-value.tc-nxdomain {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.tc-record-value.tc-error {
+  color: var(--error);
+}
+
+.tc-type-group--focused {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent), 0 0 0 1px var(--accent-glow);
+}
+
+/* ===================================================================
    Modal (shared for Help and ToS)
    =================================================================== */
 

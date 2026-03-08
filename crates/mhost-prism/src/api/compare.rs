@@ -35,7 +35,12 @@ use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::security::QueryPolicy;
 
 // All four transports to compare.
-const ALL_TRANSPORTS: [Transport; 4] = [Transport::Udp, Transport::Tcp, Transport::Tls, Transport::Https];
+const ALL_TRANSPORTS: [Transport; 4] = [
+    Transport::Udp,
+    Transport::Tcp,
+    Transport::Tls,
+    Transport::Https,
+];
 
 fn transport_name(t: Transport) -> &'static str {
     match t {
@@ -177,9 +182,13 @@ pub async fn post_handler(
 
         // For each available transport, build resolvers and run all record types.
         // Use FuturesUnordered to run transports concurrently.
-        type TransportResult = (Transport, Vec<(mhost::RecordType, mhost::resolver::Lookups, bool)>);
-        let transport_futs: FuturesUnordered<std::pin::Pin<Box<dyn std::future::Future<Output = TransportResult> + Send>>> =
-            FuturesUnordered::new();
+        type TransportResult = (
+            Transport,
+            Vec<(mhost::RecordType, mhost::resolver::Lookups, bool)>,
+        );
+        let transport_futs: FuturesUnordered<
+            std::pin::Pin<Box<dyn std::future::Future<Output = TransportResult> + Send>>,
+        > = FuturesUnordered::new();
 
         for t in &available_transports {
             let t = *t;
@@ -192,71 +201,96 @@ pub async fn post_handler(
             let domain = domain.clone();
 
             transport_futs.push(Box::pin(async move {
-                let (resolver_group, breaker_keys) = match build_resolver_group(&probe, &config, timeout).await {
-                    Ok(rg) => rg,
-                    Err(e) => {
-                        let _ = tx_err.send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string()))).await;
-                        return (t, Vec::new());
-                    }
-                };
+                let (resolver_group, breaker_keys) =
+                    match build_resolver_group(&probe, &config, timeout).await {
+                        Ok(rg) => rg,
+                        Err(e) => {
+                            let _ = tx_err
+                                .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
+                                .await;
+                            return (t, Vec::new());
+                        }
+                    };
                 let resolvers: Vec<mhost::resolver::Resolver> = resolver_group.resolvers().to_vec();
                 if resolvers.is_empty() {
-                    let _ = tx_err.send(Ok(make_error_event(
-                        "TRANSPORT_UNAVAILABLE",
-                        &format!("no resolvers support {}", transport_name(t)),
-                    ))).await;
+                    let _ = tx_err
+                        .send(Ok(make_error_event(
+                            "TRANSPORT_UNAVAILABLE",
+                            &format!("no resolvers support {}", transport_name(t)),
+                        )))
+                        .await;
                     return (t, Vec::new());
                 }
 
                 // Fan out per record type.
-                let rt_futs: FuturesUnordered<_> = record_types.iter().map(|rt| {
-                    let rt = *rt;
-                    let domain = domain.clone();
-                    let resolvers = resolvers.clone();
-                    let breaker_keys = breaker_keys.clone();
-                    let circuit_breakers = Arc::clone(&circuit_breakers);
-                    let tx_err = tx_err.clone();
-                    async move {
-                        let query = match MultiQuery::single(domain.as_str(), rt) {
-                            Ok(q) => q,
-                            Err(e) => {
-                                let _ = tx_err.send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string()))).await;
-                                return (rt, mhost::resolver::Lookups::empty(), true);
-                            }
-                        };
-
-                        let mut handles = Vec::with_capacity(resolvers.len());
-                        for (idx, resolver) in resolvers.iter().enumerate() {
-                            let breaker_key = &breaker_keys[idx];
-                            if let Err(crate::circuit_breaker::BreakerState::Open) = circuit_breakers.check(breaker_key) {
-                                continue;
-                            }
-                            let r = resolver.clone();
-                            let q = query.clone();
-                            handles.push(tokio::spawn(async move { r.lookup(q).await }));
-                        }
-
-                        let mut merged = mhost::resolver::Lookups::empty();
-                        let mut had_error = false;
-                        for handle in handles {
-                            match handle.await {
-                                Ok(Ok(lookups)) => {
-                                    record_breaker_outcomes(&circuit_breakers, &lookups);
-                                    merged = merged.merge(lookups);
-                                }
-                                Ok(Err(e)) => {
-                                    had_error = true;
-                                    let _ = tx_err.send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string()))).await;
-                                }
+                let rt_futs: FuturesUnordered<_> = record_types
+                    .iter()
+                    .map(|rt| {
+                        let rt = *rt;
+                        let domain = domain.clone();
+                        let resolvers = resolvers.clone();
+                        let breaker_keys = breaker_keys.clone();
+                        let circuit_breakers = Arc::clone(&circuit_breakers);
+                        let tx_err = tx_err.clone();
+                        async move {
+                            let query = match MultiQuery::single(domain.as_str(), rt) {
+                                Ok(q) => q,
                                 Err(e) => {
-                                    had_error = true;
-                                    let _ = tx_err.send(Ok(make_error_event("INTERNAL_ERROR", &e.to_string()))).await;
+                                    let _ = tx_err
+                                        .send(Ok(make_error_event(
+                                            "RESOLVER_ERROR",
+                                            &e.to_string(),
+                                        )))
+                                        .await;
+                                    return (rt, mhost::resolver::Lookups::empty(), true);
+                                }
+                            };
+
+                            let mut handles = Vec::with_capacity(resolvers.len());
+                            for (idx, resolver) in resolvers.iter().enumerate() {
+                                let breaker_key = &breaker_keys[idx];
+                                if let Err(crate::circuit_breaker::BreakerState::Open) =
+                                    circuit_breakers.check(breaker_key)
+                                {
+                                    continue;
+                                }
+                                let r = resolver.clone();
+                                let q = query.clone();
+                                handles.push(tokio::spawn(async move { r.lookup(q).await }));
+                            }
+
+                            let mut merged = mhost::resolver::Lookups::empty();
+                            let mut had_error = false;
+                            for handle in handles {
+                                match handle.await {
+                                    Ok(Ok(lookups)) => {
+                                        record_breaker_outcomes(&circuit_breakers, &lookups);
+                                        merged = merged.merge(lookups);
+                                    }
+                                    Ok(Err(e)) => {
+                                        had_error = true;
+                                        let _ = tx_err
+                                            .send(Ok(make_error_event(
+                                                "RESOLVER_ERROR",
+                                                &e.to_string(),
+                                            )))
+                                            .await;
+                                    }
+                                    Err(e) => {
+                                        had_error = true;
+                                        let _ = tx_err
+                                            .send(Ok(make_error_event(
+                                                "INTERNAL_ERROR",
+                                                &e.to_string(),
+                                            )))
+                                            .await;
+                                    }
                                 }
                             }
+                            (rt, merged, had_error)
                         }
-                        (rt, merged, had_error)
-                    }
-                }).collect();
+                    })
+                    .collect();
 
                 let results: Vec<_> = rt_futs.collect().await;
                 (t, results)

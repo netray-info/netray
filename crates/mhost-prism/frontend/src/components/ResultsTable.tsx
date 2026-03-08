@@ -47,6 +47,8 @@ interface RawBatchEvent {
   lookups: { lookups: Lookup[] };
   completed: number;
   total: number;
+  transport?: string;
+  source?: string;
 }
 
 export interface BatchEvent {
@@ -55,17 +57,22 @@ export interface BatchEvent {
   lookups: Lookup[];
   completed: number;
   total: number;
+  transport?: string;
+  source?: string;
 }
 
 /** Parse the raw backend format into a flat BatchEvent. */
 export function parseBatchEvent(raw: RawBatchEvent): BatchEvent {
-  return {
+  const ev: BatchEvent = {
     request_id: raw.request_id,
     record_type: raw.record_type,
     lookups: raw.lookups?.lookups ?? [],
     completed: raw.completed,
     total: raw.total,
   };
+  if (raw.transport) ev.transport = raw.transport;
+  if (raw.source) ev.source = raw.source;
+  return ev;
 }
 
 export interface DoneStats {

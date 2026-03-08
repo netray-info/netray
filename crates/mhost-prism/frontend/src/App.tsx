@@ -4,10 +4,11 @@ import { ResultsTable, parseBatchEvent, groupByRecordType, lookupsAgree, hasDevi
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
 import { TraceView, type TraceHop, type TraceDoneStats } from './components/TraceView';
 import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/DnssecView';
+import { TransportComparison } from './components/TransportComparison';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
-type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers';
+type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'transport';
 type Theme = 'dark' | 'light' | 'system';
 
 export interface CloudInfo {
@@ -95,6 +96,11 @@ function hasDnssecFlag(q: string): boolean {
   return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+dnssec');
 }
 
+/** Returns true if the query string contains the +compare flag. */
+function hasCompareFlag(q: string): boolean {
+  return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+compare');
+}
+
 /** Extract domain (first token) and @server specs from a query string. */
 function extractCheckParams(q: string): { domain: string; servers: string[] } {
   const tokens = q.trim().split(/\s+/);
@@ -106,11 +112,11 @@ function extractCheckParams(q: string): { domain: string; servers: string[] } {
   return { domain, servers };
 }
 
-/** Strip routing flags (+dnssec, +trace, +check) for background query. */
+/** Strip routing flags (+dnssec, +trace, +check, +compare) for background query. */
 function stripRoutingFlags(q: string): string {
   return q.trim().split(/\s+/).filter((t) => {
     const lower = t.toLowerCase();
-    return lower !== '+dnssec' && lower !== '+trace' && lower !== '+check';
+    return lower !== '+dnssec' && lower !== '+trace' && lower !== '+check' && lower !== '+compare';
   }).join(' ');
 }
 
@@ -236,6 +242,10 @@ export default function App() {
   const [dnssecLevels, setDnssecLevels] = createSignal<ChainLevel[]>([]);
   const [dnssecDoneStats, setDnssecDoneStats] = createSignal<DnssecDoneStats | null>(null);
 
+  // Compare mode state
+  const [isCompareMode, setIsCompareMode] = createSignal(false);
+  const [compareResults, setCompareResults] = createSignal<BatchEvent[]>([]);
+
   // IP enrichment
   const [ifconfigUrl, setIfconfigUrl] = createSignal<string | null>(null);
   const [enrichments, setEnrichments] = createSignal<Record<string, IpInfo>>({});
@@ -248,6 +258,7 @@ export default function App() {
   let checkAbortController: AbortController | null = null;
   let traceAbortController: AbortController | null = null;
   let dnssecAbortController: AbortController | null = null;
+  let compareAbortController: AbortController | null = null;
   let focusEditor: (() => void) | undefined;
   let clearEditor: (() => void) | undefined;
   let setEditorValue: ((v: string) => void) | undefined;
@@ -325,11 +336,19 @@ export default function App() {
     }
   }
 
+  function abortCompare() {
+    if (compareAbortController) {
+      compareAbortController.abort();
+      compareAbortController = null;
+    }
+  }
+
   function closeConnections() {
     closeEventSource();
     abortCheck();
     abortTrace();
     abortDnssec();
+    abortCompare();
   }
 
   function cancelQuery() {
@@ -365,6 +384,8 @@ export default function App() {
     setIsCheckMode(false);
     setIsTraceMode(false);
     setIsDnssecMode(false);
+    setIsCompareMode(false);
+    setCompareResults([]);
     setTraceHops([]);
     setTraceDoneStats(null);
     setDnssecLevels([]);
@@ -436,6 +457,9 @@ export default function App() {
     } else if (cached.mode === 'trace') {
       setIsTraceMode(true);
       setActiveTab('trace');
+    } else if (cached.mode === 'compare') {
+      setIsCompareMode(true);
+      setActiveTab('transport');
     } else {
       setActiveTab('results');
     }
@@ -445,6 +469,9 @@ export default function App() {
       if (ev.event_type === 'batch') {
         try {
           const batch = parseBatchEvent(ev.data as Parameters<typeof parseBatchEvent>[0]);
+          if (cached.mode === 'compare') {
+            setCompareResults((prev) => [...prev, batch]);
+          }
           setResults((prev) => [...prev, batch]);
         } catch { /* skip malformed */ }
       } else if (ev.event_type === 'lint') {
@@ -532,6 +559,7 @@ export default function App() {
     const wantCheck = hasCheckFlag(q);
     const wantTrace = hasTraceFlag(q);
     const wantDnssec = hasDnssecFlag(q);
+    const wantCompare = hasCompareFlag(q);
 
     const { domain, record_type } = extractTraceParams(q);
     const { domain: checkDomain, servers } = extractCheckParams(q);
@@ -546,15 +574,17 @@ export default function App() {
     setStats(null);
     setLintCategories([]);
     setCheckStats(null);
+    setCompareResults([]);
     setError(null);
     setIsTraceMode(wantTrace);
     setIsCheckMode(wantCheck);
     setIsDnssecMode(wantDnssec);
+    setIsCompareMode(wantCompare);
     setEnrichments({});
     setCacheKey(null);
     setStatus('loading');
-    // Pick the first active tab: dnssec > trace > lint
-    setActiveTab(wantDnssec ? 'dnssec' : wantTrace ? 'trace' : 'lint');
+    // Pick the first active tab: transport > dnssec > trace > lint
+    setActiveTab(wantCompare ? 'transport' : wantDnssec ? 'dnssec' : wantTrace ? 'trace' : 'lint');
     addToHistory(q);
 
     const url = new URL(window.location.href);
@@ -566,6 +596,7 @@ export default function App() {
     if (wantCheck) streamCount++;
     if (wantTrace) streamCount++;
     if (wantDnssec) streamCount++;
+    if (wantCompare) streamCount++;
 
     let doneCount = 0;
     function onStreamDone() {
@@ -576,7 +607,8 @@ export default function App() {
     // Background query to populate Results tab (strip all routing flags).
     if (wantCheck) {
       // Check already provides batch events — no separate background query needed.
-    } else {
+    } else if (!wantCompare) {
+      // Compare provides its own batch events — no separate background query needed.
       startBackgroundQuery(stripRoutingFlags(q));
     }
 
@@ -731,6 +763,69 @@ export default function App() {
         }, controller.signal);
       })();
     }
+
+    // Compare stream (provides batch events with transport field)
+    if (wantCompare) {
+      const controller = new AbortController();
+      compareAbortController = controller;
+
+      // Build the POST body: domain, record types, servers (same extraction as check).
+      const tokens = q.trim().split(/\s+/);
+      const compareDomain = tokens[0] ?? '';
+      const recordTypes = tokens.slice(1).filter((t) => /^[A-Za-z0-9]+$/.test(t) && !t.startsWith('@') && !t.startsWith('+')).map((t) => t.toUpperCase());
+      const compareServers = tokens.filter((t) => t.startsWith('@')).map((t) => t.slice(1));
+      const compareBody: Record<string, unknown> = { domain: compareDomain };
+      if (recordTypes.length > 0) compareBody.record_types = recordTypes;
+      if (compareServers.length > 0) compareBody.servers = compareServers;
+
+      (async () => {
+        let response: Response;
+        try {
+          response = await fetch('/api/compare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            body: JSON.stringify(compareBody),
+            signal: controller.signal,
+          });
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+          setError(e instanceof Error ? e.message : 'Network error');
+          onStreamDone();
+          return;
+        }
+        if (!response.ok) {
+          try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
+          catch { setError(`HTTP ${response.status}`); }
+          onStreamDone();
+          return;
+        }
+        await readPostStream(response, (eventType, data) => {
+          if (eventType === 'batch') {
+            try {
+              const batch = parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0]);
+              setCompareResults((prev) => [...prev, batch]);
+              // Also populate Results tab for the general view.
+              setResults((prev) => [...prev, batch]);
+              setCompletedTypes((prev) => prev.includes(batch.record_type) ? prev : [...prev, batch.record_type]);
+            } catch (e) { console.error('Failed to parse batch event:', e); }
+          } else if (eventType === 'enrichment') {
+            handleEnrichmentEvent(data);
+          } else if (eventType === 'done') {
+            const done = data as DoneStats & { transports?: string[]; cache_key?: string };
+            setStats({
+              total_queries: done.total_queries,
+              duration_ms: done.duration_ms,
+              warnings: done.warnings ?? [],
+            });
+            if (done.cache_key) setCacheKey(done.cache_key);
+            onStreamDone();
+          } else if (eventType === 'error') {
+            const ev = data as { message?: string; code?: string };
+            setError(ev.message ?? ev.code ?? 'Unknown error');
+          }
+        }, controller.signal);
+      })();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -741,9 +836,10 @@ export default function App() {
     const wantCheck = hasCheckFlag(q);
     const wantTrace = hasTraceFlag(q);
     const wantDnssec = hasDnssecFlag(q);
+    const wantCompare = hasCompareFlag(q);
 
     // Any combination of routing flags → unified combined handler.
-    if (wantCheck || wantTrace || wantDnssec) {
+    if (wantCheck || wantTrace || wantDnssec || wantCompare) {
       submitCombined(q);
       return;
     }
@@ -757,6 +853,8 @@ export default function App() {
     setIsCheckMode(false);
     setIsTraceMode(false);
     setIsDnssecMode(false);
+    setIsCompareMode(false);
+    setCompareResults([]);
     setTraceHops([]);
     setTraceDoneStats(null);
     setDnssecLevels([]);
@@ -876,6 +974,7 @@ export default function App() {
     if ((e.key === 'h' || e.key === 'l') && !isEditing && hasContent()) {
       e.preventDefault();
       const visibleTabs: ActiveTab[] = [];
+      if (isCompareMode()) visibleTabs.push('transport');
       if (isDnssecMode()) visibleTabs.push('dnssec');
       if (isTraceMode()) visibleTabs.push('trace');
       if (isCheckMode()) visibleTabs.push('lint');
@@ -937,7 +1036,7 @@ export default function App() {
   // ---------------------------------------------------------------------------
 
   const hasContent = () =>
-    status() !== 'idle' || results().length > 0 || lintCategories().length > 0 || traceHops().length > 0 || dnssecLevels().length > 0;
+    status() !== 'idle' || results().length > 0 || lintCategories().length > 0 || traceHops().length > 0 || dnssecLevels().length > 0 || compareResults().length > 0;
   const isLoading  = () => status() === 'loading';
 
   // Agreement/divergence counts for the results summary
@@ -1096,6 +1195,20 @@ export default function App() {
                 </button>
                 <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
+              <div class="welcome-card">
+                <div class="welcome-card-title">Compare</div>
+                <p class="welcome-card-desc">
+                  Query across all four transports — UDP, TCP, DoT, DoH — in parallel. Detect middlebox interference, protocol-specific filtering, or transport disagreements.
+                </p>
+                <button
+                  class="welcome-example"
+                  onClick={() => fillQuery('example.com A +compare')}
+                  title="Click to fill query"
+                >
+                  example.com A +compare
+                </button>
+                <span class="example-hint">fills the query bar — press Enter to run</span>
+              </div>
             </div>
           </div>
         </Show>
@@ -1104,6 +1217,9 @@ export default function App() {
           {/* Row 1: Tabs */}
           <div class="tabs">
             <div class="tabs-left" role="tablist">
+              <Show when={isCompareMode()}>
+                <button role="tab" aria-selected={activeTab() === 'transport'} class={`tab${activeTab() === 'transport' ? ' active' : ''}`} onClick={() => setActiveTab('transport')}>Transport</button>
+              </Show>
               <Show when={isDnssecMode()}>
                 <button role="tab" aria-selected={activeTab() === 'dnssec'} class={`tab${activeTab() === 'dnssec' ? ' active' : ''}${dnssecIssueCounts().errors ? ' tab--failed' : dnssecIssueCounts().warnings ? ' tab--warning' : ''}`} onClick={() => setActiveTab('dnssec')}>DNSSEC{dnssecTabBadge()}</button>
               </Show>
@@ -1125,6 +1241,7 @@ export default function App() {
               <div class="status-info">
                 <span class="status-loading-text">
                   {isCheckMode() && isTraceMode() ? 'Tracing + Checking…'
+                    : isCompareMode() ? 'Comparing transports…'
                     : isDnssecMode() ? 'Validating DNSSEC…'
                     : isCheckMode() ? 'Checking…'
                     : isTraceMode() ? 'Tracing…'
@@ -1203,6 +1320,14 @@ export default function App() {
               <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields">explain</button>
             </div>
           </Show>
+          {/* Row 3: View options — transport tab */}
+          <Show when={activeTab() === 'transport' && compareResults().length > 0}>
+            <div class="view-options">
+              <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only record types where transports diverge">deviations</button>
+              <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: divergences first">sort</button>
+              <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields">explain</button>
+            </div>
+          </Show>
         </Show>
 
         {/*
@@ -1212,6 +1337,19 @@ export default function App() {
           as a visible page shift. Keeping all panes in the DOM and toggling
           display avoids that intermediate empty state entirely.
         */}
+
+        {/* Transport tab pane — mounted once compare mode starts */}
+        <Show when={isCompareMode()}>
+          <div style={{ display: activeTab() === 'transport' ? 'block' : 'none' }}>
+            <TransportComparison
+              results={compareResults()}
+              activeTab={activeTab()}
+              explain={explain()}
+              sort={sortView()}
+              devOnly={devOnly()}
+            />
+          </div>
+        </Show>
 
         {/* DNSSEC tab pane — mounted once dnssec mode starts */}
         <Show when={isDnssecMode()}>
@@ -1252,7 +1390,7 @@ export default function App() {
 
         {/* Results / Servers / JSON — always mounted, hidden when another pane is active */}
         <Show when={hasContent()}>
-          <div id="main-content" style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' && activeTab() !== 'dnssec' ? 'block' : 'none' }}>
+          <div id="main-content" style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' && activeTab() !== 'dnssec' && activeTab() !== 'transport' ? 'block' : 'none' }}>
             <ResultsTable
               results={results()}
               stats={stats()}
@@ -1335,6 +1473,7 @@ export default function App() {
                   <tr><td class="help-token">+dnssec</td><td>DNSSEC chain-of-trust validation</td></tr>
                   <tr><td class="help-token">+check</td><td>Domain health check (15 types + DMARC lint)</td></tr>
                   <tr><td class="help-token">+trace</td><td>Delegation trace (root → authoritative)</td></tr>
+                  <tr><td class="help-token">+compare</td><td>Transport comparison (UDP/TCP/TLS/HTTPS)</td></tr>
                 </tbody>
               </table>
             </div>
