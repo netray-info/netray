@@ -2,7 +2,7 @@
 
 **Status**: Draft
 **Author**: Lukas Pustina
-**Parent SDD**: `docs/sdd.md` (tlsight core)
+**Parent SDD**: `docs/done/sdd-2026-03-08.md` (tlsight core)
 
 ---
 

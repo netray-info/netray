@@ -30,7 +30,7 @@
 
 - **Author**: Lukas Pustina | **License**: MIT
 - **Repository**: Standalone repo. Depends on `mhost` as a published crate (no `app` feature).
-- **SDD**: `docs/sdd.md` — the authoritative design document for all architecture decisions.
+- **SDD**: `docs/done/sdd-2026-03-08.md` — the original design document (archived). Active design docs live in `docs/`.
 
 Core principles:
 
@@ -41,7 +41,7 @@ Core principles:
 
 ## Design Document
 
-The Software Design Document (`docs/sdd.md`) is the source of truth for architecture, API design, security model, and phased delivery. Always consult it before making design decisions. Key sections:
+The Software Design Document (`docs/done/sdd-2026-03-08.md`) is the source of truth for architecture, API design, security model, and phased delivery. Always consult it before making design decisions. Key sections:
 
 - **§4** Input language (hostname[:port[,port...]])
 - **§5** API endpoints (inspect, health, ready, meta, OpenAPI)
