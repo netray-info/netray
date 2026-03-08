@@ -1,7 +1,7 @@
 # Software Design Document: `tlsight`
 
 **Feature**: Web-based TLS certificate inspection and diagnostics service
-**Status**: Phase 2 Complete
+**Status**: Phase 3 Partial (CT log checking deferred)
 **Date**: 2026-03-08
 
 ---
@@ -1337,16 +1337,16 @@ Socket options:
 - [x] CAA record fetch and issuer cross-check (mhost DNS, RFC 8659 tree-climbing)
 - [x] TLSA record fetch and DANE matching logic (RFC 6698, runtime-skipped until DNSSEC)
 
-### Phase 3 — Polish
+### Phase 3 — Polish (partial)
 
-- Multi-port scanning (up to 5 ports per request)
-- Port presets in frontend (HTTPS, Email, All common)
-- POST endpoint for programmatic clients
-- Keyboard shortcuts
-- Query history (localStorage)
-- Mobile-responsive layout
-- Certificate Transparency log checking (optional, requires external API)
-- Export results (JSON download, copy as markdown)
+- [x] Multi-port scanning (up to 5 ports per request, concurrent via JoinSet)
+- [x] Port presets in frontend (HTTPS, Email, All common)
+- [x] POST endpoint for programmatic clients (JSON body with hostname, ports, options)
+- [x] Keyboard shortcuts (/ and Ctrl+L to focus, Escape to blur)
+- [x] Query history (localStorage, max 20 entries)
+- [x] Mobile-responsive layout (320px minimum, scrollable tables)
+- [ ] Certificate Transparency log checking (optional, requires external API)
+- [x] Export results (JSON download, copy as markdown)
 
 ### Phase 4 — Advanced
 
