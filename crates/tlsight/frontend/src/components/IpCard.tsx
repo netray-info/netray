@@ -1,5 +1,6 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, createEffect, Show, For } from 'solid-js';
 import type { IpResult } from '../lib/types';
+import { certDisplayName } from '../lib/cert';
 import TlsParams from './TlsParams';
 import CtView from './CtView';
 import ChainView from './ChainView';
@@ -8,6 +9,7 @@ import CertDetail from './CertDetail';
 interface Props {
   result: IpResult;
   defaultExpanded: boolean;
+  expanded?: boolean;
 }
 
 type Status = 'pass' | 'warn' | 'fail' | 'error' | 'neutral';
@@ -47,14 +49,17 @@ function daysClass(days: number): string {
 
 export default function IpCard(props: Props) {
   const [expanded, setExpanded] = createSignal(props.defaultExpanded);
+  createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
+  const [certsExpanded, setCertsExpanded] = createSignal(false);
 
   const status = () => computeStatus(props.result);
   const leaf = () => props.result.chain?.[0];
   const tls = () => props.result.tls;
   const hasBody = () => !props.result.error && (props.result.tls || props.result.chain);
+  const hasCerts = () => (props.result.chain?.length ?? 0) > 0;
 
   return (
-    <div class={`ip-card ip-card--${status()}`}>
+    <div class={`ip-card ip-card--${status()}`} data-card>
       <button
         class="ip-card__header"
         onClick={() => hasBody() && setExpanded(!expanded())}
@@ -97,7 +102,7 @@ export default function IpCard(props: Props) {
       <Show when={!props.result.error && leaf()}>
         {(l) => (
           <div class="ip-card__leaf-summary">
-            <span>{l().subject}</span>
+            <span>{certDisplayName(l().subject)}</span>
             <span class="ip-card__leaf-sep">|</span>
             <span>{l().issuer.replace(/^.*O=/, '').replace(/,.*$/, '')}</span>
             <span class="ip-card__leaf-sep">|</span>
@@ -136,9 +141,19 @@ export default function IpCard(props: Props) {
             {(chain) => (
               <>
                 <ChainView chain={chain()} />
+                <Show when={hasCerts()}>
+                  <div class="ip-card__cert-toolbar">
+                    <button
+                      class="detail-toggle"
+                      onClick={() => setCertsExpanded(!certsExpanded())}
+                    >
+                      {certsExpanded() ? 'Collapse all' : 'Expand all'}
+                    </button>
+                  </div>
+                </Show>
                 <div class="cert-details">
                   <For each={chain()}>
-                    {(cert) => <CertDetail cert={cert} />}
+                    {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} />}
                   </For>
                 </div>
               </>

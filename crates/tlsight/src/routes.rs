@@ -781,7 +781,7 @@ mod tests {
                 max_concurrent_handshakes: 10,
                 handshake_timeout_secs: 5,
                 request_timeout_secs: 15,
-                max_ports: 5,
+                max_ports: 7,
                 max_ips_per_hostname: 10,
                 max_domain_length: 253,
             },
@@ -848,7 +848,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert!(body["version"].is_string());
         assert!(body["features"]["multi_port"].as_bool().unwrap());
-        assert_eq!(body["limits"]["max_ports"], 5);
+        assert_eq!(body["limits"]["max_ports"], 7);
     }
 
     #[tokio::test]

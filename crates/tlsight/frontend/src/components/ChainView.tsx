@@ -1,4 +1,5 @@
 import type { CertInfo } from '../lib/types';
+import { certDisplayName } from '../lib/cert';
 
 interface Props {
   chain: CertInfo[];
@@ -14,7 +15,7 @@ export default function ChainView(props: Props) {
             {i > 0 && <span class="chain-view__arrow">→</span>}
             <div class={`chain-view__cert chain-view__cert--${cert.position}`}>
               <div class="chain-view__position">{cert.position}</div>
-              <div class="chain-view__subject">{cert.subject}</div>
+              <div class="chain-view__subject">{certDisplayName(cert.subject)}</div>
               <div class="chain-view__days">{cert.days_remaining} days left</div>
               <div class="chain-view__key">{cert.key_type} {cert.key_size}</div>
             </div>

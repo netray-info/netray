@@ -1,17 +1,20 @@
-import { createSignal } from 'solid-js';
+import { createSignal, createEffect } from 'solid-js';
 import type { CertInfo } from '../lib/types';
+import { certDisplayName } from '../lib/cert';
 
 interface Props {
   cert: CertInfo;
+  expanded?: boolean;
 }
 
 export default function CertDetail(props: Props) {
-  const [expanded, setExpanded] = createSignal(false);
+  const [expanded, setExpanded] = createSignal(props.expanded ?? false);
+  createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
 
   return (
-    <div class="cert-detail">
+    <div class="cert-detail" data-card>
       <button class="cert-detail__toggle" onClick={() => setExpanded(!expanded())}>
-        {expanded() ? '▼' : '▶'} {props.cert.subject} ({props.cert.position})
+        {expanded() ? '\u25BC' : '\u25B6'} {certDisplayName(props.cert.subject)} ({props.cert.position})
       </button>
       {expanded() && (
         <div class="cert-detail__body">

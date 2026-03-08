@@ -3,12 +3,13 @@ import { getHistory } from '../lib/history';
 
 const PRESETS: { label: string; ports: string }[] = [
   { label: 'HTTPS', ports: ':443' },
-  { label: 'Email', ports: ':25,465,587,993,995' },
+  { label: 'E-Mail', ports: ':25,465,587,993,995' },
   { label: 'All Common', ports: ':443,25,465,587,993,995,8443' },
 ];
 
 interface Props {
   onSubmit: (input: string) => void;
+  onClear?: () => void;
   loading: boolean;
   inputRef?: (el: HTMLInputElement) => void;
   value?: string;
@@ -39,6 +40,7 @@ export default function HostInput(props: Props) {
     setValue('');
     setHistoryIdx(-1);
     setHistoryOpen(false);
+    props.onClear?.();
   };
 
   const applyPreset = (ports: string) => {
@@ -49,7 +51,9 @@ export default function HostInput(props: Props) {
 
   const handleKeyDown = (e: KeyboardEvent) => {
     const hist = history();
-    if (e.key === 'ArrowUp') {
+    const isDown = e.key === 'ArrowDown' || (e.key === 'j' && e.ctrlKey);
+    const isUp = e.key === 'ArrowUp' || (e.key === 'k' && e.ctrlKey);
+    if (isDown) {
       if (hist.length === 0) return;
       e.preventDefault();
       if (historyIdx() === -1) {
@@ -61,7 +65,7 @@ export default function HostInput(props: Props) {
         setHistoryIdx(next);
         setValue(hist[next]);
       }
-    } else if (e.key === 'ArrowDown') {
+    } else if (isUp) {
       if (historyIdx() <= -1) return;
       e.preventDefault();
       if (historyIdx() > 0) {

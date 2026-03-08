@@ -6,6 +6,7 @@ import PortTabs from './components/PortTabs';
 import ConsistencyView from './components/ConsistencyView';
 import CrossLinks from './components/CrossLinks';
 import IpCard from './components/IpCard';
+import UnifiedIpView from './components/UnifiedIpView';
 import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
@@ -56,6 +57,7 @@ export default function App() {
   const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
   const [showHelp, setShowHelp] = createSignal(false);
   const [lastQuery, setLastQuery] = createSignal('');
+  const [allIpsExpanded, setAllIpsExpanded] = createSignal<boolean | undefined>(undefined);
 
   const [meta] = createResource(fetchMeta);
 
@@ -86,6 +88,10 @@ export default function App() {
     return document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
   }
 
+  function clearCardActive() {
+    document.querySelector('[data-card-active]')?.removeAttribute('data-card-active');
+  }
+
   let mediaQuery: MediaQueryList | undefined;
   const onSystemThemeChange = () => {
     if (theme() === 'system') applyTheme('system');
@@ -106,6 +112,11 @@ export default function App() {
       if (e.key === 'Escape') {
         if (showHelp()) {
           setShowHelp(false);
+          e.preventDefault();
+          return;
+        }
+        if (document.querySelector('[data-card-active]')) {
+          clearCardActive();
           e.preventDefault();
           return;
         }
@@ -133,10 +144,40 @@ export default function App() {
         }
         return;
       }
+
+      if ((e.key === 'j' || e.key === 'k') && !isInputFocused()) {
+        const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-card]'));
+        if (cards.length === 0) return;
+        e.preventDefault();
+        const cur = document.querySelector<HTMLElement>('[data-card-active]');
+        let idx = cur ? cards.indexOf(cur) : -1;
+        if (idx === -1) {
+          idx = e.key === 'j' ? 0 : cards.length - 1;
+        } else {
+          cur!.removeAttribute('data-card-active');
+          idx += e.key === 'j' ? 1 : -1;
+        }
+        idx = Math.max(0, Math.min(idx, cards.length - 1));
+        cards[idx].setAttribute('data-card-active', '');
+        cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+
+      if (e.key === 'Enter' && !isInputFocused()) {
+        const active = document.querySelector<HTMLElement>('[data-card-active]');
+        if (active) {
+          e.preventDefault();
+          const toggle = active.querySelector<HTMLElement>('.ip-card__header, .dns-section__toggle, .cert-detail__toggle');
+          toggle?.click();
+        }
+        return;
+      }
     };
     document.addEventListener('keydown', handler);
+    document.addEventListener('mousedown', clearCardActive);
     onCleanup(() => {
       document.removeEventListener('keydown', handler);
+      document.removeEventListener('mousedown', clearCardActive);
       mediaQuery?.removeEventListener('change', onSystemThemeChange);
     });
   });
@@ -146,6 +187,7 @@ export default function App() {
     setError(null);
     setResult(null);
     setLastQuery(input);
+    setAllIpsExpanded(undefined);
     try {
       const data = await inspect(input);
       setResult(data);
@@ -210,21 +252,27 @@ export default function App() {
         <div class="header-actions">
           <button
             class="header-btn"
-            onClick={openHelp}
-            title="Help (?)"
-          >?</button>
-          <button
-            class="header-btn"
             onClick={toggleTheme}
             title={themeTitle()}
           >
             {themeIcon()}
           </button>
+          <button
+            class="header-btn"
+            onClick={openHelp}
+            title="Help (?)"
+          >?</button>
         </div>
       </header>
 
       <main class="main">
-        <HostInput onSubmit={handleInspect} loading={loading()} value={lastQuery()} inputRef={el => (inputEl = el)} />
+        <HostInput
+          onSubmit={handleInspect}
+          onClear={() => { setResult(null); setError(null); setLastQuery(''); window.history.replaceState(null, '', window.location.pathname); }}
+          loading={loading()}
+          value={lastQuery()}
+          inputRef={el => (inputEl = el)}
+        />
 
         <Show when={error()}>
           <div class="error-banner">{error()}</div>
@@ -310,28 +358,68 @@ export default function App() {
                 <Show when={currentPort()}>
                   {(port) => {
                     const p = port();
+                    const successfulIps = () => p.ips.filter(ip => !ip.error);
+                    const errorIps = () => p.ips.filter(ip => ip.error);
+                    const isConsistent = () => {
+                      const c = p.consistency;
+                      return c && c.certificates_match && c.tls_versions_match && c.cipher_suites_match;
+                    };
+                    const useUnified = () => isConsistent() && successfulIps().length > 1;
+                    const hasDnsRow = () => (!useUnified() && p.consistency) || r.dns?.caa || p.tlsa;
                     return (
                       <>
-                        <Show when={p.consistency}>
-                          {(c) => <ConsistencyView consistency={c()} />}
+                        <Show when={hasDnsRow()}>
+                          <div class="dns-row">
+                            <Show when={!useUnified() && p.consistency}>
+                              {(c) => <ConsistencyView consistency={c()} />}
+                            </Show>
+                            <Show when={r.dns?.caa}>
+                              {(caa) => <CaaView caa={caa()} />}
+                            </Show>
+                            <Show when={p.tlsa}>
+                              {(tlsa) => <TlsaView tlsa={tlsa()} />}
+                            </Show>
+                          </div>
                         </Show>
 
-                        <For each={p.ips}>
-                          {(ipResult, i) => (
-                            <IpCard result={ipResult} defaultExpanded={i() === 0} />
-                          )}
-                        </For>
+                        <Show when={useUnified()}>
+                          <UnifiedIpView ips={successfulIps()} />
+                          <For each={errorIps()}>
+                            {(ipResult) => (
+                              <IpCard
+                                result={ipResult}
+                                defaultExpanded={false}
+                                expanded={undefined}
+                              />
+                            )}
+                          </For>
+                        </Show>
+
+                        <Show when={!useUnified()}>
+                          <Show when={p.ips.length > 1}>
+                            <div class="ip-cards-toolbar">
+                              <button
+                                class="detail-toggle"
+                                onClick={() => setAllIpsExpanded(v => v === true ? false : true)}
+                              >
+                                {allIpsExpanded() === true ? 'Collapse all' : 'Expand all'}
+                              </button>
+                            </div>
+                          </Show>
+
+                          <For each={p.ips}>
+                            {(ipResult) => (
+                              <IpCard
+                                result={ipResult}
+                                defaultExpanded={p.ips.length === 1}
+                                expanded={p.ips.length > 1 ? allIpsExpanded() : undefined}
+                              />
+                            )}
+                          </For>
+                        </Show>
                       </>
                     );
                   }}
-                </Show>
-
-                <Show when={r.dns?.caa}>
-                  {(caa) => <CaaView caa={caa()} />}
-                </Show>
-
-                <Show when={currentPort()?.tlsa}>
-                  {(tlsa) => <TlsaView tlsa={tlsa()} />}
                 </Show>
 
                 <Show when={meta()}>
@@ -370,6 +458,8 @@ export default function App() {
                 <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
                 <div class="help-key"><kbd>Enter</kbd><span>Submit query</span></div>
                 <div class="help-key"><kbd>r</kbd><span>Re-run last query</span></div>
+                <div class="help-key"><kbd>j</kbd> / <kbd>k</kbd><span>Next / previous IP card</span></div>
+                <div class="help-key"><kbd>Enter</kbd><span>Expand / collapse IP card</span></div>
                 <div class="help-key"><kbd>Escape</kbd><span>Blur input / close help</span></div>
                 <div class="help-key"><kbd>?</kbd><span>Toggle help</span></div>
               </div>
@@ -379,8 +469,8 @@ export default function App() {
               <div class="help-section__title">History</div>
               <p class="help-desc">Previous queries are available via arrow keys when the input is focused.</p>
               <div class="help-keys">
-                <div class="help-key"><kbd>&uarr;</kbd><span>Previous query</span></div>
-                <div class="help-key"><kbd>&darr;</kbd><span>Next query</span></div>
+                <div class="help-key"><kbd>&darr;</kbd> / <kbd>Ctrl+j</kbd><span>Next (older) query</span></div>
+                <div class="help-key"><kbd>&uarr;</kbd> / <kbd>Ctrl+k</kbd><span>Previous (newer) query</span></div>
               </div>
             </div>
 

@@ -581,6 +581,12 @@ a:hover { text-decoration: underline; }
   background: var(--bg-primary);
 }
 
+[data-card-active] {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: var(--radius-lg);
+}
+
 .ip-card__header:disabled {
   cursor: default;
 }
@@ -692,6 +698,109 @@ a:hover { text-decoration: underline; }
 
 .ip-card__chip--pass { color: var(--pass); border-color: var(--pass); }
 .ip-card__chip--fail { color: var(--fail); border-color: var(--fail); }
+
+/* ================================================================
+   Unified IP view (consistent multi-IP)
+   ================================================================ */
+
+.unified-ip {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.unified-ip__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.unified-ip__ips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.unified-ip__ip-badge {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.unified-ip__ip-badge + .unified-ip__ip-badge::before {
+  content: '/';
+  margin-right: 4px;
+  color: var(--text-muted);
+}
+
+.unified-ip__header-right {
+  flex-shrink: 0;
+}
+
+.unified-ip__consistent-badge {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--pass);
+  padding: 1px 8px;
+  border: 1px solid var(--pass);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+.unified-ip__timings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.unified-ip__timing {
+  padding: 4px 14px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.unified-ip__timing-val {
+  color: var(--accent);
+}
+
+.unified-ip .ip-card__validation {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.unified-ip .ip-card__body .tls-params,
+.unified-ip .ip-card__body .chain-view,
+.unified-ip .ip-card__body .cert-details,
+.unified-ip .ip-card__body .dns-section {
+  border: none;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.unified-ip .ip-card__body > :last-child,
+.unified-ip .ip-card__body > :last-child > :last-child { border-bottom: none; }
+
+.ip-cards-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ip-card__cert-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
 
 .ip-card__body .tls-params,
 .ip-card__body .chain-view,
@@ -867,13 +976,14 @@ a:hover { text-decoration: underline; }
   padding: 1rem;
 }
 
-.consistency-view h3 {
+.consistency-view__title {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .consistency-view__desc {
@@ -921,6 +1031,16 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
+   DNS row (side-by-side cards)
+   ================================================================ */
+
+.dns-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+/* ================================================================
    DNS sections (CAA, TLSA, CT)
    ================================================================ */
 
@@ -931,6 +1051,44 @@ a:hover { text-decoration: underline; }
   padding: 1rem;
 }
 
+.dns-section__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+}
+
+.dns-section__toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.dns-section__count {
+  font-size: 0.6875rem;
+  font-family: var(--mono);
+  color: var(--text-muted);
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.dns-section__body {
+  margin-top: 0.75rem;
+}
+
 .dns-section__title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -939,12 +1097,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.dns-section__desc {
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .dns-section__empty {

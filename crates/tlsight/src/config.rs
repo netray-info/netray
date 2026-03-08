@@ -7,7 +7,7 @@ pub use config::ConfigError;
 // Hard caps (SDD §8.1) — configuration values are clamped to these maximums.
 const HARD_CAP_HANDSHAKE_TIMEOUT: u64 = 5;
 const HARD_CAP_REQUEST_TIMEOUT: u64 = 15;
-const HARD_CAP_MAX_PORTS: usize = 5;
+const HARD_CAP_MAX_PORTS: usize = 7;
 const HARD_CAP_MAX_IPS: usize = 10;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -177,7 +177,7 @@ fn default_request_timeout_secs() -> u64 {
 }
 
 fn default_max_ports() -> usize {
-    5
+    7
 }
 
 fn default_max_ips_per_hostname() -> usize {

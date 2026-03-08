@@ -51,8 +51,8 @@ export default function ExportButtons(props: Props) {
 
   return (
     <div class="export-buttons">
-      <button class="export-buttons__btn" onClick={downloadJson}>Download JSON</button>
-      <button class="export-buttons__btn" onClick={copyMarkdown}>Copy Markdown</button>
+      <button class="export-buttons__btn" onClick={copyMarkdown}>Copy MD</button>
+      <button class="export-buttons__btn" onClick={downloadJson}>JSON</button>
     </div>
   );
 }
