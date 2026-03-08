@@ -937,6 +937,8 @@ export default function App() {
           disabled={status() === 'loading'}
           onReset={hasContent() ? resetAll : undefined}
           onReady={(api) => { focusEditor = api.focus; clearEditor = api.clear; setEditorValue = api.setValue; }}
+          shareLabel={status() === 'done' && cacheKey() ? (shareMessage() ?? 'Share') : undefined}
+          onShare={copyShareLink}
         />
 
         {/* Empty state — shown on landing before any query */}
@@ -1091,9 +1093,6 @@ export default function App() {
                 >{copied() ? 'Copied' : 'Copy MD'}</button>
                 <button class="export-btn" onClick={() => downloadFile(toCsv(results()), 'dns-results.csv', 'text/csv')} title="Download results as CSV">CSV</button>
                 <button class="export-btn" onClick={() => downloadFile(toJson(results(), stats()), 'dns-results.json', 'application/json')} title="Download results as JSON">JSON</button>
-                <Show when={cacheKey()}>
-                  <button class="share-btn" onClick={copyShareLink} title="Copy shareable permalink to clipboard">{shareMessage() ?? 'Share'}</button>
-                </Show>
               </div>
             </div>
           </Show>
