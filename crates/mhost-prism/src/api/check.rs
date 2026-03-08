@@ -30,12 +30,13 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::RequestId;
 use crate::api::query::{
-    build_resolver_group, effective_server_specs, make_error_event, parse_server_spec,
-    record_breaker_outcomes, target_keys_from_servers,
+    build_resolver_group, effective_server_specs, extract_ips_from_cached_events, make_error_event,
+    parse_server_spec, record_breaker_outcomes, send_enrichment_event, target_keys_from_servers,
 };
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
+use crate::ip_enrichment::IpInfo;
 use crate::parser::ParsedQuery;
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
@@ -199,6 +200,7 @@ pub async fn post_handler(
     let circuit_breakers = state.circuit_breakers.clone();
     let result_cache = state.result_cache.clone();
     let query_string = domain.clone();
+    let enrichment_svc = state.ip_enrichment.clone();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
@@ -324,9 +326,20 @@ pub async fn post_handler(
             .collect();
 
         // ------------------------------------------------------------------
+        // Phase 1.5: IP enrichment (non-blocking, before lint)
+        // ------------------------------------------------------------------
+        let enrichment_map = if let Some(ref svc) = enrichment_svc {
+            let ips = extract_ips_from_cached_events(&cached_events);
+            send_enrichment_event(svc, &ips, &rid, &tx, &mut cached_events).await;
+            svc.lookup_batch(&ips).await
+        } else {
+            std::collections::HashMap::new()
+        };
+
+        // ------------------------------------------------------------------
         // Phase 2: Lint checks (synchronous, pure)
         // ------------------------------------------------------------------
-        let lint_checks: Vec<(&'static str, Vec<CheckResult>)> = vec![
+        let mut lint_checks: Vec<(&'static str, Vec<CheckResult>)> = vec![
             ("caa", check_caa(&all_lookups)),
             ("cname_apex", check_cname_apex(&all_lookups)),
             ("dnssec", check_dnssec(&all_lookups)),
@@ -337,6 +350,9 @@ pub async fn post_handler(
             ("ttl", check_ttl(&all_lookups)),
             ("dmarc", check_dmarc_records(&dmarc_txts)),
         ];
+        if !enrichment_map.is_empty() {
+            lint_checks.push(("infrastructure", check_infrastructure(&enrichment_map)));
+        }
 
         let mut total_checks: u32 = 0;
         let mut passed: u32 = 0;
@@ -494,4 +510,49 @@ async fn fan_out_lookup(
     }
 
     merged
+}
+
+/// Infrastructure lint: flag threat indicators and unusual hosting from enrichment data.
+fn check_infrastructure(
+    enrichments: &std::collections::HashMap<std::net::IpAddr, IpInfo>,
+) -> Vec<CheckResult> {
+    let mut results = Vec::new();
+    let mut has_concern = false;
+
+    for (ip, info) in enrichments {
+        if info.is_spamhaus == Some(true) {
+            results.push(CheckResult::Failed(format!(
+                "{ip} is listed on Spamhaus blocklists"
+            )));
+            has_concern = true;
+        }
+        if info.is_c2 == Some(true) {
+            results.push(CheckResult::Failed(format!(
+                "{ip} is associated with command-and-control infrastructure"
+            )));
+            has_concern = true;
+        }
+        if info.is_tor == Some(true) {
+            results.push(CheckResult::Warning(format!(
+                "{ip} is a Tor exit node — unusual for DNS infrastructure"
+            )));
+            has_concern = true;
+        }
+        if let Some(ref ip_type) = info.ip_type
+            && ip_type.eq_ignore_ascii_case("residential")
+        {
+            results.push(CheckResult::Warning(format!(
+                "{ip} is on a residential IP — unusual for MX/NS records"
+            )));
+            has_concern = true;
+        }
+    }
+
+    if !has_concern {
+        results.push(CheckResult::Ok(
+            "No infrastructure concerns detected".to_owned(),
+        ));
+    }
+
+    results
 }

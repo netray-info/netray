@@ -20,7 +20,7 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::RequestId;
-use crate::api::query::make_error_event;
+use crate::api::query::{make_error_event, send_enrichment_event};
 use crate::api::{AppState, STREAM_TIMEOUT_SECS};
 use crate::dns_trace;
 use crate::error::{ApiError, ErrorResponse};
@@ -152,6 +152,7 @@ pub async fn post_handler(
     let rid = request_id.0;
     let result_cache = state.result_cache.clone();
     let query_string = domain.clone();
+    let enrichment_svc = state.ip_enrichment.clone();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
@@ -198,6 +199,28 @@ pub async fn post_handler(
                 metrics::gauge!("prism_active_traces").decrement(1.0);
                 return;
             }
+        }
+
+        // Enrich server IPs from all hops.
+        if let Some(ref svc) = enrichment_svc {
+            let mut ips: Vec<std::net::IpAddr> = Vec::new();
+            for event in &cached_events {
+                if event.event_type != "hop" {
+                    continue;
+                }
+                let Some(results) = event.data["hop"]["server_results"].as_array() else {
+                    continue;
+                };
+                for sr in results {
+                    if let Some(ip_str) = sr["server_ip"].as_str()
+                        && let Ok(ip) = ip_str.parse::<std::net::IpAddr>()
+                        && !ips.contains(&ip)
+                    {
+                        ips.push(ip);
+                    }
+                }
+            }
+            send_enrichment_event(svc, &ips, &rid, &tx, &mut cached_events).await;
         }
 
         let elapsed = start.elapsed();

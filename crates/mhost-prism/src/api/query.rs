@@ -31,6 +31,7 @@ use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ApiError, ErrorResponse};
+use crate::ip_enrichment::{IpEnrichmentService, IpInfo};
 use crate::parser::{self, ParsedQuery, ServerSpec, Transport};
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
@@ -59,9 +60,83 @@ struct DoneEvent {
 }
 
 #[derive(Serialize)]
+pub(crate) struct EnrichmentEvent {
+    pub request_id: String,
+    pub enrichments: std::collections::HashMap<String, IpInfo>,
+}
+
+#[derive(Serialize)]
 struct ErrorEvent {
     code: String,
     message: String,
+}
+
+/// Extract IP addresses from cached batch events (A/AAAA record values).
+pub(crate) fn extract_ips_from_cached_events(events: &[CachedEvent]) -> Vec<IpAddr> {
+    let mut ips = Vec::new();
+    for event in events {
+        if event.event_type != "batch" {
+            continue;
+        }
+        // Walk the JSON: data.lookups.lookups[].result.Response.records[].data.{A,AAAA}
+        let lookups = &event.data["lookups"]["lookups"];
+        if let Some(arr) = lookups.as_array() {
+            for lookup in arr {
+                if let Some(records) = lookup["result"]["Response"]["records"].as_array() {
+                    for record in records {
+                        if let Some(data) = record["data"].as_object() {
+                            for key in ["A", "AAAA"] {
+                                if let Some(val) = data.get(key).and_then(|v| v.as_str())
+                                    && let Ok(ip) = val.parse::<IpAddr>()
+                                    && !ips.contains(&ip)
+                                {
+                                    ips.push(ip);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ips
+}
+
+/// Send an enrichment SSE event if enrichment is enabled and IPs are found.
+pub(crate) async fn send_enrichment_event(
+    enrichment_svc: &Arc<IpEnrichmentService>,
+    ips: &[IpAddr],
+    request_id: &str,
+    tx: &mpsc::Sender<Result<Event, Infallible>>,
+    cached_events: &mut Vec<CachedEvent>,
+) {
+    if ips.is_empty() {
+        return;
+    }
+    let enrichments = enrichment_svc.lookup_batch(ips).await;
+    if enrichments.is_empty() {
+        return;
+    }
+
+    let enrichment_event = EnrichmentEvent {
+        request_id: request_id.to_owned(),
+        enrichments: enrichments
+            .into_iter()
+            .map(|(ip, info)| (ip.to_string(), info))
+            .collect(),
+    };
+
+    if let Ok(json_val) = serde_json::to_value(&enrichment_event) {
+        cached_events.push(CachedEvent {
+            event_type: "enrichment".to_owned(),
+            data: json_val,
+        });
+    }
+    let event = Event::default()
+        .event("enrichment")
+        .json_data(&enrichment_event)
+        .unwrap_or_else(|_| Event::default().event("enrichment").data("{}"));
+    let _ = tx.send(Ok(event)).await;
 }
 
 // ---------------------------------------------------------------------------
@@ -327,6 +402,7 @@ async fn execute_query(
     .to_owned();
     let dnssec_requested = parsed.dnssec;
     let result_cache = state.result_cache.clone();
+    let enrichment_svc = state.ip_enrichment.clone();
 
     tokio::spawn(async move {
         // Hold stream guard for the lifetime of this task so the active stream
@@ -490,6 +566,12 @@ async fn execute_query(
         }
 
         if !timed_out {
+            // Send enrichment event before done (non-blocking, graceful).
+            if let Some(ref svc) = enrichment_svc {
+                let ips = extract_ips_from_cached_events(&cached_events);
+                send_enrichment_event(svc, &ips, &rid, &tx, &mut cached_events).await;
+            }
+
             let elapsed = start.elapsed();
             tracing::info!(
                 request_id = %rid,

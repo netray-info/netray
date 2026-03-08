@@ -14,8 +14,6 @@ mod dns_dnssec;
 mod dns_raw;
 mod dns_trace;
 mod error;
-// TODO: Wire enrichment into SSE handlers (commit 2).
-#[allow(dead_code)]
 mod ip_enrichment;
 mod parser;
 // TODO: Wire query dedup into SSE handlers and resolver pool into build_resolver_group.
