@@ -118,6 +118,9 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   min-height: 100vh;
+  /* iOS safe area: pad left/right for notch/island on landscape */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* ===================================================================
@@ -1310,6 +1313,7 @@ body {
   justify-content: center;
   gap: 8px;
   padding: 24px 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
   margin-top: 32px;
   border-top: 1px solid var(--border-subtle);
   font-size: 12px;
@@ -1383,7 +1387,55 @@ body {
 
   .query-button {
     width: 100%;
-    padding: 10px;
+    padding: 12px;
+    min-height: 44px;
+  }
+
+  /* Touch-friendly clear button */
+  .query-clear-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+    right: 8px;
+  }
+
+  /* Touch-friendly header buttons */
+  .header-btn {
+    width: 44px;
+    height: 44px;
+    font-size: 18px;
+  }
+
+  /* Tab bar: horizontally scrollable */
+  .tabs {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .tabs-left {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* IE/Edge */
+    flex-shrink: 0;
+  }
+
+  .tabs-left::-webkit-scrollbar {
+    display: none;                  /* Chrome/Safari */
+  }
+
+  .tab {
+    padding: 8px 14px;
+    white-space: nowrap;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .status-info {
+    flex-wrap: wrap;
+    padding: 4px 4px 0;
   }
 
   /* Card layout — replace table with stacked cards */
@@ -1494,14 +1546,46 @@ body {
   .modal {
     width: 95vw;
     padding: 16px;
+    /* Respect safe areas in landscape */
+    margin-left: env(safe-area-inset-left);
+    margin-right: env(safe-area-inset-right);
   }
 
   .status-bar {
     flex-wrap: wrap;
   }
+
+  /* Trace view: stack the server row grid on mobile */
+  .trace-server-row {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+
+  .trace-server-latency {
+    text-align: left;
+  }
+
+  /* Touch-friendly trace expand toggle */
+  .trace-expand-toggle {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 8px;
+  }
+
+  .trace-ns-more {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 8px;
+  }
 }
 
 @media (max-width: 480px) {
+  .app {
+    padding: 12px 8px 24px;
+  }
+
   /* Tighter card layout on small phones */
   .results-table tr {
     padding: 8px 10px;
@@ -1520,10 +1604,13 @@ body {
     gap: 4px;
   }
 
-  .header-btn {
-    width: 28px;
-    height: 28px;
-    font-size: 14px;
+  .record-group-header {
+    padding: 10px 10px;
+  }
+
+  .footer {
+    flex-wrap: wrap;
+    gap: 4px 8px;
   }
 }
 
