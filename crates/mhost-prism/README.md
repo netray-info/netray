@@ -278,6 +278,74 @@ There is no server-side DNS caching — every request hits the resolver fresh. T
 
 ---
 
+## Deployment
+
+prism is a single binary with the frontend baked in. Copy it to your server, drop a config file next to it, and run it behind a reverse proxy.
+
+### Behind nginx
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name dns.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # SSE support
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+Configure `trusted_proxies` so prism extracts the real client IP:
+
+```toml
+[server]
+trusted_proxies = ["127.0.0.1/32"]
+```
+
+### Behind Caddy
+
+```
+dns.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Caddy handles TLS automatically. Set `trusted_proxies` the same way.
+
+### Security hardening checklist
+
+- Set `allow_arbitrary_servers = false` (default) to block custom resolver IPs
+- Set `allow_system_resolvers = false` if you don't want `/etc/resolv.conf` exposed
+- Configure `trusted_proxies` to match your reverse proxy's IP range
+- Keep the metrics port (`:9090`) on loopback — never expose it publicly
+- Review rate limits for your expected traffic (`per_ip_per_minute`, `global_per_minute`)
+
+### Metrics
+
+prism exposes Prometheus metrics on the metrics bind address (default `127.0.0.1:9090`).
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: prism
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+```
+
+Keep the metrics endpoint on loopback or behind a firewall — it is not authenticated.
+
+---
+
 ## Development
 
 ### Prerequisites

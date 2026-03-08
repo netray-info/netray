@@ -37,6 +37,11 @@ pub struct RateLimitState {
 
 impl RateLimitState {
     /// Build rate limiters from configuration values.
+    ///
+    /// Note: Governor's `DefaultKeyedStateStore` (DashMap) never evicts entries.
+    /// Memory grows ~50 bytes per unique IP/target key. This is acceptable for
+    /// production workloads — a server restart clears all state. TTL-based
+    /// eviction is a future improvement (see roadmap Tier 4).
     pub fn new(config: &LimitsConfig) -> Self {
         let per_ip = RateLimiter::keyed(
             Quota::per_minute(
@@ -95,6 +100,7 @@ impl RateLimitState {
                     .increment(1);
                 return Err(ApiError::RateLimited {
                     retry_after_secs: 1,
+                    scope: "max_streams",
                 });
             }
         }
@@ -137,6 +143,7 @@ fn check_keyed_cost<K: std::hash::Hash + Eq + Clone>(
     metrics::counter!("prism_rate_limit_hits_total", "scope" => scope).increment(1);
     Err(ApiError::RateLimited {
         retry_after_secs: result.max(1),
+        scope,
     })
 }
 
@@ -157,6 +164,7 @@ fn check_direct_cost(
     metrics::counter!("prism_rate_limit_hits_total", "scope" => "global").increment(1);
     Err(ApiError::RateLimited {
         retry_after_secs: result.max(1),
+        scope: "global",
     })
 }
 

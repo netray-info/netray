@@ -62,12 +62,14 @@ pub enum ApiError {
     #[error("too many servers: {requested} exceeds limit of {max}")]
     TooManyServers { requested: usize, max: usize },
 
-    #[error("rate limited")]
-    RateLimited { retry_after_secs: u64 },
+    #[error("rate limited ({scope})")]
+    RateLimited {
+        retry_after_secs: u64,
+        scope: &'static str,
+    },
 
     #[error("resolver error: {0}")]
     ResolverError(String),
-
 }
 
 impl ApiError {
@@ -133,7 +135,10 @@ impl IntoResponse for ApiError {
         let mut response = (status, axum::Json(body)).into_response();
 
         // For rate-limited responses, include the Retry-After header (RFC 6585 §4).
-        if let Self::RateLimited { retry_after_secs } = &self {
+        if let Self::RateLimited {
+            retry_after_secs, ..
+        } = &self
+        {
             response.headers_mut().insert(
                 axum::http::header::RETRY_AFTER,
                 axum::http::HeaderValue::from(*retry_after_secs),
@@ -242,7 +247,11 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limited_is_429() {
-        let r = ApiError::RateLimited { retry_after_secs: 5 }.into_response();
+        let r = ApiError::RateLimited {
+            retry_after_secs: 5,
+            scope: "per_ip",
+        }
+        .into_response();
         assert_eq!(r.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
@@ -258,7 +267,10 @@ mod tests {
     async fn body_has_error_code_and_message_fields() {
         let body = body_json(ApiError::InvalidDomain("bad.domain".into())).await;
         assert!(body["error"]["code"].is_string(), "missing code field");
-        assert!(body["error"]["message"].is_string(), "missing message field");
+        assert!(
+            body["error"]["message"].is_string(),
+            "missing message field"
+        );
         // No extra top-level keys beyond "error"
         assert_eq!(
             body.as_object().unwrap().len(),
@@ -311,7 +323,11 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limited_error_code() {
-        let body = body_json(ApiError::RateLimited { retry_after_secs: 30 }).await;
+        let body = body_json(ApiError::RateLimited {
+            retry_after_secs: 30,
+            scope: "per_ip",
+        })
+        .await;
         assert_eq!(body["error"]["code"], "RATE_LIMITED");
     }
 
@@ -325,8 +341,11 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limited_includes_retry_after_header() {
-        let (status, headers, _body) =
-            into_parts(ApiError::RateLimited { retry_after_secs: 42 }).await;
+        let (status, headers, _body) = into_parts(ApiError::RateLimited {
+            retry_after_secs: 42,
+            scope: "per_ip",
+        })
+        .await;
         assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
         let retry_after = headers
             .get(axum::http::header::RETRY_AFTER)

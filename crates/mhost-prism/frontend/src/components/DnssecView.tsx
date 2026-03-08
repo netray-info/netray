@@ -99,6 +99,7 @@ interface LevelCardProps {
   level: ChainLevel;
   index: number;
   isFocused: boolean;
+  isExpanded: boolean;
   onClick: () => void;
 }
 
@@ -153,8 +154,8 @@ function LevelCard(props: LevelCardProps) {
         </For>
       </div>
 
-      {/* Collapsible record details */}
-      <Show when={totalRecords() > 0}>
+      {/* Collapsible record details — toggled via Enter or click */}
+      <Show when={props.isExpanded && totalRecords() > 0}>
         <div class="dnssec-records">
           <RecordList label="DNSKEY" records={lev.dnskey_records} />
           <RecordList label="DS" records={lev.ds_records} />
@@ -178,12 +179,23 @@ interface DnssecViewProps {
 
 export function DnssecView(props: DnssecViewProps) {
   const [focusedIndex, setFocusedIndex] = createSignal<number | null>(null);
+  const [expandedIndices, setExpandedIndices] = createSignal<Set<number>>(new Set());
   let containerRef: HTMLDivElement | undefined;
+
+  function toggleExpanded(index: number) {
+    setExpandedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+  }
 
   // Reset state when levels are cleared (new query).
   createEffect(() => {
     if (props.levels.length === 0) {
       setFocusedIndex(null);
+      setExpandedIndices(new Set<number>());
     }
   });
 
@@ -222,6 +234,15 @@ export function DnssecView(props: DnssecViewProps) {
           ?.querySelector(`[data-row-key="dnssec-${next}"]`)
           ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       });
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      const idx = focusedIndex();
+      if (idx !== null) {
+        e.preventDefault();
+        toggleExpanded(idx);
+      }
       return;
     }
 
@@ -268,7 +289,11 @@ export function DnssecView(props: DnssecViewProps) {
                 level={level}
                 index={i()}
                 isFocused={focusedIndex() === i()}
-                onClick={() => setFocusedIndex(i())}
+                isExpanded={expandedIndices().has(i())}
+                onClick={() => {
+                  setFocusedIndex(i());
+                  toggleExpanded(i());
+                }}
               />
             </>
           )}

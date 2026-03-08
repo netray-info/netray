@@ -221,8 +221,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   font-size: 14px;
   line-height: 1;
   color: var(--text-muted);
@@ -358,10 +358,17 @@ body {
 }
 
 
+.view-options-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 2px;
+}
+
 .view-btn {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 4px 8px;
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
@@ -1079,6 +1086,11 @@ body {
 
 .sc-record-value.sc-error {
   color: var(--error);
+}
+
+.sc-type-group--focused {
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent), 0 0 0 1px var(--accent-glow);
 }
 
 /* ===================================================================
@@ -2644,4 +2656,101 @@ body {
 [data-theme="light"] .dnssec-finding--failed .dnssec-finding-icon,
 [data-theme="light"] .dnssec-finding--failed .dnssec-finding-message {
   color: #d43333;
+}
+
+/* ===================================================================
+   Skip-to-content link (a11y)
+   =================================================================== */
+
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--bg-primary);
+  background: var(--accent);
+  border-radius: var(--radius);
+  z-index: 9999;
+  text-decoration: none;
+  transition: top 150ms ease;
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+/* ===================================================================
+   Skeleton loading shimmer
+   =================================================================== */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-row td {
+  position: relative;
+}
+
+.skeleton-bar {
+  height: 12px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--border-subtle) 25%, var(--border) 50%, var(--border-subtle) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.skeleton-bar--name { width: 60%; }
+.skeleton-bar--ttl  { width: 30px; }
+.skeleton-bar--value { width: 80%; }
+.skeleton-bar--server { width: 70%; }
+.skeleton-bar--time { width: 40px; margin-left: auto; }
+
+.lint-card--pending .lint-card-header,
+.lint-card--pending .lint-card-pending-text {
+  background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.03) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Touch target sizing applied via overrides to existing classes above */
+
+/* ===================================================================
+   Lint remediation hints
+   =================================================================== */
+
+.lint-hint {
+  padding: 6px 14px 10px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ===================================================================
+   Cancel button (streaming)
+   =================================================================== */
+
+.cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: color var(--transition), border-color var(--transition);
+}
+
+.cancel-btn:hover {
+  color: var(--error);
+  border-color: var(--error);
 }

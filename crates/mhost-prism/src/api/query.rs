@@ -10,7 +10,7 @@
 use std::convert::Infallible;
 use std::net::{IpAddr, SocketAddr};
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use axum::Json;
@@ -26,14 +26,14 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::RequestId;
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
-use crate::record_format;
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::{self, ParsedQuery, ServerSpec, Transport};
+use crate::record_format;
 use crate::security::QueryPolicy;
-use crate::RequestId;
 
 // ---------------------------------------------------------------------------
 // SSE event payloads
@@ -49,6 +49,9 @@ struct DoneEvent {
     transport: String,
     /// Whether DNSSEC mode was requested.
     dnssec: bool,
+    /// Providers skipped due to open circuit breakers during this query.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    degraded_providers: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -260,7 +263,6 @@ async fn execute_query(
     client_ip: IpAddr,
     request_id: String,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
-
     // Validate against query policy.
     let policy = QueryPolicy::new(&state.config);
     policy.validate(&parsed)?;
@@ -327,6 +329,7 @@ async fn execute_query(
         let start = Instant::now();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
         let total = record_types.len() as u32;
+        let degraded: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
         // TODO: consider shared fan-out helper — check.rs already extracts
         // fan_out_lookup(), but query.rs returns a (RecordType, Lookups, had_error)
@@ -349,6 +352,7 @@ async fn execute_query(
                 let breaker_keys = breaker_keys.clone();
                 let circuit_breakers = Arc::clone(&circuit_breakers);
                 let tx_err = tx.clone();
+                let degraded = Arc::clone(&degraded);
                 async move {
                     let query = match MultiQuery::single(domain.as_str(), rt) {
                         Ok(q) => q,
@@ -370,9 +374,16 @@ async fn execute_query(
                             let _ = tx_err
                                 .send(Ok(make_error_event(
                                     "PROVIDER_DEGRADED",
-                                    &format!("circuit breaker open for {breaker_key}, skipping"),
+                                    &format!(
+                                        "circuit breaker open for {breaker_key} ({rt}), skipping"
+                                    ),
                                 )))
                                 .await;
+                            if let Ok(mut d) = degraded.lock()
+                                && !d.contains(breaker_key)
+                            {
+                                d.push(breaker_key.clone());
+                            }
                             continue;
                         }
                         let r = resolver.clone();
@@ -472,6 +483,7 @@ async fn execute_query(
                 duration_ms = elapsed.as_millis(),
                 "query completed"
             );
+            let degraded_providers = degraded.lock().map(|d| d.clone()).unwrap_or_default();
             let done = DoneEvent {
                 request_id: rid,
                 total_queries: total,
@@ -479,6 +491,7 @@ async fn execute_query(
                 warnings,
                 transport: transport_name,
                 dnssec: dnssec_requested,
+                degraded_providers,
             };
             let event = Event::default()
                 .event("done")

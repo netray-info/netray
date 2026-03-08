@@ -1,4 +1,4 @@
-import { For, Show, createMemo } from 'solid-js';
+import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import type { BatchEvent, Lookup, LookupResult } from './ResultsTable';
 import { responseTimeMs, responseTimeColor, formatRecordData } from './ResultsTable';
 
@@ -8,6 +8,7 @@ import { responseTimeMs, responseTimeColor, formatRecordData } from './ResultsTa
 
 interface ServerComparisonProps {
   results: BatchEvent[];
+  activeTab: string;
 }
 
 interface ServerGroup {
@@ -225,7 +226,7 @@ function ServerColumn(props: { server: ServerGroup; maxMs: number }) {
   );
 }
 
-function ComparisonRow(props: { comparison: RecordTypeComparison }) {
+function ComparisonRow(props: { comparison: RecordTypeComparison; index: number; isFocused: boolean }) {
   const maxMs = createMemo(() => {
     let max = 0;
     for (const server of props.comparison.servers) {
@@ -238,7 +239,10 @@ function ComparisonRow(props: { comparison: RecordTypeComparison }) {
   });
 
   return (
-    <div class="sc-type-group">
+    <div
+      class={`sc-type-group${props.isFocused ? ' sc-type-group--focused' : ''}`}
+      data-row-key={`sc-${props.index}`}
+    >
       <div class="sc-type-header">
         <span class="type-badge" style={{ 'background-color': typeColorVar(props.comparison.recordType) }}>
           {props.comparison.recordType}
@@ -262,9 +266,73 @@ function ComparisonRow(props: { comparison: RecordTypeComparison }) {
 
 export function ServerComparison(props: ServerComparisonProps) {
   const comparisons = createMemo(() => buildComparisons(props.results));
+  const [focusedIndex, setFocusedIndex] = createSignal<number | null>(null);
+  let containerRef: HTMLDivElement | undefined;
+
+  // Reset state when results are cleared (new query).
+  createEffect(() => {
+    if (props.results.length === 0) {
+      setFocusedIndex(null);
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Keyboard navigation (j / k)
+  // -------------------------------------------------------------------------
+
+  function handleKeyDown(e: KeyboardEvent) {
+    if (e.defaultPrevented) return;
+    if (props.activeTab !== 'servers') return;
+
+    const target = e.target as HTMLElement;
+    const isEditing =
+      target.tagName === 'INPUT' ||
+      target.tagName === 'TEXTAREA' ||
+      target.isContentEditable ||
+      !!target.closest('.cm-editor');
+    if (isEditing) return;
+
+    const count = comparisons().length;
+    if (count === 0) return;
+
+    if (e.key === 'j' || e.key === 'k') {
+      e.preventDefault();
+      const current = focusedIndex();
+      let next: number;
+      if (e.key === 'j') {
+        next = current === null ? 0 : Math.min(current + 1, count - 1);
+      } else {
+        if (current === null) return;
+        next = Math.max(current - 1, 0);
+      }
+      setFocusedIndex(next);
+      requestAnimationFrame(() => {
+        containerRef
+          ?.querySelector(`[data-row-key="sc-${next}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      if (focusedIndex() !== null) {
+        e.preventDefault();
+        setFocusedIndex(null);
+      }
+      return;
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener('keydown', handleKeyDown);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
 
   return (
-    <div class="server-comparison">
+    <div class="server-comparison" ref={containerRef}>
       <Show
         when={comparisons().length > 0}
         fallback={
@@ -275,7 +343,7 @@ export function ServerComparison(props: ServerComparisonProps) {
         }
       >
         <For each={comparisons()}>
-          {(comp) => <ComparisonRow comparison={comp} />}
+          {(comp, i) => <ComparisonRow comparison={comp} index={i()} isFocused={focusedIndex() === i()} />}
         </For>
       </Show>
     </div>

@@ -1,6 +1,6 @@
 import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { QueryInput } from './components/QueryInput';
-import { ResultsTable, parseBatchEvent, type BatchEvent, type DoneStats } from './components/ResultsTable';
+import { ResultsTable, parseBatchEvent, groupByRecordType, lookupsAgree, hasDeviation, type BatchEvent, type DoneStats } from './components/ResultsTable';
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
 import { TraceView, type TraceHop, type TraceDoneStats } from './components/TraceView';
 import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/DnssecView';
@@ -191,6 +191,13 @@ export default function App() {
   function toggleDevOnly() { const n = !devOnly(); setDevOnly(n); saveViewPrefs({ ...currentViewPrefs(), devOnly: n }); }
   function toggleSort()    { const n = !sortView(); setSortView(n); saveViewPrefs({ ...currentViewPrefs(), sort: n }); }
 
+  // Expand/collapse all triggers (increment to trigger effect)
+  const [expandAllTrigger, setExpandAllTrigger] = createSignal(0);
+  const [collapseAllTrigger, setCollapseAllTrigger] = createSignal(0);
+
+  // Completed record types (for streaming progress)
+  const [completedTypes, setCompletedTypes] = createSignal<string[]>([]);
+
   // Check mode state
   const [isCheckMode, setIsCheckMode] = createSignal(false);
   const [lintCategories, setLintCategories] = createSignal<LintCategory[]>([]);
@@ -294,6 +301,11 @@ export default function App() {
     abortDnssec();
   }
 
+  function cancelQuery() {
+    closeConnections();
+    setStatus('done');
+  }
+
   // ---------------------------------------------------------------------------
   // History
   // ---------------------------------------------------------------------------
@@ -328,6 +340,7 @@ export default function App() {
     setDnssecDoneStats(null);
     setLintCategories([]);
     setCheckStats(null);
+    setCompletedTypes([]);
     clearEditor?.();
     focusEditor?.();
     const url = new URL(window.location.href);
@@ -348,6 +361,7 @@ export default function App() {
       try {
         const batch = parseBatchEvent(JSON.parse(event.data));
         setResults((prev) => [...prev, batch]);
+        setCompletedTypes((prev) => prev.includes(batch.record_type) ? prev : [...prev, batch.record_type]);
       } catch (e) {
         console.error('Failed to parse batch event:', e);
       }
@@ -451,7 +465,11 @@ export default function App() {
         }
         await readPostStream(response, (eventType, data) => {
           if (eventType === 'batch') {
-            try { setResults((prev) => [...prev, parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0])]); }
+            try {
+              const batch = parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0]);
+              setResults((prev) => [...prev, batch]);
+              setCompletedTypes((prev) => prev.includes(batch.record_type) ? prev : [...prev, batch.record_type]);
+            }
             catch (e) { console.error('Failed to parse batch event:', e); }
           } else if (eventType === 'lint') {
             try {
@@ -609,6 +627,7 @@ export default function App() {
       try {
         const batch = parseBatchEvent(JSON.parse(event.data));
         setResults((prev) => [...prev, batch]);
+        setCompletedTypes((prev) => prev.includes(batch.record_type) ? prev : [...prev, batch.record_type]);
       } catch (e) {
         console.error('Failed to parse batch event:', e);
       }
@@ -689,6 +708,23 @@ export default function App() {
       if (q && status() !== 'loading') { e.preventDefault(); submitQuery(q); }
       return;
     }
+
+    // h / l — previous / next tab (vim-style)
+    if ((e.key === 'h' || e.key === 'l') && !isEditing && hasContent()) {
+      e.preventDefault();
+      const visibleTabs: ActiveTab[] = [];
+      if (isDnssecMode()) visibleTabs.push('dnssec');
+      if (isTraceMode()) visibleTabs.push('trace');
+      if (isCheckMode()) visibleTabs.push('lint');
+      visibleTabs.push('results', 'servers', 'json');
+      const idx = visibleTabs.indexOf(activeTab());
+      if (idx === -1) return;
+      const next = e.key === 'l'
+        ? Math.min(idx + 1, visibleTabs.length - 1)
+        : Math.max(idx - 1, 0);
+      setActiveTab(visibleTabs[next]);
+      return;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -728,6 +764,18 @@ export default function App() {
     status() !== 'idle' || results().length > 0 || lintCategories().length > 0 || traceHops().length > 0 || dnssecLevels().length > 0;
   const isLoading  = () => status() === 'loading';
 
+  // Agreement/divergence counts for the results summary
+  const agreementCounts = () => {
+    const groups = groupByRecordType(results());
+    let agree = 0;
+    let diverge = 0;
+    for (const g of groups) {
+      if (hasDeviation(g.lookups)) diverge++;
+      else if (lookupsAgree(g.lookups)) agree++;
+    }
+    return { agree, diverge };
+  };
+
   // Lint tab badge text: show worst status count when done.
   function lintTabBadge(): string {
     const s = checkStats();
@@ -743,6 +791,7 @@ export default function App() {
 
   return (
     <div class="app">
+      <a href="#main-content" class="skip-link">Skip to results</a>
       <header class="header">
         <h1 class="logo">prism</h1>
         <span class="tagline">DNS, refracted</span>
@@ -923,18 +972,25 @@ export default function App() {
                 <button class={`view-btn${compact() ? ' active' : ''}`} onClick={toggleCompact} title="Collapse groups where all servers agree">compact</button>
                 <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only groups where servers diverge">deviations</button>
                 <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: deviations first, then records, then NXDOMAIN">sort</button>
+                <span class="view-options-sep" />
+                <button class="view-btn" onClick={() => setExpandAllTrigger((n) => n + 1)} title="Expand all record rows">expand all</button>
+                <button class="view-btn" onClick={() => setCollapseAllTrigger((n) => n + 1)} title="Collapse all record rows">collapse all</button>
               </div>
             </Show>
 
             {/* Status bar — loading (check / trace / dnssec / combinations) */}
-            <Show when={(isCheckMode() || isTraceMode() || isDnssecMode()) && isLoading()}>
+            <Show when={isLoading()}>
               <div class="status-info">
                 <span class="status-loading-text">
                   {isCheckMode() && isTraceMode() ? 'Tracing + Checking…'
                     : isDnssecMode() ? 'Validating DNSSEC…'
                     : isCheckMode() ? 'Checking…'
-                    : 'Tracing…'}
+                    : isTraceMode() ? 'Tracing…'
+                    : completedTypes().length > 0
+                      ? `Querying… ${completedTypes().join(', ')} done`
+                      : 'Querying…'}
                 </span>
+                <button class="cancel-btn" onClick={cancelQuery} title="Cancel query">cancel</button>
               </div>
             </Show>
           </div>
@@ -985,7 +1041,7 @@ export default function App() {
 
         {/* Results / Servers / JSON — always mounted, hidden when another pane is active */}
         <Show when={hasContent()}>
-          <div style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' && activeTab() !== 'dnssec' ? 'block' : 'none' }}>
+          <div id="main-content" style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' && activeTab() !== 'dnssec' ? 'block' : 'none' }}>
             <Show when={activeTab() === 'results' && stats()}>
               <div class="results-summary">
                 <span class="results-summary-item">{stats()!.total_queries} queries</span>
@@ -1007,6 +1063,14 @@ export default function App() {
                     {stats()!.warnings.length} warning{stats()!.warnings.length !== 1 ? 's' : ''}
                   </span>
                 </Show>
+                <Show when={agreementCounts().agree > 0}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item agree-badge" aria-label="All servers agree">{agreementCounts().agree} agree</span>
+                </Show>
+                <Show when={agreementCounts().diverge > 0}>
+                  <span class="results-summary-sep">/</span>
+                  <span class="results-summary-item deviation-badge" aria-label="Results diverge">{agreementCounts().diverge} diverge</span>
+                </Show>
               </div>
             </Show>
             <ResultsTable
@@ -1019,6 +1083,8 @@ export default function App() {
               compact={compact()}
               devOnly={devOnly()}
               sort={sortView()}
+              expandAll={expandAllTrigger()}
+              collapseAll={collapseAllTrigger()}
             />
           </div>
         </Show>
@@ -1107,6 +1173,7 @@ export default function App() {
                   <tr><td class="shortcut-key">Tab</td><td>Accept autocomplete suggestion</td></tr>
                   <tr><td class="shortcut-key">Escape</td><td>Dismiss autocomplete / blur input</td></tr>
                   <tr><td class="shortcut-key">j / k</td><td>Navigate result rows</td></tr>
+                  <tr><td class="shortcut-key">h / l</td><td>Previous / next tab</td></tr>
                   <tr><td class="shortcut-key">&uarr; / &darr;</td><td>Browse query history (in input)</td></tr>
                   <tr><td class="shortcut-key">r</td><td>Re-run current query</td></tr>
                   <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>

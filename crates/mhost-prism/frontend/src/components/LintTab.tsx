@@ -91,12 +91,50 @@ function resultKind(r: CheckResult): 'ok' | 'warning' | 'failed' | 'not_found' {
 }
 
 // ---------------------------------------------------------------------------
+// Contextual remediation hints
+// ---------------------------------------------------------------------------
+
+function getHint(category: string, results: CheckResult[]): string | null {
+  for (const r of results) {
+    const kind = resultKind(r);
+    const msg = resultMessage(r).toLowerCase();
+
+    if (category === 'spf') {
+      if (kind === 'failed' && msg.includes('too many'))
+        return 'Reduce SPF includes or flatten with ip4:/ip6: mechanisms.';
+      if (kind === 'failed' || kind === 'not_found')
+        return 'Add a TXT record: v=spf1 -all (or with your mail providers).';
+    }
+    if (category === 'dmarc') {
+      if (kind === 'failed' || kind === 'not_found')
+        return 'Add _dmarc.domain TXT "v=DMARC1; p=reject; rua=mailto:dmarc@example.com".';
+      if (kind === 'warning' && msg.includes('p=none'))
+        return 'Consider upgrading to p=quarantine or p=reject.';
+    }
+    if (category === 'dnssec' && kind === 'failed')
+      return 'Contact your DNS provider to enable DNSSEC signing.';
+    if (category === 'caa' && kind === 'not_found')
+      return 'Add CAA records to restrict certificate issuance (e.g., 0 issue "letsencrypt.org").';
+    if (category === 'cname_apex' && kind === 'failed')
+      return 'CNAME at zone apex violates RFC 1034; use ALIAS/ANAME or A/AAAA records.';
+    if (category === 'ns' && kind === 'warning' && msg.includes('single'))
+      return 'Add a secondary nameserver for redundancy.';
+    if (category === 'https_svcb' && kind === 'not_found')
+      return 'Consider adding HTTPS/SVCB records for faster TLS connection setup.';
+    if (category === 'ttl' && kind === 'warning')
+      return 'Inconsistent TTLs across record types; align TTLs for predictable caching.';
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // LintCard — one card per lint category
 // ---------------------------------------------------------------------------
 
 function LintCard(props: { category: LintCategory }) {
   const status = () => worstStatus(props.category.results);
   const label  = () => categoryLabel(props.category.category);
+  const hint   = () => getHint(props.category.category, props.category.results);
 
   return (
     <div class={`lint-card lint-card--${status()}`}>
@@ -115,6 +153,9 @@ function LintCard(props: { category: LintCategory }) {
           )}
         </For>
       </ul>
+      <Show when={hint()}>
+        <div class="lint-hint">{hint()}</div>
+      </Show>
     </div>
   );
 }

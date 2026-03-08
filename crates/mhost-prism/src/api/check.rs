@@ -28,17 +28,17 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
-use crate::record_format;
+use crate::RequestId;
 use crate::api::query::{
     build_resolver_group, effective_server_specs, make_error_event, parse_server_spec,
     record_breaker_outcomes, target_keys_from_servers,
 };
+use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::ParsedQuery;
+use crate::record_format;
 use crate::security::QueryPolicy;
-use crate::RequestId;
 
 // ---------------------------------------------------------------------------
 // Record types queried for the base domain (15 types)
@@ -207,9 +207,8 @@ pub async fn post_handler(
         let dmarc_domain = format!("_dmarc.{domain}");
 
         // Each future yields (record_type_label, Lookups, is_dmarc_lookup).
-        type LookupFut = std::pin::Pin<
-            Box<dyn std::future::Future<Output = (String, Lookups, bool)> + Send>,
-        >;
+        type LookupFut =
+            std::pin::Pin<Box<dyn std::future::Future<Output = (String, Lookups, bool)> + Send>>;
         let futs: FuturesUnordered<LookupFut> = FuturesUnordered::new();
         for rt in CHECK_RECORD_TYPES.iter() {
             let rt = *rt;
@@ -427,7 +426,7 @@ async fn fan_out_lookup(
             let _ = tx
                 .send(Ok(make_error_event(
                     "PROVIDER_DEGRADED",
-                    &format!("circuit breaker open for {breaker_key}, skipping"),
+                    &format!("circuit breaker open for {breaker_key} ({rt}), skipping"),
                 )))
                 .await;
             continue;

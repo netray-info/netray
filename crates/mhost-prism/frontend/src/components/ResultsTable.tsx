@@ -89,6 +89,8 @@ interface ResultsTableProps {
   compact: boolean;
   devOnly: boolean;
   sort: boolean;
+  expandAll?: number;
+  collapseAll?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +258,7 @@ function interpretRecord(rtype: string, data: Record<string, unknown>): string |
 
 /** Returns true if all lookups in a group return identical results (all NxDomain or all
  *  Response with the same record values). Used for compact rendering. */
-function lookupsAgree(lookups: Lookup[]): boolean {
+export function lookupsAgree(lookups: Lookup[]): boolean {
   if (lookups.length < 2) return false;
 
   // All NxDomain → trivially agree
@@ -277,7 +279,7 @@ function lookupsAgree(lookups: Lookup[]): boolean {
 }
 
 /** Returns true if servers returned different results for this group. */
-function hasDeviation(lookups: Lookup[]): boolean {
+export function hasDeviation(lookups: Lookup[]): boolean {
   if (lookups.length < 2) return false;
   return !lookupsAgree(lookups);
 }
@@ -298,7 +300,7 @@ interface GroupedResult {
   lookups: Lookup[];
 }
 
-function groupByRecordType(batches: BatchEvent[]): GroupedResult[] {
+export function groupByRecordType(batches: BatchEvent[]): GroupedResult[] {
   const map = new Map<string, Lookup[]>();
   for (const batch of batches) {
     const rt = batch.record_type;
@@ -404,10 +406,10 @@ function RecordGroup(props: {
         </span>
         <span class="record-count">{totalRecords()} record{totalRecords() !== 1 ? 's' : ''}</span>
         <Show when={deviated()}>
-          <span class="deviation-badge">differs</span>
+          <span class="deviation-badge" aria-label="Results diverge">{'\u26A0'} differs</span>
         </Show>
         <Show when={agreed()}>
-          <span class="agree-badge">agree</span>
+          <span class="agree-badge" aria-label="All servers agree">{'\u2713'} agree</span>
         </Show>
         <span class="collapse-indicator">{collapsed() ? '+' : '\u2212'}</span>
       </button>
@@ -756,6 +758,25 @@ export function ResultsTable(props: ResultsTableProps) {
     }
   });
 
+  // Expand all: collect all expandable keys from visible rows
+  createEffect(() => {
+    const trigger = props.expandAll;
+    if (trigger && trigger > 0) {
+      requestAnimationFrame(() => {
+        const keys = getVisibleRowKeys().filter(isExpandableKey);
+        setExpandedKeys(new Set(keys));
+      });
+    }
+  });
+
+  // Collapse all: clear expanded keys
+  createEffect(() => {
+    const trigger = props.collapseAll;
+    if (trigger && trigger > 0) {
+      setExpandedKeys(new Set<string>());
+    }
+  });
+
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown);
   });
@@ -779,11 +800,31 @@ export function ResultsTable(props: ResultsTableProps) {
       </Show>
 
       <Show when={props.activeTab === 'results'}>
-        {/* Loading indicator */}
+        {/* Skeleton loading placeholder */}
         <Show when={props.status === 'loading' && props.results.length === 0}>
-          <div class="loading" role="status" aria-live="polite">
-            <div class="loading-spinner" />
-            <span>Resolving...</span>
+          <div class="record-group" role="status" aria-live="polite">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>TTL</th>
+                  <th>Value</th>
+                  <th>Server</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[0, 1, 2, 3].map(() => (
+                  <tr class="skeleton-row">
+                    <td><div class="skeleton-bar skeleton-bar--name" /></td>
+                    <td><div class="skeleton-bar skeleton-bar--ttl" /></td>
+                    <td><div class="skeleton-bar skeleton-bar--value" /></td>
+                    <td><div class="skeleton-bar skeleton-bar--server" /></td>
+                    <td><div class="skeleton-bar skeleton-bar--time" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </Show>
 
@@ -824,7 +865,7 @@ export function ResultsTable(props: ResultsTableProps) {
       </Show>
 
       <Show when={props.activeTab === 'servers'}>
-        <ServerComparison results={props.results} />
+        <ServerComparison results={props.results} activeTab={props.activeTab} />
       </Show>
 
       <Show when={props.activeTab === 'json'}>
