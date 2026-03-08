@@ -131,11 +131,12 @@ tlsight/
   Makefile                        # build/test/docker targets
   src/
     main.rs                       # entry point, axum server, graceful shutdown
-    lib.rs                        # build_app(), middleware stack
     config.rs                     # config crate: TOML + env vars (TLSIGHT_ prefix)
     error.rs                      # thiserror AppError enum -> HTTP status + error codes
+    input.rs                      # hostname[:port,...] input parsing and validation
     state.rs                      # AppState (config, rate limiter, dns resolver, trust store)
     routes.rs                     # axum router, endpoint handlers
+    scalar_docs.html              # Scalar API docs UI template
     tls/
       mod.rs                      # TLS inspection orchestration
       connect.rs                  # TCP connect + TLS handshake execution
@@ -151,26 +152,34 @@ tlsight/
       chain_trust.rs              # Chain completeness, expiry, signature algo checks
       dane.rs                     # TLSA record vs. presented certificate matching
       caa_compliance.rs           # CAA record vs. issuing CA matching
-      ct.rs                       # Certificate Transparency log presence (optional)
+      ct.rs                       # Certificate Transparency SCT extraction (optional)
     security/
       mod.rs                      # Security headers, CORS
-      rate_limit.rs               # tower-governor layers (per-IP, per-target)
+      rate_limit.rs               # GCRA rate limiting (per-IP, per-target)
       ip_extract.rs               # Client IP from proxy headers
       target_policy.rs            # Target validation (no internal IPs, port restrictions)
-    format.rs                     # Human-readable formatting for cert fields
-    middleware.rs                 # Request ID, metrics, security headers
   frontend/                       # SolidJS + Vite (strict TypeScript)
     src/
+      index.tsx                   # SolidJS entry point (renders App)
       App.tsx                     # Main state, inspection trigger, theme
+      vite-env.d.ts               # Vite client type declarations
       components/
         HostInput.tsx             # Hostname input with port selector
         ChainView.tsx             # Certificate chain visualization
         CertDetail.tsx            # Individual certificate details
         TlsParams.tsx             # Negotiated TLS parameters
         ValidationSummary.tsx     # Pass/warn/fail validation results
+        ConsistencyView.tsx       # Multi-IP consistency comparison
+        CtView.tsx                # Certificate Transparency SCT display
+        DnsInfo.tsx               # CAA and TLSA DNS cross-check results
+        PortTabs.tsx              # Multi-port tab navigation
+        QueryHistory.tsx          # Recent query history (localStorage)
+        ExportButtons.tsx         # JSON download + markdown copy
         CrossLinks.tsx            # Links to dns.pdt.sh and ip.pdt.sh
       lib/
         types.ts                  # TypeScript interfaces matching Rust response
+        api.ts                    # API client for /api/inspect
+        history.ts                # Query history management (localStorage)
       styles/
         global.css                # Plain CSS with custom properties
     dist/                         # Build output, .gitignored, embedded via rust-embed
