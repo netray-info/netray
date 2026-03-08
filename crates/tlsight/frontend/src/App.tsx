@@ -224,7 +224,7 @@ export default function App() {
       </header>
 
       <main class="main">
-        <HostInput onSubmit={handleInspect} loading={loading()} inputRef={el => (inputEl = el)} />
+        <HostInput onSubmit={handleInspect} loading={loading()} value={lastQuery()} inputRef={el => (inputEl = el)} />
 
         <Show when={error()}>
           <div class="error-banner">{error()}</div>

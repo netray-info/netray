@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
 import { getHistory } from '../lib/history';
 
 const PRESETS: { label: string; ports: string }[] = [
@@ -11,10 +11,12 @@ interface Props {
   onSubmit: (input: string) => void;
   loading: boolean;
   inputRef?: (el: HTMLInputElement) => void;
+  value?: string;
 }
 
 export default function HostInput(props: Props) {
-  const [value, setValue] = createSignal('');
+  const [value, setValue] = createSignal(props.value ?? '');
+  createEffect(() => { if (props.value !== undefined) setValue(props.value); });
   const [historyOpen, setHistoryOpen] = createSignal(false);
   const [historyIdx, setHistoryIdx] = createSignal(-1);
 
