@@ -20,6 +20,9 @@ use utoipa::OpenApi;
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ErrorInfo, ErrorResponse};
+use crate::query_dedup::QueryDedup;
+use crate::reload::HotState;
+use crate::resolver_pool::ResolverPool;
 use crate::result_cache::ResultCache;
 use crate::security::{IpExtractor, RateLimitState};
 
@@ -38,12 +41,16 @@ pub struct BatchEvent {
 
 /// Shared state passed to all API handlers via axum's `State` extractor.
 #[derive(Clone)]
+#[allow(dead_code)] // resolver_pool, query_dedup, hot_state: handler integration pending
 pub struct AppState {
     pub config: Arc<Config>,
     pub circuit_breakers: Arc<CircuitBreakerRegistry>,
     pub ip_extractor: Arc<IpExtractor>,
     pub rate_limiter: Arc<RateLimitState>,
     pub result_cache: Arc<ResultCache>,
+    pub resolver_pool: Arc<ResolverPool>,
+    pub query_dedup: QueryDedup,
+    pub hot_state: HotState,
 }
 
 // ---------------------------------------------------------------------------
@@ -183,6 +190,9 @@ mod tests {
 
     use crate::circuit_breaker::CircuitBreakerRegistry;
     use crate::config::Config;
+    use crate::query_dedup::QueryDedup;
+    use crate::reload::HotState;
+    use crate::resolver_pool::ResolverPool;
     use crate::result_cache::ResultCache;
     use crate::security::{IpExtractor, RateLimitState};
 
@@ -195,6 +205,7 @@ mod tests {
     /// Build an `AppState` from default config.
     fn default_state() -> AppState {
         let config = Config::load(None).expect("default config must be valid");
+        let hot_state = HotState::new(&config);
         AppState {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
             ip_extractor: Arc::new(
@@ -203,6 +214,12 @@ mod tests {
             ),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             result_cache: Arc::new(ResultCache::new()),
+            resolver_pool: Arc::new(ResolverPool::new(
+                config.performance.resolver_pool_ttl_secs,
+                config.performance.resolver_pool_max_size,
+            )),
+            query_dedup: QueryDedup::new(),
+            hot_state,
             config: Arc::new(config),
         }
     }
@@ -458,7 +475,8 @@ mod tests {
         // Build a state with a tiny per-IP rate limit so we can exhaust it
         // without sending hundreds of requests.
         use crate::config::{
-            CircuitBreakerConfig, DnsConfig, LimitsConfig, ServerConfig, TraceConfig,
+            CircuitBreakerConfig, DnsConfig, LimitsConfig, PerformanceConfig, ServerConfig,
+            TelemetryConfig, TraceConfig,
         };
 
         let config = Config {
@@ -495,8 +513,11 @@ mod tests {
                 max_hops: 10,
                 query_timeout_secs: 3,
             },
+            performance: PerformanceConfig::default(),
+            telemetry: TelemetryConfig::default(),
         };
 
+        let hot_state = HotState::new(&config);
         let state = AppState {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
             ip_extractor: Arc::new(
@@ -505,6 +526,12 @@ mod tests {
             ),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             result_cache: Arc::new(ResultCache::new()),
+            resolver_pool: Arc::new(ResolverPool::new(
+                config.performance.resolver_pool_ttl_secs,
+                config.performance.resolver_pool_max_size,
+            )),
+            query_dedup: QueryDedup::new(),
+            hot_state,
             config: Arc::new(config),
         };
 

@@ -35,7 +35,13 @@ thiserror = "2"
 
 # Logging / tracing
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "registry"] }
+
+# OpenTelemetry (opt-in)
+opentelemetry = "0.28"
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.28", features = ["http-proto"] }
+tracing-opentelemetry = "0.29"
 
 # Metrics
 metrics = "0.24"
@@ -47,6 +53,12 @@ mime_guess = "2"
 
 # Result caching
 moka = { version = "0.12", features = ["future"] }
+
+# Hot config reload
+arc-swap = "1"
+
+# Query deduplication
+dashmap = "6"
 
 # Request IDs
 uuid = { version = "1", features = ["v7"] }

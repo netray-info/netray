@@ -15,9 +15,16 @@ mod dns_raw;
 mod dns_trace;
 mod error;
 mod parser;
+// TODO: Wire query dedup into SSE handlers and resolver pool into build_resolver_group.
+#[allow(dead_code)]
+mod query_dedup;
 mod record_format;
+mod reload;
+#[allow(dead_code)]
+mod resolver_pool;
 mod result_cache;
 mod security;
+mod telemetry;
 
 // ---------------------------------------------------------------------------
 // Request ID newtype
@@ -43,25 +50,26 @@ struct Assets;
 
 #[tokio::main]
 async fn main() {
-    // 1. Initialize tracing.
-    tracing_subscriber::fmt()
-        .json()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "prism=info,tower_http=info".into()),
-        )
-        .init();
-
-    // 2. Load configuration.
+    // 1. Load configuration (before tracing, since telemetry config controls subscriber setup).
     let config_path = std::env::args()
         .nth(1)
         .or_else(|| std::env::var("PRISM_CONFIG").ok());
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
+    // 2. Initialize tracing (with optional OpenTelemetry layer).
+    telemetry::init_subscriber(&config.telemetry);
+
     tracing::info!(bind = %config.server.bind, "starting prism");
 
     // 3. Build shared application state.
+    let hot_state = reload::HotState::new(&config);
+    let resolver_pool = Arc::new(resolver_pool::ResolverPool::new(
+        config.performance.resolver_pool_ttl_secs,
+        config.performance.resolver_pool_max_size,
+    ));
+    resolver_pool.spawn_cleanup_task(config.performance.resolver_pool_cleanup_interval_secs);
+
     let state = api::AppState {
         circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(
             &config.circuit_breaker,
@@ -72,8 +80,14 @@ async fn main() {
         ),
         rate_limiter: Arc::new(security::RateLimitState::new(&config.limits)),
         result_cache: Arc::new(result_cache::ResultCache::new()),
+        resolver_pool,
+        query_dedup: query_dedup::QueryDedup::new(),
+        hot_state: hot_state.clone(),
         config: Arc::new(config.clone()),
     };
+
+    // Spawn SIGHUP-based hot config reload watcher.
+    reload::spawn_reload_watcher(config_path.clone(), hot_state);
 
     // 4. Compose the application router.
     //
@@ -133,6 +147,9 @@ async fn main() {
     .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
     .await
     .expect("server error");
+
+    // Flush pending OTel spans on shutdown.
+    telemetry::shutdown();
 }
 
 // ---------------------------------------------------------------------------

@@ -271,7 +271,7 @@ impl CircuitBreakerRegistry {
                     to = ?to,
                     "circuit breaker state transition"
                 );
-                emit_breaker_metrics(provider, to);
+                emit_breaker_metrics(provider, from, to);
                 Ok(())
             }
             Ok(None) => Ok(()),
@@ -291,7 +291,7 @@ impl CircuitBreakerRegistry {
                 to = ?to,
                 "circuit breaker state transition"
             );
-            emit_breaker_metrics(provider, to);
+            emit_breaker_metrics(provider, from, to);
         }
     }
 
@@ -307,7 +307,7 @@ impl CircuitBreakerRegistry {
                 to = ?to,
                 "circuit breaker state transition"
             );
-            emit_breaker_metrics(provider, to);
+            emit_breaker_metrics(provider, from, to);
         }
     }
 
@@ -333,19 +333,35 @@ impl CircuitBreakerRegistry {
     }
 }
 
+fn breaker_state_str(state: BreakerState) -> &'static str {
+    match state {
+        BreakerState::Closed => "closed",
+        BreakerState::Open => "open",
+        BreakerState::HalfOpen => "half_open",
+    }
+}
+
 /// Emit Prometheus metrics for a circuit breaker state transition.
 ///
 /// - `prism_circuit_breaker_state`: gauge (0=Closed, 1=Open, 2=HalfOpen)
 /// - `prism_circuit_breaker_trips_total`: counter incremented on transitions to Open
-fn emit_breaker_metrics(provider: &str, new_state: BreakerState) {
-    let state_value = match new_state {
+/// - `prism_circuit_breaker_transitions_total`: counter with `from` and `to` labels
+fn emit_breaker_metrics(provider: &str, from: BreakerState, to: BreakerState) {
+    let state_value = match to {
         BreakerState::Closed => 0.0,
         BreakerState::Open => 1.0,
         BreakerState::HalfOpen => 2.0,
     };
     metrics::gauge!("prism_circuit_breaker_state", "provider" => provider.to_owned())
         .set(state_value);
-    if new_state == BreakerState::Open {
+    metrics::counter!(
+        "prism_circuit_breaker_transitions_total",
+        "provider" => provider.to_owned(),
+        "from" => breaker_state_str(from),
+        "to" => breaker_state_str(to),
+    )
+    .increment(1);
+    if to == BreakerState::Open {
         metrics::counter!("prism_circuit_breaker_trips_total", "provider" => provider.to_owned())
             .increment(1);
     }

@@ -51,7 +51,7 @@ pub enum ServerSpec {
 }
 
 /// DNS transport protocol to use for queries.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Transport {
     Udp,
     Tcp,

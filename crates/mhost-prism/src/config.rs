@@ -32,6 +32,10 @@ pub struct Config {
     pub dns: DnsConfig,
     #[serde(default = "default_trace")]
     pub trace: TraceConfig,
+    #[serde(default)]
+    pub performance: PerformanceConfig,
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -44,7 +48,7 @@ pub struct ServerConfig {
     pub trusted_proxies: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct LimitsConfig {
     #[serde(default = "default_per_ip_per_minute")]
     pub per_ip_per_minute: u32,
@@ -70,7 +74,7 @@ pub struct LimitsConfig {
     pub max_servers: usize,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct CircuitBreakerConfig {
     /// Sliding window length for error-rate tracking.
     #[serde(default = "default_cb_window_secs")]
@@ -86,7 +90,7 @@ pub struct CircuitBreakerConfig {
     pub min_requests: u32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct TraceConfig {
     /// Maximum delegation hops before stopping (hard cap: 20).
     #[serde(default = "default_trace_max_hops")]
@@ -96,7 +100,7 @@ pub struct TraceConfig {
     pub query_timeout_secs: u64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct DnsConfig {
     #[serde(default = "default_servers_list")]
     pub default_servers: Vec<String>,
@@ -104,6 +108,83 @@ pub struct DnsConfig {
     pub allow_system_resolvers: bool,
     #[serde(default)]
     pub allow_arbitrary_servers: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PerformanceConfig {
+    #[serde(default = "default_resolver_pool_ttl_secs")]
+    pub resolver_pool_ttl_secs: u64,
+    #[serde(default = "default_resolver_pool_max_size")]
+    pub resolver_pool_max_size: usize,
+    #[serde(default = "default_resolver_pool_cleanup_interval_secs")]
+    pub resolver_pool_cleanup_interval_secs: u64,
+}
+
+impl Default for PerformanceConfig {
+    fn default() -> Self {
+        Self {
+            resolver_pool_ttl_secs: default_resolver_pool_ttl_secs(),
+            resolver_pool_max_size: default_resolver_pool_max_size(),
+            resolver_pool_cleanup_interval_secs: default_resolver_pool_cleanup_interval_secs(),
+        }
+    }
+}
+
+fn default_resolver_pool_ttl_secs() -> u64 {
+    300
+}
+fn default_resolver_pool_max_size() -> usize {
+    32
+}
+fn default_resolver_pool_cleanup_interval_secs() -> u64 {
+    60
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TelemetryConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_otlp_endpoint")]
+    pub otlp_endpoint: String,
+    #[serde(default = "default_service_name")]
+    pub service_name: String,
+    #[serde(default = "default_sample_rate")]
+    pub sample_rate: f64,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            otlp_endpoint: default_otlp_endpoint(),
+            service_name: default_service_name(),
+            sample_rate: default_sample_rate(),
+        }
+    }
+}
+
+fn default_otlp_endpoint() -> String {
+    "http://localhost:4318".to_owned()
+}
+fn default_service_name() -> String {
+    "prism".to_owned()
+}
+fn default_sample_rate() -> f64 {
+    1.0
+}
+
+/// Hot-reloadable subset of the configuration.
+///
+/// Contains fields that can be swapped at runtime via SIGHUP without
+/// restarting the server. Cold fields (bind address, TLS, trusted proxies)
+/// are not included.
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields read by reload.rs on SIGHUP; handler migration pending.
+pub struct HotConfig {
+    pub limits: LimitsConfig,
+    pub circuit_breaker: CircuitBreakerConfig,
+    pub dns: DnsConfig,
+    pub trace: TraceConfig,
 }
 
 // --- Default value functions ---
@@ -274,11 +355,53 @@ impl Config {
         Ok(cfg)
     }
 
+    /// Extract the hot-reloadable subset of the configuration.
+    pub fn hot(&self) -> HotConfig {
+        HotConfig {
+            limits: self.limits.clone(),
+            circuit_breaker: self.circuit_breaker.clone(),
+            dns: self.dns.clone(),
+            trace: self.trace.clone(),
+        }
+    }
+
+    /// Validate only the hot-reloadable fields. Used during SIGHUP reload.
+    pub fn validate_hot(&mut self) -> Result<(), ConfigError> {
+        self.validate_limits_and_trace()
+    }
+
     /// Validate and clamp configuration values to hard caps.
     ///
     /// - Values exceeding hard caps are clamped with a tracing warning.
     /// - Zero values for rate limits, connections, and query limits are rejected.
     fn validate(&mut self) -> Result<(), ConfigError> {
+        self.validate_limits_and_trace()?;
+
+        // Performance config validation.
+        reject_zero(
+            "performance.resolver_pool_ttl_secs",
+            self.performance.resolver_pool_ttl_secs,
+        )?;
+        reject_zero(
+            "performance.resolver_pool_max_size",
+            self.performance.resolver_pool_max_size,
+        )?;
+        reject_zero(
+            "performance.resolver_pool_cleanup_interval_secs",
+            self.performance.resolver_pool_cleanup_interval_secs,
+        )?;
+
+        // Telemetry config validation.
+        if self.telemetry.enabled && !(0.0..=1.0).contains(&self.telemetry.sample_rate) {
+            return Err(ConfigError::Message(
+                "invalid configuration: telemetry.sample_rate must be in [0.0, 1.0]".to_owned(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn validate_limits_and_trace(&mut self) -> Result<(), ConfigError> {
         // Clamp to hard caps (§8.1).
         if self.limits.max_timeout_secs > HARD_CAP_TIMEOUT_SECS {
             tracing::warn!(
@@ -388,6 +511,8 @@ mod tests {
             circuit_breaker: default_circuit_breaker(),
             dns: default_dns(),
             trace: default_trace(),
+            performance: PerformanceConfig::default(),
+            telemetry: TelemetryConfig::default(),
         }
     }
 
