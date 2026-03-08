@@ -16,6 +16,10 @@ Think `dig` on steroids, minus the terminal, plus a UI that actually shows you w
 
 **Trace** — Walk the full delegation chain from root servers to authoritative, hop by hop. Find out where your delegation breaks, where the TTL drops, and which nameserver is actually authoritative for your zone.
 
+**Compare** — Query the same domain over all four transports (UDP, TCP, DNS-over-TLS, DNS-over-HTTPS) in parallel. See which transports return different answers, which are blocked, and where middleboxes are interfering.
+
+**Auth** — Discover the domain's authoritative nameservers, then query both authoritative (RD=0) and recursive resolvers side by side. Instantly reveals caching staleness, NXDOMAIN hijacking, or split-horizon inconsistencies.
+
 ---
 
 ## Quick start
@@ -49,7 +53,7 @@ Type it, get results. Tab-completion fills in record types, servers, and flags.
 | **Server** | Which resolver(s) to ask | `@cloudflare`, `@google`, `@quad9`, `@mullvad`, `@wikimedia`, `@dns4eu`, `@system`, `@1.1.1.1`, `@8.8.8.8:53` |
 | **Transport** | How to speak DNS | `+udp` (default), `+tcp`, `+tls`, `+https` |
 | **DNSSEC** | Request DNSSEC validation | `+dnssec` |
-| **Mode** | Switch to a different endpoint | `+check`, `+trace` |
+| **Mode** | Switch to a different endpoint | `+check`, `+trace`, `+compare`, `+auth` |
 
 Blocked types: `ANY`, `AXFR`, `IXFR`. Private and loopback IPs are rejected as server targets.
 
@@ -70,6 +74,12 @@ example.com +check
 
 # Walk the delegation chain
 example.com A +trace
+
+# Compare answers across all transports
+example.com A +compare
+
+# Authoritative vs recursive comparison
+example.com MX +auth
 
 # DNSSEC validation
 example.com DNSKEY DS @cloudflare +dnssec
@@ -128,6 +138,38 @@ Useful for:
 curl -sN -X POST http://localhost:8080/api/trace \
   -H 'Content-Type: application/json' \
   -d '{"domain": "example.com", "record_type": "A"}'
+```
+
+### Compare mode
+
+Query the same domain over UDP, TCP, DNS-over-TLS, and DNS-over-HTTPS simultaneously. Results are grouped by transport so you can spot differences at a glance.
+
+Useful for:
+- Detecting ISP or corporate firewall DNS manipulation
+- Finding middleboxes that intercept or modify DNS responses
+- Comparing latency and reliability across transports
+- Verifying that encrypted DNS returns the same answers as plain UDP
+
+```sh
+curl -sN -X POST http://localhost:8080/api/compare \
+  -H 'Content-Type: application/json' \
+  -d '{"domain": "example.com", "record_types": ["A", "AAAA"], "servers": ["cloudflare"]}'
+```
+
+### Auth mode
+
+Discover the domain's authoritative nameservers via NS lookup, then query them directly (RD=0) alongside recursive resolvers. A two-column comparison shows where authoritative and recursive answers diverge.
+
+Useful for:
+- Detecting stale cached records vs fresh authoritative data
+- Finding NXDOMAIN hijacking by recursive resolvers
+- Identifying split-horizon DNS configurations
+- Verifying propagation after DNS changes
+
+```sh
+curl -sN -X POST http://localhost:8080/api/authcompare \
+  -H 'Content-Type: application/json' \
+  -d '{"domain": "example.com", "record_types": ["A", "MX"], "servers": ["cloudflare"]}'
 ```
 
 ---
@@ -190,6 +232,30 @@ Emits `hop` events (one per delegation level), then `done`.
 event: hop
 data: {"request_id":"...","hop":{"level":1,"nameservers":["a.root-servers.net."],"referrals":["com."],"records":[],"latency_ms":18}}
 ```
+
+### `POST /api/compare`
+
+```json
+{
+  "domain": "example.com",
+  "record_types": ["A", "AAAA"],
+  "servers": ["cloudflare"]
+}
+```
+
+Emits `batch` events with a `transport` field (`"udp"`, `"tcp"`, `"tls"`, `"https"`), then `done` with a `transports` array listing which transports were queried. Transports where the provider has no resolvers are skipped.
+
+### `POST /api/authcompare`
+
+```json
+{
+  "domain": "example.com",
+  "record_types": ["A", "MX"],
+  "servers": ["cloudflare"]
+}
+```
+
+Emits `batch` events with a `source` field (`"authoritative"` or `"recursive"`), then `done` with an `auth_servers` array listing the discovered authoritative nameservers.
 
 ### Metadata
 
@@ -268,7 +334,7 @@ prism is designed to be exposed to the internet. Security is load-bearing, not o
 
 1. **Query restrictions** — `ANY`, `AXFR`, and `IXFR` are blocked outright. RFC 1918, loopback, link-local, CGNAT, and multicast addresses are rejected as resolver targets. Domains over 253 characters are rejected.
 
-2. **GCRA rate limiting** — Three independent limiters: per client IP (120 tokens/min, burst 40), per DNS target (60 tokens/min, burst 20), and global (1000 tokens/min). Query cost = `record_types × servers`. A request for 10 types against 4 servers costs 40 tokens.
+2. **GCRA rate limiting** — Three independent limiters: per client IP (120 tokens/min, burst 40), per DNS target (60 tokens/min, burst 20), and global (1000 tokens/min). Query cost = `record_types × servers`. Compare mode multiplies by 4 (one per transport). Auth mode adds a flat 16 for NS discovery.
 
 3. **IP extraction** — Client IP is extracted from proxy headers only when the request arrives from a configured trusted proxy. Direct connections always use the peer address.
 
@@ -392,6 +458,8 @@ src/
     query.rs           # FuturesUnordered fan-out, 30s stream deadline
     check.rs           # 15-type lint sweep
     trace.rs           # Delegation walk
+    compare.rs         # Transport comparison (UDP/TCP/TLS/HTTPS)
+    authcompare.rs     # Auth vs recursive (NS discovery + RD=0)
     parse.rs           # Completion hints
     meta.rs            # Health, servers, record-types
   security/
@@ -406,6 +474,8 @@ frontend/src/
     ResultsTable.tsx   # Streaming results
     LintTab.tsx        # Check mode lint results
     TraceView.tsx      # Delegation hop visualization
+    TransportComparison.tsx  # Transport comparison view
+    AuthComparison.tsx       # Auth vs recursive view
   lib/tokenizer.ts     # Syntax highlighting (cosmetic, not semantic)
   styles/global.css    # Plain CSS, custom properties, no framework
 ```
