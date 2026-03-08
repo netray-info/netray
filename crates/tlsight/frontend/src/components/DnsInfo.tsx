@@ -14,7 +14,8 @@ export function CaaView(props: { caa: DnsContext['caa'] }) {
               </span>
             </Show>
           </h3>
-          <Show when={caa().records.length > 0} fallback={<p class="dns-section__empty">No CAA records found</p>}>
+          <p class="dns-section__desc">Which certificate authorities are authorized to issue certificates for this domain.</p>
+          <Show when={caa().records.length > 0} fallback={<p class="dns-section__empty">No CAA records found — any CA may issue.</p>}>
             <ul class="dns-records">
               <For each={caa().records}>
                 {(record) => <li class="dns-records__item mono">{record}</li>}

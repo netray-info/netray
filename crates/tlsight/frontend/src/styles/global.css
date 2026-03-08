@@ -165,9 +165,15 @@ a:hover { text-decoration: underline; }
   margin-bottom: 0.5rem;
 }
 
-.host-input__field {
+.host-input__field-wrap {
   flex: 1;
-  padding: 0.5rem 0.75rem;
+  position: relative;
+  min-width: 0;
+}
+
+.host-input__field {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
   font-family: var(--mono);
   font-size: 1rem;
   background: var(--bg-secondary);
@@ -185,6 +191,66 @@ a:hover { text-decoration: underline; }
 .host-input__field:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.host-input__clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition), background var(--transition);
+  z-index: 10;
+}
+
+.host-input__clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.host-input__history {
+  position: relative;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.25rem;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.host-input__history-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  transition: background var(--transition);
+}
+
+.host-input__history-item:hover,
+.host-input__history-item--active {
+  background: var(--bg-tertiary);
+}
+
+.host-input__history-item + .host-input__history-item {
+  border-top: 1px solid var(--border-subtle);
 }
 
 .host-input__submit {
@@ -478,27 +544,61 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
-   IP section
+   IP card
    ================================================================ */
 
-.ip-section {
+.ip-card {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  border-left: 3px solid var(--border);
   overflow: hidden;
+  background: var(--bg-secondary);
 }
 
-.ip-section__header {
+.ip-card--pass  { border-left-color: var(--pass); }
+.ip-card--warn  { border-left-color: var(--warn); }
+.ip-card--fail  { border-left-color: var(--fail); }
+.ip-card--error { border-left-color: var(--fail); }
+
+.ip-card__header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 10px 14px;
+  width: 100%;
   background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border);
+  border: none;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  transition: background var(--transition);
 }
 
-.ip-section__ip { font-weight: 600; font-family: var(--mono); font-size: 0.875rem; }
+.ip-card__header:hover:not(:disabled) {
+  background: var(--bg-primary);
+}
 
-.ip-section__version {
+.ip-card__header:disabled {
+  cursor: default;
+}
+
+.ip-card__left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.ip-card__ip {
+  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+}
+
+.ip-card__version {
   font-size: 0.6875rem;
   color: var(--text-muted);
   padding: 1px 6px;
@@ -509,19 +609,101 @@ a:hover { text-decoration: underline; }
   letter-spacing: 0.5px;
 }
 
-.ip-section__error { color: var(--fail); font-size: 0.875rem; }
+.ip-card__error {
+  color: var(--fail);
+  font-size: 0.8125rem;
+  flex: 1;
+}
 
-.ip-section .tls-params,
-.ip-section .chain-view,
-.ip-section .cert-details,
-.ip-section .dns-section {
+.ip-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.ip-card__badge {
+  font-size: 0.6875rem;
+  font-family: var(--mono);
+  color: var(--text-muted);
+  padding: 1px 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.ip-card__days {
+  font-size: 0.6875rem;
+  font-family: var(--mono);
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.ip-card__days--pass { color: var(--pass); border: 1px solid var(--pass); }
+.ip-card__days--warn { color: var(--warn); border: 1px solid var(--warn); }
+.ip-card__days--fail { color: var(--fail); border: 1px solid var(--fail); }
+
+.ip-card__chevron {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+  flex-shrink: 0;
+}
+
+.ip-card__chevron--open {
+  transform: rotate(90deg);
+}
+
+.ip-card__leaf-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.ip-card__leaf-sep {
+  color: var(--border);
+}
+
+.ip-card__validation {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ip-card__chip {
+  font-size: 0.6875rem;
+  font-family: var(--mono);
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+}
+
+.ip-card__chip--pass { color: var(--pass); border-color: var(--pass); }
+.ip-card__chip--fail { color: var(--fail); border-color: var(--fail); }
+
+.ip-card__body .tls-params,
+.ip-card__body .chain-view,
+.ip-card__body .cert-details,
+.ip-card__body .dns-section {
   border: none;
   border-radius: 0;
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.ip-section > :last-child,
-.ip-section > :last-child > :last-child { border-bottom: none; }
+.ip-card__body > :last-child,
+.ip-card__body > :last-child > :last-child { border-bottom: none; }
 
 /* ================================================================
    TLS parameters
@@ -694,6 +876,12 @@ a:hover { text-decoration: underline; }
   margin-bottom: 0.5rem;
 }
 
+.consistency-view__desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
 .consistency-view__badges {
   display: flex;
   flex-wrap: wrap;
@@ -751,6 +939,12 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.dns-section__desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
 }
 
 .dns-section__empty {
@@ -855,52 +1049,139 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
-   Query history
+   Modal
    ================================================================ */
 
-.query-history { margin-bottom: 1rem; }
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fade-in 150ms ease;
+}
 
-.query-history__list {
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+.modal {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-width: 480px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: modal-in 150ms ease;
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal__header h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 20px;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.modal__close:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+/* ================================================================
+   Help content
+   ================================================================ */
+
+.help-section + .help-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.help-section__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.help-syntax {
+  display: block;
+  padding: 6px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.help-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.help-desc + .help-desc {
+  margin-top: 8px;
+}
+
+.help-keys {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 0.5rem;
-  max-height: 200px;
-  overflow-y: auto;
+  margin-top: 6px;
 }
 
-.query-history__item {
+.help-key {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 6px 10px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius);
-  cursor: pointer;
-  text-align: left;
-  color: var(--text-primary);
-  width: 100%;
-  transition: border-color var(--transition);
+  gap: 10px;
+  font-size: 0.8125rem;
 }
 
-.query-history__item:hover { border-color: var(--accent); }
-
-.query-history__query { flex: 1; }
-.query-history__time { color: var(--text-muted); font-size: 0.75rem; margin-left: 0.5rem; }
-
-.query-history__clear {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
+.help-key kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 2px 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--mono);
   font-size: 0.75rem;
-  padding: 4px;
-  text-align: left;
-  transition: color var(--transition);
+  color: var(--text-primary);
 }
 
-.query-history__clear:hover { color: var(--fail); }
+.help-key span {
+  color: var(--text-secondary);
+}
 
 /* ================================================================
    Export buttons
@@ -980,6 +1261,7 @@ a:hover { text-decoration: underline; }
   .logo { font-size: 1.375rem; }
   .tagline { display: none; }
   .host-input { flex-direction: column; }
+  .host-input__field-wrap { width: 100%; }
   .host-input__submit { width: 100%; }
   .host-input__presets { justify-content: center; flex-wrap: wrap; }
   .port-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -991,7 +1273,9 @@ a:hover { text-decoration: underline; }
   .tls-params__table { display: block; overflow-x: auto; }
   .validation-summary__checks { gap: 4px; }
   .check { font-size: 0.75rem; padding: 1px 6px; }
-  .ip-section__header { flex-wrap: wrap; }
+  .ip-card__header { flex-wrap: wrap; }
+  .ip-card__meta { justify-content: flex-start; }
+  .ip-card__leaf-summary { flex-wrap: wrap; white-space: normal; }
   .export-buttons { flex-direction: column; }
   .export-buttons__btn { width: 100%; }
   .chain-view__chain { flex-direction: column; }

@@ -1,15 +1,11 @@
 import { createSignal, createResource, Show, For, onMount, onCleanup } from 'solid-js';
 import HostInput from './components/HostInput';
-import QueryHistory from './components/QueryHistory';
 import ExportButtons from './components/ExportButtons';
 import ValidationSummary from './components/ValidationSummary';
-import ChainView from './components/ChainView';
-import CertDetail from './components/CertDetail';
-import TlsParams from './components/TlsParams';
 import PortTabs from './components/PortTabs';
 import ConsistencyView from './components/ConsistencyView';
 import CrossLinks from './components/CrossLinks';
-import CtView from './components/CtView';
+import IpCard from './components/IpCard';
 import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
@@ -58,10 +54,14 @@ export default function App() {
   const [loading, setLoading] = createSignal(false);
   const [selectedPort, setSelectedPort] = createSignal<number>(443);
   const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
+  const [showHelp, setShowHelp] = createSignal(false);
+  const [lastQuery, setLastQuery] = createSignal('');
 
   const [meta] = createResource(fetchMeta);
 
   let inputEl: HTMLInputElement | undefined;
+  let modalCloseBtn: HTMLButtonElement | undefined;
+  let preModalFocus: HTMLElement | null = null;
 
   function applyTheme(t: Theme) {
     document.documentElement.setAttribute('data-theme', resolveTheme(t));
@@ -97,16 +97,41 @@ export default function App() {
     mediaQuery.addEventListener('change', onSystemThemeChange);
 
     const handler = (e: KeyboardEvent) => {
+      if (e.key === '?' && !isInputFocused()) {
+        e.preventDefault();
+        setShowHelp(v => !v);
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        if (showHelp()) {
+          setShowHelp(false);
+          e.preventDefault();
+          return;
+        }
+        inputEl?.blur();
+        return;
+      }
+
       if (e.key === '/' && !isInputFocused()) {
         e.preventDefault();
         inputEl?.focus();
+        return;
       }
+
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
         e.preventDefault();
         inputEl?.focus();
+        return;
       }
-      if (e.key === 'Escape') {
-        inputEl?.blur();
+
+      if (e.key === 'r' && !isInputFocused()) {
+        const q = lastQuery();
+        if (q && !loading()) {
+          e.preventDefault();
+          handleInspect(q);
+        }
+        return;
       }
     };
     document.addEventListener('keydown', handler);
@@ -120,6 +145,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setLastQuery(input);
     try {
       const data = await inspect(input);
       setResult(data);
@@ -155,6 +181,18 @@ export default function App() {
     return [...ips];
   };
 
+  const openHelp = () => {
+    preModalFocus = document.activeElement as HTMLElement | null;
+    setShowHelp(true);
+    requestAnimationFrame(() => modalCloseBtn?.focus());
+  };
+
+  const closeHelp = () => {
+    setShowHelp(false);
+    preModalFocus?.focus();
+    preModalFocus = null;
+  };
+
   // Check URL for initial query
   const params = new URLSearchParams(window.location.search);
   const initialQuery = params.get('h');
@@ -172,6 +210,11 @@ export default function App() {
         <div class="header-actions">
           <button
             class="header-btn"
+            onClick={openHelp}
+            title="Help (?)"
+          >?</button>
+          <button
+            class="header-btn"
             onClick={toggleTheme}
             title={themeTitle()}
           >
@@ -182,7 +225,6 @@ export default function App() {
 
       <main class="main">
         <HostInput onSubmit={handleInspect} loading={loading()} inputRef={el => (inputEl = el)} />
-        <QueryHistory onSelect={handleInspect} />
 
         <Show when={error()}>
           <div class="error-banner">{error()}</div>
@@ -230,9 +272,7 @@ export default function App() {
             const r = res();
             return (
               <div id="main-content" class="results">
-                <ValidationSummary summary={r.summary} />
-
-                {/* Results toolbar */}
+                {/* Statistics first */}
                 <div class="results-toolbar">
                   <div class="results-summary">
                     <span class="results-summary-item">{allIps().length} IP{allIps().length !== 1 ? 's' : ''}</span>
@@ -256,16 +296,15 @@ export default function App() {
                   </div>
                 </Show>
 
+                {/* Validation second */}
+                <ValidationSummary summary={r.summary} />
+
                 <Show when={r.ports.length > 1}>
                   <PortTabs
                     ports={r.ports.map(p => p.port)}
                     selected={selectedPort()}
                     onSelect={setSelectedPort}
                   />
-                </Show>
-
-                <Show when={r.dns?.caa}>
-                  {(caa) => <CaaView caa={caa()} />}
                 </Show>
 
                 <Show when={currentPort()}>
@@ -277,47 +316,22 @@ export default function App() {
                           {(c) => <ConsistencyView consistency={c()} />}
                         </Show>
 
-                        <Show when={p.tlsa}>
-                          {(tlsa) => <TlsaView tlsa={tlsa()} />}
-                        </Show>
-
                         <For each={p.ips}>
-                          {(ipResult) => (
-                            <div class="ip-section">
-                              <div class="ip-section__header">
-                                <span class="ip-section__ip">{ipResult.ip}</span>
-                                <span class="ip-section__version">{ipResult.ip_version}</span>
-                                <Show when={ipResult.error}>
-                                  {(err) => <span class="ip-section__error">{err().message}</span>}
-                                </Show>
-                              </div>
-
-                              <Show when={ipResult.tls}>
-                                {(tls) => <TlsParams params={tls()} />}
-                              </Show>
-
-                              <Show when={ipResult.ct}>
-                                {(ct) => <CtView ct={ct()} />}
-                              </Show>
-
-                              <Show when={ipResult.chain}>
-                                {(chain) => (
-                                  <>
-                                    <ChainView chain={chain()} />
-                                    <div class="cert-details">
-                                      <For each={chain()}>
-                                        {(cert) => <CertDetail cert={cert} />}
-                                      </For>
-                                    </div>
-                                  </>
-                                )}
-                              </Show>
-                            </div>
+                          {(ipResult, i) => (
+                            <IpCard result={ipResult} defaultExpanded={i() === 0} />
                           )}
                         </For>
                       </>
                     );
                   }}
+                </Show>
+
+                <Show when={r.dns?.caa}>
+                  {(caa) => <CaaView caa={caa()} />}
+                </Show>
+
+                <Show when={currentPort()?.tlsa}>
+                  {(tlsa) => <TlsaView tlsa={tlsa()} />}
                 </Show>
 
                 <Show when={meta()}>
@@ -328,6 +342,57 @@ export default function App() {
           }}
         </Show>
       </main>
+
+      {/* Help modal */}
+      <Show when={showHelp()}>
+        <div class="modal-overlay" onClick={closeHelp}>
+          <div
+            class="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="help-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div class="modal__header">
+              <h2 id="help-title">Help</h2>
+              <button class="modal__close" ref={modalCloseBtn} onClick={closeHelp}>&times;</button>
+            </div>
+
+            <div class="help-section">
+              <div class="help-section__title">Input syntax</div>
+              <code class="help-syntax">hostname[:port[,port...]]</code>
+              <p class="help-desc">Enter a hostname to inspect its TLS certificate. Optionally append ports separated by commas.</p>
+            </div>
+
+            <div class="help-section">
+              <div class="help-section__title">Keyboard shortcuts</div>
+              <div class="help-keys">
+                <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
+                <div class="help-key"><kbd>Enter</kbd><span>Submit query</span></div>
+                <div class="help-key"><kbd>r</kbd><span>Re-run last query</span></div>
+                <div class="help-key"><kbd>Escape</kbd><span>Blur input / close help</span></div>
+                <div class="help-key"><kbd>?</kbd><span>Toggle help</span></div>
+              </div>
+            </div>
+
+            <div class="help-section">
+              <div class="help-section__title">History</div>
+              <p class="help-desc">Previous queries are available via arrow keys when the input is focused.</p>
+              <div class="help-keys">
+                <div class="help-key"><kbd>&uarr;</kbd><span>Previous query</span></div>
+                <div class="help-key"><kbd>&darr;</kbd><span>Next query</span></div>
+              </div>
+            </div>
+
+            <div class="help-section">
+              <div class="help-section__title">What the results mean</div>
+              <p class="help-desc"><strong>CAA records</strong> — DNS Certification Authority Authorization. These records declare which CAs are allowed to issue certificates for a domain. If the issuing CA is not listed, the certificate may violate the domain owner's policy.</p>
+              <p class="help-desc"><strong>IP consistency</strong> — When a hostname resolves to multiple IPs, this check compares whether all IPs serve the same certificate, TLS version, and cipher suite. Mismatches may indicate misconfigured servers, stale deployments, or CDN inconsistencies.</p>
+              <p class="help-desc"><strong>DANE/TLSA</strong> — DNS-based Authentication of Named Entities. TLSA records pin certificates or CAs in DNS, validated via DNSSEC. Provides an alternative trust path independent of the CA system.</p>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       <footer class="footer">
         <a class="footer-link" href="/docs" target="_blank" rel="noopener noreferrer">API Docs</a>

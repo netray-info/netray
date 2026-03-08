@@ -14,6 +14,7 @@ export default function ConsistencyView(props: Props) {
   return (
     <div class="consistency-view">
       <h3>IP Consistency</h3>
+      <p class="consistency-view__desc">Whether all IPs for this hostname serve the same certificate and TLS configuration.</p>
       <div class="consistency-view__badges">
         <Badge label="Certificates" match={props.consistency.certificates_match} />
         <Badge label="TLS Version" match={props.consistency.tls_versions_match} />
