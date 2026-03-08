@@ -37,6 +37,8 @@ pub struct SummaryChecks {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ValidationResult {
     pub chain_trusted: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_trust_reason: Option<String>,
     pub terminates_at_self_signed: bool,
     pub chain_order_correct: bool,
     pub leaf_covers_hostname: bool,
@@ -136,6 +138,7 @@ mod tests {
     fn passing_validation() -> ValidationResult {
         ValidationResult {
             chain_trusted: true,
+            chain_trust_reason: None,
             terminates_at_self_signed: false,
             chain_order_correct: true,
             leaf_covers_hostname: true,

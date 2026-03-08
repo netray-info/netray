@@ -91,6 +91,7 @@ export interface CertInfo {
 
 export interface ValidationInfo {
   chain_trusted: boolean;
+  chain_trust_reason?: string;
   terminates_at_self_signed: boolean;
   chain_order_correct: boolean;
   leaf_covers_hostname: boolean;

@@ -749,6 +749,15 @@ a:hover { text-decoration: underline; }
 .ip-card__chip--pass { color: var(--pass); border-color: var(--pass); }
 .ip-card__chip--fail { color: var(--fail); border-color: var(--fail); }
 
+.validation-reason {
+  padding: 6px 14px;
+  font-size: 0.8125rem;
+  color: var(--fail);
+  background: color-mix(in srgb, var(--fail) 6%, transparent);
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 /* ================================================================
    Unified IP view (consistent multi-IP)
    ================================================================ */
@@ -972,6 +981,10 @@ a:hover { text-decoration: underline; }
   font-style: italic;
 }
 
+.chain-view__arrow--broken { color: var(--fail); font-weight: 700; }
+.chain-view__cert--expired { border-color: var(--fail); }
+.chain-view__cert--unknown-issuer { border-color: var(--warn); border-width: 2px; }
+.chain-view__cert--root-untrusted { border-color: var(--fail); border-style: dashed; opacity: 0.7; }
 .chain-view__days { font-size: 0.75rem; color: var(--text-secondary); }
 .chain-view__key { font-size: 0.75rem; color: var(--text-muted); }
 

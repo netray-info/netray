@@ -1,5 +1,6 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import type { IpResult } from '../lib/types';
+import { explainTrustReason } from '../lib/trust';
 import { certDisplayName } from '../lib/cert';
 import Explain from './Explain';
 import TlsParams from './TlsParams';
@@ -57,24 +58,29 @@ export default function UnifiedIpView(props: Props) {
 
       <Show when={rep().validation}>
         {(v) => (
-          <div class="ip-card__validation">
-            <span class={`ip-card__chip ${v().chain_trusted ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
-              {v().chain_trusted ? 'trusted' : 'untrusted'}
-            </span>
-            <span class={`ip-card__chip ${v().leaf_covers_hostname ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
-              {v().leaf_covers_hostname ? 'hostname ok' : 'hostname mismatch'}
-            </span>
-            <span class={`ip-card__chip ${!v().any_expired ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
-              {v().any_expired ? 'expired' : 'not expired'}
-            </span>
-            <Show when={leaf()}>
-              {(l) => (
-                <span class={`ip-card__days ${daysClass(l().days_remaining)}`}>
-                  {daysLabel(l().days_remaining)}
-                </span>
-              )}
+          <>
+            <div class="ip-card__validation">
+              <span class={`ip-card__chip ${v().chain_trusted ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
+                {v().chain_trusted ? 'trusted' : 'untrusted'}
+              </span>
+              <span class={`ip-card__chip ${v().leaf_covers_hostname ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
+                {v().leaf_covers_hostname ? 'hostname ok' : 'hostname mismatch'}
+              </span>
+              <span class={`ip-card__chip ${!v().any_expired ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
+                {v().any_expired ? 'expired' : 'not expired'}
+              </span>
+              <Show when={leaf()}>
+                {(l) => (
+                  <span class={`ip-card__days ${daysClass(l().days_remaining)}`}>
+                    {daysLabel(l().days_remaining)}
+                  </span>
+                )}
+              </Show>
+            </div>
+            <Show when={!v().chain_trusted && v().chain_trust_reason}>
+              {(reason) => <div class="validation-reason">{explainTrustReason(reason())}</div>}
             </Show>
-          </div>
+          </>
         )}
       </Show>
 
@@ -102,7 +108,7 @@ export default function UnifiedIpView(props: Props) {
         <Show when={rep().chain}>
           {(chain) => (
             <>
-              <ChainView chain={chain()} explain={props.explain} />
+              <ChainView chain={chain()} explain={props.explain} validation={rep().validation} />
               <Show when={hasCerts()}>
                 <div class="ip-card__cert-toolbar">
                   <button

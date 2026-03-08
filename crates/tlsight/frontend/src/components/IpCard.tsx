@@ -1,5 +1,6 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import type { IpResult } from '../lib/types';
+import { explainTrustReason } from '../lib/trust';
 import { certDisplayName } from '../lib/cert';
 import Explain from './Explain';
 import TlsParams from './TlsParams';
@@ -117,17 +118,22 @@ export default function IpCard(props: Props) {
 
       <Show when={props.result.validation}>
         {(v) => (
-          <div class="ip-card__validation">
-            <span class={`ip-card__chip ${v().chain_trusted ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
-              {v().chain_trusted ? 'trusted' : 'untrusted'}
-            </span>
-            <span class={`ip-card__chip ${v().leaf_covers_hostname ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
-              {v().leaf_covers_hostname ? 'hostname ok' : 'hostname mismatch'}
-            </span>
-            <span class={`ip-card__chip ${!v().any_expired ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
-              {v().any_expired ? 'expired' : 'not expired'}
-            </span>
-          </div>
+          <>
+            <div class="ip-card__validation">
+              <span class={`ip-card__chip ${v().chain_trusted ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
+                {v().chain_trusted ? 'trusted' : 'untrusted'}
+              </span>
+              <span class={`ip-card__chip ${v().leaf_covers_hostname ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
+                {v().leaf_covers_hostname ? 'hostname ok' : 'hostname mismatch'}
+              </span>
+              <span class={`ip-card__chip ${!v().any_expired ? 'ip-card__chip--pass' : 'ip-card__chip--fail'}`}>
+                {v().any_expired ? 'expired' : 'not expired'}
+              </span>
+            </div>
+            <Show when={!v().chain_trusted && v().chain_trust_reason}>
+              {(reason) => <div class="validation-reason">{explainTrustReason(reason())}</div>}
+            </Show>
+          </>
         )}
       </Show>
 
@@ -144,7 +150,7 @@ export default function IpCard(props: Props) {
           <Show when={props.result.chain}>
             {(chain) => (
               <>
-                <ChainView chain={chain()} explain={props.explain} />
+                <ChainView chain={chain()} explain={props.explain} validation={props.result.validation} />
                 <Show when={hasCerts()}>
                   <div class="ip-card__cert-toolbar">
                     <button

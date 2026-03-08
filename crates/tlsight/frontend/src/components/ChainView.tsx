@@ -1,10 +1,18 @@
 import Explain from './Explain';
-import type { CertInfo } from '../lib/types';
+import type { CertInfo, ValidationInfo } from '../lib/types';
 import { certDisplayName } from '../lib/cert';
+import { isUnknownIssuer } from '../lib/trust';
 
 interface Props {
   chain: CertInfo[];
   explain?: boolean;
+  validation?: ValidationInfo;
+}
+
+/** Check if cert[i].issuer matches cert[i+1].subject (chain link is valid). */
+function isLinkBroken(chain: CertInfo[], i: number): boolean {
+  if (i + 1 >= chain.length) return false;
+  return chain[i].issuer !== chain[i + 1].subject;
 }
 
 export default function ChainView(props: Props) {
@@ -12,6 +20,17 @@ export default function ChainView(props: Props) {
   const needsInferredRoot = () => {
     const last = lastCert();
     return last && !last.is_self_signed;
+  };
+  const isRootLinkBroken = () => {
+    const v = props.validation;
+    return v && !v.chain_trusted && !v.terminates_at_self_signed;
+  };
+  /** The last presented cert is the problematic one when issuer is unknown. */
+  const isUnknownIssuerCert = (i: number) => {
+    const v = props.validation;
+    return v && !v.chain_trusted
+      && isUnknownIssuer(v.chain_trust_reason)
+      && i === props.chain.length - 1;
   };
 
   return (
@@ -21,8 +40,12 @@ export default function ChainView(props: Props) {
       <div class="chain-view__chain">
         {props.chain.map((cert, i) => (
           <>
-            {i > 0 && <span class="chain-view__arrow">&rarr;</span>}
-            <div class={`chain-view__cert chain-view__cert--${cert.position}`}>
+            {i > 0 && (
+              <span class={`chain-view__arrow${isLinkBroken(props.chain, i - 1) ? ' chain-view__arrow--broken' : ''}`}>
+                {isLinkBroken(props.chain, i - 1) ? <>&times;</> : <>&rarr;</>}
+              </span>
+            )}
+            <div class={`chain-view__cert chain-view__cert--${cert.position}${cert.is_expired ? ' chain-view__cert--expired' : ''}${isUnknownIssuerCert(i) ? ' chain-view__cert--unknown-issuer' : ''}`}>
               <div class="chain-view__position">{cert.position}</div>
               <div class="chain-view__subject">{certDisplayName(cert.subject)}</div>
               <div class="chain-view__days">{cert.days_remaining} days left</div>
@@ -32,11 +55,15 @@ export default function ChainView(props: Props) {
         ))}
         {needsInferredRoot() && (
           <>
-            <span class="chain-view__arrow">&rarr;</span>
-            <div class="chain-view__cert chain-view__cert--root-inferred">
+            <span class={`chain-view__arrow${isRootLinkBroken() ? ' chain-view__arrow--broken' : ''}`}>
+              {isRootLinkBroken() ? <>&times;</> : <>&rarr;</>}
+            </span>
+            <div class={`chain-view__cert chain-view__cert--root-inferred${props.validation && !props.validation.chain_trusted ? ' chain-view__cert--root-untrusted' : ''}`}>
               <div class="chain-view__position">root</div>
               <div class="chain-view__subject">{certDisplayName(lastCert().issuer)}</div>
-              <div class="chain-view__inferred">from trust store</div>
+              <div class="chain-view__inferred">
+                {isRootLinkBroken() ? 'not in trust store' : 'from trust store'}
+              </div>
             </div>
           </>
         )}

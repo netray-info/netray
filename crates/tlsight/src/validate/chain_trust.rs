@@ -21,7 +21,7 @@ pub fn validate_chain(
         .map(|h| check_hostname_match(chain, h))
         .unwrap_or(false);
 
-    let chain_trusted = verify_chain_trust(verifier, hostname, raw_certs);
+    let (chain_trusted, chain_trust_reason) = verify_chain_trust(verifier, hostname, raw_certs);
 
     let weakest_signature = chain
         .iter()
@@ -38,6 +38,7 @@ pub fn validate_chain(
 
     ValidationResult {
         chain_trusted,
+        chain_trust_reason,
         terminates_at_self_signed,
         chain_order_correct,
         leaf_covers_hostname,
@@ -50,13 +51,14 @@ pub fn validate_chain(
 }
 
 /// Verify chain trust using rustls WebPkiServerVerifier.
+/// Returns `(trusted, reason)` where reason captures the error message on failure.
 fn verify_chain_trust(
     verifier: &dyn ServerCertVerifier,
     hostname: Option<&str>,
     raw_certs: &[CertificateDer<'_>],
-) -> bool {
+) -> (bool, Option<String>) {
     let Some(end_entity) = raw_certs.first() else {
-        return false;
+        return (false, Some("empty certificate chain".to_string()));
     };
     let intermediates = if raw_certs.len() > 1 {
         &raw_certs[1..]
@@ -70,15 +72,16 @@ fn verify_chain_trust(
     let server_name = match hostname {
         Some(h) => match ServerName::try_from(h.to_owned()) {
             Ok(sn) => sn,
-            Err(_) => return false,
+            Err(_) => return (false, Some(format!("invalid server name: {h}"))),
         },
-        None => return false,
+        None => return (false, Some("no hostname for trust verification".to_string())),
     };
 
     let now = UnixTime::now();
-    verifier
-        .verify_server_cert(end_entity, intermediates, &server_name, &[], now)
-        .is_ok()
+    match verifier.verify_server_cert(end_entity, intermediates, &server_name, &[], now) {
+        Ok(_) => (true, None),
+        Err(e) => (false, Some(e.to_string())),
+    }
 }
 
 /// Check if any certificate in the chain has a not_before date in the future.
@@ -287,21 +290,17 @@ mod tests {
             .self_signed(&rcgen::KeyPair::generate().unwrap())
             .unwrap();
         let der = CertificateDer::from(cert.der().to_vec());
-        assert!(!verify_chain_trust(
-            verifier.as_ref(),
-            Some("example.com"),
-            &[der]
-        ));
+        let (trusted, reason) = verify_chain_trust(verifier.as_ref(), Some("example.com"), &[der]);
+        assert!(!trusted);
+        assert!(reason.is_some());
     }
 
     #[test]
     fn empty_chain_not_trusted() {
         let verifier = test_verifier();
-        assert!(!verify_chain_trust(
-            verifier.as_ref(),
-            Some("example.com"),
-            &[]
-        ));
+        let (trusted, reason) = verify_chain_trust(verifier.as_ref(), Some("example.com"), &[]);
+        assert!(!trusted);
+        assert_eq!(reason.as_deref(), Some("empty certificate chain"));
     }
 
     #[test]
@@ -312,7 +311,12 @@ mod tests {
             .self_signed(&rcgen::KeyPair::generate().unwrap())
             .unwrap();
         let der = CertificateDer::from(cert.der().to_vec());
-        assert!(!verify_chain_trust(verifier.as_ref(), None, &[der]));
+        let (trusted, reason) = verify_chain_trust(verifier.as_ref(), None, &[der]);
+        assert!(!trusted);
+        assert_eq!(
+            reason.as_deref(),
+            Some("no hostname for trust verification")
+        );
     }
 
     // --- sig_strength tests ---
