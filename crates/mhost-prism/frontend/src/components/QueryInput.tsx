@@ -48,6 +48,8 @@ const FLAGS = [
   { label: '+dnssec', detail: 'DNSSEC validation' },
   { label: '+check', detail: 'DNS health check (lint all record types)' },
   { label: '+trace', detail: 'Delegation trace (walk root → authoritative)' },
+  { label: '+compare', detail: 'Transport comparison (UDP/TCP/TLS/HTTPS)' },
+  { label: '+auth', detail: 'Authoritative vs recursive comparison' },
 ];
 
 function prismCompletions(context: CompletionContext): CompletionResult | null {
