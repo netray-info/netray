@@ -5,10 +5,11 @@ import { LintTab, type LintCategory, type CheckDoneStats } from './components/Li
 import { TraceView, type TraceHop, type TraceDoneStats } from './components/TraceView';
 import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/DnssecView';
 import { TransportComparison } from './components/TransportComparison';
+import { AuthComparison } from './components/AuthComparison';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
-type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'transport';
+type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'transport' | 'auth';
 type Theme = 'dark' | 'light' | 'system';
 
 export interface CloudInfo {
@@ -101,6 +102,11 @@ function hasCompareFlag(q: string): boolean {
   return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+compare');
 }
 
+/** Returns true if the query string contains the +auth flag. */
+function hasAuthFlag(q: string): boolean {
+  return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+auth');
+}
+
 /** Extract domain (first token) and @server specs from a query string. */
 function extractCheckParams(q: string): { domain: string; servers: string[] } {
   const tokens = q.trim().split(/\s+/);
@@ -112,11 +118,11 @@ function extractCheckParams(q: string): { domain: string; servers: string[] } {
   return { domain, servers };
 }
 
-/** Strip routing flags (+dnssec, +trace, +check, +compare) for background query. */
+/** Strip routing flags (+dnssec, +trace, +check, +compare, +auth) for background query. */
 function stripRoutingFlags(q: string): string {
   return q.trim().split(/\s+/).filter((t) => {
     const lower = t.toLowerCase();
-    return lower !== '+dnssec' && lower !== '+trace' && lower !== '+check' && lower !== '+compare';
+    return lower !== '+dnssec' && lower !== '+trace' && lower !== '+check' && lower !== '+compare' && lower !== '+auth';
   }).join(' ');
 }
 
@@ -246,6 +252,11 @@ export default function App() {
   const [isCompareMode, setIsCompareMode] = createSignal(false);
   const [compareResults, setCompareResults] = createSignal<BatchEvent[]>([]);
 
+  // Auth mode state
+  const [isAuthMode, setIsAuthMode] = createSignal(false);
+  const [authResults, setAuthResults] = createSignal<BatchEvent[]>([]);
+  const [authServers, setAuthServers] = createSignal<string[]>([]);
+
   // IP enrichment
   const [ifconfigUrl, setIfconfigUrl] = createSignal<string | null>(null);
   const [enrichments, setEnrichments] = createSignal<Record<string, IpInfo>>({});
@@ -259,6 +270,7 @@ export default function App() {
   let traceAbortController: AbortController | null = null;
   let dnssecAbortController: AbortController | null = null;
   let compareAbortController: AbortController | null = null;
+  let authAbortController: AbortController | null = null;
   let focusEditor: (() => void) | undefined;
   let clearEditor: (() => void) | undefined;
   let setEditorValue: ((v: string) => void) | undefined;
@@ -343,12 +355,20 @@ export default function App() {
     }
   }
 
+  function abortAuth() {
+    if (authAbortController) {
+      authAbortController.abort();
+      authAbortController = null;
+    }
+  }
+
   function closeConnections() {
     closeEventSource();
     abortCheck();
     abortTrace();
     abortDnssec();
     abortCompare();
+    abortAuth();
   }
 
   function cancelQuery() {
@@ -386,6 +406,9 @@ export default function App() {
     setIsDnssecMode(false);
     setIsCompareMode(false);
     setCompareResults([]);
+    setIsAuthMode(false);
+    setAuthResults([]);
+    setAuthServers([]);
     setTraceHops([]);
     setTraceDoneStats(null);
     setDnssecLevels([]);
@@ -460,6 +483,9 @@ export default function App() {
     } else if (cached.mode === 'compare') {
       setIsCompareMode(true);
       setActiveTab('transport');
+    } else if (cached.mode === 'auth') {
+      setIsAuthMode(true);
+      setActiveTab('auth');
     } else {
       setActiveTab('results');
     }
@@ -471,6 +497,8 @@ export default function App() {
           const batch = parseBatchEvent(ev.data as Parameters<typeof parseBatchEvent>[0]);
           if (cached.mode === 'compare') {
             setCompareResults((prev) => [...prev, batch]);
+          } else if (cached.mode === 'auth') {
+            setAuthResults((prev) => [...prev, batch]);
           }
           setResults((prev) => [...prev, batch]);
         } catch { /* skip malformed */ }
@@ -492,6 +520,10 @@ export default function App() {
           setCheckStats(done as unknown as CheckDoneStats);
         } else if (cached.mode === 'trace') {
           setTraceDoneStats(done as unknown as TraceDoneStats);
+        } else if (cached.mode === 'auth') {
+          const authDone = done as Record<string, unknown>;
+          if (Array.isArray(authDone.auth_servers)) setAuthServers(authDone.auth_servers as string[]);
+          setStats(done as unknown as DoneStats);
         } else {
           setStats(done as unknown as DoneStats);
         }
@@ -560,6 +592,7 @@ export default function App() {
     const wantTrace = hasTraceFlag(q);
     const wantDnssec = hasDnssecFlag(q);
     const wantCompare = hasCompareFlag(q);
+    const wantAuth = hasAuthFlag(q);
 
     const { domain, record_type } = extractTraceParams(q);
     const { domain: checkDomain, servers } = extractCheckParams(q);
@@ -575,16 +608,19 @@ export default function App() {
     setLintCategories([]);
     setCheckStats(null);
     setCompareResults([]);
+    setAuthResults([]);
+    setAuthServers([]);
     setError(null);
     setIsTraceMode(wantTrace);
     setIsCheckMode(wantCheck);
     setIsDnssecMode(wantDnssec);
     setIsCompareMode(wantCompare);
+    setIsAuthMode(wantAuth);
     setEnrichments({});
     setCacheKey(null);
     setStatus('loading');
-    // Pick the first active tab: transport > dnssec > trace > lint
-    setActiveTab(wantCompare ? 'transport' : wantDnssec ? 'dnssec' : wantTrace ? 'trace' : 'lint');
+    // Pick the first active tab: auth > transport > dnssec > trace > lint
+    setActiveTab(wantAuth ? 'auth' : wantCompare ? 'transport' : wantDnssec ? 'dnssec' : wantTrace ? 'trace' : 'lint');
     addToHistory(q);
 
     const url = new URL(window.location.href);
@@ -597,6 +633,7 @@ export default function App() {
     if (wantTrace) streamCount++;
     if (wantDnssec) streamCount++;
     if (wantCompare) streamCount++;
+    if (wantAuth) streamCount++;
 
     let doneCount = 0;
     function onStreamDone() {
@@ -607,8 +644,8 @@ export default function App() {
     // Background query to populate Results tab (strip all routing flags).
     if (wantCheck) {
       // Check already provides batch events — no separate background query needed.
-    } else if (!wantCompare) {
-      // Compare provides its own batch events — no separate background query needed.
+    } else if (!wantCompare && !wantAuth) {
+      // Compare and auth provide their own batch events — no separate background query needed.
       startBackgroundQuery(stripRoutingFlags(q));
     }
 
@@ -826,6 +863,68 @@ export default function App() {
         }, controller.signal);
       })();
     }
+
+    // Auth stream (provides batch events with source field)
+    if (wantAuth) {
+      const controller = new AbortController();
+      authAbortController = controller;
+
+      const tokens = q.trim().split(/\s+/);
+      const authDomain = tokens[0] ?? '';
+      const recordTypes = tokens.slice(1).filter((t) => /^[A-Za-z0-9]+$/.test(t) && !t.startsWith('@') && !t.startsWith('+')).map((t) => t.toUpperCase());
+      const authServersSpec = tokens.filter((t) => t.startsWith('@')).map((t) => t.slice(1));
+      const authBody: Record<string, unknown> = { domain: authDomain };
+      if (recordTypes.length > 0) authBody.record_types = recordTypes;
+      if (authServersSpec.length > 0) authBody.servers = authServersSpec;
+
+      (async () => {
+        let response: Response;
+        try {
+          response = await fetch('/api/authcompare', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            body: JSON.stringify(authBody),
+            signal: controller.signal,
+          });
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') return;
+          setError(e instanceof Error ? e.message : 'Network error');
+          onStreamDone();
+          return;
+        }
+        if (!response.ok) {
+          try { const body = await response.json(); setError(body?.error?.message ?? `HTTP ${response.status}`); }
+          catch { setError(`HTTP ${response.status}`); }
+          onStreamDone();
+          return;
+        }
+        await readPostStream(response, (eventType, data) => {
+          if (eventType === 'batch') {
+            try {
+              const batch = parseBatchEvent(data as Parameters<typeof parseBatchEvent>[0]);
+              setAuthResults((prev) => [...prev, batch]);
+              setResults((prev) => [...prev, batch]);
+              setCompletedTypes((prev) => prev.includes(batch.record_type) ? prev : [...prev, batch.record_type]);
+            } catch (e) { console.error('Failed to parse batch event:', e); }
+          } else if (eventType === 'enrichment') {
+            handleEnrichmentEvent(data);
+          } else if (eventType === 'done') {
+            const done = data as DoneStats & { auth_servers?: string[]; cache_key?: string };
+            if (done.auth_servers) setAuthServers(done.auth_servers);
+            setStats({
+              total_queries: done.total_queries,
+              duration_ms: done.duration_ms,
+              warnings: done.warnings ?? [],
+            });
+            if (done.cache_key) setCacheKey(done.cache_key);
+            onStreamDone();
+          } else if (eventType === 'error') {
+            const ev = data as { message?: string; code?: string };
+            setError(ev.message ?? ev.code ?? 'Unknown error');
+          }
+        }, controller.signal);
+      })();
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -837,9 +936,10 @@ export default function App() {
     const wantTrace = hasTraceFlag(q);
     const wantDnssec = hasDnssecFlag(q);
     const wantCompare = hasCompareFlag(q);
+    const wantAuth = hasAuthFlag(q);
 
     // Any combination of routing flags → unified combined handler.
-    if (wantCheck || wantTrace || wantDnssec || wantCompare) {
+    if (wantCheck || wantTrace || wantDnssec || wantCompare || wantAuth) {
       submitCombined(q);
       return;
     }
@@ -855,6 +955,9 @@ export default function App() {
     setIsDnssecMode(false);
     setIsCompareMode(false);
     setCompareResults([]);
+    setIsAuthMode(false);
+    setAuthResults([]);
+    setAuthServers([]);
     setTraceHops([]);
     setTraceDoneStats(null);
     setDnssecLevels([]);
@@ -974,6 +1077,7 @@ export default function App() {
     if ((e.key === 'h' || e.key === 'l') && !isEditing && hasContent()) {
       e.preventDefault();
       const visibleTabs: ActiveTab[] = [];
+      if (isAuthMode()) visibleTabs.push('auth');
       if (isCompareMode()) visibleTabs.push('transport');
       if (isDnssecMode()) visibleTabs.push('dnssec');
       if (isTraceMode()) visibleTabs.push('trace');
@@ -1036,7 +1140,7 @@ export default function App() {
   // ---------------------------------------------------------------------------
 
   const hasContent = () =>
-    status() !== 'idle' || results().length > 0 || lintCategories().length > 0 || traceHops().length > 0 || dnssecLevels().length > 0 || compareResults().length > 0;
+    status() !== 'idle' || results().length > 0 || lintCategories().length > 0 || traceHops().length > 0 || dnssecLevels().length > 0 || compareResults().length > 0 || authResults().length > 0;
   const isLoading  = () => status() === 'loading';
 
   // Agreement/divergence counts for the results summary
@@ -1209,6 +1313,20 @@ export default function App() {
                 </button>
                 <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
+              <div class="welcome-card">
+                <div class="welcome-card-title">Auth</div>
+                <p class="welcome-card-desc">
+                  Compare authoritative nameserver answers against recursive resolver answers. Reveal caching staleness, NXDOMAIN hijacking, or split-horizon inconsistencies.
+                </p>
+                <button
+                  class="welcome-example"
+                  onClick={() => fillQuery('example.com A +auth')}
+                  title="Click to fill query"
+                >
+                  example.com A +auth
+                </button>
+                <span class="example-hint">fills the query bar — press Enter to run</span>
+              </div>
             </div>
           </div>
         </Show>
@@ -1217,6 +1335,9 @@ export default function App() {
           {/* Row 1: Tabs */}
           <div class="tabs">
             <div class="tabs-left" role="tablist">
+              <Show when={isAuthMode()}>
+                <button role="tab" aria-selected={activeTab() === 'auth'} class={`tab${activeTab() === 'auth' ? ' active' : ''}`} onClick={() => setActiveTab('auth')}>Auth</button>
+              </Show>
               <Show when={isCompareMode()}>
                 <button role="tab" aria-selected={activeTab() === 'transport'} class={`tab${activeTab() === 'transport' ? ' active' : ''}`} onClick={() => setActiveTab('transport')}>Transport</button>
               </Show>
@@ -1241,6 +1362,7 @@ export default function App() {
               <div class="status-info">
                 <span class="status-loading-text">
                   {isCheckMode() && isTraceMode() ? 'Tracing + Checking…'
+                    : isAuthMode() ? 'Comparing auth vs recursive…'
                     : isCompareMode() ? 'Comparing transports…'
                     : isDnssecMode() ? 'Validating DNSSEC…'
                     : isCheckMode() ? 'Checking…'
@@ -1320,6 +1442,14 @@ export default function App() {
               <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields">explain</button>
             </div>
           </Show>
+          {/* Row 3: View options — auth tab */}
+          <Show when={activeTab() === 'auth' && authResults().length > 0}>
+            <div class="view-options">
+              <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only record types where auth and recursive diverge">deviations</button>
+              <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: divergences first">sort</button>
+              <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields">explain</button>
+            </div>
+          </Show>
           {/* Row 3: View options — transport tab */}
           <Show when={activeTab() === 'transport' && compareResults().length > 0}>
             <div class="view-options">
@@ -1337,6 +1467,20 @@ export default function App() {
           as a visible page shift. Keeping all panes in the DOM and toggling
           display avoids that intermediate empty state entirely.
         */}
+
+        {/* Auth tab pane — mounted once auth mode starts */}
+        <Show when={isAuthMode()}>
+          <div style={{ display: activeTab() === 'auth' ? 'block' : 'none' }}>
+            <AuthComparison
+              results={authResults()}
+              activeTab={activeTab()}
+              explain={explain()}
+              sort={sortView()}
+              devOnly={devOnly()}
+              authServers={authServers()}
+            />
+          </div>
+        </Show>
 
         {/* Transport tab pane — mounted once compare mode starts */}
         <Show when={isCompareMode()}>
@@ -1390,7 +1534,7 @@ export default function App() {
 
         {/* Results / Servers / JSON — always mounted, hidden when another pane is active */}
         <Show when={hasContent()}>
-          <div id="main-content" style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' && activeTab() !== 'dnssec' && activeTab() !== 'transport' ? 'block' : 'none' }}>
+          <div id="main-content" style={{ display: activeTab() !== 'lint' && activeTab() !== 'trace' && activeTab() !== 'dnssec' && activeTab() !== 'transport' && activeTab() !== 'auth' ? 'block' : 'none' }}>
             <ResultsTable
               results={results()}
               stats={stats()}
@@ -1474,6 +1618,7 @@ export default function App() {
                   <tr><td class="help-token">+check</td><td>Domain health check (15 types + DMARC lint)</td></tr>
                   <tr><td class="help-token">+trace</td><td>Delegation trace (root → authoritative)</td></tr>
                   <tr><td class="help-token">+compare</td><td>Transport comparison (UDP/TCP/TLS/HTTPS)</td></tr>
+                  <tr><td class="help-token">+auth</td><td>Authoritative vs recursive comparison</td></tr>
                 </tbody>
               </table>
             </div>
