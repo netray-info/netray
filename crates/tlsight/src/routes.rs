@@ -235,7 +235,7 @@ async fn inspect_handler(
                 port,
                 parsed.target.hostname(),
                 handshake_timeout,
-                &state.trust_store,
+                state.cert_verifier.as_ref(),
             )
             .await;
             results.push(result);
@@ -278,7 +278,7 @@ async fn inspect_port(
     port: u16,
     hostname: Option<&str>,
     timeout: Duration,
-    trust_store: &rustls::RootCertStore,
+    cert_verifier: &dyn rustls::client::danger::ServerCertVerifier,
 ) -> PortResult {
     let mut ip_results = Vec::with_capacity(ips.len());
 
@@ -287,9 +287,9 @@ async fn inspect_port(
 
         // Run validation if we got a chain
         if let Some(chain) = &result.chain {
-            let raw_certs: Vec<rustls::pki_types::CertificateDer<'_>> = Vec::new();
+            let raw_certs = result.raw_certs.as_deref().unwrap_or(&[]);
             let validation =
-                validate::chain_trust::validate_chain(chain, hostname, trust_store, &raw_certs);
+                validate::chain_trust::validate_chain(chain, hostname, cert_verifier, raw_certs);
             result.validation = Some(validation);
         }
 
@@ -420,6 +420,7 @@ mod tests {
     }
 
     fn test_state() -> AppState {
+        let _ = rustls::crypto::ring::default_provider().install_default();
         AppState::new(&test_config())
     }
 

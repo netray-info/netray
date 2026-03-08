@@ -34,6 +34,11 @@ pub struct IpInspectionResult {
     pub validation: Option<crate::validate::ValidationResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<InspectionError>,
+    /// Raw DER-encoded certificates from the handshake, used for chain trust validation.
+    /// Not serialized to JSON.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub raw_certs: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 }
 
 /// Perform TLS inspection on a single IP and port.
@@ -52,6 +57,7 @@ pub async fn inspect_ip(
                 .as_ref()
                 .map(|certs| chain::parse_chain(certs));
             let tls_params = params::extract_params(&result, hostname);
+            let raw_certs = result.peer_certs;
 
             IpInspectionResult {
                 ip: ip.to_string(),
@@ -59,6 +65,7 @@ pub async fn inspect_ip(
                 tls: Some(tls_params),
                 chain,
                 validation: None,
+                raw_certs,
                 error: None,
             }
         }
@@ -68,6 +75,7 @@ pub async fn inspect_ip(
             tls: None,
             chain: None,
             validation: None,
+            raw_certs: None,
             error: Some(InspectionError {
                 code: "HANDSHAKE_FAILED".to_string(),
                 message: e.to_string(),

@@ -2,13 +2,16 @@ use std::sync::Arc;
 
 use crate::config::Config;
 use crate::security::{IpExtractor, RateLimitState};
+use rustls::client::danger::ServerCertVerifier;
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
     pub ip_extractor: Arc<IpExtractor>,
     pub rate_limiter: Arc<RateLimitState>,
+    #[allow(dead_code)] // Used to build cert_verifier; will be used for custom CA loading
     pub trust_store: Arc<rustls::RootCertStore>,
+    pub cert_verifier: Arc<dyn ServerCertVerifier>,
 }
 
 impl AppState {
@@ -20,13 +23,19 @@ impl AppState {
         // when rustls-pemfile is added as a dependency. Iterate *.pem files, parse with
         // rustls_pemfile::certs(), add to root_store.
 
+        let trust_store = Arc::new(root_store);
+        let cert_verifier = rustls::client::WebPkiServerVerifier::builder(Arc::clone(&trust_store))
+            .build()
+            .expect("failed to build WebPki verifier");
+
         Self {
             ip_extractor: Arc::new(
                 IpExtractor::new(&config.server.trusted_proxies)
                     .expect("invalid trusted_proxies configuration"),
             ),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
-            trust_store: Arc::new(root_store),
+            trust_store,
+            cert_verifier,
             config: Arc::new(config.clone()),
         }
     }
@@ -35,6 +44,10 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn ensure_crypto_provider() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
 
     fn default_config() -> Config {
         let mut cfg = Config {
@@ -77,6 +90,7 @@ mod tests {
 
     #[test]
     fn creates_state_with_defaults() {
+        ensure_crypto_provider();
         let config = default_config();
         let state = AppState::new(&config);
 
@@ -89,6 +103,7 @@ mod tests {
 
     #[test]
     fn state_is_clone() {
+        ensure_crypto_provider();
         let config = default_config();
         let state = AppState::new(&config);
         let _cloned = state.clone();
@@ -96,6 +111,7 @@ mod tests {
 
     #[test]
     fn trust_store_has_reasonable_ca_count() {
+        ensure_crypto_provider();
         let config = default_config();
         let state = AppState::new(&config);
 

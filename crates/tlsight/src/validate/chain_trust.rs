@@ -1,16 +1,18 @@
+use rustls::client::danger::ServerCertVerifier;
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+
 use crate::tls::chain::CertInfo;
 use crate::validate::ValidationResult;
 
-/// Validate a certificate chain.
+/// Validate a certificate chain using webpki trust store verification.
 pub fn validate_chain(
     chain: &[CertInfo],
     hostname: Option<&str>,
-    _trust_store: &rustls::RootCertStore,
-    _raw_certs: &[rustls::pki_types::CertificateDer<'_>],
+    verifier: &dyn ServerCertVerifier,
+    raw_certs: &[CertificateDer<'_>],
 ) -> ValidationResult {
     let any_expired = chain.iter().any(|c| c.is_expired);
-    // TODO("check not_before > now for not-yet-valid certs")
-    let any_not_yet_valid = false;
+    let any_not_yet_valid = check_any_not_yet_valid(raw_certs);
 
     let terminates_at_self_signed = chain.last().is_some_and(|c| c.is_self_signed);
     let chain_order_correct = check_chain_order(chain);
@@ -19,10 +21,7 @@ pub fn validate_chain(
         .map(|h| check_hostname_match(chain, h))
         .unwrap_or(false);
 
-    // TODO("chain trust validation requires webpki EndEntityCert API integration")
-    // Phase 1: return true; proper chain validation will use webpki::EndEntityCert
-    // or rustls::client::WebPkiServerVerifier
-    let chain_trusted = true;
+    let chain_trusted = verify_chain_trust(verifier, hostname, raw_certs);
 
     let weakest_signature = chain
         .iter()
@@ -48,6 +47,50 @@ pub fn validate_chain(
         earliest_expiry,
         earliest_expiry_days,
     }
+}
+
+/// Verify chain trust using rustls WebPkiServerVerifier.
+fn verify_chain_trust(
+    verifier: &dyn ServerCertVerifier,
+    hostname: Option<&str>,
+    raw_certs: &[CertificateDer<'_>],
+) -> bool {
+    let Some(end_entity) = raw_certs.first() else {
+        return false;
+    };
+    let intermediates = if raw_certs.len() > 1 {
+        &raw_certs[1..]
+    } else {
+        &[]
+    };
+
+    // We need a ServerName to verify. For IP input (no hostname), we can't do
+    // standard hostname verification — return false gracefully since the summary
+    // will mark hostname_match as Skip anyway.
+    let server_name = match hostname {
+        Some(h) => match ServerName::try_from(h.to_owned()) {
+            Ok(sn) => sn,
+            Err(_) => return false,
+        },
+        None => return false,
+    };
+
+    let now = UnixTime::now();
+    verifier
+        .verify_server_cert(end_entity, intermediates, &server_name, &[], now)
+        .is_ok()
+}
+
+/// Check if any certificate in the chain has a not_before date in the future.
+fn check_any_not_yet_valid(raw_certs: &[CertificateDer<'_>]) -> bool {
+    use x509_parser::prelude::*;
+    let now_ts = ::time::OffsetDateTime::now_utc().unix_timestamp();
+    raw_certs.iter().any(|cert_der| {
+        let Ok((_, cert)) = X509Certificate::from_der(cert_der.as_ref()) else {
+            return false;
+        };
+        cert.validity().not_before.timestamp() > now_ts
+    })
 }
 
 /// Check if the chain is ordered correctly (each cert's issuer matches next cert's subject).
@@ -225,6 +268,53 @@ mod tests {
         assert!(!check_hostname_match(&chain, "example.com"));
     }
 
+    // --- verify_chain_trust tests ---
+
+    fn test_verifier() -> std::sync::Arc<dyn ServerCertVerifier> {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        rustls::client::WebPkiServerVerifier::builder(std::sync::Arc::new(root_store))
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn self_signed_cert_not_trusted() {
+        let verifier = test_verifier();
+        let params = rcgen::CertificateParams::new(vec!["example.com".to_string()]).unwrap();
+        let cert = params
+            .self_signed(&rcgen::KeyPair::generate().unwrap())
+            .unwrap();
+        let der = CertificateDer::from(cert.der().to_vec());
+        assert!(!verify_chain_trust(
+            verifier.as_ref(),
+            Some("example.com"),
+            &[der]
+        ));
+    }
+
+    #[test]
+    fn empty_chain_not_trusted() {
+        let verifier = test_verifier();
+        assert!(!verify_chain_trust(
+            verifier.as_ref(),
+            Some("example.com"),
+            &[]
+        ));
+    }
+
+    #[test]
+    fn no_hostname_not_trusted() {
+        let verifier = test_verifier();
+        let params = rcgen::CertificateParams::new(vec!["example.com".to_string()]).unwrap();
+        let cert = params
+            .self_signed(&rcgen::KeyPair::generate().unwrap())
+            .unwrap();
+        let der = CertificateDer::from(cert.der().to_vec());
+        assert!(!verify_chain_trust(verifier.as_ref(), None, &[der]));
+    }
+
     // --- sig_strength tests ---
 
     #[test]
@@ -240,5 +330,22 @@ mod tests {
     #[test]
     fn unknown_algo_is_weakest() {
         assert_eq!(sig_strength("some-unknown-algo"), 0);
+    }
+
+    // --- check_any_not_yet_valid tests ---
+
+    #[test]
+    fn valid_cert_is_not_future() {
+        let params = rcgen::CertificateParams::new(vec!["example.com".to_string()]).unwrap();
+        let cert = params
+            .self_signed(&rcgen::KeyPair::generate().unwrap())
+            .unwrap();
+        let der = CertificateDer::from(cert.der().to_vec());
+        assert!(!check_any_not_yet_valid(&[der]));
+    }
+
+    #[test]
+    fn empty_certs_not_future() {
+        assert!(!check_any_not_yet_valid(&[]));
     }
 }

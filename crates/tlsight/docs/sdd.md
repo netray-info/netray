@@ -1,7 +1,7 @@
 # Software Design Document: `tlsight`
 
 **Feature**: Web-based TLS certificate inspection and diagnostics service
-**Status**: Draft
+**Status**: Phase 1 Complete
 **Date**: 2026-03-08
 
 ---
@@ -1307,26 +1307,26 @@ Socket options:
 
 ## 14. Phased Delivery
 
-### Phase 1 — MVP
+### Phase 1 — MVP ✓ Complete
 
-- axum server with embedded SPA
-- `GET /api/inspect?h=` with JSON response
-- Hostname and IP-address parsing with port support
-- Single-IP TLS handshake (connect to first resolved IP)
-- Certificate chain extraction and parsing
-- TLS parameter extraction (version, cipher, ALPN)
-- Basic chain validation (expiry, completeness, hostname match)
-- Top-level summary verdict
-- Rate limiting (per-source-IP and per-target-hostname GCRA)
-- Target IP validation (no internal IPs)
-- Security headers, CORS
-- Config validation at startup
-- Frontend: hostname input, chain visualization, cert details, TLS params
-- Dark/light theme
-- URL shareability via `?h=`
-- Health/ready/meta endpoints
-- Prometheus metrics on separate port
-- Scalar docs UI + OpenAPI spec
+- [x] axum server with embedded SPA
+- [x] `GET /api/inspect?h=` with JSON response
+- [x] Hostname and IP-address parsing with port support
+- [x] Single-IP TLS handshake (connect to first resolved IP)
+- [x] Certificate chain extraction and parsing
+- [x] TLS parameter extraction (version, cipher, ALPN)
+- [x] Basic chain validation (expiry, not-yet-valid, trust via webpki, hostname match)
+- [x] Top-level summary verdict
+- [x] Rate limiting (per-source-IP and per-target-hostname GCRA)
+- [x] Target IP validation (no internal IPs)
+- [x] Security headers, CORS
+- [x] Config validation at startup
+- [x] Frontend: hostname input, chain visualization, cert details, TLS params
+- [x] Dark/light theme
+- [x] URL shareability via `?h=`
+- [x] Health/ready/meta endpoints
+- [x] Prometheus metrics on separate port
+- [x] Scalar docs UI + OpenAPI spec
 
 ### Phase 2 — Multi-IP + DNS Cross-Checks
 
