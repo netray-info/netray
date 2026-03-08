@@ -1,5 +1,6 @@
 //! API route definitions and shared application state.
 
+pub mod authcompare;
 pub mod check;
 pub mod compare;
 pub mod dnssec;
@@ -88,6 +89,7 @@ pub struct AppState {
         trace::post_handler,
         dnssec::post_handler,
         compare::post_handler,
+        authcompare::post_handler,
         parse::parse_handler,
         meta::servers,
         meta::record_types,
@@ -173,6 +175,7 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api/trace", post(trace::post_handler))
         .route("/api/dnssec", post(dnssec::post_handler))
         .route("/api/compare", post(compare::post_handler))
+        .route("/api/authcompare", post(authcompare::post_handler))
         .route("/api/parse", post(parse::parse_handler))
         .route("/api/results/{key}", get(results::get_handler))
         .route("/api-docs/openapi.json", get(openapi_handler))

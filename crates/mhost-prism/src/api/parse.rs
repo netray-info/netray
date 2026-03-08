@@ -96,6 +96,7 @@ const FLAG_INFO: &[(&str, &str)] = &[
     ("+check", "DNS health check"),
     ("+trace", "Delegation trace"),
     ("+compare", "Transport comparison"),
+    ("+auth", "Authoritative vs recursive"),
 ];
 
 // ---------------------------------------------------------------------------
@@ -197,7 +198,9 @@ fn classify_server(value: &str) -> &'static str {
 
 fn classify_flag(value: &str) -> &'static str {
     match value[1..].to_ascii_lowercase().as_str() {
-        "udp" | "tcp" | "tls" | "https" | "dnssec" | "check" | "trace" | "compare" => "flag",
+        "udp" | "tcp" | "tls" | "https" | "dnssec" | "check" | "trace" | "compare" | "auth" => {
+            "flag"
+        }
         _ => "flag_partial",
     }
 }
