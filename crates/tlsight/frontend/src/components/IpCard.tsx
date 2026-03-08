@@ -1,6 +1,7 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
 import type { IpResult } from '../lib/types';
 import { certDisplayName } from '../lib/cert';
+import Explain from './Explain';
 import TlsParams from './TlsParams';
 import CtView from './CtView';
 import ChainView from './ChainView';
@@ -10,6 +11,7 @@ interface Props {
   result: IpResult;
   defaultExpanded: boolean;
   expanded?: boolean;
+  explain?: boolean;
 }
 
 type Status = 'pass' | 'warn' | 'fail' | 'error' | 'neutral';
@@ -51,6 +53,7 @@ export default function IpCard(props: Props) {
   const [expanded, setExpanded] = createSignal(props.defaultExpanded);
   createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
   const [certsExpanded, setCertsExpanded] = createSignal(false);
+  createEffect(() => { if (props.expanded !== undefined) setCertsExpanded(props.expanded); });
 
   const status = () => computeStatus(props.result);
   const leaf = () => props.result.chain?.[0];
@@ -98,6 +101,7 @@ export default function IpCard(props: Props) {
           </span>
         </Show>
       </button>
+      <Explain when={!!props.explain}>Each card shows the TLS inspection result for one IP address. The left border color indicates overall status: green = good, orange = warning, red = problem.</Explain>
 
       <Show when={!props.result.error && leaf()}>
         {(l) => (
@@ -130,30 +134,30 @@ export default function IpCard(props: Props) {
       <Show when={expanded() && hasBody()}>
         <div class="ip-card__body">
           <Show when={props.result.tls}>
-            {(t) => <TlsParams params={t()} />}
+            {(t) => <TlsParams params={t()} explain={props.explain} expanded={props.expanded} />}
           </Show>
 
           <Show when={props.result.ct}>
-            {(ct) => <CtView ct={ct()} />}
+            {(ct) => <CtView ct={ct()} explain={props.explain} expanded={props.expanded} />}
           </Show>
 
           <Show when={props.result.chain}>
             {(chain) => (
               <>
-                <ChainView chain={chain()} />
+                <ChainView chain={chain()} explain={props.explain} />
                 <Show when={hasCerts()}>
                   <div class="ip-card__cert-toolbar">
                     <button
                       class="detail-toggle"
                       onClick={() => setCertsExpanded(!certsExpanded())}
                     >
-                      {certsExpanded() ? 'Collapse all' : 'Expand all'}
+                      {certsExpanded() ? 'collapse all' : 'expand all'}
                     </button>
                   </div>
                 </Show>
                 <div class="cert-details">
                   <For each={chain()}>
-                    {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} />}
+                    {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} explain={props.explain} />}
                   </For>
                 </div>
               </>

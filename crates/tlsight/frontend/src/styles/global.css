@@ -25,6 +25,8 @@
   --radius: 8px;
   --radius-lg: 10px;
   --transition: 150ms ease;
+  --explain-bg: rgba(0, 119, 204, 0.06);
+  --explain-border: rgba(0, 119, 204, 0.15);
 }
 
 [data-theme="dark"] {
@@ -43,6 +45,8 @@
   --skip: #94a3b8;
   --border: #2a2a4a;
   --border-subtle: #222240;
+  --explain-bg: rgba(0, 212, 255, 0.06);
+  --explain-border: rgba(0, 212, 255, 0.12);
 }
 
 /* ================================================================
@@ -471,6 +475,52 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
+   Results actions (filter toggles + expand/collapse)
+   ================================================================ */
+
+.results-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.results-actions__left,
+.results-actions__right {
+  display: flex;
+  gap: 4px;
+}
+
+.filter-toggle {
+  padding: 3px 10px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+}
+
+.filter-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.filter-toggle--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.filter-toggle--active:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: #fff;
+}
+
+/* ================================================================
    Validation summary
    ================================================================ */
 
@@ -790,10 +840,6 @@ a:hover { text-decoration: underline; }
 .unified-ip .ip-card__body > :last-child,
 .unified-ip .ip-card__body > :last-child > :last-child { border-bottom: none; }
 
-.ip-cards-toolbar {
-  display: flex;
-  justify-content: flex-end;
-}
 
 .ip-card__cert-toolbar {
   display: flex;
@@ -1363,6 +1409,7 @@ a:hover { text-decoration: underline; }
   border-color: var(--text-secondary);
 }
 
+
 /* ================================================================
    Footer
    ================================================================ */
@@ -1402,6 +1449,38 @@ a:hover { text-decoration: underline; }
   font-size: 0.8125rem;
   font-family: var(--mono);
   padding-top: 0.5rem;
+}
+
+/* ================================================================
+   Explain cards
+   ================================================================ */
+
+.explain-card {
+  padding: 8px 12px;
+  margin: 6px 0;
+  background: var(--explain-bg);
+  border: 1px solid var(--explain-border);
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.check-explanations {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+}
+
+.check-explanations dt {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+
+.check-explanations dd {
+  font-size: 0.8125rem;
 }
 
 /* ================================================================

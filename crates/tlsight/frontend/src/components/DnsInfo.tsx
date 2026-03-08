@@ -1,4 +1,5 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, createEffect, Show, For } from 'solid-js';
+import Explain from './Explain';
 import type { DnsContext, TlsaInfo } from '../lib/types';
 
 function parseCaaRecord(raw: string): string {
@@ -15,8 +16,9 @@ function parseCaaRecord(raw: string): string {
   return `${tag}: ${value}`;
 }
 
-export function CaaView(props: { caa: DnsContext['caa'] }) {
+export function CaaView(props: { caa: DnsContext['caa']; explain?: boolean; expanded?: boolean }) {
   const [expanded, setExpanded] = createSignal(false);
+  createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
 
   return (
     <Show when={props.caa}>
@@ -38,6 +40,7 @@ export function CaaView(props: { caa: DnsContext['caa'] }) {
               &#x25B8;
             </span>
           </button>
+          <Explain when={!!props.explain}>CAA (Certification Authority Authorization) DNS records declare which CAs are allowed to issue certificates for this domain. If the issuing CA is not listed, the certificate may violate the domain owner's policy.</Explain>
           <Show when={expanded()}>
             <div class="dns-section__body">
               <Show when={caa().records.length > 0} fallback={<p class="dns-section__empty">No CAA records found — any CA may issue.</p>}>
@@ -55,7 +58,7 @@ export function CaaView(props: { caa: DnsContext['caa'] }) {
   );
 }
 
-export function TlsaView(props: { tlsa: TlsaInfo }) {
+export function TlsaView(props: { tlsa: TlsaInfo; explain?: boolean }) {
   return (
     <div class="dns-section">
       <h3 class="dns-section__title">
@@ -64,6 +67,7 @@ export function TlsaView(props: { tlsa: TlsaInfo }) {
           <span class="badge badge--skip">No DNSSEC</span>
         </Show>
       </h3>
+      <Explain when={!!props.explain}>TLSA records enable DANE — pinning certificates or CAs in DNS via DNSSEC. This provides an alternative trust path independent of the CA system. Requires DNSSEC to be meaningful.</Explain>
       <ul class="dns-records">
         <For each={props.tlsa.records}>
           {(record) => <li class="dns-records__item mono">{record}</li>}

@@ -1,6 +1,7 @@
-import { createSignal, Show, For } from 'solid-js';
+import { createSignal, createEffect, Show, For } from 'solid-js';
 import type { IpResult } from '../lib/types';
 import { certDisplayName } from '../lib/cert';
+import Explain from './Explain';
 import TlsParams from './TlsParams';
 import CtView from './CtView';
 import ChainView from './ChainView';
@@ -8,6 +9,8 @@ import CertDetail from './CertDetail';
 
 interface Props {
   ips: IpResult[];
+  explain?: boolean;
+  expanded?: boolean;
 }
 
 function daysLabel(days: number): string {
@@ -24,6 +27,7 @@ function daysClass(days: number): string {
 
 export default function UnifiedIpView(props: Props) {
   const [certsExpanded, setCertsExpanded] = createSignal(false);
+  createEffect(() => { if (props.expanded !== undefined) setCertsExpanded(props.expanded); });
 
   const rep = () => props.ips[0];
   const leaf = () => rep().chain?.[0];
@@ -35,27 +39,21 @@ export default function UnifiedIpView(props: Props) {
       <div class="unified-ip__header">
         <div class="unified-ip__ips">
           <For each={props.ips}>
-            {(ip) => <span class="unified-ip__ip-badge">{ip.ip}</span>}
+            {(ip) => (
+              <span class="unified-ip__ip-badge">
+                {ip.ip}
+                <Show when={ip.tls}>
+                  {(t) => <span class="unified-ip__timing-val"> {t().handshake_ms}ms</span>}
+                </Show>
+              </span>
+            )}
           </For>
         </div>
         <div class="unified-ip__header-right">
           <span class="unified-ip__consistent-badge">* consistent</span>
         </div>
       </div>
-
-      <div class="unified-ip__timings">
-        <For each={props.ips}>
-          {(ip) => (
-            <Show when={ip.tls}>
-              {(t) => (
-                <span class="unified-ip__timing">
-                  {ip.ip} <span class="unified-ip__timing-val">{t().handshake_ms}ms</span>
-                </span>
-              )}
-            </Show>
-          )}
-        </For>
-      </div>
+      <Explain when={!!props.explain}>All resolved IP addresses serve the same certificate and TLS configuration. This is the expected state for a correctly configured multi-server deployment.</Explain>
 
       <Show when={rep().validation}>
         {(v) => (
@@ -94,30 +92,30 @@ export default function UnifiedIpView(props: Props) {
 
       <div class="ip-card__body">
         <Show when={tls()}>
-          {(t) => <TlsParams params={t()} />}
+          {(t) => <TlsParams params={t()} explain={props.explain} expanded={props.expanded} />}
         </Show>
 
         <Show when={rep().ct}>
-          {(ct) => <CtView ct={ct()} />}
+          {(ct) => <CtView ct={ct()} explain={props.explain} expanded={props.expanded} />}
         </Show>
 
         <Show when={rep().chain}>
           {(chain) => (
             <>
-              <ChainView chain={chain()} />
+              <ChainView chain={chain()} explain={props.explain} />
               <Show when={hasCerts()}>
                 <div class="ip-card__cert-toolbar">
                   <button
                     class="detail-toggle"
                     onClick={() => setCertsExpanded(!certsExpanded())}
                   >
-                    {certsExpanded() ? 'Collapse all' : 'Expand all'}
+                    {certsExpanded() ? 'collapse all' : 'expand all'}
                   </button>
                 </div>
               </Show>
               <div class="cert-details">
                 <For each={chain()}>
-                  {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} />}
+                  {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} explain={props.explain} />}
                 </For>
               </div>
             </>

@@ -1,14 +1,17 @@
+import Explain from './Explain';
 import type { CertInfo } from '../lib/types';
 import { certDisplayName } from '../lib/cert';
 
 interface Props {
   chain: CertInfo[];
+  explain?: boolean;
 }
 
 export default function ChainView(props: Props) {
   return (
     <div class="chain-view">
       <h2>Certificate Chain</h2>
+      <Explain when={!!props.explain}>This shows the certificate trust chain from your server's leaf certificate to the root CA. Each certificate in the chain vouches for the next. A complete chain is required for browsers to trust the connection.</Explain>
       <div class="chain-view__chain">
         {props.chain.map((cert, i) => (
           <>

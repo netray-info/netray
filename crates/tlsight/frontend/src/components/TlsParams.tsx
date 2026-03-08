@@ -1,12 +1,16 @@
-import { createSignal } from 'solid-js';
+import { createSignal, createEffect } from 'solid-js';
+import Explain from './Explain';
 import type { TlsInfo } from '../lib/types';
 
 interface Props {
   params: TlsInfo;
+  explain?: boolean;
+  expanded?: boolean;
 }
 
 export default function TlsParams(props: Props) {
   const [expanded, setExpanded] = createSignal(false);
+  createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
 
   const ocspLabel = () =>
     props.params.ocsp.stapled ? `OCSP stapled (${props.params.ocsp.status})` : 'no OCSP staple';
@@ -24,6 +28,7 @@ export default function TlsParams(props: Props) {
           &#x25B8;
         </span>
       </button>
+      <Explain when={!!props.explain}>These are the TLS connection parameters negotiated during the handshake. TLSv1.3 is current best practice. The cipher suite determines the encryption algorithm. OCSP stapling improves certificate revocation checking performance.</Explain>
       {expanded() && (
         <div class="dns-section__body">
           <table class="tls-params__table">

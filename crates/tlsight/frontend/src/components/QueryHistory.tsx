@@ -20,7 +20,7 @@ export default function QueryHistory(props: Props) {
     <Show when={entries().length > 0}>
       <div class="query-history">
         <button class="detail-toggle" onClick={() => { refresh(); setVisible(v => !v); }}>
-          {visible() ? 'Hide' : 'History'} ({entries().length})
+          {visible() ? 'hide' : 'history'} ({entries().length})
         </button>
         <Show when={visible()}>
           <div class="query-history__list">
@@ -32,7 +32,7 @@ export default function QueryHistory(props: Props) {
                 </button>
               )}
             </For>
-            <button class="query-history__clear" onClick={handleClear}>Clear history</button>
+            <button class="query-history__clear" onClick={handleClear}>clear history</button>
           </div>
         </Show>
       </div>

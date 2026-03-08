@@ -57,7 +57,8 @@ export default function App() {
   const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
   const [showHelp, setShowHelp] = createSignal(false);
   const [lastQuery, setLastQuery] = createSignal('');
-  const [allIpsExpanded, setAllIpsExpanded] = createSignal<boolean | undefined>(undefined);
+  const [allExpanded, setAllExpanded] = createSignal<boolean | undefined>(undefined);
+  const [explain, setExplain] = createSignal(false);
 
   const [meta] = createResource(fetchMeta);
 
@@ -136,6 +137,12 @@ export default function App() {
         return;
       }
 
+      if (e.key === 'e' && !isInputFocused()) {
+        e.preventDefault();
+        setExplain(v => !v);
+        return;
+      }
+
       if (e.key === 'r' && !isInputFocused()) {
         const q = lastQuery();
         if (q && !loading()) {
@@ -187,7 +194,7 @@ export default function App() {
     setError(null);
     setResult(null);
     setLastQuery(input);
-    setAllIpsExpanded(undefined);
+    setAllExpanded(undefined);
     try {
       const data = await inspect(input);
       setResult(data);
@@ -320,7 +327,7 @@ export default function App() {
             const r = res();
             return (
               <div id="main-content" class="results">
-                {/* Statistics first */}
+                {/* Statistics + export */}
                 <div class="results-toolbar">
                   <div class="results-summary">
                     <span class="results-summary-item">{allIps().length} IP{allIps().length !== 1 ? 's' : ''}</span>
@@ -336,6 +343,23 @@ export default function App() {
                   <ExportButtons result={r} />
                 </div>
 
+                {/* Filters + expand/collapse */}
+                <div class="results-actions">
+                  <div class="results-actions__left">
+                    <button
+                      class="filter-toggle"
+                      classList={{ 'filter-toggle--active': explain() }}
+                      onClick={() => setExplain(v => !v)}
+                      title="Toggle explanations (e)"
+                    >explain</button>
+                  </div>
+                  <div class="results-actions__right">
+                    <button class="filter-toggle" onClick={() => setAllExpanded(v => v === true ? false : true)}>
+                      {allExpanded() === true ? 'collapse all' : 'expand all'}
+                    </button>
+                  </div>
+                </div>
+
                 <Show when={r.warnings?.length}>
                   <div class="warnings">
                     <For each={r.warnings}>
@@ -345,7 +369,7 @@ export default function App() {
                 </Show>
 
                 {/* Validation second */}
-                <ValidationSummary summary={r.summary} />
+                <ValidationSummary summary={r.summary} explain={explain()} />
 
                 <Show when={r.ports.length > 1}>
                   <PortTabs
@@ -371,48 +395,39 @@ export default function App() {
                         <Show when={hasDnsRow()}>
                           <div class="dns-row">
                             <Show when={!useUnified() && p.consistency}>
-                              {(c) => <ConsistencyView consistency={c()} />}
+                              {(c) => <ConsistencyView consistency={c()} explain={explain()} />}
                             </Show>
                             <Show when={r.dns?.caa}>
-                              {(caa) => <CaaView caa={caa()} />}
+                              {(caa) => <CaaView caa={caa()} explain={explain()} expanded={allExpanded()} />}
                             </Show>
                             <Show when={p.tlsa}>
-                              {(tlsa) => <TlsaView tlsa={tlsa()} />}
+                              {(tlsa) => <TlsaView tlsa={tlsa()} explain={explain()} />}
                             </Show>
                           </div>
                         </Show>
 
                         <Show when={useUnified()}>
-                          <UnifiedIpView ips={successfulIps()} />
+                          <UnifiedIpView ips={successfulIps()} explain={explain()} expanded={allExpanded()} />
                           <For each={errorIps()}>
                             {(ipResult) => (
                               <IpCard
                                 result={ipResult}
                                 defaultExpanded={false}
                                 expanded={undefined}
+                                explain={explain()}
                               />
                             )}
                           </For>
                         </Show>
 
                         <Show when={!useUnified()}>
-                          <Show when={p.ips.length > 1}>
-                            <div class="ip-cards-toolbar">
-                              <button
-                                class="detail-toggle"
-                                onClick={() => setAllIpsExpanded(v => v === true ? false : true)}
-                              >
-                                {allIpsExpanded() === true ? 'Collapse all' : 'Expand all'}
-                              </button>
-                            </div>
-                          </Show>
-
                           <For each={p.ips}>
                             {(ipResult) => (
                               <IpCard
                                 result={ipResult}
                                 defaultExpanded={p.ips.length === 1}
-                                expanded={p.ips.length > 1 ? allIpsExpanded() : undefined}
+                                expanded={p.ips.length > 1 ? allExpanded() : undefined}
+                                explain={explain()}
                               />
                             )}
                           </For>
@@ -458,6 +473,7 @@ export default function App() {
                 <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
                 <div class="help-key"><kbd>Enter</kbd><span>Submit query</span></div>
                 <div class="help-key"><kbd>r</kbd><span>Re-run last query</span></div>
+                <div class="help-key"><kbd>e</kbd><span>Toggle explain mode</span></div>
                 <div class="help-key"><kbd>j</kbd> / <kbd>k</kbd><span>Next / previous IP card</span></div>
                 <div class="help-key"><kbd>Enter</kbd><span>Expand / collapse IP card</span></div>
                 <div class="help-key"><kbd>Escape</kbd><span>Blur input / close help</span></div>

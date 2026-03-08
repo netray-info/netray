@@ -1,10 +1,12 @@
 import { createSignal, createEffect } from 'solid-js';
+import Explain from './Explain';
 import type { CertInfo } from '../lib/types';
 import { certDisplayName } from '../lib/cert';
 
 interface Props {
   cert: CertInfo;
   expanded?: boolean;
+  explain?: boolean;
 }
 
 export default function CertDetail(props: Props) {
@@ -18,6 +20,7 @@ export default function CertDetail(props: Props) {
       </button>
       {expanded() && (
         <div class="cert-detail__body">
+          <Explain when={!!props.explain}>Full details for this certificate. SANs list all hostnames this certificate covers. The SHA-256 fingerprint uniquely identifies this certificate.</Explain>
           <table class="cert-detail__table">
             <tbody>
               <tr><th>Issuer</th><td>{props.cert.issuer}</td></tr>
