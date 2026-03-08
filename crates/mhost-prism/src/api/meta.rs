@@ -140,6 +140,34 @@ pub struct RecordTypeInfo {
     name: String,
 }
 
+// ---------------------------------------------------------------------------
+// GET /api/config
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct ClientConfig {
+    /// Public ifconfig URL for IP lookups, or null if not configured.
+    ifconfig_url: Option<String>,
+}
+
+/// Returns client-facing configuration (e.g. ifconfig URL for IP links).
+#[utoipa::path(
+    get, path = "/api/config",
+    tag = "Metadata",
+    responses(
+        (status = 200, description = "Client configuration", body = ClientConfig),
+    )
+)]
+pub async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
+    Json(ClientConfig {
+        ifconfig_url: state.config.ecosystem.ifconfig_url.clone(),
+    })
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/record-types
+// ---------------------------------------------------------------------------
+
 /// List all supported DNS record types (excludes ANY, AXFR, IXFR, OPT, ZERO, NULL).
 #[utoipa::path(
     get, path = "/api/record-types",

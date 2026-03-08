@@ -230,8 +230,8 @@ mod tests {
 
     fn make_policy() -> QueryPolicy<'static> {
         use crate::config::{
-            CircuitBreakerConfig, Config, DnsConfig, LimitsConfig, PerformanceConfig, ServerConfig,
-            TelemetryConfig, TraceConfig,
+            CircuitBreakerConfig, Config, DnsConfig, EcosystemConfig, LimitsConfig,
+            PerformanceConfig, ServerConfig, TelemetryConfig, TraceConfig,
         };
         let config = Box::leak(Box::new(Config {
             server: ServerConfig {
@@ -269,6 +269,7 @@ mod tests {
             },
             performance: PerformanceConfig::default(),
             telemetry: TelemetryConfig::default(),
+            ecosystem: EcosystemConfig::default(),
         }));
         QueryPolicy::new(config)
     }

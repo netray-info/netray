@@ -36,6 +36,8 @@ pub struct Config {
     pub performance: PerformanceConfig,
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub ecosystem: EcosystemConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -161,6 +163,49 @@ impl Default for TelemetryConfig {
             sample_rate: default_sample_rate(),
         }
     }
+}
+
+const HARD_CAP_ENRICHMENT_TIMEOUT_MS: u64 = 2000;
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EcosystemConfig {
+    /// Public URL for IP lookups (frontend links).
+    #[serde(default)]
+    pub ifconfig_url: Option<String>,
+    /// Backend API URL for IP enrichment fetches (defaults to ifconfig_url).
+    #[serde(default)]
+    pub ifconfig_api_url: Option<String>,
+    /// Timeout for enrichment HTTP requests in milliseconds (default 500, hard cap 2000).
+    #[serde(default = "default_enrichment_timeout_ms")]
+    pub enrichment_timeout_ms: u64,
+}
+
+impl Default for EcosystemConfig {
+    fn default() -> Self {
+        Self {
+            ifconfig_url: None,
+            ifconfig_api_url: None,
+            enrichment_timeout_ms: default_enrichment_timeout_ms(),
+        }
+    }
+}
+
+impl EcosystemConfig {
+    /// Returns the effective API URL for backend enrichment fetches.
+    pub fn effective_api_url(&self) -> Option<&str> {
+        self.ifconfig_api_url
+            .as_deref()
+            .or(self.ifconfig_url.as_deref())
+    }
+
+    /// Returns true if enrichment is enabled (an API URL is configured).
+    pub fn enrichment_enabled(&self) -> bool {
+        self.effective_api_url().is_some()
+    }
+}
+
+fn default_enrichment_timeout_ms() -> u64 {
+    500
 }
 
 fn default_otlp_endpoint() -> String {
@@ -391,6 +436,21 @@ impl Config {
             self.performance.resolver_pool_cleanup_interval_secs,
         )?;
 
+        // Ecosystem config validation.
+        if self.ecosystem.enrichment_timeout_ms == 0 && self.ecosystem.enrichment_enabled() {
+            return Err(ConfigError::Message(
+                "invalid configuration: ecosystem.enrichment_timeout_ms must not be zero when enrichment is enabled".to_owned(),
+            ));
+        }
+        if self.ecosystem.enrichment_timeout_ms > HARD_CAP_ENRICHMENT_TIMEOUT_MS {
+            tracing::warn!(
+                configured = self.ecosystem.enrichment_timeout_ms,
+                clamped = HARD_CAP_ENRICHMENT_TIMEOUT_MS,
+                "ecosystem.enrichment_timeout_ms exceeds hard cap, clamping"
+            );
+            self.ecosystem.enrichment_timeout_ms = HARD_CAP_ENRICHMENT_TIMEOUT_MS;
+        }
+
         // Telemetry config validation.
         if self.telemetry.enabled && !(0.0..=1.0).contains(&self.telemetry.sample_rate) {
             return Err(ConfigError::Message(
@@ -513,6 +573,7 @@ mod tests {
             trace: default_trace(),
             performance: PerformanceConfig::default(),
             telemetry: TelemetryConfig::default(),
+            ecosystem: EcosystemConfig::default(),
         }
     }
 

@@ -51,6 +51,9 @@ metrics-exporter-prometheus = "0.16"
 rust-embed = "8"
 mime_guess = "2"
 
+# IP enrichment
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+
 # Result caching
 moka = { version = "0.12", features = ["future"] }
 

@@ -20,6 +20,7 @@ use utoipa::OpenApi;
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ErrorInfo, ErrorResponse};
+use crate::ip_enrichment::IpEnrichmentService;
 use crate::query_dedup::QueryDedup;
 use crate::reload::HotState;
 use crate::resolver_pool::ResolverPool;
@@ -51,6 +52,7 @@ pub struct AppState {
     pub resolver_pool: Arc<ResolverPool>,
     pub query_dedup: QueryDedup,
     pub hot_state: HotState,
+    pub ip_enrichment: Option<Arc<IpEnrichmentService>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +85,7 @@ pub struct AppState {
         meta::record_types,
         meta::health,
         meta::ready,
+        meta::client_config,
     ),
     components(schemas(
         query::PostQueryRequest,
@@ -98,6 +101,7 @@ pub struct AppState {
         meta::ServerInfo,
         meta::ServerConfigInfo,
         meta::RecordTypeInfo,
+        meta::ClientConfig,
         ErrorResponse,
         ErrorInfo,
     )),
@@ -156,6 +160,7 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api/ready", get(meta::ready))
         .route("/api/servers", get(meta::servers))
         .route("/api/record-types", get(meta::record_types))
+        .route("/api/config", get(meta::client_config))
         .route("/api/check", post(check::post_handler))
         .route("/api/trace", post(trace::post_handler))
         .route("/api/dnssec", post(dnssec::post_handler))
@@ -220,6 +225,7 @@ mod tests {
             )),
             query_dedup: QueryDedup::new(),
             hot_state,
+            ip_enrichment: None,
             config: Arc::new(config),
         }
     }
@@ -475,8 +481,8 @@ mod tests {
         // Build a state with a tiny per-IP rate limit so we can exhaust it
         // without sending hundreds of requests.
         use crate::config::{
-            CircuitBreakerConfig, DnsConfig, LimitsConfig, PerformanceConfig, ServerConfig,
-            TelemetryConfig, TraceConfig,
+            CircuitBreakerConfig, DnsConfig, EcosystemConfig, LimitsConfig, PerformanceConfig,
+            ServerConfig, TelemetryConfig, TraceConfig,
         };
 
         let config = Config {
@@ -515,6 +521,7 @@ mod tests {
             },
             performance: PerformanceConfig::default(),
             telemetry: TelemetryConfig::default(),
+            ecosystem: EcosystemConfig::default(),
         };
 
         let hot_state = HotState::new(&config);
@@ -532,6 +539,7 @@ mod tests {
             )),
             query_dedup: QueryDedup::new(),
             hot_state,
+            ip_enrichment: None,
             config: Arc::new(config),
         };
 

@@ -14,6 +14,9 @@ mod dns_dnssec;
 mod dns_raw;
 mod dns_trace;
 mod error;
+// TODO: Wire enrichment into SSE handlers (commit 2).
+#[allow(dead_code)]
+mod ip_enrichment;
 mod parser;
 // TODO: Wire query dedup into SSE handlers and resolver pool into build_resolver_group.
 #[allow(dead_code)]
@@ -70,6 +73,12 @@ async fn main() {
     ));
     resolver_pool.spawn_cleanup_task(config.performance.resolver_pool_cleanup_interval_secs);
 
+    let ip_enrichment = config.ecosystem.effective_api_url().map(|url| {
+        let timeout = std::time::Duration::from_millis(config.ecosystem.enrichment_timeout_ms);
+        tracing::info!(url = %url, timeout_ms = config.ecosystem.enrichment_timeout_ms, "IP enrichment enabled");
+        Arc::new(ip_enrichment::IpEnrichmentService::new(url, timeout))
+    });
+
     let state = api::AppState {
         circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(
             &config.circuit_breaker,
@@ -83,6 +92,7 @@ async fn main() {
         resolver_pool,
         query_dedup: query_dedup::QueryDedup::new(),
         hot_state: hot_state.clone(),
+        ip_enrichment,
         config: Arc::new(config.clone()),
     };
 
