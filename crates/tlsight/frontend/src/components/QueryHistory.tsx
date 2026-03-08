@@ -19,7 +19,7 @@ export default function QueryHistory(props: Props) {
   return (
     <Show when={entries().length > 0}>
       <div class="query-history">
-        <button class="query-history__toggle" onClick={() => { refresh(); setVisible(v => !v); }}>
+        <button class="detail-toggle" onClick={() => { refresh(); setVisible(v => !v); }}>
           {visible() ? 'Hide' : 'History'} ({entries().length})
         </button>
         <Show when={visible()}>
