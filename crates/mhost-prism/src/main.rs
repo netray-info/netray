@@ -142,7 +142,7 @@ async fn main() {
 /// Injects a `X-Request-Id` header (UUID v7) into every response and stores
 /// the same ID in request extensions so SSE handlers can correlate the header
 /// with their `request_id` SSE field.
-async fn request_id_middleware(
+pub(crate) async fn request_id_middleware(
     mut request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
