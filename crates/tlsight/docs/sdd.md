@@ -1,7 +1,7 @@
 # Software Design Document: `tlsight`
 
 **Feature**: Web-based TLS certificate inspection and diagnostics service
-**Status**: Phase 2 Partial (DNS cross-checks deferred)
+**Status**: Phase 2 Complete
 **Date**: 2026-03-08
 
 ---
@@ -1328,14 +1328,14 @@ Socket options:
 - [x] Prometheus metrics on separate port
 - [x] Scalar docs UI + OpenAPI spec
 
-### Phase 2 — Multi-IP + DNS Cross-Checks (partial)
+### Phase 2 — Multi-IP + DNS Cross-Checks ✓ Complete
 
 - [x] Multi-IP consistency comparison (leaf cert, TLS version, cipher suite)
 - [x] Cap-and-warn rate limiting for multi-IP fan-out (select_representative_ips)
 - [x] Frontend: multi-IP rendering per port, port tabs, consistency badges
 - [x] Ecosystem cross-links (dns.pdt.sh, ip.pdt.sh) via `/api/meta`
-- [ ] CAA record fetch and issuer cross-check (deferred: requires mhost integration)
-- [ ] TLSA record fetch and DANE validation (deferred: requires mhost integration)
+- [x] CAA record fetch and issuer cross-check (mhost DNS, RFC 8659 tree-climbing)
+- [x] TLSA record fetch and DANE matching logic (RFC 6698, runtime-skipped until DNSSEC)
 
 ### Phase 3 — Polish
 
