@@ -275,6 +275,8 @@ pub async fn post_handler(
                                 lookups: lookups.clone(),
                                 completed,
                                 total: CHECK_TOTAL_STEPS,
+                                transport: None,
+                                source: None,
                             };
                             if let Ok(json_val) = serde_json::to_value(&batch) {
                                 cached_events.push(CachedEvent {

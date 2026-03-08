@@ -1,6 +1,7 @@
 //! API route definitions and shared application state.
 
 pub mod check;
+pub mod compare;
 pub mod dnssec;
 pub mod meta;
 pub mod parse;
@@ -38,6 +39,12 @@ pub struct BatchEvent {
     pub lookups: Lookups,
     pub completed: u32,
     pub total: u32,
+    /// Transport used for this batch (compare mode only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport: Option<String>,
+    /// Source of this batch: "recursive" or "authoritative" (auth mode only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// Shared state passed to all API handlers via axum's `State` extractor.
@@ -80,6 +87,7 @@ pub struct AppState {
         check::post_handler,
         trace::post_handler,
         dnssec::post_handler,
+        compare::post_handler,
         parse::parse_handler,
         meta::servers,
         meta::record_types,
@@ -164,6 +172,7 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api/check", post(check::post_handler))
         .route("/api/trace", post(trace::post_handler))
         .route("/api/dnssec", post(dnssec::post_handler))
+        .route("/api/compare", post(compare::post_handler))
         .route("/api/parse", post(parse::parse_handler))
         .route("/api/results/{key}", get(results::get_handler))
         .route("/api-docs/openapi.json", get(openapi_handler))

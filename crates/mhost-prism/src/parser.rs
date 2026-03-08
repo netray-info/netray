@@ -291,7 +291,7 @@ fn parse_flag(
         "dnssec" => *dnssec = true,
         // +check and +trace are routing hints for the frontend; the backend
         // routes them via dedicated endpoints, not via query-string flags.
-        "check" | "trace" => {}
+        "check" | "trace" | "compare" => {}
         _ => {
             warnings.push(format!("unrecognized flag: +{name}"));
         }
@@ -722,6 +722,12 @@ mod tests {
     fn flag_trace_parses_without_error() {
         // +trace is a routing hint; the parser accepts it silently.
         let q = parse("example.com +trace").unwrap();
+        assert!(q.warnings.is_empty());
+    }
+
+    #[test]
+    fn flag_compare_parses_without_error() {
+        let q = parse("example.com +compare").unwrap();
         assert!(q.warnings.is_empty());
     }
 

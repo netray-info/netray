@@ -240,23 +240,23 @@ pub async fn post_handler(
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct PostQueryRequest {
     /// Domain name to query (e.g. `"example.com"`).
-    domain: String,
+    pub(crate) domain: String,
     /// DNS record types to query (e.g. `["A", "MX"]`). Defaults to A, AAAA, CNAME, MX.
     #[serde(default)]
-    record_types: Vec<String>,
+    pub(crate) record_types: Vec<String>,
     /// DNS servers to use (e.g. `["cloudflare", "8.8.8.8"]`). Defaults to config default_servers.
     #[serde(default)]
-    servers: Vec<String>,
+    pub(crate) servers: Vec<String>,
     /// Transport: `udp` (default), `tcp`, `tls`, or `https`.
     #[serde(default)]
-    transport: Option<String>,
+    pub(crate) transport: Option<String>,
     /// Enable DNSSEC mode (adds DNSKEY and DS record types).
     #[serde(default)]
-    dnssec: bool,
+    pub(crate) dnssec: bool,
 }
 
 /// Convert a structured POST body into a [`ParsedQuery`].
-fn convert_post_body(body: PostQueryRequest) -> Result<ParsedQuery, ApiError> {
+pub(crate) fn convert_post_body(body: PostQueryRequest) -> Result<ParsedQuery, ApiError> {
     let domain = body.domain.to_ascii_lowercase();
     if domain.is_empty() {
         return Err(ApiError::InvalidDomain("empty domain".into()));
@@ -528,6 +528,8 @@ async fn execute_query(
                                 lookups: merged,
                                 completed,
                                 total,
+                                transport: None,
+                                source: None,
                             };
                             if let Ok(json_val) = serde_json::to_value(&batch) {
                                 cached_events.push(CachedEvent {
