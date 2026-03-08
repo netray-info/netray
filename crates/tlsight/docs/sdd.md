@@ -1068,9 +1068,11 @@ dns_url = "https://dns.pdt.sh"
 # Base URL for IP cross-links in the frontend (omit to disable IP links)
 ip_url = "https://ip.pdt.sh"
 
-# Backend-to-backend IP enrichment (ip_api_url) is deferred to Phase 4+.
-# When added, it will support an internal address for server-side calls
-# that bypass the public instance's rate limits.
+# Backend-to-backend IP enrichment endpoint (ifconfig-rs /network API).
+# Omit to disable enrichment. Supports internal addresses to bypass
+# the public instance's rate limits.
+ip_api_url = "https://ip.internal.example.com"
+enrichment_timeout_ms = 500  # default 500, hard cap 2000
 ```
 
 **Ecosystem URL design**: Every `[ecosystem]` URL is optional. When omitted, the corresponding cross-links and enrichment features are disabled — tlsight functions fully standalone. This supports three deployment scenarios:
@@ -1081,7 +1083,7 @@ ip_url = "https://ip.pdt.sh"
 
 Operators running private instances of ifconfig-rs (e.g., `https://ip.internal.example.com`) configure `ip_url` to point there instead of the public `ip.pdt.sh`.
 
-**Hard caps** (cannot exceed via config): `handshake_timeout_secs=5`, `request_timeout_secs=15`, `max_ports=5`, `max_ips_per_hostname=10`. Values above caps are clamped with a startup warning. Zero values rejected.
+**Hard caps** (cannot exceed via config): `handshake_timeout_secs=5`, `request_timeout_secs=15`, `max_ports=5`, `max_ips_per_hostname=10`, `enrichment_timeout_ms=2000`. Values above caps are clamped with a startup warning. Zero values rejected.
 
 **DNS resolver options**: The `resolver` field accepts predefined provider names (`"cloudflare"`, `"google"`, `"quad9"`, `"system"`) or a custom IP address (`"1.1.1.1"`, `"[2606:4700:4700::1111]"`). The `"system"` option uses `/etc/resolv.conf`. For DANE validation, the resolver must support DNSSEC — `"cloudflare"` and `"google"` do; `"system"` depends on the host configuration.
 
@@ -1095,7 +1097,7 @@ All cross-links are driven by the `[ecosystem]` config section (see section 9). 
 
 - **DNS** (`dns_url`): "View full DNS records" link for the inspected hostname. Pre-filled query: `{dns_url}/?q={hostname}+CAA+TLSA+A+AAAA`. Shown in the DNS Cross-Check section.
 - **IP** (`ip_url`): "View IP info" link for each resolved IP. Link: `{ip_url}/?ip={ip}`. Shown next to each IP in multi-IP results.
-- **IP enrichment** (deferred to Phase 4+): Backend-to-backend calls to ifconfig-rs for inline badges (cloud provider, network type) are explicitly deferred. The frontend cross-link to ip.pdt.sh already lets users click through for IP details. Adding a backend HTTP client, timeout/retry logic, and a new failure mode for a cosmetic feature is not justified until the core feature set is stable.
+- **IP enrichment** (`ip_api_url`): Backend-to-backend calls to ifconfig-rs (`GET /network?ip={ip}&fields=...`) fetch ASN, cloud provider, network type, and threat indicators (Tor, VPN, Spamhaus, C2) for each inspected IP. Runs concurrently with TLS handshakes and DNS lookups. Failures are non-fatal — enrichment never blocks or fails inspection. Frontend displays inline badges (cloud provider, threat flags) next to IPs in both single-IP and unified multi-IP views. Configurable via `ecosystem.ip_api_url` and `ecosystem.enrichment_timeout_ms` (default 500ms, hard cap 2000ms).
 
 **Inbound links from sibling services:**
 
@@ -1367,10 +1369,13 @@ Socket options:
 - [x] Inferred root CA in chain view (dashed ghost card from last cert's issuer when root not sent by server)
 - [x] Consistent lowercase button/toggle labels across all UI elements
 
-### Phase 4 — Advanced
+### Phase 4 — Advanced (in progress)
 
+- [x] IP enrichment via backend-to-backend calls to ifconfig-rs (`ip_api_url` config)
+- [x] Custom CA loading from directory (`custom_ca_dir` config, `*.pem`/`*.crt` files)
+- [x] Dev-mode `allow_blocked_targets` for inspecting private infrastructure
 - STARTTLS support (SMTP, IMAP, POP3)
-- IP enrichment via backend-to-backend calls to ifconfig-rs (`ip_api_url` config)
+- TLS quality assessment / health checks (see `docs/quality.md`)
 - Certificate expiry monitoring / scheduling (webhook on approaching expiry)
 - TLS version/cipher trend tracking (compare scans over time)
 - Batch inspection (`POST /api/inspect/batch` with multiple hostnames)
