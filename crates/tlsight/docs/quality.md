@@ -1,6 +1,6 @@
 # TLS Quality Assessment — Software Design Document
 
-**Status**: Draft
+**Status**: Implemented (Phase Q1 + Q2 complete)
 **Author**: Lukas Pustina
 **Parent SDD**: `docs/done/sdd-2026-03-08.md` (tlsight core)
 
@@ -37,7 +37,9 @@ This approach:
 - Health checks derived from existing inspection data (certificate, chain, TLS params)
 - HSTS presence and configuration (new HTTP check)
 - HTTP-to-HTTPS redirect detection (new HTTP check)
-- Opt-in via `grade=true` query parameter
+- OCSP stapling check (warn if not stapled)
+- DANE/TLSA validity check (pass-through from validation)
+- Always-on when `config.quality.enabled` (no opt-in parameter)
 - Per-port health check results
 
 **Out of scope** (future work, §8):
@@ -117,7 +119,9 @@ Every check must be **actionable** — a warn or fail status should correspond t
 
 **`tls_version`**: Both TLS 1.2 and TLS 1.3 are pass. TLS 1.2 with AEAD ciphers and forward secrecy is secure — warning on it would flag the majority of the internet for something that is not a problem and may not be under the operator's control (the version negotiated depends on both client and server). When TLS 1.3 is negotiated, the detail text says "TLS 1.3". When TLS 1.2, it says "TLS 1.2; older version support cannot be determined without protocol probing." The detection gap is communicated as information, not inflated to a warning.
 
-**OCSP stapling is not a health check.** Many healthy servers don't staple OCSP responses. Absence of stapling is not a deficiency — it's a server optimization choice. The only actionable OCSP signal is `revoked` status, which is already covered by `chain_trusted` (revoked certs fail webpki verification if the staple is present). OCSP stapling status continues to be reported in `TlsParams` (existing behavior) but is not a health check.
+| `ocsp_stapled` | OCSP stapled | OCSP response stapled | No OCSP staple (clients must contact CA) | — | No handshake | `TlsParams.ocsp.stapled` |
+
+**`ocsp_stapled`**: Absence of OCSP stapling is a warn (not fail) because it degrades client privacy and performance rather than being a security vulnerability. Servers that staple OCSP responses allow clients to verify revocation without contacting the CA directly.
 
 #### Configuration Checks — Hostname-Scoped
 
@@ -128,7 +132,7 @@ These checks run once per request, regardless of port count:
 | `hsts` | HSTS | Present, `max-age >= 15768000` (6 months) | Present but `max-age` < 6 months | Not present | HTTP check skipped or failed; IP-mode input | New HTTP check (§3) |
 | `https_redirect` | HTTPS redirect | Port 80 redirects to `https://` same host | Redirects to `https://` different host | No redirect / non-redirect response | Port 80 not open (connection refused), timeout, or HTTP check skipped | New HTTP check (§3) |
 
-**`hsts`**: Fail when absent assumes the target is a browser-facing HTTPS service. The `grade=true` opt-in signals that the user wants a browser-oriented TLS quality assessment — API-only endpoints and internal services that don't serve browsers would not typically enable it.
+**`hsts`**: Fail when absent assumes the target is a browser-facing HTTPS service. Operators can disable quality assessment via config (`quality.enabled = false`) or skip HTTP checks specifically (`quality.skip_http_checks = true`) for API-only endpoints and internal services that don't serve browsers.
 
 #### Configuration Checks — Per-Port
 
@@ -137,6 +141,7 @@ These checks are per-port because they depend on port-specific data:
 | ID | Label | Pass | Warn | Fail | Skip | Source |
 |----|-------|------|------|------|------|--------|
 | `caa_compliant` | CAA compliance | Issuer matches CAA `issue` record, or no CAA records | — | CAA records exist and issuer doesn't match | CAA checking disabled or no cert to check against | Existing `caa_compliance` |
+| `dane_valid` | DANE valid | TLSA records match presented certificate | — | TLSA records do not match | DANE check skipped (requires DNSSEC) | Existing `dane_status` from validation |
 | `consistency` | Multi-IP consistency | All IPs return same leaf cert fingerprint, same TLS version, and same cipher suite | — | Any of the three fields differs across IPs | Single IP or fewer than 2 successful handshakes | Existing `ConsistencyResult` |
 
 **`caa_compliant`**: Per-port because CAA compliance depends on the leaf certificate's issuer, which may differ per port. CAA records are per-domain (fetched once), but if port 443 has a Let's Encrypt cert and port 8443 has a DigiCert cert, each needs a separate issuer check.
@@ -231,29 +236,17 @@ HSTS is per-hostname, not per-port. When multiple ports are inspected (e.g., `ex
 
 ### 4.1 Request
 
-Quality assessment is opt-in via a `grade` query parameter:
+Quality assessment runs automatically when `config.quality.enabled` (default: true). No query parameter needed:
 
 ```
-GET /api/inspect?h=example.com&grade=true
+GET /api/inspect?h=example.com
 ```
 
-For the POST endpoint:
-
-```json
-{
-  "hostname": "example.com",
-  "ports": [443],
-  "grade": true
-}
-```
-
-When `grade` is absent or `false`, the response is identical to today's `InspectResponse` — no HTTP checks, no overhead.
-
-The parameter is named `grade` (not `quality` or `health`) for brevity and because the future letter-grade system will use the same flag.
+**Design change**: The original design used an opt-in `grade=true` query parameter. This was removed — quality is always computed when enabled in config. The rationale: quality checks are lightweight (pure logic over existing inspection data + two HTTP requests) and the merged Validation card always shows the results. An opt-in toggle added UI complexity without meaningful benefit.
 
 ### 4.2 Response
 
-When `grade=true`, the `InspectResponse` gains a top-level `quality` field for hostname-scoped checks, and each `PortResult` gains a `quality` field for port-scoped checks:
+When quality is enabled, the `InspectResponse` includes a top-level `quality` field for hostname-scoped checks, and each `PortResult` includes a `quality` field for port-scoped checks:
 
 ```json
 {
@@ -427,20 +420,11 @@ The existing `summary` field is unchanged and always present (§2.2). Note: `sum
 
 ### 4.4 Meta Endpoint Update
 
-`/api/meta` gains a `quality` field in `features`:
-
-```json
-{
-  "features": {
-    "quality_assessment": true,
-    "..."
-  }
-}
-```
+The `quality_assessment` field was removed from `/api/meta` features — quality is no longer opt-in, so clients don't need to feature-detect it.
 
 ### 4.5 OpenAPI
 
-All new response types (`HealthCheck`, `HstsInfo`, `RedirectInfo`, `QualityResult`, `PortQualityResult`) require `#[derive(ToSchema)]` and utoipa annotations. The `grade` query parameter must be documented on the `/api/inspect` endpoint schema.
+All new response types (`HealthCheck`, `HstsInfo`, `RedirectInfo`, `QualityResult`, `PortQualityResult`) require `#[derive(ToSchema)]` and utoipa annotations.
 
 ---
 
@@ -466,8 +450,8 @@ Parse input
   → Resolve IPs → Filter blocked → Cap-and-warn
   → Concurrent: TLS handshakes + DNS lookups
   → Chain validation, CT extraction
-  → [if grade=true] HTTP checks (HSTS + redirect), concurrent with each other
-  → [if grade=true] Compute health checks from inspection data + HTTP results
+  → [if quality enabled] HTTP checks (HSTS + redirect), concurrent with each other
+  → [if quality enabled] Compute health checks from inspection data + HTTP results
   → Build response
 ```
 
@@ -511,69 +495,65 @@ Principle: **never let health checks degrade the core inspection**.
 The HTTP checks add to the per-request rate limit cost:
 
 ```
-cost_without_grade = ports * ips
-cost_with_grade    = ports * ips + 2  (HSTS connection + redirect connection)
+cost = ports * ips  (HTTP checks are not rate-limited separately)
 ```
 
-The +2 is a flat cost, independent of ports and IPs. Cost is charged at budget-check time, before connections are made — if the check is skipped (e.g., connection refused on port 80), the cost is not refunded. This is simpler and prevents gaming.
-
-If the increased cost exceeds the rate budget, quality assessment is skipped entirely (not the inspection). The response includes inspection data without `quality`, plus a warning: "quality assessment skipped due to rate limiting."
-
-The rate-limit-skip decision is made **before** HTTP checks start. No partial execution — either all quality work runs or none does.
+**Note**: The original design added +2 for HTTP check connections. In the current implementation, HTTP checks are not separately rate-limited — they are lightweight (two HEAD requests to the first resolved IP) and always run when quality is enabled. If rate limiting needs to account for HTTP checks in the future, the cost model can be revisited.
 
 ---
 
 ## 6. Frontend Integration
 
-### 6.1 Health Check Display
+### 6.1 Unified Validation Card
 
-The health checks are displayed as a structured checklist in a new collapsible section, grouped by category. Each port gets its own section; hostname-scoped checks appear above all port sections:
+Validation and health check are merged into a single always-visible "Validation" card (`ValidationSummary` component). The card has two layers:
+
+**Always visible (header)**:
+- Collapsible toggle with "Validation" label
+- Verdict badge (pass/warn/fail) — derived from quality checks when available, else from summary
+- Count pills (N passed, N warnings, N failed)
+- Summary pills row showing the 8 summary checks (chain trusted, not expired, etc.)
+
+**Expanded body** (collapsed by default):
+- Hostname-scoped checks (HSTS, HTTPS redirect) at the top
+- Per-port detailed checks grouped by category (Certificate, Protocol, Configuration)
+- Each check shows status icon, label, and detail text
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  TLS Health Check                                       │
-├─────────────────────────────────────────────────────────┤
-│  Hostname                                               │
-│   [*] HSTS                max-age=31536000, preload     │
-│   [*] HTTPS redirect      Redirects to https://...      │
+│  Validation  [PASS]  [15 passed]                    ▸   │
+│  [✓ Chain trusted] [✓ Not expired] [✓ Hostname match]   │
+│  [✓ CAA compliant] [— DANE valid] [— CT logged]        │
+│  [✓ OCSP stapled] [✓ Consistency]                       │
+│─────────────────────────────────────────────────────────│
+│  ✓ HSTS — max-age=31536000 (1 year)                    │
+│  ✓ HTTPS redirect — HTTP 301 → https://...             │
 │                                                         │
-│  Port 443                                      1 warn   │
-│  Certificate                                            │
-│   [*] Chain trusted       Verified against Mozilla      │
-│   [*] Certificate valid   All certs in validity period  │
-│   [*] Hostname match      SAN covers example.com        │
-│   [*] Chain complete      Correct order, all present    │
-│   [*] Signature algorithm sha256WithRSAEncryption       │
-│   [*] Key strength        ECDSA P-256 (256-bit)         │
-│   [!] Expiry window       Expires in 22 days            │
-│  Protocol                                               │
-│   [*] TLS version         TLS 1.3                       │
-│   [*] Forward secrecy     ECDHE key exchange            │
-│   [*] AEAD cipher         AES-256-GCM                   │
-│   [*] CT logged           3 embedded SCTs               │
-│  Configuration                                          │
-│   [*] CAA compliance      Issuer matches CAA record     │
-│   [-] Consistency         Single IP (skipped)           │
+│  CERTIFICATE                                            │
+│  ✓ Chain trusted — chain verifies to a trusted root     │
+│  ✓ Not expired — all certificates are within validity   │
+│  ...                                                    │
+│  PROTOCOL                                               │
+│  ✓ TLS version — TLS 1.3                               │
+│  ...                                                    │
+│  CONFIGURATION                                          │
+│  ✓ CAA compliant — issuing CA authorized by CAA records │
+│  — DANE valid — DANE check skipped (requires DNSSEC)    │
+│  ✓ IP consistency — all IPs serve matching config       │
 └─────────────────────────────────────────────────────────┘
-
-[*] = pass    [!] = warn    [X] = fail    [-] = skip
 ```
 
 ### 6.2 Placement
 
-The health check section appears below the existing `ValidationSummary` and above the per-IP cards. It's collapsible (default: expanded).
+The Validation card appears below the results toolbar/actions and above port tabs and per-IP cards. There is no separate health check card.
 
-### 6.3 Grade Toggle
+### 6.3 No Grade Toggle
 
-A toggle in the input area (next to the port presets) controls `grade=true`. Label: "Health check". Default: off.
-
-State is persisted in localStorage (`tlsight_grade`).
-
-When toggled on mid-session with an existing result, the UI re-runs the query with `grade=true` (the HTTP checks require a new request — they can't be computed client-side from cached data).
+**Design change**: The `grade` toggle was removed. Quality assessment runs automatically when enabled in config. The `g` keyboard shortcut and localStorage persistence for `tlsight_grade` were removed.
 
 ### 6.4 Exports
 
-The `ExportButtons` component (JSON download + markdown copy) includes quality data when present. The JSON export includes the full `quality` objects. The markdown export adds a "Health Check" section listing each check with its status and detail.
+The `ExportButtons` component includes quality data when present. The JSON export includes the full `quality` objects. The markdown export adds a "Detailed Checks" section listing each check with its status and detail.
 
 ---
 
@@ -581,13 +561,11 @@ The `ExportButtons` component (JSON download + markdown copy) includes quality d
 
 The core SDD (`docs/sdd.md`) must be updated alongside the implementation (not as a separate phase):
 
-1. **§8 Security**: Add an exception to the "no application data after TLS handshake" rule: "Exception: when quality assessment is enabled (`grade=true`), separate HTTP connections are made for HSTS and redirect checking. These are distinct from inspection handshakes and governed by the quality SDD (§3.3) security constraints."
+1. **§8 Security**: Add an exception to the "no application data after TLS handshake" rule: "Exception: when quality assessment is enabled, separate HTTP connections are made for HSTS and redirect checking. These are distinct from inspection handshakes and governed by the quality SDD (§3.3) security constraints."
 
-2. **§5 API**: Document the `grade` query parameter on `/api/inspect`.
+2. **§7 Backend**: Reference the `quality/` module in the inspection pipeline.
 
-3. **§7 Backend**: Reference the `quality/` module in the inspection pipeline.
-
-4. **§14 Phased delivery**: Add quality assessment phases.
+3. **§14 Phased delivery**: Add quality assessment phases.
 
 ---
 
@@ -640,7 +618,7 @@ Tag findings against PCI DSS 4.0, NIST SP 800-52r2, BSI TR-02102-2.
 
 ```toml
 [quality]
-# Enable quality assessment (grade=true parameter accepted)
+# Enable quality assessment (always-on when true, no query parameter needed)
 # Default: true
 enabled = true
 
@@ -728,8 +706,8 @@ Quality assessment is accounted for in rate limiting (§5.5). If the budget is i
 **Decision 1: Health checks, not letter grades.**
 A letter grade system without cipher enumeration and protocol probing gives every server an A. A checklist of concrete findings is immediately useful and honest about its coverage. The grade system is built later on top of this foundation when probing makes scoring discriminating.
 
-**Decision 2: Opt-in via query parameter, not separate endpoint.**
-Quality assessment consumes the same inspection data. A separate endpoint would duplicate the pipeline or call the first one internally. One response, optionally enriched.
+**Decision 2: Always-on via config, not opt-in query parameter.**
+Originally designed as opt-in via `grade=true`. Changed to always-on when `config.quality.enabled` — quality checks are lightweight and the merged Validation card always shows results. An opt-in toggle added UI complexity without meaningful benefit. Operators can disable quality entirely via config if needed.
 
 **Decision 3: HSTS and redirect only, no other HTTP headers.**
 HSTS prevents TLS downgrade attacks — directly TLS-relevant. Other security headers (CSP, X-Frame-Options) are web security, not TLS quality. Scope discipline.
@@ -753,37 +731,35 @@ Simpler accounting. If port 80 refuses the connection, the cost is already paid.
 The existing `summary` continues to appear for backwards compatibility. `quality` reads from the same `ValidationResult` — it's a richer reformatting, not a recomputation. Deprecation of `summary` is a future API version concern.
 
 **Decision 10: Only actionable findings produce warnings.**
-RSA 2048 is pass (industry standard, not actionable). TLS 1.2 is pass (secure, detection gap is informational). OCSP stapling absence is not a check (not a deficiency). Warnings must correspond to something the operator can fix.
+RSA 2048 is pass (industry standard, not actionable). TLS 1.2 is pass (secure, detection gap is informational). OCSP stapling absence is warn (degrades client privacy/performance, server can fix). Warnings must correspond to something the operator can fix.
+
+**Decision 11: Merged Validation + Health Check card.**
+Originally two separate cards (ValidationSummary for the 8-pill summary, QualityView for detailed checks). Merged into a single "Validation" card — the pills are always visible as a quick glance, the detailed checks are in the collapsible body. Reduces visual clutter and eliminates the overlapping information between the two views.
 
 ---
 
 ## 13. Phased Delivery
 
-### Phase Q1: Health Check Engine + HTTP Checks + SDD Update
-- [ ] `quality/` module with `types.rs`, `checks.rs`, `http.rs`
-- [ ] Health check functions for all check IDs defined in §2.3
-- [ ] Cipher suite name parser (key exchange, AEAD, symmetric bits)
-- [ ] HSTS HTTP check (HEAD, port 443 preferred, no redirect following)
-- [ ] HTTPS redirect check (HEAD to port 80, no redirect following)
-- [ ] `grade=true` query parameter on GET and POST `/api/inspect`
-- [ ] `QualityResult` and `PortQualityResult` response types with `#[derive(ToSchema)]`
-- [ ] Hostname-scoped quality at top level, port-scoped quality per `PortResult`
-- [ ] Rate limit cost adjustment (+2 for HTTP checks)
-- [ ] Rate-limit-skip decision before HTTP connections
-- [ ] Config: `[quality]` section in TOML
-- [ ] Unit tests for all checks, cipher suite parsing, HTTP parsing, verdict computation
-- [ ] Integration tests with `grade=true/false`, multi-port, IP-mode
-- [ ] Update `/api/meta` features
-- [ ] Update `docs/sdd.md` (§5 grade param, §7 quality module, §8 HTTP exception, §14 phases)
+### Phase Q1: Health Check Engine + HTTP Checks — DONE
+- [x] `quality/` module with `types.rs`, `checks.rs`, `http.rs`
+- [x] Health check functions for all check IDs defined in §2.3 (including `ocsp_stapled` and `dane_valid`)
+- [x] Cipher suite name parser (key exchange, AEAD, symmetric bits)
+- [x] HSTS HTTP check (HEAD, port 443 preferred, no redirect following)
+- [x] HTTPS redirect check (HEAD to port 80, no redirect following)
+- [x] Always-on quality when `config.quality.enabled` (no `grade` parameter)
+- [x] `QualityResult` and `PortQualityResult` response types
+- [x] Hostname-scoped quality at top level, port-scoped quality per `PortResult`
+- [x] Config: `[quality]` section in TOML
+- [x] Unit tests for all checks, cipher suite parsing, HTTP parsing, verdict computation
+- [x] Removed `quality_assessment` from `/api/meta` features (no longer opt-in)
 
-### Phase Q2: Frontend
-- [ ] Health check section (hostname-scoped + per-port groups, collapsible)
-- [ ] Status icons (pass/warn/fail/skip)
-- [ ] Grade toggle in input area
-- [ ] localStorage persistence
-- [ ] Re-query on toggle
-- [ ] Quality data in JSON/markdown exports
-- [ ] Component tests
+### Phase Q2: Frontend — DONE
+- [x] Unified Validation card (merged ValidationSummary + QualityView)
+- [x] Summary pills always visible, detailed checks in collapsible body
+- [x] Status icons (pass/warn/fail/skip)
+- [x] No grade toggle (always-on)
+- [x] Quality data in JSON/markdown exports
+- [x] Deleted QualityView.tsx (logic merged into ValidationSummary)
 
 ### Phase Q3: Letter Grade System (§8)
 - [ ] Raw socket ClientHello crafter
