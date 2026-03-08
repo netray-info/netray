@@ -19,11 +19,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::api::{AppState, STREAM_TIMEOUT_SECS};
+use crate::RequestId;
 use crate::api::query::make_error_event;
+use crate::api::{AppState, STREAM_TIMEOUT_SECS};
 use crate::dns_trace;
 use crate::error::{ApiError, ErrorResponse};
-use crate::RequestId;
 
 // Cost charged against per-IP and global rate limiters per trace request.
 // Trace queries root/TLD/auth servers (public infrastructure), so we skip

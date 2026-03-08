@@ -282,7 +282,10 @@ mod tests {
         let body = body_string(resp.into_body()).await;
         let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
         assert!(json.is_array());
-        assert!(!json.as_array().unwrap().is_empty(), "servers array must not be empty");
+        assert!(
+            !json.as_array().unwrap().is_empty(),
+            "servers array must not be empty"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -297,7 +300,10 @@ mod tests {
         let body = body_string(resp.into_body()).await;
         let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
         assert!(json.is_array());
-        assert!(!json.as_array().unwrap().is_empty(), "record-types array must not be empty");
+        assert!(
+            !json.as_array().unwrap().is_empty(),
+            "record-types array must not be empty"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -396,7 +402,10 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let resp_body = body_string(resp.into_body()).await;
         let json: serde_json::Value = serde_json::from_str(&resp_body).expect("valid JSON");
-        assert_eq!(json["error"]["code"].as_str().unwrap(), "TOO_MANY_RECORD_TYPES");
+        assert_eq!(
+            json["error"]["code"].as_str().unwrap(),
+            "TOO_MANY_RECORD_TYPES"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -442,7 +451,9 @@ mod tests {
     async fn rate_limit_eventually_returns_429() {
         // Build a state with a tiny per-IP rate limit so we can exhaust it
         // without sending hundreds of requests.
-        use crate::config::{CircuitBreakerConfig, DnsConfig, LimitsConfig, ServerConfig, TraceConfig};
+        use crate::config::{
+            CircuitBreakerConfig, DnsConfig, LimitsConfig, ServerConfig, TraceConfig,
+        };
 
         let config = Config {
             server: ServerConfig {
@@ -522,7 +533,11 @@ mod tests {
         let router = test_router(state.clone());
         let resp1 = router.oneshot(make_query_req()).await.unwrap();
         // It may return 200 (SSE started) or some DNS error — either way it's not 429.
-        assert_ne!(resp1.status(), StatusCode::TOO_MANY_REQUESTS, "first request should not be rate-limited");
+        assert_ne!(
+            resp1.status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "first request should not be rate-limited"
+        );
 
         // Second request: burst is exhausted, should be 429.
         let router = test_router(state);

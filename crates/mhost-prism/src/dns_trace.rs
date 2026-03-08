@@ -14,8 +14,8 @@ use hickory_proto::rr::{Name, RecordType};
 use serde::Serialize;
 
 use crate::dns_raw::{
-    DnsRecord, RawQueryResult, ROOT_SERVERS,
-    build_server_list, parallel_queries, record_to_dns_record, resolve_missing_glue,
+    DnsRecord, ROOT_SERVERS, RawQueryResult, build_server_list, parallel_queries,
+    record_to_dns_record, resolve_missing_glue,
 };
 
 // ---------------------------------------------------------------------------
@@ -136,8 +136,7 @@ pub async fn walk(
 
         let results = parallel_queries(&server_addrs, &name, record_type, query_timeout).await;
 
-        let (server_results, next_servers, is_final) =
-            process_hop(&results, &server_names);
+        let (server_results, next_servers, is_final) = process_hop(&results, &server_names);
 
         let referral_groups = compute_referral_groups(&server_results);
 
@@ -248,8 +247,7 @@ fn process_hop(
                     }
 
                     let glue = response.glue_ips();
-                    let referral_ns: Vec<String> =
-                        ns_names.iter().map(|n| n.to_ascii()).collect();
+                    let referral_ns: Vec<String> = ns_names.iter().map(|n| n.to_ascii()).collect();
 
                     let authority_zone = response
                         .authority()
@@ -320,7 +318,11 @@ fn compute_referral_groups(server_results: &[ServerResult]) -> Vec<ReferralGroup
         .into_iter()
         .map(|(ns_names, servers)| {
             let is_majority = total_referrals > 0 && servers.len() * 2 > total_referrals;
-            ReferralGroup { ns_names, servers, is_majority }
+            ReferralGroup {
+                ns_names,
+                servers,
+                is_majority,
+            }
         })
         .collect();
 

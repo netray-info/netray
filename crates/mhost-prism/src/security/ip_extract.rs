@@ -375,11 +375,8 @@ mod tests {
 
     #[test]
     fn cidr_entry_returns_error() {
-        let err = IpExtractor::new(&[
-            "10.0.0.1".to_string(),
-            "10.0.0.0/8".to_string(),
-        ])
-        .unwrap_err();
+        let err =
+            IpExtractor::new(&["10.0.0.1".to_string(), "10.0.0.0/8".to_string()]).unwrap_err();
         assert!(err.contains("CIDR range"), "unexpected error: {err}");
         assert!(err.contains("10.0.0.0/8"), "unexpected error: {err}");
     }

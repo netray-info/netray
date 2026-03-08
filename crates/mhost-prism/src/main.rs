@@ -15,8 +15,8 @@ mod dns_raw;
 mod dns_trace;
 mod error;
 mod parser;
-mod security;
 mod record_format;
+mod security;
 
 // ---------------------------------------------------------------------------
 // Request ID newtype

@@ -432,13 +432,17 @@ mod tests {
     #[test]
     fn rejects_ipv6_ula_fc00() {
         assert!(is_allowed_target("fc00::1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("fc00:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err());
+        assert!(
+            is_allowed_target("fc00:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
+        );
     }
 
     #[test]
     fn rejects_ipv6_ula_fd00() {
         assert!(is_allowed_target("fd00::1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err());
+        assert!(
+            is_allowed_target("fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
+        );
     }
 
     #[test]

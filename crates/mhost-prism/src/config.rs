@@ -493,10 +493,9 @@ mod tests {
     zero_rejects!(rejects_zero_global_burst, |c: &mut Config| {
         c.limits.global_burst = 0
     });
-    zero_rejects!(
-        rejects_zero_max_concurrent_connections,
-        |c: &mut Config| { c.limits.max_concurrent_connections = 0 }
-    );
+    zero_rejects!(rejects_zero_max_concurrent_connections, |c: &mut Config| {
+        c.limits.max_concurrent_connections = 0
+    });
     zero_rejects!(rejects_zero_per_ip_max_streams, |c: &mut Config| {
         c.limits.per_ip_max_streams = 0
     });

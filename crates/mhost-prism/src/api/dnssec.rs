@@ -19,11 +19,11 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::api::{AppState, STREAM_TIMEOUT_SECS};
+use crate::RequestId;
 use crate::api::query::make_error_event;
+use crate::api::{AppState, STREAM_TIMEOUT_SECS};
 use crate::dns_dnssec;
 use crate::error::{ApiError, ErrorResponse};
-use crate::RequestId;
 
 // Flat rate limit cost — same as trace (queries public infrastructure).
 const DNSSEC_COST: u32 = 16;
@@ -102,8 +102,7 @@ pub async fn post_handler(
         )));
     }
 
-    let name =
-        dns_dnssec::parse_name(&domain).map_err(ApiError::InvalidDomain)?;
+    let name = dns_dnssec::parse_name(&domain).map_err(ApiError::InvalidDomain)?;
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::debug!(%client_ip, %peer_addr, domain = %domain, "dnssec POST");

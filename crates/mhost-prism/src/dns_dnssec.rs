@@ -60,11 +60,7 @@ pub fn parse_name(domain: &str) -> Result<Name, String> {
 /// DS (at the parent zone's servers, for non-root zones). Collects RRSIG
 /// records returned alongside DNSKEY. Validates the cryptographic chain of
 /// trust at each level.
-pub async fn walk_chain(
-    name: Name,
-    max_hops: usize,
-    query_timeout: Duration,
-) -> Vec<ChainLevel> {
+pub async fn walk_chain(name: Name, max_hops: usize, query_timeout: Duration) -> Vec<ChainLevel> {
     // Start with all IPv4 root servers.
     let mut current_servers: Vec<(SocketAddr, Option<String>)> = ROOT_SERVERS
         .iter()
@@ -89,8 +85,7 @@ pub async fn walk_chain(
             break;
         }
 
-        let server_addrs: Vec<SocketAddr> =
-            current_servers.iter().map(|(addr, _)| *addr).collect();
+        let server_addrs: Vec<SocketAddr> = current_servers.iter().map(|(addr, _)| *addr).collect();
         let is_final = idx == zone_labels.len() - 1;
 
         tracing::debug!(
@@ -102,8 +97,7 @@ pub async fn walk_chain(
 
         let start = Instant::now();
 
-        let zone_name = Name::from_str(target_zone)
-            .unwrap_or_else(|_| Name::root());
+        let zone_name = Name::from_str(target_zone).unwrap_or_else(|_| Name::root());
 
         // Query DNSKEY at this zone's servers (with DO bit).
         let dnskey_raw =
@@ -112,13 +106,8 @@ pub async fn walk_chain(
 
         // Query DS at parent servers (not for root).
         let ds_response = if !parent_servers.is_empty() && target_zone != "." {
-            query_record_type_dnssec(
-                &parent_servers,
-                &zone_name,
-                RecordType::DS,
-                query_timeout,
-            )
-            .await
+            query_record_type_dnssec(&parent_servers, &zone_name, RecordType::DS, query_timeout)
+                .await
         } else {
             Vec::new()
         };
@@ -390,14 +379,14 @@ fn analyze_level(
             .filter_map(|dk| dk.calculate_key_tag().ok())
             .map(|t: u16| t.to_string())
             .collect();
-        let algos: Vec<&str> = ksks.iter().map(|dk| algorithm_name(dk.algorithm())).collect();
+        let algos: Vec<&str> = ksks
+            .iter()
+            .map(|dk| algorithm_name(dk.algorithm()))
+            .collect();
         let algo_str = dedup_join(&algos);
         findings.push(ChainFinding {
             severity: "ok".into(),
-            message: format!(
-                "KSK present (tag {}, {algo_str})",
-                tags.join(", ")
-            ),
+            message: format!("KSK present (tag {}, {algo_str})", tags.join(", ")),
         });
     } else {
         findings.push(ChainFinding {
@@ -455,9 +444,7 @@ fn analyze_level(
                 } else {
                     findings.push(ChainFinding {
                         severity: "ok".into(),
-                        message: format!(
-                            "DNSKEY signed (tag {key_tag}, expires in {days_left}d)"
-                        ),
+                        message: format!("DNSKEY signed (tag {key_tag}, expires in {days_left}d)"),
                     });
                 }
             }
@@ -469,9 +456,7 @@ fn analyze_level(
             if !has_signing_key {
                 findings.push(ChainFinding {
                     severity: "warning".into(),
-                    message: format!(
-                        "RRSIG key tag {key_tag} does not match any DNSKEY at {zone}"
-                    ),
+                    message: format!("RRSIG key tag {key_tag} does not match any DNSKEY at {zone}"),
                 });
             }
         }
@@ -498,9 +483,7 @@ fn analyze_level(
                     any_verified = true;
                     findings.push(ChainFinding {
                         severity: "ok".into(),
-                        message: format!(
-                            "DS tag {ds_tag} verified against DNSKEY"
-                        ),
+                        message: format!("DS tag {ds_tag} verified against DNSKEY"),
                     });
                 } else {
                     findings.push(ChainFinding {
@@ -570,7 +553,10 @@ mod tests {
     fn build_zone_labels_subdomain() {
         let name = Name::from_str("www.example.com.").unwrap();
         let labels = build_zone_labels(&name);
-        assert_eq!(labels, vec![".", "com.", "example.com.", "www.example.com."]);
+        assert_eq!(
+            labels,
+            vec![".", "com.", "example.com.", "www.example.com."]
+        );
     }
 
     #[test]

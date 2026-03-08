@@ -255,13 +255,18 @@ pub(crate) async fn send_udp(
     };
     let latency = start.elapsed();
 
-    let response =
-        Message::from_vec(&buf[..len]).map_err(|e| RawError::Decode(e.to_string()))?;
+    let response = Message::from_vec(&buf[..len]).map_err(|e| RawError::Decode(e.to_string()))?;
     if response.id() != expected_id {
-        return Err(RawError::IdMismatch { expected: expected_id, got: response.id() });
+        return Err(RawError::IdMismatch {
+            expected: expected_id,
+            got: response.id(),
+        });
     }
 
-    Ok(RawResponse { message: response, latency })
+    Ok(RawResponse {
+        message: response,
+        latency,
+    })
 }
 
 pub(crate) async fn send_tcp(
@@ -308,10 +313,16 @@ pub(crate) async fn send_tcp(
 
     let response = Message::from_vec(&buf).map_err(|e| RawError::Decode(e.to_string()))?;
     if response.id() != expected_id {
-        return Err(RawError::IdMismatch { expected: expected_id, got: response.id() });
+        return Err(RawError::IdMismatch {
+            expected: expected_id,
+            got: response.id(),
+        });
     }
 
-    Ok(RawResponse { message: response, latency })
+    Ok(RawResponse {
+        message: response,
+        latency,
+    })
 }
 
 // ---------------------------------------------------------------------------

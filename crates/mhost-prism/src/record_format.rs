@@ -28,7 +28,10 @@ pub fn format_txt(txt: &TXT) -> String {
                         };
                         let mech_str = match mechanism {
                             Mechanism::All => "all".to_string(),
-                            Mechanism::A { domain_spec, cidr_len } => {
+                            Mechanism::A {
+                                domain_spec,
+                                cidr_len,
+                            } => {
                                 let mut s = "a".to_string();
                                 if let Some(d) = domain_spec {
                                     s = format!("a:{d}");
@@ -40,7 +43,10 @@ pub fn format_txt(txt: &TXT) -> String {
                             }
                             Mechanism::IPv4(ip) => format!("ip4:{ip}"),
                             Mechanism::IPv6(ip) => format!("ip6:{ip}"),
-                            Mechanism::MX { domain_spec, cidr_len } => {
+                            Mechanism::MX {
+                                domain_spec,
+                                cidr_len,
+                            } => {
                                 let mut s = "mx".to_string();
                                 if let Some(d) = domain_spec {
                                     s = format!("mx:{d}");
@@ -145,9 +151,7 @@ pub fn format_caa_human(obj: &serde_json::Value) -> Option<String> {
     let policy = match (tag, value) {
         ("issue", "") => "No CA is allowed to issue certificates".to_string(),
         ("issue", v) => format!("Allow {v} to issue certificates"),
-        ("issuewild", "") => {
-            "No CA is allowed to issue wildcard certificates".to_string()
-        }
+        ("issuewild", "") => "No CA is allowed to issue wildcard certificates".to_string(),
         ("issuewild", v) => format!("Allow {v} to issue wildcard certificates"),
         ("iodef", v) => format!("Report policy violations to {}", strip_uri_scheme(v)),
         (t, v) => format!("{t} {v}"),
@@ -234,8 +238,8 @@ fn enrich_txt(value: &mut serde_json::Value) {
 
         for ri in 0..record_count {
             let txt_string = {
-                let txt_data = &value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]
-                    ["data"]["TXT"]["txt_data"];
+                let txt_data = &value["lookups"]["lookups"][li]["result"]["Response"]["records"]
+                    [ri]["data"]["TXT"]["txt_data"];
                 let chunks = match txt_data.as_array() {
                     Some(arr) => arr,
                     None => continue,
@@ -264,8 +268,14 @@ fn enrich_txt(value: &mut serde_json::Value) {
                 ["data"]["TXT"]
                 .as_object_mut()
             {
-                obj.insert("txt_string".to_string(), serde_json::Value::String(txt_string));
-                obj.insert("txt_human".to_string(), serde_json::Value::String(txt_human));
+                obj.insert(
+                    "txt_string".to_string(),
+                    serde_json::Value::String(txt_string),
+                );
+                obj.insert(
+                    "txt_human".to_string(),
+                    serde_json::Value::String(txt_human),
+                );
             }
         }
     }
@@ -294,8 +304,8 @@ fn enrich_simple(
 
         for ri in 0..record_count {
             let human = {
-                let data = &value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]
-                    ["data"][data_key];
+                let data = &value["lookups"]["lookups"][li]["result"]["Response"]["records"][ri]["data"]
+                    [data_key];
                 match formatter(data) {
                     Some(s) => s,
                     None => continue,
@@ -367,7 +377,10 @@ mod tests {
         let txt = make_txt("v=BIMI1; l=https://example.com/logo.svg");
         let out = format_txt(&txt);
         assert!(out.starts_with("BIMI:"), "got: {out}");
-        assert!(out.contains("logo: https://example.com/logo.svg"), "got: {out}");
+        assert!(
+            out.contains("logo: https://example.com/logo.svg"),
+            "got: {out}"
+        );
     }
 
     #[test]
@@ -427,7 +440,8 @@ mod tests {
             }
         });
         enrich_lookups_json(&mut value, "TXT");
-        let txt_obj = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
+        let txt_obj =
+            &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
         assert_eq!(txt_obj["txt_string"], "hello");
         assert_eq!(txt_obj["txt_human"], "hello");
     }
@@ -457,7 +471,8 @@ mod tests {
             }
         });
         enrich_lookups_json(&mut value, "TXT");
-        let txt_obj = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
+        let txt_obj =
+            &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
         assert_eq!(txt_obj["txt_string"], "v=spf1 -all");
         let human = txt_obj["txt_human"].as_str().unwrap();
         assert!(human.starts_with("SPF:"), "got: {human}");
@@ -487,7 +502,8 @@ mod tests {
             }
         });
         enrich_lookups_json(&mut value, "_dmarc");
-        let txt_obj = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
+        let txt_obj =
+            &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
         let human = txt_obj["txt_human"].as_str().unwrap();
         assert!(human.starts_with("DMARC:"), "got: {human}");
     }
@@ -495,8 +511,14 @@ mod tests {
     #[test]
     fn enrich_multi_chunk_txt() {
         // Two chunks: "hello" + " world"
-        let chunk1: Vec<serde_json::Value> = "hello".bytes().map(|b| serde_json::Value::Number(b.into())).collect();
-        let chunk2: Vec<serde_json::Value> = " world".bytes().map(|b| serde_json::Value::Number(b.into())).collect();
+        let chunk1: Vec<serde_json::Value> = "hello"
+            .bytes()
+            .map(|b| serde_json::Value::Number(b.into()))
+            .collect();
+        let chunk2: Vec<serde_json::Value> = " world"
+            .bytes()
+            .map(|b| serde_json::Value::Number(b.into()))
+            .collect();
         let mut value = json!({
             "lookups": {
                 "lookups": [{
@@ -515,7 +537,8 @@ mod tests {
             }
         });
         enrich_lookups_json(&mut value, "TXT");
-        let txt_obj = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
+        let txt_obj =
+            &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["TXT"];
         assert_eq!(txt_obj["txt_string"], "hello world");
     }
 
@@ -539,30 +562,21 @@ mod tests {
     fn format_caa_issuewild_empty() {
         let obj = json!({"issuer_critical": false, "tag": "issuewild", "value": ""});
         let out = format_caa_human(&obj).unwrap();
-        assert_eq!(
-            out,
-            "No CA is allowed to issue wildcard certificates"
-        );
+        assert_eq!(out, "No CA is allowed to issue wildcard certificates");
     }
 
     #[test]
     fn format_caa_issuewild_ca() {
         let obj = json!({"issuer_critical": false, "tag": "issuewild", "value": "letsencrypt.org"});
         let out = format_caa_human(&obj).unwrap();
-        assert_eq!(
-            out,
-            "Allow letsencrypt.org to issue wildcard certificates"
-        );
+        assert_eq!(out, "Allow letsencrypt.org to issue wildcard certificates");
     }
 
     #[test]
     fn format_caa_iodef() {
         let obj = json!({"issuer_critical": false, "tag": "iodef", "value": "mailto:security@example.com"});
         let out = format_caa_human(&obj).unwrap();
-        assert_eq!(
-            out,
-            "Report policy violations to security@example.com"
-        );
+        assert_eq!(out, "Report policy violations to security@example.com");
     }
 
     #[test]
@@ -574,7 +588,8 @@ mod tests {
 
     #[test]
     fn format_caa_unknown_tag() {
-        let obj = json!({"issuer_critical": false, "tag": "contactemail", "value": "admin@example.com"});
+        let obj =
+            json!({"issuer_critical": false, "tag": "contactemail", "value": "admin@example.com"});
         let out = format_caa_human(&obj).unwrap();
         assert_eq!(out, "contactemail admin@example.com");
     }
@@ -635,7 +650,8 @@ mod tests {
             }
         });
         enrich_lookups_json(&mut value, "CAA");
-        let caa = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["CAA"];
+        let caa =
+            &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["CAA"];
         assert_eq!(
             caa["caa_human"],
             "Allow letsencrypt.org to issue certificates"
@@ -693,9 +709,13 @@ mod tests {
             }
         });
         enrich_lookups_json(&mut value, "SOA");
-        let soa = &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["SOA"];
+        let soa =
+            &value["lookups"]["lookups"][0]["result"]["Response"]["records"][0]["data"]["SOA"];
         let human = soa["soa_human"].as_str().unwrap();
-        assert!(human.contains("Primary NS: ns1.example.com."), "got: {human}");
+        assert!(
+            human.contains("Primary NS: ns1.example.com."),
+            "got: {human}"
+        );
         assert!(human.contains("Serial: 2024010101"), "got: {human}");
     }
 }
