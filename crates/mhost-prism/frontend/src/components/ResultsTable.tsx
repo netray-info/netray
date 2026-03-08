@@ -180,7 +180,7 @@ function formatStructuredRecord(rtype: string, value: Record<string, unknown>): 
 }
 
 /** Format name_server string like "udp:1.1.1.1:53,name=Cloudflare 1" for display. */
-function formatServer(ns: string): string {
+export function formatServer(ns: string): string {
   // Extract the name if present: "udp:1.1.1.1:53,name=Cloudflare 1" -> "Cloudflare 1"
   const nameMatch = ns.match(/name=(.+?)(?:,|$)/);
   if (nameMatch) return nameMatch[1];

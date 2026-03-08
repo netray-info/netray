@@ -763,6 +763,38 @@ body {
 }
 
 /* ===================================================================
+   Export Buttons
+   =================================================================== */
+
+.export-buttons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-bottom: 8px;
+  margin-left: 8px;
+}
+
+.export-btn {
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
+  white-space: nowrap;
+}
+
+.export-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+/* ===================================================================
    JSON View
    =================================================================== */
 

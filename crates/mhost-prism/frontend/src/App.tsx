@@ -4,6 +4,7 @@ import { ResultsTable, parseBatchEvent, groupByRecordType, lookupsAgree, hasDevi
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
 import { TraceView, type TraceHop, type TraceDoneStats } from './components/TraceView';
 import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/DnssecView';
+import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard } from './lib/export';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'json';
@@ -176,6 +177,7 @@ export default function App() {
   const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
   const [showHelp, setShowHelp] = createSignal(false);
 
+
   // View options
   const vp = loadViewPrefs();
   const [hideNx, setHideNx] = createSignal(vp.hideNx);
@@ -199,6 +201,7 @@ export default function App() {
 
   // Completed record types (for streaming progress)
   const [completedTypes, setCompletedTypes] = createSignal<string[]>([]);
+  const [copied, setCopied] = createSignal(false);
 
   // Check mode state
   const [isCheckMode, setIsCheckMode] = createSignal(false);
@@ -994,6 +997,40 @@ export default function App() {
                       : 'Querying…'}
                 </span>
                 <button class="cancel-btn" onClick={cancelQuery} title="Cancel query">cancel</button>
+              </div>
+            </Show>
+
+            {/* Export buttons — visible when results are available */}
+            <Show when={status() === 'done' && results().length > 0}>
+              <div class="export-buttons">
+                <button
+                  class="export-btn"
+                  onClick={() => {
+                    copyToClipboard(toMarkdown(results())).then((ok) => {
+                      if (ok) {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                      }
+                    });
+                  }}
+                  title="Copy results as Markdown table"
+                >
+                  {copied() ? 'Copied' : 'Copy MD'}
+                </button>
+                <button
+                  class="export-btn"
+                  onClick={() => downloadFile(toCsv(results()), 'dns-results.csv', 'text/csv')}
+                  title="Download results as CSV"
+                >
+                  CSV
+                </button>
+                <button
+                  class="export-btn"
+                  onClick={() => downloadFile(toJson(results(), stats()), 'dns-results.json', 'application/json')}
+                  title="Download results as JSON"
+                >
+                  JSON
+                </button>
               </div>
             </Show>
           </div>
