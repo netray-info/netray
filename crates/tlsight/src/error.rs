@@ -37,7 +37,6 @@ pub enum AppError {
     #[error("parse error: {0}")]
     ParseError(String),
 
-    #[allow(dead_code)] // POST handler (Phase 2)
     #[error("ambiguous input: {0}")]
     AmbiguousInput(String),
 

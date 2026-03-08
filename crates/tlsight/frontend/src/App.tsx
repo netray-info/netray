@@ -1,5 +1,7 @@
-import { createSignal, createResource, Show, For, ErrorBoundary } from 'solid-js';
+import { createSignal, createResource, Show, For, onMount, onCleanup } from 'solid-js';
 import HostInput from './components/HostInput';
+import QueryHistory from './components/QueryHistory';
+import ExportButtons from './components/ExportButtons';
 import ValidationSummary from './components/ValidationSummary';
 import ChainView from './components/ChainView';
 import CertDetail from './components/CertDetail';
@@ -9,6 +11,7 @@ import ConsistencyView from './components/ConsistencyView';
 import CrossLinks from './components/CrossLinks';
 import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
+import { addToHistory } from './lib/history';
 import type { InspectResponse, PortResult } from './lib/types';
 
 export default function App() {
@@ -22,7 +25,31 @@ export default function App() {
 
   const [meta] = createResource(fetchMeta);
 
+  let inputEl: HTMLInputElement | undefined;
+
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
+
+  function isInputFocused() {
+    return document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
+  }
+
+  onMount(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === '/' && !isInputFocused()) {
+        e.preventDefault();
+        inputEl?.focus();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        inputEl?.focus();
+      }
+      if (e.key === 'Escape') {
+        inputEl?.blur();
+      }
+    };
+    document.addEventListener('keydown', handler);
+    onCleanup(() => document.removeEventListener('keydown', handler));
+  });
 
   const handleInspect = async (input: string) => {
     setLoading(true);
@@ -31,6 +58,7 @@ export default function App() {
     try {
       const data = await inspect(input);
       setResult(data);
+      addToHistory(input);
       if (data.ports.length > 0) {
         setSelectedPort(data.ports[0].port);
       }
@@ -79,7 +107,8 @@ export default function App() {
       </header>
 
       <main class="main">
-        <HostInput onSubmit={handleInspect} loading={loading()} />
+        <HostInput onSubmit={handleInspect} loading={loading()} inputRef={el => (inputEl = el)} />
+        <QueryHistory onSelect={handleInspect} />
 
         <Show when={error()}>
           <div class="error-banner">{error()}</div>
@@ -163,6 +192,8 @@ export default function App() {
                 <Show when={meta()}>
                   <CrossLinks meta={meta()!} hostname={r.hostname} ips={allIps()} />
                 </Show>
+
+                <ExportButtons result={r} />
 
                 <div class="footer-info">
                   Inspected {allIps().length} IP(s) across {r.ports.length} port(s) in {r.duration_ms}ms

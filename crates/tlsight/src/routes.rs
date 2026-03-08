@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::extract::{ConnectInfo, Query, State};
+use axum::extract::{ConnectInfo, Query, RawQuery, State};
 use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -136,6 +137,21 @@ pub struct InspectQuery {
     pub h: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)] // Fields are part of the POST API contract; wired in a future phase
+pub struct InspectPostBody {
+    pub hostname: String,
+    #[serde(default = "default_ports")]
+    pub ports: Vec<u16>,
+    pub timeout_secs: Option<u64>,
+    pub check_dane: Option<bool>,
+    pub check_caa: Option<bool>,
+}
+
+fn default_ports() -> Vec<u16> {
+    vec![443]
+}
+
 // ---------------------------------------------------------------------------
 // Routers
 // ---------------------------------------------------------------------------
@@ -148,7 +164,10 @@ pub fn health_router() -> Router {
 
 pub fn api_router(state: AppState) -> Router {
     Router::new()
-        .route("/api/inspect", get(inspect_handler))
+        .route(
+            "/api/inspect",
+            get(inspect_handler).post(inspect_post_handler),
+        )
         .route("/api/meta", get(meta_handler))
         .route("/api-docs/openapi.json", get(openapi_handler))
         .route("/docs", get(docs_handler))
@@ -204,13 +223,66 @@ async fn inspect_handler(
     headers: axum::http::HeaderMap,
     query: Query<InspectQuery>,
 ) -> Result<Json<InspectResponse>, AppError> {
+    let client_ip = state.ip_extractor.extract(&headers, addr);
+    let parsed = input::parse_input(&query.h, state.config.limits.max_ports)?;
+    do_inspect(state, client_ip, &headers, parsed).await
+}
+
+async fn inspect_post_handler(
+    State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    raw_query: RawQuery,
+    Json(body): Json<InspectPostBody>,
+) -> Result<Json<InspectResponse>, AppError> {
+    // Reject if query string contains h= param
+    if let Some(ref qs) = raw_query.0
+        && qs.contains("h=")
+    {
+        return Err(AppError::AmbiguousInput(
+            "POST body and ?h= query parameter cannot be used together".to_string(),
+        ));
+    }
+
+    // Validate ports
+    if body.ports.is_empty() {
+        return Err(AppError::InvalidPort(
+            "ports array must not be empty".to_string(),
+        ));
+    }
+    if body.ports.len() > state.config.limits.max_ports {
+        return Err(AppError::TooManyPorts {
+            requested: body.ports.len(),
+            max: state.config.limits.max_ports,
+        });
+    }
+    for &p in &body.ports {
+        if p == 0 {
+            return Err(AppError::InvalidPort("port must be 1-65535".to_string()));
+        }
+    }
+
+    // Validate hostname through the same path as GET
+    let target_parsed = input::parse_input(&body.hostname, state.config.limits.max_ports)?;
+    let parsed = input::ParsedInput {
+        target: target_parsed.target,
+        ports: body.ports,
+    };
+
+    let client_ip = state.ip_extractor.extract(&headers, addr);
+    do_inspect(state, client_ip, &headers, parsed).await
+}
+
+async fn do_inspect(
+    state: AppState,
+    client_ip: IpAddr,
+    _headers: &axum::http::HeaderMap,
+    parsed: input::ParsedInput,
+) -> Result<Json<InspectResponse>, AppError> {
     let request_start = Instant::now();
 
     // Extract request ID from extensions (set by middleware)
     let request_id = uuid::Uuid::now_v7().to_string();
-
-    // Parse input
-    let parsed = input::parse_input(&query.h, state.config.limits.max_ports)?;
 
     let hostname_str = match &parsed.target {
         Target::Hostname(h) => h.clone(),
@@ -220,9 +292,6 @@ async fn inspect_handler(
         Target::Hostname(_) => "hostname",
         Target::Ip(_) => "ip",
     };
-
-    // Extract client IP for rate limiting
-    let client_ip = state.ip_extractor.extract(&headers, addr);
 
     let mut warnings = Vec::new();
     let mut skipped_ips = Vec::new();
@@ -342,20 +411,22 @@ async fn inspect_handler(
         None
     };
 
-    // Run TLS handshakes with request timeout
+    // Run TLS handshakes with request timeout — ports run concurrently
     let port_results = tokio::time::timeout(request_timeout, async {
-        let mut results = Vec::with_capacity(parsed.ports.len());
+        let mut join_set = tokio::task::JoinSet::new();
         for &port in &parsed.ports {
-            let result = inspect_port(
-                &inspected_ips,
-                port,
-                parsed.target.hostname(),
-                handshake_timeout,
-                state.cert_verifier.as_ref(),
-            )
-            .await;
-            results.push(result);
+            let ips = inspected_ips.clone();
+            let hostname = parsed.target.hostname().map(|h| h.to_string());
+            let verifier = state.cert_verifier.clone();
+            join_set.spawn(async move {
+                inspect_port(&ips, port, hostname.as_deref(), handshake_timeout, verifier).await
+            });
         }
+        let mut results = Vec::with_capacity(parsed.ports.len());
+        while let Some(result) = join_set.join_next().await {
+            results.push(result.unwrap());
+        }
+        results.sort_by_key(|r| r.port);
         results
     })
     .await
@@ -472,7 +543,7 @@ async fn inspect_port(
     port: u16,
     hostname: Option<&str>,
     timeout: Duration,
-    cert_verifier: &dyn rustls::client::danger::ServerCertVerifier,
+    cert_verifier: Arc<dyn rustls::client::danger::ServerCertVerifier>,
 ) -> PortResult {
     let mut ip_results = Vec::with_capacity(ips.len());
 
@@ -482,8 +553,12 @@ async fn inspect_port(
         // Run validation if we got a chain
         if let Some(chain) = &result.chain {
             let raw_certs = result.raw_certs.as_deref().unwrap_or(&[]);
-            let validation =
-                validate::chain_trust::validate_chain(chain, hostname, cert_verifier, raw_certs);
+            let validation = validate::chain_trust::validate_chain(
+                chain,
+                hostname,
+                cert_verifier.as_ref(),
+                raw_certs,
+            );
             result.validation = Some(validation);
         }
 
