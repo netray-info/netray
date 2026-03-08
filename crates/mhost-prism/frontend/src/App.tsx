@@ -228,6 +228,16 @@ export default function App() {
   // Expand/collapse all triggers (increment to trigger effect)
   const [expandAllTrigger, setExpandAllTrigger] = createSignal(0);
   const [collapseAllTrigger, setCollapseAllTrigger] = createSignal(0);
+  const [allExpanded, setAllExpanded] = createSignal(false);
+  function toggleExpandAll() {
+    if (allExpanded()) {
+      setCollapseAllTrigger((n) => n + 1);
+      setAllExpanded(false);
+    } else {
+      setExpandAllTrigger((n) => n + 1);
+      setAllExpanded(true);
+    }
+  }
 
   // Completed record types (for streaming progress)
   const [completedTypes, setCompletedTypes] = createSignal<string[]>([]);
@@ -607,6 +617,7 @@ export default function App() {
     setResults([]);
     setStats(null);
     setLintCategories([]);
+    setAllExpanded(false);
     setCheckStats(null);
     setCompareResults([]);
     setAuthResults([]);
@@ -1425,8 +1436,7 @@ export default function App() {
               <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: deviations first, then records, then NXDOMAIN">sort</button>
               <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields">explain</button>
               <span class="view-options-spacer" />
-              <button class="view-btn" onClick={() => setExpandAllTrigger((n) => n + 1)} title="Expand all record rows">expand all</button>
-              <button class="view-btn" onClick={() => setCollapseAllTrigger((n) => n + 1)} title="Collapse all record rows">collapse all</button>
+              <button class={`view-btn${allExpanded() ? ' active' : ''}`} onClick={toggleExpandAll} title={allExpanded() ? 'Collapse all record rows' : 'Expand all record rows'}>{allExpanded() ? 'collapse all' : 'expand all'}</button>
             </div>
           </Show>
           {/* Row 3: View options — servers tab */}
