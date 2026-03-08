@@ -9,9 +9,23 @@ use std::net::IpAddr;
 
 /// Check if an IP address is allowed as a TLS inspection target.
 ///
-/// Returns `Ok(())` if the IP is routable and not in any reserved range.
+/// Returns `Ok(())` if the IP is routable and not in any reserved range,
+/// or if `allow_blocked` is true (development mode).
 /// Returns `Err` with a human-readable reason if the IP is blocked.
+#[allow(dead_code)] // Used in tests; production code uses check_allowed_with_policy
 pub fn check_allowed(ip: &IpAddr) -> Result<(), &'static str> {
+    check_allowed_inner(ip, false)
+}
+
+/// Like [`check_allowed`] but with an explicit flag to bypass blocking.
+pub fn check_allowed_with_policy(ip: &IpAddr, allow_blocked: bool) -> Result<(), &'static str> {
+    check_allowed_inner(ip, allow_blocked)
+}
+
+fn check_allowed_inner(ip: &IpAddr, allow_blocked: bool) -> Result<(), &'static str> {
+    if allow_blocked {
+        return Ok(());
+    }
     match ip {
         IpAddr::V4(v4) => {
             if v4.is_loopback() {

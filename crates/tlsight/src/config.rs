@@ -9,6 +9,7 @@ const HARD_CAP_HANDSHAKE_TIMEOUT: u64 = 5;
 const HARD_CAP_REQUEST_TIMEOUT: u64 = 15;
 const HARD_CAP_MAX_PORTS: usize = 7;
 const HARD_CAP_MAX_IPS: usize = 10;
+const HARD_CAP_ENRICHMENT_TIMEOUT_MS: u64 = 2000;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -58,6 +59,10 @@ pub struct LimitsConfig {
     pub max_ips_per_hostname: usize,
     #[serde(default = "default_max_domain_length")]
     pub max_domain_length: usize,
+    /// Allow inspection of blocked IP ranges (loopback, private, etc.).
+    /// **Development only** — must never be enabled in production.
+    #[serde(default)]
+    pub allow_blocked_targets: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -81,15 +86,41 @@ pub struct ValidationConfig {
     pub check_caa: bool,
     #[serde(default)]
     pub check_ct: bool,
-    #[allow(dead_code)] // Used by state.rs TODO for custom CA loading
     #[serde(default)]
     pub custom_ca_dir: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct EcosystemConfig {
     pub dns_base_url: Option<String>,
     pub ip_base_url: Option<String>,
+    /// Base URL for the ifconfig-rs IP enrichment API (e.g. `https://ip.pdt.sh`).
+    /// When set, enrichment lookups run concurrently with TLS handshakes.
+    pub ip_api_url: Option<String>,
+    /// Timeout for each enrichment HTTP call in milliseconds.
+    #[serde(default = "default_enrichment_timeout_ms")]
+    pub enrichment_timeout_ms: u64,
+}
+
+impl Default for EcosystemConfig {
+    fn default() -> Self {
+        Self {
+            dns_base_url: None,
+            ip_base_url: None,
+            ip_api_url: None,
+            enrichment_timeout_ms: default_enrichment_timeout_ms(),
+        }
+    }
+}
+
+impl EcosystemConfig {
+    pub fn enrichment_enabled(&self) -> bool {
+        self.ip_api_url.is_some()
+    }
+}
+
+fn default_enrichment_timeout_ms() -> u64 {
+    500
 }
 
 // --- Default value functions ---
@@ -115,6 +146,7 @@ fn default_limits() -> LimitsConfig {
         max_ports: default_max_ports(),
         max_ips_per_hostname: default_max_ips_per_hostname(),
         max_domain_length: default_max_domain_length(),
+        allow_blocked_targets: false,
     }
 }
 
@@ -306,6 +338,22 @@ impl Config {
             self.validation.expiry_critical_days,
         )?;
 
+        // Enrichment timeout: clamp to hard cap, reject zero when enabled.
+        if self.ecosystem.enrichment_timeout_ms > HARD_CAP_ENRICHMENT_TIMEOUT_MS {
+            tracing::warn!(
+                configured = self.ecosystem.enrichment_timeout_ms,
+                clamped = HARD_CAP_ENRICHMENT_TIMEOUT_MS,
+                "enrichment_timeout_ms exceeds hard cap, clamping"
+            );
+            self.ecosystem.enrichment_timeout_ms = HARD_CAP_ENRICHMENT_TIMEOUT_MS;
+        }
+        if self.ecosystem.enrichment_enabled() {
+            reject_zero(
+                "ecosystem.enrichment_timeout_ms",
+                self.ecosystem.enrichment_timeout_ms,
+            )?;
+        }
+
         Ok(())
     }
 }
@@ -456,4 +504,38 @@ mod tests {
     zero_rejects!(rejects_zero_expiry_critical_days, |c: &mut Config| {
         c.validation.expiry_critical_days = 0
     });
+
+    // --- Enrichment config ---
+
+    #[test]
+    fn clamps_enrichment_timeout_ms() {
+        let mut cfg = valid_config();
+        cfg.ecosystem.ip_api_url = Some("https://ip.pdt.sh".to_owned());
+        cfg.ecosystem.enrichment_timeout_ms = 9999;
+        cfg.validate().unwrap();
+        assert_eq!(
+            cfg.ecosystem.enrichment_timeout_ms,
+            HARD_CAP_ENRICHMENT_TIMEOUT_MS
+        );
+    }
+
+    #[test]
+    fn rejects_zero_enrichment_timeout_when_enabled() {
+        let mut cfg = valid_config();
+        cfg.ecosystem.ip_api_url = Some("https://ip.pdt.sh".to_owned());
+        cfg.ecosystem.enrichment_timeout_ms = 0;
+        let err = cfg.validate().unwrap_err().to_string();
+        assert!(
+            err.contains("must not be zero"),
+            "expected 'must not be zero' in: {err}"
+        );
+    }
+
+    #[test]
+    fn allows_zero_enrichment_timeout_when_disabled() {
+        let mut cfg = valid_config();
+        cfg.ecosystem.ip_api_url = None;
+        cfg.ecosystem.enrichment_timeout_ms = 0;
+        assert!(cfg.validate().is_ok());
+    }
 }

@@ -3,6 +3,7 @@ import type { IpResult } from '../lib/types';
 import { explainTrustReason } from '../lib/trust';
 import { certDisplayName } from '../lib/cert';
 import Explain from './Explain';
+import IpBadges from './IpBadges';
 import TlsParams from './TlsParams';
 import CtView from './CtView';
 import ChainView from './ChainView';
@@ -49,6 +50,9 @@ export default function UnifiedIpView(props: Props) {
               </span>
             )}
           </For>
+          <Show when={rep().enrichment}>
+            {(e) => <IpBadges info={e()} />}
+          </Show>
         </div>
         <div class="unified-ip__header-right">
           <span class="unified-ip__consistent-badge">* consistent</span>

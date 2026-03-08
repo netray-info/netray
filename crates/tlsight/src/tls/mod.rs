@@ -35,6 +35,8 @@ pub struct IpInspectionResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ct: Option<crate::validate::ct::CtInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub enrichment: Option<crate::enrichment::IpEnrichment>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<InspectionError>,
     /// Raw DER-encoded certificates from the handshake, used for chain trust validation.
     /// Not serialized to JSON.
@@ -68,6 +70,7 @@ pub async fn inspect_ip(
                 chain,
                 validation: None,
                 ct: None,
+                enrichment: None,
                 raw_certs,
                 error: None,
             }
@@ -79,6 +82,7 @@ pub async fn inspect_ip(
             chain: None,
             validation: None,
             ct: None,
+            enrichment: None,
             raw_certs: None,
             error: Some(InspectionError {
                 code: "HANDSHAKE_FAILED".to_string(),

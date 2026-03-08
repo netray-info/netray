@@ -1,7 +1,10 @@
+use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::config::Config;
 use crate::dns::DnsResolver;
+use crate::enrichment::EnrichmentClient;
 use crate::security::{IpExtractor, RateLimitState};
 use rustls::client::danger::ServerCertVerifier;
 
@@ -10,10 +13,11 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub ip_extractor: Arc<IpExtractor>,
     pub rate_limiter: Arc<RateLimitState>,
-    #[allow(dead_code)] // Used to build cert_verifier; will be used for custom CA loading
+    #[allow(dead_code)] // Kept alive for cert_verifier which holds an Arc reference to it
     pub trust_store: Arc<rustls::RootCertStore>,
     pub cert_verifier: Arc<dyn ServerCertVerifier>,
     pub dns_resolver: Option<Arc<DnsResolver>>,
+    pub enrichment_client: Option<Arc<EnrichmentClient>>,
 }
 
 impl AppState {
@@ -21,14 +25,21 @@ impl AppState {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
-        // TODO("custom CA loading"): Load custom CA directory (config.validation.custom_ca_dir)
-        // when rustls-pemfile is added as a dependency. Iterate *.pem files, parse with
-        // rustls_pemfile::certs(), add to root_store.
+        if let Some(ref ca_dir) = config.validation.custom_ca_dir {
+            load_custom_cas(&mut root_store, ca_dir);
+        }
 
         let trust_store = Arc::new(root_store);
         let cert_verifier = rustls::client::WebPkiServerVerifier::builder(Arc::clone(&trust_store))
             .build()
             .expect("failed to build WebPki verifier");
+
+        let enrichment_client = config.ecosystem.ip_api_url.as_ref().map(|url| {
+            Arc::new(EnrichmentClient::new(
+                url,
+                Duration::from_millis(config.ecosystem.enrichment_timeout_ms),
+            ))
+        });
 
         Self {
             ip_extractor: Arc::new(
@@ -39,9 +50,72 @@ impl AppState {
             trust_store,
             cert_verifier,
             dns_resolver: None, // Initialized async in main
+            enrichment_client,
             config: Arc::new(config.clone()),
         }
     }
+}
+
+/// Load all `*.pem` and `*.crt` files from a directory into the root store.
+/// Fails fast on missing directory, logs warnings for unparseable files.
+fn load_custom_cas(root_store: &mut rustls::RootCertStore, ca_dir: &str) {
+    let dir = Path::new(ca_dir);
+    if !dir.is_dir() {
+        panic!("custom_ca_dir does not exist or is not a directory: {ca_dir}");
+    }
+
+    let entries = std::fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("failed to read custom_ca_dir {ca_dir}: {e}"));
+
+    let mut loaded = 0u32;
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to read directory entry in {ca_dir}");
+                continue;
+            }
+        };
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext != "pem" && ext != "crt" {
+            continue;
+        }
+
+        let data = match std::fs::read(&path) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::warn!(path = %path.display(), error = %e, "failed to read CA file");
+                continue;
+            }
+        };
+
+        let certs: Vec<_> = rustls_pemfile::certs(&mut data.as_slice())
+            .filter_map(|r| match r {
+                Ok(cert) => Some(cert),
+                Err(e) => {
+                    tracing::warn!(path = %path.display(), error = %e, "failed to parse PEM cert");
+                    None
+                }
+            })
+            .collect();
+
+        if certs.is_empty() {
+            tracing::warn!(path = %path.display(), "no certificates found in file");
+            continue;
+        }
+
+        for cert in certs {
+            match root_store.add(cert) {
+                Ok(()) => loaded += 1,
+                Err(e) => {
+                    tracing::warn!(path = %path.display(), error = %e, "failed to add cert to trust store");
+                }
+            }
+        }
+    }
+
+    tracing::info!(dir = ca_dir, count = loaded, "loaded custom CA certificates");
 }
 
 #[cfg(test)]
@@ -71,6 +145,7 @@ mod tests {
                 max_ports: 7,
                 max_ips_per_hostname: 10,
                 max_domain_length: 253,
+                allow_blocked_targets: false,
             },
             dns: crate::config::DnsConfig {
                 resolver: "cloudflare".to_owned(),

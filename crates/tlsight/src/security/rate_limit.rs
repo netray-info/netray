@@ -165,6 +165,7 @@ mod tests {
             max_ports: 7,
             max_ips_per_hostname: 10,
             max_domain_length: 253,
+            allow_blocked_targets: false,
         }
     }
 

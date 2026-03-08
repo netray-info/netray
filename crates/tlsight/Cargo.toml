@@ -8,6 +8,7 @@ description = "Web-based TLS certificate inspection and diagnostics service"
 [dependencies]
 # TLS
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls-pemfile = "2"
 tokio-rustls = "0.26"
 webpki-roots = "0.26"
 x509-parser = { version = "0.17", features = ["verify"] }
@@ -65,6 +66,10 @@ chrono = { version = "0.4", default-features = false, features = ["serde", "cloc
 
 # Percent-decoding for URL params
 percent-encoding = "2"
+
+# IP enrichment (ifconfig-rs backend-to-backend calls)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+futures = "0.3"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

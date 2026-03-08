@@ -105,6 +105,7 @@ pub struct MetaFeatures {
     pub ct: bool,
     pub multi_port: bool,
     pub multi_ip: bool,
+    pub ip_enrichment: bool,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -206,6 +207,7 @@ async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
             ct: config.validation.check_ct,
             multi_port: true,
             multi_ip: true,
+            ip_enrichment: state.enrichment_client.is_some(),
         },
         limits: MetaLimits {
             max_ports: config.limits.max_ports,
@@ -309,9 +311,10 @@ async fn do_inspect(
     }
 
     // Filter blocked IPs
+    let allow_blocked = state.config.limits.allow_blocked_targets;
     let allowed_ips: Vec<IpAddr> = ips
         .into_iter()
-        .filter(|ip| match target_policy::check_allowed(ip) {
+        .filter(|ip| match target_policy::check_allowed_with_policy(ip, allow_blocked) {
             Ok(()) => true,
             Err(reason) => {
                 warnings.push(format!("{ip}: blocked ({reason})"));
@@ -372,6 +375,17 @@ async fn do_inspect(
                 .to_string(),
         );
     }
+
+    // Spawn enrichment (concurrent with TLS + DNS)
+    let enrichment_handle = if let Some(ref client) = state.enrichment_client {
+        let client = Arc::clone(client);
+        let ips = inspected_ips.clone();
+        Some(tokio::spawn(
+            async move { client.lookup_batch(&ips).await },
+        ))
+    } else {
+        None
+    };
 
     let handshake_timeout = Duration::from_secs(state.config.limits.handshake_timeout_secs);
     let request_timeout = Duration::from_secs(state.config.limits.request_timeout_secs);
@@ -448,6 +462,13 @@ async fn do_inspect(
         (None, HashMap::new())
     };
 
+    // Collect enrichment results
+    let enrichments = if let Some(handle) = enrichment_handle {
+        handle.await.unwrap_or_default()
+    } else {
+        HashMap::new()
+    };
+
     // Extract leaf issuer for CAA checking
     let leaf_issuer: Option<String> = port_results
         .iter()
@@ -493,8 +514,19 @@ async fn do_inspect(
         None
     };
 
-    // Build per-port TLSA info
+    // Inject enrichment data into IP results
     let mut port_results = port_results;
+    if !enrichments.is_empty() {
+        for pr in &mut port_results {
+            for ip_result in &mut pr.ips {
+                if let Ok(ip) = ip_result.ip.parse::<IpAddr>() {
+                    ip_result.enrichment = enrichments.get(&ip).cloned();
+                }
+            }
+        }
+    }
+
+    // Build per-port TLSA info
     for pr in &mut port_results {
         if let Some(tlsa) = tlsa_lookups.get(&pr.port)
             && !tlsa.is_empty()
@@ -784,6 +816,7 @@ mod tests {
                 max_ports: 7,
                 max_ips_per_hostname: 10,
                 max_domain_length: 253,
+                allow_blocked_targets: false,
             },
             dns: crate::config::DnsConfig {
                 resolver: "cloudflare".to_owned(),

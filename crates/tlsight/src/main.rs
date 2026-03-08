@@ -7,6 +7,7 @@ use tower_http::trace::TraceLayer;
 
 mod config;
 mod dns;
+mod enrichment;
 mod error;
 mod input;
 mod routes;
@@ -56,6 +57,10 @@ async fn main() {
                 tracing::warn!(error = %e, "failed to initialize DNS resolver, CAA/DANE checks disabled");
             }
         }
+    }
+
+    if state.enrichment_client.is_some() {
+        tracing::info!("IP enrichment enabled");
     }
 
     let app = Router::new()

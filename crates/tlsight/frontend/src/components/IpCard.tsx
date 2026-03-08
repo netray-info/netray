@@ -3,6 +3,7 @@ import type { IpResult } from '../lib/types';
 import { explainTrustReason } from '../lib/trust';
 import { certDisplayName } from '../lib/cert';
 import Explain from './Explain';
+import IpBadges from './IpBadges';
 import TlsParams from './TlsParams';
 import CtView from './CtView';
 import ChainView from './ChainView';
@@ -72,6 +73,9 @@ export default function IpCard(props: Props) {
         <div class="ip-card__left">
           <span class="ip-card__ip">{props.result.ip}</span>
           <span class="ip-card__version">{props.result.ip_version}</span>
+          <Show when={props.result.enrichment}>
+            {(e) => <IpBadges info={e()} />}
+          </Show>
         </div>
 
         <Show when={props.result.error}>

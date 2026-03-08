@@ -42,7 +42,20 @@ export interface IpResult {
   chain?: CertInfo[];
   validation?: ValidationInfo;
   ct?: CtInfo;
+  enrichment?: IpEnrichment;
   error?: ErrorInfo;
+}
+
+export interface IpEnrichment {
+  network_type?: string;
+  asn?: number;
+  org?: string;
+  cloud?: { provider?: string; region?: string; service?: string };
+  is_tor: boolean;
+  is_vpn: boolean;
+  is_datacenter: boolean;
+  is_spamhaus: boolean;
+  is_c2: boolean;
 }
 
 export interface CtInfo {

@@ -1508,6 +1508,23 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
+   IP enrichment badges
+   ================================================================ */
+
+.ip-badge {
+  font-size: 0.6875rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.ip-badge--cloud { color: var(--accent); border-color: var(--accent); }
+.ip-badge--type { color: var(--text-secondary); border-color: var(--border); }
+.ip-badge--threat { color: var(--fail); border-color: var(--fail); }
+.ip-badge--org { color: var(--text-muted); border-color: var(--border-subtle); }
+
+/* ================================================================
    Responsive
    ================================================================ */
 

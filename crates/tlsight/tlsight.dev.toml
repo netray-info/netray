@@ -1,11 +1,18 @@
 # Development configuration — relaxed limits for local testing.
 
 [server]
-bind = "127.0.0.1:8080"
-metrics_bind = "127.0.0.1:9090"
+bind = "127.0.0.1:8081"
+metrics_bind = "127.0.0.1:9091"
 
 [limits]
 per_ip_per_minute = 600
 per_ip_burst = 100
 per_target_per_minute = 600
 per_target_burst = 100
+allow_blocked_targets = true
+
+[validation]
+custom_ca_dir = "custom_cas"
+
+[ecosystem]
+ip_api_url = "https://ip.pdt.sh"
