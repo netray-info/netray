@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import { ServerComparison } from './ServerComparison';
+import type { IpInfo } from '../App';
 
 // ---------------------------------------------------------------------------
 // Types — mirrors the mhost-lib Serialize output
@@ -93,6 +94,8 @@ interface ResultsTableProps {
   explain: boolean;
   expandAll?: number;
   collapseAll?: number;
+  ifconfigUrl?: string | null;
+  enrichments?: Record<string, IpInfo>;
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +255,45 @@ export function getExplanation(rtype: string, data: Record<string, unknown>): st
 
 
 // ---------------------------------------------------------------------------
+// IP enrichment components
+// ---------------------------------------------------------------------------
+
+/** Extract the raw IP string from A/AAAA record data. */
+function extractIpFromData(data: Record<string, unknown>): string | null {
+  const val = data['A'] ?? data['AAAA'];
+  return typeof val === 'string' ? val : null;
+}
+
+/** Render an IP address as a clickable link (when ifconfigUrl is set) or plain text. */
+function IpValue(props: { ip: string; ifconfigUrl?: string | null }) {
+  if (props.ifconfigUrl) {
+    const href = `${props.ifconfigUrl}/?ip=${encodeURIComponent(props.ip)}`;
+    return <a class="ip-link" href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{props.ip}</a>;
+  }
+  return <>{props.ip}</>;
+}
+
+/** Render small badge pills for IP enrichment metadata. */
+function IpBadges(props: { info: IpInfo }) {
+  const badges: Array<{ label: string; cls: string }> = [];
+  if (props.info.cloud) badges.push({ label: props.info.cloud, cls: 'ip-badge--cloud' });
+  else if (props.info.ip_type) badges.push({ label: props.info.ip_type, cls: props.info.ip_type === 'residential' ? 'ip-badge--residential' : 'ip-badge--datacenter' });
+  if (props.info.is_tor) badges.push({ label: 'Tor', cls: 'ip-badge--threat' });
+  if (props.info.is_vpn) badges.push({ label: 'VPN', cls: 'ip-badge--threat' });
+  if (props.info.is_spamhaus) badges.push({ label: 'Spamhaus', cls: 'ip-badge--threat' });
+  if (props.info.is_c2) badges.push({ label: 'C2', cls: 'ip-badge--threat' });
+  if (props.info.org && badges.length === 0) badges.push({ label: props.info.org, cls: 'ip-badge--datacenter' });
+  if (badges.length === 0) return null;
+  return (
+    <span class="ip-badges">
+      <For each={badges}>
+        {(b) => <span class={`ip-badge ${b.cls}`}>{b.label}</span>}
+      </For>
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Agreement detection
 // ---------------------------------------------------------------------------
 
@@ -354,6 +396,8 @@ function RecordGroup(props: {
   onRowClick: (key: string) => void;
   compact: boolean;
   explain: boolean;
+  ifconfigUrl?: string | null;
+  enrichments?: Record<string, IpInfo>;
 }) {
   const [collapsed, setCollapsed] = createSignal(false);
 
@@ -437,6 +481,8 @@ function RecordGroup(props: {
                   maxResponseTimeMs={maxResponseTimeMs()}
                   serverOverride={serverAgreementLabel()}
                   explain={props.explain}
+                  ifconfigUrl={props.ifconfigUrl}
+                  enrichments={props.enrichments}
                 />
               )}
             </For>
@@ -461,6 +507,8 @@ function LookupRows(props: {
   maxResponseTimeMs: number;
   serverOverride?: string | null;
   explain: boolean;
+  ifconfigUrl?: string | null;
+  enrichments?: Record<string, IpInfo>;
 }) {
   const server = createMemo(() => props.serverOverride ?? formatServer(props.lookup.name_server));
   const transport = createMemo(() => extractTransport(props.lookup.name_server));
@@ -497,7 +545,17 @@ function LookupRows(props: {
                       <td data-label="Name">{record.name}</td>
                       <td data-label="TTL" class="ttl-value">{record.ttl}s</td>
                       <td data-label="Value" class="record-value">
-                        {formatRecordData(record.data)}
+                        {(() => {
+                          const ip = (props.recordType === 'A' || props.recordType === 'AAAA') ? extractIpFromData(record.data) : null;
+                          if (ip) {
+                            const info = props.enrichments?.[ip];
+                            return <>
+                              <IpValue ip={ip} ifconfigUrl={props.ifconfigUrl} />
+                              <Show when={info}>{(i) => <IpBadges info={i()} />}</Show>
+                            </>;
+                          }
+                          return formatRecordData(record.data);
+                        })()}
                         <Show when={explanation()}>
                           <div class="record-explanation">{explanation()}</div>
                         </Show>
@@ -816,6 +874,8 @@ export function ResultsTable(props: ResultsTableProps) {
               onRowClick={handleRowClick}
               compact={props.compact}
               explain={props.explain}
+              ifconfigUrl={props.ifconfigUrl}
+              enrichments={props.enrichments}
             />
           )}
         </For>

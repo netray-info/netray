@@ -36,15 +36,16 @@ export interface CheckDoneStats {
 // ---------------------------------------------------------------------------
 
 const CATEGORY_LABELS: Record<string, string> = {
-  caa:        'CAA',
-  cname_apex: 'CNAME at Apex',
-  dnssec:     'DNSSEC',
-  https_svcb: 'HTTPS / SVCB',
-  mx:         'MX',
-  ns:         'NS',
-  spf:        'SPF',
-  ttl:        'TTL Consistency',
-  dmarc:      'DMARC',
+  caa:            'CAA',
+  cname_apex:     'CNAME at Apex',
+  dnssec:         'DNSSEC',
+  https_svcb:     'HTTPS / SVCB',
+  mx:             'MX',
+  ns:             'NS',
+  spf:            'SPF',
+  ttl:            'TTL Consistency',
+  dmarc:          'DMARC',
+  infrastructure: 'Infrastructure',
 };
 
 function categoryLabel(category: string): string {
@@ -124,6 +125,16 @@ function getHint(category: string, results: CheckResult[]): string | null {
       return 'Consider adding HTTPS/SVCB records for faster TLS connection setup.';
     if (category === 'ttl' && kind === 'warning')
       return 'Inconsistent TTLs across record types; align TTLs for predictable caching.';
+    if (category === 'infrastructure') {
+      if (kind === 'failed' && msg.includes('spamhaus'))
+        return 'This IP is listed on Spamhaus blocklists — deliverability may be affected.';
+      if (kind === 'failed' && msg.includes('command-and-control'))
+        return 'This IP is flagged as C2 infrastructure — investigate immediately.';
+      if (kind === 'warning' && msg.includes('residential'))
+        return 'Residential IPs are unusual for production DNS/mail infrastructure.';
+      if (kind === 'warning' && msg.includes('tor'))
+        return 'Tor exit nodes are unusual for DNS infrastructure.';
+    }
   }
   return null;
 }
@@ -175,7 +186,7 @@ export function LintTab(props: LintTabProps) {
   // All 9 known categories in display order; missing ones shown as pending
   const ORDERED_CATEGORIES = [
     'dmarc', 'spf', 'dnssec', 'caa', 'ns', 'mx',
-    'cname_apex', 'https_svcb', 'ttl',
+    'cname_apex', 'https_svcb', 'ttl', 'infrastructure',
   ];
 
   const received = () => new Set(props.categories.map((c) => c.category));

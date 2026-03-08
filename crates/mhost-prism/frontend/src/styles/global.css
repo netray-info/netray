@@ -2369,7 +2369,7 @@ body {
 
 .trace-server-row {
   display: grid;
-  grid-template-columns: 8rem auto 4rem 1fr;
+  grid-template-columns: 8rem auto auto 4rem 1fr;
   align-items: baseline;
   gap: 0.5rem;
   padding: 0.3rem 0.9rem;
@@ -2919,4 +2919,67 @@ body {
 .cancel-btn:hover {
   color: var(--error);
   border-color: var(--error);
+}
+
+/* ===================================================================
+   IP enrichment — clickable links + badges
+   =================================================================== */
+
+.ip-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 2px;
+  transition: text-decoration-color var(--transition);
+}
+
+.ip-link:hover {
+  text-decoration-color: var(--accent);
+}
+
+.ip-badges {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+  vertical-align: baseline;
+}
+
+.ip-badge {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.ip-badge--cloud {
+  background: rgba(92, 179, 255, 0.15);
+  color: var(--rt-a);
+}
+
+.ip-badge--threat {
+  background: var(--error-dim);
+  color: var(--error);
+}
+
+.ip-badge--datacenter {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-muted);
+}
+
+.ip-badge--residential {
+  background: rgba(255, 170, 0, 0.12);
+  color: var(--warning);
+}
+
+/* Trace server org annotation */
+
+.trace-server-org {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

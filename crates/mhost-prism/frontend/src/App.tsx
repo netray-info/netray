@@ -10,6 +10,18 @@ type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers';
 type Theme = 'dark' | 'light' | 'system';
 
+export interface IpInfo {
+  asn?: number;
+  org?: string;
+  ip_type?: string;
+  cloud?: string;
+  is_tor?: boolean;
+  is_vpn?: boolean;
+  is_proxy?: boolean;
+  is_spamhaus?: boolean;
+  is_c2?: boolean;
+}
+
 const HISTORY_KEY = 'prism_history';
 const THEME_KEY = 'prism_theme';
 const VIEW_PREFS_KEY = 'prism_view_prefs';
@@ -218,6 +230,10 @@ export default function App() {
   const [dnssecLevels, setDnssecLevels] = createSignal<ChainLevel[]>([]);
   const [dnssecDoneStats, setDnssecDoneStats] = createSignal<DnssecDoneStats | null>(null);
 
+  // IP enrichment
+  const [ifconfigUrl, setIfconfigUrl] = createSignal<string | null>(null);
+  const [enrichments, setEnrichments] = createSignal<Record<string, IpInfo>>({});
+
   // Permalink state
   const [cacheKey, setCacheKey] = createSignal<string | null>(null);
   const [shareMessage, setShareMessage] = createSignal<string | null>(null);
@@ -350,6 +366,7 @@ export default function App() {
     setLintCategories([]);
     setCheckStats(null);
     setCompletedTypes([]);
+    setEnrichments({});
     setCacheKey(null);
     setShareMessage(null);
     clearEditor?.();
@@ -434,6 +451,8 @@ export default function App() {
           const hop = ev.data as { request_id: string; hop: TraceHop };
           setTraceHops((prev) => [...prev, hop.hop]);
         } catch { /* skip */ }
+      } else if (ev.event_type === 'enrichment') {
+        handleEnrichmentEvent(ev.data);
       } else if (ev.event_type === 'done') {
         const done = ev.data as Record<string, unknown>;
         if (cached.mode === 'check') {
@@ -468,6 +487,12 @@ export default function App() {
       }
     });
 
+    es.addEventListener('enrichment', (event) => {
+      try {
+        handleEnrichmentEvent(JSON.parse(event.data));
+      } catch { /* ignore */ }
+    });
+
     es.addEventListener('done', (event) => {
       try {
         const done = JSON.parse(event.data) as DoneStats;
@@ -487,6 +512,13 @@ export default function App() {
   // ---------------------------------------------------------------------------
   // Submit — combined mode (any combination of +check, +trace, +dnssec)
   // ---------------------------------------------------------------------------
+
+  function handleEnrichmentEvent(data: unknown) {
+    const ev = data as { enrichments?: Record<string, IpInfo> };
+    if (ev.enrichments) {
+      setEnrichments((prev) => ({ ...prev, ...ev.enrichments }));
+    }
+  }
 
   function submitCombined(q: string) {
     closeConnections();
@@ -512,6 +544,7 @@ export default function App() {
     setIsTraceMode(wantTrace);
     setIsCheckMode(wantCheck);
     setIsDnssecMode(wantDnssec);
+    setEnrichments({});
     setCacheKey(null);
     setStatus('loading');
     // Pick the first active tab: dnssec > trace > lint
@@ -591,6 +624,8 @@ export default function App() {
               warnings: [],
             });
             onStreamDone();
+          } else if (eventType === 'enrichment') {
+            handleEnrichmentEvent(data);
           } else if (eventType === 'error') {
             const ev = data as { message?: string; code?: string };
             setError(ev.message ?? ev.code ?? 'Unknown error');
@@ -631,6 +666,8 @@ export default function App() {
               const ev = data as { request_id: string; hop: TraceHop };
               setTraceHops((prev) => [...prev, ev.hop]);
             } catch (e) { console.error('Failed to parse hop event:', e); }
+          } else if (eventType === 'enrichment') {
+            handleEnrichmentEvent(data);
           } else if (eventType === 'done') {
             const done = data as TraceDoneStats;
             setTraceDoneStats(done);
@@ -720,6 +757,7 @@ export default function App() {
     setDnssecDoneStats(null);
     setLintCategories([]);
     setCheckStats(null);
+    setEnrichments({});
     setCacheKey(null);
     setStatus('loading');
     setActiveTab('results');
@@ -740,6 +778,14 @@ export default function App() {
         setCompletedTypes((prev) => prev.includes(batch.record_type) ? prev : [...prev, batch.record_type]);
       } catch (e) {
         console.error('Failed to parse batch event:', e);
+      }
+    });
+
+    es.addEventListener('enrichment', (event) => {
+      try {
+        handleEnrichmentEvent(JSON.parse(event.data));
+      } catch (e) {
+        console.error('Failed to parse enrichment event:', e);
       }
     });
 
@@ -853,6 +899,14 @@ export default function App() {
     applyTheme(theme());
     mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     mediaQuery.addEventListener('change', onSystemThemeChange);
+
+    // Fetch client config (ifconfig URL for IP links).
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((cfg: { ifconfig_url?: string }) => {
+        if (cfg.ifconfig_url) setIfconfigUrl(cfg.ifconfig_url);
+      })
+      .catch(() => { /* non-critical */ });
 
     const params = new URLSearchParams(window.location.search);
     const r = params.get('r');
@@ -1173,6 +1227,8 @@ export default function App() {
               doneStats={traceDoneStats()}
               isLoading={isLoading()}
               activeTab={activeTab()}
+              ifconfigUrl={ifconfigUrl()}
+              enrichments={enrichments()}
             />
           </div>
         </Show>
@@ -1204,6 +1260,8 @@ export default function App() {
               explain={explain()}
               expandAll={expandAllTrigger()}
               collapseAll={collapseAllTrigger()}
+              ifconfigUrl={ifconfigUrl()}
+              enrichments={enrichments()}
             />
           </div>
         </Show>

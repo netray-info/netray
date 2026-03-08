@@ -1,4 +1,5 @@
 import { createSignal, createEffect, onMount, onCleanup, For, Show } from 'solid-js';
+import type { IpInfo } from '../App';
 
 // ---------------------------------------------------------------------------
 // Types (mirror the Rust backend structs in dns_trace.rs)
@@ -87,15 +88,24 @@ function NsList(props: { names: string[] }) {
 // ServerRow — one row in the expanded per-server detail panel
 // ---------------------------------------------------------------------------
 
-function ServerRow(props: { result: ServerResult }) {
+function ServerRow(props: { result: ServerResult; ifconfigUrl?: string | null; enrichments?: Record<string, IpInfo> }) {
   const r = props.result;
   const outcomeType = r.outcome.type;
 
+  const info = () => props.enrichments?.[r.server_ip];
+
   return (
     <div class={`trace-server-row trace-server-row--${outcomeType}`}>
-      <span class="trace-server-ip" title={r.server_name}>{r.server_ip}</span>
+      <span class="trace-server-ip" title={r.server_name}>
+        {props.ifconfigUrl
+          ? <a class="ip-link" href={`${props.ifconfigUrl}/?ip=${encodeURIComponent(r.server_ip)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{r.server_ip}</a>
+          : r.server_ip}
+      </span>
       <Show when={r.server_name}>
         <span class="trace-server-name">{r.server_name}</span>
+      </Show>
+      <Show when={info()?.org}>
+        <span class="trace-server-org">({info()!.org})</span>
       </Show>
       <span class="trace-server-latency">{r.latency_ms.toFixed(1)}ms</span>
       <span class={`trace-server-outcome trace-server-outcome--${outcomeType}`}>
@@ -118,6 +128,8 @@ interface HopCardProps {
   isExpanded: boolean;
   onToggle: () => void;
   onClick: () => void;
+  ifconfigUrl?: string | null;
+  enrichments?: Record<string, IpInfo>;
 }
 
 function HopCard(props: HopCardProps) {
@@ -225,7 +237,7 @@ function HopCard(props: HopCardProps) {
       <Show when={props.isExpanded}>
         <div class="trace-server-list">
           <For each={hop.server_results}>
-            {(result) => <ServerRow result={result} />}
+            {(result) => <ServerRow result={result} ifconfigUrl={props.ifconfigUrl} enrichments={props.enrichments} />}
           </For>
         </div>
       </Show>
@@ -242,6 +254,8 @@ interface TraceViewProps {
   doneStats: TraceDoneStats | null;
   isLoading: boolean;
   activeTab: string;
+  ifconfigUrl?: string | null;
+  enrichments?: Record<string, IpInfo>;
 }
 
 export function TraceView(props: TraceViewProps) {
@@ -356,6 +370,8 @@ export function TraceView(props: TraceViewProps) {
                 isExpanded={expandedIndices().has(i())}
                 onToggle={() => toggleExpanded(i())}
                 onClick={() => setFocusedIndex(i())}
+                ifconfigUrl={props.ifconfigUrl}
+                enrichments={props.enrichments}
               />
             </>
           )}
