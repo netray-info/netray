@@ -36,34 +36,23 @@ All items completed.
 
 ---
 
-## Tier 3 — Significant Features (2-4 weeks each)
+## Tier 3 — Significant Features ✓
 
-### Transport Comparison View
+All items completed.
 
-New UI mode: query the same domain over all supported transports (UDP, TCP, DoT, DoH) in parallel and display results side-by-side. Highlights transport-specific differences in answers, latencies, and failures. Surfaces firewall/middlebox interference that single-transport queries miss. Leverages existing `+udp/+tcp/+tls/+https` flags.
+- ✓ **Transport Comparison View** (`+compare`) — queries over UDP, TCP, DoT, DoH in parallel; 4-column side-by-side display; highlights transport-specific answer differences, latency, and failures; surfaces middlebox interference
+- ✓ **Authoritative-vs-Recursive Split View** (`+auth`) — discovers authoritative NS via recursive lookup, queries both auth (RD=0) and recursive resolvers; 2-column comparison; reveals caching staleness, NXDOMAIN hijacking, split-horizon inconsistencies
 
-### Query History with Temporal Diff
+---
 
-Self-hosted killer feature — public tools can't do this.
-- Server-side: persist query results in a bounded store (SQLite or in-memory with disk spill).
-- UI: browseable history timeline per domain. Select two snapshots and diff them: added/removed/changed records, TTL shifts, new/disappeared servers.
-- Enables the "what changed since yesterday?" workflow during migrations and incidents.
+## Future
 
-### Authoritative-vs-Recursive Split View
+Items deferred until there's a clear need or upstream support.
 
-Automatically query both the domain's authoritative nameservers and the user's chosen recursive resolvers. Display a two-column comparison highlighting differences. Instantly reveals caching staleness, NXDOMAIN hijacking, or split-horizon inconsistencies.
-
-### Batch Queries
-
-`POST /api/query/batch` accepting a list of `{domain, record_types, servers}`. Returns a merged SSE stream with domain labels per batch event. Useful for migration verification ("did all 20 domains propagate?") and CI/CD integration.
-
-### DNSSEC Expiry Timeline
-
-Extend the chain-of-trust visualization to show the temporal dimension:
-- Signature expiry dates per zone level.
-- Key rollover schedule detection (pre-publish, double-sign).
-- Warning badges when RRSIGs are within N days of expiry.
-- Timeline chart showing validity windows across the chain.
+- **Query History with Temporal Diff** — server-side persistence (SQLite), timeline UI, snapshot diffing. Compelling but essentially a second product; revisit if monitoring use case emerges.
+- **DNSSEC Expiry Timeline** — signature expiry dates, key rollover detection, validity window charts. Niche; existing chain-of-trust view covers most DNSSEC debugging.
+- **EDNS diagnostics** — surface EDNS buffer size, NSID, client subnet, and cookie support per resolver. Blocked on mhost-lib upstream: `Response` struct doesn't expose EDNS data.
+- **DNS-over-QUIC** — add DoQ transport support when mhost-lib gains it (track upstream).
 
 ---
 
@@ -79,29 +68,21 @@ Infrastructure integrated. Handler-level wiring (resolver pool into build_resolv
 
 ---
 
-## Tier 5 — pdt.sh Ecosystem Integration
+## Tier 5 — pdt.sh Ecosystem Integration ✓
 
-### IP Enrichment via ifconfig-rs (dns.pdt.sh + ip.pdt.sh)
+### IP Enrichment via ifconfig-rs (dns.pdt.sh + ip.pdt.sh) ✓
 
-Link prism results to ifconfig-rs for IP context. A/AAAA records are bare addresses today — enrichment turns them into actionable intelligence.
+Implemented. IP enrichment integrated via separate SSE `enrichment` event — DNS results stream immediately, enrichment data merges in after completion.
 
-**Configuration**: New `[ecosystem]` config section with configurable service URLs. Users running their own ifconfig-rs instance (or no instance at all) can point to it instead of the public `ip.pdt.sh`. When `ifconfig_url` is unset, enrichment features are disabled and IP links are omitted. `ifconfig_api_url` allows a separate backend-to-backend URL (e.g., loopback or internal network) for inline enrichment fetches, avoiding the public rate-limited endpoint.
-
-```toml
-[ecosystem]
-# Base URL for IP links in the frontend (omit to disable IP cross-links)
-ifconfig_url = "https://ip.pdt.sh"
-# Backend-to-backend URL for inline enrichment API calls (defaults to ifconfig_url)
-# Use an internal address to bypass public rate limits.
-ifconfig_api_url = "http://127.0.0.1:8081"
-```
-
-- **Clickable IPs**: A/AAAA record values link to `{ifconfig_url}/?ip=<addr>` (new tab). Only rendered when `ifconfig_url` is configured.
-- **Inline enrichment**: Optional async fetch to `{ifconfig_api_url}/network/json?ip=<addr>` for inline badges: cloud provider (AWS/GCP/Azure/CF), network type (residential/datacenter/VPN/Tor), threat flags (Spamhaus, Feodo C2). Only active when `ifconfig_api_url` (or `ifconfig_url` as fallback) is configured.
-- **Check mode lint**: New lint category "Infrastructure" — flag MX/NS records pointing at residential IPs, known bot ranges, or threat-listed addresses. Requires `ifconfig_api_url`.
-- **Trace mode context**: Annotate each delegation hop's nameserver IPs with provider/location from ifconfig.
-- **Reverse link from ifconfig**: ifconfig's PTR/host view links back to `dns.pdt.sh/?q=<hostname>` for full DNS analysis (configured on the ifconfig-rs side).
-- **Graceful degradation**: All enrichment is best-effort. If the ifconfig instance is unreachable or slow (>500ms), skip enrichment silently — never block or delay DNS results for enrichment data.
+- ✓ **`[ecosystem]` config** — `ifconfig_url`, `ifconfig_api_url`, `enrichment_timeout_ms` (default 500ms, hard cap 2000ms)
+- ✓ **IpEnrichmentService** — reqwest + moka cache (1024 entries, 5min TTL), private IP filtering, parallel batch lookups
+- ✓ **SSE enrichment events** — sent after DNS batches in query, check, and trace endpoints; included in cached permalinks
+- ✓ **Clickable IPs** — A/AAAA values and trace server IPs link to `{ifconfig_url}/?ip=<addr>`
+- ✓ **Inline badges** — cloud provider, IP type (datacenter/residential), threat flags (Tor, VPN, Spamhaus, C2)
+- ✓ **Infrastructure lint** — new check mode category flagging Spamhaus/C2 (failed), Tor/residential (warning)
+- ✓ **Trace annotations** — server IPs show org name when enrichment available
+- ✓ **Graceful degradation** — enrichment never blocks DNS results; all errors silently skipped
+- Deferred: **Reverse link from ifconfig** (configured on the ifconfig-rs side, not prism)
 
 ---
 
@@ -112,5 +93,3 @@ ifconfig_api_url = "http://127.0.0.1:8081"
 - **CHANGELOG.md** — maintain release notes per version.
 - **SECURITY.md** — vulnerability disclosure process, dependency audit policy.
 - **Print styles** — CSS `@media print` for results, lint, and trace views.
-- **EDNS diagnostics** — surface EDNS buffer size, NSID, client subnet, and cookie support per resolver in detail panels.
-- **DNS-over-QUIC** — add DoQ transport support when mhost-lib gains it (track upstream).

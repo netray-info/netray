@@ -74,7 +74,8 @@ Phased delivery as defined in SDD §14:
 - ~~**Phase 2**: Transport & UI enhancements — transport flags, DNSSEC, server comparison, expandable rows~~
 - ~~**Phase 3**: Polish — server-side autocomplete, keyboard shortcuts, history, mobile~~
 - ~~**Phase 4**: check/trace endpoints, stream timeouts, domain-length validation, `+check`/`+trace` routing~~
-- **Phase 5**: Future — auth, DNSSEC visualization, propagation map
+- ~~**Phase 5**: IP enrichment via ifconfig-rs — clickable IPs, inline badges, infrastructure lint, trace annotations~~
+- ~~**Phase 6**: Transport comparison (`+compare`) and auth-vs-recursive (`+auth`) endpoints + frontend~~
 
 ## Build & Test
 
@@ -124,6 +125,8 @@ mhost-prism/                  # standalone crate (not a workspace member)
       query.rs                # GET/POST /api/query → SSE stream
       check.rs                # POST /api/check → SSE stream (15 types + DMARC lint)
       trace.rs                # POST /api/trace → SSE stream (iterative delegation walk)
+      compare.rs              # POST /api/compare → SSE stream (transport comparison)
+      authcompare.rs          # POST /api/authcompare → SSE stream (auth vs recursive)
       parse.rs                # POST /api/parse → completion hints (Phase 3)
       meta.rs                 # GET /api/servers, /api/record-types, /api/health
                               # GET /docs → Scalar API reference UI
@@ -144,7 +147,9 @@ mhost-prism/                  # standalone crate (not a workspace member)
         ResultsTable.tsx      # Streaming results table
         LintTab.tsx           # Check mode lint results
         TraceView.tsx         # Delegation hop visualization
-        ServerComparison.tsx
+        ServerComparison.tsx  # Multi-server divergence view
+        TransportComparison.tsx # Transport comparison (UDP/TCP/TLS/HTTPS)
+        AuthComparison.tsx    # Authoritative vs recursive comparison
       lib/
         tokenizer.ts          # Syntax highlighting (cosmetic only)
       styles/                 # Plain CSS with custom properties
@@ -162,10 +167,10 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - **SSE streaming**: Per-record-type queries via `FuturesUnordered`, all record types in parallel; each completed batch streamed as a `batch` SSE event. All streams have a hard 30s deadline.
 - **Per-request ResolverGroup**: Fresh `ResolverGroup` per API request — no shared resolver pool.
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
-- **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens (no per-target charging — trace queries public root/TLD/auth infrastructure, not user-specified servers).
+- **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens. Compare endpoint cost = `record_types * servers * 4` (4 transports). Auth compare cost = `record_types * servers + 16` (recursive + NS discovery + auth queries).
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
 - **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed.
-- **Routing flags**: `+check` and `+trace` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
+- **Routing flags**: `+check`, `+trace`, `+compare`, and `+auth` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
 
 ## Key Dependencies
 
