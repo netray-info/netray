@@ -7,6 +7,7 @@ import TlsParams from './components/TlsParams';
 import PortTabs from './components/PortTabs';
 import ConsistencyView from './components/ConsistencyView';
 import CrossLinks from './components/CrossLinks';
+import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
 import type { InspectResponse, PortResult } from './lib/types';
 
@@ -107,6 +108,10 @@ export default function App() {
                   />
                 </Show>
 
+                <Show when={r.dns?.caa}>
+                  {(caa) => <CaaView caa={caa()} />}
+                </Show>
+
                 <Show when={currentPort()}>
                   {(port) => {
                     const p = port();
@@ -114,6 +119,10 @@ export default function App() {
                       <>
                         <Show when={p.consistency}>
                           {(c) => <ConsistencyView consistency={c()} />}
+                        </Show>
+
+                        <Show when={p.tlsa}>
+                          {(tlsa) => <TlsaView tlsa={tlsa()} />}
                         </Show>
 
                         <For each={p.ips}>

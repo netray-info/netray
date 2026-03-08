@@ -30,6 +30,7 @@ export interface PortResult {
   ips: IpResult[];
   consistency?: ConsistencyInfo;
   validation?: ValidationInfo;
+  tlsa?: TlsaInfo;
   error?: ErrorInfo;
 }
 
@@ -112,7 +113,7 @@ export interface DnsContext {
 
 export interface CaaInfo {
   records: string[];
-  issuer_allowed: boolean;
+  issuer_allowed: boolean | null;
   issuewild_present: boolean;
 }
 

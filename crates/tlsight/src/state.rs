@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::config::Config;
+use crate::dns::DnsResolver;
 use crate::security::{IpExtractor, RateLimitState};
 use rustls::client::danger::ServerCertVerifier;
 
@@ -12,6 +13,7 @@ pub struct AppState {
     #[allow(dead_code)] // Used to build cert_verifier; will be used for custom CA loading
     pub trust_store: Arc<rustls::RootCertStore>,
     pub cert_verifier: Arc<dyn ServerCertVerifier>,
+    pub dns_resolver: Option<Arc<DnsResolver>>,
 }
 
 impl AppState {
@@ -36,6 +38,7 @@ impl AppState {
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             trust_store,
             cert_verifier,
+            dns_resolver: None, // Initialized async in main
             config: Arc::new(config.clone()),
         }
     }

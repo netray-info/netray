@@ -406,6 +406,53 @@ body {
 
 .cross-links__link:hover { border-color: var(--accent); }
 
+.dns-section {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+.dns-section__title {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dns-section__empty {
+  color: var(--fg-secondary);
+  font-size: 0.875rem;
+}
+
+.dns-records {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dns-records__item {
+  padding: 0.25rem 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  word-break: break-all;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius);
+  font-weight: 500;
+}
+
+.badge--pass { color: var(--pass); border: 1px solid var(--pass); }
+.badge--fail { color: var(--fail); border: 1px solid var(--fail); }
+.badge--skip { color: var(--skip); border: 1px solid var(--skip); }
+
 @media (max-width: 768px) {
   .chain-view__chain { flex-direction: column; }
   .chain-view__arrow { transform: rotate(90deg); }

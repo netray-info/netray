@@ -28,6 +28,8 @@ pub struct InspectResponse {
     pub input_mode: &'static str,
     pub summary: validate::Summary,
     pub ports: Vec<PortResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dns: Option<DnsContext>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -44,7 +46,30 @@ pub struct PortResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub validation: Option<validate::ValidationResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub tlsa: Option<TlsaInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<tls::InspectionError>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct DnsContext {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub caa: Option<CaaInfo>,
+    pub resolved_ips: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CaaInfo {
+    pub records: Vec<String>,
+    pub issuer_allowed: Option<bool>,
+    pub issuewild_present: bool,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct TlsaInfo {
+    pub records: Vec<String>,
+    pub dnssec_signed: bool,
+    pub dane_valid: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -282,7 +307,42 @@ async fn inspect_handler(
     let handshake_timeout = Duration::from_secs(state.config.limits.handshake_timeout_secs);
     let request_timeout = Duration::from_secs(state.config.limits.request_timeout_secs);
 
-    // Inspect all ports concurrently, with request timeout
+    let is_hostname = input_mode == "hostname";
+    let do_dns = is_hostname && state.dns_resolver.is_some();
+
+    // Spawn DNS lookups on a blocking thread (mhost uses rand::thread_rng which
+    // is !Send in rand 0.9, so the DNS future can't live in the async task)
+    let dns_handle = if do_dns {
+        let resolver = state.dns_resolver.clone().unwrap();
+        let hostname = parsed.target.hostname().unwrap().to_string();
+        let ports = parsed.ports.clone();
+        let check_caa = state.config.validation.check_caa;
+        let check_dane = state.config.validation.check_dane;
+        let rt = tokio::runtime::Handle::current();
+
+        Some(tokio::task::spawn_blocking(move || {
+            rt.block_on(async move {
+                let caa = if check_caa {
+                    Some(resolver.lookup_caa(&hostname).await)
+                } else {
+                    None
+                };
+
+                let mut tlsa = HashMap::new();
+                if check_dane {
+                    for &port in &ports {
+                        tlsa.insert(port, resolver.lookup_tlsa(&hostname, port).await);
+                    }
+                }
+
+                (caa, tlsa)
+            })
+        }))
+    } else {
+        None
+    };
+
+    // Run TLS handshakes with request timeout
     let port_results = tokio::time::timeout(request_timeout, async {
         let mut results = Vec::with_capacity(parsed.ports.len());
         for &port in &parsed.ports {
@@ -300,6 +360,72 @@ async fn inspect_handler(
     })
     .await
     .map_err(|_| AppError::RequestTimeout)?;
+
+    // Collect DNS results
+    let (caa_lookup, tlsa_lookups) = if let Some(handle) = dns_handle {
+        handle.await.unwrap_or((None, HashMap::new()))
+    } else {
+        (None, HashMap::new())
+    };
+
+    // Extract leaf issuer for CAA checking
+    let leaf_issuer: Option<String> = port_results
+        .iter()
+        .flat_map(|pr| pr.ips.iter())
+        .find(|r| r.chain.is_some())
+        .and_then(|r| r.chain.as_ref()?.first())
+        .map(|leaf| leaf.issuer.clone());
+
+    // Compute CAA check status
+    let caa_status = match (&caa_lookup, &leaf_issuer) {
+        (Some(caa), Some(issuer)) => validate::caa_compliance::check_caa_compliance(caa, issuer),
+        (Some(caa), None) if caa.is_empty() => validate::CheckStatus::Pass,
+        (Some(_), None) => validate::CheckStatus::Skip, // Have records but no cert to check against
+        (None, _) => validate::CheckStatus::Skip,
+    };
+
+    // DANE status: Skip without DNSSEC
+    let dane_status = validate::CheckStatus::Skip;
+
+    // Build DNS context for response
+    let dns_context = if do_dns {
+        let caa_info = caa_lookup.as_ref().map(|caa| {
+            let issuer_allowed = leaf_issuer.as_ref().map(|issuer| {
+                validate::caa_compliance::check_caa_compliance(caa, issuer)
+                    == validate::CheckStatus::Pass
+            });
+            CaaInfo {
+                records: caa
+                    .records
+                    .iter()
+                    .map(|r| format!("{} \"{}\"", r.tag, r.value))
+                    .collect(),
+                issuer_allowed,
+                issuewild_present: caa.issuewild_present(),
+            }
+        });
+
+        Some(DnsContext {
+            caa: caa_info,
+            resolved_ips: inspected_ips.iter().map(|ip| ip.to_string()).collect(),
+        })
+    } else {
+        None
+    };
+
+    // Build per-port TLSA info
+    let mut port_results = port_results;
+    for pr in &mut port_results {
+        if let Some(tlsa) = tlsa_lookups.get(&pr.port)
+            && !tlsa.is_empty()
+        {
+            pr.tlsa = Some(TlsaInfo {
+                records: tlsa.records.iter().map(|r| r.display.clone()).collect(),
+                dnssec_signed: tlsa.dnssec_signed,
+                dane_valid: None, // DNSSEC not available
+            });
+        }
+    }
 
     // Compute summary from first successful port result
     let (validation_ref, ocsp_stapled) = port_results
@@ -321,6 +447,8 @@ async fn inspect_handler(
         parsed.target.hostname(),
         ocsp_stapled,
         has_consistency_mismatch,
+        caa_status,
+        dane_status,
     );
 
     let duration_ms = request_start.elapsed().as_millis() as u64;
@@ -331,6 +459,7 @@ async fn inspect_handler(
         input_mode,
         summary,
         ports: port_results,
+        dns: dns_context,
         warnings,
         skipped_ips,
         duration_ms,
@@ -368,6 +497,7 @@ async fn inspect_port(
         ips: ip_results,
         consistency,
         validation: None,
+        tlsa: None,
         error: None,
     }
 }

@@ -13,6 +13,9 @@ webpki-roots = "0.26"
 x509-parser = { version = "0.17", features = ["verify"] }
 x509-ocsp = "0.2"
 
+# DNS
+mhost = { version = "0.11", default-features = false }
+
 # Crypto
 sha2 = "0.10"
 der = "0.7"

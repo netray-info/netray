@@ -6,6 +6,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
 
 mod config;
+mod dns;
 mod error;
 mod input;
 mod routes;
@@ -43,7 +44,19 @@ async fn main() {
 
     tracing::info!(bind = %config.server.bind, "starting tlsight");
 
-    let state = state::AppState::new(&config);
+    let mut state = state::AppState::new(&config);
+
+    if config.validation.check_caa || config.validation.check_dane {
+        match dns::DnsResolver::new(config.dns.timeout_secs).await {
+            Ok(resolver) => {
+                state.dns_resolver = Some(std::sync::Arc::new(resolver));
+                tracing::info!("DNS resolver initialized for CAA/DANE lookups");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to initialize DNS resolver, CAA/DANE checks disabled");
+            }
+        }
+    }
 
     let app = Router::new()
         .merge(routes::health_router())
