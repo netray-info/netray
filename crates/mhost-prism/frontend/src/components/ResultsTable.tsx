@@ -89,6 +89,7 @@ interface ResultsTableProps {
   compact: boolean;
   devOnly: boolean;
   sort: boolean;
+  explain: boolean;
   expandAll?: number;
   collapseAll?: number;
 }
@@ -141,16 +142,31 @@ export function formatRecordData(data: Record<string, unknown>): string {
   return JSON.stringify(value);
 }
 
+/** Map of record type → injected *_human field name. */
+const humanFields: Record<string, string> = {
+  'CAA': 'caa_human', 'MX': 'mx_human', 'SOA': 'soa_human',
+  'SVCB': 'svcb_human', 'HTTPS': 'svcb_human', 'TLSA': 'tlsa_human',
+  'NAPTR': 'naptr_human', 'DNSKEY': 'dnskey_human', 'DS': 'ds_human',
+  'NSEC': 'nsec_human',
+};
+
+/** Map of record type → injected *_explain field name. */
+const explainFields: Record<string, string> = {
+  'CAA': 'caa_explain', 'MX': 'mx_explain', 'SOA': 'soa_explain',
+  'SVCB': 'svcb_explain', 'HTTPS': 'svcb_explain', 'TLSA': 'tlsa_explain',
+  'NAPTR': 'naptr_explain', 'DNSKEY': 'dnskey_explain', 'DS': 'ds_explain',
+  'NSEC': 'nsec_explain',
+};
+
 function formatStructuredRecord(rtype: string, value: Record<string, unknown>): string {
+  // Prefer backend-injected *_human field (concise formatted display)
+  const hf = humanFields[rtype];
+  if (hf && typeof value[hf] === 'string') return value[hf] as string;
+
+  // Fallback for types without enrichment
   switch (rtype) {
-    case 'MX':
-      if (typeof value.mx_human === 'string') return value.mx_human;
-      return `${value.preference} ${value.exchange}`;
     case 'SRV':
       return `${value.priority} ${value.weight} ${value.port} ${value.target}`;
-    case 'SOA':
-      if (typeof value.soa_human === 'string') return value.soa_human;
-      return `${value.mname} ${value.rname} (serial: ${value.serial})`;
     case 'TXT': {
       const txt = value as Record<string, unknown>;
       if (typeof txt.txt_human === 'string') return txt.txt_human;
@@ -158,11 +174,6 @@ function formatStructuredRecord(rtype: string, value: Record<string, unknown>): 
       if (Array.isArray(txt.txt_data)) return JSON.stringify(txt.txt_data);
       return JSON.stringify(value);
     }
-    case 'CAA':
-      if (typeof value.caa_human === 'string') return value.caa_human;
-      return `${value.issuer_critical ? '!' : ''}${value.tag} "${value.value}"`;
-    case 'NAPTR':
-      return `${value.order} ${value.preference} "${value.flags}" "${value.services}" "${value.regexp}" ${value.replacement}`;
     default:
       return JSON.stringify(value);
   }
@@ -218,34 +229,21 @@ function formatLookupError(result: LookupResult): string {
   return key;
 }
 
-/** Human-readable interpretation of specific record types. */
-function interpretRecord(rtype: string, data: Record<string, unknown>): string | null {
+/** Return the *_explain educational text for a record, or null if none. */
+function getExplanation(rtype: string, data: Record<string, unknown>): string | null {
   const keys = Object.keys(data);
   if (keys.length === 0) return null;
   const value = data[keys[0]];
 
-  // TXT record: backend enriches with txt_string and txt_human fields.
-  // txt_human is the formatted human-readable string; use it as the interpretation.
   if (rtype === 'TXT' || keys[0] === 'TXT') {
     const txtObj = value as Record<string, unknown>;
-    const txtHuman = typeof txtObj?.txt_human === 'string' ? txtObj.txt_human : null;
-    // Always show txt_human in the expanded detail — it's either the parsed structured
-    // output (SPF/DMARC/etc.) or the plain decoded string as a fallback.
-    if (txtHuman) return txtHuman;
-    return null;
+    return typeof txtObj?.txt_explain === 'string' ? txtObj.txt_explain : null;
   }
 
   if (value && typeof value === 'object') {
     const obj = value as Record<string, unknown>;
-    if (rtype === 'CAA' || keys[0] === 'CAA') {
-      if (typeof obj.caa_human === 'string') return obj.caa_human;
-    }
-    if (rtype === 'MX' || keys[0] === 'MX') {
-      if (typeof obj.mx_human === 'string') return obj.mx_human;
-    }
-    if (rtype === 'SOA' || keys[0] === 'SOA') {
-      if (typeof obj.soa_human === 'string') return obj.soa_human;
-    }
+    const field = explainFields[rtype] || explainFields[keys[0]];
+    if (field && typeof obj[field] === 'string') return obj[field] as string;
   }
 
   return null;
@@ -354,6 +352,7 @@ function RecordGroup(props: {
   expandedKeys: Set<string>;
   onRowClick: (key: string) => void;
   compact: boolean;
+  explain: boolean;
 }) {
   const [collapsed, setCollapsed] = createSignal(false);
 
@@ -436,6 +435,7 @@ function RecordGroup(props: {
                   onRowClick={props.onRowClick}
                   maxResponseTimeMs={maxResponseTimeMs()}
                   serverOverride={serverAgreementLabel()}
+                  explain={props.explain}
                 />
               )}
             </For>
@@ -459,6 +459,7 @@ function LookupRows(props: {
   onRowClick: (key: string) => void;
   maxResponseTimeMs: number;
   serverOverride?: string | null;
+  explain: boolean;
 }) {
   const server = createMemo(() => props.serverOverride ?? formatServer(props.lookup.name_server));
   const transport = createMemo(() => extractTransport(props.lookup.name_server));
@@ -472,7 +473,7 @@ function LookupRows(props: {
             <For each={resp.records}>
               {(record, i) => {
                 const rowKey = () => `${props.recordType}:${props.lookupIndex}:${i()}`;
-                const interpretation = createMemo(() => interpretRecord(props.recordType, record.data));
+                const explanation = () => props.explain ? getExplanation(props.recordType, record.data) : null;
                 const isExpanded = () => props.expandedKeys.has(rowKey());
                 const isFocused = () => props.focusedKey === rowKey();
 
@@ -494,7 +495,12 @@ function LookupRows(props: {
                     >
                       <td data-label="Name">{record.name}</td>
                       <td data-label="TTL" class="ttl-value">{record.ttl}s</td>
-                      <td data-label="Value" class="record-value">{formatRecordData(record.data)}</td>
+                      <td data-label="Value" class="record-value">
+                        {formatRecordData(record.data)}
+                        <Show when={explanation()}>
+                          <div class="record-explanation">{explanation()}</div>
+                        </Show>
+                      </td>
                       <td data-label="Server" class={i() > 0 ? 'card-hide-empty' : ''}>{i() === 0 ? server() : ''}</td>
                       <td data-label="Time" class={i() > 0 ? 'card-hide-empty' : ''}>
                         {i() === 0 ? <TimeCell rt={resp.response_time} maxMs={props.maxResponseTimeMs} /> : ''}
@@ -526,11 +532,6 @@ function LookupRows(props: {
                                 </dl>
                               </div>
                             </div>
-                            <Show when={interpretation()}>
-                              <div class="detail-interpretation">
-                                {interpretation()}
-                              </div>
-                            </Show>
                           </div>
                         </td>
                       </tr>
@@ -847,6 +848,7 @@ export function ResultsTable(props: ResultsTableProps) {
               expandedKeys={expandedKeys()}
               onRowClick={handleRowClick}
               compact={props.compact}
+              explain={props.explain}
             />
           )}
         </For>

@@ -894,22 +894,21 @@ body {
   white-space: pre-wrap;
 }
 
-.detail-interpretation {
-  margin-top: 10px;
-  padding: 8px 12px;
+.record-explanation {
+  margin-top: 6px;
+  padding: 4px 8px;
   background: rgba(0, 212, 255, 0.06);
-  border: 1px solid rgba(0, 212, 255, 0.12);
-  border-radius: var(--radius);
-  font-family: var(--font-mono);
-  font-size: 12px;
+  border-left: 2px solid rgba(0, 212, 255, 0.25);
+  font-size: 11px;
   color: var(--accent);
   line-height: 1.5;
   white-space: pre-wrap;
 }
 
-[data-theme="light"] .detail-interpretation {
+[data-theme="light"] .record-explanation {
   background: rgba(0, 119, 204, 0.06);
-  border-color: rgba(0, 119, 204, 0.12);
+  border-color: rgba(0, 119, 204, 0.25);
+}
 }
 
 /* ===================================================================

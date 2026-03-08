@@ -14,17 +14,17 @@ const THEME_KEY = 'prism_theme';
 const VIEW_PREFS_KEY = 'prism_view_prefs';
 const MAX_HISTORY = 50;
 
-interface ViewPrefs { hideNx: boolean; compact: boolean; devOnly: boolean; sort: boolean; }
+interface ViewPrefs { hideNx: boolean; compact: boolean; devOnly: boolean; sort: boolean; explain: boolean; }
 
 function loadViewPrefs(): ViewPrefs {
   try {
     const raw = localStorage.getItem(VIEW_PREFS_KEY);
     if (raw) {
       const p = JSON.parse(raw);
-      return { hideNx: Boolean(p.hideNx), compact: Boolean(p.compact), devOnly: Boolean(p.devOnly), sort: Boolean(p.sort) };
+      return { hideNx: Boolean(p.hideNx), compact: Boolean(p.compact), devOnly: Boolean(p.devOnly), sort: Boolean(p.sort), explain: Boolean(p.explain) };
     }
   } catch { /* ignore */ }
-  return { hideNx: true, compact: true, devOnly: false, sort: true };
+  return { hideNx: true, compact: true, devOnly: false, sort: true, explain: false };
 }
 
 function saveViewPrefs(prefs: ViewPrefs) {
@@ -182,14 +182,16 @@ export default function App() {
   const [compact, setCompact] = createSignal(vp.compact);
   const [devOnly, setDevOnly] = createSignal(vp.devOnly);
   const [sortView, setSortView] = createSignal(vp.sort);
+  const [explain, setExplain] = createSignal(vp.explain);
 
   function currentViewPrefs(): ViewPrefs {
-    return { hideNx: hideNx(), compact: compact(), devOnly: devOnly(), sort: sortView() };
+    return { hideNx: hideNx(), compact: compact(), devOnly: devOnly(), sort: sortView(), explain: explain() };
   }
   function toggleHideNx() { const n = !hideNx(); setHideNx(n); saveViewPrefs({ ...currentViewPrefs(), hideNx: n }); }
   function toggleCompact() { const n = !compact(); setCompact(n); saveViewPrefs({ ...currentViewPrefs(), compact: n }); }
   function toggleDevOnly() { const n = !devOnly(); setDevOnly(n); saveViewPrefs({ ...currentViewPrefs(), devOnly: n }); }
   function toggleSort()    { const n = !sortView(); setSortView(n); saveViewPrefs({ ...currentViewPrefs(), sort: n }); }
+  function toggleExplain() { const n = !explain(); setExplain(n); saveViewPrefs({ ...currentViewPrefs(), explain: n }); }
 
   // Expand/collapse all triggers (increment to trigger effect)
   const [expandAllTrigger, setExpandAllTrigger] = createSignal(0);
@@ -972,6 +974,7 @@ export default function App() {
                 <button class={`view-btn${compact() ? ' active' : ''}`} onClick={toggleCompact} title="Collapse groups where all servers agree">compact</button>
                 <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only groups where servers diverge">deviations</button>
                 <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: deviations first, then records, then NXDOMAIN">sort</button>
+                <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields in expanded rows">explain</button>
                 <span class="view-options-sep" />
                 <button class="view-btn" onClick={() => setExpandAllTrigger((n) => n + 1)} title="Expand all record rows">expand all</button>
                 <button class="view-btn" onClick={() => setCollapseAllTrigger((n) => n + 1)} title="Collapse all record rows">collapse all</button>
@@ -1083,6 +1086,7 @@ export default function App() {
               compact={compact()}
               devOnly={devOnly()}
               sort={sortView()}
+              explain={explain()}
               expandAll={expandAllTrigger()}
               collapseAll={collapseAllTrigger()}
             />
