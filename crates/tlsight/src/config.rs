@@ -10,6 +10,7 @@ const HARD_CAP_REQUEST_TIMEOUT: u64 = 15;
 const HARD_CAP_MAX_PORTS: usize = 7;
 const HARD_CAP_MAX_IPS: usize = 10;
 const HARD_CAP_ENRICHMENT_TIMEOUT_MS: u64 = 2000;
+const HARD_CAP_HTTP_CHECK_TIMEOUT: u64 = 5;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -23,6 +24,8 @@ pub struct Config {
     pub validation: ValidationConfig,
     #[serde(default)]
     pub ecosystem: EcosystemConfig,
+    #[serde(default = "default_quality")]
+    pub quality: QualityConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -102,6 +105,22 @@ pub struct EcosystemConfig {
     pub enrichment_timeout_ms: u64,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct QualityConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_http_check_timeout_secs")]
+    pub http_check_timeout_secs: u64,
+    #[serde(default)]
+    pub skip_http_checks: bool,
+}
+
+impl Default for QualityConfig {
+    fn default() -> Self {
+        default_quality()
+    }
+}
+
 impl Default for EcosystemConfig {
     fn default() -> Self {
         Self {
@@ -121,6 +140,18 @@ impl EcosystemConfig {
 
 fn default_enrichment_timeout_ms() -> u64 {
     500
+}
+
+fn default_quality() -> QualityConfig {
+    QualityConfig {
+        enabled: true,
+        http_check_timeout_secs: default_http_check_timeout_secs(),
+        skip_http_checks: false,
+    }
+}
+
+fn default_http_check_timeout_secs() -> u64 {
+    5
 }
 
 // --- Default value functions ---
@@ -354,6 +385,16 @@ impl Config {
             )?;
         }
 
+        // Quality assessment HTTP check timeout: clamp to hard cap.
+        if self.quality.http_check_timeout_secs > HARD_CAP_HTTP_CHECK_TIMEOUT {
+            tracing::warn!(
+                configured = self.quality.http_check_timeout_secs,
+                clamped = HARD_CAP_HTTP_CHECK_TIMEOUT,
+                "quality.http_check_timeout_secs exceeds hard cap, clamping"
+            );
+            self.quality.http_check_timeout_secs = HARD_CAP_HTTP_CHECK_TIMEOUT;
+        }
+
         Ok(())
     }
 }
@@ -379,6 +420,7 @@ mod tests {
             dns: default_dns(),
             validation: default_validation(),
             ecosystem: EcosystemConfig::default(),
+            quality: default_quality(),
         }
     }
 
@@ -537,5 +579,26 @@ mod tests {
         cfg.ecosystem.ip_api_url = None;
         cfg.ecosystem.enrichment_timeout_ms = 0;
         assert!(cfg.validate().is_ok());
+    }
+
+    // --- Quality config ---
+
+    #[test]
+    fn quality_defaults_are_valid() {
+        let cfg = valid_config();
+        assert!(cfg.quality.enabled);
+        assert_eq!(cfg.quality.http_check_timeout_secs, 5);
+        assert!(!cfg.quality.skip_http_checks);
+    }
+
+    #[test]
+    fn clamps_quality_http_check_timeout() {
+        let mut cfg = valid_config();
+        cfg.quality.http_check_timeout_secs = 99;
+        cfg.validate().unwrap();
+        assert_eq!(
+            cfg.quality.http_check_timeout_secs,
+            HARD_CAP_HTTP_CHECK_TIMEOUT
+        );
     }
 }

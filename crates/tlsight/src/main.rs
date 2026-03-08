@@ -10,6 +10,7 @@ mod dns;
 mod enrichment;
 mod error;
 mod input;
+mod quality;
 mod routes;
 mod security;
 mod state;

@@ -69,7 +69,13 @@ impl EnrichmentClient {
             "{}/network?ip={}&fields=asn,org,type,cloud,is_tor,is_vpn,is_datacenter,is_spamhaus,is_c2",
             self.base_url, ip
         );
-        match self.client.get(&url).header("Accept", "application/json").send().await {
+        match self
+            .client
+            .get(&url)
+            .header("Accept", "application/json")
+            .send()
+            .await
+        {
             Ok(resp) if resp.status().is_success() => match resp.json::<IpEnrichment>().await {
                 Ok(info) => Some(info),
                 Err(e) => {

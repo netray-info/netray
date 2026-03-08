@@ -74,7 +74,12 @@ fn verify_chain_trust(
             Ok(sn) => sn,
             Err(_) => return (false, Some(format!("invalid server name: {h}"))),
         },
-        None => return (false, Some("no hostname for trust verification".to_string())),
+        None => {
+            return (
+                false,
+                Some("no hostname for trust verification".to_string()),
+            );
+        }
     };
 
     let now = UnixTime::now();

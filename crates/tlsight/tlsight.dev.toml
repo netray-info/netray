@@ -16,3 +16,6 @@ custom_ca_dir = "custom_cas"
 
 [ecosystem]
 ip_api_url = "https://ip.pdt.sh"
+
+[quality]
+enabled = true

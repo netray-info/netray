@@ -5,6 +5,7 @@ export interface InspectResponse {
   summary: Summary;
   ports: PortResult[];
   dns: DnsContext | null;
+  quality?: QualityResult;
   warnings?: string[];
   skipped_ips?: string[];
   duration_ms: number;
@@ -32,6 +33,7 @@ export interface PortResult {
   consistency?: ConsistencyInfo;
   validation?: ValidationInfo;
   tlsa?: TlsaInfo;
+  quality?: PortQualityResult;
   error?: ErrorInfo;
 }
 
@@ -147,6 +149,40 @@ export interface CaaInfo {
 export interface ErrorInfo {
   code: string;
   message: string;
+}
+
+export type QualityCategory = 'certificate' | 'protocol' | 'configuration';
+
+export interface HealthCheck {
+  id: string;
+  category: QualityCategory;
+  status: CheckStatus;
+  label: string;
+  detail: string;
+}
+
+export interface QualityResult {
+  verdict: CheckStatus;
+  checks: HealthCheck[];
+  hsts?: HstsInfo;
+  https_redirect?: RedirectCheckInfo;
+}
+
+export interface PortQualityResult {
+  verdict: CheckStatus;
+  checks: HealthCheck[];
+}
+
+export interface HstsInfo {
+  present: boolean;
+  max_age: number;
+  include_sub_domains: boolean;
+  preload: boolean;
+}
+
+export interface RedirectCheckInfo {
+  status: CheckStatus;
+  redirect_url?: string;
 }
 
 export interface MetaResponse {

@@ -115,7 +115,11 @@ fn load_custom_cas(root_store: &mut rustls::RootCertStore, ca_dir: &str) {
         }
     }
 
-    tracing::info!(dir = ca_dir, count = loaded, "loaded custom CA certificates");
+    tracing::info!(
+        dir = ca_dir,
+        count = loaded,
+        "loaded custom CA certificates"
+    );
 }
 
 #[cfg(test)]
@@ -160,6 +164,7 @@ mod tests {
                 custom_ca_dir: None,
             },
             ecosystem: crate::config::EcosystemConfig::default(),
+            quality: crate::config::QualityConfig::default(),
         };
         // Ensure defaults pass validation (not strictly needed but defensive).
         let _ = &mut cfg;
