@@ -176,6 +176,7 @@ tlsight/
         QueryHistory.tsx          # Recent query history (localStorage)
         ExportButtons.tsx         # JSON download + markdown copy
         CrossLinks.tsx            # Links to dns.pdt.sh and ip.pdt.sh
+        Explain.tsx               # Reusable explain-mode info card wrapper
       lib/
         types.ts                  # TypeScript interfaces matching Rust response
         api.ts                    # API client for /api/inspect

@@ -1,7 +1,7 @@
 # Software Design Document: `tlsight`
 
 **Feature**: Web-based TLS certificate inspection and diagnostics service
-**Status**: Phase 3 Complete, Phase 4 In Progress
+**Status**: Phase 4 In Progress
 **Date**: 2026-03-08
 
 ---
@@ -1347,12 +1347,12 @@ Socket options:
 - [x] CAA record fetch and issuer cross-check (mhost DNS, RFC 8659 tree-climbing)
 - [x] TLSA record fetch and DANE matching logic (RFC 6698, runtime-skipped until DNSSEC)
 
-### Phase 3 — Polish (complete)
+### Phase 3 — Polish ✓ Complete
 
 - [x] Multi-port scanning (up to 7 ports per request, concurrent via JoinSet)
 - [x] Port presets in frontend (HTTPS, E-Mail, All Common)
 - [x] POST endpoint for programmatic clients (JSON body with hostname, ports, options)
-- [x] Keyboard shortcuts (/ and Ctrl+L to focus, Escape to blur, j/k card nav, Enter expand/collapse)
+- [x] Keyboard shortcuts (/ and Ctrl+L to focus, Escape to blur, j/k card nav, Enter expand/collapse, e explain, r re-run)
 - [x] Query history (localStorage, max 20 entries)
 - [x] Mobile-responsive layout (320px minimum, scrollable tables)
 - [x] Certificate Transparency: embedded SCT extraction from leaf cert (no external API)
@@ -1362,6 +1362,10 @@ Socket options:
 - [x] Human-readable CAA record display (parsed tag/value, sorted)
 - [x] CN extraction from certificate DN for display (handles EV certs)
 - [x] Input clear resets results and shows welcome cards
+- [x] Explain mode: toggle shows info cards below each section explaining results in plain language
+- [x] Global expand all / collapse all in filter toolbar (prism-style layout)
+- [x] Inferred root CA in chain view (dashed ghost card from last cert's issuer when root not sent by server)
+- [x] Consistent lowercase button/toggle labels across all UI elements
 
 ### Phase 4 — Advanced
 
