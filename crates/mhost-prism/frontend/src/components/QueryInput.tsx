@@ -1,4 +1,4 @@
-import { onMount, onCleanup, Show } from 'solid-js';
+import { onMount, onCleanup, Show, For, createSignal } from 'solid-js';
 import { EditorView, keymap, placeholder as cmPlaceholder, ViewPlugin, Decoration, type DecorationSet } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { acceptCompletion, autocompletion, startCompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
@@ -271,17 +271,44 @@ interface QueryInputProps {
 
 export function QueryInput(props: QueryInputProps) {
   let containerRef: HTMLDivElement | undefined;
+  let wrapRef: HTMLDivElement | undefined;
   let view: EditorView | undefined;
   let historyIndex = -1;
   let savedInput = '';
+  const [showHistory, setShowHistory] = createSignal(false);
+  const [historyHighlight, setHistoryHighlight] = createSignal(-1);
 
   onMount(() => {
     if (!containerRef) return;
 
     const submitKeymap = keymap.of([
       {
+        key: 'Escape',
+        run: () => {
+          if (showHistory()) {
+            setShowHistory(false);
+            setHistoryHighlight(-1);
+            return true;
+          }
+          return false;
+        },
+      },
+      {
         key: 'Enter',
         run: (v) => {
+          // If history dropdown is open with a highlighted item, select it
+          if (showHistory() && historyHighlight() >= 0) {
+            const item = props.history[historyHighlight()];
+            if (item) {
+              v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: item } });
+              setShowHistory(false);
+              setHistoryHighlight(-1);
+              historyIndex = -1;
+              props.onSubmit(item);
+              return true;
+            }
+          }
+          setShowHistory(false);
           const query = v.state.doc.toString().trim();
           if (query) {
             historyIndex = -1;
@@ -312,6 +339,11 @@ export function QueryInput(props: QueryInputProps) {
         run: (v) => {
           const hist = props.history;
           if (hist.length === 0) return false;
+          // If dropdown is visible, navigate highlight
+          if (showHistory()) {
+            setHistoryHighlight((h) => Math.min(h + 1, hist.length - 1));
+            return true;
+          }
           if (historyIndex === -1) {
             savedInput = v.state.doc.toString();
           }
@@ -327,6 +359,14 @@ export function QueryInput(props: QueryInputProps) {
       {
         key: 'ArrowDown',
         run: (v) => {
+          // If dropdown is visible, navigate highlight
+          if (showHistory()) {
+            const next = historyHighlight() - 1;
+            if (next < -1) return true;
+            setHistoryHighlight(next);
+            if (next === -1) setShowHistory(false);
+            return true;
+          }
           if (historyIndex <= -1) return false;
           if (historyIndex > 0) {
             historyIndex--;
@@ -367,10 +407,28 @@ export function QueryInput(props: QueryInputProps) {
       parent: containerRef,
     });
 
-    // Reset history index when user types.
+    // Reset history index when user types; hide dropdown when typing.
     view.contentDOM.addEventListener('beforeinput', () => {
       historyIndex = -1;
+      setShowHistory(false);
     });
+
+    // Show history dropdown on focus (if there's history and input is empty).
+    view.contentDOM.addEventListener('focus', () => {
+      if (props.history.length > 0 && view!.state.doc.toString().trim() === '') {
+        setHistoryHighlight(-1);
+        setShowHistory(true);
+      }
+    });
+
+    // Hide on outside click (defer so click on dropdown item fires first).
+    const onPointerDown = (e: PointerEvent) => {
+      if (wrapRef && !wrapRef.contains(e.target as Node)) {
+        setShowHistory(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    onCleanup(() => document.removeEventListener('pointerdown', onPointerDown));
 
     props.onReady?.({
       focus: () => view?.focus(),
@@ -392,6 +450,7 @@ export function QueryInput(props: QueryInputProps) {
 
   const handleSubmitClick = () => {
     if (!view) return;
+    setShowHistory(false);
     const query = view.state.doc.toString().trim();
     if (query) {
       historyIndex = -1;
@@ -399,9 +458,18 @@ export function QueryInput(props: QueryInputProps) {
     }
   };
 
+  const selectHistoryItem = (item: string) => {
+    if (!view) return;
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: item } });
+    setShowHistory(false);
+    setHistoryHighlight(-1);
+    historyIndex = -1;
+    props.onSubmit(item);
+  };
+
   return (
     <div class="query-bar">
-      <div class="query-editor-wrap">
+      <div class="query-editor-wrap" ref={wrapRef}>
         <div class="query-editor" ref={containerRef} />
         <Show when={props.onReset}>
           <button
@@ -412,6 +480,23 @@ export function QueryInput(props: QueryInputProps) {
           >
             &times;
           </button>
+        </Show>
+        <Show when={showHistory() && props.history.length > 0}>
+          <div class="history-dropdown">
+            <For each={props.history}>
+              {(item, i) => (
+                <button
+                  class={`history-item${historyHighlight() === i() ? ' history-item--active' : ''}`}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    selectHistoryItem(item);
+                  }}
+                >
+                  {item}
+                </button>
+              )}
+            </For>
+          </div>
         </Show>
       </div>
       <Show when={props.shareLabel}>

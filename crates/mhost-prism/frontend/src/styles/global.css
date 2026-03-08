@@ -243,6 +243,45 @@ body {
   background: var(--bg-tertiary);
 }
 
+.history-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.history-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition);
+  border-bottom: 1px solid var(--border);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item:hover,
+.history-item--active {
+  background: var(--bg-tertiary);
+}
+
 .query-button {
   flex-shrink: 0;
   padding: 8px 20px;
