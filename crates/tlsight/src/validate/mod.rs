@@ -1,5 +1,6 @@
 pub mod caa_compliance;
 pub mod chain_trust;
+pub mod ct;
 #[allow(dead_code)] // Fully tested, not called at runtime until DNSSEC is available
 pub mod dane;
 
@@ -28,6 +29,7 @@ pub struct SummaryChecks {
     pub hostname_match: CheckStatus,
     pub caa_compliant: CheckStatus,
     pub dane_valid: CheckStatus,
+    pub ct_logged: CheckStatus,
     pub ocsp_stapled: CheckStatus,
     pub consistency: CheckStatus,
 }
@@ -53,6 +55,7 @@ pub fn summarize(
     has_consistency_mismatch: bool,
     caa_status: CheckStatus,
     dane_status: CheckStatus,
+    ct_status: CheckStatus,
 ) -> Summary {
     let (chain_trusted, not_expired, hostname_match) = match validation {
         Some(v) => {
@@ -98,6 +101,7 @@ pub fn summarize(
         hostname_match,
         caa_compliant: caa_status,
         dane_valid: dane_status,
+        ct_logged: ct_status,
         ocsp_stapled: ocsp,
         consistency,
     };
@@ -107,6 +111,7 @@ pub fn summarize(
         checks.not_expired,
         checks.hostname_match,
         checks.caa_compliant,
+        checks.ct_logged,
         checks.ocsp_stapled,
         checks.consistency,
     ]);
@@ -142,7 +147,7 @@ mod tests {
         }
     }
 
-    /// Helper: summarize with CAA/DANE defaulting to Skip.
+    /// Helper: summarize with CAA/DANE/CT defaulting to Skip.
     fn summarize_skip(
         validation: Option<&ValidationResult>,
         hostname: Option<&str>,
@@ -154,6 +159,7 @@ mod tests {
             hostname,
             ocsp_stapled,
             has_consistency_mismatch,
+            CheckStatus::Skip,
             CheckStatus::Skip,
             CheckStatus::Skip,
         )
@@ -255,6 +261,7 @@ mod tests {
             false,
             CheckStatus::Fail,
             CheckStatus::Skip,
+            CheckStatus::Skip,
         );
         assert_eq!(summary.checks.caa_compliant, CheckStatus::Fail);
         assert_eq!(summary.verdict, CheckStatus::Fail);
@@ -268,6 +275,7 @@ mod tests {
             true,
             false,
             CheckStatus::Pass,
+            CheckStatus::Skip,
             CheckStatus::Skip,
         );
         assert_eq!(summary.checks.caa_compliant, CheckStatus::Pass);

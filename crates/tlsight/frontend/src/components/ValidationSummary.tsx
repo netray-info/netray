@@ -10,6 +10,7 @@ const CHECK_LABELS: Record<string, string> = {
   hostname_match: 'Hostname match',
   caa_compliant: 'CAA compliant',
   dane_valid: 'DANE valid',
+  ct_logged: 'CT logged',
   ocsp_stapled: 'OCSP stapled',
   consistency: 'Consistency',
 };

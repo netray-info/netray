@@ -418,8 +418,17 @@ async fn do_inspect(
             let ips = inspected_ips.clone();
             let hostname = parsed.target.hostname().map(|h| h.to_string());
             let verifier = state.cert_verifier.clone();
+            let check_ct = state.config.validation.check_ct;
             join_set.spawn(async move {
-                inspect_port(&ips, port, hostname.as_deref(), handshake_timeout, verifier).await
+                inspect_port(
+                    &ips,
+                    port,
+                    hostname.as_deref(),
+                    handshake_timeout,
+                    verifier,
+                    check_ct,
+                )
+                .await
             });
         }
         let mut results = Vec::with_capacity(parsed.ports.len());
@@ -506,6 +515,18 @@ async fn do_inspect(
         .map(|ip_result| (&ip_result.validation, ip_result.ocsp_stapled()))
         .unwrap_or((&None, false));
 
+    // Compute CT status from first successful IP result
+    let ct_status = if state.config.validation.check_ct {
+        let ct_info = port_results
+            .iter()
+            .flat_map(|pr| pr.ips.iter())
+            .find(|r| r.error.is_none())
+            .and_then(|r| r.ct.as_ref());
+        validate::ct::check_ct_status(ct_info)
+    } else {
+        validate::CheckStatus::Skip
+    };
+
     // Check if any port has consistency mismatches
     let has_consistency_mismatch = port_results.iter().any(|pr| {
         pr.consistency
@@ -520,6 +541,7 @@ async fn do_inspect(
         has_consistency_mismatch,
         caa_status,
         dane_status,
+        ct_status,
     );
 
     let duration_ms = request_start.elapsed().as_millis() as u64;
@@ -544,6 +566,7 @@ async fn inspect_port(
     hostname: Option<&str>,
     timeout: Duration,
     cert_verifier: Arc<dyn rustls::client::danger::ServerCertVerifier>,
+    check_ct: bool,
 ) -> PortResult {
     let mut ip_results = Vec::with_capacity(ips.len());
 
@@ -560,6 +583,11 @@ async fn inspect_port(
                 raw_certs,
             );
             result.validation = Some(validation);
+
+            // Extract SCTs from leaf certificate
+            if check_ct && let Some(leaf_der) = raw_certs.first() {
+                result.ct = validate::ct::extract_ct_info(leaf_der.as_ref());
+            }
         }
 
         ip_results.push(result);

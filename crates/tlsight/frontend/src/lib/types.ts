@@ -20,6 +20,7 @@ export interface Summary {
     hostname_match: CheckStatus;
     caa_compliant: CheckStatus;
     dane_valid: CheckStatus;
+    ct_logged: CheckStatus;
     ocsp_stapled: CheckStatus;
     consistency: CheckStatus;
   };
@@ -40,7 +41,19 @@ export interface IpResult {
   tls?: TlsInfo;
   chain?: CertInfo[];
   validation?: ValidationInfo;
+  ct?: CtInfo;
   error?: ErrorInfo;
+}
+
+export interface CtInfo {
+  sct_count: number;
+  scts: SctEntry[];
+}
+
+export interface SctEntry {
+  version: number;
+  log_id: string;
+  timestamp: string;
 }
 
 export interface TlsInfo {

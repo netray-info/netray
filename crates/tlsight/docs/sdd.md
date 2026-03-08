@@ -1,7 +1,7 @@
 # Software Design Document: `tlsight`
 
 **Feature**: Web-based TLS certificate inspection and diagnostics service
-**Status**: Phase 3 Partial (CT log checking deferred)
+**Status**: Phase 3 Complete
 **Date**: 2026-03-08
 
 ---
@@ -1045,7 +1045,7 @@ expiry_warning_days = 30             # warn if cert expires within N days
 expiry_critical_days = 14            # critical if cert expires within N days
 check_dane = true                    # fetch TLSA records and validate
 check_caa = true                     # fetch CAA records and cross-check
-check_ct = false                     # CT log checking (requires external API, disabled by default)
+check_ct = false                     # CT log checking (embedded SCT extraction, disabled by default)
 # custom_ca_dir = "/etc/tlsight/ca.d/"  # directory of *.pem files for private CAs (optional)
 
 [ecosystem]
@@ -1337,7 +1337,7 @@ Socket options:
 - [x] CAA record fetch and issuer cross-check (mhost DNS, RFC 8659 tree-climbing)
 - [x] TLSA record fetch and DANE matching logic (RFC 6698, runtime-skipped until DNSSEC)
 
-### Phase 3 — Polish (partial)
+### Phase 3 — Polish (complete)
 
 - [x] Multi-port scanning (up to 5 ports per request, concurrent via JoinSet)
 - [x] Port presets in frontend (HTTPS, Email, All common)
@@ -1345,7 +1345,7 @@ Socket options:
 - [x] Keyboard shortcuts (/ and Ctrl+L to focus, Escape to blur)
 - [x] Query history (localStorage, max 20 entries)
 - [x] Mobile-responsive layout (320px minimum, scrollable tables)
-- [ ] Certificate Transparency log checking (optional, requires external API)
+- [x] Certificate Transparency: embedded SCT extraction from leaf cert (no external API)
 - [x] Export results (JSON download, copy as markdown)
 
 ### Phase 4 — Advanced
@@ -1391,7 +1391,7 @@ Socket options:
 
 2. **OCSP responder availability.** OCSP stapling is checked from the TLS handshake (no outbound OCSP query). If the server doesn't staple, we report "not stapled" — we do not make outbound OCSP queries to the CA's responder (that would add latency, privacy concerns, and a new outbound dependency).
 
-3. **CT log checking.** Checking Certificate Transparency logs requires querying external APIs (crt.sh, Google CT). This adds latency and an external dependency. Disabled by default; when enabled, failures are non-fatal warnings.
+3. **CT log checking.** Implemented as embedded SCT extraction from the leaf certificate's X.509 extension (OID 1.3.6.1.4.1.11129.2.4.2) — no external API calls required. Chrome requires 2+ SCTs from diverse logs; certs with fewer SCTs get a Warn status. Disabled by default (`check_ct = false`). Future: querying external CT APIs (crt.sh, Google CT) for additional log coverage could be added but is not currently planned.
 
 4. **DANE/DNSSEC dependency.** DANE validation requires DNSSEC-signed TLSA records. If the zone is not signed, DANE validation is skipped (not failed). The response indicates "TLSA records found but zone not DNSSEC-signed — DANE validation not applicable."
 

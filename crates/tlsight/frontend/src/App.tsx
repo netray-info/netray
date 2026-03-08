@@ -9,6 +9,7 @@ import TlsParams from './components/TlsParams';
 import PortTabs from './components/PortTabs';
 import ConsistencyView from './components/ConsistencyView';
 import CrossLinks from './components/CrossLinks';
+import CtView from './components/CtView';
 import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
@@ -167,6 +168,10 @@ export default function App() {
 
                               <Show when={ipResult.tls}>
                                 {(tls) => <TlsParams params={tls()} />}
+                              </Show>
+
+                              <Show when={ipResult.ct}>
+                                {(ct) => <CtView ct={ct()} />}
                               </Show>
 
                               <Show when={ipResult.chain}>

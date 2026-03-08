@@ -39,9 +39,9 @@ pub fn check_caa_compliance(caa: &CaaLookup, leaf_issuer: &str) -> CheckStatus {
 /// Heuristic match between a cert issuer DN field and a CAA domain.
 ///
 /// The CAA `issue` value is a domain (e.g., "letsencrypt.org") while the cert
-/// issuer is a Distinguished Name (e.g., "O=Let's Encrypt"). We normalize both
-/// by stripping non-alphanumeric characters, removing TLD from the domain, and
-/// checking for containment.
+/// issuer is a Distinguished Name (e.g., "O=Let's Encrypt"). We check:
+/// 1. Issuer DN contains the domain's second-level label ("digicert" in "digicert.com")
+/// 2. Domain label starts with any word from the issuer DN ("amazonaws" starts with "amazon")
 fn issuer_domain_matches(issuer: &str, caa_domain: &str) -> bool {
     let issuer_norm = normalize(issuer);
     // Use the second-level domain label: "letsencrypt.org" → "letsencrypt"
@@ -52,7 +52,30 @@ fn issuer_domain_matches(issuer: &str, caa_domain: &str) -> bool {
         return false;
     }
 
-    issuer_norm.contains(&domain_norm)
+    // Direct: issuer DN contains domain label
+    if issuer_norm.contains(&domain_norm) {
+        return true;
+    }
+
+    // Reverse: domain label starts with an issuer DN word.
+    // Handles "amazonaws.com" matching issuer "O=Amazon" — "amazonaws" starts with "amazon".
+    issuer_words(issuer).any(|word| word.len() >= 4 && domain_norm.starts_with(&word))
+}
+
+/// Extract normalized words (len >= 4) from an issuer DN's O= and CN= fields.
+fn issuer_words(issuer: &str) -> impl Iterator<Item = String> + '_ {
+    issuer
+        .split(',')
+        .flat_map(|part| {
+            let part = part.trim();
+            if part.starts_with("O=") || part.starts_with("CN=") {
+                let value = part.split_once('=').map(|(_, v)| v).unwrap_or("");
+                Some(value.split_whitespace().map(normalize).collect::<Vec<_>>())
+            } else {
+                None
+            }
+        })
+        .flatten()
 }
 
 /// Normalize a string for comparison: lowercase, keep only alphanumeric.
@@ -185,6 +208,29 @@ mod tests {
     #[test]
     fn no_match() {
         assert!(!issuer_domain_matches("O=Let's Encrypt", "digicert.com"));
+    }
+
+    #[test]
+    fn amazonaws_matches_amazon_issuer() {
+        assert!(issuer_domain_matches(
+            "C=US, O=Amazon, CN=Amazon RSA 2048 M04",
+            "amazonaws.com"
+        ));
+    }
+
+    #[test]
+    fn amazon_issuer_matches_amazon_domain() {
+        let caa = caa_with_issues(&["amazonaws.com"]);
+        assert_eq!(
+            check_caa_compliance(&caa, "C=US, O=Amazon, CN=Amazon RSA 2048 M04"),
+            CheckStatus::Pass
+        );
+    }
+
+    #[test]
+    fn short_issuer_word_not_matched() {
+        // "US" is too short (< 4 chars) to match via reverse heuristic
+        assert!(!issuer_domain_matches("C=US, O=AB", "uscdn.com"));
     }
 
     #[test]
