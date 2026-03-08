@@ -8,14 +8,20 @@ interface Props {
 }
 
 export default function ChainView(props: Props) {
+  const lastCert = () => props.chain[props.chain.length - 1];
+  const needsInferredRoot = () => {
+    const last = lastCert();
+    return last && !last.is_self_signed;
+  };
+
   return (
     <div class="chain-view">
       <h2>Certificate Chain</h2>
-      <Explain when={!!props.explain}>This shows the certificate trust chain from your server's leaf certificate to the root CA. Each certificate in the chain vouches for the next. A complete chain is required for browsers to trust the connection.</Explain>
+      <Explain when={!!props.explain}>This shows the certificate trust chain from your server's leaf certificate to the root CA. Each certificate in the chain vouches for the next. A complete chain is required for browsers to trust the connection. The root CA is typically not sent by the server — it lives in your browser's trust store. When omitted, it is shown here as an inferred card (dashed border) using the last certificate's issuer name.</Explain>
       <div class="chain-view__chain">
         {props.chain.map((cert, i) => (
           <>
-            {i > 0 && <span class="chain-view__arrow">→</span>}
+            {i > 0 && <span class="chain-view__arrow">&rarr;</span>}
             <div class={`chain-view__cert chain-view__cert--${cert.position}`}>
               <div class="chain-view__position">{cert.position}</div>
               <div class="chain-view__subject">{certDisplayName(cert.subject)}</div>
@@ -24,6 +30,16 @@ export default function ChainView(props: Props) {
             </div>
           </>
         ))}
+        {needsInferredRoot() && (
+          <>
+            <span class="chain-view__arrow">&rarr;</span>
+            <div class="chain-view__cert chain-view__cert--root-inferred">
+              <div class="chain-view__position">root</div>
+              <div class="chain-view__subject">{certDisplayName(lastCert().issuer)}</div>
+              <div class="chain-view__inferred">from trust store</div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
