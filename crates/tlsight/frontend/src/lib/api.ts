@@ -3,7 +3,8 @@ import type { InspectResponse, MetaResponse, ErrorInfo } from './types';
 const BASE = '';
 
 export async function inspect(input: string): Promise<InspectResponse> {
-  const res = await fetch(`${BASE}/api/inspect?h=${encodeURIComponent(input)}`);
+  const url = `${BASE}/api/inspect?h=${encodeURIComponent(input)}`;
+  const res = await fetch(url);
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const err = body?.error as ErrorInfo | undefined;

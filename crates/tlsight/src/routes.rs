@@ -31,6 +31,8 @@ pub struct InspectResponse {
     pub ports: Vec<PortResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dns: Option<DnsContext>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<crate::quality::QualityResult>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -48,6 +50,8 @@ pub struct PortResult {
     pub validation: Option<validate::ValidationResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tlsa: Option<TlsaInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quality: Option<crate::quality::PortQualityResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<tls::InspectionError>,
 }
@@ -314,13 +318,15 @@ async fn do_inspect(
     let allow_blocked = state.config.limits.allow_blocked_targets;
     let allowed_ips: Vec<IpAddr> = ips
         .into_iter()
-        .filter(|ip| match target_policy::check_allowed_with_policy(ip, allow_blocked) {
-            Ok(()) => true,
-            Err(reason) => {
-                warnings.push(format!("{ip}: blocked ({reason})"));
-                false
-            }
-        })
+        .filter(
+            |ip| match target_policy::check_allowed_with_policy(ip, allow_blocked) {
+                Ok(()) => true,
+                Err(reason) => {
+                    warnings.push(format!("{ip}: blocked ({reason})"));
+                    false
+                }
+            },
+        )
         .collect();
 
     if allowed_ips.is_empty() {
@@ -380,9 +386,7 @@ async fn do_inspect(
     let enrichment_handle = if let Some(ref client) = state.enrichment_client {
         let client = Arc::clone(client);
         let ips = inspected_ips.clone();
-        Some(tokio::spawn(
-            async move { client.lookup_batch(&ips).await },
-        ))
+        Some(tokio::spawn(async move { client.lookup_batch(&ips).await }))
     } else {
         None
     };
@@ -539,6 +543,38 @@ async fn do_inspect(
         }
     }
 
+    // Quality assessment (always when enabled in config)
+    let do_quality = state.config.quality.enabled;
+
+    let hostname_quality = if do_quality {
+        let is_hn = is_hostname;
+        let skip_http = state.config.quality.skip_http_checks || !is_hn;
+        if skip_http {
+            Some(crate::quality::assess_hostname(None, None))
+        } else {
+            let hsts_port = crate::quality::hsts_port(&parsed.ports);
+            let first_ip = inspected_ips[0];
+            let hostname_clone = hostname_str.clone();
+            let http_timeout = Duration::from_secs(state.config.quality.http_check_timeout_secs);
+
+            let (hsts_result, redirect_result) = tokio::join!(
+                crate::quality::http::check_hsts(
+                    first_ip,
+                    &hostname_clone,
+                    hsts_port,
+                    http_timeout,
+                ),
+                crate::quality::http::check_https_redirect(first_ip, &hostname_clone, http_timeout,),
+            );
+            Some(crate::quality::assess_hostname(
+                Some(hsts_result),
+                Some(redirect_result),
+            ))
+        }
+    } else {
+        None
+    };
+
     // Compute summary from first successful port result
     let (validation_ref, ocsp_stapled) = port_results
         .iter()
@@ -576,6 +612,23 @@ async fn do_inspect(
         ct_status,
     );
 
+    // Per-port quality assessment
+    if do_quality {
+        let ct_enabled = state.config.validation.check_ct;
+        for pr in &mut port_results {
+            let port_quality = crate::quality::assess_port(
+                &pr.ips,
+                is_hostname,
+                caa_status,
+                dane_status,
+                ocsp_stapled,
+                pr.consistency.as_ref(),
+                ct_enabled,
+            );
+            pr.quality = Some(port_quality);
+        }
+    }
+
     let duration_ms = request_start.elapsed().as_millis() as u64;
 
     Ok(Json(InspectResponse {
@@ -585,6 +638,7 @@ async fn do_inspect(
         summary,
         ports: port_results,
         dns: dns_context,
+        quality: hostname_quality,
         warnings,
         skipped_ips,
         duration_ms,
@@ -633,6 +687,7 @@ async fn inspect_port(
         consistency,
         validation: None,
         tlsa: None,
+        quality: None,
         error: None,
     }
 }
@@ -831,6 +886,7 @@ mod tests {
                 custom_ca_dir: None,
             },
             ecosystem: crate::config::EcosystemConfig::default(),
+            quality: crate::config::QualityConfig::default(),
         }
     }
 

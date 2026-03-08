@@ -7,6 +7,7 @@ import ConsistencyView from './components/ConsistencyView';
 import CrossLinks from './components/CrossLinks';
 import IpCard from './components/IpCard';
 import UnifiedIpView from './components/UnifiedIpView';
+
 import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
@@ -368,8 +369,14 @@ export default function App() {
                   </div>
                 </Show>
 
-                {/* Validation second */}
-                <ValidationSummary summary={r.summary} explain={explain()} />
+                {/* Validation */}
+                <ValidationSummary
+                  summary={r.summary}
+                  quality={r.quality}
+                  portQualities={r.ports.map(p => ({ port: p.port, quality: p.quality }))}
+                  explain={explain()}
+                  expanded={allExpanded()}
+                />
 
                 <Show when={r.ports.length > 1}>
                   <PortTabs

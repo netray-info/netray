@@ -44,6 +44,24 @@ export default function ExportButtons(props: Props) {
       lines.push('');
     }
 
+    if (r.quality || r.ports.some(p => p.quality)) {
+      lines.push('## Detailed Checks');
+      if (r.quality) {
+        for (const c of r.quality.checks) {
+          lines.push(`- ${c.status}: ${c.label} — ${c.detail}`);
+        }
+      }
+      for (const port of r.ports) {
+        if (port.quality) {
+          if (r.ports.length > 1) lines.push(`### Port ${port.port}`);
+          for (const c of port.quality.checks) {
+            lines.push(`- ${c.status}: ${c.label} — ${c.detail}`);
+          }
+        }
+      }
+      lines.push('');
+    }
+
     lines.push(`_Inspected in ${r.duration_ms}ms_`);
 
     await navigator.clipboard.writeText(lines.join('\n'));

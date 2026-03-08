@@ -1,9 +1,13 @@
+import { createSignal, createEffect, Show, For } from 'solid-js';
 import Explain from './Explain';
-import type { Summary, CheckStatus } from '../lib/types';
+import type { Summary, QualityResult, PortQualityResult, HealthCheck, CheckStatus, QualityCategory } from '../lib/types';
 
 interface Props {
   summary: Summary;
+  quality?: QualityResult;
+  portQualities: { port: number; quality?: PortQualityResult }[];
   explain?: boolean;
+  expanded?: boolean;
 }
 
 const CHECK_LABELS: Record<string, string> = {
@@ -29,19 +33,134 @@ const CHECK_EXPLANATIONS: Record<string, string> = {
 };
 
 const STATUS_ICON: Record<CheckStatus, string> = {
-  pass: '*',
-  warn: '!',
-  fail: 'X',
-  skip: '-',
+  pass: '\u2713',
+  warn: '\u26A0',
+  fail: '\u2717',
+  skip: '\u2014',
 };
 
-export default function ValidationSummary(props: Props) {
+const CATEGORY_LABELS: Record<QualityCategory, string> = {
+  certificate: 'Certificate',
+  protocol: 'Protocol',
+  configuration: 'Configuration',
+};
+
+const DETAIL_EXPLANATIONS: Record<string, string> = {
+  chain_trusted: 'Verifies the certificate chain terminates at a trusted root CA in the Mozilla trust store.',
+  not_expired: 'Checks that no certificate in the chain has expired or is not yet valid.',
+  hostname_match: 'Confirms the leaf certificate\'s SANs include the queried hostname.',
+  chain_complete: 'Verifies the chain is correctly ordered — each certificate\'s issuer matches the next certificate\'s subject.',
+  strong_signature: 'Checks that no certificate uses a weak signature algorithm (SHA-1 or MD5).',
+  key_strength: 'Verifies RSA keys are at least 2048 bits. ECDSA and Ed25519 keys always pass.',
+  expiry_window: 'Warns when any certificate expires within 30 days, fails within 7 days.',
+  tls_version: 'Passes for TLS 1.2 and 1.3. Older versions (TLS 1.0, 1.1, SSLv3) are insecure.',
+  forward_secrecy: 'Checks the cipher suite uses ECDHE or DHE key exchange. Static RSA key exchange does not provide forward secrecy.',
+  aead_cipher: 'Checks the cipher suite uses an AEAD mode (GCM, ChaCha20-Poly1305, CCM). CBC mode ciphers are vulnerable to padding oracle attacks.',
+  ct_logged: 'Checks for Signed Certificate Timestamps (SCTs) proving the certificate was logged in Certificate Transparency logs. Chrome requires 2+ SCTs.',
+  ocsp_stapled: 'Checks that the server staples an OCSP response so clients can verify revocation without contacting the CA.',
+  caa_compliant: 'Verifies the issuing CA is authorized by the domain\'s CAA DNS records.',
+  dane_valid: 'Checks that TLSA records in DNS match the presented certificate (requires DNSSEC).',
+  consistency: 'When multiple IPs are inspected, checks that all serve the same certificate and TLS configuration.',
+  hsts: 'HTTP Strict Transport Security tells browsers to always use HTTPS. A max-age of at least 6 months (15768000s) is recommended.',
+  https_redirect: 'Checks whether port 80 redirects HTTP requests to HTTPS on the same host.',
+};
+
+function countStatuses(checks: Record<string, CheckStatus>): Record<CheckStatus, number> {
+  const counts: Record<CheckStatus, number> = { pass: 0, warn: 0, fail: 0, skip: 0 };
+  for (const status of Object.values(checks)) counts[status]++;
+  return counts;
+}
+
+function groupByCategory(checks: HealthCheck[]): [string, HealthCheck[]][] {
+  const groups: Record<string, HealthCheck[]> = {};
+  const order: string[] = [];
+  for (const c of checks) {
+    if (!groups[c.category]) {
+      groups[c.category] = [];
+      order.push(c.category);
+    }
+    groups[c.category].push(c);
+  }
+  return order.map(cat => [cat, groups[cat]]);
+}
+
+function allQualityChecks(quality?: QualityResult, portQualities?: { port: number; quality?: PortQualityResult }[]): HealthCheck[] {
+  const checks: HealthCheck[] = [];
+  if (quality) checks.push(...quality.checks);
+  if (portQualities) {
+    for (const pq of portQualities) {
+      if (pq.quality) checks.push(...pq.quality.checks);
+    }
+  }
+  return checks;
+}
+
+function qualityCounts(quality?: QualityResult, portQualities?: { port: number; quality?: PortQualityResult }[]): Record<string, number> {
+  const counts: Record<string, number> = { pass: 0, warn: 0, fail: 0, skip: 0 };
+  for (const c of allQualityChecks(quality, portQualities)) counts[c.status]++;
+  return counts;
+}
+
+function qualityVerdict(quality?: QualityResult, portQualities?: { port: number; quality?: PortQualityResult }[]): CheckStatus {
+  const checks = allQualityChecks(quality, portQualities);
+  if (checks.some(c => c.status === 'fail')) return 'fail';
+  if (checks.some(c => c.status === 'warn')) return 'warn';
+  if (checks.length > 0) return 'pass';
+  return 'skip';
+}
+
+function CheckRow(props: { check: HealthCheck }) {
   return (
-    <div class="validation-summary">
-      <h2 class="validation-summary__title">
-        Validation: <span class={`verdict verdict--${props.summary.verdict}`}>{props.summary.verdict}</span>
-      </h2>
-      <Explain when={!!props.explain}>This is the overall health check. Green = good, orange = warning, red = problem, grey = skipped.</Explain>
+    <div class={`quality-check quality-check--${props.check.status}`} title={DETAIL_EXPLANATIONS[props.check.id]}>
+      <span class="quality-check__icon">{STATUS_ICON[props.check.status]}</span>
+      <span class="quality-check__label">{props.check.label}</span>
+      <span class="quality-check__sep">&mdash;</span>
+      <span class="quality-check__detail">{props.check.detail}</span>
+    </div>
+  );
+}
+
+function CheckGroup(props: { category: string; checks: HealthCheck[] }) {
+  return (
+    <div class="quality-group">
+      <div class="quality-group__title">{CATEGORY_LABELS[props.category as QualityCategory] ?? props.category}</div>
+      <For each={props.checks}>
+        {(check) => <CheckRow check={check} />}
+      </For>
+    </div>
+  );
+}
+
+export default function ValidationSummary(props: Props) {
+  const hasQuality = () => props.quality || props.portQualities.some(p => p.quality);
+  const [expanded, setExpanded] = createSignal(false);
+  createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
+
+  // Use quality verdict/counts when available, else fall back to summary
+  const verdict = () => hasQuality() ? qualityVerdict(props.quality, props.portQualities) : props.summary.verdict;
+  const counts = () => hasQuality() ? qualityCounts(props.quality, props.portQualities) : countStatuses(props.summary.checks);
+
+  return (
+    <div class="validation-summary" data-card>
+      <button class="dns-section__toggle" onClick={() => setExpanded(!expanded())}>
+        <span class="dns-section__toggle-left">
+          Validation
+          <span class={`badge badge--${verdict()}`}>{verdict()}</span>
+          <Show when={counts().pass > 0}>
+            <span class="quality-summary-count quality-summary-count--pass">{counts().pass} passed</span>
+          </Show>
+          <Show when={counts().warn > 0}>
+            <span class="quality-summary-count quality-summary-count--warn">{counts().warn} warning{counts().warn !== 1 ? 's' : ''}</span>
+          </Show>
+          <Show when={counts().fail > 0}>
+            <span class="quality-summary-count quality-summary-count--fail">{counts().fail} failed</span>
+          </Show>
+        </span>
+        <span class="ip-card__chevron" classList={{ 'ip-card__chevron--open': expanded() }}>
+          &#x25B8;
+        </span>
+      </button>
+
       <div class="validation-summary__checks">
         {Object.entries(props.summary.checks).map(([key, status]) => (
           <span class={`check check--${status}`} title={CHECK_EXPLANATIONS[key]}>
@@ -49,16 +168,55 @@ export default function ValidationSummary(props: Props) {
           </span>
         ))}
       </div>
-      <Explain when={!!props.explain}>
-        <dl class="check-explanations">
-          {Object.entries(props.summary.checks).map(([key]) => (
-            <>
-              <dt>{CHECK_LABELS[key] ?? key}</dt>
-              <dd>{CHECK_EXPLANATIONS[key]}</dd>
-            </>
-          ))}
-        </dl>
-      </Explain>
+
+      <Explain when={!!props.explain}>This is the overall validation summary. Green = good, orange = warning, red = problem, grey = skipped.</Explain>
+
+      <Show when={expanded()}>
+        <div class="quality-section__body">
+          {/* Hostname-scoped checks (HSTS, redirect) */}
+          <Show when={props.quality && props.quality!.checks.length > 0}>
+            <div class="quality-hostname">
+              <For each={props.quality!.checks}>
+                {(check) => <CheckRow check={check} />}
+              </For>
+            </div>
+          </Show>
+
+          {/* Per-port checks */}
+          <For each={props.portQualities}>
+            {(pq) => (
+              <Show when={pq.quality}>
+                <div class="quality-port">
+                  <Show when={props.portQualities.length > 1}>
+                    <div class="quality-port__header">
+                      <span class="quality-port__label">Port {pq.port}</span>
+                      <span class={`verdict verdict--${pq.quality!.verdict}`}>{pq.quality!.verdict}</span>
+                    </div>
+                  </Show>
+                  <For each={groupByCategory(pq.quality!.checks)}>
+                    {([cat, checks]) => <CheckGroup category={cat} checks={checks} />}
+                  </For>
+                </div>
+              </Show>
+            )}
+          </For>
+
+          <Explain when={!!props.explain}>
+            <dl class="check-explanations">
+              <For each={allQualityChecks(props.quality, props.portQualities).filter((c, i, arr) => arr.findIndex(x => x.id === c.id) === i)}>
+                {(check) => (
+                  <Show when={DETAIL_EXPLANATIONS[check.id]}>
+                    <>
+                      <dt>{check.label}</dt>
+                      <dd>{DETAIL_EXPLANATIONS[check.id]}</dd>
+                    </>
+                  </Show>
+                )}
+              </For>
+            </dl>
+          </Explain>
+        </div>
+      </Show>
     </div>
   );
 }
