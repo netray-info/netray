@@ -33,6 +33,7 @@ use crate::config::Config;
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::{self, ParsedQuery, ServerSpec, Transport};
 use crate::record_format;
+use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::security::QueryPolicy;
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,9 @@ struct DoneEvent {
     /// Providers skipped due to open circuit breakers during this query.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     degraded_providers: Vec<String>,
+    /// Cache key for retrieving this result via permalink.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_key: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -108,7 +112,7 @@ pub async fn get_handler(
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::debug!(%client_ip, %peer_addr, "query GET");
 
-    execute_query(parsed, state, client_ip, request_id.0).await
+    execute_query(parsed, state, client_ip, request_id.0, q).await
 }
 
 // ---------------------------------------------------------------------------
@@ -149,12 +153,13 @@ pub async fn post_handler(
         return Err(ApiError::AmbiguousInput);
     }
 
+    let query_display = body.domain.clone();
     let parsed = convert_post_body(body)?;
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::debug!(%client_ip, %peer_addr, "query POST");
 
-    execute_query(parsed, state, client_ip, request_id.0).await
+    execute_query(parsed, state, client_ip, request_id.0, query_display).await
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -262,6 +267,7 @@ async fn execute_query(
     state: AppState,
     client_ip: IpAddr,
     request_id: String,
+    query_string: String,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     // Validate against query policy.
     let policy = QueryPolicy::new(&state.config);
@@ -320,6 +326,7 @@ async fn execute_query(
     }
     .to_owned();
     let dnssec_requested = parsed.dnssec;
+    let result_cache = state.result_cache.clone();
 
     tokio::spawn(async move {
         // Hold stream guard for the lifetime of this task so the active stream
@@ -327,6 +334,7 @@ async fn execute_query(
         let _stream_guard = stream_guard;
         metrics::gauge!("prism_active_queries").increment(1.0);
         let start = Instant::now();
+        let mut cached_events: Vec<CachedEvent> = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
         let total = record_types.len() as u32;
         let degraded: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
@@ -445,6 +453,12 @@ async fn execute_query(
                                 completed,
                                 total,
                             };
+                            if let Ok(json_val) = serde_json::to_value(&batch) {
+                                cached_events.push(CachedEvent {
+                                    event_type: "batch".to_owned(),
+                                    data: json_val,
+                                });
+                            }
                             let event = {
                                 let mut v = serde_json::to_value(&batch)
                                     .unwrap_or(serde_json::Value::Null);
@@ -484,6 +498,9 @@ async fn execute_query(
                 "query completed"
             );
             let degraded_providers = degraded.lock().map(|d| d.clone()).unwrap_or_default();
+
+            // Cache the result and include the key in the done event.
+            let cache_key = ResultCache::generate_key();
             let done = DoneEvent {
                 request_id: rid,
                 total_queries: total,
@@ -492,7 +509,25 @@ async fn execute_query(
                 transport: transport_name,
                 dnssec: dnssec_requested,
                 degraded_providers,
+                cache_key: Some(cache_key.clone()),
             };
+            if let Ok(done_val) = serde_json::to_value(&done) {
+                cached_events.push(CachedEvent {
+                    event_type: "done".to_owned(),
+                    data: done_val,
+                });
+            }
+            result_cache
+                .insert(
+                    cache_key,
+                    CachedResult {
+                        query: query_string,
+                        mode: "query".to_owned(),
+                        events: cached_events,
+                    },
+                )
+                .await;
+
             let event = Event::default()
                 .event("done")
                 .json_data(&done)

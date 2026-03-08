@@ -74,6 +74,7 @@ export interface DoneStats {
   warnings: string[];
   transport?: string;
   dnssec?: boolean;
+  cache_key?: string;
 }
 
 type Status = 'idle' | 'loading' | 'done' | 'error';

@@ -5,6 +5,7 @@ pub mod dnssec;
 pub mod meta;
 pub mod parse;
 pub mod query;
+pub mod results;
 pub mod trace;
 
 use std::sync::Arc;
@@ -19,6 +20,7 @@ use utoipa::OpenApi;
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ErrorInfo, ErrorResponse};
+use crate::result_cache::ResultCache;
 use crate::security::{IpExtractor, RateLimitState};
 
 /// Hard cap on total SSE stream duration (SDD §8.1).
@@ -41,6 +43,7 @@ pub struct AppState {
     pub circuit_breakers: Arc<CircuitBreakerRegistry>,
     pub ip_extractor: Arc<IpExtractor>,
     pub rate_limiter: Arc<RateLimitState>,
+    pub result_cache: Arc<ResultCache>,
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +153,7 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api/trace", post(trace::post_handler))
         .route("/api/dnssec", post(dnssec::post_handler))
         .route("/api/parse", post(parse::parse_handler))
+        .route("/api/results/{key}", get(results::get_handler))
         .route("/api-docs/openapi.json", get(openapi_handler))
         .route("/docs", get(docs_handler))
         .route("/docs/", get(docs_redirect))
@@ -179,6 +183,7 @@ mod tests {
 
     use crate::circuit_breaker::CircuitBreakerRegistry;
     use crate::config::Config;
+    use crate::result_cache::ResultCache;
     use crate::security::{IpExtractor, RateLimitState};
 
     use super::{AppState, api_router, health_router};
@@ -197,6 +202,7 @@ mod tests {
                     .expect("invalid trusted_proxies configuration"),
             ),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
+            result_cache: Arc::new(ResultCache::new()),
             config: Arc::new(config),
         }
     }
@@ -498,6 +504,7 @@ mod tests {
                     .expect("invalid trusted_proxies configuration"),
             ),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
+            result_cache: Arc::new(ResultCache::new()),
             config: Arc::new(config),
         };
 

@@ -34,6 +34,7 @@ use crate::api::query::{
     record_breaker_outcomes, target_keys_from_servers,
 };
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
+use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::ParsedQuery;
@@ -85,6 +86,8 @@ struct CheckDoneEvent {
     warnings: u32,
     failed: u32,
     not_found: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_key: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -194,12 +197,15 @@ pub async fn post_handler(
 
     let rid = request_id.0;
     let circuit_breakers = state.circuit_breakers.clone();
+    let result_cache = state.result_cache.clone();
+    let query_string = domain.clone();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
         metrics::gauge!("prism_active_checks").increment(1.0);
         let start = Instant::now();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
+        let mut cached_events: Vec<CachedEvent> = Vec::new();
 
         // ------------------------------------------------------------------
         // Phase 1: DNS lookups — all 16 types in parallel (FuturesUnordered)
@@ -268,6 +274,12 @@ pub async fn post_handler(
                                 completed,
                                 total: CHECK_TOTAL_STEPS,
                             };
+                            if let Ok(json_val) = serde_json::to_value(&batch) {
+                                cached_events.push(CachedEvent {
+                                    event_type: "batch".to_owned(),
+                                    data: json_val,
+                                });
+                            }
                             let event = {
                                 let mut v = serde_json::to_value(&batch)
                                     .unwrap_or(serde_json::Value::Null);
@@ -348,6 +360,12 @@ pub async fn post_handler(
                 category,
                 results,
             };
+            if let Ok(json_val) = serde_json::to_value(&lint_event) {
+                cached_events.push(CachedEvent {
+                    event_type: "lint".to_owned(),
+                    data: json_val,
+                });
+            }
             let event = Event::default()
                 .event("lint")
                 .json_data(&lint_event)
@@ -367,6 +385,7 @@ pub async fn post_handler(
             duration_ms = elapsed.as_millis(),
             "check completed"
         );
+        let cache_key = ResultCache::generate_key();
         let done = CheckDoneEvent {
             request_id: rid,
             duration_ms: elapsed.as_millis() as u64,
@@ -375,7 +394,25 @@ pub async fn post_handler(
             warnings: lint_warnings,
             failed,
             not_found,
+            cache_key: Some(cache_key.clone()),
         };
+        if let Ok(done_val) = serde_json::to_value(&done) {
+            cached_events.push(CachedEvent {
+                event_type: "done".to_owned(),
+                data: done_val,
+            });
+        }
+        result_cache
+            .insert(
+                cache_key,
+                CachedResult {
+                    query: query_string,
+                    mode: "check".to_owned(),
+                    events: cached_events,
+                },
+            )
+            .await;
+
         let event = Event::default()
             .event("done")
             .json_data(&done)

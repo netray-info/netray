@@ -45,6 +45,9 @@ metrics-exporter-prometheus = "0.16"
 rust-embed = "8"
 mime_guess = "2"
 
+# Result caching
+moka = { version = "0.12", features = ["future"] }
+
 # Request IDs
 uuid = { version = "1", features = ["v7"] }
 

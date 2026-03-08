@@ -28,6 +28,7 @@ export interface CheckDoneStats {
   warnings: number;
   failed: number;
   not_found: number;
+  cache_key?: string;
 }
 
 // ---------------------------------------------------------------------------

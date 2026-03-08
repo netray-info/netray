@@ -45,6 +45,7 @@ export interface TraceDoneStats {
   request_id: string;
   duration_ms: number;
   hops: number;
+  cache_key?: string;
 }
 
 // ---------------------------------------------------------------------------

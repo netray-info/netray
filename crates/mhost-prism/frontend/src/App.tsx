@@ -218,6 +218,10 @@ export default function App() {
   const [dnssecLevels, setDnssecLevels] = createSignal<ChainLevel[]>([]);
   const [dnssecDoneStats, setDnssecDoneStats] = createSignal<DnssecDoneStats | null>(null);
 
+  // Permalink state
+  const [cacheKey, setCacheKey] = createSignal<string | null>(null);
+  const [shareMessage, setShareMessage] = createSignal<string | null>(null);
+
   let eventSource: EventSource | null = null;
   let checkAbortController: AbortController | null = null;
   let traceAbortController: AbortController | null = null;
@@ -346,11 +350,103 @@ export default function App() {
     setLintCategories([]);
     setCheckStats(null);
     setCompletedTypes([]);
+    setCacheKey(null);
+    setShareMessage(null);
     clearEditor?.();
     focusEditor?.();
     const url = new URL(window.location.href);
     url.searchParams.delete('q');
+    url.searchParams.delete('r');
     window.history.replaceState(null, '', url.toString());
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shareable permalinks
+  // ---------------------------------------------------------------------------
+
+  function copyShareLink() {
+    const key = cacheKey();
+    if (!key) return;
+    const url = `${window.location.origin}/?r=${key}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setShareMessage('Copied!');
+      setTimeout(() => setShareMessage(null), 2000);
+    }).catch(() => {
+      setShareMessage('Copy failed');
+      setTimeout(() => setShareMessage(null), 2000);
+    });
+  }
+
+  async function loadCachedResult(key: string) {
+    setStatus('loading');
+    setCacheKey(key);
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/results/${encodeURIComponent(key)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Network error');
+      setStatus('error');
+      return;
+    }
+
+    if (!response.ok) {
+      setError(response.status === 404 ? 'Shared result not found or expired' : `HTTP ${response.status}`);
+      setStatus('error');
+      return;
+    }
+
+    const cached = await response.json() as {
+      query: string;
+      mode: string;
+      events: Array<{ event_type: string; data: unknown }>;
+    };
+
+    // Populate the query input.
+    setQuery(cached.query);
+    setEditorValue?.(cached.query);
+
+    // Set mode flags based on cached mode.
+    if (cached.mode === 'check') {
+      setIsCheckMode(true);
+      setActiveTab('lint');
+    } else if (cached.mode === 'trace') {
+      setIsTraceMode(true);
+      setActiveTab('trace');
+    } else {
+      setActiveTab('results');
+    }
+
+    // Replay events to populate UI state.
+    for (const ev of cached.events) {
+      if (ev.event_type === 'batch') {
+        try {
+          const batch = parseBatchEvent(ev.data as Parameters<typeof parseBatchEvent>[0]);
+          setResults((prev) => [...prev, batch]);
+        } catch { /* skip malformed */ }
+      } else if (ev.event_type === 'lint') {
+        try {
+          const lint = ev.data as { category: string; results: LintCategory['results'] };
+          setLintCategories((prev) => [...prev, { category: lint.category, results: lint.results }]);
+        } catch { /* skip */ }
+      } else if (ev.event_type === 'hop') {
+        try {
+          const hop = ev.data as { request_id: string; hop: TraceHop };
+          setTraceHops((prev) => [...prev, hop.hop]);
+        } catch { /* skip */ }
+      } else if (ev.event_type === 'done') {
+        const done = ev.data as Record<string, unknown>;
+        if (cached.mode === 'check') {
+          setCheckStats(done as unknown as CheckDoneStats);
+        } else if (cached.mode === 'trace') {
+          setTraceDoneStats(done as unknown as TraceDoneStats);
+        } else {
+          setStats(done as unknown as DoneStats);
+        }
+      }
+    }
+
+    setStatus('done');
   }
 
   // ---------------------------------------------------------------------------
@@ -414,6 +510,7 @@ export default function App() {
     setIsTraceMode(wantTrace);
     setIsCheckMode(wantCheck);
     setIsDnssecMode(wantDnssec);
+    setCacheKey(null);
     setStatus('loading');
     // Pick the first active tab: dnssec > trace > lint
     setActiveTab(wantDnssec ? 'dnssec' : wantTrace ? 'trace' : 'lint');
@@ -484,6 +581,7 @@ export default function App() {
           } else if (eventType === 'done') {
             const checkDone = data as CheckDoneStats;
             setCheckStats(checkDone);
+            if (checkDone.cache_key) setCacheKey(checkDone.cache_key);
             // Populate query-level stats so the Results tab summary works.
             setStats({
               total_queries: checkDone.total_checks,
@@ -532,7 +630,9 @@ export default function App() {
               setTraceHops((prev) => [...prev, ev.hop]);
             } catch (e) { console.error('Failed to parse hop event:', e); }
           } else if (eventType === 'done') {
-            setTraceDoneStats(data as TraceDoneStats);
+            const done = data as TraceDoneStats;
+            setTraceDoneStats(done);
+            if (done.cache_key) setCacheKey(done.cache_key);
             onStreamDone();
           } else if (eventType === 'error') {
             const ev = data as { message?: string; code?: string };
@@ -616,6 +716,7 @@ export default function App() {
     setDnssecDoneStats(null);
     setLintCategories([]);
     setCheckStats(null);
+    setCacheKey(null);
     setStatus('loading');
     setActiveTab('results');
     addToHistory(q);
@@ -653,6 +754,7 @@ export default function App() {
       try {
         const doneData: DoneStats = JSON.parse(event.data);
         setStats(doneData);
+        if (doneData.cache_key) setCacheKey(doneData.cache_key);
       } catch (e) {
         console.error('Failed to parse done event:', e);
       }
@@ -749,8 +851,13 @@ export default function App() {
     mediaQuery.addEventListener('change', onSystemThemeChange);
 
     const params = new URLSearchParams(window.location.search);
-    const q = params.get('q');
-    if (q) submitQuery(q);
+    const r = params.get('r');
+    if (r) {
+      loadCachedResult(r);
+    } else {
+      const q = params.get('q');
+      if (q) submitQuery(q);
+    }
 
     document.addEventListener('keydown', handleKeyDown);
   });
@@ -1032,6 +1139,17 @@ export default function App() {
                   JSON
                 </button>
               </div>
+            </Show>
+
+            {/* Share button */}
+            <Show when={status() === 'done' && cacheKey()}>
+              <button
+                class="share-btn"
+                onClick={copyShareLink}
+                title="Copy shareable permalink to clipboard"
+              >
+                {shareMessage() ?? 'Share'}
+              </button>
             </Show>
           </div>
         </Show>

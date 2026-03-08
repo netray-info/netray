@@ -16,6 +16,7 @@ mod dns_trace;
 mod error;
 mod parser;
 mod record_format;
+mod result_cache;
 mod security;
 
 // ---------------------------------------------------------------------------
@@ -70,6 +71,7 @@ async fn main() {
                 .expect("invalid trusted_proxies configuration"),
         ),
         rate_limiter: Arc::new(security::RateLimitState::new(&config.limits)),
+        result_cache: Arc::new(result_cache::ResultCache::new()),
         config: Arc::new(config.clone()),
     };
 

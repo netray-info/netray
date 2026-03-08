@@ -24,6 +24,7 @@ use crate::api::query::make_error_event;
 use crate::api::{AppState, STREAM_TIMEOUT_SECS};
 use crate::dns_trace;
 use crate::error::{ApiError, ErrorResponse};
+use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 
 // Cost charged against per-IP and global rate limiters per trace request.
 // Trace queries root/TLD/auth servers (public infrastructure), so we skip
@@ -45,6 +46,8 @@ struct TraceDoneEvent {
     request_id: String,
     duration_ms: u64,
     hops: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cache_key: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -147,11 +150,14 @@ pub async fn post_handler(
 
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
     let rid = request_id.0;
+    let result_cache = state.result_cache.clone();
+    let query_string = domain.clone();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
         metrics::gauge!("prism_active_traces").increment(1.0);
         let start = Instant::now();
+        let mut cached_events: Vec<CachedEvent> = Vec::new();
 
         let hops = match tokio::time::timeout(
             Duration::from_secs(STREAM_TIMEOUT_SECS),
@@ -178,6 +184,12 @@ pub async fn post_handler(
                 request_id: rid.clone(),
                 hop,
             };
+            if let Ok(json_val) = serde_json::to_value(&event_payload) {
+                cached_events.push(CachedEvent {
+                    event_type: "hop".to_owned(),
+                    data: json_val,
+                });
+            }
             let event = Event::default()
                 .event("hop")
                 .json_data(&event_payload)
@@ -195,11 +207,30 @@ pub async fn post_handler(
             duration_ms = elapsed.as_millis(),
             "trace completed"
         );
+        let cache_key = ResultCache::generate_key();
         let done = TraceDoneEvent {
             request_id: rid,
             duration_ms: elapsed.as_millis() as u64,
             hops: hop_count,
+            cache_key: Some(cache_key.clone()),
         };
+        if let Ok(done_val) = serde_json::to_value(&done) {
+            cached_events.push(CachedEvent {
+                event_type: "done".to_owned(),
+                data: done_val,
+            });
+        }
+        result_cache
+            .insert(
+                cache_key,
+                CachedResult {
+                    query: query_string,
+                    mode: "trace".to_owned(),
+                    events: cached_events,
+                },
+            )
+            .await;
+
         let event = Event::default()
             .event("done")
             .json_data(&done)
