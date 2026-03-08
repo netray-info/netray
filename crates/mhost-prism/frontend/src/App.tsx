@@ -279,6 +279,7 @@ export default function App() {
 
   function fillQuery(q: string) {
     setEditorValue?.(q);
+    submitCombined(q);
   }
 
   // ---------------------------------------------------------------------------
@@ -1244,11 +1245,10 @@ export default function App() {
                 <button
                   class="welcome-example"
                   onClick={() => fillQuery('example.com A AAAA @cloudflare @google')}
-                  title="Click to fill query"
+                  title="Click to run"
                 >
                   example.com A AAAA @cloudflare @google
                 </button>
-                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
               <div class="welcome-card">
                 <div class="welcome-card-title">Check</div>
@@ -1258,11 +1258,10 @@ export default function App() {
                 <button
                   class="welcome-example"
                   onClick={() => fillQuery('example.com +check')}
-                  title="Click to fill query"
+                  title="Click to run"
                 >
                   example.com +check
                 </button>
-                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
               <div class="welcome-card">
                 <div class="welcome-card-title">Trace</div>
@@ -1272,11 +1271,10 @@ export default function App() {
                 <button
                   class="welcome-example"
                   onClick={() => fillQuery('example.com A +trace')}
-                  title="Click to fill query"
+                  title="Click to run"
                 >
                   example.com A +trace
                 </button>
-                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
               <div class="welcome-card">
                 <div class="welcome-card-title">DNSSEC</div>
@@ -1286,18 +1284,17 @@ export default function App() {
                 <button
                   class="welcome-example"
                   onClick={() => fillQuery('dnssec-deployment.org +dnssec')}
-                  title="Click to fill query"
+                  title="Click to run"
                 >
                   dnssec-deployment.org +dnssec
                 </button>
                 <button
                   class="welcome-example"
                   onClick={() => fillQuery('dnssec-failed.org +dnssec')}
-                  title="Click to fill query"
+                  title="Click to run"
                 >
                   dnssec-failed.org +dnssec
                 </button>
-                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
               <div class="welcome-card">
                 <div class="welcome-card-title">Compare</div>
@@ -1307,11 +1304,10 @@ export default function App() {
                 <button
                   class="welcome-example"
                   onClick={() => fillQuery('example.com A +compare')}
-                  title="Click to fill query"
+                  title="Click to run"
                 >
                   example.com A +compare
                 </button>
-                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
               <div class="welcome-card">
                 <div class="welcome-card-title">Auth</div>
@@ -1321,11 +1317,10 @@ export default function App() {
                 <button
                   class="welcome-example"
                   onClick={() => fillQuery('example.com A +auth')}
-                  title="Click to fill query"
+                  title="Click to run"
                 >
                   example.com A +auth
                 </button>
-                <span class="example-hint">fills the query bar — press Enter to run</span>
               </div>
             </div>
           </div>

@@ -2311,13 +2311,6 @@ body {
   border-color: rgba(0, 119, 204, 0.4);
 }
 
-.example-hint {
-  display: block;
-  margin-top: 5px;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
 @media (max-width: 768px) {
   .welcome {
     padding: 20px 0 32px;
