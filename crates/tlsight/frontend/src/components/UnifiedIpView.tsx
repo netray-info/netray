@@ -55,7 +55,7 @@ export default function UnifiedIpView(props: Props) {
           </Show>
         </div>
         <div class="unified-ip__header-right">
-          <span class="unified-ip__consistent-badge">* consistent</span>
+          <span class="unified-ip__consistent-badge">{'\u2713'} consistent</span>
         </div>
       </div>
       <Explain when={!!props.explain}>All resolved IP addresses serve the same certificate and TLS configuration. This is the expected state for a correctly configured multi-server deployment.</Explain>
