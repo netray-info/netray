@@ -1,0 +1,11 @@
+# Development configuration — relaxed limits for local testing.
+
+[server]
+bind = "127.0.0.1:8080"
+metrics_bind = "127.0.0.1:9090"
+
+[limits]
+per_ip_per_minute = 600
+per_ip_burst = 100
+per_target_per_minute = 600
+per_target_burst = 100

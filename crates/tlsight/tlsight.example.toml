@@ -1,0 +1,35 @@
+# tlsight configuration
+# See docs/sdd.md for full documentation.
+
+[server]
+bind = "127.0.0.1:8080"
+metrics_bind = "127.0.0.1:9090"
+# trusted_proxies = ["10.0.0.1"]
+
+[limits]
+per_ip_per_minute = 30
+per_ip_burst = 10
+per_target_per_minute = 60
+per_target_burst = 20
+max_concurrent_connections = 256
+max_concurrent_handshakes = 10
+max_ports = 5
+max_ips_per_hostname = 10
+handshake_timeout_secs = 5
+request_timeout_secs = 15
+
+[dns]
+resolver = "cloudflare"
+timeout_secs = 3
+
+[validation]
+expiry_warning_days = 30
+expiry_critical_days = 14
+check_dane = true
+check_caa = true
+check_ct = false
+# custom_ca_dir = "/etc/tlsight/ca.d/"
+
+[ecosystem]
+dns_url = "https://dns.pdt.sh"
+ip_url = "https://ip.pdt.sh"

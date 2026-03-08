@@ -73,28 +73,40 @@ Decisions made during project setup, supplementing the SDD:
 
 ## Build & Test
 
-Use `make` targets for all build and test operations.
+**Always use `make` targets** — never run raw `cargo`, `npm`, or `npx` commands directly.
 
 ```sh
 # Prerequisites: Node.js (for frontend), Rust toolchain
 
+make help                             # list all targets with descriptions
+
 # Full production build (frontend + backend)
 make                                  # or: make all
+make run                              # build + run release binary
 
-# Individual targets
+# Rust
 make check                            # cargo check (fast compile check)
-make test                             # cargo test
+make test-rust                        # cargo test
 make clippy                           # cargo clippy -- -D warnings
 make fmt                              # cargo fmt
 make fmt-check                        # cargo fmt -- --check
+
+# Frontend
+make frontend-install                 # npm ci (deps only, no build)
+make frontend                         # npm ci + npm run build
+make frontend-test                    # npm ci + vitest run
+
+# Combined
+make test                             # test-rust + test-frontend
 make lint                             # clippy + fmt-check
-make frontend                         # cd frontend && npm ci && npm run build
-make clean                            # remove target/ + frontend/dist/ + node_modules/
-make ci                               # lint + test + frontend (CI pipeline; also use before pushing)
+make ci                               # lint + test + frontend (run before pushing)
 
 # Development (two terminals)
 make frontend-dev                     # Vite dev server :5173 (proxies /api/* to :8080)
-make dev                              # cargo run (axum server :8080)
+make dev                              # cargo run with tlsight.dev.toml
+
+# Cleanup
+make clean                            # remove target/ + frontend/dist/ + node_modules/
 ```
 
 ### Test Guidelines
