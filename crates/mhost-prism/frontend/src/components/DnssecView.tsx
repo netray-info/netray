@@ -42,7 +42,7 @@ function severityIcon(severity: string): string {
   switch (severity) {
     case 'ok':      return '\u2713'; // checkmark
     case 'warning': return '\u26A0'; // warning
-    case 'failed':  return '\u2717'; // cross
+    case 'failed':  return '\u2718'; // heavy ballot x
     default:        return '?';
   }
 }
@@ -263,6 +263,18 @@ export function DnssecView(props: DnssecViewProps) {
     document.removeEventListener('keydown', handleKeyDown);
   });
 
+  const issueCounts = () => {
+    let warnings = 0;
+    let errors = 0;
+    for (const level of props.levels) {
+      for (const f of level.findings) {
+        if (f.severity === 'warning') warnings++;
+        else if (f.severity === 'failed') errors++;
+      }
+    }
+    return { warnings, errors };
+  };
+
   return (
     <div class="dnssec-view" ref={containerRef}>
       <Show when={props.doneStats}>
@@ -271,6 +283,14 @@ export function DnssecView(props: DnssecViewProps) {
             <span class="dnssec-summary-item">{stats().levels} level{stats().levels !== 1 ? 's' : ''}</span>
             <span class="dnssec-summary-sep">/</span>
             <span class="dnssec-summary-item">{stats().duration_ms}ms</span>
+            <Show when={issueCounts().errors > 0}>
+              <span class="dnssec-summary-sep">/</span>
+              <span class="dnssec-summary-item dnssec-summary--error">✘ {issueCounts().errors} error{issueCounts().errors !== 1 ? 's' : ''}</span>
+            </Show>
+            <Show when={issueCounts().warnings > 0}>
+              <span class="dnssec-summary-sep">/</span>
+              <span class="dnssec-summary-item dnssec-summary--warning">⚠ {issueCounts().warnings} warning{issueCounts().warnings !== 1 ? 's' : ''}</span>
+            </Show>
           </div>
         )}
       </Show>

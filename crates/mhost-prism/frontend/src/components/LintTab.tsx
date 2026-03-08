@@ -69,7 +69,7 @@ function worstStatus(results: CheckResult[]): CardStatus {
 
 function statusIcon(s: CardStatus): string {
   switch (s) {
-    case 'failed':    return '✗';
+    case 'failed':    return '✘';
     case 'warning':   return '⚠';
     case 'ok':        return '✓';
     case 'not_found': return '—';
@@ -217,7 +217,7 @@ export function LintTab(props: LintTabProps) {
             <Show when={stats().failed > 0}>
               <span class="lint-summary-sep">/</span>
               <span class="lint-summary-item lint-summary-failed">
-                ✗ {stats().failed} failed
+                ✘ {stats().failed} failed
               </span>
             </Show>
             <span class="lint-summary-sep">/</span>

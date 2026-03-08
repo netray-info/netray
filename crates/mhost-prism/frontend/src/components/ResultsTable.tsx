@@ -231,7 +231,7 @@ function formatLookupError(result: LookupResult): string {
 }
 
 /** Return the *_explain educational text for a record, or null if none. */
-function getExplanation(rtype: string, data: Record<string, unknown>): string | null {
+export function getExplanation(rtype: string, data: Record<string, unknown>): string | null {
   const keys = Object.keys(data);
   if (keys.length === 0) return null;
   const value = data[keys[0]];
@@ -834,7 +834,7 @@ export function ResultsTable(props: ResultsTableProps) {
       </Show>
 
       <Show when={props.activeTab === 'servers'}>
-        <ServerComparison results={props.results} activeTab={props.activeTab} />
+        <ServerComparison results={props.results} activeTab={props.activeTab} explain={props.explain} sort={props.sort} devOnly={props.devOnly} />
       </Show>
 
     </div>

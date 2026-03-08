@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from 'solid-js';
 import type { BatchEvent, Lookup, LookupResult } from './ResultsTable';
-import { responseTimeMs, responseTimeColor, formatRecordData } from './ResultsTable';
+import { responseTimeMs, responseTimeColor, formatRecordData, getExplanation } from './ResultsTable';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -9,6 +9,9 @@ import { responseTimeMs, responseTimeColor, formatRecordData } from './ResultsTa
 interface ServerComparisonProps {
   results: BatchEvent[];
   activeTab: string;
+  explain: boolean;
+  sort: boolean;
+  devOnly: boolean;
 }
 
 interface ServerGroup {
@@ -115,6 +118,14 @@ function typeColorVar(recordType: string): string {
   return 'var(--rt-default)';
 }
 
+/** Sort tier: divergences first (0), then normal records (1), then all-NXDOMAIN (2). */
+function comparisonTier(c: RecordTypeComparison): number {
+  if (!c.allAgree) return 0;
+  const allNx = c.servers.every((s) => s.lookups.every((l) => isNxDomain(l.result)));
+  if (allNx) return 2;
+  return 1;
+}
+
 // ---------------------------------------------------------------------------
 // Build comparison data
 // ---------------------------------------------------------------------------
@@ -165,7 +176,7 @@ function buildComparisons(batches: BatchEvent[]): RecordTypeComparison[] {
 // Components
 // ---------------------------------------------------------------------------
 
-function ServerColumn(props: { server: ServerGroup; maxMs: number }) {
+function ServerColumn(props: { server: ServerGroup; maxMs: number; recordType: string; explain: boolean }) {
   return (
     <div class="sc-server-column">
       <div class="sc-server-name">{props.server.serverName}</div>
@@ -200,9 +211,17 @@ function ServerColumn(props: { server: ServerGroup; maxMs: number }) {
               <Show when={isResponse(lookup.result)}>
                 <div class="sc-records">
                   <For each={(lookup.result as { Response: { records: Array<{ data: Record<string, unknown> }> } }).Response.records}>
-                    {(record) => (
-                      <div class="sc-record-value">{formatRecordData(record.data)}</div>
-                    )}
+                    {(record) => {
+                      const explanation = () => props.explain ? getExplanation(props.recordType, record.data) : null;
+                      return (
+                        <div class="sc-record-value">
+                          {formatRecordData(record.data)}
+                          <Show when={explanation()}>
+                            <div class="record-explanation">{explanation()}</div>
+                          </Show>
+                        </div>
+                      );
+                    }}
                   </For>
                 </div>
               </Show>
@@ -226,7 +245,7 @@ function ServerColumn(props: { server: ServerGroup; maxMs: number }) {
   );
 }
 
-function ComparisonRow(props: { comparison: RecordTypeComparison; index: number; isFocused: boolean }) {
+function ComparisonRow(props: { comparison: RecordTypeComparison; index: number; isFocused: boolean; explain: boolean }) {
   const maxMs = createMemo(() => {
     let max = 0;
     for (const server of props.comparison.servers) {
@@ -253,7 +272,7 @@ function ComparisonRow(props: { comparison: RecordTypeComparison; index: number;
       </div>
       <div class="sc-server-grid" style={{ 'grid-template-columns': `repeat(${props.comparison.servers.length}, 1fr)` }}>
         <For each={props.comparison.servers}>
-          {(server) => <ServerColumn server={server} maxMs={maxMs()} />}
+          {(server) => <ServerColumn server={server} maxMs={maxMs()} recordType={props.comparison.recordType} explain={props.explain} />}
         </For>
       </div>
     </div>
@@ -265,7 +284,19 @@ function ComparisonRow(props: { comparison: RecordTypeComparison; index: number;
 // ---------------------------------------------------------------------------
 
 export function ServerComparison(props: ServerComparisonProps) {
-  const comparisons = createMemo(() => buildComparisons(props.results));
+  const comparisons = createMemo(() => {
+    let comps = buildComparisons(props.results);
+    if (props.devOnly) comps = comps.filter((c) => !c.allAgree);
+    if (props.sort) {
+      comps = [...comps].sort((a, b) => {
+        const ta = comparisonTier(a);
+        const tb = comparisonTier(b);
+        if (ta !== tb) return ta - tb;
+        return a.recordType.localeCompare(b.recordType);
+      });
+    }
+    return comps;
+  });
   const [focusedIndex, setFocusedIndex] = createSignal<number | null>(null);
   let containerRef: HTMLDivElement | undefined;
 
@@ -343,7 +374,7 @@ export function ServerComparison(props: ServerComparisonProps) {
         }
       >
         <For each={comparisons()}>
-          {(comp, i) => <ComparisonRow comparison={comp} index={i()} isFocused={focusedIndex() === i()} />}
+          {(comp, i) => <ComparisonRow comparison={comp} index={i()} isFocused={focusedIndex() === i()} explain={props.explain} />}
         </For>
       </Show>
     </div>

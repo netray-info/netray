@@ -1,5 +1,5 @@
-import { onMount, onCleanup, createSignal, Show } from 'solid-js';
-import { EditorView, keymap, placeholder as cmPlaceholder, ViewPlugin, Decoration, type DecorationSet, type ViewUpdate } from '@codemirror/view';
+import { onMount, onCleanup, Show } from 'solid-js';
+import { EditorView, keymap, placeholder as cmPlaceholder, ViewPlugin, Decoration, type DecorationSet } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { acceptCompletion, autocompletion, startCompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { tokenize, TokenType } from '../lib/tokenizer';
@@ -272,9 +272,6 @@ export function QueryInput(props: QueryInputProps) {
   let view: EditorView | undefined;
   let historyIndex = -1;
   let savedInput = '';
-  const [hasContent, setHasContent] = createSignal(
-    (props.initialValue ?? '').trim().length > 0,
-  );
 
   onMount(() => {
     if (!containerRef) return;
@@ -345,12 +342,6 @@ export function QueryInput(props: QueryInputProps) {
       },
     ]);
 
-    const contentTracker = EditorView.updateListener.of((update: ViewUpdate) => {
-      if (update.docChanged) {
-        setHasContent(update.state.doc.length > 0);
-      }
-    });
-
     const state = EditorState.create({
       doc: props.initialValue ?? '',
       extensions: [
@@ -366,7 +357,6 @@ export function QueryInput(props: QueryInputProps) {
         historyKeymap,
         singleLine,
         EditorView.lineWrapping,
-        contentTracker,
       ],
     });
 
@@ -411,7 +401,7 @@ export function QueryInput(props: QueryInputProps) {
     <div class="query-bar">
       <div class="query-editor-wrap">
         <div class="query-editor" ref={containerRef} />
-        <Show when={hasContent() && props.onReset}>
+        <Show when={props.onReset}>
           <button
             class="query-clear-btn"
             onClick={props.onReset}

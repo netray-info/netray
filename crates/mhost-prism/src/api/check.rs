@@ -34,11 +34,11 @@ use crate::api::query::{
     record_breaker_outcomes, target_keys_from_servers,
 };
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
-use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::ParsedQuery;
 use crate::record_format;
+use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::security::QueryPolicy;
 
 // ---------------------------------------------------------------------------

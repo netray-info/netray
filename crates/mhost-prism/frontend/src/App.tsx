@@ -470,7 +470,9 @@ export default function App() {
 
     es.addEventListener('done', (event) => {
       try {
-        setStats(JSON.parse(event.data) as DoneStats);
+        const done = JSON.parse(event.data) as DoneStats;
+        setStats(done);
+        if (done.cache_key) setCacheKey(done.cache_key);
       } catch (e) {
         console.error('Failed to parse done event:', e);
       }
@@ -675,7 +677,9 @@ export default function App() {
               setDnssecLevels((prev) => [...prev, ev.level]);
             } catch (e) { console.error('Failed to parse chain event:', e); }
           } else if (eventType === 'done') {
-            setDnssecDoneStats(data as DnssecDoneStats);
+            const done = data as DnssecDoneStats & { cache_key?: string };
+            setDnssecDoneStats(done);
+            if (done.cache_key) setCacheKey(done.cache_key);
             onStreamDone();
           } else if (eventType === 'error') {
             const ev = data as { message?: string; code?: string };
@@ -888,13 +892,34 @@ export default function App() {
     return { agree, diverge };
   };
 
-  // Lint tab badge text: show worst status count when done.
-  function lintTabBadge(): string {
+  // Lint tab badge: show worst status count when done.
+  function lintTabBadge() {
     const s = checkStats();
-    if (!s) return '';
-    if (s.failed > 0)   return ` ✗${s.failed}`;
-    if (s.warnings > 0) return ` ⚠${s.warnings}`;
-    return ' ✓';
+    if (!s) return null;
+    if (s.failed > 0)   return <> <span class="tab-badge">{'\u2718'}{s.failed}</span></>;
+    if (s.warnings > 0) return <> <span class="tab-badge">{'\u26A0'}{s.warnings}</span></>;
+    return <> <span class="tab-badge">{'\u2713'}</span></>;
+  }
+
+  // DNSSEC tab badge + issue counts from chain findings.
+  function dnssecIssueCounts(): { warnings: number; errors: number } {
+    let warnings = 0;
+    let errors = 0;
+    for (const level of dnssecLevels()) {
+      for (const f of level.findings) {
+        if (f.severity === 'warning') warnings++;
+        else if (f.severity === 'failed') errors++;
+      }
+    }
+    return { warnings, errors };
+  }
+
+  function dnssecTabBadge() {
+    if (!dnssecDoneStats()) return null;
+    const { warnings, errors } = dnssecIssueCounts();
+    if (errors > 0)   return <> <span class="tab-badge">{'\u2718'}{errors}</span></>;
+    if (warnings > 0) return <> <span class="tab-badge">{'\u26A0'}{warnings}</span></>;
+    return <> <span class="tab-badge">{'\u2713'}</span></>;
   }
 
   // ---------------------------------------------------------------------------
@@ -935,7 +960,7 @@ export default function App() {
           initialValue={query()}
           history={history()}
           disabled={status() === 'loading'}
-          onReset={hasContent() ? resetAll : undefined}
+          onReset={status() !== 'idle' ? resetAll : undefined}
           onReady={(api) => { focusEditor = api.focus; clearEditor = api.clear; setEditorValue = api.setValue; }}
           shareLabel={status() === 'done' && cacheKey() ? (shareMessage() ?? 'Share') : undefined}
           onShare={copyShareLink}
@@ -1020,7 +1045,7 @@ export default function App() {
           <div class="tabs">
             <div class="tabs-left" role="tablist">
               <Show when={isDnssecMode()}>
-                <button role="tab" aria-selected={activeTab() === 'dnssec'} class={`tab${activeTab() === 'dnssec' ? ' active' : ''}`} onClick={() => setActiveTab('dnssec')}>DNSSEC</button>
+                <button role="tab" aria-selected={activeTab() === 'dnssec'} class={`tab${activeTab() === 'dnssec' ? ' active' : ''}${dnssecIssueCounts().errors ? ' tab--failed' : dnssecIssueCounts().warnings ? ' tab--warning' : ''}`} onClick={() => setActiveTab('dnssec')}>DNSSEC{dnssecTabBadge()}</button>
               </Show>
               <Show when={isTraceMode()}>
                 <button role="tab" aria-selected={activeTab() === 'trace'} class={`tab${activeTab() === 'trace' ? ' active' : ''}`} onClick={() => setActiveTab('trace')}>Trace</button>
@@ -1097,17 +1122,25 @@ export default function App() {
             </div>
           </Show>
 
-          {/* Row 3: View options — results tab only */}
+          {/* Row 3: View options — results tab */}
           <Show when={activeTab() === 'results' && results().length > 0}>
             <div class="view-options">
               <button class={`view-btn${hideNx() ? ' active' : ''}`} onClick={toggleHideNx} title="Hide groups where all servers returned NXDOMAIN">hide NX</button>
               <button class={`view-btn${compact() ? ' active' : ''}`} onClick={toggleCompact} title="Collapse groups where all servers agree">compact</button>
               <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only groups where servers diverge">deviations</button>
               <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: deviations first, then records, then NXDOMAIN">sort</button>
-              <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields in expanded rows">explain</button>
+              <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields">explain</button>
               <span class="view-options-spacer" />
               <button class="view-btn" onClick={() => setExpandAllTrigger((n) => n + 1)} title="Expand all record rows">expand all</button>
               <button class="view-btn" onClick={() => setCollapseAllTrigger((n) => n + 1)} title="Collapse all record rows">collapse all</button>
+            </div>
+          </Show>
+          {/* Row 3: View options — servers tab */}
+          <Show when={activeTab() === 'servers' && results().length > 0}>
+            <div class="view-options">
+              <button class={`view-btn${devOnly() ? ' active' : ''}`} onClick={toggleDevOnly} title="Show only groups where servers diverge">deviations</button>
+              <button class={`view-btn${sortView() ? ' active' : ''}`} onClick={toggleSort} title="Sort: deviations first">sort</button>
+              <button class={`view-btn${explain() ? ' active' : ''}`} onClick={toggleExplain} title="Show explanations for record fields">explain</button>
             </div>
           </Show>
         </Show>
