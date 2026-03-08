@@ -1,7 +1,7 @@
 # Software Design Document: `tlsight`
 
 **Feature**: Web-based TLS certificate inspection and diagnostics service
-**Status**: Phase 3 Complete
+**Status**: Phase 3 Complete, Phase 4 In Progress
 **Date**: 2026-03-08
 
 ---
@@ -1349,14 +1349,19 @@ Socket options:
 
 ### Phase 3 — Polish (complete)
 
-- [x] Multi-port scanning (up to 5 ports per request, concurrent via JoinSet)
-- [x] Port presets in frontend (HTTPS, Email, All common)
+- [x] Multi-port scanning (up to 7 ports per request, concurrent via JoinSet)
+- [x] Port presets in frontend (HTTPS, E-Mail, All Common)
 - [x] POST endpoint for programmatic clients (JSON body with hostname, ports, options)
-- [x] Keyboard shortcuts (/ and Ctrl+L to focus, Escape to blur)
+- [x] Keyboard shortcuts (/ and Ctrl+L to focus, Escape to blur, j/k card nav, Enter expand/collapse)
 - [x] Query history (localStorage, max 20 entries)
 - [x] Mobile-responsive layout (320px minimum, scrollable tables)
 - [x] Certificate Transparency: embedded SCT extraction from leaf cert (no external API)
 - [x] Export results (JSON download, copy as markdown)
+- [x] Unified IP view when all IPs are consistent (single card instead of N identical cards)
+- [x] Collapsible TLS Parameters and CAA Records sections (collapsed by default)
+- [x] Human-readable CAA record display (parsed tag/value, sorted)
+- [x] CN extraction from certificate DN for display (handles EV certs)
+- [x] Input clear resets results and shows welcome cards
 
 ### Phase 4 — Advanced
 

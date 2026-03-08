@@ -235,7 +235,7 @@ When modifying API endpoints or adding features, verify:
 
 - [ ] Target IP validation enforced (no RFC 1918, localhost, link-local, CGNAT, multicast)
 - [ ] DNS rebinding mitigated (resolved IP checked before connect, no re-resolution)
-- [ ] Port limits respected (max 5 per request, 1-65535)
+- [ ] Port limits respected (max 7 per request, 1-65535)
 - [ ] IP-per-hostname limit respected (max 10)
 - [ ] Timeouts enforced (5s per-handshake, 15s per-request)
 - [ ] Rate limiting applied with correct cost calculation (ports * inspected_ips)
