@@ -32,7 +32,7 @@ use crate::api::query::{
     extract_ips_from_cached_events, make_error_event, record_breaker_outcomes,
     send_enrichment_event, target_keys_from_servers,
 };
-use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
+use crate::api::{AppState, STREAM_TIMEOUT_SECS};
 use crate::dns_raw;
 use crate::error::{ApiError, ErrorResponse};
 use crate::record_format;
@@ -256,7 +256,7 @@ pub async fn post_handler(
 
         let mut timed_out = false;
 
-        type BranchResult = Vec<(mhost::RecordType, mhost::resolver::Lookups, &'static str)>;
+        type BranchResult = Vec<(mhost::RecordType, serde_json::Value, &'static str)>;
         let futs: FuturesUnordered<
             std::pin::Pin<Box<dyn std::future::Future<Output = BranchResult> + Send>>,
         > = FuturesUnordered::new();
@@ -288,7 +288,7 @@ pub async fn post_handler(
                                             &e.to_string(),
                                         )))
                                         .await;
-                                    return (rt, mhost::resolver::Lookups::empty(), "recursive");
+                                    return (rt, serde_json::json!({"lookups": []}), "recursive");
                                 }
                             };
 
@@ -324,7 +324,9 @@ pub async fn post_handler(
                                     }
                                 }
                             }
-                            (rt, merged, "recursive")
+                            let lookups_json = serde_json::to_value(&merged)
+                                .unwrap_or(serde_json::json!({"lookups": []}));
+                            (rt, lookups_json, "recursive")
                         }
                     })
                     .collect();
@@ -373,7 +375,8 @@ pub async fn post_handler(
                                             .collect();
 
                                         // Build a synthetic lookup result.
-                                        let ns_name = format!("{}", qr.server.ip());
+                                        let ns_name =
+                                            format!("udp:{}:{}", qr.server.ip(), qr.server.port());
                                         let result = if raw_resp.response_code()
                                             == hickory_proto::op::ResponseCode::NXDomain
                                         {
@@ -394,8 +397,8 @@ pub async fn post_handler(
                                                             r.record_type.clone(): r.rdata.clone()
                                                         },
                                                         "name": r.name,
-                                                        "ttl": r.ttl,
-                                                        "record_type": r.record_type
+                                                        "type": r.record_type,
+                                                        "ttl": r.ttl
                                                     })
                                                 })
                                                 .collect();
@@ -430,15 +433,8 @@ pub async fn post_handler(
                                 }
                             }
 
-                            // Build a Lookups from JSON (roundtrip through serde).
                             let lookups_json = serde_json::json!({ "lookups": lookups_vec });
-                            let lookups: mhost::resolver::Lookups =
-                                serde_json::from_value(lookups_json).unwrap_or_else(|e| {
-                                    tracing::warn!("failed to deserialize auth lookups: {e}");
-                                    mhost::resolver::Lookups::empty()
-                                });
-
-                            (rt, lookups, "authoritative")
+                            (rt, lookups_json, "authoritative")
                         }
                     })
                     .collect();
@@ -455,32 +451,26 @@ pub async fn post_handler(
                     match maybe {
                         None => break,
                         Some(results) => {
-                            for (rt, merged, source) in results {
+                            for (rt, lookups_json, source) in results {
                                 completed += 1;
-                                let batch = BatchEvent {
-                                    request_id: rid.clone(),
-                                    record_type: rt.to_string(),
-                                    lookups: merged,
-                                    completed,
-                                    total: total_batches,
-                                    transport: None,
-                                    source: Some(source.to_owned()),
-                                };
-                                if let Ok(json_val) = serde_json::to_value(&batch) {
-                                    cached_events.push(CachedEvent {
-                                        event_type: "batch".to_owned(),
-                                        data: json_val,
-                                    });
-                                }
-                                let event = {
-                                    let mut v = serde_json::to_value(&batch)
-                                        .unwrap_or(serde_json::Value::Null);
-                                    record_format::enrich_lookups_json(&mut v, &batch.record_type);
-                                    Event::default()
-                                        .event("batch")
-                                        .json_data(&v)
-                                        .unwrap_or_else(|_| Event::default().event("batch").data("{}"))
-                                };
+                                let rt_str = rt.to_string();
+                                let mut batch_json = serde_json::json!({
+                                    "request_id": rid,
+                                    "record_type": rt_str,
+                                    "lookups": lookups_json,
+                                    "completed": completed,
+                                    "total": total_batches,
+                                    "source": source,
+                                });
+                                cached_events.push(CachedEvent {
+                                    event_type: "batch".to_owned(),
+                                    data: batch_json.clone(),
+                                });
+                                record_format::enrich_lookups_json(&mut batch_json, &rt_str);
+                                let event = Event::default()
+                                    .event("batch")
+                                    .json_data(&batch_json)
+                                    .unwrap_or_else(|_| Event::default().event("batch").data("{}"));
                                 if tx.send(Ok(event)).await.is_err() {
                                     metrics::gauge!("prism_active_authcompares").decrement(1.0);
                                     return;
