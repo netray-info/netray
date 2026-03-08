@@ -26,6 +26,7 @@ type KeyedLimiter<K> =
 pub struct RateLimitState {
     per_ip: KeyedLimiter<IpAddr>,
     per_target: KeyedLimiter<String>,
+    per_ip_burst: u32,
 }
 
 impl RateLimitState {
@@ -49,7 +50,19 @@ impl RateLimitState {
             .allow_burst(NonZeroU32::new(config.per_target_burst).expect("validated non-zero")),
         );
 
-        Self { per_ip, per_target }
+        Self {
+            per_ip,
+            per_target,
+            per_ip_burst: config.per_ip_burst,
+        }
+    }
+
+    /// Return the per-IP burst size as an upper bound for cap-and-warn budget calculation.
+    ///
+    /// Governor doesn't expose remaining capacity, so we use the burst size as a
+    /// conservative estimate. The actual `check_cost` call will reject if insufficient.
+    pub fn remaining_budget(&self, _client_ip: IpAddr) -> u32 {
+        self.per_ip_burst
     }
 
     /// Check whether a request with the given cost is allowed.
@@ -72,6 +85,42 @@ impl RateLimitState {
 
         Ok(())
     }
+}
+
+/// Select representative IPs when the full set exceeds the rate budget.
+///
+/// Prefers one IPv4 + one IPv6, fills remaining slots in DNS order.
+/// Returns `(selected, skipped)`.
+pub fn select_representative_ips(ips: &[IpAddr], budget: usize) -> (Vec<IpAddr>, Vec<IpAddr>) {
+    if ips.len() <= budget {
+        return (ips.to_vec(), Vec::new());
+    }
+
+    if budget == 0 {
+        return (Vec::new(), ips.to_vec());
+    }
+
+    let mut selected = Vec::with_capacity(budget);
+    let mut remaining: Vec<IpAddr> = ips.to_vec();
+
+    // Pick first v4
+    if let Some(pos) = remaining.iter().position(|ip| ip.is_ipv4()) {
+        selected.push(remaining.remove(pos));
+    }
+
+    // Pick first v6 (if budget allows)
+    if selected.len() < budget
+        && let Some(pos) = remaining.iter().position(|ip| ip.is_ipv6())
+    {
+        selected.push(remaining.remove(pos));
+    }
+
+    // Fill remaining budget in DNS order
+    while selected.len() < budget && !remaining.is_empty() {
+        selected.push(remaining.remove(0));
+    }
+
+    (selected, remaining)
 }
 
 /// Check a keyed rate limiter and convert rejection to `AppError`.
@@ -192,6 +241,52 @@ mod tests {
         assert!(state.check_cost(ip, "Example.COM", 10).is_ok());
         // Same target (lowercased), burst should be exhausted for per-IP.
         assert!(state.check_cost(ip, "example.com", 1).is_err());
+    }
+
+    #[test]
+    fn select_representative_all_fit() {
+        let ips: Vec<IpAddr> = vec![
+            "198.51.100.1".parse().unwrap(),
+            "198.51.100.2".parse().unwrap(),
+        ];
+        let (selected, skipped) = select_representative_ips(&ips, 5);
+        assert_eq!(selected.len(), 2);
+        assert!(skipped.is_empty());
+    }
+
+    #[test]
+    fn select_representative_prefers_v4_and_v6() {
+        let ips: Vec<IpAddr> = vec![
+            "198.51.100.1".parse().unwrap(),
+            "198.51.100.2".parse().unwrap(),
+            "2001:db8::1".parse().unwrap(),
+            "2001:db8::2".parse().unwrap(),
+        ];
+        let (selected, skipped) = select_representative_ips(&ips, 2);
+        assert_eq!(selected.len(), 2);
+        assert!(selected[0].is_ipv4());
+        assert!(selected[1].is_ipv6());
+        assert_eq!(skipped.len(), 2);
+    }
+
+    #[test]
+    fn select_representative_budget_one() {
+        let ips: Vec<IpAddr> = vec![
+            "198.51.100.1".parse().unwrap(),
+            "2001:db8::1".parse().unwrap(),
+        ];
+        let (selected, skipped) = select_representative_ips(&ips, 1);
+        assert_eq!(selected.len(), 1);
+        assert!(selected[0].is_ipv4());
+        assert_eq!(skipped.len(), 1);
+    }
+
+    #[test]
+    fn select_representative_budget_zero() {
+        let ips: Vec<IpAddr> = vec!["198.51.100.1".parse().unwrap()];
+        let (selected, skipped) = select_representative_ips(&ips, 0);
+        assert!(selected.is_empty());
+        assert_eq!(skipped.len(), 1);
     }
 
     #[test]

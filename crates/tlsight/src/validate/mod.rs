@@ -45,11 +45,11 @@ pub struct ValidationResult {
 }
 
 /// Compute the summary verdict from validation results.
-/// Phase 1: CAA, DANE, consistency are all Skip.
 pub fn summarize(
     validation: Option<&ValidationResult>,
     hostname: Option<&str>,
     ocsp_stapled: bool,
+    has_consistency_mismatch: bool,
 ) -> Summary {
     let (chain_trusted, not_expired, hostname_match) = match validation {
         Some(v) => {
@@ -83,14 +83,20 @@ pub fn summarize(
         CheckStatus::Warn
     };
 
+    let consistency = if has_consistency_mismatch {
+        CheckStatus::Warn
+    } else {
+        CheckStatus::Pass
+    };
+
     let checks = SummaryChecks {
         chain_trusted,
         not_expired,
         hostname_match,
-        caa_compliant: CheckStatus::Skip, // Phase 2
-        dane_valid: CheckStatus::Skip,    // Phase 2
+        caa_compliant: CheckStatus::Skip,
+        dane_valid: CheckStatus::Skip,
         ocsp_stapled: ocsp,
-        consistency: CheckStatus::Skip, // Phase 2
+        consistency,
     };
 
     let verdict = worst_status(&[
@@ -98,6 +104,7 @@ pub fn summarize(
         checks.not_expired,
         checks.hostname_match,
         checks.ocsp_stapled,
+        checks.consistency,
     ]);
 
     Summary { verdict, checks }
@@ -133,7 +140,12 @@ mod tests {
 
     #[test]
     fn all_pass_verdict_is_pass() {
-        let summary = summarize(Some(&passing_validation()), Some("example.com"), true);
+        let summary = summarize(
+            Some(&passing_validation()),
+            Some("example.com"),
+            true,
+            false,
+        );
         assert_eq!(summary.verdict, CheckStatus::Pass);
     }
 
@@ -141,7 +153,7 @@ mod tests {
     fn expired_cert_verdict_is_fail() {
         let mut v = passing_validation();
         v.any_expired = true;
-        let summary = summarize(Some(&v), Some("example.com"), true);
+        let summary = summarize(Some(&v), Some("example.com"), true, false);
         assert_eq!(summary.verdict, CheckStatus::Fail);
         assert_eq!(summary.checks.not_expired, CheckStatus::Fail);
     }
@@ -150,7 +162,7 @@ mod tests {
     fn not_yet_valid_cert_verdict_is_fail() {
         let mut v = passing_validation();
         v.any_not_yet_valid = true;
-        let summary = summarize(Some(&v), Some("example.com"), true);
+        let summary = summarize(Some(&v), Some("example.com"), true, false);
         assert_eq!(summary.verdict, CheckStatus::Fail);
         assert_eq!(summary.checks.not_expired, CheckStatus::Fail);
     }
@@ -159,7 +171,7 @@ mod tests {
     fn untrusted_chain_verdict_is_fail() {
         let mut v = passing_validation();
         v.chain_trusted = false;
-        let summary = summarize(Some(&v), Some("example.com"), true);
+        let summary = summarize(Some(&v), Some("example.com"), true, false);
         assert_eq!(summary.verdict, CheckStatus::Fail);
         assert_eq!(summary.checks.chain_trusted, CheckStatus::Fail);
     }
@@ -168,21 +180,26 @@ mod tests {
     fn hostname_mismatch_verdict_is_fail() {
         let mut v = passing_validation();
         v.leaf_covers_hostname = false;
-        let summary = summarize(Some(&v), Some("example.com"), true);
+        let summary = summarize(Some(&v), Some("example.com"), true, false);
         assert_eq!(summary.verdict, CheckStatus::Fail);
         assert_eq!(summary.checks.hostname_match, CheckStatus::Fail);
     }
 
     #[test]
     fn no_ocsp_staple_verdict_is_warn() {
-        let summary = summarize(Some(&passing_validation()), Some("example.com"), false);
+        let summary = summarize(
+            Some(&passing_validation()),
+            Some("example.com"),
+            false,
+            false,
+        );
         assert_eq!(summary.verdict, CheckStatus::Warn);
         assert_eq!(summary.checks.ocsp_stapled, CheckStatus::Warn);
     }
 
     #[test]
     fn ip_input_skips_hostname_check() {
-        let summary = summarize(Some(&passing_validation()), None, true);
+        let summary = summarize(Some(&passing_validation()), None, true, false);
         assert_eq!(summary.checks.hostname_match, CheckStatus::Skip);
         // Skip does not affect verdict
         assert_eq!(summary.verdict, CheckStatus::Pass);
@@ -190,18 +207,40 @@ mod tests {
 
     #[test]
     fn no_validation_result_skips_all_chain_checks() {
-        let summary = summarize(None, Some("example.com"), true);
+        let summary = summarize(None, Some("example.com"), true, false);
         assert_eq!(summary.checks.chain_trusted, CheckStatus::Skip);
         assert_eq!(summary.checks.not_expired, CheckStatus::Skip);
         assert_eq!(summary.checks.hostname_match, CheckStatus::Skip);
     }
 
     #[test]
-    fn phase2_checks_are_skip() {
-        let summary = summarize(Some(&passing_validation()), Some("example.com"), true);
+    fn deferred_checks_are_skip() {
+        let summary = summarize(
+            Some(&passing_validation()),
+            Some("example.com"),
+            true,
+            false,
+        );
         assert_eq!(summary.checks.caa_compliant, CheckStatus::Skip);
         assert_eq!(summary.checks.dane_valid, CheckStatus::Skip);
-        assert_eq!(summary.checks.consistency, CheckStatus::Skip);
+    }
+
+    #[test]
+    fn consistency_pass_when_no_mismatch() {
+        let summary = summarize(
+            Some(&passing_validation()),
+            Some("example.com"),
+            true,
+            false,
+        );
+        assert_eq!(summary.checks.consistency, CheckStatus::Pass);
+    }
+
+    #[test]
+    fn consistency_warn_when_mismatch() {
+        let summary = summarize(Some(&passing_validation()), Some("example.com"), true, true);
+        assert_eq!(summary.checks.consistency, CheckStatus::Warn);
+        assert_eq!(summary.verdict, CheckStatus::Warn);
     }
 
     #[test]
@@ -209,7 +248,7 @@ mod tests {
         let mut v = passing_validation();
         v.any_expired = true;
         // Both fail (expired) and warn (no OCSP) present; verdict should be fail
-        let summary = summarize(Some(&v), Some("example.com"), false);
+        let summary = summarize(Some(&v), Some("example.com"), false, false);
         assert_eq!(summary.verdict, CheckStatus::Fail);
     }
 

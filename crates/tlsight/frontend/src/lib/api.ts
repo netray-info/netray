@@ -12,8 +12,12 @@ export async function inspect(input: string): Promise<InspectResponse> {
   return res.json();
 }
 
-export async function fetchMeta(): Promise<MetaResponse> {
-  const res = await fetch(`${BASE}/api/meta`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+export async function fetchMeta(): Promise<MetaResponse | null> {
+  try {
+    const res = await fetch(`${BASE}/api/meta`);
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
 }

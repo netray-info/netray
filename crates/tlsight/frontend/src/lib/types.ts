@@ -5,7 +5,8 @@ export interface InspectResponse {
   summary: Summary;
   ports: PortResult[];
   dns: DnsContext | null;
-  warnings: string[];
+  warnings?: string[];
+  skipped_ips?: string[];
   duration_ms: number;
 }
 
@@ -26,9 +27,9 @@ export interface Summary {
 
 export interface PortResult {
   port: number;
-  dns?: { tlsa: TlsaInfo };
   ips: IpResult[];
-  consistency: ConsistencyInfo | null;
+  consistency?: ConsistencyInfo;
+  validation?: ValidationInfo;
   error?: ErrorInfo;
 }
 
@@ -121,9 +122,11 @@ export interface ErrorInfo {
 }
 
 export interface MetaResponse {
-  name: string;
   version: string;
   features: Record<string, boolean>;
-  ecosystem: Record<string, string>;
   limits: Record<string, number>;
+  ecosystem?: {
+    dns_base_url?: string;
+    ip_base_url?: string;
+  };
 }

@@ -1,4 +1,5 @@
-use std::net::SocketAddr;
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 
 use axum::extract::{ConnectInfo, Query, State};
@@ -10,6 +11,7 @@ use utoipa::ToSchema;
 
 use crate::error::AppError;
 use crate::input::{self, Target};
+use crate::security::rate_limit::select_representative_ips;
 use crate::security::target_policy;
 use crate::state::AppState;
 use crate::tls;
@@ -28,6 +30,8 @@ pub struct InspectResponse {
     pub ports: Vec<PortResult>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped_ips: Vec<String>,
     pub duration_ms: u64,
 }
 
@@ -36,9 +40,27 @@ pub struct PortResult {
     pub port: u16,
     pub ips: Vec<tls::IpInspectionResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub consistency: Option<ConsistencyResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub validation: Option<validate::ValidationResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<tls::InspectionError>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ConsistencyResult {
+    pub certificates_match: bool,
+    pub tls_versions_match: bool,
+    pub cipher_suites_match: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub mismatches: Vec<ConsistencyMismatch>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ConsistencyMismatch {
+    pub field: String,
+    /// Per-IP values, keyed by IP address string.
+    pub values: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -177,13 +199,8 @@ async fn inspect_handler(
     // Extract client IP for rate limiting
     let client_ip = state.ip_extractor.extract(&headers, addr);
 
-    // Rate limit check (cost = ports * 1 IP for Phase 1)
-    let cost = parsed.ports.len() as u32;
-    state
-        .rate_limiter
-        .check_cost(client_ip, &hostname_str, cost)?;
-
     let mut warnings = Vec::new();
+    let mut skipped_ips = Vec::new();
 
     // Resolve IPs
     let ips = match &parsed.target {
@@ -198,7 +215,7 @@ async fn inspect_handler(
     }
 
     // Filter blocked IPs
-    let allowed_ips: Vec<_> = ips
+    let allowed_ips: Vec<IpAddr> = ips
         .into_iter()
         .filter(|ip| match target_policy::check_allowed(ip) {
             Ok(()) => true,
@@ -214,6 +231,45 @@ async fn inspect_handler(
             "all resolved IPs for {hostname_str} are in blocked ranges"
         )));
     }
+
+    // Cap-and-warn: compute cost and reduce IPs if over budget
+    let full_cost = parsed.ports.len() as u32 * allowed_ips.len() as u32;
+    let inspected_ips = if state
+        .rate_limiter
+        .check_cost(client_ip, &hostname_str, full_cost)
+        .is_ok()
+    {
+        allowed_ips
+    } else {
+        // Try with reduced IPs
+        let budget = state.rate_limiter.remaining_budget(client_ip);
+        let ip_budget = (budget / parsed.ports.len() as u32).max(1) as usize;
+        let (selected, skipped) = select_representative_ips(&allowed_ips, ip_budget);
+
+        if selected.is_empty() {
+            // Even 1 IP doesn't fit — hard reject
+            return Err(AppError::RateLimited {
+                retry_after_secs: 60,
+                scope: "per_ip",
+            });
+        }
+
+        let reduced_cost = parsed.ports.len() as u32 * selected.len() as u32;
+        state
+            .rate_limiter
+            .check_cost(client_ip, &hostname_str, reduced_cost)?;
+
+        if !skipped.is_empty() {
+            warnings.push(format!(
+                "rate limit: inspecting {} of {} IPs to stay within budget",
+                selected.len(),
+                selected.len() + skipped.len()
+            ));
+            skipped_ips = skipped.iter().map(|ip| ip.to_string()).collect();
+        }
+
+        selected
+    };
 
     // IP input warning
     if input_mode == "ip" {
@@ -231,7 +287,7 @@ async fn inspect_handler(
         let mut results = Vec::with_capacity(parsed.ports.len());
         for &port in &parsed.ports {
             let result = inspect_port(
-                &allowed_ips,
+                &inspected_ips,
                 port,
                 parsed.target.hostname(),
                 handshake_timeout,
@@ -253,10 +309,18 @@ async fn inspect_handler(
         .map(|ip_result| (&ip_result.validation, ip_result.ocsp_stapled()))
         .unwrap_or((&None, false));
 
+    // Check if any port has consistency mismatches
+    let has_consistency_mismatch = port_results.iter().any(|pr| {
+        pr.consistency
+            .as_ref()
+            .is_some_and(|c| !c.mismatches.is_empty())
+    });
+
     let summary = validate::summarize(
         validation_ref.as_ref(),
         parsed.target.hostname(),
         ocsp_stapled,
+        has_consistency_mismatch,
     );
 
     let duration_ms = request_start.elapsed().as_millis() as u64;
@@ -268,6 +332,7 @@ async fn inspect_handler(
         summary,
         ports: port_results,
         warnings,
+        skipped_ips,
         duration_ms,
     }))
 }
@@ -296,12 +361,96 @@ async fn inspect_port(
         ip_results.push(result);
     }
 
+    let consistency = compute_consistency(&ip_results);
+
     PortResult {
         port,
         ips: ip_results,
-        validation: None, // Per-port validation summary not needed in Phase 1
+        consistency,
+        validation: None,
         error: None,
     }
+}
+
+/// Compute consistency across IP results for a single port.
+///
+/// Only considers successful IPs (those with `tls` present).
+/// Returns `None` if fewer than 2 IPs succeeded.
+fn compute_consistency(ip_results: &[tls::IpInspectionResult]) -> Option<ConsistencyResult> {
+    let successful: Vec<_> = ip_results.iter().filter(|r| r.tls.is_some()).collect();
+
+    if successful.len() < 2 {
+        return None;
+    }
+
+    let mut mismatches = Vec::new();
+
+    // Compare leaf cert fingerprints
+    let fingerprints: HashMap<String, String> = successful
+        .iter()
+        .filter_map(|r| {
+            let fp = r.chain.as_ref()?.first()?.fingerprint_sha256.clone();
+            Some((r.ip.clone(), fp))
+        })
+        .collect();
+    let certs_match = fingerprints
+        .values()
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+        <= 1;
+    if !certs_match {
+        mismatches.push(ConsistencyMismatch {
+            field: "leaf_certificate".to_string(),
+            values: fingerprints,
+        });
+    }
+
+    // Compare TLS versions
+    let versions: HashMap<String, String> = successful
+        .iter()
+        .filter_map(|r| {
+            let v = r.tls.as_ref()?.version.clone();
+            Some((r.ip.clone(), v))
+        })
+        .collect();
+    let versions_match = versions
+        .values()
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+        <= 1;
+    if !versions_match {
+        mismatches.push(ConsistencyMismatch {
+            field: "tls_version".to_string(),
+            values: versions,
+        });
+    }
+
+    // Compare cipher suites
+    let ciphers: HashMap<String, String> = successful
+        .iter()
+        .filter_map(|r| {
+            let c = r.tls.as_ref()?.cipher_suite.clone();
+            Some((r.ip.clone(), c))
+        })
+        .collect();
+    let ciphers_match = ciphers
+        .values()
+        .collect::<std::collections::HashSet<_>>()
+        .len()
+        <= 1;
+    if !ciphers_match {
+        mismatches.push(ConsistencyMismatch {
+            field: "cipher_suite".to_string(),
+            values: ciphers,
+        });
+    }
+
+    Some(ConsistencyResult {
+        certificates_match: certs_match,
+        tls_versions_match: versions_match,
+        cipher_suites_match: ciphers_match,
+        mismatches,
+    })
 }
 
 /// Resolve a hostname to IP addresses using tokio's built-in resolver.
