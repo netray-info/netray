@@ -296,6 +296,7 @@ export function QueryInput(props: QueryInputProps) {
       {
         key: 'Enter',
         run: (v) => {
+          if (props.disabled) return true;
           // If history dropdown is open with a highlighted item, select it
           if (showHistory() && historyHighlight() >= 0) {
             const item = props.history[historyHighlight()];
@@ -470,7 +471,7 @@ export function QueryInput(props: QueryInputProps) {
   return (
     <div class="query-bar">
       <div class="query-editor-wrap" ref={wrapRef}>
-        <div class="query-editor" ref={containerRef} />
+        <div class="query-editor" ref={containerRef} aria-label="DNS query" />
         <Show when={props.onReset}>
           <button
             class="query-clear-btn"
@@ -512,6 +513,7 @@ export function QueryInput(props: QueryInputProps) {
         class="query-button"
         onClick={handleSubmitClick}
         disabled={props.disabled}
+        aria-busy={props.disabled ? 'true' : 'false'}
         title="Run query (Enter)"
       >
         Query

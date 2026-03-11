@@ -4,6 +4,8 @@
 //! OTLP exporter and bridges `tracing` spans into OpenTelemetry spans via
 //! `tracing-opentelemetry`. When disabled, no OTel overhead is incurred.
 
+use std::sync::OnceLock;
+
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider;
 use opentelemetry_otlp::WithExportConfig;
@@ -13,6 +15,8 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::config::{LogFormat, TelemetryConfig};
+
+static TRACER_PROVIDER: OnceLock<SdkTracerProvider> = OnceLock::new();
 
 /// Initialize the tracing subscriber with an optional OpenTelemetry layer.
 ///
@@ -91,7 +95,8 @@ fn init_otel_layer(
         .build();
 
     let tracer = provider.tracer("prism");
-    global::set_tracer_provider(provider);
+    global::set_tracer_provider(provider.clone());
+    let _ = TRACER_PROVIDER.set(provider);
 
     let layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
@@ -100,7 +105,12 @@ fn init_otel_layer(
 
 /// Flush pending spans and shut down the global tracer provider.
 pub fn shutdown() {
-    // Replace the global provider with a noop, which drops the old one
-    // and flushes the batch exporter.
-    global::set_tracer_provider(opentelemetry::trace::noop::NoopTracerProvider::new());
+    if let Some(provider) = TRACER_PROVIDER.get() {
+        if let Err(e) = provider.force_flush() {
+            tracing::warn!(error = %e, "failed to flush OTel spans on shutdown");
+        }
+        if let Err(e) = provider.shutdown() {
+            tracing::warn!(error = %e, "failed to shut down OTel provider");
+        }
+    }
 }

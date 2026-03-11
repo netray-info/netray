@@ -88,6 +88,10 @@ function NsList(props: { names: string[] }) {
 // ServerRow — one row in the expanded per-server detail panel
 // ---------------------------------------------------------------------------
 
+function isSafeUrl(url: string): boolean {
+  return url.startsWith('https://') || url.startsWith('http://');
+}
+
 function ServerRow(props: { result: ServerResult; ifconfigUrl?: string | null; enrichments?: Record<string, IpInfo> }) {
   const r = props.result;
   const outcomeType = r.outcome.type;
@@ -97,7 +101,7 @@ function ServerRow(props: { result: ServerResult; ifconfigUrl?: string | null; e
   return (
     <div class={`trace-server-row trace-server-row--${outcomeType}`}>
       <span class="trace-server-ip" title={r.server_name}>
-        {props.ifconfigUrl
+        {props.ifconfigUrl && isSafeUrl(props.ifconfigUrl)
           ? <a class="ip-link" href={`${props.ifconfigUrl}/?ip=${encodeURIComponent(r.server_ip)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{r.server_ip}</a>
           : r.server_ip}
       </span>

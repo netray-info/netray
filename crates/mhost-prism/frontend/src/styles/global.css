@@ -3366,6 +3366,20 @@ body {
   color: var(--warning);
 }
 
+/* ===================================================================
+   Responsive: narrow screens — stack comparison grids vertically
+   =================================================================== */
+
+@media (max-width: 640px) {
+  .tc-transport-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .ac-source-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Trace server org annotation */
 
 .trace-server-org {

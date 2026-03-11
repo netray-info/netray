@@ -85,7 +85,6 @@ async fn main() {
             security::IpExtractor::new(&config.server.trusted_proxies)
                 .expect("invalid trusted_proxies configuration"),
         ),
-        rate_limiter: Arc::new(security::RateLimitState::new(&config.limits)),
         result_cache: Arc::new(result_cache::ResultCache::new()),
         resolver_pool,
         query_dedup: query_dedup::QueryDedup::new(),
@@ -193,7 +192,11 @@ async fn http_metrics_middleware(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     let method = request.method().to_string();
-    let path = request.uri().path().to_owned();
+    let path = request
+        .extensions()
+        .get::<axum::extract::MatchedPath>()
+        .map(|mp| mp.as_str().to_owned())
+        .unwrap_or_else(|| "unknown".to_owned());
     let response = next.run(request).await;
     let status = response.status().as_u16().to_string();
     metrics::counter!(

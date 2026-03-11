@@ -117,10 +117,12 @@ pub async fn post_handler(
     let max_hops = state.config.trace.max_hops as usize;
 
     // Rate limiting: flat cost against per-IP and global limiters only.
-    let stream_guard =
-        state
-            .rate_limiter
-            .check_query_cost(client_ip, &[], DNSSEC_COST, DNSSEC_COST)?;
+    let stream_guard = state.hot_state.rate_limiter.load().check_query_cost(
+        client_ip,
+        &[],
+        DNSSEC_COST,
+        DNSSEC_COST,
+    )?;
 
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
     let rid = request_id.0;
@@ -144,6 +146,7 @@ pub async fn post_handler(
                         "stream deadline exceeded",
                     )))
                     .await;
+                metrics::counter!("prism_queries_total", "endpoint" => "dnssec", "status" => "error").increment(1);
                 metrics::gauge!("prism_active_dnssec").decrement(1.0);
                 return;
             }
@@ -160,6 +163,7 @@ pub async fn post_handler(
                 .json_data(&event_payload)
                 .unwrap_or_else(|_| Event::default().event("chain").data("{}"));
             if tx.send(Ok(event)).await.is_err() {
+                metrics::counter!("prism_queries_total", "endpoint" => "dnssec", "status" => "error").increment(1);
                 metrics::gauge!("prism_active_dnssec").decrement(1.0);
                 return;
             }
@@ -183,6 +187,8 @@ pub async fn post_handler(
             .unwrap_or_else(|_| Event::default().event("done").data("{}"));
         let _ = tx.send(Ok(event)).await;
 
+        metrics::counter!("prism_queries_total", "endpoint" => "dnssec", "status" => "ok")
+            .increment(1);
         metrics::histogram!("prism_dnssec_duration_seconds").record(elapsed.as_secs_f64());
         metrics::gauge!("prism_active_dnssec").decrement(1.0);
     });

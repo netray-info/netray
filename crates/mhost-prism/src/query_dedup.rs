@@ -4,9 +4,10 @@
 //! executes the DNS fan-out and broadcasts results; subsequent requests subscribe to
 //! the broadcast and receive the same results without executing a duplicate query.
 
-use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+
+use ahash::AHasher;
 
 use dashmap::DashMap;
 use tokio::sync::broadcast;
@@ -32,7 +33,7 @@ impl QueryHash {
     /// sorted server specs, transport, and DNSSEC flag. Sorting ensures
     /// that token order in the query string does not affect the hash.
     pub fn from_query(parsed: &ParsedQuery) -> Self {
-        let mut h = DefaultHasher::new();
+        let mut h = AHasher::default();
 
         // Domain is already lowercased by the parser.
         parsed.domain.hash(&mut h);

@@ -62,6 +62,7 @@ arc-swap = "1"
 
 # Query deduplication
 dashmap = "6"
+ahash = "0.8"
 
 # Request IDs
 uuid = { version = "1", features = ["v7"] }

@@ -45,6 +45,10 @@ RUN apt-get update \
 
 COPY --from=builder /app/target/release/prism /usr/local/bin/prism
 
+RUN addgroup --system --gid 1001 prism \
+ && adduser --system --uid 1001 --ingroup prism --no-create-home prism
+USER prism
+
 # API + frontend
 EXPOSE 8080
 # Prometheus metrics — must NOT be published externally (Prometheus scraper access only).

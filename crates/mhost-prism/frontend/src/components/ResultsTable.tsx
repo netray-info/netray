@@ -271,9 +271,13 @@ function extractIpFromData(data: Record<string, unknown>): string | null {
   return typeof val === 'string' ? val : null;
 }
 
-/** Render an IP address as a clickable link (when ifconfigUrl is set) or plain text. */
+function isSafeUrl(url: string): boolean {
+  return url.startsWith('https://') || url.startsWith('http://');
+}
+
+/** Render an IP address as a clickable link (when ifconfigUrl is set and safe) or plain text. */
 function IpValue(props: { ip: string; ifconfigUrl?: string | null }) {
-  if (props.ifconfigUrl) {
+  if (props.ifconfigUrl && isSafeUrl(props.ifconfigUrl)) {
     const href = `${props.ifconfigUrl}/?ip=${encodeURIComponent(props.ip)}`;
     return <a class="ip-link" href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{props.ip}</a>;
   }
@@ -827,7 +831,7 @@ export function ResultsTable(props: ResultsTableProps) {
     <div class="results-container" ref={containerRef}>
       {/* Error banner */}
       <Show when={props.error}>
-        <div class="error-banner">
+        <div class="error-banner" role="alert">
           <span class="error-icon">!</span>
           <span>{props.error}</span>
         </div>

@@ -109,10 +109,12 @@ pub async fn post_handler(
     let num_types = parsed.record_types.len() as u32;
     let num_servers = effective_servers.len().max(1) as u32;
     let total_cost = num_types * num_servers * 2 + 16;
-    let stream_guard =
-        state
-            .rate_limiter
-            .check_query_cost(client_ip, &target_keys, total_cost, num_types)?;
+    let stream_guard = state.hot_state.rate_limiter.load().check_query_cost(
+        client_ip,
+        &target_keys,
+        total_cost,
+        num_types,
+    )?;
 
     let domain = parsed.domain.clone();
     let trace_timeout = Duration::from_secs(state.config.trace.query_timeout_secs);
@@ -172,11 +174,13 @@ pub async fn post_handler(
                     ns_lookups = ns_lookups.merge(lookups);
                 }
                 Ok(Err(e)) => {
+                    tracing::warn!(domain = %domain, error = %e, "NS lookup failed during authcompare discovery");
                     let _ = tx
                         .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
                         .await;
                 }
                 Err(e) => {
+                    tracing::error!(domain = %domain, error = %e, "NS lookup task panicked during authcompare discovery");
                     let _ = tx
                         .send(Ok(make_error_event("INTERNAL_ERROR", &e.to_string())))
                         .await;
@@ -307,6 +311,7 @@ pub async fn post_handler(
                                         merged = merged.merge(lookups);
                                     }
                                     Ok(Err(e)) => {
+                                        tracing::warn!(domain = %domain, record_type = %rt, error = %e, "recursive resolver lookup failed");
                                         let _ = tx_err
                                             .send(Ok(make_error_event(
                                                 "RESOLVER_ERROR",
@@ -315,6 +320,7 @@ pub async fn post_handler(
                                             .await;
                                     }
                                     Err(e) => {
+                                        tracing::error!(domain = %domain, record_type = %rt, error = %e, "recursive resolver task panicked");
                                         let _ = tx_err
                                             .send(Ok(make_error_event(
                                                 "INTERNAL_ERROR",
@@ -423,6 +429,7 @@ pub async fn post_handler(
                                         }));
                                     }
                                     Err(e) => {
+                                        tracing::warn!(domain = %domain_name, record_type = %rt, server = %qr.server, error = %e, "authoritative query failed");
                                         let _ = tx_err
                                             .send(Ok(make_error_event(
                                                 "AUTH_QUERY_ERROR",
@@ -472,6 +479,7 @@ pub async fn post_handler(
                                     .json_data(&batch_json)
                                     .unwrap_or_else(|_| Event::default().event("batch").data("{}"));
                                 if tx.send(Ok(event)).await.is_err() {
+                                    metrics::counter!("prism_queries_total", "endpoint" => "authcompare", "status" => "error").increment(1);
                                     metrics::gauge!("prism_active_authcompares").decrement(1.0);
                                     return;
                                 }
@@ -482,6 +490,7 @@ pub async fn post_handler(
                 _ = tokio::time::sleep_until(deadline) => {
                     timed_out = true;
                     let _ = tx.send(Ok(make_error_event("STREAM_TIMEOUT", "stream deadline exceeded"))).await;
+                    metrics::counter!("prism_queries_total", "endpoint" => "authcompare", "status" => "error").increment(1);
                     break;
                 }
             }
@@ -535,6 +544,8 @@ pub async fn post_handler(
                 .unwrap_or_else(|_| Event::default().event("done").data("{}"));
             let _ = tx.send(Ok(event)).await;
 
+            metrics::counter!("prism_queries_total", "endpoint" => "authcompare", "status" => "ok")
+                .increment(1);
             metrics::histogram!("prism_authcompare_duration_seconds").record(elapsed.as_secs_f64());
         }
 

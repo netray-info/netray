@@ -31,7 +31,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::RequestId;
 use crate::api::query::{
     build_resolver_group, effective_server_specs, extract_ips_from_cached_events, make_error_event,
-    parse_server_spec, record_breaker_outcomes, send_enrichment_event, target_keys_from_servers,
+    parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
 };
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
@@ -183,7 +183,7 @@ pub async fn post_handler(
     let target_keys = target_keys_from_servers(&effective_servers);
     let num_servers = effective_servers.len().max(1) as u32;
     let total_cost = CHECK_TOTAL_STEPS * num_servers;
-    let stream_guard = state.rate_limiter.check_query_cost(
+    let stream_guard = state.hot_state.rate_limiter.load().check_query_cost(
         client_ip,
         &target_keys,
         total_cost,
@@ -294,6 +294,7 @@ pub async fn post_handler(
                                     .unwrap_or_else(|_| Event::default().event("batch").data("{}"))
                             };
                             if tx.send(Ok(event)).await.is_err() {
+                                metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
                                 metrics::gauge!("prism_active_checks").decrement(1.0);
                                 return;
                             }
@@ -312,6 +313,7 @@ pub async fn post_handler(
                             "stream deadline exceeded",
                         )))
                         .await;
+                    metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
                     metrics::gauge!("prism_active_checks").decrement(1.0);
                     return;
                 }
@@ -332,8 +334,29 @@ pub async fn post_handler(
         // ------------------------------------------------------------------
         let enrichment_map = if let Some(ref svc) = enrichment_svc {
             let ips = extract_ips_from_cached_events(&cached_events);
-            send_enrichment_event(svc, &ips, &rid, &tx, &mut cached_events).await;
-            svc.lookup_batch(&ips).await
+            let map = svc.lookup_batch(&ips).await;
+            if !map.is_empty() {
+                use crate::api::query::EnrichmentEvent;
+                let enrichment_event = EnrichmentEvent {
+                    request_id: rid.clone(),
+                    enrichments: map
+                        .iter()
+                        .map(|(ip, info)| (ip.to_string(), info.clone()))
+                        .collect(),
+                };
+                if let Ok(json_val) = serde_json::to_value(&enrichment_event) {
+                    cached_events.push(CachedEvent {
+                        event_type: "enrichment".to_owned(),
+                        data: json_val,
+                    });
+                }
+                let event = Event::default()
+                    .event("enrichment")
+                    .json_data(&enrichment_event)
+                    .unwrap_or_else(|_| Event::default().event("enrichment").data("{}"));
+                let _ = tx.send(Ok(event)).await;
+            }
+            map
         } else {
             std::collections::HashMap::new()
         };
@@ -389,6 +412,7 @@ pub async fn post_handler(
                 .json_data(&lint_event)
                 .unwrap_or_else(|_| Event::default().event("lint").data("{}"));
             if tx.send(Ok(event)).await.is_err() {
+                metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
                 return;
             }
         }
@@ -437,6 +461,8 @@ pub async fn post_handler(
             .unwrap_or_else(|_| Event::default().event("done").data("{}"));
         let _ = tx.send(Ok(event)).await;
 
+        metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "ok")
+            .increment(1);
         metrics::histogram!("prism_check_duration_seconds").record(elapsed.as_secs_f64());
         metrics::gauge!("prism_active_checks").decrement(1.0);
     });
@@ -467,6 +493,7 @@ async fn fan_out_lookup(
     let query = match MultiQuery::single(domain, rt) {
         Ok(q) => q,
         Err(e) => {
+            tracing::warn!(domain = %domain, record_type = %rt, error = %e, "check query build failed");
             let _ = tx
                 .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
                 .await;
@@ -478,6 +505,7 @@ async fn fan_out_lookup(
     for (idx, resolver) in resolvers.iter().enumerate() {
         let breaker_key = &breaker_keys[idx];
         if let Err(BreakerState::Open) = circuit_breakers.check(breaker_key) {
+            tracing::warn!(domain = %domain, record_type = %rt, provider = %breaker_key, "circuit breaker open, skipping provider");
             let _ = tx
                 .send(Ok(make_error_event(
                     "PROVIDER_DEGRADED",
@@ -499,11 +527,13 @@ async fn fan_out_lookup(
                 merged = merged.merge(lookups);
             }
             Ok(Err(e)) => {
+                tracing::warn!(domain = %domain, record_type = %rt, error = %e, "resolver lookup failed");
                 let _ = tx
                     .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
                     .await;
             }
             Err(e) => {
+                tracing::error!(domain = %domain, record_type = %rt, error = %e, "resolver task panicked");
                 let _ = tx
                     .send(Ok(make_error_event("INTERNAL_ERROR", &e.to_string())))
                     .await;

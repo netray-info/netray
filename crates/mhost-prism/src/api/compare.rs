@@ -145,10 +145,12 @@ pub async fn post_handler(
     let num_servers = effective_servers.len().max(1) as u32;
     let num_transports = available_transports.len() as u32;
     let total_cost = num_types * num_servers * num_transports;
-    let stream_guard =
-        state
-            .rate_limiter
-            .check_query_cost(client_ip, &target_keys, total_cost, num_types)?;
+    let stream_guard = state.hot_state.rate_limiter.load().check_query_cost(
+        client_ip,
+        &target_keys,
+        total_cost,
+        num_types,
+    )?;
 
     // DNSSEC augmentation.
     if parsed.dnssec {
@@ -269,6 +271,7 @@ pub async fn post_handler(
                                     }
                                     Ok(Err(e)) => {
                                         had_error = true;
+                                        tracing::warn!(domain = %domain, record_type = %rt, transport = transport_name(t), error = %e, "resolver lookup failed");
                                         let _ = tx_err
                                             .send(Ok(make_error_event(
                                                 "RESOLVER_ERROR",
@@ -278,6 +281,7 @@ pub async fn post_handler(
                                     }
                                     Err(e) => {
                                         had_error = true;
+                                        tracing::error!(domain = %domain, record_type = %rt, transport = transport_name(t), error = %e, "resolver task panicked");
                                         let _ = tx_err
                                             .send(Ok(make_error_event(
                                                 "INTERNAL_ERROR",
@@ -339,6 +343,7 @@ pub async fn post_handler(
                                         .unwrap_or_else(|_| Event::default().event("batch").data("{}"))
                                 };
                                 if tx.send(Ok(event)).await.is_err() {
+                                    metrics::counter!("prism_queries_total", "endpoint" => "compare", "status" => "error").increment(1);
                                     metrics::gauge!("prism_active_compares").decrement(1.0);
                                     return;
                                 }
@@ -349,6 +354,7 @@ pub async fn post_handler(
                 _ = tokio::time::sleep_until(deadline) => {
                     timed_out = true;
                     let _ = tx.send(Ok(make_error_event("STREAM_TIMEOUT", "stream deadline exceeded"))).await;
+                    metrics::counter!("prism_queries_total", "endpoint" => "compare", "status" => "error").increment(1);
                     break;
                 }
             }
@@ -403,6 +409,8 @@ pub async fn post_handler(
                 .unwrap_or_else(|_| Event::default().event("done").data("{}"));
             let _ = tx.send(Ok(event)).await;
 
+            metrics::counter!("prism_queries_total", "endpoint" => "compare", "status" => "ok")
+                .increment(1);
             metrics::histogram!("prism_compare_duration_seconds").record(elapsed.as_secs_f64());
         }
 

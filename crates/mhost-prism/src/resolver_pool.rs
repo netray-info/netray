@@ -59,7 +59,7 @@ impl ResolverPool {
             transport,
         };
 
-        // Fast path: read lock, check cache.
+        // Fast path: write lock to update last_used on hit (required for LRU eviction accuracy).
         {
             let mut entries = self.entries.write().await;
             if let Some(entry) = entries.get_mut(&key) {

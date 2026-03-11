@@ -27,7 +27,7 @@ use crate::query_dedup::QueryDedup;
 use crate::reload::HotState;
 use crate::resolver_pool::ResolverPool;
 use crate::result_cache::ResultCache;
-use crate::security::{IpExtractor, RateLimitState};
+use crate::security::IpExtractor;
 
 /// Hard cap on total SSE stream duration (SDD §8.1).
 pub const STREAM_TIMEOUT_SECS: u64 = 30;
@@ -55,7 +55,6 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub circuit_breakers: Arc<CircuitBreakerRegistry>,
     pub ip_extractor: Arc<IpExtractor>,
-    pub rate_limiter: Arc<RateLimitState>,
     pub result_cache: Arc<ResultCache>,
     pub resolver_pool: Arc<ResolverPool>,
     pub query_dedup: QueryDedup,
@@ -211,7 +210,7 @@ mod tests {
     use crate::reload::HotState;
     use crate::resolver_pool::ResolverPool;
     use crate::result_cache::ResultCache;
-    use crate::security::{IpExtractor, RateLimitState};
+    use crate::security::IpExtractor;
 
     use super::{AppState, api_router, health_router};
 
@@ -229,7 +228,6 @@ mod tests {
                 IpExtractor::new(&config.server.trusted_proxies)
                     .expect("invalid trusted_proxies configuration"),
             ),
-            rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             result_cache: Arc::new(ResultCache::new()),
             resolver_pool: Arc::new(ResolverPool::new(
                 config.performance.resolver_pool_ttl_secs,
@@ -543,7 +541,6 @@ mod tests {
                 IpExtractor::new(&config.server.trusted_proxies)
                     .expect("invalid trusted_proxies configuration"),
             ),
-            rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             result_cache: Arc::new(ResultCache::new()),
             resolver_pool: Arc::new(ResolverPool::new(
                 config.performance.resolver_pool_ttl_secs,

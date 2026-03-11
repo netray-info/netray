@@ -370,10 +370,12 @@ async fn execute_query(
     let num_types = parsed.record_types.len() as u32;
     let num_servers = effective_servers.len().max(1) as u32;
     let total_cost = num_types * num_servers;
-    let stream_guard =
-        state
-            .rate_limiter
-            .check_query_cost(client_ip, &target_keys, total_cost, num_types)?;
+    let stream_guard = state.hot_state.rate_limiter.load().check_query_cost(
+        client_ip,
+        &target_keys,
+        total_cost,
+        num_types,
+    )?;
 
     // Build resolver group and parallel circuit breaker keys.
     let (resolver_group, breaker_keys) =
@@ -413,6 +415,7 @@ async fn execute_query(
         let mut cached_events: Vec<CachedEvent> = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
         let total = record_types.len() as u32;
+        // std::sync::Mutex is safe here: the lock is never held across an .await point.
         let degraded: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
         // TODO: consider shared fan-out helper — check.rs already extracts
@@ -441,6 +444,7 @@ async fn execute_query(
                     let query = match MultiQuery::single(domain.as_str(), rt) {
                         Ok(q) => q,
                         Err(e) => {
+                            tracing::warn!(domain = %domain, record_type = %rt, error = %e, "query build failed");
                             let _ = tx_err
                                 .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
                                 .await;
@@ -455,6 +459,7 @@ async fn execute_query(
                         if let Err(crate::circuit_breaker::BreakerState::Open) =
                             circuit_breakers.check(breaker_key)
                         {
+                            tracing::warn!(domain = %domain, record_type = %rt, provider = %breaker_key, "circuit breaker open, skipping provider");
                             let _ = tx_err
                                 .send(Ok(make_error_event(
                                     "PROVIDER_DEGRADED",
@@ -485,12 +490,14 @@ async fn execute_query(
                             }
                             Ok(Err(e)) => {
                                 had_error = true;
+                                tracing::warn!(domain = %domain, record_type = %rt, error = %e, "resolver lookup failed");
                                 let _ = tx_err
                                     .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
                                     .await;
                             }
                             Err(e) => {
                                 had_error = true;
+                                tracing::error!(domain = %domain, record_type = %rt, error = %e, "resolver task panicked");
                                 let _ = tx_err
                                     .send(Ok(make_error_event("INTERNAL_ERROR", &e.to_string())))
                                     .await;
