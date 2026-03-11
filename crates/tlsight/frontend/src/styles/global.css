@@ -31,6 +31,11 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 body {
   font-family: var(--sans);
   background: var(--bg-primary);
@@ -1494,6 +1499,15 @@ a:hover { text-decoration: underline; }
 .ip-badge--org { color: var(--text-muted); border-color: var(--border-subtle); }
 
 /* ================================================================
+   Scrollbar styling
+   ================================================================ */
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-primary); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ================================================================
    Responsive
    ================================================================ */
 
@@ -1523,6 +1537,21 @@ a:hover { text-decoration: underline; }
   .chain-view__chain { flex-direction: column; }
   .chain-view__arrow { transform: rotate(90deg); }
   .welcome-cards { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .app { padding: 0.5rem 0.5rem; }
+  .header { margin-bottom: 1rem; padding-bottom: 0.5rem; }
+  .logo { font-size: 1.25rem; }
+  .header-actions { gap: 4px; }
+  .host-input__presets { gap: 4px; }
+  .host-input__preset { font-size: 0.6875rem; padding: 2px 6px; }
+  .welcome-card { padding: 14px; }
+  .welcome-card-title { font-size: 0.8125rem; }
+  .welcome-card-desc { font-size: 0.75rem; }
+  .ip-card__header { padding: 8px 10px; }
+  .ip-card__ip { font-size: 0.8125rem; }
+  .footer { flex-wrap: wrap; gap: 4px 8px; }
 }
 
 /* ================================================================
