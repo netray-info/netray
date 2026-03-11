@@ -146,11 +146,15 @@ pub struct RecordTypeInfo {
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ClientConfig {
+    /// Display name shown in the UI.
+    site_name: String,
+    /// Service version.
+    version: &'static str,
     /// Public ifconfig URL for IP lookups, or null if not configured.
     ifconfig_url: Option<String>,
 }
 
-/// Returns client-facing configuration (e.g. ifconfig URL for IP links).
+/// Returns client-facing configuration (e.g. site name, ifconfig URL for IP links).
 #[utoipa::path(
     get, path = "/api/config",
     tag = "Metadata",
@@ -160,6 +164,8 @@ pub struct ClientConfig {
 )]
 pub async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
     Json(ClientConfig {
+        site_name: state.config.site_name.clone(),
+        version: env!("CARGO_PKG_VERSION"),
         ifconfig_url: state.config.ecosystem.ifconfig_url.clone(),
     })
 }

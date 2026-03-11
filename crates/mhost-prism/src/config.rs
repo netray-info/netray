@@ -22,6 +22,9 @@ const _: () = assert!(
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    /// Display name shown in the UI. Defaults to "prism".
+    #[serde(default = "default_site_name")]
+    pub site_name: String,
     #[serde(default = "default_server")]
     pub server: ServerConfig,
     #[serde(default = "default_limits")]
@@ -251,6 +254,10 @@ pub struct HotConfig {
 }
 
 // --- Default value functions ---
+
+fn default_site_name() -> String {
+    "prism".to_string()
+}
 
 fn default_server() -> ServerConfig {
     ServerConfig {

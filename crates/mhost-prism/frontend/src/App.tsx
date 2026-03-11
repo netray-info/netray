@@ -7,9 +7,9 @@ import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/
 import { TransportComparison } from './components/TransportComparison';
 import { AuthComparison } from './components/AuthComparison';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
-import { createTheme } from '../../../frontend-shared/src/theme';
-import { createKeyboardShortcuts } from '../../../frontend-shared/src/keyboard';
-import { createFocusTrap } from '../../../frontend-shared/src/focus-trap';
+import { createTheme } from '../../../netray-common-frontend/src/theme';
+import { createKeyboardShortcuts } from '../../../netray-common-frontend/src/keyboard';
+import { createFocusTrap } from '../../../netray-common-frontend/src/focus-trap';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'transport' | 'auth';
@@ -255,6 +255,10 @@ export default function App() {
   const [isAuthMode, setIsAuthMode] = createSignal(false);
   const [authResults, setAuthResults] = createSignal<BatchEvent[]>([]);
   const [authServers, setAuthServers] = createSignal<string[]>([]);
+
+  // Site metadata
+  const [siteName, setSiteName] = createSignal('prism');
+  const [siteVersion, setSiteVersion] = createSignal<string | null>(null);
 
   // IP enrichment
   const [ifconfigUrl, setIfconfigUrl] = createSignal<string | null>(null);
@@ -1055,10 +1059,15 @@ export default function App() {
   // ---------------------------------------------------------------------------
 
   onMount(() => {
-    // Fetch client config (ifconfig URL for IP links).
+    // Fetch client config (site name, version, ifconfig URL for IP links).
     fetch('/api/config')
       .then((r) => r.json())
-      .then((cfg: { ifconfig_url?: string }) => {
+      .then((cfg: { site_name?: string; version?: string; ifconfig_url?: string }) => {
+        if (cfg.site_name) {
+          setSiteName(cfg.site_name);
+          document.title = cfg.site_name;
+        }
+        if (cfg.version) setSiteVersion(cfg.version);
         if (cfg.ifconfig_url) setIfconfigUrl(cfg.ifconfig_url);
       })
       .catch(() => { /* non-critical */ });
@@ -1150,7 +1159,7 @@ export default function App() {
     <div class="app">
       <a href="#main-content" class="skip-link">Skip to results</a>
       <header class="header">
-        <h1 class="logo">prism</h1>
+        <h1 class="logo">{siteName()}</h1>
         <span class="tagline">DNS, refracted</span>
         <div class="header-actions">
           <button
@@ -1506,13 +1515,26 @@ export default function App() {
       </main>
 
       <footer class="footer">
-        <a class="footer-link" href="https://github.com/lukaspustina/mhost-prism" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <span class="footer-sep">&middot;</span>
-        <a class="footer-link" href="/docs">API Docs</a>
-        <span class="footer-sep">&middot;</span>
-        <a class="footer-link" href="https://lukas.pustina.de" target="_blank" rel="noopener noreferrer">Author</a>
-        <span class="footer-sep">&middot;</span>
-        <span class="footer-text">v{__APP_VERSION__}</span>
+        <div class="footer-about">
+          <em>{siteName()}</em> is a multi-server DNS debugging and inspection service.
+          Fan-out queries across resolvers with streaming results, DNSSEC validation, delegation tracing, and transport comparison.
+          Built in <a href="https://www.rust-lang.org/" target="_blank" rel="noopener noreferrer">Rust</a>{" "}
+          with <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a>{" "}
+          and <a href="https://www.solidjs.com/" target="_blank" rel="noopener noreferrer">SolidJS</a>,{" "}
+          powered by <a href="https://github.com/lukaspustina/mhost" target="_blank" rel="noopener noreferrer">mhost</a>.
+          Open to use — rate limiting applies.
+        </div>
+        <div class="footer-links">
+          <a class="footer-link" href="https://github.com/lukaspustina/mhost-prism" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <span class="footer-sep">&middot;</span>
+          <a class="footer-link" href="/docs">API Docs</a>
+          <span class="footer-sep">&middot;</span>
+          <a class="footer-link" href="https://lukas.pustina.de" target="_blank" rel="noopener noreferrer">Author</a>
+          <span class="footer-sep">&middot;</span>
+          <Show when={siteVersion()}>
+            <span class="footer-text">v{siteVersion()}</span>
+          </Show>
+        </div>
       </footer>
 
       {/* Help modal */}
