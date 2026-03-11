@@ -218,7 +218,8 @@ async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {
 
     match Assets::get(if path.is_empty() { "index.html" } else { path }) {
         Some(file) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            let mime = mime_guess::from_path(if path.is_empty() { "index.html" } else { path })
+                .first_or_octet_stream();
             // index.html: no-cache so the SPA picks up new deployments.
             // Hashed assets (JS/CSS bundles from Vite): immutable.
             let cache = if path.is_empty() || path == "index.html" {
