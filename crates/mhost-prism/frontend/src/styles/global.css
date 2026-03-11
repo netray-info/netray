@@ -60,6 +60,11 @@
   box-sizing: border-box;
 }
 
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -80,7 +85,7 @@ body {
   font-family: var(--font-sans);
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.6;
+  line-height: 1.5;
   min-height: 100vh;
   /* iOS safe area: pad left/right for notch/island on landscape */
   padding-left: env(safe-area-inset-left);
@@ -1560,7 +1565,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 24px;
-  max-width: 460px;
+  max-width: 480px;
   width: 90vw;
   max-height: 80vh;
   overflow-y: auto;
