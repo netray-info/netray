@@ -8,7 +8,7 @@
 [server]
 bind = "127.0.0.1:8081"
 metrics_bind = "127.0.0.1:9090"
-# trusted_proxies = ["10.0.0.1"]
+# trusted_proxies = ["10.0.0.0/8"]
 
 [limits]
 per_ip_per_minute = 30
@@ -44,3 +44,14 @@ ip_base_url = "https://ip.netray.info"
 # enabled = true
 # http_check_timeout_secs = 5
 # skip_http_checks = false
+
+[telemetry]
+# Log output format: "text" (default, human-readable) or "json" (structured, for log aggregators).
+# Override via TLSIGHT_TELEMETRY__LOG_FORMAT=json
+# log_format = "text"
+
+# Set enabled = true and configure otlp_endpoint to export traces via OTLP.
+# enabled = false
+# otlp_endpoint = "http://localhost:4318"
+# service_name = "tlsight"
+# sample_rate = 1.0

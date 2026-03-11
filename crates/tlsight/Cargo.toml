@@ -29,7 +29,7 @@ axum = { version = "0.8", features = ["json"] }
 tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
 governor = "0.10"
-netray-common = "0.1.0"
+netray-common = "0.2.0"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -47,7 +47,13 @@ thiserror = "2"
 
 # Logging / tracing
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "registry"] }
+
+# OpenTelemetry (opt-in)
+opentelemetry = "0.28"
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.28", features = ["http-proto"] }
+tracing-opentelemetry = "0.29"
 
 # Metrics
 metrics = "0.24"
