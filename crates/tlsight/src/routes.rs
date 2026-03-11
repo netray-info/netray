@@ -10,7 +10,10 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::error::AppError;
+use utoipa::OpenApi;
+
+use crate::enrichment::{CloudInfo, IpEnrichment};
+use crate::error::{AppError, ErrorResponse};
 use crate::input::{self, Target};
 use crate::security::rate_limit::select_representative_ips;
 use crate::security::target_policy;
@@ -142,7 +145,7 @@ pub struct InspectQuery {
     pub h: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct InspectPostBody {
     pub hostname: String,
     #[serde(default = "default_ports")]
@@ -152,6 +155,61 @@ pub struct InspectPostBody {
 fn default_ports() -> Vec<u16> {
     vec![443]
 }
+
+// ---------------------------------------------------------------------------
+// OpenAPI
+// ---------------------------------------------------------------------------
+
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "tlsight",
+        description = "TLS certificate inspection and diagnostics API"
+    ),
+    paths(
+        health_handler,
+        ready_handler,
+        inspect_handler,
+        inspect_post_handler,
+        meta_handler,
+    ),
+    components(schemas(
+        InspectResponse,
+        PortResult,
+        DnsContext,
+        CaaInfo,
+        TlsaInfo,
+        ConsistencyResult,
+        ConsistencyMismatch,
+        MetaResponse,
+        MetaFeatures,
+        MetaLimits,
+        MetaEcosystem,
+        HealthResponse,
+        ErrorResponse,
+        crate::error::ErrorInfo,
+        tls::IpInspectionResult,
+        tls::InspectionError,
+        tls::CertInfo,
+        tls::TlsParams,
+        tls::ocsp::OcspInfo,
+        validate::CheckStatus,
+        validate::Summary,
+        validate::SummaryChecks,
+        validate::ValidationResult,
+        validate::ct::CtInfo,
+        validate::ct::SctEntry,
+        IpEnrichment,
+        CloudInfo,
+        crate::quality::QualityResult,
+        crate::quality::PortQualityResult,
+        crate::quality::HealthCheck,
+        crate::quality::RedirectInfo,
+        crate::quality::types::HstsInfo,
+        crate::quality::types::Category,
+    ))
+)]
+pub struct ApiDoc;
 
 // ---------------------------------------------------------------------------
 // Routers
@@ -179,16 +237,37 @@ pub fn api_router(state: AppState) -> Router {
 // Handlers
 // ---------------------------------------------------------------------------
 
+#[utoipa::path(
+    get,
+    path = "/api/health",
+    responses(
+        (status = 200, description = "Service is alive", body = HealthResponse),
+    )
+)]
 async fn health_handler() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/ready",
+    responses(
+        (status = 200, description = "Service is ready", body = HealthResponse),
+    )
+)]
 async fn ready_handler() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ready" })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/meta",
+    responses(
+        (status = 200, description = "Service metadata", body = MetaResponse),
+    )
+)]
 async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
-    let config = &state.config;
+    let config = state.config.load();
     let ecosystem =
         if config.ecosystem.dns_base_url.is_some() || config.ecosystem.ip_base_url.is_some() {
             Some(MetaEcosystem {
@@ -219,6 +298,21 @@ async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
     })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/inspect",
+    params(
+        ("h" = String, Query, description = "Hostname or IP with optional ports, e.g. example.com:443,8443"),
+    ),
+    responses(
+        (status = 200, description = "Inspection result", body = InspectResponse),
+        (status = 400, description = "Invalid input", body = ErrorResponse),
+        (status = 403, description = "Blocked target", body = ErrorResponse),
+        (status = 429, description = "Rate limited", body = ErrorResponse),
+        (status = 502, description = "Upstream failure", body = ErrorResponse),
+        (status = 504, description = "Request timeout", body = ErrorResponse),
+    )
+)]
 async fn inspect_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -226,10 +320,25 @@ async fn inspect_handler(
     query: Query<InspectQuery>,
 ) -> Result<Json<InspectResponse>, AppError> {
     let client_ip = state.ip_extractor.extract(&headers, addr);
-    let parsed = input::parse_input(&query.h, state.config.limits.max_ports)?;
+    let config = state.config.load();
+    let parsed = input::parse_input(&query.h, config.limits.max_ports)?;
     do_inspect(state, client_ip, &headers, parsed).await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/inspect",
+    request_body = InspectPostBody,
+    responses(
+        (status = 200, description = "Inspection result", body = InspectResponse),
+        (status = 400, description = "Invalid input", body = ErrorResponse),
+        (status = 403, description = "Blocked target", body = ErrorResponse),
+        (status = 422, description = "Too many ports", body = ErrorResponse),
+        (status = 429, description = "Rate limited", body = ErrorResponse),
+        (status = 502, description = "Upstream failure", body = ErrorResponse),
+        (status = 504, description = "Request timeout", body = ErrorResponse),
+    )
+)]
 async fn inspect_post_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -246,16 +355,18 @@ async fn inspect_post_handler(
         ));
     }
 
+    let config = state.config.load();
+
     // Validate ports
     if body.ports.is_empty() {
         return Err(AppError::InvalidPort(
             "ports array must not be empty".to_string(),
         ));
     }
-    if body.ports.len() > state.config.limits.max_ports {
+    if body.ports.len() > config.limits.max_ports {
         return Err(AppError::TooManyPorts {
             requested: body.ports.len(),
-            max: state.config.limits.max_ports,
+            max: config.limits.max_ports,
         });
     }
     for &p in &body.ports {
@@ -265,7 +376,7 @@ async fn inspect_post_handler(
     }
 
     // Validate hostname through the same path as GET
-    let target_parsed = input::parse_input(&body.hostname, state.config.limits.max_ports)?;
+    let target_parsed = input::parse_input(&body.hostname, config.limits.max_ports)?;
     let parsed = input::ParsedInput {
         target: target_parsed.target,
         ports: body.ports,
@@ -282,6 +393,7 @@ async fn do_inspect(
     parsed: input::ParsedInput,
 ) -> Result<Json<InspectResponse>, AppError> {
     let request_start = Instant::now();
+    let config = state.config.load();
 
     // Extract request ID from extensions (set by middleware)
     let request_id = uuid::Uuid::now_v7().to_string();
@@ -320,7 +432,7 @@ async fn do_inspect(
     }
 
     // Filter blocked IPs
-    let allow_blocked = state.config.limits.allow_blocked_targets;
+    let allow_blocked = config.limits.allow_blocked_targets;
     let allowed_ips: Vec<IpAddr> = ips
         .into_iter()
         .filter(
@@ -396,8 +508,8 @@ async fn do_inspect(
         None
     };
 
-    let handshake_timeout = Duration::from_secs(state.config.limits.handshake_timeout_secs);
-    let request_timeout = Duration::from_secs(state.config.limits.request_timeout_secs);
+    let handshake_timeout = Duration::from_secs(config.limits.handshake_timeout_secs);
+    let request_timeout = Duration::from_secs(config.limits.request_timeout_secs);
 
     let is_hostname = input_mode == "hostname";
     let do_dns = is_hostname && state.dns_resolver.is_some();
@@ -409,8 +521,8 @@ async fn do_inspect(
         let resolver = state.dns_resolver.clone().unwrap();
         let hostname = parsed.target.hostname().unwrap().to_string();
         let ports = parsed.ports.clone();
-        let check_caa = state.config.validation.check_caa;
-        let check_dane = state.config.validation.check_dane;
+        let check_caa = config.validation.check_caa;
+        let check_dane = config.validation.check_dane;
         let rt = tokio::runtime::Handle::current();
 
         Some(tokio::task::spawn_blocking(move || {
@@ -442,7 +554,7 @@ async fn do_inspect(
             let ips = inspected_ips.clone();
             let hostname = parsed.target.hostname().map(|h| h.to_string());
             let verifier = state.cert_verifier.clone();
-            let check_ct = state.config.validation.check_ct;
+            let check_ct = config.validation.check_ct;
             let semaphore = Arc::clone(&state.handshake_semaphore);
             join_set.spawn(async move {
                 inspect_port(
@@ -564,18 +676,18 @@ async fn do_inspect(
     }
 
     // Quality assessment (always when enabled in config)
-    let do_quality = state.config.quality.enabled;
+    let do_quality = config.quality.enabled;
 
     let hostname_quality = if do_quality {
         let is_hn = is_hostname;
-        let skip_http = state.config.quality.skip_http_checks || !is_hn;
+        let skip_http = config.quality.skip_http_checks || !is_hn;
         if skip_http {
             Some(crate::quality::assess_hostname(None, None))
         } else {
             let hsts_port = crate::quality::hsts_port(&parsed.ports);
             let first_ip = inspected_ips[0];
             let hostname_clone = hostname_str.clone();
-            let http_timeout = Duration::from_secs(state.config.quality.http_check_timeout_secs);
+            let http_timeout = Duration::from_secs(config.quality.http_check_timeout_secs);
 
             let hsts_connector = Arc::clone(&state.hsts_tls_connector);
             let (hsts_result, redirect_result) = tokio::join!(
@@ -606,7 +718,7 @@ async fn do_inspect(
         .unwrap_or((&None, false));
 
     // Compute CT status from first successful IP result
-    let ct_status = if state.config.validation.check_ct {
+    let ct_status = if config.validation.check_ct {
         let ct_info = port_results
             .iter()
             .flat_map(|pr| pr.ips.iter())
@@ -636,7 +748,7 @@ async fn do_inspect(
 
     // Per-port quality assessment
     if do_quality {
-        let ct_enabled = state.config.validation.check_ct;
+        let ct_enabled = config.validation.check_ct;
         for pr in &mut port_results {
             let port_quality = crate::quality::assess_port(
                 &pr.ips,
@@ -834,38 +946,9 @@ async fn resolve_hostname(hostname: &str) -> Result<Vec<std::net::IpAddr>, AppEr
 }
 
 async fn openapi_handler() -> impl IntoResponse {
-    // TODO("proper utoipa OpenAPI spec generation")
-    let spec = serde_json::json!({
-        "openapi": "3.1.0",
-        "info": {
-            "title": "tlsight",
-            "version": env!("CARGO_PKG_VERSION"),
-            "description": "TLS certificate inspection and diagnostics API"
-        },
-        "paths": {
-            "/api/inspect": {
-                "get": {
-                    "summary": "Inspect TLS configuration",
-                    "parameters": [{
-                        "name": "h",
-                        "in": "query",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }]
-                }
-            },
-            "/api/health": {
-                "get": { "summary": "Health check" }
-            },
-            "/api/ready": {
-                "get": { "summary": "Readiness check" }
-            },
-            "/api/meta": {
-                "get": { "summary": "Service metadata" }
-            }
-        }
-    });
-    Json(spec)
+    let mut doc = ApiDoc::openapi();
+    doc.info.version = env!("CARGO_PKG_VERSION").to_string();
+    Json(doc)
 }
 
 async fn docs_handler() -> Html<&'static str> {

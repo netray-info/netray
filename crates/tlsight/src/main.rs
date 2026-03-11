@@ -11,6 +11,7 @@ mod enrichment;
 mod error;
 mod input;
 mod quality;
+mod reload;
 mod routes;
 mod security;
 mod state;
@@ -63,6 +64,8 @@ async fn main() {
     if state.enrichment_client.is_some() {
         tracing::info!("IP enrichment enabled");
     }
+
+    reload::spawn_reload_watcher(config_path.clone(), state.config.clone());
 
     let app = Router::new()
         .merge(routes::health_router())

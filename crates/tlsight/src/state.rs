@@ -2,6 +2,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arc_swap::ArcSwap;
+
 use crate::config::Config;
 use crate::dns::DnsResolver;
 use crate::enrichment::EnrichmentClient;
@@ -11,7 +13,7 @@ use tokio::sync::Semaphore;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub config: Arc<Config>,
+    pub config: Arc<ArcSwap<Config>>,
     pub ip_extractor: Arc<IpExtractor>,
     pub rate_limiter: Arc<RateLimitState>,
     #[allow(dead_code)] // Kept alive for cert_verifier which holds an Arc reference to it
@@ -62,7 +64,7 @@ impl AppState {
             hsts_tls_connector,
             dns_resolver: None, // Initialized async in main
             enrichment_client,
-            config: Arc::new(config.clone()),
+            config: Arc::new(ArcSwap::from_pointee(config.clone())),
         }
     }
 }

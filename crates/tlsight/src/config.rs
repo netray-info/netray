@@ -304,7 +304,7 @@ impl Config {
     ///
     /// - Values exceeding hard caps are clamped with a tracing warning.
     /// - Zero values for rate limits, connections, and query limits are rejected.
-    fn validate(&mut self) -> Result<(), ConfigError> {
+    pub fn validate(&mut self) -> Result<(), ConfigError> {
         // Clamp to hard caps (SDD §8.1).
         if self.limits.handshake_timeout_secs > HARD_CAP_HANDSHAKE_TIMEOUT {
             tracing::warn!(
