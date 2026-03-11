@@ -149,7 +149,8 @@ async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {
 
     match Assets::get(if path.is_empty() { "index.html" } else { path }) {
         Some(file) => {
-            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            let effective_path = if path.is_empty() { "index.html" } else { path };
+            let mime = mime_guess::from_path(effective_path).first_or_octet_stream();
             let cache = if path.is_empty() || path == "index.html" {
                 "no-cache"
             } else {
