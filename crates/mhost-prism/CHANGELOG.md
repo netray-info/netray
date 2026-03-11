@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3] - 2026-03-11
+
+### Fixed
+
+- Serve `index.html` with `text/html` content-type for root path (`/`); previously `mime_guess` fell back to `application/octet-stream` causing browsers to download instead of render the SPA
+
 ## [0.1.2] - 2026-03-11
 
 ### Fixed
