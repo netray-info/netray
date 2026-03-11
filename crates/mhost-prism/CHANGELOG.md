@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.1] - 2026-03-11
+
+### Fixed
+
+- Docker release workflow: add `tags` field to `build-push-action` so push-by-digest succeeds
+
+### Changed
+
+- Roadmap: add trusted CIDR network access as high-priority infrastructure item
+
 ## [0.1.0] - 2026-03-11
 
 ### Added
