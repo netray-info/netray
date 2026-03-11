@@ -591,6 +591,7 @@ mod tests {
 
     fn valid_config() -> Config {
         Config {
+            site_name: default_site_name(),
             server: default_server(),
             limits: default_limits(),
             circuit_breaker: default_circuit_breaker(),

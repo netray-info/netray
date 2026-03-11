@@ -234,6 +234,7 @@ mod tests {
             PerformanceConfig, ServerConfig, TelemetryConfig, TraceConfig,
         };
         Config {
+            site_name: "prism".to_string(),
             server: ServerConfig {
                 bind: ([127, 0, 0, 1], 8080).into(),
                 metrics_bind: ([127, 0, 0, 1], 9090).into(),

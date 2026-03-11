@@ -1,6 +1,8 @@
 # Development configuration — relaxed limits for local testing.
 # Used by `make dev`.
 
+# site_name = "prism (dev)"
+
 [limits]
 per_ip_per_minute = 600
 per_ip_burst = 64
@@ -15,7 +17,7 @@ allow_system_resolvers = true
 allow_arbitrary_servers = true
 
 [ecosystem]
-ifconfig_url = "https://ip.pdt.sh"
+ifconfig_url = "https://ip.netray.info"
 
 [telemetry]
 # Human-readable text output for local development.

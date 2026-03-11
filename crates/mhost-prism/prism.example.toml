@@ -6,6 +6,10 @@
 #   PRISM_LIMITS__PER_IP_PER_MINUTE=200
 #   PRISM_DNS__ALLOW_ARBITRARY_SERVERS=true
 
+# Display name shown in the UI header, footer, and page title.
+# Default: "prism"
+#site_name = "prism"
+
 # ---------------------------------------------------------------------------
 # [server] — HTTP server settings
 # ---------------------------------------------------------------------------
@@ -118,11 +122,11 @@
 
 # Public URL for ifconfig-style IP lookups (frontend clickable IP links).
 # When set, A/AAAA record values and trace server IPs become clickable links.
-#ifconfig_url = "https://ip.pdt.sh"
+#ifconfig_url = "https://ip.netray.info"
 
 # Backend API URL for IP enrichment fetches. Defaults to ifconfig_url if unset.
 # Useful when the public URL differs from the internal API endpoint.
-#ifconfig_api_url = "https://ip.pdt.sh"
+#ifconfig_api_url = "https://ip.netray.info"
 
 # Timeout for enrichment HTTP requests in milliseconds (default: 500, hard cap: 2000).
 # Enrichment never blocks DNS results — it runs after all DNS queries complete.

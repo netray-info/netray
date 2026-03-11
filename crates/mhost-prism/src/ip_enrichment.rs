@@ -56,7 +56,7 @@ pub struct IpEnrichmentService {
 impl IpEnrichmentService {
     /// Create a new enrichment service.
     ///
-    /// - `base_url`: ifconfig API base (e.g. `https://ip.pdt.sh`)
+    /// - `base_url`: ifconfig API base (e.g. `https://ip.netray.info`)
     /// - `timeout`: HTTP request timeout
     pub fn new(base_url: &str, timeout: Duration) -> Self {
         let client = reqwest::Client::builder()
