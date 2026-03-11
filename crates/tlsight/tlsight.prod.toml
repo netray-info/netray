@@ -1,6 +1,8 @@
 # tlsight production configuration
 # See docs/sdd.md for full documentation.
 
+site_name = "tlsight"
+
 [server]
 bind = "0.0.0.0:8081"
 # metrics_bind is intentionally localhost-only: the endpoint is unauthenticated.
@@ -33,9 +35,9 @@ check_ct = false
 # custom_ca_dir = "/etc/tlsight/ca.d/"
 
 [ecosystem]
-dns_base_url = "https://dns.pdt.sh"
-ip_base_url = "https://ip.pdt.sh"
-# ip_api_url = "https://ip.pdt.sh"   # enables IP enrichment (geo, ASN, rDNS)
+dns_base_url = "https://dns.netray.info"
+ip_base_url = "https://ip.netray.info"
+# ip_api_url = "https://ip.netray.info"   # enables IP enrichment (geo, ASN, rDNS)
 # enrichment_timeout_ms = 500
 
 [quality]

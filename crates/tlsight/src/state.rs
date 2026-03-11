@@ -145,6 +145,7 @@ mod tests {
 
     fn default_config() -> Config {
         let mut cfg = Config {
+            site_name: "tlsight".to_string(),
             server: crate::config::ServerConfig {
                 bind: ([127, 0, 0, 1], 8080).into(),
                 metrics_bind: ([127, 0, 0, 1], 9090).into(),

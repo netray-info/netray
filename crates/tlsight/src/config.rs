@@ -101,7 +101,7 @@ pub struct ValidationConfig {
 pub struct EcosystemConfig {
     pub dns_base_url: Option<String>,
     pub ip_base_url: Option<String>,
-    /// Base URL for the ifconfig-rs IP enrichment API (e.g. `https://ip.pdt.sh`).
+    /// Base URL for the ifconfig-rs IP enrichment API (e.g. `https://ip.netray.info`).
     /// When set, enrichment lookups run concurrently with TLS handshakes.
     pub ip_api_url: Option<String>,
     /// Timeout for each enrichment HTTP call in milliseconds.
@@ -423,6 +423,7 @@ mod tests {
 
     fn valid_config() -> Config {
         Config {
+            site_name: default_site_name(),
             server: default_server(),
             limits: default_limits(),
             dns: default_dns(),
@@ -560,7 +561,7 @@ mod tests {
     #[test]
     fn clamps_enrichment_timeout_ms() {
         let mut cfg = valid_config();
-        cfg.ecosystem.ip_api_url = Some("https://ip.pdt.sh".to_owned());
+        cfg.ecosystem.ip_api_url = Some("https://ip.netray.info".to_owned());
         cfg.ecosystem.enrichment_timeout_ms = 9999;
         cfg.validate().unwrap();
         assert_eq!(
@@ -572,7 +573,7 @@ mod tests {
     #[test]
     fn rejects_zero_enrichment_timeout_when_enabled() {
         let mut cfg = valid_config();
-        cfg.ecosystem.ip_api_url = Some("https://ip.pdt.sh".to_owned());
+        cfg.ecosystem.ip_api_url = Some("https://ip.netray.info".to_owned());
         cfg.ecosystem.enrichment_timeout_ms = 0;
         let err = cfg.validate().unwrap_err().to_string();
         assert!(
