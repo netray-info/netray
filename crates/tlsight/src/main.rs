@@ -15,6 +15,7 @@ mod reload;
 mod routes;
 mod security;
 mod state;
+mod telemetry;
 mod tls;
 mod validate;
 
@@ -31,19 +32,15 @@ async fn main() {
         .install_default()
         .expect("failed to install rustls crypto provider");
 
-    tracing_subscriber::fmt()
-        .json()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "tlsight=info,tower_http=info".into()),
-        )
-        .init();
-
+    // 1. Load configuration (before tracing, since telemetry config controls subscriber setup).
     let config_path = std::env::args()
         .nth(1)
         .or_else(|| std::env::var("TLSIGHT_CONFIG").ok());
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
+
+    // 2. Initialize tracing (with optional OpenTelemetry layer).
+    telemetry::init_subscriber(&config.telemetry);
 
     tracing::info!(bind = %config.server.bind, "starting tlsight");
 
@@ -112,6 +109,9 @@ async fn main() {
     .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
     .await
     .expect("server error");
+
+    // Flush pending OTel spans on shutdown.
+    telemetry::shutdown();
 }
 
 pub(crate) async fn request_id_middleware(

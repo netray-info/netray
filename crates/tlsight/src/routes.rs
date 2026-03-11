@@ -1014,6 +1014,7 @@ mod tests {
             },
             ecosystem: crate::config::EcosystemConfig::default(),
             quality: crate::config::QualityConfig::default(),
+            telemetry: crate::config::TelemetryConfig::default(),
         }
     }
 

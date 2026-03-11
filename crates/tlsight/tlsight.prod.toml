@@ -43,3 +43,10 @@ ip_base_url = "https://ip.netray.info"
 [quality]
 enabled = true
 http_check_timeout_secs = 5
+
+# [telemetry]
+# log_format = "json"
+# enabled = false
+# otlp_endpoint = "http://localhost:4318"
+# service_name = "tlsight"
+# sample_rate = 1.0

@@ -179,6 +179,7 @@ mod tests {
             },
             ecosystem: crate::config::EcosystemConfig::default(),
             quality: crate::config::QualityConfig::default(),
+            telemetry: crate::config::TelemetryConfig::default(),
         };
         // Ensure defaults pass validation (not strictly needed but defensive).
         let _ = &mut cfg;

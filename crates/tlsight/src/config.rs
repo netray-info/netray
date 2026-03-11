@@ -29,6 +29,8 @@ pub struct Config {
     pub ecosystem: EcosystemConfig,
     #[serde(default = "default_quality")]
     pub quality: QualityConfig,
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -156,6 +158,57 @@ fn default_quality() -> QualityConfig {
 
 fn default_http_check_timeout_secs() -> u64 {
     5
+}
+
+/// Log output format.
+///
+/// Configurable via `telemetry.log_format` in the TOML config or
+/// `TLSIGHT_TELEMETRY__LOG_FORMAT=json` environment variable.
+///
+/// - `text` (default): human-readable, colour-coded output for local development.
+/// - `json`: structured JSON lines for log aggregators (Loki, CloudWatch, Datadog).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogFormat {
+    #[default]
+    Text,
+    Json,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct TelemetryConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_otlp_endpoint")]
+    pub otlp_endpoint: String,
+    #[serde(default = "default_service_name")]
+    pub service_name: String,
+    #[serde(default = "default_sample_rate")]
+    pub sample_rate: f64,
+    #[serde(default)]
+    pub log_format: LogFormat,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            otlp_endpoint: default_otlp_endpoint(),
+            service_name: default_service_name(),
+            sample_rate: default_sample_rate(),
+            log_format: LogFormat::default(),
+        }
+    }
+}
+
+fn default_otlp_endpoint() -> String {
+    "http://localhost:4318".to_owned()
+}
+fn default_service_name() -> String {
+    "tlsight".to_owned()
+}
+fn default_sample_rate() -> f64 {
+    1.0
 }
 
 // --- Default value functions ---
@@ -403,6 +456,13 @@ impl Config {
             self.quality.http_check_timeout_secs = HARD_CAP_HTTP_CHECK_TIMEOUT;
         }
 
+        // Telemetry config validation.
+        if self.telemetry.enabled && !(0.0..=1.0).contains(&self.telemetry.sample_rate) {
+            return Err(ConfigError::Message(
+                "invalid configuration: telemetry.sample_rate must be in [0.0, 1.0]".to_owned(),
+            ));
+        }
+
         Ok(())
     }
 }
@@ -430,6 +490,7 @@ mod tests {
             validation: default_validation(),
             ecosystem: EcosystemConfig::default(),
             quality: default_quality(),
+            telemetry: TelemetryConfig::default(),
         }
     }
 
