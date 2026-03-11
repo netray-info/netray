@@ -93,6 +93,13 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
             .expect("valid header value"),
     );
 
+    headers.insert(
+        axum::http::HeaderName::from_static("permissions-policy"),
+        "geolocation=(), microphone=(), camera=(), payment=()"
+            .parse()
+            .expect("valid header value"),
+    );
+
     response
 }
 
@@ -178,6 +185,20 @@ mod tests {
     async fn handler_still_returns_ok() {
         let response = make_response_with_security_headers().await;
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn sets_permissions_policy() {
+        let response = make_response_with_security_headers().await;
+        let pp = response
+            .headers()
+            .get("permissions-policy")
+            .expect("Permissions-Policy header present")
+            .to_str()
+            .unwrap();
+        assert!(pp.contains("geolocation=()"));
+        assert!(pp.contains("microphone=()"));
+        assert!(pp.contains("camera=()"));
     }
 
     #[test]

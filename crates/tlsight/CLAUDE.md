@@ -59,11 +59,11 @@ Decisions made during project setup, supplementing the SDD:
 | **Repository** | Standalone repo, `mhost` via crates.io | Independent release cadence; same pattern as prism/ifconfig-rs |
 | **TLS implementation** | `rustls` (pure Rust) | No OpenSSL dependency, static musl builds, memory-safe. Trade-off: no legacy cipher support (RC4, 3DES) |
 | **Certificate verifier** | `AcceptAnyCert` custom verifier | Inspection tool must see broken certs, not reject them. Validation is application-level, post-handshake |
-| **Trust store** | `webpki-roots` + optional CA directory (`custom_ca_dir` config) | Mozilla bundle as baseline; operators drop PEM files into a directory for private CAs. All `*.pem` files loaded at startup. Supports internal PKI (e.g., Step-CA) without rebuilds |
+| **Trust store** | `webpki-roots` + optional CA directory (`custom_ca_dir` config) | Mozilla bundle as baseline; operators drop PEM/CRT files into a directory for private CAs. All `*.pem` and `*.crt` files loaded at startup. Supports internal PKI (e.g., Step-CA) without rebuilds |
 | **Cert parsing** | `x509-parser` + `x509-ocsp` | DER/PEM parsing, extension extraction, OID mapping. `x509-ocsp` for OCSP staple parsing |
 | **DNS resolution** | `mhost` (not `hickory-resolver`) | Ecosystem consistency, proven DNSSEC support, same-team maintenance. Heavier than needed but accepted cost |
 | **Response model** | Synchronous JSON (not SSE) | TLS handshakes complete in milliseconds; SSE is unnecessary overhead |
-| **Rate limiting** | `tower-governor` (GCRA), two-tier + cap-and-warn | Per-source-IP + per-target-hostname. Multi-IP fan-out degrades gracefully instead of rejecting |
+| **Rate limiting** | `governor = "0.8"` (GCRA), two-tier + cap-and-warn | Per-source-IP + per-target-hostname. Multi-IP fan-out degrades gracefully instead of rejecting |
 | **CSS** | Plain CSS with custom properties | Small frontend, zero build config, maps to ecosystem design language |
 | **Config parsing** | `config` crate | Same pattern as prism/ifconfig-rs: TOML + `TLSIGHT_` prefix + `__` separators |
 | **Error handling** | `thiserror` | Structured `AppError` enum maps to HTTP status + error codes |
@@ -102,7 +102,7 @@ make lint                             # clippy + fmt-check
 make ci                               # lint + test + frontend (run before pushing)
 
 # Development (two terminals)
-make frontend-dev                     # Vite dev server :5173 (proxies /api/* to :8080)
+make frontend-dev                     # Vite dev server :5174 (proxies /api/* to :8081)
 make dev                              # cargo run with tlsight.dev.toml
 
 # Cleanup
@@ -137,6 +137,7 @@ tlsight/
     state.rs                      # AppState (config, rate limiter, dns resolver, trust store)
     routes.rs                     # axum router, endpoint handlers
     scalar_docs.html              # Scalar API docs UI template
+    enrichment.rs                 # IP enrichment client (geo, ASN, rDNS via ip_api_url)
     tls/
       mod.rs                      # TLS inspection orchestration
       connect.rs                  # TCP connect + TLS handshake execution
@@ -158,6 +159,11 @@ tlsight/
       rate_limit.rs               # GCRA rate limiting (per-IP, per-target)
       ip_extract.rs               # Client IP from proxy headers
       target_policy.rs            # Target validation (no internal IPs, port restrictions)
+    quality/
+      mod.rs                      # Quality/health assessment orchestration
+      checks.rs                   # Individual quality check implementations
+      http.rs                     # HTTP reachability and redirect checks
+      types.rs                    # Quality check result types
   frontend/                       # SolidJS + Vite (strict TypeScript)
     src/
       index.tsx                   # SolidJS entry point (renders App)
@@ -172,6 +178,9 @@ tlsight/
         ConsistencyView.tsx       # Multi-IP consistency comparison
         CtView.tsx                # Certificate Transparency SCT display
         DnsInfo.tsx               # CAA and TLSA DNS cross-check results
+        IpBadges.tsx              # IP address badge display
+        IpCard.tsx                # Per-IP inspection result card
+        UnifiedIpView.tsx         # Unified multi-IP result view
         PortTabs.tsx              # Multi-port tab navigation
         QueryHistory.tsx          # Recent query history (localStorage)
         ExportButtons.tsx         # JSON download + markdown copy
@@ -180,7 +189,9 @@ tlsight/
       lib/
         types.ts                  # TypeScript interfaces matching Rust response
         api.ts                    # API client for /api/inspect
+        cert.ts                   # Certificate utility functions
         history.ts                # Query history management (localStorage)
+        trust.ts                  # Trust store / root CA utilities
       styles/
         global.css                # Plain CSS with custom properties
     dist/                         # Build output, .gitignored, embedded via rust-embed
@@ -199,7 +210,7 @@ tlsight/
 - **Inspection pipeline**: Resolve IPs → filter blocked → cap-and-warn → concurrent handshakes (semaphore-bounded) + concurrent DNS (CAA, TLSA) → cross-validate → summary verdict.
 - **Per-request concurrency**: `JoinSet` + `Arc<Semaphore>` bounds concurrent handshakes per request (`max_concurrent_handshakes`). Ports run concurrently, not sequentially.
 - **Cap-and-warn rate limiting**: When multi-IP fan-out exceeds rate budget, reduce inspected IPs (prefer one v4 + one v6) instead of rejecting. Response includes `warnings` and `skipped_ips`.
-- **Trust store**: `RootCertStore` built at startup from `webpki-roots` (Mozilla bundle) + all `*.pem` files from `custom_ca_dir` (if configured). Supports private CAs without rebuilds.
+- **Trust store**: `RootCertStore` built at startup from `webpki-roots` (Mozilla bundle) + all `*.pem` and `*.crt` files from `custom_ca_dir` (if configured). Supports private CAs without rebuilds.
 - **Config precedence**: CLI arg / `TLSIGHT_CONFIG` env var > TOML file > built-in defaults. Env vars override TOML (`TLSIGHT_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed.
 - **Error responses**: Structured JSON via `AppError` enum: `{ "error": { "code": "...", "message": "..." } }`.
 - **Request IDs**: UUID v7 in `X-Request-Id` header on every response.
@@ -216,7 +227,7 @@ tlsight/
 - `x509-ocsp` — OCSP stapled response parsing
 - `axum` 0.8 — Web framework (routes, extractors, JSON)
 - `tower-http` 0.6 — CORS, compression, tracing, security headers
-- `tower-governor` — Rate limiting (GCRA, per-IP + per-target)
+- `governor` 0.8 — Rate limiting (GCRA, per-IP + per-target)
 - `rust-embed` 8 — Embed frontend assets
 - `config` — Layered configuration (TOML + env vars)
 - `thiserror` — Structured error enums
@@ -245,4 +256,4 @@ When modifying API endpoints or adding features, verify:
 - [ ] No PII in logs (no full certificate content)
 - [ ] Security headers present on all responses
 - [ ] CORS restricted to configured origins
-- [ ] Custom CA directory loads only `*.pem` files, fails fast on bad PEM
+- [ ] Custom CA directory loads only `*.pem` and `*.crt` files, fails fast on bad PEM

@@ -7,12 +7,97 @@
 
 use std::net::IpAddr;
 
+fn check_ipv4(v4: &std::net::Ipv4Addr) -> Result<(), &'static str> {
+    if v4.is_loopback() {
+        return Err("loopback address");
+    }
+    if v4.is_private() {
+        return Err("private address (RFC 1918)");
+    }
+    if v4.is_link_local() {
+        return Err("link-local address");
+    }
+    if v4.is_broadcast() {
+        return Err("broadcast address");
+    }
+    if v4.is_unspecified() {
+        return Err("unspecified address");
+    }
+    // CGNAT (100.64.0.0/10)
+    let octets = v4.octets();
+    if octets[0] == 100 && (octets[1] & 0xC0) == 64 {
+        return Err("CGNAT address (100.64.0.0/10)");
+    }
+    // Documentation ranges (RFC 5737)
+    if octets[0] == 192 && octets[1] == 0 && octets[2] == 2 {
+        return Err("documentation address (192.0.2.0/24)");
+    }
+    if octets[0] == 198 && octets[1] == 51 && octets[2] == 100 {
+        return Err("documentation address (198.51.100.0/24)");
+    }
+    if octets[0] == 203 && octets[1] == 0 && octets[2] == 113 {
+        return Err("documentation address (203.0.113.0/24)");
+    }
+    // Multicast
+    if v4.is_multicast() {
+        return Err("multicast address");
+    }
+    Ok(())
+}
+
+fn check_ipv6(v6: &std::net::Ipv6Addr) -> Result<(), &'static str> {
+    if let Some(v4) = v6.to_ipv4_mapped() {
+        return check_ipv4(&v4);
+    }
+    if v6.is_loopback() {
+        return Err("loopback address");
+    }
+    if v6.is_unspecified() {
+        return Err("unspecified address");
+    }
+    if v6.is_multicast() {
+        return Err("multicast address");
+    }
+    let segments = v6.segments();
+    // Link-local fe80::/10
+    if (segments[0] & 0xffc0) == 0xfe80 {
+        return Err("link-local address");
+    }
+    // ULA fc00::/7
+    if (segments[0] & 0xfe00) == 0xfc00 {
+        return Err("unique local address (ULA)");
+    }
+    // Documentation 2001:db8::/32
+    if segments[0] == 0x2001 && segments[1] == 0x0db8 {
+        return Err("documentation address (2001:db8::/32)");
+    }
+    // 6to4 2002::/16
+    if segments[0] == 0x2002 {
+        return Err("6to4 address");
+    }
+    // NAT64 64:ff9b::/96
+    if segments[0] == 0x0064
+        && segments[1] == 0xff9b
+        && segments[2] == 0
+        && segments[3] == 0
+        && segments[4] == 0
+        && segments[5] == 0
+    {
+        return Err("NAT64 address");
+    }
+    // Deprecated site-local fec0::/10
+    if (segments[0] & 0xffc0) == 0xfec0 {
+        return Err("deprecated site-local address (fec0::/10)");
+    }
+    Ok(())
+}
+
 /// Check if an IP address is allowed as a TLS inspection target.
 ///
 /// Returns `Ok(())` if the IP is routable and not in any reserved range,
 /// or if `allow_blocked` is true (development mode).
 /// Returns `Err` with a human-readable reason if the IP is blocked.
-#[allow(dead_code)] // Used in tests; production code uses check_allowed_with_policy
+#[cfg(test)]
 pub fn check_allowed(ip: &IpAddr) -> Result<(), &'static str> {
     check_allowed_inner(ip, false)
 }
@@ -27,68 +112,8 @@ fn check_allowed_inner(ip: &IpAddr, allow_blocked: bool) -> Result<(), &'static 
         return Ok(());
     }
     match ip {
-        IpAddr::V4(v4) => {
-            if v4.is_loopback() {
-                return Err("loopback address");
-            }
-            if v4.is_private() {
-                return Err("private address (RFC 1918)");
-            }
-            if v4.is_link_local() {
-                return Err("link-local address");
-            }
-            if v4.is_broadcast() {
-                return Err("broadcast address");
-            }
-            if v4.is_unspecified() {
-                return Err("unspecified address");
-            }
-            // CGNAT (100.64.0.0/10)
-            let octets = v4.octets();
-            if octets[0] == 100 && (octets[1] & 0xC0) == 64 {
-                return Err("CGNAT address (100.64.0.0/10)");
-            }
-            // Documentation ranges (RFC 5737)
-            if octets[0] == 192 && octets[1] == 0 && octets[2] == 2 {
-                return Err("documentation address (192.0.2.0/24)");
-            }
-            if octets[0] == 198 && octets[1] == 51 && octets[2] == 100 {
-                return Err("documentation address (198.51.100.0/24)");
-            }
-            if octets[0] == 203 && octets[1] == 0 && octets[2] == 113 {
-                return Err("documentation address (203.0.113.0/24)");
-            }
-            // Multicast
-            if v4.is_multicast() {
-                return Err("multicast address");
-            }
-            Ok(())
-        }
-        IpAddr::V6(v6) => {
-            if v6.is_loopback() {
-                return Err("loopback address");
-            }
-            if v6.is_unspecified() {
-                return Err("unspecified address");
-            }
-            if v6.is_multicast() {
-                return Err("multicast address");
-            }
-            let segments = v6.segments();
-            // Link-local fe80::/10
-            if (segments[0] & 0xffc0) == 0xfe80 {
-                return Err("link-local address");
-            }
-            // ULA fc00::/7
-            if (segments[0] & 0xfe00) == 0xfc00 {
-                return Err("unique local address (ULA)");
-            }
-            // Documentation 2001:db8::/32
-            if segments[0] == 0x2001 && segments[1] == 0x0db8 {
-                return Err("documentation address (2001:db8::/32)");
-            }
-            Ok(())
-        }
+        IpAddr::V4(v4) => check_ipv4(v4),
+        IpAddr::V6(v6) => check_ipv6(v6),
     }
 }
 
@@ -291,6 +316,48 @@ mod tests {
         assert!(err.contains("documentation"), "{err}");
     }
 
+    #[test]
+    fn blocks_deprecated_site_local_v6() {
+        let ip: IpAddr = "fec0::1".parse().unwrap();
+        let err = check_allowed(&ip).unwrap_err();
+        assert!(err.contains("deprecated site-local"), "{err}");
+    }
+
+    #[test]
+    fn blocks_ipv4_mapped_loopback() {
+        let ip: IpAddr = "::ffff:127.0.0.1".parse().unwrap();
+        let err = check_allowed(&ip).unwrap_err();
+        assert!(err.contains("loopback"), "{err}");
+    }
+
+    #[test]
+    fn blocks_ipv4_mapped_private() {
+        let ip: IpAddr = "::ffff:192.168.1.1".parse().unwrap();
+        let err = check_allowed(&ip).unwrap_err();
+        assert!(err.contains("private"), "{err}");
+    }
+
+    #[test]
+    fn blocks_ipv4_mapped_cgnat() {
+        let ip: IpAddr = "::ffff:100.64.0.1".parse().unwrap();
+        let err = check_allowed(&ip).unwrap_err();
+        assert!(err.contains("CGNAT"), "{err}");
+    }
+
+    #[test]
+    fn blocks_6to4() {
+        let ip: IpAddr = "2002:7f00:1::".parse().unwrap();
+        let err = check_allowed(&ip).unwrap_err();
+        assert!(err.contains("6to4"), "{err}");
+    }
+
+    #[test]
+    fn blocks_nat64() {
+        let ip: IpAddr = "64:ff9b::7f00:1".parse().unwrap();
+        let err = check_allowed(&ip).unwrap_err();
+        assert!(err.contains("NAT64"), "{err}");
+    }
+
     // ---- IPv6 allowed ----
 
     #[test]
@@ -302,19 +369,6 @@ mod tests {
     #[test]
     fn allows_google_dns_v6() {
         let ip: IpAddr = "2001:4860:4860::8888".parse().unwrap();
-        assert!(check_allowed(&ip).is_ok());
-    }
-
-    // ---- Edge cases ----
-
-    #[test]
-    fn allows_non_link_local_fe_prefix() {
-        // fec0:: is not in fe80::/10 range (it's in fec0::/10, deprecated site-local)
-        // but is still in fc00::/7 ULA range? No: fec0 & 0xfe00 = 0xfe00 != 0xfc00.
-        // fec0 is outside ULA (fc00::/7 covers fc00-fdff).
-        let ip: IpAddr = "fec0::1".parse().unwrap();
-        // fec0::/10 is link-local check: fec0 & 0xffc0 = 0xfec0 != 0xfe80, so not link-local.
-        // fec0 & 0xfe00 = 0xfe00 != 0xfc00, so not ULA.
         assert!(check_allowed(&ip).is_ok());
     }
 }

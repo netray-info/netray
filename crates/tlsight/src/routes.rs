@@ -8,20 +8,15 @@ use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use utoipa::{OpenApi, ToSchema};
+use utoipa::ToSchema;
 
-use crate::enrichment::{CloudInfo, IpEnrichment};
-use crate::error::{AppError, ErrorInfo, ErrorResponse};
+use crate::error::AppError;
 use crate::input::{self, Target};
-use crate::quality::types::{Category, HstsInfo, RedirectInfo};
-use crate::quality::{HealthCheck, PortQualityResult, QualityResult};
 use crate::security::rate_limit::select_representative_ips;
 use crate::security::target_policy;
 use crate::state::AppState;
 use crate::tls;
-use crate::tls::ocsp::OcspInfo;
 use crate::validate;
-use crate::validate::ct::{CtInfo, SctEntry};
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -167,9 +162,7 @@ fn default_ports() -> Vec<u16> {
 // ---------------------------------------------------------------------------
 
 pub fn health_router() -> Router {
-    Router::new()
-        .route("/api/health", get(health_handler))
-        .route("/api/ready", get(ready_handler))
+    Router::new().route("/api/health", get(health_handler))
 }
 
 pub fn api_router(state: AppState) -> Router {
@@ -179,6 +172,7 @@ pub fn api_router(state: AppState) -> Router {
             get(inspect_handler).post(inspect_post_handler),
         )
         .route("/api/meta", get(meta_handler))
+        .route("/api/ready", get(ready_handler))
         .route("/api-docs/openapi.json", get(openapi_handler))
         .route("/docs", get(docs_handler))
         .with_state(state)
@@ -188,38 +182,18 @@ pub fn api_router(state: AppState) -> Router {
 // Handlers
 // ---------------------------------------------------------------------------
 
-#[utoipa::path(
-    get,
-    path = "/api/health",
-    responses(
-        (status = 200, description = "Service is healthy", body = HealthResponse)
-    ),
-    tag = "system"
-)]
 async fn health_handler() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
-#[utoipa::path(
-    get,
-    path = "/api/ready",
-    responses(
-        (status = 200, description = "Service is ready to accept requests", body = HealthResponse)
-    ),
-    tag = "system"
-)]
-async fn ready_handler() -> Json<HealthResponse> {
+async fn ready_handler(State(state): State<AppState>) -> Json<HealthResponse> {
+    let needs_dns = state.config.validation.check_dane || state.config.validation.check_caa;
+    if needs_dns && state.dns_resolver.is_none() {
+        return Json(HealthResponse { status: "starting" });
+    }
     Json(HealthResponse { status: "ready" })
 }
 
-#[utoipa::path(
-    get,
-    path = "/api/meta",
-    responses(
-        (status = 200, description = "Server capabilities, enabled features, and configured limits", body = MetaResponse)
-    ),
-    tag = "system"
-)]
 async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
     let config = &state.config;
     let ecosystem =
@@ -252,38 +226,26 @@ async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
     })
 }
 
-#[utoipa::path(
-    get,
-    path = "/api/inspect",
-    params(
-        ("h" = String, Query, description = "Target to inspect. Format: `hostname[:port[,port...]]` — e.g. `example.com`, `example.com:443,8443`, `example.com:443,465,993`")
-    ),
-    responses(
-        (status = 200, description = "TLS inspection results", body = InspectResponse),
-        (status = 400, description = "Invalid input (hostname, port, or syntax error)", body = ErrorResponse),
-        (status = 403, description = "Blocked target (private/loopback/reserved address)", body = ErrorResponse),
-        (status = 422, description = "Input valid but exceeds configured limits (e.g. too many ports)", body = ErrorResponse),
-        (status = 429, description = "Rate limit exceeded", body = ErrorResponse,
-            headers(("Retry-After" = u64, description = "Seconds until the rate limit window resets"))),
-        (status = 502, description = "DNS resolution or TLS handshake failure", body = ErrorResponse),
-        (status = 504, description = "Request timed out", body = ErrorResponse),
-    ),
-    tag = "inspection"
-)]
 async fn inspect_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    axum::extract::Extension(crate::RequestId(request_id)): axum::extract::Extension<
+        crate::RequestId,
+    >,
     headers: axum::http::HeaderMap,
     query: Query<InspectQuery>,
 ) -> Result<Json<InspectResponse>, AppError> {
     let client_ip = state.ip_extractor.extract(&headers, addr);
     let parsed = input::parse_input(&query.h, state.config.limits.max_ports)?;
-    do_inspect(state, client_ip, &headers, parsed).await
+    do_inspect(state, client_ip, &headers, parsed, request_id).await
 }
 
 async fn inspect_post_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    axum::extract::Extension(crate::RequestId(request_id)): axum::extract::Extension<
+        crate::RequestId,
+    >,
     headers: axum::http::HeaderMap,
     raw_query: RawQuery,
     Json(body): Json<InspectPostBody>,
@@ -323,7 +285,7 @@ async fn inspect_post_handler(
     };
 
     let client_ip = state.ip_extractor.extract(&headers, addr);
-    do_inspect(state, client_ip, &headers, parsed).await
+    do_inspect(state, client_ip, &headers, parsed, request_id).await
 }
 
 async fn do_inspect(
@@ -331,11 +293,9 @@ async fn do_inspect(
     client_ip: IpAddr,
     _headers: &axum::http::HeaderMap,
     parsed: input::ParsedInput,
+    request_id: String,
 ) -> Result<Json<InspectResponse>, AppError> {
     let request_start = Instant::now();
-
-    // Extract request ID from extensions (set by middleware)
-    let request_id = uuid::Uuid::now_v7().to_string();
 
     let hostname_str = match &parsed.target {
         Target::Hostname(h) => h.clone(),
@@ -381,6 +341,21 @@ async fn do_inspect(
             "all resolved IPs for {hostname_str} are in blocked ranges"
         )));
     }
+
+    // Hard cap on IPs regardless of rate limiting
+    let allowed_ips = {
+        let max = state.config.limits.max_ips_per_hostname;
+        if allowed_ips.len() > max {
+            warnings.push(format!(
+                "resolved {} IPs; capped to {} (max_ips_per_hostname limit)",
+                allowed_ips.len(),
+                max
+            ));
+            allowed_ips[..max].to_vec()
+        } else {
+            allowed_ips
+        }
+    };
 
     // Cap-and-warn: compute cost and reduce IPs if over budget
     let full_cost = parsed.ports.len() as u32 * allowed_ips.len() as u32;
@@ -484,6 +459,7 @@ async fn do_inspect(
             let hostname = parsed.target.hostname().map(|h| h.to_string());
             let verifier = state.cert_verifier.clone();
             let check_ct = state.config.validation.check_ct;
+            let semaphore = Arc::clone(&state.handshake_semaphore);
             join_set.spawn(async move {
                 inspect_port(
                     &ips,
@@ -492,6 +468,7 @@ async fn do_inspect(
                     handshake_timeout,
                     verifier,
                     check_ct,
+                    semaphore,
                 )
                 .await
             });
@@ -700,10 +677,12 @@ async fn inspect_port(
     timeout: Duration,
     cert_verifier: Arc<dyn rustls::client::danger::ServerCertVerifier>,
     check_ct: bool,
+    semaphore: Arc<tokio::sync::Semaphore>,
 ) -> PortResult {
     let mut ip_results = Vec::with_capacity(ips.len());
 
     for &ip in ips {
+        let _permit = semaphore.acquire().await.ok();
         let mut result = tls::inspect_ip(ip, port, hostname, timeout).await;
 
         // Run validation if we got a chain
@@ -830,65 +809,45 @@ async fn resolve_hostname(hostname: &str) -> Result<Vec<std::net::IpAddr>, AppEr
         .collect();
 
     // Deduplicate
-    let mut unique = Vec::new();
-    for ip in addrs {
-        if !unique.contains(&ip) {
-            unique.push(ip);
-        }
-    }
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    let unique: Vec<_> = addrs.into_iter().filter(|ip| seen.insert(*ip)).collect();
     Ok(unique)
 }
 
-/// OpenAPI document for tlsight.
-#[derive(utoipa::OpenApi)]
-#[openapi(
-    info(
-        title = "tlsight",
-        description = "TLS certificate inspection and diagnostics API",
-        license(name = "MIT"),
-    ),
-    paths(
-        health_handler,
-        ready_handler,
-        meta_handler,
-        inspect_handler,
-    ),
-    components(
-        schemas(
-            // Top-level response types
-            InspectResponse, PortResult, DnsContext, CaaInfo, TlsaInfo,
-            ConsistencyResult, ConsistencyMismatch,
-            MetaResponse, MetaFeatures, MetaLimits, MetaEcosystem,
-            HealthResponse,
-            // Validation
-            validate::Summary, validate::SummaryChecks,
-            validate::ValidationResult, validate::CheckStatus,
-            // TLS inspection
-            tls::IpInspectionResult, tls::InspectionError,
-            tls::TlsParams, tls::CertInfo,
-            OcspInfo,
-            // Certificate Transparency
-            CtInfo, SctEntry,
-            // IP enrichment
-            IpEnrichment, CloudInfo,
-            // Quality / health checks
-            QualityResult, PortQualityResult, HealthCheck, Category,
-            HstsInfo, RedirectInfo,
-            // Error responses
-            ErrorResponse, ErrorInfo,
-        )
-    ),
-    tags(
-        (name = "inspection", description = "TLS inspection"),
-        (name = "system", description = "Health and metadata"),
-    )
-)]
-struct ApiDoc;
-
 async fn openapi_handler() -> impl IntoResponse {
-    let mut api = ApiDoc::openapi();
-    api.info.version = env!("CARGO_PKG_VERSION").to_string();
-    Json(api)
+    // TODO("proper utoipa OpenAPI spec generation")
+    let spec = serde_json::json!({
+        "openapi": "3.1.0",
+        "info": {
+            "title": "tlsight",
+            "version": env!("CARGO_PKG_VERSION"),
+            "description": "TLS certificate inspection and diagnostics API"
+        },
+        "paths": {
+            "/api/inspect": {
+                "get": {
+                    "summary": "Inspect TLS configuration",
+                    "parameters": [{
+                        "name": "h",
+                        "in": "query",
+                        "required": true,
+                        "schema": { "type": "string" }
+                    }]
+                }
+            },
+            "/api/health": {
+                "get": { "summary": "Health check" }
+            },
+            "/api/ready": {
+                "get": { "summary": "Readiness check" }
+            },
+            "/api/meta": {
+                "get": { "summary": "Service metadata" }
+            }
+        }
+    });
+    Json(spec)
 }
 
 async fn docs_handler() -> Html<&'static str> {
@@ -987,11 +946,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ready_returns_ready() {
+    async fn ready_returns_ready_or_starting() {
         let app = test_router();
         let (status, body) = get(&app, "/api/ready").await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["status"], "ready");
+        let s = body["status"].as_str().unwrap();
+        assert!(s == "ready" || s == "starting");
     }
 
     #[tokio::test]

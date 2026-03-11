@@ -7,6 +7,7 @@ use crate::dns::DnsResolver;
 use crate::enrichment::EnrichmentClient;
 use crate::security::{IpExtractor, RateLimitState};
 use rustls::client::danger::ServerCertVerifier;
+use tokio::sync::Semaphore;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -18,6 +19,7 @@ pub struct AppState {
     pub cert_verifier: Arc<dyn ServerCertVerifier>,
     pub dns_resolver: Option<Arc<DnsResolver>>,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
+    pub handshake_semaphore: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -51,6 +53,7 @@ impl AppState {
             cert_verifier,
             dns_resolver: None, // Initialized async in main
             enrichment_client,
+            handshake_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
             config: Arc::new(config.clone()),
         }
     }
