@@ -1,7 +1,8 @@
 .PHONY: all build check test clippy fmt fmt-check lint ci clean \
        dev run help \
        frontend frontend-install frontend-dev frontend-test \
-       test-rust test-frontend
+       test-rust test-frontend \
+       docker docker-run
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -64,3 +65,11 @@ dev: ## Run dev server with tlsight.dev.toml
 clean: ## Remove target/, frontend/dist/, node_modules/
 	cargo clean
 	rm -rf frontend/dist frontend/node_modules
+
+# --- Docker ---
+
+docker: ## Build Docker image (ghcr.io/lukaspustina/tlsight:latest)
+	docker build -t ghcr.io/lukaspustina/tlsight:latest .
+
+docker-run: ## Run Docker image locally (port 8081)
+	docker run --rm -p 8081:8081 -p 9090:9090 ghcr.io/lukaspustina/tlsight:latest
