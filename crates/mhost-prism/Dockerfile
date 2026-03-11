@@ -4,6 +4,7 @@
 FROM node:22-slim AS frontend
 WORKDIR /app
 
+COPY Cargo.toml ./
 COPY frontend/package.json frontend/package-lock.json ./frontend/
 RUN cd frontend && npm ci
 
