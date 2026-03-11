@@ -172,12 +172,17 @@ metrics_bind = "127.0.0.1:9090"  # Prometheus metrics (keep on loopback — do n
 trusted_proxies = []              # Individual IP addresses of trusted reverse proxies (not CIDR)
 
 [limits]
-per_ip_per_minute = 120   # GCRA tokens per client IP
-per_ip_burst = 64         # burst allowance (must cover combined mode costs)
-global_per_minute = 1000  # total across all clients
-max_record_types = 10     # per-query cap (hard cap: 10)
-max_servers = 4           # per-query cap (hard cap: 4)
-max_timeout_secs = 10     # hard cap
+per_ip_per_minute = 120     # GCRA tokens per client IP per minute
+per_ip_burst = 64           # burst allowance (must cover combined mode costs)
+per_target_per_minute = 60  # tokens per DNS target per minute
+per_target_burst = 20       # per-target burst size
+global_per_minute = 1000    # total across all clients
+global_burst = 50           # global burst size
+max_concurrent_connections = 256  # maximum concurrent TCP connections
+per_ip_max_streams = 10     # maximum concurrent SSE streams per client IP
+max_record_types = 10       # per-query cap (hard cap: 10)
+max_servers = 4             # per-query cap (hard cap: 4)
+max_timeout_secs = 10       # hard cap
 
 [trace]
 max_hops = 10             # delegation depth (hard cap: 20)
@@ -198,6 +203,11 @@ min_requests = 5
 # ifconfig_url = "https://ip.example.com"      # enables clickable IPs + enrichment badges
 # ifconfig_api_url = "https://ip.example.com"  # backend API URL (defaults to ifconfig_url)
 # enrichment_timeout_ms = 500                  # hard cap: 2000
+
+[performance]
+resolver_pool_ttl_secs = 300          # TTL for cached resolver instances
+resolver_pool_max_size = 32           # maximum resolver instances in pool
+resolver_pool_cleanup_interval_secs = 60  # pool eviction task interval
 
 [telemetry]
 log_format = "text"          # "text" (default) or "json" (for log aggregators)
@@ -257,7 +267,7 @@ dns.example.com {
 
 - `allow_arbitrary_servers = false` (default) -- no custom resolver IPs
 - `allow_system_resolvers = false` if you don't want `/etc/resolv.conf` exposed
-- `trusted_proxies` matches your reverse proxy CIDR
+- `trusted_proxies` lists your reverse proxy IP addresses (individual IPs only, not CIDR)
 - Metrics port (`:9090`) stays on loopback
 - Rate limits tuned for your traffic
 

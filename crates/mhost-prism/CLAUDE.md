@@ -21,7 +21,7 @@
 - **DRY + Rule of Three**: Tolerate duplication until the third occurrence, then extract.
 - **SRP**: Each module/struct has one reason to change. Split when responsibilities diverge.
 - **Fail Fast**: Validate at boundaries, return errors early, don't silently swallow failures.
-- **Secure by Default**: Sanitize external input, no PII in logs, prefer safe APIs. This is an open DNS proxy — security is load-bearing (see SDD §8).
+- **Secure by Default**: Sanitize external input, no PII in logs, prefer safe APIs. This is an open DNS proxy — security is load-bearing (see Security Checklist below).
 - **Determinism**: Same input → same output. Pin randomness in tests, avoid time-dependent logic where possible.
 - **Reversibility**: Prefer changes that are easy to undo. Feature flags over big-bang migrations, small commits over monolithic ones.
 
@@ -32,7 +32,7 @@
 - **Author**: Lukas Pustina | **License**: MIT / Apache-2.0
 - **Repository**: Standalone repo (separate from mhost). Depends on `mhost` as a published crate (no `app` feature).
 - **README**: `README.md` — user-facing docs: features, query language, all three modes, API reference, configuration, security, dev setup.
-- **SDD**: `docs/sdd.md` — the authoritative design document for all architecture decisions. Note: the SDD was written assuming a workspace member; this repo diverges to a standalone crate with a crates.io dependency. Structural references (§3 workspace layout) are adapted accordingly.
+- **SDD**: `docs/done/sdd-2025-03-07.md` (historical) — the original design document. Current architecture is documented in this file (CLAUDE.md) and README.md.
 
 prism provides and all functionality must adhere to these core principles:
 
@@ -43,7 +43,7 @@ prism provides and all functionality must adhere to these core principles:
 
 ## Design Document
 
-The Software Design Document (`docs/sdd.md`) is the source of truth for architecture, API design, security model, and phased delivery. Always consult it before making design decisions. Key sections:
+The original Software Design Document (`docs/done/sdd-2025-03-07.md`, historical) defined the initial architecture, API design, security model, and phased delivery. It is kept for reference but is no longer the source of truth — the implemented architecture is documented in this file (CLAUDE.md) and README.md. Key SDD sections for historical context:
 
 - **§4** Query language syntax and semantics
 - **§5** API endpoints (query, check, trace, parse, metadata)
@@ -61,13 +61,13 @@ Decisions made during project setup, supplementing the SDD:
 | **Repository** | Standalone repo, `mhost` via crates.io | Independent release cadence; gaps in mhost-lib addressed upstream separately |
 | **CSS** | Plain CSS with custom properties | Frontend is ~3 components; custom properties map directly to mhost's color palette and dark mode toggle; zero build config |
 | **Config parsing** | `config` crate | Built-in layering (TOML file + env vars + defaults); handles `PRISM_` prefix and `__` section separators natively |
-| **Error handling** | `thiserror` | Structured `ApiError` enum maps to specific HTTP status + error codes (§5.6); no need for `anyhow`'s erased types |
-| **Request IDs** | `uuid` crate with `v7` feature | Time-ordered UUIDs per SDD §8.5; universally recognized in headers/logs/JSON |
+| **Error handling** | `thiserror` | Structured `ApiError` enum maps to specific HTTP status + error codes; no need for `anyhow`'s erased types |
+| **Request IDs** | `uuid` crate with `v7` feature | Time-ordered UUIDs; universally recognized in headers/logs/JSON |
 | **TypeScript** | Strict mode (`strict: true`) | Frontend is thin — low ceremony cost, catches bugs at compile time |
 
 ## Roadmap
 
-Phased delivery as defined in SDD §14:
+Phased delivery as originally defined in the SDD (historical):
 
 - ~~**Phase 0**: Workspace conversion (mhost repo)~~ — N/A (standalone repo)
 - ~~**Phase 1**: MVP — query endpoint, parser, results table, rate limiting, circuit breaker, metrics~~
@@ -187,7 +187,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
 - **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens. Compare endpoint cost = `record_types * servers * 4` (4 transports). Auth compare cost = `record_types * servers + 16` (recursive + NS discovery + auth queries).
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
-- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed. Notable options: `PRISM_TELEMETRY__LOG_FORMAT=json` switches to JSON log lines; `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs only (CIDR ranges are rejected at startup).
+- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps are upper bounds that config cannot exceed. Notable options: `PRISM_TELEMETRY__LOG_FORMAT=json` switches to JSON log lines; `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs only (CIDR ranges are rejected at startup).
 - **Routing flags**: `+check`, `+trace`, `+compare`, and `+auth` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
 
 ## Key Dependencies
