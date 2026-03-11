@@ -22,10 +22,10 @@ COPY Cargo.toml Cargo.lock build.rs ./
 # Stub src/main.rs and frontend/dist/index.html so build.rs is satisfied and
 # all crate dependencies compile without the real application source.
 RUN mkdir -p src frontend/dist \
- && echo 'fn main() {}' > src/main.rs \
- && echo '' > frontend/dist/index.html \
- && cargo build --release --locked \
- && rm -rf target/release/deps/prism-* target/release/.fingerprint/prism-*
+  && echo 'fn main() {}' > src/main.rs \
+  && echo '' > frontend/dist/index.html \
+  && cargo build --release --locked \
+  && rm -rf target/release/deps/prism-* target/release/.fingerprint/prism-*
 
 # Copy real source and the built frontend (overwrites the stub dist/).
 COPY src/ ./src/
@@ -37,16 +37,19 @@ RUN touch src/main.rs && cargo build --release --locked
 # ---------------------------------------------------------------------------
 # Stage 3: Runtime image
 # ---------------------------------------------------------------------------
-FROM debian:bookworm-slim
 
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
 
 COPY --from=builder /app/target/release/prism /usr/local/bin/prism
 
 RUN addgroup --system --gid 1001 prism \
- && adduser --system --uid 1001 --ingroup prism --no-create-home prism
+  && adduser --system --uid 1001 --ingroup prism --no-create-home prism
 USER prism
 
 # API + frontend
