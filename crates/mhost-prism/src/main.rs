@@ -16,13 +16,8 @@ mod dns_trace;
 mod error;
 mod ip_enrichment;
 mod parser;
-// TODO: Wire query dedup into SSE handlers and resolver pool into build_resolver_group.
-#[allow(dead_code)]
-mod query_dedup;
 mod record_format;
 mod reload;
-#[allow(dead_code)]
-mod resolver_pool;
 mod result_cache;
 mod security;
 mod telemetry;
@@ -65,11 +60,6 @@ async fn main() {
 
     // 3. Build shared application state.
     let hot_state = reload::HotState::new(&config);
-    let resolver_pool = Arc::new(resolver_pool::ResolverPool::new(
-        config.performance.resolver_pool_ttl_secs,
-        config.performance.resolver_pool_max_size,
-    ));
-    resolver_pool.spawn_cleanup_task(config.performance.resolver_pool_cleanup_interval_secs);
 
     let ip_enrichment = config.ecosystem.effective_api_url().map(|url| {
         let timeout = std::time::Duration::from_millis(config.ecosystem.enrichment_timeout_ms);
@@ -86,8 +76,6 @@ async fn main() {
                 .expect("invalid trusted_proxies configuration"),
         ),
         result_cache: Arc::new(result_cache::ResultCache::new()),
-        resolver_pool,
-        query_dedup: query_dedup::QueryDedup::new(),
         hot_state: hot_state.clone(),
         ip_enrichment,
         config: Arc::new(config.clone()),

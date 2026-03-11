@@ -36,8 +36,6 @@ pub struct Config {
     #[serde(default = "default_trace")]
     pub trace: TraceConfig,
     #[serde(default)]
-    pub performance: PerformanceConfig,
-    #[serde(default)]
     pub telemetry: TelemetryConfig,
     #[serde(default)]
     pub ecosystem: EcosystemConfig,
@@ -115,35 +113,6 @@ pub struct DnsConfig {
     pub allow_arbitrary_servers: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct PerformanceConfig {
-    #[serde(default = "default_resolver_pool_ttl_secs")]
-    pub resolver_pool_ttl_secs: u64,
-    #[serde(default = "default_resolver_pool_max_size")]
-    pub resolver_pool_max_size: usize,
-    #[serde(default = "default_resolver_pool_cleanup_interval_secs")]
-    pub resolver_pool_cleanup_interval_secs: u64,
-}
-
-impl Default for PerformanceConfig {
-    fn default() -> Self {
-        Self {
-            resolver_pool_ttl_secs: default_resolver_pool_ttl_secs(),
-            resolver_pool_max_size: default_resolver_pool_max_size(),
-            resolver_pool_cleanup_interval_secs: default_resolver_pool_cleanup_interval_secs(),
-        }
-    }
-}
-
-fn default_resolver_pool_ttl_secs() -> u64 {
-    300
-}
-fn default_resolver_pool_max_size() -> usize {
-    32
-}
-fn default_resolver_pool_cleanup_interval_secs() -> u64 {
-    60
-}
 
 /// Log output format.
 ///
@@ -447,20 +416,6 @@ impl Config {
     fn validate(&mut self) -> Result<(), ConfigError> {
         self.validate_limits_and_trace()?;
 
-        // Performance config validation.
-        reject_zero(
-            "performance.resolver_pool_ttl_secs",
-            self.performance.resolver_pool_ttl_secs,
-        )?;
-        reject_zero(
-            "performance.resolver_pool_max_size",
-            self.performance.resolver_pool_max_size,
-        )?;
-        reject_zero(
-            "performance.resolver_pool_cleanup_interval_secs",
-            self.performance.resolver_pool_cleanup_interval_secs,
-        )?;
-
         // Ecosystem config validation.
         if self.ecosystem.enrichment_timeout_ms == 0 && self.ecosystem.enrichment_enabled() {
             return Err(ConfigError::Message(
@@ -597,7 +552,6 @@ mod tests {
             circuit_breaker: default_circuit_breaker(),
             dns: default_dns(),
             trace: default_trace(),
-            performance: PerformanceConfig::default(),
             telemetry: TelemetryConfig::default(),
             ecosystem: EcosystemConfig::default(),
         }

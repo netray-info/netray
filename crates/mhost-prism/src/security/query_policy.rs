@@ -231,7 +231,7 @@ mod tests {
     fn test_config() -> crate::config::Config {
         use crate::config::{
             CircuitBreakerConfig, Config, DnsConfig, EcosystemConfig, LimitsConfig,
-            PerformanceConfig, ServerConfig, TelemetryConfig, TraceConfig,
+            ServerConfig, TelemetryConfig, TraceConfig,
         };
         Config {
             site_name: "prism".to_string(),
@@ -268,7 +268,6 @@ mod tests {
                 max_hops: 10,
                 query_timeout_secs: 3,
             },
-            performance: PerformanceConfig::default(),
             telemetry: TelemetryConfig::default(),
             ecosystem: EcosystemConfig::default(),
         }

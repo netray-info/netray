@@ -133,9 +133,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
     dns_trace.rs              # Iterative delegation walker (root → TLD → authoritative)
     dns_dnssec.rs             # DNSSEC chain-of-trust fetch helpers
     ip_enrichment.rs          # IpEnrichmentService: reqwest + moka cache, batch lookups
-    query_dedup.rs            # Broadcast-based query coalescing (infrastructure; not yet wired)
     reload.rs                 # SIGHUP hot config reload via ArcSwap
-    resolver_pool.rs          # TTL+LRU resolver cache (infrastructure; not yet wired)
     result_cache.rs           # LRU result cache for permalink sharing
     api/
       mod.rs                  # Route definitions, AppState, shared BatchEvent / STREAM_TIMEOUT_SECS
