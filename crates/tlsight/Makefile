@@ -28,6 +28,7 @@ NPM_CI_FLAGS ?=
         test-rust test-frontend \
         fmt fmt-check clippy \
         docker docker-run \
+        acceptance \
         help
 
 # ══════════════════════════════════════════════════════════════════
@@ -117,3 +118,10 @@ docker: ## Build Docker image (ghcr.io/lukaspustina/tlsight:latest)
 
 docker-run: ## Run Docker image locally (port 8081)
 	docker run --rm -p 8081:8081 -p 9090:9090 ghcr.io/lukaspustina/$(APP):latest
+
+# ══════════════════════════════════════════════════════════════════
+#  E2E Tests
+# ══════════════════════════════════════════════════════════════════
+
+acceptance: ## Run Playwright E2E tests
+	$(MAKE) -C tests acceptance
