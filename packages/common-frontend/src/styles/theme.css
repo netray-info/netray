@@ -1,0 +1,44 @@
+/* ================================================================
+   @netray/common-frontend — base theme tokens
+   Dark-mode-by-default. Projects import this and override as needed.
+   ================================================================ */
+
+:root {
+  /* Dark theme (default) */
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --text-primary: #e0e0e0;
+  --text-secondary: #a0a0a0;
+  --text-muted: #888888;
+  --accent: #00d4ff;
+  --accent-dim: #0088aa;
+  --accent-glow: rgba(0, 212, 255, 0.15);
+  --success: #44ff44;
+  --warning: #ffaa00;
+  --error: #ff4444;
+  --border: #2a2a4a;
+  --border-subtle: #222240;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --radius: 8px;
+  --radius-lg: 10px;
+  --transition: 150ms ease;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f5f7fa;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #edf0f5;
+  --text-primary: #1a1a2e;
+  --text-secondary: #4a4a6a;
+  --text-muted: #8888a0;
+  --accent: #0077cc;
+  --accent-dim: #005599;
+  --accent-glow: rgba(0, 119, 204, 0.12);
+  --success: #008800;
+  --warning: #b86e00;
+  --error: #cc0000;
+  --border: #d0d4dc;
+  --border-subtle: #e4e8ee;
+}
