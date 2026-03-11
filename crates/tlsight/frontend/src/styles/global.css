@@ -1,4 +1,4 @@
-@import '../../../../frontend-shared/src/styles/theme.css';
+@import '../../../../netray-common-frontend/src/styles/theme.css';
 
 /* ================================================================
    tlsight — project-specific overrides
@@ -1412,16 +1412,36 @@ a:hover { text-decoration: underline; }
    ================================================================ */
 
 .footer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
   margin-top: 2rem;
   padding-top: 1rem;
   padding-bottom: env(safe-area-inset-bottom);
   border-top: 1px solid var(--border-subtle);
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+.footer-about {
+  text-align: center;
+  line-height: 1.6;
+  max-width: 540px;
+  margin: 0 auto 0.75rem;
+}
+
+.footer-about a {
+  color: var(--text-secondary);
+}
+
+.footer-about em {
+  color: var(--accent);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.footer-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 .footer-link {

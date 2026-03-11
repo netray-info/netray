@@ -11,9 +11,9 @@ import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
 import type { InspectResponse, PortResult } from './lib/types';
-import { createTheme } from '../../../frontend-shared/src/theme';
-import { createKeyboardShortcuts } from '../../../frontend-shared/src/keyboard';
-import { createFocusTrap } from '../../../frontend-shared/src/focus-trap';
+import { createTheme } from '../../../netray-common-frontend/src/theme';
+import { createKeyboardShortcuts } from '../../../netray-common-frontend/src/keyboard';
+import { createFocusTrap } from '../../../netray-common-frontend/src/focus-trap';
 
 const EXAMPLES: { title: string; desc: string; queries: string[] }[] = [
   {
@@ -45,6 +45,7 @@ export default function App() {
   const [explain, setExplain] = createSignal(false);
 
   const [meta] = createResource(fetchMeta);
+  const siteName = () => meta()?.site_name ?? 'tlsight';
   const dnsUrl = () => meta()?.ecosystem?.dns_base_url;
   const ipUrl = () => meta()?.ecosystem?.ip_base_url;
 
@@ -64,6 +65,11 @@ export default function App() {
   function clearCardActive() {
     document.querySelector('[data-card-active]')?.removeAttribute('data-card-active');
   }
+
+  createEffect(() => {
+    const name = siteName();
+    if (name) document.title = name;
+  });
 
   createEffect(() => {
     if (showHelp()) {
@@ -197,7 +203,7 @@ export default function App() {
       <a href="#main-content" class="skip-link">Skip to results</a>
 
       <header class="header">
-        <h1 class="logo">tlsight</h1>
+        <h1 class="logo">{siteName()}</h1>
         <span class="tagline">TLS, illuminated</span>
         <div class="header-actions">
           <button
@@ -454,15 +460,26 @@ export default function App() {
       </Show>
 
       <footer class="footer">
-        <a class="footer-link" href="https://github.com/lukaspustina/tlsight" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <span class="footer-sep">&middot;</span>
-        <a class="footer-link" href="/docs" target="_blank" rel="noopener noreferrer">API Docs</a>
-        <span class="footer-sep">&middot;</span>
-        <a class="footer-link" href="https://github.com/lukaspustina" target="_blank" rel="noopener noreferrer">Author</a>
-        <span class="footer-sep">&middot;</span>
-        <Show when={meta()?.version}>
-          <span class="footer-text">v{meta()!.version}</span>
-        </Show>
+        <div class="footer-about">
+          <em>{siteName()}</em> is a TLS certificate inspection and diagnostics service.
+          Inspects certificate chains, TLS parameters, DANE/TLSA records, and CAA compliance across all resolved IPs.
+          Built in <a href="https://www.rust-lang.org/" target="_blank" rel="noopener noreferrer">Rust</a>{" "}
+          with <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a>,{" "}
+          <a href="https://github.com/rustls/rustls" target="_blank" rel="noopener noreferrer">rustls</a>,{" "}
+          and <a href="https://www.solidjs.com/" target="_blank" rel="noopener noreferrer">SolidJS</a>.
+          Open to use — rate limiting applies.
+        </div>
+        <div class="footer-links">
+          <a class="footer-link" href="https://github.com/lukaspustina/tlsight" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <span class="footer-sep">&middot;</span>
+          <a class="footer-link" href="/docs" target="_blank" rel="noopener noreferrer">API Docs</a>
+          <span class="footer-sep">&middot;</span>
+          <a class="footer-link" href="https://lukas.pustina.de" target="_blank" rel="noopener noreferrer">Author</a>
+          <Show when={meta()?.version}>
+            <span class="footer-sep">&middot;</span>
+            <span class="footer-text">v{meta()!.version}</span>
+          </Show>
+        </div>
       </footer>
     </div>
   );

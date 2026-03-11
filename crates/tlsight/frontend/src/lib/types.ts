@@ -186,6 +186,7 @@ export interface RedirectCheckInfo {
 }
 
 export interface MetaResponse {
+  site_name: string;
   version: string;
   features: Record<string, boolean>;
   limits: Record<string, number>;

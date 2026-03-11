@@ -98,6 +98,7 @@ pub struct ConsistencyMismatch {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct MetaResponse {
+    pub site_name: String,
     pub version: &'static str,
     pub features: MetaFeatures,
     pub limits: MetaLimits,
@@ -279,6 +280,7 @@ async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
         };
 
     Json(MetaResponse {
+        site_name: config.site_name.clone(),
         version: env!("CARGO_PKG_VERSION"),
         features: MetaFeatures {
             dane: config.validation.check_dane,

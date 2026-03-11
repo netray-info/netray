@@ -14,6 +14,9 @@ const HARD_CAP_HTTP_CHECK_TIMEOUT: u64 = 5;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    /// Display name shown in the UI. Defaults to "tlsight".
+    #[serde(default = "default_site_name")]
+    pub site_name: String,
     #[serde(default = "default_server")]
     pub server: ServerConfig,
     #[serde(default = "default_limits")]
@@ -156,6 +159,10 @@ fn default_http_check_timeout_secs() -> u64 {
 }
 
 // --- Default value functions ---
+
+fn default_site_name() -> String {
+    "tlsight".to_string()
+}
 
 fn default_server() -> ServerConfig {
     ServerConfig {
