@@ -7,10 +7,12 @@ import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/
 import { TransportComparison } from './components/TransportComparison';
 import { AuthComparison } from './components/AuthComparison';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
+import { createTheme } from '../../../frontend-shared/src/theme';
+import { createKeyboardShortcuts } from '../../../frontend-shared/src/keyboard';
+import { createFocusTrap } from '../../../frontend-shared/src/focus-trap';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'transport' | 'auth';
-type Theme = 'dark' | 'light' | 'system';
 
 export interface CloudInfo {
   provider?: string;
@@ -31,7 +33,6 @@ export interface IpInfo {
 }
 
 const HISTORY_KEY = 'prism_history';
-const THEME_KEY = 'prism_theme';
 const VIEW_PREFS_KEY = 'prism_view_prefs';
 const MAX_HISTORY = 50;
 
@@ -64,18 +65,6 @@ function saveHistory(history: string[]) {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
   } catch { /* ignore */ }
-}
-
-function getSystemTheme(): Theme {
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-}
-
-function getSavedTheme(): Theme | null {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
-  } catch { /* ignore */ }
-  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +193,7 @@ export default function App() {
   const [stats, setStats] = createSignal<DoneStats | null>(null);
   const [activeTab, setActiveTab] = createSignal<ActiveTab>('results');
   const [history, setHistory] = createSignal<string[]>(loadHistory());
-  const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
+  const { theme, toggleTheme } = createTheme('prism_theme', 'dark');
   const [showHelp, setShowHelp] = createSignal(false);
 
 
@@ -284,8 +273,9 @@ export default function App() {
   let focusEditor: (() => void) | undefined;
   let clearEditor: (() => void) | undefined;
   let setEditorValue: ((v: string) => void) | undefined;
-  let modalCloseBtn: HTMLButtonElement | undefined;
-  let preModalFocus: HTMLElement | null = null;
+  let helpModalEl: HTMLDivElement | undefined;
+
+  const helpTrap = createFocusTrap(() => helpModalEl, () => setShowHelp(false));
 
   function fillQuery(q: string) {
     setEditorValue?.(q);
@@ -298,34 +288,10 @@ export default function App() {
 
   createEffect(() => {
     if (showHelp()) {
-      preModalFocus = document.activeElement as HTMLElement | null;
-      // Defer focus so the modal is in the DOM before we focus into it.
-      requestAnimationFrame(() => {
-        modalCloseBtn?.focus();
-      });
-      onCleanup(() => {
-        preModalFocus?.focus();
-        preModalFocus = null;
-      });
+      helpTrap.activate();
+      onCleanup(() => helpTrap.deactivate());
     }
   });
-
-  // ---------------------------------------------------------------------------
-  // Theme
-  // ---------------------------------------------------------------------------
-
-  function applyTheme(t: Theme) {
-    const resolved = t === 'system' ? getSystemTheme() : t;
-    document.documentElement.setAttribute('data-theme', resolved);
-  }
-
-  function toggleTheme() {
-    // Cycle: system → dark → light → system
-    const next: Theme = theme() === 'system' ? 'dark' : theme() === 'dark' ? 'light' : 'system';
-    setTheme(next);
-    applyTheme(next);
-    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
-  }
 
   // ---------------------------------------------------------------------------
   // Connection teardown
@@ -1049,78 +1015,46 @@ export default function App() {
   // Keyboard shortcuts
   // ---------------------------------------------------------------------------
 
-  function handleKeyDown(e: KeyboardEvent) {
+  // Escape needs special handling (works inside editors too)
+  function handleEscape(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    if (showHelp()) { setShowHelp(false); e.preventDefault(); return; }
     const target = e.target as HTMLElement;
     const isEditing =
       target.tagName === 'INPUT' ||
       target.tagName === 'TEXTAREA' ||
       target.isContentEditable ||
       !!target.closest('.cm-editor');
-
-    if (e.key === '?' && !isEditing) {
+    if (isEditing) {
+      const cmContent = (target.closest('.cm-editor') as HTMLElement | null)?.querySelector<HTMLElement>('.cm-content');
+      cmContent?.blur();
       e.preventDefault();
-      setShowHelp((v) => !v);
-      return;
     }
+  }
 
-    if (e.key === 'Escape') {
-      if (showHelp()) { setShowHelp(false); e.preventDefault(); return; }
-      if (isEditing) {
-        const cmContent = (target.closest('.cm-editor') as HTMLElement | null)?.querySelector<HTMLElement>('.cm-content');
-        cmContent?.blur();
-        e.preventDefault();
-        return;
-      }
-    }
-
-    if (e.key === '/' && !isEditing) {
-      e.preventDefault();
-      focusEditor?.();
-      return;
-    }
-
-    if (e.key === 'r' && !isEditing) {
-      const q = query();
-      if (q && status() !== 'loading') { e.preventDefault(); submitQuery(q); }
-      return;
-    }
-
-    // h / l — previous / next tab (vim-style)
-    if ((e.key === 'h' || e.key === 'l') && !isEditing && hasContent()) {
-      e.preventDefault();
-      const visibleTabs: ActiveTab[] = [];
-      if (isAuthMode()) visibleTabs.push('auth');
-      if (isCompareMode()) visibleTabs.push('transport');
-      if (isDnssecMode()) visibleTabs.push('dnssec');
-      if (isTraceMode()) visibleTabs.push('trace');
-      if (isCheckMode()) visibleTabs.push('lint');
-      visibleTabs.push('results', 'servers');
-      const idx = visibleTabs.indexOf(activeTab());
-      if (idx === -1) return;
-      const next = e.key === 'l'
-        ? Math.min(idx + 1, visibleTabs.length - 1)
-        : Math.max(idx - 1, 0);
-      setActiveTab(visibleTabs[next]);
-      return;
-    }
+  function navigateTab(e: KeyboardEvent) {
+    if (!hasContent()) return;
+    e.preventDefault();
+    const visibleTabs: ActiveTab[] = [];
+    if (isAuthMode()) visibleTabs.push('auth');
+    if (isCompareMode()) visibleTabs.push('transport');
+    if (isDnssecMode()) visibleTabs.push('dnssec');
+    if (isTraceMode()) visibleTabs.push('trace');
+    if (isCheckMode()) visibleTabs.push('lint');
+    visibleTabs.push('results', 'servers');
+    const idx = visibleTabs.indexOf(activeTab());
+    if (idx === -1) return;
+    const next = e.key === 'l'
+      ? Math.min(idx + 1, visibleTabs.length - 1)
+      : Math.max(idx - 1, 0);
+    setActiveTab(visibleTabs[next]);
   }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
 
-  let mediaQuery: MediaQueryList | undefined;
-  const onSystemThemeChange = () => {
-    if (theme() === 'system') {
-      applyTheme('system');
-    }
-  };
-
   onMount(() => {
-    applyTheme(theme());
-    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    mediaQuery.addEventListener('change', onSystemThemeChange);
-
     // Fetch client config (ifconfig URL for IP links).
     fetch('/api/config')
       .then((r) => r.json())
@@ -1138,13 +1072,24 @@ export default function App() {
       if (q) submitQuery(q);
     }
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleEscape);
+
+    const cleanupShortcuts = createKeyboardShortcuts({
+      '?': (e) => { e.preventDefault(); setShowHelp((v) => !v); },
+      '/': (e) => { e.preventDefault(); focusEditor?.(); },
+      'r': (e) => { const q = query(); if (q && status() !== 'loading') { e.preventDefault(); submitQuery(q); } },
+      'h': navigateTab,
+      'l': navigateTab,
+    });
+
+    onCleanup(() => {
+      cleanupShortcuts();
+      document.removeEventListener('keydown', handleEscape);
+    });
   });
 
   onCleanup(() => {
     closeConnections();
-    mediaQuery?.removeEventListener('change', onSystemThemeChange);
-    document.removeEventListener('keydown', handleKeyDown);
   });
 
   // ---------------------------------------------------------------------------
@@ -1578,13 +1523,13 @@ export default function App() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="help-modal-title"
+            ref={helpModalEl}
             onClick={(e) => e.stopPropagation()}
           >
             <div class="modal-header">
               <h2 id="help-modal-title">Help</h2>
               <button
                 class="modal-close"
-                ref={modalCloseBtn}
                 onClick={() => setShowHelp(false)}
               >&times;</button>
             </div>
