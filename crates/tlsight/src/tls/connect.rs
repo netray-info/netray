@@ -135,3 +135,152 @@ pub async fn tls_handshake(
         handshake_ms,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use tokio::net::TcpListener;
+
+    fn ensure_crypto_provider() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+
+    /// Generates a self-signed cert+key for "localhost" using rcgen.
+    fn make_self_signed() -> (
+        rustls::pki_types::CertificateDer<'static>,
+        rustls::pki_types::PrivateKeyDer<'static>,
+    ) {
+        use rcgen::CertifiedKey;
+        let CertifiedKey { cert, key_pair } =
+            rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+        let cert_der = rustls::pki_types::CertificateDer::from(cert.der().to_vec());
+        let key_der = rustls::pki_types::PrivateKeyDer::try_from(key_pair.serialize_der()).unwrap();
+        (cert_der, key_der)
+    }
+
+    /// Spawns a TLS server on 127.0.0.1:0. Returns the bound port.
+    /// The server accepts one connection and immediately closes after the handshake.
+    async fn spawn_tls_server() -> u16 {
+        ensure_crypto_provider();
+        let (cert_der, key_der) = make_self_signed();
+
+        let server_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert_der], key_der)
+            .unwrap();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        tokio::spawn(async move {
+            let acceptor = tokio_rustls::TlsAcceptor::from(std::sync::Arc::new(server_config));
+            if let Ok((stream, _)) = listener.accept().await {
+                let _ = acceptor.accept(stream).await;
+                // Just close after handshake
+            }
+        });
+
+        port
+    }
+
+    /// Spawns a TLS server that hangs after TCP accept (never completes handshake).
+    async fn spawn_hanging_server() -> u16 {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            if let Ok((_stream, _)) = listener.accept().await {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            }
+        });
+        port
+    }
+
+    #[tokio::test]
+    async fn successful_handshake_returns_peer_certs() {
+        ensure_crypto_provider();
+        let port = spawn_tls_server().await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        let result = tls_handshake(ip, port, Some("localhost"), Duration::from_secs(5)).await;
+
+        if let Err(ref e) = result {
+            panic!("handshake should succeed: {e}");
+        }
+        let res = result.unwrap();
+        assert!(res.peer_certs.is_some(), "should have peer certs");
+        assert!(
+            !res.peer_certs.unwrap().is_empty(),
+            "peer certs should be non-empty"
+        );
+    }
+
+    #[tokio::test]
+    async fn successful_handshake_returns_tls_version() {
+        ensure_crypto_provider();
+        let port = spawn_tls_server().await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        let result = tls_handshake(ip, port, Some("localhost"), Duration::from_secs(5)).await;
+
+        assert!(result.is_ok());
+        let res = result.unwrap();
+        assert!(res.version.is_some());
+    }
+
+    #[tokio::test]
+    async fn successful_handshake_returns_cipher_suite() {
+        ensure_crypto_provider();
+        let port = spawn_tls_server().await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        let result = tls_handshake(ip, port, Some("localhost"), Duration::from_secs(5)).await;
+
+        assert!(result.is_ok());
+        let res = result.unwrap();
+        assert!(res.cipher_suite.is_some());
+    }
+
+    #[tokio::test]
+    async fn timeout_fires_when_server_hangs() {
+        ensure_crypto_provider();
+        let port = spawn_hanging_server().await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        let result = tls_handshake(ip, port, Some("localhost"), Duration::from_millis(100)).await;
+
+        assert!(result.is_err(), "should timeout");
+        let err = result.err().unwrap().to_string();
+        assert!(
+            err.contains("timed out"),
+            "error should mention timeout: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn connection_refused_returns_error() {
+        ensure_crypto_provider();
+        // Port 1 is never open
+        let ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        let result = tls_handshake(ip, 1, Some("localhost"), Duration::from_secs(2)).await;
+
+        assert!(result.is_err(), "should fail for refused connection");
+    }
+
+    #[tokio::test]
+    async fn handshake_ms_is_populated() {
+        ensure_crypto_provider();
+        let port = spawn_tls_server().await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        let result = tls_handshake(ip, port, Some("localhost"), Duration::from_secs(5)).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().handshake_ms < 1000);
+    }
+}

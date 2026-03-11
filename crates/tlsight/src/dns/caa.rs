@@ -39,21 +39,33 @@ impl CaaLookup {
     }
 }
 
+/// Returns the parent domain by stripping the leftmost label, or `None` if
+/// `domain` is already a TLD (single label).
+///
+/// Examples: `"www.example.com"` → `Some("example.com")`,
+/// `"com"` → `None`.
+fn parent_domain(domain: &str) -> Option<&str> {
+    let dot = domain.find('.')?;
+    Some(&domain[dot + 1..])
+}
+
 /// Fetch CAA records with RFC 8659 tree-climbing.
 ///
 /// Walks up the domain tree: www.example.com → example.com → com.
 /// Returns the first level that has CAA records, or empty if none found.
 pub async fn lookup_caa(resolvers: &ResolverGroup, hostname: &str) -> CaaLookup {
-    let hostname = hostname.trim_end_matches('.');
-    let labels: Vec<&str> = hostname.split('.').collect();
+    let mut domain = hostname.trim_end_matches('.');
 
-    // Walk up the domain tree (RFC 8659 §3)
-    for i in 0..labels.len().saturating_sub(1) {
-        let domain = labels[i..].join(".");
-        if let Some(lookup) = query_caa(resolvers, &domain).await
+    // Walk up the domain tree (RFC 8659 §3); stop before bare TLD
+    loop {
+        if let Some(lookup) = query_caa(resolvers, domain).await
             && !lookup.is_empty()
         {
             return lookup;
+        }
+        match parent_domain(domain) {
+            Some(parent) if parent.contains('.') => domain = parent,
+            _ => break,
         }
     }
 
@@ -89,6 +101,33 @@ async fn query_caa(resolvers: &ResolverGroup, domain: &str) -> Option<CaaLookup>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- parent_domain ---
+
+    #[test]
+    fn parent_domain_three_labels() {
+        assert_eq!(parent_domain("www.example.com"), Some("example.com"));
+    }
+
+    #[test]
+    fn parent_domain_four_labels() {
+        assert_eq!(
+            parent_domain("sub.sub.example.com"),
+            Some("sub.example.com")
+        );
+    }
+
+    #[test]
+    fn parent_domain_two_labels() {
+        assert_eq!(parent_domain("example.com"), Some("com"));
+    }
+
+    #[test]
+    fn parent_domain_single_label_is_none() {
+        assert_eq!(parent_domain("com"), None);
+    }
+
+    // --- CaaLookup helpers ---
 
     #[test]
     fn empty_lookup_is_empty() {

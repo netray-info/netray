@@ -262,7 +262,6 @@ export default function App() {
             class="header-btn"
             onClick={toggleTheme}
             title={themeTitle()}
-            aria-label={themeTitle()}
           >
             {themeIcon()}
           </button>
@@ -270,7 +269,6 @@ export default function App() {
             class="header-btn"
             onClick={openHelp}
             title="Help (?)"
-            aria-label="Help"
           >?</button>
         </div>
       </header>
@@ -285,11 +283,11 @@ export default function App() {
         />
 
         <Show when={error()}>
-          <div class="error-banner" role="alert">{error()}</div>
+          <div class="error-banner">{error()}</div>
         </Show>
 
         <Show when={loading()}>
-          <div role="status" aria-live="polite" class="loading-indicator">
+          <div class="loading-indicator">
             <div class="spinner" />
             Inspecting...
           </div>
@@ -464,6 +462,30 @@ export default function App() {
             aria-modal="true"
             aria-labelledby="help-title"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              const modal = e.currentTarget as HTMLElement;
+              const focusable = modal.querySelectorAll<HTMLElement>(
+                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+              );
+              const first = focusable[0];
+              const last = focusable[focusable.length - 1];
+              if (e.key === 'Tab') {
+                if (e.shiftKey) {
+                  if (document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                  }
+                } else {
+                  if (document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                  }
+                }
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeHelp();
+              }
+            }}
           >
             <div class="modal__header">
               <h2 id="help-title">Help</h2>

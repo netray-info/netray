@@ -7,6 +7,7 @@ use crate::dns::DnsResolver;
 use crate::enrichment::EnrichmentClient;
 use crate::security::{IpExtractor, RateLimitState};
 use rustls::client::danger::ServerCertVerifier;
+use tokio::sync::Semaphore;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -16,6 +17,8 @@ pub struct AppState {
     #[allow(dead_code)] // Kept alive for cert_verifier which holds an Arc reference to it
     pub trust_store: Arc<rustls::RootCertStore>,
     pub cert_verifier: Arc<dyn ServerCertVerifier>,
+    pub handshake_semaphore: Arc<Semaphore>,
+    pub hsts_tls_connector: Arc<tokio_rustls::TlsConnector>,
     pub dns_resolver: Option<Arc<DnsResolver>>,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
 }
@@ -34,6 +37,12 @@ impl AppState {
             .build()
             .expect("failed to build WebPki verifier");
 
+        let hsts_config = rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(crate::tls::verifier::AcceptAnyCert))
+            .with_no_client_auth();
+        let hsts_tls_connector = Arc::new(tokio_rustls::TlsConnector::from(Arc::new(hsts_config)));
+
         let enrichment_client = config.ecosystem.ip_api_url.as_ref().map(|url| {
             Arc::new(EnrichmentClient::new(
                 url,
@@ -49,6 +58,8 @@ impl AppState {
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             trust_store,
             cert_verifier,
+            handshake_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
+            hsts_tls_connector,
             dns_resolver: None, // Initialized async in main
             enrichment_client,
             config: Arc::new(config.clone()),

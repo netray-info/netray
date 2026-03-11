@@ -442,6 +442,7 @@ async fn do_inspect(
             let hostname = parsed.target.hostname().map(|h| h.to_string());
             let verifier = state.cert_verifier.clone();
             let check_ct = state.config.validation.check_ct;
+            let semaphore = Arc::clone(&state.handshake_semaphore);
             join_set.spawn(async move {
                 inspect_port(
                     &ips,
@@ -450,6 +451,7 @@ async fn do_inspect(
                     handshake_timeout,
                     verifier,
                     check_ct,
+                    semaphore,
                 )
                 .await
             });
@@ -574,12 +576,14 @@ async fn do_inspect(
             let hostname_clone = hostname_str.clone();
             let http_timeout = Duration::from_secs(state.config.quality.http_check_timeout_secs);
 
+            let hsts_connector = Arc::clone(&state.hsts_tls_connector);
             let (hsts_result, redirect_result) = tokio::join!(
                 crate::quality::http::check_hsts(
                     first_ip,
                     &hostname_clone,
                     hsts_port,
                     http_timeout,
+                    &hsts_connector,
                 ),
                 crate::quality::http::check_https_redirect(first_ip, &hostname_clone, http_timeout,),
             );
@@ -684,10 +688,12 @@ async fn inspect_port(
     timeout: Duration,
     cert_verifier: Arc<dyn rustls::client::danger::ServerCertVerifier>,
     check_ct: bool,
+    semaphore: Arc<tokio::sync::Semaphore>,
 ) -> PortResult {
     let mut ip_results = Vec::with_capacity(ips.len());
 
     for &ip in ips {
+        let _permit = semaphore.acquire().await.ok();
         let mut result = tls::inspect_ip(ip, port, hostname, timeout).await;
         if result.error.is_some() {
             metrics::counter!("tlsight_handshake_errors_total").increment(1);

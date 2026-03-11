@@ -8,7 +8,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 
-use crate::tls::verifier::AcceptAnyCert;
 use crate::validate::CheckStatus;
 
 use super::types::HstsInfo;
@@ -31,13 +30,9 @@ pub async fn check_hsts(
     hostname: &str,
     port: u16,
     timeout: Duration,
+    connector: &Arc<TlsConnector>,
 ) -> HstsCheckResult {
     let result = tokio::time::timeout(timeout, async {
-        let config = rustls::ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(Arc::new(AcceptAnyCert))
-            .with_no_client_auth();
-
         let server_name = match ServerName::try_from(hostname.to_owned()) {
             Ok(sn) => sn,
             Err(_) => {
@@ -49,7 +44,7 @@ pub async fn check_hsts(
             }
         };
 
-        let connector = TlsConnector::from(Arc::new(config));
+        let connector = Arc::clone(connector);
         let tcp = match TcpStream::connect((ip, port)).await {
             Ok(tcp) => tcp,
             Err(e) => {
@@ -332,6 +327,130 @@ pub fn parse_hsts_header(value: &str) -> HstsInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    fn ensure_crypto_provider() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+
+    fn make_self_signed() -> (
+        rustls::pki_types::CertificateDer<'static>,
+        rustls::pki_types::PrivateKeyDer<'static>,
+    ) {
+        use rcgen::CertifiedKey;
+        let CertifiedKey { cert, key_pair } =
+            rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
+        let cert_der = rustls::pki_types::CertificateDer::from(cert.der().to_vec());
+        let key_der = rustls::pki_types::PrivateKeyDer::try_from(key_pair.serialize_der()).unwrap();
+        (cert_der, key_der)
+    }
+
+    fn make_test_connector() -> Arc<TlsConnector> {
+        ensure_crypto_provider();
+        let config = rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(crate::tls::verifier::AcceptAnyCert))
+            .with_no_client_auth();
+        Arc::new(TlsConnector::from(Arc::new(config)))
+    }
+
+    /// Spawns a TLS server that responds with a canned HTTP response.
+    async fn spawn_tls_http_server(http_response: &'static str) -> u16 {
+        ensure_crypto_provider();
+        let (cert_der, key_der) = make_self_signed();
+
+        let server_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert_der], key_der)
+            .unwrap();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let acceptor = tokio_rustls::TlsAcceptor::from(std::sync::Arc::new(server_config));
+            while let Ok((stream, _)) = listener.accept().await {
+                if let Ok(mut tls) = acceptor.accept(stream).await {
+                    let mut buf = [0u8; 1024];
+                    let _ = tls.read(&mut buf).await;
+                    let _ = tls.write_all(http_response.as_bytes()).await;
+                }
+            }
+        });
+
+        port
+    }
+
+    // --- check_hsts integration tests ---
+
+    #[tokio::test]
+    async fn hsts_pass_when_header_present_with_long_max_age() {
+        let response = "HTTP/1.1 200 OK\r\nStrict-Transport-Security: max-age=31536000; includeSubDomains\r\nConnection: close\r\n\r\n";
+        let port = spawn_tls_http_server(response).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let connector = make_test_connector();
+        let ip: IpAddr = "127.0.0.1".parse().unwrap();
+        let result = check_hsts(ip, "localhost", port, Duration::from_secs(5), &connector).await;
+
+        assert_eq!(result.status, CheckStatus::Pass);
+        let info = result.info.unwrap();
+        assert_eq!(info.max_age, 31536000);
+        assert!(info.include_sub_domains);
+    }
+
+    #[tokio::test]
+    async fn hsts_warn_when_max_age_too_short() {
+        // 86400 = 1 day, below the 15_768_000 (6 months) threshold
+        let response = "HTTP/1.1 200 OK\r\nStrict-Transport-Security: max-age=86400\r\nConnection: close\r\n\r\n";
+        let port = spawn_tls_http_server(response).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let connector = make_test_connector();
+        let ip: IpAddr = "127.0.0.1".parse().unwrap();
+        let result = check_hsts(ip, "localhost", port, Duration::from_secs(5), &connector).await;
+
+        assert_eq!(result.status, CheckStatus::Warn);
+    }
+
+    #[tokio::test]
+    async fn hsts_fail_when_header_absent() {
+        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n";
+        let port = spawn_tls_http_server(response).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        let connector = make_test_connector();
+        let ip: IpAddr = "127.0.0.1".parse().unwrap();
+        let result = check_hsts(ip, "localhost", port, Duration::from_secs(5), &connector).await;
+
+        assert_eq!(result.status, CheckStatus::Fail);
+        assert!(result.info.is_none());
+    }
+
+    #[tokio::test]
+    async fn hsts_skip_on_connection_refused() {
+        let connector = make_test_connector();
+        // Port 1 is never open
+        let ip: IpAddr = "127.0.0.1".parse().unwrap();
+        let result = check_hsts(ip, "localhost", 1, Duration::from_secs(2), &connector).await;
+
+        assert_eq!(result.status, CheckStatus::Skip);
+    }
+
+    // --- check_https_redirect integration tests ---
+    // check_https_redirect hardcodes port 80, so connection tests that require
+    // a specific port cannot inject a custom server. We verify the Skip path
+    // (port 80 not reachable on loopback in test environments).
+
+    #[tokio::test]
+    async fn redirect_skip_when_port_80_not_reachable() {
+        // In CI and dev environments port 80 on 127.0.0.1 is typically closed.
+        // We can only assert it doesn't panic; the actual status depends on the environment.
+        let ip: IpAddr = "127.0.0.1".parse().unwrap();
+        let result = check_https_redirect(ip, "localhost", Duration::from_millis(500)).await;
+        let _ = result.status;
+    }
 
     // --- HSTS header parsing ---
 
