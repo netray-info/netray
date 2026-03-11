@@ -13,7 +13,8 @@ COPY --from=frontend /build/frontend/dist frontend/dist/
 RUN cargo build --release --bins && cp $(find /build -xdev -name tlsight) /
 
 FROM alpine:3.21
-RUN addgroup -S tlsight && adduser -S tlsight -G tlsight
+RUN apk add --no-cache ca-certificates wget \
+ && addgroup -S tlsight && adduser -S tlsight -G tlsight
 WORKDIR /tlsight
 COPY tlsight.prod.toml tlsight.toml
 COPY --from=builder /tlsight .
