@@ -138,7 +138,8 @@ Interactive docs at `GET /docs` (Scalar UI). OpenAPI spec at `GET /api-docs/open
 
 | Utility endpoint | Description |
 |-----------------|-------------|
-| `GET /api/health` | Liveness probe |
+| `GET /api/health` | Liveness probe (always 200 while running) |
+| `GET /api/ready` | Readiness probe (503 when a circuit breaker is open) |
 | `GET /api/servers` | Predefined resolvers and IPs |
 | `GET /api/record-types` | Queryable record types |
 
@@ -167,15 +168,15 @@ PRISM_LIMITS__PER_IP_PER_MINUTE=200
 ```toml
 [server]
 bind = "127.0.0.1:8080"          # API + frontend
-metrics_bind = "127.0.0.1:9090"  # Prometheus metrics (keep on loopback)
-trusted_proxies = []              # CIDR ranges for reverse proxy IP extraction
+metrics_bind = "127.0.0.1:9090"  # Prometheus metrics (keep on loopback — do not expose publicly)
+trusted_proxies = []              # Individual IP addresses of trusted reverse proxies (not CIDR)
 
 [limits]
 per_ip_per_minute = 120   # GCRA tokens per client IP
-per_ip_burst = 40         # burst allowance
+per_ip_burst = 64         # burst allowance (must cover combined mode costs)
 global_per_minute = 1000  # total across all clients
-max_record_types = 10     # per-query cap
-max_servers = 4           # per-query cap
+max_record_types = 10     # per-query cap (hard cap: 10)
+max_servers = 4           # per-query cap (hard cap: 4)
 max_timeout_secs = 10     # hard cap
 
 [trace]
@@ -185,13 +186,25 @@ query_timeout_secs = 3    # per-hop timeout
 [dns]
 default_servers = ["cloudflare"]
 allow_system_resolvers = true
-allow_arbitrary_servers = false
+allow_arbitrary_servers = false   # set true only in trusted environments
 
 [circuit_breaker]
 failure_threshold = 0.5
 window_secs = 60
 cooldown_secs = 30
 min_requests = 5
+
+[ecosystem]
+# ifconfig_url = "https://ip.example.com"      # enables clickable IPs + enrichment badges
+# ifconfig_api_url = "https://ip.example.com"  # backend API URL (defaults to ifconfig_url)
+# enrichment_timeout_ms = 500                  # hard cap: 2000
+
+[telemetry]
+log_format = "text"          # "text" (default) or "json" (for log aggregators)
+enabled = false              # set true to export OpenTelemetry spans
+# otlp_endpoint = "http://localhost:4318"
+# service_name = "prism"
+# sample_rate = 1.0
 ```
 
 </details>
@@ -224,7 +237,7 @@ server {
 
 ```toml
 [server]
-trusted_proxies = ["127.0.0.1/32"]
+trusted_proxies = ["127.0.0.1"]   # individual IPs only — CIDR ranges are not supported
 ```
 
 </details>

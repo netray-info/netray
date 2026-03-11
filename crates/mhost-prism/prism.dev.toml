@@ -16,3 +16,8 @@ allow_arbitrary_servers = true
 
 [ecosystem]
 ifconfig_url = "https://ip.pdt.sh"
+
+[telemetry]
+# Human-readable text output for local development.
+# Switch to "json" if piping logs to a local aggregator.
+log_format = "text"

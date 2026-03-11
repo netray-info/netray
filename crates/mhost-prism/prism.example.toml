@@ -17,8 +17,9 @@
 # Address and port for the Prometheus metrics endpoint.
 #metrics_bind = "127.0.0.1:9090"
 
-# IP addresses or CIDR ranges of trusted reverse proxies.
-# When a request arrives from a trusted proxy, client IP is extracted from
+# Individual IP addresses of trusted reverse proxies.
+# Only individual IPs are supported (not CIDR ranges). When a request arrives
+# from a trusted proxy, the real client IP is extracted from
 # X-Forwarded-For / X-Real-IP / CF-Connecting-IP headers.
 # Leave empty to trust no proxies (peer IP is always used).
 #trusted_proxies = []
@@ -33,8 +34,9 @@
 #per_ip_per_minute = 120
 
 # Maximum tokens a single request can consume in one burst.
-# Must be >= max_record_types x max_servers (currently 10 x 4 = 40).
-#per_ip_burst = 40
+# Must accommodate combined mode costs: check(16) + trace(16) + dnssec(16) = 48,
+# plus a background query (up to 10×4 = 40). Default 64 gives headroom above both.
+#per_ip_burst = 64
 
 # GCRA rate limit: query-cost tokens per DNS target (provider/server) per minute.
 # Each target is only charged its share: record_types (not the full query cost).
@@ -125,3 +127,40 @@
 # Timeout for enrichment HTTP requests in milliseconds (default: 500, hard cap: 2000).
 # Enrichment never blocks DNS results — it runs after all DNS queries complete.
 #enrichment_timeout_ms = 500
+
+# ---------------------------------------------------------------------------
+# [performance] — Resolver pool settings
+# ---------------------------------------------------------------------------
+[performance]
+
+# TTL (seconds) for cached resolver instances in the pool.
+#resolver_pool_ttl_secs = 300
+
+# Maximum number of resolver instances to keep in the pool.
+#resolver_pool_max_size = 32
+
+# How often (seconds) the pool eviction task runs.
+#resolver_pool_cleanup_interval_secs = 60
+
+# ---------------------------------------------------------------------------
+# [telemetry] — Logging and distributed tracing
+# ---------------------------------------------------------------------------
+[telemetry]
+
+# Log output format.
+#   "text" — human-readable, colour-coded (default; best for terminals)
+#   "json" — structured JSON lines (best for log aggregators: Loki, Datadog, etc.)
+# Also configurable via: PRISM_TELEMETRY__LOG_FORMAT=json
+#log_format = "text"
+
+# Enable OpenTelemetry distributed tracing (OTLP/HTTP export).
+#enabled = false
+
+# OTLP HTTP endpoint to export spans to.
+#otlp_endpoint = "http://localhost:4318"
+
+# Service name reported in spans and logs.
+#service_name = "prism"
+
+# Trace sampling rate (0.0 = off, 1.0 = 100%, any value in between for ratio sampling).
+#sample_rate = 1.0

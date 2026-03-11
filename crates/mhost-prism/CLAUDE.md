@@ -118,40 +118,58 @@ make dev                              # cargo run (axum server :8080)
 ```
 mhost-prism/                  # standalone crate (not a workspace member)
   Cargo.toml                  # depends on mhost = "<version>" (crates.io)
+  prism.example.toml          # full annotated config reference (all defaults documented)
+  prism.dev.toml              # relaxed limits + arbitrary servers for local development
   src/
-    main.rs                   # Entry point, axum server setup, graceful shutdown
+    main.rs                   # Entry point, axum server setup, graceful shutdown,
+                              #   request_id_middleware, http_metrics_middleware
+    parser.rs                 # Query language parser (single source of truth for query semantics)
+    config.rs                 # config crate: TOML + env vars (PRISM_ prefix)
+    error.rs                  # thiserror ApiError enum → HTTP status + error codes
+    record_format.rs          # Human-readable formatting for TXT, CAA, MX, SOA, SVCB, TLSA, etc.
+    telemetry.rs              # tracing-subscriber init; optional OTel OTLP export; log_format switch
+    circuit_breaker.rs        # Per-provider sliding-window breaker (CircuitBreakerRegistry)
+    dns_raw.rs                # Raw UDP/TCP hickory-proto queries, glue resolution, build_server_list
+    dns_trace.rs              # Iterative delegation walker (root → TLD → authoritative)
+    dns_dnssec.rs             # DNSSEC chain-of-trust fetch helpers
+    ip_enrichment.rs          # IpEnrichmentService: reqwest + moka cache, batch lookups
+    query_dedup.rs            # Broadcast-based query coalescing (infrastructure; not yet wired)
+    reload.rs                 # SIGHUP hot config reload via ArcSwap
+    resolver_pool.rs          # TTL+LRU resolver cache (infrastructure; not yet wired)
+    result_cache.rs           # LRU result cache for permalink sharing
     api/
-      mod.rs                  # Route definitions
-      query.rs                # GET/POST /api/query → SSE stream
+      mod.rs                  # Route definitions, AppState, shared BatchEvent / STREAM_TIMEOUT_SECS
+      query.rs                # GET/POST /api/query → SSE stream (FuturesUnordered fan-out)
       check.rs                # POST /api/check → SSE stream (15 types + DMARC lint)
       trace.rs                # POST /api/trace → SSE stream (iterative delegation walk)
       compare.rs              # POST /api/compare → SSE stream (transport comparison)
       authcompare.rs          # POST /api/authcompare → SSE stream (auth vs recursive)
-      parse.rs                # POST /api/parse → completion hints (Phase 3)
-      meta.rs                 # GET /api/servers, /api/record-types, /api/health
-                              # GET /docs → Scalar API reference UI
-                              # GET /api-docs/openapi.json → OpenAPI spec
+      dnssec.rs               # POST /api/dnssec → SSE stream (DNSSEC chain-of-trust)
+      parse.rs                # POST /api/parse → completion hints
+      results.rs              # Shared result serialisation helpers (lookups → JSON)
+      meta.rs                 # GET /api/health (liveness), GET /api/ready (readiness),
+                              #   GET /api/servers, GET /api/record-types, GET /api/config
+                              #   GET /docs → Scalar API reference UI
+                              #   GET /api-docs/openapi.json → OpenAPI spec
     security/
-      mod.rs                  # Middleware composition
-      rate_limit.rs           # tower-governor layers (per-IP, per-target, global)
-      ip_extract.rs           # Real client IP from proxy headers
-      query_policy.rs         # Target validation, type restrictions
-    config.rs                 # config crate: TOML + env vars (PRISM_ prefix)
-    error.rs                  # thiserror ApiError enum → HTTP status + error codes
-    record_format.rs          # Human-readable formatting for TXT, CAA, MX, SOA
+      mod.rs                  # Middleware composition, cors_layer, security_headers
+      rate_limit.rs           # 3-tier GCRA (per-IP, per-target, global)
+      ip_extract.rs           # Real client IP from CF-Connecting-IP / X-Real-IP / X-Forwarded-For
+      query_policy.rs         # Target validation (is_allowed_target), type restrictions, limits
   frontend/                   # SolidJS + Vite (strict TypeScript)
     src/
       App.tsx
       components/
-        QueryInput.tsx        # CodeMirror 6 single-line input
-        ResultsTable.tsx      # Streaming results table
-        LintTab.tsx           # Check mode lint results
-        TraceView.tsx         # Delegation hop visualization
+        QueryInput.tsx        # CodeMirror 6 single-line input with autocomplete
+        ResultsTable.tsx      # Streaming results table with expand/collapse
+        LintTab.tsx           # Check mode lint results with remediation hints
+        TraceView.tsx         # Delegation hop visualisation
+        DnssecView.tsx        # DNSSEC chain-of-trust display
         ServerComparison.tsx  # Multi-server divergence view
         TransportComparison.tsx # Transport comparison (UDP/TCP/TLS/HTTPS)
         AuthComparison.tsx    # Authoritative vs recursive comparison
       lib/
-        tokenizer.ts          # Syntax highlighting (cosmetic only)
+        tokenizer.ts          # Syntax highlighting (cosmetic only — never affects query execution)
       styles/                 # Plain CSS with custom properties
     dist/                     # Build output, .gitignored, embedded via rust-embed
 ```
@@ -169,7 +187,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
 - **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens. Compare endpoint cost = `record_types * servers * 4` (4 transports). Auth compare cost = `record_types * servers + 16` (recursive + NS discovery + auth queries).
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
-- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed.
+- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed. Notable options: `PRISM_TELEMETRY__LOG_FORMAT=json` switches to JSON log lines; `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs only (CIDR ranges are rejected at startup).
 - **Routing flags**: `+check`, `+trace`, `+compare`, and `+auth` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
 
 ## Key Dependencies
@@ -196,7 +214,8 @@ mhost-prism/                  # standalone crate (not a workspace member)
 When modifying API endpoints or adding features, verify:
 
 - [ ] Blocked query types enforced (ANY, AXFR, IXFR)
-- [ ] Target IP validation (no RFC 1918, localhost, link-local, CGNAT, multicast)
+- [ ] Target IP validation (no RFC 1918, localhost, link-local, CGNAT, multicast, IPv6 ULA fc00::/7)
+- [ ] Glue IPs from trace delegation walk also pass `is_allowed_target` (dns_trace.rs)
 - [ ] Query limits respected (max 10 record types, max 4 servers)
 - [ ] Timeouts enforced (10s per-query, 30s stream)
 - [ ] Rate limiting applied with correct cost calculation
