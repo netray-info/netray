@@ -14,6 +14,7 @@ interface Props {
   defaultExpanded: boolean;
   expanded?: boolean;
   explain?: boolean;
+  ipUrl?: string;
 }
 
 type Status = 'pass' | 'warn' | 'fail' | 'error' | 'neutral';
@@ -107,6 +108,11 @@ export default function IpCard(props: Props) {
           </span>
         </Show>
       </button>
+      <Show when={props.ipUrl}>
+        <div class="ip-eco">
+          <a class="eco-link" href={`${props.ipUrl}/?ip=${encodeURIComponent(props.result.ip)}`} target="_blank" rel="noopener noreferrer">IP info ↗</a>
+        </div>
+      </Show>
       <Explain when={!!props.explain}>Each card shows the TLS inspection result for one IP address. The left border color indicates overall status: green = good, orange = warning, red = problem.</Explain>
 
       <Show when={!props.result.error && leaf()}>

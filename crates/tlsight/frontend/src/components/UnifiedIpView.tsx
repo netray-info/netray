@@ -13,6 +13,7 @@ interface Props {
   ips: IpResult[];
   explain?: boolean;
   expanded?: boolean;
+  ipUrl?: string;
 }
 
 function daysLabel(days: number): string {
@@ -46,6 +47,9 @@ export default function UnifiedIpView(props: Props) {
                 {ip.ip}
                 <Show when={ip.tls}>
                   {(t) => <span class="unified-ip__timing-val"> {t().handshake_ms}ms</span>}
+                </Show>
+                <Show when={props.ipUrl}>
+                  <a class="eco-link eco-link--badge" href={`${props.ipUrl}/?ip=${encodeURIComponent(ip.ip)}`} target="_blank" rel="noopener noreferrer"> ↗</a>
                 </Show>
               </span>
             )}

@@ -1238,44 +1238,29 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
-   Cross-links
+   Ecosystem links (contextual DNS / IP info links)
    ================================================================ */
 
-.cross-links {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 1rem;
+.eco-link {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color var(--transition);
 }
 
-.cross-links h3 {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.5rem;
+.eco-link:hover {
+  color: var(--accent);
+  text-decoration: none;
 }
 
-.cross-links__list {
+.eco-link--badge {
+  margin-left: 2px;
+}
+
+.ip-eco {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.cross-links__link {
-  font-size: 0.8125rem;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  transition: border-color var(--transition), background var(--transition);
-  text-decoration: none;
-}
-
-.cross-links__link:hover {
-  border-color: var(--accent);
-  background: var(--accent-glow);
-  text-decoration: none;
+  justify-content: flex-end;
+  padding: 2px 12px 4px;
 }
 
 /* ================================================================
@@ -1452,6 +1437,7 @@ a:hover { text-decoration: underline; }
   gap: 8px;
   margin-top: 2rem;
   padding-top: 1rem;
+  padding-bottom: env(safe-area-inset-bottom);
   border-top: 1px solid var(--border-subtle);
   font-size: 0.75rem;
   color: var(--text-muted);

@@ -4,7 +4,6 @@ import ExportButtons from './components/ExportButtons';
 import ValidationSummary from './components/ValidationSummary';
 import PortTabs from './components/PortTabs';
 import ConsistencyView from './components/ConsistencyView';
-import CrossLinks from './components/CrossLinks';
 import IpCard from './components/IpCard';
 import UnifiedIpView from './components/UnifiedIpView';
 
@@ -62,6 +61,8 @@ export default function App() {
   const [explain, setExplain] = createSignal(false);
 
   const [meta] = createResource(fetchMeta);
+  const dnsUrl = () => meta()?.ecosystem?.dns_base_url;
+  const ipUrl = () => meta()?.ecosystem?.ip_base_url;
 
   let inputEl: HTMLInputElement | undefined;
   let modalCloseBtn: HTMLButtonElement | undefined;
@@ -340,6 +341,10 @@ export default function App() {
                       <span class="results-summary-sep">/</span>
                       <span class="results-summary-item" style={{ color: 'var(--warn)' }}>{r.skipped_ips?.length} skipped</span>
                     </Show>
+                    <Show when={dnsUrl()}>
+                      <span class="results-summary-sep">/</span>
+                      <a class="eco-link" href={`${dnsUrl()}/?q=${encodeURIComponent(r.hostname)}`} target="_blank" rel="noopener noreferrer">DNS ↗</a>
+                    </Show>
                   </div>
                   <ExportButtons result={r} />
                 </div>
@@ -414,7 +419,7 @@ export default function App() {
                         </Show>
 
                         <Show when={useUnified()}>
-                          <UnifiedIpView ips={successfulIps()} explain={explain()} expanded={allExpanded()} />
+                          <UnifiedIpView ips={successfulIps()} explain={explain()} expanded={allExpanded()} ipUrl={ipUrl()} />
                           <For each={errorIps()}>
                             {(ipResult) => (
                               <IpCard
@@ -422,6 +427,7 @@ export default function App() {
                                 defaultExpanded={false}
                                 expanded={undefined}
                                 explain={explain()}
+                                ipUrl={ipUrl()}
                               />
                             )}
                           </For>
@@ -435,6 +441,7 @@ export default function App() {
                                 defaultExpanded={p.ips.length === 1}
                                 expanded={p.ips.length > 1 ? allExpanded() : undefined}
                                 explain={explain()}
+                                ipUrl={ipUrl()}
                               />
                             )}
                           </For>
@@ -444,9 +451,6 @@ export default function App() {
                   }}
                 </Show>
 
-                <Show when={meta()}>
-                  <CrossLinks meta={meta()!} hostname={r.hostname} ips={allIps()} />
-                </Show>
               </div>
             );
           }}
@@ -532,7 +536,11 @@ export default function App() {
       </Show>
 
       <footer class="footer">
+        <a class="footer-link" href="https://github.com/lukaspustina/tlsight" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <span class="footer-sep">&middot;</span>
         <a class="footer-link" href="/docs" target="_blank" rel="noopener noreferrer">API Docs</a>
+        <span class="footer-sep">&middot;</span>
+        <a class="footer-link" href="https://github.com/lukaspustina" target="_blank" rel="noopener noreferrer">Author</a>
         <span class="footer-sep">&middot;</span>
         <Show when={meta()?.version}>
           <span class="footer-text">v{meta()!.version}</span>
