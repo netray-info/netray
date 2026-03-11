@@ -15,7 +15,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
- "getrandom 0.3.4",
  "once_cell",
  "version_check",
  "zerocopy",
@@ -1199,6 +1198,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ip_network"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa2f047c0a98b2f299aa5d6d7088443570faae494e9ae1305e48be000c9e0eb1"
+
+[[package]]
 name = "ipconfig"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1486,12 +1491,13 @@ dependencies = [
 
 [[package]]
 name = "netray-common"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bb3c673f6c20c7287f139eedecd28754bea674e2caaa8e78f1af7a45ac39ff8"
+checksum = "4072b0ab589b4cb668c867aaa7e234b71f1f5631ecc27d5e02d4009b7a4691ee"
 dependencies = [
  "axum",
  "governor",
+ "ip_network",
  "metrics",
  "serde",
  "tracing",
@@ -1803,11 +1809,9 @@ dependencies = [
 name = "prism"
 version = "0.1.3"
 dependencies = [
- "ahash",
  "arc-swap",
  "axum",
  "config",
- "dashmap",
  "futures",
  "governor",
  "hickory-proto",

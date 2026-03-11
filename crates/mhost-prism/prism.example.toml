@@ -21,10 +21,10 @@
 # Address and port for the Prometheus metrics endpoint.
 #metrics_bind = "127.0.0.1:9090"
 
-# Individual IP addresses of trusted reverse proxies.
-# Only individual IPs are supported (not CIDR ranges). When a request arrives
-# from a trusted proxy, the real client IP is extracted from
-# X-Forwarded-For / X-Real-IP / CF-Connecting-IP headers.
+# Trusted reverse proxies (individual IPs or CIDR ranges).
+# When a request arrives from a trusted proxy, the real client IP is extracted
+# from X-Forwarded-For / X-Real-IP / CF-Connecting-IP headers.
+# Examples: ["10.0.0.1"], ["10.0.0.0/8", "fd00::/8"]
 # Leave empty to trust no proxies (peer IP is always used).
 #trusted_proxies = []
 
@@ -131,20 +131,6 @@
 # Timeout for enrichment HTTP requests in milliseconds (default: 500, hard cap: 2000).
 # Enrichment never blocks DNS results — it runs after all DNS queries complete.
 #enrichment_timeout_ms = 500
-
-# ---------------------------------------------------------------------------
-# [performance] — Resolver pool settings
-# ---------------------------------------------------------------------------
-[performance]
-
-# TTL (seconds) for cached resolver instances in the pool.
-#resolver_pool_ttl_secs = 300
-
-# Maximum number of resolver instances to keep in the pool.
-#resolver_pool_max_size = 32
-
-# How often (seconds) the pool eviction task runs.
-#resolver_pool_cleanup_interval_secs = 60
 
 # ---------------------------------------------------------------------------
 # [telemetry] — Logging and distributed tracing

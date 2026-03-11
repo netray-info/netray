@@ -7,7 +7,7 @@ description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
 mhost = { version = "0.11", default-features = false, features = ["dot", "doh"] }
-netray-common = "0.1.0"
+netray-common = "0.2.0"
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }
@@ -60,10 +60,6 @@ moka = { version = "0.12", features = ["future"] }
 
 # Hot config reload
 arc-swap = "1"
-
-# Query deduplication
-dashmap = "6"
-ahash = "0.8"
 
 # Request IDs
 uuid = { version = "1", features = ["v7"] }
