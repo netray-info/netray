@@ -48,8 +48,8 @@ RUN apt-get update \
 
 COPY --from=builder /app/target/release/prism /usr/local/bin/prism
 
-RUN addgroup --system --gid 1001 prism \
-  && adduser --system --uid 1001 --ingroup prism --no-create-home prism
+RUN groupadd --system --gid 1001 prism \
+  && useradd --system --uid 1001 --gid prism --no-create-home prism
 USER prism
 
 # API + frontend
