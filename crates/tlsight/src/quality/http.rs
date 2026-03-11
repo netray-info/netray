@@ -298,13 +298,25 @@ fn humanize_seconds(secs: u64) -> String {
     const MONTH: u64 = 30 * DAY;
     if secs >= YEAR {
         let years = secs / YEAR;
-        if years == 1 { "1 year".to_string() } else { format!("{years} years") }
+        if years == 1 {
+            "1 year".to_string()
+        } else {
+            format!("{years} years")
+        }
     } else if secs >= MONTH {
         let months = secs / MONTH;
-        if months == 1 { "1 month".to_string() } else { format!("{months} months") }
+        if months == 1 {
+            "1 month".to_string()
+        } else {
+            format!("{months} months")
+        }
     } else {
         let days = secs / DAY;
-        if days <= 1 { "1 day".to_string() } else { format!("{days} days") }
+        if days <= 1 {
+            "1 day".to_string()
+        } else {
+            format!("{days} days")
+        }
     }
 }
 

@@ -78,10 +78,22 @@ fn parse_ocsp_response(resp: x509_ocsp::OcspResponse) -> OcspInfo {
     OcspInfo {
         stapled: true,
         status: Some(status.to_string()),
-        // TODO("extract GeneralizedTime from single.this_update / single.next_update")
-        this_update: None,
-        next_update: None,
+        this_update: Some(format_generalized_time(&single.this_update)),
+        next_update: single.next_update.as_ref().map(format_generalized_time),
     }
+}
+
+fn format_generalized_time(t: &x509_ocsp::OcspGeneralizedTime) -> String {
+    let dt = t.0.to_date_time();
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
+        dt.year(),
+        dt.month(),
+        dt.day(),
+        dt.hour(),
+        dt.minutes(),
+        dt.seconds()
+    )
 }
 
 #[cfg(test)]

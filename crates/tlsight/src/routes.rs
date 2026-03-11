@@ -8,15 +8,20 @@ use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{OpenApi, ToSchema};
 
-use crate::error::AppError;
+use crate::enrichment::{CloudInfo, IpEnrichment};
+use crate::error::{AppError, ErrorInfo, ErrorResponse};
 use crate::input::{self, Target};
+use crate::quality::types::{Category, HstsInfo, RedirectInfo};
+use crate::quality::{HealthCheck, PortQualityResult, QualityResult};
 use crate::security::rate_limit::select_representative_ips;
 use crate::security::target_policy;
 use crate::state::AppState;
 use crate::tls;
+use crate::tls::ocsp::OcspInfo;
 use crate::validate;
+use crate::validate::ct::{CtInfo, SctEntry};
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -183,14 +188,38 @@ pub fn api_router(state: AppState) -> Router {
 // Handlers
 // ---------------------------------------------------------------------------
 
+#[utoipa::path(
+    get,
+    path = "/api/health",
+    responses(
+        (status = 200, description = "Service is healthy", body = HealthResponse)
+    ),
+    tag = "system"
+)]
 async fn health_handler() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/ready",
+    responses(
+        (status = 200, description = "Service is ready to accept requests", body = HealthResponse)
+    ),
+    tag = "system"
+)]
 async fn ready_handler() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ready" })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/meta",
+    responses(
+        (status = 200, description = "Server capabilities, enabled features, and configured limits", body = MetaResponse)
+    ),
+    tag = "system"
+)]
 async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
     let config = &state.config;
     let ecosystem =
@@ -223,6 +252,24 @@ async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
     })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/inspect",
+    params(
+        ("h" = String, Query, description = "Target to inspect. Format: `hostname[:port[,port...]]` — e.g. `example.com`, `example.com:443,8443`, `example.com:443,465,993`")
+    ),
+    responses(
+        (status = 200, description = "TLS inspection results", body = InspectResponse),
+        (status = 400, description = "Invalid input (hostname, port, or syntax error)", body = ErrorResponse),
+        (status = 403, description = "Blocked target (private/loopback/reserved address)", body = ErrorResponse),
+        (status = 422, description = "Input valid but exceeds configured limits (e.g. too many ports)", body = ErrorResponse),
+        (status = 429, description = "Rate limit exceeded", body = ErrorResponse,
+            headers(("Retry-After" = u64, description = "Seconds until the rate limit window resets"))),
+        (status = 502, description = "DNS resolution or TLS handshake failure", body = ErrorResponse),
+        (status = 504, description = "Request timed out", body = ErrorResponse),
+    ),
+    tag = "inspection"
+)]
 async fn inspect_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -792,39 +839,56 @@ async fn resolve_hostname(hostname: &str) -> Result<Vec<std::net::IpAddr>, AppEr
     Ok(unique)
 }
 
+/// OpenAPI document for tlsight.
+#[derive(utoipa::OpenApi)]
+#[openapi(
+    info(
+        title = "tlsight",
+        description = "TLS certificate inspection and diagnostics API",
+        license(name = "MIT"),
+    ),
+    paths(
+        health_handler,
+        ready_handler,
+        meta_handler,
+        inspect_handler,
+    ),
+    components(
+        schemas(
+            // Top-level response types
+            InspectResponse, PortResult, DnsContext, CaaInfo, TlsaInfo,
+            ConsistencyResult, ConsistencyMismatch,
+            MetaResponse, MetaFeatures, MetaLimits, MetaEcosystem,
+            HealthResponse,
+            // Validation
+            validate::Summary, validate::SummaryChecks,
+            validate::ValidationResult, validate::CheckStatus,
+            // TLS inspection
+            tls::IpInspectionResult, tls::InspectionError,
+            tls::TlsParams, tls::CertInfo,
+            OcspInfo,
+            // Certificate Transparency
+            CtInfo, SctEntry,
+            // IP enrichment
+            IpEnrichment, CloudInfo,
+            // Quality / health checks
+            QualityResult, PortQualityResult, HealthCheck, Category,
+            HstsInfo, RedirectInfo,
+            // Error responses
+            ErrorResponse, ErrorInfo,
+        )
+    ),
+    tags(
+        (name = "inspection", description = "TLS inspection"),
+        (name = "system", description = "Health and metadata"),
+    )
+)]
+struct ApiDoc;
+
 async fn openapi_handler() -> impl IntoResponse {
-    // TODO("proper utoipa OpenAPI spec generation")
-    let spec = serde_json::json!({
-        "openapi": "3.1.0",
-        "info": {
-            "title": "tlsight",
-            "version": env!("CARGO_PKG_VERSION"),
-            "description": "TLS certificate inspection and diagnostics API"
-        },
-        "paths": {
-            "/api/inspect": {
-                "get": {
-                    "summary": "Inspect TLS configuration",
-                    "parameters": [{
-                        "name": "h",
-                        "in": "query",
-                        "required": true,
-                        "schema": { "type": "string" }
-                    }]
-                }
-            },
-            "/api/health": {
-                "get": { "summary": "Health check" }
-            },
-            "/api/ready": {
-                "get": { "summary": "Readiness check" }
-            },
-            "/api/meta": {
-                "get": { "summary": "Service metadata" }
-            }
-        }
-    });
-    Json(spec)
+    let mut api = ApiDoc::openapi();
+    api.info.version = env!("CARGO_PKG_VERSION").to_string();
+    Json(api)
 }
 
 async fn docs_handler() -> Html<&'static str> {
