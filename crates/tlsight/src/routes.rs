@@ -403,7 +403,8 @@ async fn do_inspect(
     let do_dns = is_hostname && state.dns_resolver.is_some();
 
     // Spawn DNS lookups on a blocking thread (mhost uses rand::thread_rng which
-    // is !Send in rand 0.9, so the DNS future can't live in the async task)
+    // is !Send in rand 0.9, so the DNS future can't be sent across threads via tokio::spawn;
+    // TODO: remove spawn_blocking once mhost upgrades to a Send-compatible rand version)
     let dns_handle = if do_dns {
         let resolver = state.dns_resolver.clone().unwrap();
         let hostname = parsed.target.hostname().unwrap().to_string();
