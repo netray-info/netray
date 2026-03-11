@@ -4,6 +4,9 @@ use serde::Serialize;
 
 // ---------------------------------------------------------------------------
 // Wire + schema types (single representation for both HTTP response body and OpenAPI docs)
+//
+// These mirror netray_common::error::{ErrorResponse, ErrorInfo} but add
+// utoipa::ToSchema derives required for OpenAPI spec generation.
 // ---------------------------------------------------------------------------
 
 /// JSON body returned for all error responses.
@@ -72,33 +75,27 @@ pub enum ApiError {
     ResolverError(String),
 }
 
-impl ApiError {
-    /// Returns the HTTP status code for this error variant.
+impl netray_common::error::ApiError for ApiError {
     fn status_code(&self) -> StatusCode {
         match self {
-            // 400 Bad Request — malformed input.
             Self::InvalidDomain(_)
             | Self::InvalidRecordType(_)
             | Self::InvalidServer(_)
             | Self::ParseError(_)
             | Self::AmbiguousInput => StatusCode::BAD_REQUEST,
 
-            // 422 Unprocessable Entity — valid syntax but policy-rejected.
             Self::BlockedTargetIp { .. }
             | Self::SystemResolversDisabled
             | Self::ArbitraryServersDisabled
             | Self::TooManyRecordTypes { .. }
             | Self::TooManyServers { .. } => StatusCode::UNPROCESSABLE_ENTITY,
 
-            // 429 Too Many Requests.
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
 
-            // 500 Internal Server Error.
             Self::ResolverError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
-    /// Returns the machine-readable error code string for this variant.
     fn error_code(&self) -> &'static str {
         match self {
             Self::InvalidDomain(_) => "INVALID_DOMAIN",
@@ -115,37 +112,20 @@ impl ApiError {
             Self::ResolverError(_) => "RESOLVER_ERROR",
         }
     }
+
+    fn retry_after_secs(&self) -> Option<u64> {
+        match self {
+            Self::RateLimited {
+                retry_after_secs, ..
+            } => Some(*retry_after_secs),
+            _ => None,
+        }
+    }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let status = self.status_code();
-
-        if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error = %self, "internal server error");
-        }
-
-        let body = ErrorResponse {
-            error: ErrorInfo {
-                code: self.error_code(),
-                message: self.to_string(),
-            },
-        };
-
-        let mut response = (status, axum::Json(body)).into_response();
-
-        // For rate-limited responses, include the Retry-After header (RFC 6585 §4).
-        if let Self::RateLimited {
-            retry_after_secs, ..
-        } = &self
-        {
-            response.headers_mut().insert(
-                axum::http::header::RETRY_AFTER,
-                axum::http::HeaderValue::from(*retry_after_secs),
-            );
-        }
-
-        response
+        netray_common::error::into_error_response(&self)
     }
 }
 

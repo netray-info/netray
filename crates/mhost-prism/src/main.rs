@@ -102,13 +102,17 @@ async fn main() {
     // responses). The concurrency limit is outermost so excess connections are
     // shed before any work. Security headers and CORS wrap everything. Tracing
     // and compression are innermost around the actual handlers.
+    let security_headers_fn = security::security_headers_layer();
     let app = Router::new()
         .merge(api::health_router())
         .merge(api::api_router(state))
         .fallback(static_handler)
         .layer(axum::middleware::from_fn(http_metrics_middleware))
         .layer(axum::middleware::from_fn(request_id_middleware))
-        .layer(axum::middleware::from_fn(security::security_headers))
+        .layer(axum::middleware::from_fn(move |req, next| {
+            let f = security_headers_fn.clone();
+            async move { f(req, next).await }
+        }))
         .layer(security::cors_layer())
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())

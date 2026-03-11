@@ -6,13 +6,14 @@ license = "MIT OR Apache-2.0"
 description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
-mhost = { version = "0.10.0", default-features = false }
+mhost = { version = "0.11", default-features = false, features = ["dot", "doh"] }
+netray-common = "0.1.0"
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }
 tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
-governor = "0.8"
+governor = "0.10"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -45,7 +46,7 @@ tracing-opentelemetry = "0.29"
 
 # Metrics
 metrics = "0.24"
-metrics-exporter-prometheus = "0.16"
+metrics-exporter-prometheus = "0.18"
 
 # Embedded frontend
 rust-embed = "8"

@@ -15,22 +15,19 @@ use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
 
-use governor::clock::DefaultClock;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{Quota, RateLimiter};
 
+use netray_common::rate_limit::{self, KeyedLimiter};
+
 use crate::config::LimitsConfig;
 use crate::error::ApiError;
-
-/// Keyed rate limiter type alias for readability.
-type KeyedLimiter<K> =
-    RateLimiter<K, governor::state::keyed::DefaultKeyedStateStore<K>, DefaultClock>;
 
 /// Rate limiting state shared across all request handlers.
 pub struct RateLimitState {
     per_ip: KeyedLimiter<IpAddr>,
     per_target: KeyedLimiter<String>,
-    global: RateLimiter<NotKeyed, InMemoryState, DefaultClock>,
+    global: RateLimiter<NotKeyed, InMemoryState, governor::clock::DefaultClock>,
     active_streams: Arc<Mutex<HashMap<IpAddr, usize>>>,
     per_ip_max_streams: u32,
 }
@@ -106,66 +103,39 @@ impl RateLimitState {
         }
 
         // 2. Per-IP rate limit (total cost: all lookups charged to this client).
-        check_keyed_cost(&self.per_ip, &client_ip, total_nz, "per_ip")?;
+        rate_limit::check_keyed_cost(&self.per_ip, &client_ip, total_nz, "per_ip", "prism")
+            .map_err(|r| ApiError::RateLimited {
+                retry_after_secs: r.retry_after_secs,
+                scope: r.scope,
+            })?;
 
         // 3. Per-target rate limit (each target only charged its share: record_types).
         for key in target_keys {
-            check_keyed_cost(&self.per_target, key, target_nz, "per_target")?;
+            rate_limit::check_keyed_cost(
+                &self.per_target,
+                key,
+                target_nz,
+                "per_target",
+                "prism",
+            )
+            .map_err(|r| ApiError::RateLimited {
+                retry_after_secs: r.retry_after_secs,
+                scope: r.scope,
+            })?;
         }
 
         // 4. Global rate limit (total cost).
-        check_direct_cost(&self.global, total_nz)?;
+        rate_limit::check_direct_cost(&self.global, total_nz, "prism").map_err(|r| {
+            ApiError::RateLimited {
+                retry_after_secs: r.retry_after_secs,
+                scope: r.scope,
+            }
+        })?;
 
         // All checks passed — increment active stream count.
         let guard = StreamGuard::new(Arc::clone(&self.active_streams), client_ip);
         Ok(guard)
     }
-}
-
-/// Check a keyed rate limiter and convert rejection to `ApiError`.
-fn check_keyed_cost<K: std::hash::Hash + Eq + Clone>(
-    limiter: &KeyedLimiter<K>,
-    key: &K,
-    cost: NonZeroU32,
-    scope: &'static str,
-) -> Result<(), ApiError> {
-    let result = match limiter.check_key_n(key, cost) {
-        Ok(Ok(())) => return Ok(()),
-        Ok(Err(not_until)) => {
-            let wait =
-                not_until.wait_time_from(governor::clock::Clock::now(&DefaultClock::default()));
-            wait.as_secs()
-        }
-        // InsufficientCapacity: cost exceeds burst size entirely.
-        // The request can never fit in a single burst — report a 60s retry.
-        Err(_) => 60,
-    };
-    metrics::counter!("prism_rate_limit_hits_total", "scope" => scope).increment(1);
-    Err(ApiError::RateLimited {
-        retry_after_secs: result.max(1),
-        scope,
-    })
-}
-
-/// Check the global (direct/unkeyed) rate limiter and convert rejection to `ApiError`.
-fn check_direct_cost(
-    limiter: &RateLimiter<NotKeyed, InMemoryState, DefaultClock>,
-    cost: NonZeroU32,
-) -> Result<(), ApiError> {
-    let result = match limiter.check_n(cost) {
-        Ok(Ok(())) => return Ok(()),
-        Ok(Err(not_until)) => {
-            let wait =
-                not_until.wait_time_from(governor::clock::Clock::now(&DefaultClock::default()));
-            wait.as_secs()
-        }
-        Err(_) => 60,
-    };
-    metrics::counter!("prism_rate_limit_hits_total", "scope" => "global").increment(1);
-    Err(ApiError::RateLimited {
-        retry_after_secs: result.max(1),
-        scope: "global",
-    })
 }
 
 /// RAII guard that tracks active SSE streams per IP.
