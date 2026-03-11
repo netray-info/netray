@@ -142,6 +142,21 @@ fn default_resolver_pool_cleanup_interval_secs() -> u64 {
     60
 }
 
+/// Log output format.
+///
+/// Configurable via `telemetry.log_format` in the TOML config or
+/// `PRISM_TELEMETRY__LOG_FORMAT=json` environment variable.
+///
+/// - `text` (default): human-readable, colour-coded output for local development.
+/// - `json`: structured JSON lines for log aggregators (Loki, CloudWatch, Datadog).
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LogFormat {
+    #[default]
+    Text,
+    Json,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct TelemetryConfig {
     #[serde(default)]
@@ -152,6 +167,8 @@ pub struct TelemetryConfig {
     pub service_name: String,
     #[serde(default = "default_sample_rate")]
     pub sample_rate: f64,
+    #[serde(default)]
+    pub log_format: LogFormat,
 }
 
 impl Default for TelemetryConfig {
@@ -161,6 +178,7 @@ impl Default for TelemetryConfig {
             otlp_endpoint: default_otlp_endpoint(),
             service_name: default_service_name(),
             sample_rate: default_sample_rate(),
+            log_format: LogFormat::default(),
         }
     }
 }

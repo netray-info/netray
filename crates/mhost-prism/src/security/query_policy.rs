@@ -228,12 +228,12 @@ mod tests {
 
     // ---- domain length ----
 
-    fn make_policy() -> QueryPolicy<'static> {
+    fn test_config() -> crate::config::Config {
         use crate::config::{
             CircuitBreakerConfig, Config, DnsConfig, EcosystemConfig, LimitsConfig,
             PerformanceConfig, ServerConfig, TelemetryConfig, TraceConfig,
         };
-        let config = Box::leak(Box::new(Config {
+        Config {
             server: ServerConfig {
                 bind: ([127, 0, 0, 1], 8080).into(),
                 metrics_bind: ([127, 0, 0, 1], 9090).into(),
@@ -270,8 +270,7 @@ mod tests {
             performance: PerformanceConfig::default(),
             telemetry: TelemetryConfig::default(),
             ecosystem: EcosystemConfig::default(),
-        }));
-        QueryPolicy::new(config)
+        }
     }
 
     fn make_query(domain: &str) -> ParsedQuery {
@@ -287,7 +286,8 @@ mod tests {
 
     #[test]
     fn domain_length_exactly_253_is_allowed() {
-        let policy = make_policy();
+        let config = test_config();
+        let policy = QueryPolicy::new(&config);
         // 253 'a' chars is at the limit.
         let q = make_query(&"a".repeat(253));
         assert!(policy.validate(&q).is_ok());
@@ -295,7 +295,8 @@ mod tests {
 
     #[test]
     fn domain_length_254_is_rejected() {
-        let policy = make_policy();
+        let config = test_config();
+        let policy = QueryPolicy::new(&config);
         let q = make_query(&"a".repeat(254));
         assert!(matches!(
             policy.validate(&q),

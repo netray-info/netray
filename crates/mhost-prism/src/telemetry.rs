@@ -12,7 +12,7 @@ use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::config::TelemetryConfig;
+use crate::config::{LogFormat, TelemetryConfig};
 
 /// Initialize the tracing subscriber with an optional OpenTelemetry layer.
 ///
@@ -26,12 +26,27 @@ pub fn init_subscriber(config: &TelemetryConfig) {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| "prism=info,tower_http=info".into());
 
+    let use_json = config.log_format == LogFormat::Json;
+
     if config.enabled {
         let otel_layer = init_otel_layer(config).expect("failed to initialize OpenTelemetry");
 
+        if use_json {
+            tracing_subscriber::registry()
+                .with(otel_layer)
+                .with(tracing_subscriber::fmt::layer().json())
+                .with(env_filter)
+                .init();
+        } else {
+            tracing_subscriber::registry()
+                .with(otel_layer)
+                .with(tracing_subscriber::fmt::layer())
+                .with(env_filter)
+                .init();
+        }
+    } else if use_json {
         tracing_subscriber::registry()
-            .with(otel_layer)
-            .with(tracing_subscriber::fmt::layer())
+            .with(tracing_subscriber::fmt::layer().json())
             .with(env_filter)
             .init();
     } else {
