@@ -1,10 +1,14 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use netray_common::error::ApiError;
 use serde::Serialize;
 
 /// JSON body returned for all error responses.
 ///
 /// Wire format: `{"error": {"code": "...", "message": "..."}}`
+///
+/// Local re-definition with `utoipa::ToSchema` for OpenAPI schema generation.
+/// The actual response body is produced by `netray_common::error::into_error_response`.
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ErrorResponse {
     pub error: ErrorInfo,
@@ -71,37 +75,29 @@ pub enum AppError {
     RequestTimeout,
 }
 
-impl AppError {
-    /// Returns the HTTP status code for this error variant.
+impl ApiError for AppError {
     fn status_code(&self) -> StatusCode {
         match self {
-            // 400 Bad Request — malformed input.
             Self::InvalidHostname(_)
             | Self::InvalidPort(_)
             | Self::ParseError(_)
             | Self::AmbiguousInput(_) => StatusCode::BAD_REQUEST,
 
-            // 403 Forbidden — blocked target.
             Self::BlockedTarget(_) => StatusCode::FORBIDDEN,
 
-            // 422 Unprocessable Entity — valid syntax but policy-rejected.
             Self::TooManyPorts { .. } => StatusCode::UNPROCESSABLE_ENTITY,
 
-            // 429 Too Many Requests.
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
 
-            // 502 Bad Gateway — upstream connection/TLS failures.
             Self::DnsResolutionFailed(_)
             | Self::ConnectionFailed(_)
             | Self::HandshakeFailed(_)
             | Self::CertificateError(_) => StatusCode::BAD_GATEWAY,
 
-            // 504 Gateway Timeout.
             Self::RequestTimeout => StatusCode::GATEWAY_TIMEOUT,
         }
     }
 
-    /// Returns the machine-readable error code string for this variant.
     fn error_code(&self) -> &'static str {
         match self {
             Self::InvalidHostname(_) => "INVALID_HOSTNAME",
@@ -116,6 +112,15 @@ impl AppError {
             Self::HandshakeFailed(_) => "HANDSHAKE_FAILED",
             Self::CertificateError(_) => "CERTIFICATE_ERROR",
             Self::RequestTimeout => "REQUEST_TIMEOUT",
+        }
+    }
+
+    fn retry_after_secs(&self) -> Option<u64> {
+        match self {
+            Self::RateLimited {
+                retry_after_secs, ..
+            } => Some(*retry_after_secs),
+            _ => None,
         }
     }
 }
@@ -134,27 +139,7 @@ impl IntoResponse for AppError {
             _ => {}
         }
 
-        let body = ErrorResponse {
-            error: ErrorInfo {
-                code: self.error_code(),
-                message: self.to_string(),
-            },
-        };
-
-        let mut response = (status, axum::Json(body)).into_response();
-
-        // For rate-limited responses, include the Retry-After header (RFC 6585 §4).
-        if let Self::RateLimited {
-            retry_after_secs, ..
-        } = &self
-        {
-            response.headers_mut().insert(
-                axum::http::header::RETRY_AFTER,
-                axum::http::HeaderValue::from(*retry_after_secs),
-            );
-        }
-
-        response
+        netray_common::error::into_error_response(&self)
     }
 }
 

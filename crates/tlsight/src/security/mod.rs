@@ -17,6 +17,7 @@ pub use rate_limit::RateLimitState;
 use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::Response;
+use netray_common::security_headers::{SecurityHeadersConfig, security_headers_layer};
 use tower_http::cors::CorsLayer;
 
 /// Create the CORS layer for the application.
@@ -36,71 +37,19 @@ pub fn cors_layer() -> CorsLayer {
 
 /// Axum middleware that injects security headers on every response.
 ///
-/// Headers applied (per SDD §8.4):
-/// - `Content-Security-Policy`: Restricts resource loading to same origin.
-///   `style-src 'unsafe-inline'` is required for inline styles.
-///   `frame-ancestors 'none'` prevents clickjacking (equivalent to X-Frame-Options: DENY).
-/// - `X-Content-Type-Options: nosniff`: Prevents MIME-type sniffing.
-/// - `X-Frame-Options: DENY`: Legacy clickjacking protection (superseded by CSP
-///   frame-ancestors but still respected by older browsers).
-/// - `Referrer-Policy: strict-origin-when-cross-origin`: Limits referrer leakage.
-/// - `Strict-Transport-Security`: Signals HTTPS-only to browsers. Only meaningful
-///   when TLS is terminated by a reverse proxy in front of tlsight; harmless otherwise.
-///
-/// Body size is limited to 4KB for API requests (hostname + optional JSON body).
+/// Uses `netray_common::security_headers::security_headers_layer` with:
+/// - Relaxed CSP for `/docs` (Scalar CDN)
+/// - Permissions-Policy enabled
 ///
 /// Compatible with axum 0.8 `middleware::from_fn`.
 pub async fn security_headers(request: Request, next: Next) -> Response {
-    // Capture path before consuming the request.
-    let is_docs = request.uri().path().starts_with("/docs");
-
-    let mut response = next.run(request).await;
-    let headers = response.headers_mut();
-
-    // The API docs page loads Scalar from a CDN, so it needs a relaxed script-src.
-    // All other pages keep the strict same-origin policy.
-    let csp = if is_docs {
-        "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'"
-    } else {
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'"
-    };
-    headers.insert(
-        axum::http::header::CONTENT_SECURITY_POLICY,
-        csp.parse().expect("valid CSP header value"),
-    );
-
-    headers.insert(
-        axum::http::header::X_CONTENT_TYPE_OPTIONS,
-        "nosniff".parse().expect("valid header value"),
-    );
-
-    headers.insert(
-        axum::http::header::X_FRAME_OPTIONS,
-        "DENY".parse().expect("valid header value"),
-    );
-
-    headers.insert(
-        axum::http::header::REFERRER_POLICY,
-        "strict-origin-when-cross-origin"
-            .parse()
-            .expect("valid header value"),
-    );
-
-    headers.insert(
-        axum::http::header::STRICT_TRANSPORT_SECURITY,
-        "max-age=31536000; includeSubDomains"
-            .parse()
-            .expect("valid header value"),
-    );
-
-    headers.insert(
-        axum::http::HeaderName::from_static("permissions-policy"),
-        "geolocation=(), microphone=(), camera=(), payment=()"
-            .parse()
-            .expect("valid header value"),
-    );
-
-    response
+    // Captures are cheap (all Strings/bools), and `from_fn` calls this per-request.
+    let layer_fn = security_headers_layer(SecurityHeadersConfig {
+        extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
+        relaxed_csp_path_prefix: "/docs".to_string(),
+        include_permissions_policy: true,
+    });
+    layer_fn(request, next).await
 }
 
 #[cfg(test)]

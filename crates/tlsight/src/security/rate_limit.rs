@@ -13,14 +13,10 @@ use std::num::NonZeroU32;
 
 use governor::Quota;
 use governor::RateLimiter;
-use governor::clock::DefaultClock;
+use netray_common::rate_limit::{check_keyed_cost, KeyedLimiter};
 
 use crate::config::LimitsConfig;
 use crate::error::AppError;
-
-/// Keyed rate limiter type alias for readability.
-type KeyedLimiter<K> =
-    RateLimiter<K, governor::state::keyed::DefaultKeyedStateStore<K>, DefaultClock>;
 
 /// Rate limiting state shared across all request handlers.
 pub struct RateLimitState {
@@ -73,7 +69,11 @@ impl RateLimitState {
         let cost_nz = NonZeroU32::new(cost.max(1)).expect("max(1) is non-zero");
 
         // Per-IP check
-        check_keyed_cost(&self.per_ip, &client_ip, cost_nz, "per_ip")?;
+        check_keyed_cost(&self.per_ip, &client_ip, cost_nz, "per_ip", "tlsight")
+            .map_err(|r| AppError::RateLimited {
+                retry_after_secs: r.retry_after_secs,
+                scope: r.scope,
+            })?;
 
         // Per-target check
         check_keyed_cost(
@@ -81,7 +81,12 @@ impl RateLimitState {
             &hostname.to_lowercase(),
             cost_nz,
             "per_target",
-        )?;
+            "tlsight",
+        )
+        .map_err(|r| AppError::RateLimited {
+            retry_after_secs: r.retry_after_secs,
+            scope: r.scope,
+        })?;
 
         Ok(())
     }
@@ -121,31 +126,6 @@ pub fn select_representative_ips(ips: &[IpAddr], budget: usize) -> (Vec<IpAddr>,
     }
 
     (selected, remaining)
-}
-
-/// Check a keyed rate limiter and convert rejection to `AppError`.
-fn check_keyed_cost<K: std::hash::Hash + Eq + Clone>(
-    limiter: &KeyedLimiter<K>,
-    key: &K,
-    cost: NonZeroU32,
-    scope: &'static str,
-) -> Result<(), AppError> {
-    let result = match limiter.check_key_n(key, cost) {
-        Ok(Ok(())) => return Ok(()),
-        Ok(Err(not_until)) => {
-            let wait =
-                not_until.wait_time_from(governor::clock::Clock::now(&DefaultClock::default()));
-            wait.as_secs()
-        }
-        // InsufficientCapacity: cost exceeds burst size entirely.
-        // The request can never fit in a single burst — report a 60s retry.
-        Err(_) => 60,
-    };
-    metrics::counter!("tlsight_rate_limit_hits_total", "scope" => scope).increment(1);
-    Err(AppError::RateLimited {
-        retry_after_secs: result.max(1),
-        scope,
-    })
 }
 
 #[cfg(test)]
