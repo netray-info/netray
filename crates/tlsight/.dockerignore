@@ -6,6 +6,6 @@ frontend/node_modules/
 frontend/dist/
 docs/
 *.md
-*.toml
-!tlsight.prod.toml
+tlsight.dev.toml
+tlsight.example.toml
 Makefile
