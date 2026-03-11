@@ -1,4 +1,4 @@
-import { createSignal, createResource, Show, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, createResource, Show, For, onMount, onCleanup } from 'solid-js';
 import HostInput from './components/HostInput';
 import ExportButtons from './components/ExportButtons';
 import ValidationSummary from './components/ValidationSummary';
@@ -11,25 +11,9 @@ import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
 import type { InspectResponse, PortResult } from './lib/types';
-
-type Theme = 'dark' | 'light' | 'system';
-const THEME_KEY = 'tlsight_theme';
-
-function getSystemTheme(): 'dark' | 'light' {
-  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-}
-
-function getSavedTheme(): Theme | null {
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
-  } catch { /* ignore */ }
-  return null;
-}
-
-function resolveTheme(t: Theme): 'dark' | 'light' {
-  return t === 'system' ? getSystemTheme() : t;
-}
+import { createTheme } from '../../../frontend-shared/src/theme';
+import { createKeyboardShortcuts } from '../../../frontend-shared/src/keyboard';
+import { createFocusTrap } from '../../../frontend-shared/src/focus-trap';
 
 const EXAMPLES: { title: string; desc: string; queries: string[] }[] = [
   {
@@ -54,7 +38,7 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [selectedPort, setSelectedPort] = createSignal<number>(443);
-  const [theme, setTheme] = createSignal<Theme>(getSavedTheme() ?? 'system');
+  const { theme, toggleTheme } = createTheme('tlsight_theme', 'dark');
   const [showHelp, setShowHelp] = createSignal(false);
   const [lastQuery, setLastQuery] = createSignal('');
   const [allExpanded, setAllExpanded] = createSignal<boolean | undefined>(undefined);
@@ -65,19 +49,9 @@ export default function App() {
   const ipUrl = () => meta()?.ecosystem?.ip_base_url;
 
   let inputEl: HTMLInputElement | undefined;
-  let modalCloseBtn: HTMLButtonElement | undefined;
-  let preModalFocus: HTMLElement | null = null;
+  let helpModalEl: HTMLDivElement | undefined;
 
-  function applyTheme(t: Theme) {
-    document.documentElement.setAttribute('data-theme', resolveTheme(t));
-  }
-
-  function toggleTheme() {
-    const next: Theme = theme() === 'system' ? 'dark' : theme() === 'dark' ? 'light' : 'system';
-    setTheme(next);
-    applyTheme(next);
-    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
-  }
+  const helpTrap = createFocusTrap(() => helpModalEl, () => setShowHelp(false));
 
   const themeIcon = () =>
     theme() === 'system' ? '\u25D0' : theme() === 'dark' ? '\u263E' : '\u2600';
@@ -87,107 +61,83 @@ export default function App() {
     : theme() === 'dark' ? 'Theme: Dark'
     : 'Theme: Light';
 
-  function isInputFocused() {
-    return document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
-  }
-
   function clearCardActive() {
     document.querySelector('[data-card-active]')?.removeAttribute('data-card-active');
   }
 
-  let mediaQuery: MediaQueryList | undefined;
-  const onSystemThemeChange = () => {
-    if (theme() === 'system') applyTheme('system');
-  };
+  createEffect(() => {
+    if (showHelp()) {
+      helpTrap.activate();
+      onCleanup(() => helpTrap.deactivate());
+    }
+  });
+
+  // Escape needs special handling (works inside editors/inputs too)
+  function handleEscape(e: KeyboardEvent) {
+    if (e.key !== 'Escape') return;
+    if (showHelp()) { setShowHelp(false); e.preventDefault(); return; }
+    if (document.querySelector('[data-card-active]')) {
+      clearCardActive();
+      e.preventDefault();
+      return;
+    }
+    inputEl?.blur();
+  }
+
+  function navigateCards(e: KeyboardEvent) {
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-card]'));
+    if (cards.length === 0) return;
+    e.preventDefault();
+    const cur = document.querySelector<HTMLElement>('[data-card-active]');
+    let idx = cur ? cards.indexOf(cur) : -1;
+    if (idx === -1) {
+      idx = e.key === 'j' ? 0 : cards.length - 1;
+    } else {
+      cur!.removeAttribute('data-card-active');
+      idx += e.key === 'j' ? 1 : -1;
+    }
+    idx = Math.max(0, Math.min(idx, cards.length - 1));
+    cards[idx].setAttribute('data-card-active', '');
+    cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  function expandActiveCard(e: KeyboardEvent) {
+    const active = document.querySelector<HTMLElement>('[data-card-active]');
+    if (active) {
+      e.preventDefault();
+      const toggle = active.querySelector<HTMLElement>('.ip-card__header, .dns-section__toggle, .cert-detail__toggle');
+      toggle?.click();
+    }
+  }
 
   onMount(() => {
-    applyTheme(theme());
-    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    mediaQuery.addEventListener('change', onSystemThemeChange);
+    document.addEventListener('keydown', handleEscape);
+    document.addEventListener('mousedown', clearCardActive);
 
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === '?' && !isInputFocused()) {
-        e.preventDefault();
-        setShowHelp(v => !v);
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        if (showHelp()) {
-          setShowHelp(false);
-          e.preventDefault();
-          return;
-        }
-        if (document.querySelector('[data-card-active]')) {
-          clearCardActive();
-          e.preventDefault();
-          return;
-        }
-        inputEl?.blur();
-        return;
-      }
-
-      if (e.key === '/' && !isInputFocused()) {
-        e.preventDefault();
-        inputEl?.focus();
-        return;
-      }
-
+    // Ctrl+L / Cmd+L needs separate handler (not filtered by createKeyboardShortcuts)
+    const ctrlLHandler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
         e.preventDefault();
         inputEl?.focus();
-        return;
-      }
-
-      if (e.key === 'e' && !isInputFocused()) {
-        e.preventDefault();
-        setExplain(v => !v);
-        return;
-      }
-
-      if (e.key === 'r' && !isInputFocused()) {
-        const q = lastQuery();
-        if (q && !loading()) {
-          e.preventDefault();
-          handleInspect(q);
-        }
-        return;
-      }
-
-      if ((e.key === 'j' || e.key === 'k') && !isInputFocused()) {
-        const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-card]'));
-        if (cards.length === 0) return;
-        e.preventDefault();
-        const cur = document.querySelector<HTMLElement>('[data-card-active]');
-        let idx = cur ? cards.indexOf(cur) : -1;
-        if (idx === -1) {
-          idx = e.key === 'j' ? 0 : cards.length - 1;
-        } else {
-          cur!.removeAttribute('data-card-active');
-          idx += e.key === 'j' ? 1 : -1;
-        }
-        idx = Math.max(0, Math.min(idx, cards.length - 1));
-        cards[idx].setAttribute('data-card-active', '');
-        cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        return;
-      }
-
-      if (e.key === 'Enter' && !isInputFocused()) {
-        const active = document.querySelector<HTMLElement>('[data-card-active]');
-        if (active) {
-          e.preventDefault();
-          const toggle = active.querySelector<HTMLElement>('.ip-card__header, .dns-section__toggle, .cert-detail__toggle');
-          toggle?.click();
-        }
-        return;
       }
     };
-    document.addEventListener('keydown', handler);
-    document.addEventListener('mousedown', clearCardActive);
+    document.addEventListener('keydown', ctrlLHandler);
+
+    const cleanupShortcuts = createKeyboardShortcuts({
+      '?': (e) => { e.preventDefault(); setShowHelp(v => !v); },
+      '/': (e) => { e.preventDefault(); inputEl?.focus(); },
+      'e': (e) => { e.preventDefault(); setExplain(v => !v); },
+      'r': (e) => { const q = lastQuery(); if (q && !loading()) { e.preventDefault(); handleInspect(q); } },
+      'j': navigateCards,
+      'k': navigateCards,
+      'Enter': expandActiveCard,
+    });
+
     onCleanup(() => {
-      document.removeEventListener('keydown', handler);
+      cleanupShortcuts();
+      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('keydown', ctrlLHandler);
       document.removeEventListener('mousedown', clearCardActive);
-      mediaQuery?.removeEventListener('change', onSystemThemeChange);
     });
   });
 
@@ -232,17 +182,8 @@ export default function App() {
     return [...ips];
   };
 
-  const openHelp = () => {
-    preModalFocus = document.activeElement as HTMLElement | null;
-    setShowHelp(true);
-    requestAnimationFrame(() => modalCloseBtn?.focus());
-  };
-
-  const closeHelp = () => {
-    setShowHelp(false);
-    preModalFocus?.focus();
-    preModalFocus = null;
-  };
+  const openHelp = () => setShowHelp(true);
+  const closeHelp = () => setShowHelp(false);
 
   // Check URL for initial query
   const params = new URLSearchParams(window.location.search);
@@ -465,35 +406,12 @@ export default function App() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="help-title"
+            ref={helpModalEl}
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              const modal = e.currentTarget as HTMLElement;
-              const focusable = modal.querySelectorAll<HTMLElement>(
-                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-              );
-              const first = focusable[0];
-              const last = focusable[focusable.length - 1];
-              if (e.key === 'Tab') {
-                if (e.shiftKey) {
-                  if (document.activeElement === first) {
-                    e.preventDefault();
-                    last.focus();
-                  }
-                } else {
-                  if (document.activeElement === last) {
-                    e.preventDefault();
-                    first.focus();
-                  }
-                }
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                closeHelp();
-              }
-            }}
           >
             <div class="modal__header">
               <h2 id="help-title">Help</h2>
-              <button class="modal__close" ref={modalCloseBtn} onClick={closeHelp}>&times;</button>
+              <button class="modal__close" onClick={closeHelp}>&times;</button>
             </div>
 
             <div class="help-section">

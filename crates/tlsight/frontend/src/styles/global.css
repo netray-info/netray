@@ -1,52 +1,28 @@
+@import '../../../../frontend-shared/src/styles/theme.css';
+
 /* ================================================================
-   tlsight — design tokens
-   Follows the pdt.sh ecosystem design language (prism, ifconfig-rs)
+   tlsight — project-specific overrides
    ================================================================ */
 
 :root {
-  /* Light theme */
-  --bg-primary: #f5f7fa;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #edf0f5;
-  --text-primary: #1a1a2e;
-  --text-secondary: #4a4a6a;
-  --text-muted: #8888a0;
-  --accent: #0077cc;
-  --accent-dim: #005599;
-  --accent-glow: rgba(0, 119, 204, 0.12);
-  --pass: #008800;
-  --warn: #b86e00;
-  --fail: #cc0000;
-  --skip: #4a5568;
-  --border: #d0d4dc;
-  --border-subtle: #e4e8ee;
-  --mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --radius: 8px;
-  --radius-lg: 10px;
-  --transition: 150ms ease;
-  --explain-bg: rgba(0, 119, 204, 0.06);
-  --explain-border: rgba(0, 119, 204, 0.15);
-}
-
-[data-theme="dark"] {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --text-primary: #e0e0e0;
-  --text-secondary: #a0a0a0;
-  --text-muted: #888888;
-  --accent: #00d4ff;
-  --accent-dim: #0088aa;
-  --accent-glow: rgba(0, 212, 255, 0.15);
+  /* tlsight-specific tokens (dark default from shared theme) */
   --pass: #44ff44;
   --warn: #ffaa00;
   --fail: #ff4444;
   --skip: #94a3b8;
-  --border: #2a2a4a;
-  --border-subtle: #222240;
+  --mono: var(--font-mono);
+  --sans: var(--font-sans);
   --explain-bg: rgba(0, 212, 255, 0.06);
   --explain-border: rgba(0, 212, 255, 0.12);
+}
+
+[data-theme="light"] {
+  --pass: #008800;
+  --warn: #b86e00;
+  --fail: #cc0000;
+  --skip: #4a5568;
+  --explain-bg: rgba(0, 119, 204, 0.06);
+  --explain-border: rgba(0, 119, 204, 0.15);
 }
 
 /* ================================================================
