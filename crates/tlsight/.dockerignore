@@ -1,0 +1,11 @@
+.git/
+.github/
+.claude/
+target/
+frontend/node_modules/
+frontend/dist/
+docs/
+*.md
+*.toml
+!tlsight.prod.toml
+Makefile
