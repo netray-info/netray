@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b4a0a7208cc7d # stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt,clippy
 
