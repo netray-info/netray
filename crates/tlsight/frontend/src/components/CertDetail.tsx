@@ -15,7 +15,7 @@ export default function CertDetail(props: Props) {
 
   return (
     <div class="cert-detail" data-card>
-      <button class="cert-detail__toggle" onClick={() => setExpanded(!expanded())}>
+      <button class="cert-detail__toggle" onClick={() => setExpanded(!expanded())} aria-expanded={expanded() ? "true" : "false"}>
         {expanded() ? '\u25BC' : '\u25B6'} {certDisplayName(props.cert.subject)} ({props.cert.position})
       </button>
       {expanded() && (

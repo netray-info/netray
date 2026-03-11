@@ -142,7 +142,7 @@ export default function ValidationSummary(props: Props) {
 
   return (
     <div class="validation-summary" data-card>
-      <button class="dns-section__toggle" onClick={() => setExpanded(!expanded())}>
+      <button class="dns-section__toggle" onClick={() => setExpanded(!expanded())} aria-expanded={expanded() ? "true" : "false"}>
         <span class="dns-section__toggle-left">
           Validation
           <span class={`badge badge--${verdict()}`}>{verdict()}</span>

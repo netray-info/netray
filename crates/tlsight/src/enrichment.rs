@@ -79,16 +79,16 @@ impl EnrichmentClient {
             Ok(resp) if resp.status().is_success() => match resp.json::<IpEnrichment>().await {
                 Ok(info) => Some(info),
                 Err(e) => {
-                    tracing::debug!(ip = %ip, error = %e, "enrichment parse failed");
+                    tracing::warn!(ip = %ip, error = %e, "enrichment parse failed");
                     None
                 }
             },
             Ok(resp) => {
-                tracing::debug!(ip = %ip, status = %resp.status(), "enrichment HTTP error");
+                tracing::warn!(ip = %ip, status = %resp.status(), "enrichment HTTP error");
                 None
             }
             Err(e) => {
-                tracing::debug!(ip = %ip, error = %e, "enrichment request failed");
+                tracing::warn!(ip = %ip, error = %e, "enrichment request failed");
                 None
             }
         }

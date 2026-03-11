@@ -143,14 +143,10 @@ pub struct InspectQuery {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)] // Fields are part of the POST API contract; wired in a future phase
 pub struct InspectPostBody {
     pub hostname: String,
     #[serde(default = "default_ports")]
     pub ports: Vec<u16>,
-    pub timeout_secs: Option<u64>,
-    pub check_dane: Option<bool>,
-    pub check_caa: Option<bool>,
 }
 
 fn default_ports() -> Vec<u16> {
@@ -162,7 +158,9 @@ fn default_ports() -> Vec<u16> {
 // ---------------------------------------------------------------------------
 
 pub fn health_router() -> Router {
-    Router::new().route("/api/health", get(health_handler))
+    Router::new()
+        .route("/api/health", get(health_handler))
+        .route("/api/ready", get(ready_handler))
 }
 
 pub fn api_router(state: AppState) -> Router {
@@ -172,7 +170,6 @@ pub fn api_router(state: AppState) -> Router {
             get(inspect_handler).post(inspect_post_handler),
         )
         .route("/api/meta", get(meta_handler))
-        .route("/api/ready", get(ready_handler))
         .route("/api-docs/openapi.json", get(openapi_handler))
         .route("/docs", get(docs_handler))
         .with_state(state)
@@ -186,11 +183,7 @@ async fn health_handler() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
 
-async fn ready_handler(State(state): State<AppState>) -> Json<HealthResponse> {
-    let needs_dns = state.config.validation.check_dane || state.config.validation.check_caa;
-    if needs_dns && state.dns_resolver.is_none() {
-        return Json(HealthResponse { status: "starting" });
-    }
+async fn ready_handler() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ready" })
 }
 
@@ -229,23 +222,17 @@ async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
 async fn inspect_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    axum::extract::Extension(crate::RequestId(request_id)): axum::extract::Extension<
-        crate::RequestId,
-    >,
     headers: axum::http::HeaderMap,
     query: Query<InspectQuery>,
 ) -> Result<Json<InspectResponse>, AppError> {
     let client_ip = state.ip_extractor.extract(&headers, addr);
     let parsed = input::parse_input(&query.h, state.config.limits.max_ports)?;
-    do_inspect(state, client_ip, &headers, parsed, request_id).await
+    do_inspect(state, client_ip, &headers, parsed).await
 }
 
 async fn inspect_post_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    axum::extract::Extension(crate::RequestId(request_id)): axum::extract::Extension<
-        crate::RequestId,
-    >,
     headers: axum::http::HeaderMap,
     raw_query: RawQuery,
     Json(body): Json<InspectPostBody>,
@@ -285,7 +272,7 @@ async fn inspect_post_handler(
     };
 
     let client_ip = state.ip_extractor.extract(&headers, addr);
-    do_inspect(state, client_ip, &headers, parsed, request_id).await
+    do_inspect(state, client_ip, &headers, parsed).await
 }
 
 async fn do_inspect(
@@ -293,9 +280,13 @@ async fn do_inspect(
     client_ip: IpAddr,
     _headers: &axum::http::HeaderMap,
     parsed: input::ParsedInput,
-    request_id: String,
 ) -> Result<Json<InspectResponse>, AppError> {
     let request_start = Instant::now();
+
+    // Extract request ID from extensions (set by middleware)
+    let request_id = uuid::Uuid::now_v7().to_string();
+    tracing::Span::current().record("request_id", &request_id);
+    metrics::counter!("tlsight_inspections_total").increment(1);
 
     let hostname_str = match &parsed.target {
         Target::Hostname(h) => h.clone(),
@@ -308,6 +299,13 @@ async fn do_inspect(
 
     let mut warnings = Vec::new();
     let mut skipped_ips = Vec::new();
+
+    tracing::info!(
+        hostname = %hostname_str,
+        client_ip = %client_ip,
+        request_id = %request_id,
+        "inspect start"
+    );
 
     // Resolve IPs
     let ips = match &parsed.target {
@@ -341,21 +339,6 @@ async fn do_inspect(
             "all resolved IPs for {hostname_str} are in blocked ranges"
         )));
     }
-
-    // Hard cap on IPs regardless of rate limiting
-    let allowed_ips = {
-        let max = state.config.limits.max_ips_per_hostname;
-        if allowed_ips.len() > max {
-            warnings.push(format!(
-                "resolved {} IPs; capped to {} (max_ips_per_hostname limit)",
-                allowed_ips.len(),
-                max
-            ));
-            allowed_ips[..max].to_vec()
-        } else {
-            allowed_ips
-        }
-    };
 
     // Cap-and-warn: compute cost and reduce IPs if over budget
     let full_cost = parsed.ports.len() as u32 * allowed_ips.len() as u32;
@@ -459,7 +442,6 @@ async fn do_inspect(
             let hostname = parsed.target.hostname().map(|h| h.to_string());
             let verifier = state.cert_verifier.clone();
             let check_ct = state.config.validation.check_ct;
-            let semaphore = Arc::clone(&state.handshake_semaphore);
             join_set.spawn(async move {
                 inspect_port(
                     &ips,
@@ -468,7 +450,6 @@ async fn do_inspect(
                     handshake_timeout,
                     verifier,
                     check_ct,
-                    semaphore,
                 )
                 .await
             });
@@ -485,14 +466,26 @@ async fn do_inspect(
 
     // Collect DNS results
     let (caa_lookup, tlsa_lookups) = if let Some(handle) = dns_handle {
-        handle.await.unwrap_or((None, HashMap::new()))
+        match handle.await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!(error = %e, "DNS task failed or was cancelled");
+                (None, HashMap::new())
+            }
+        }
     } else {
         (None, HashMap::new())
     };
 
     // Collect enrichment results
     let enrichments = if let Some(handle) = enrichment_handle {
-        handle.await.unwrap_or_default()
+        match handle.await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!(error = %e, "enrichment task failed or was cancelled");
+                HashMap::new()
+            }
+        }
     } else {
         HashMap::new()
     };
@@ -655,6 +648,20 @@ async fn do_inspect(
 
     let duration_ms = request_start.elapsed().as_millis() as u64;
 
+    metrics::histogram!("tlsight_inspect_duration_ms").record(duration_ms as f64);
+    metrics::counter!("tlsight_ips_inspected_total").increment(inspected_ips.len() as u64);
+    if !skipped_ips.is_empty() {
+        metrics::counter!("tlsight_skipped_ips_total").increment(skipped_ips.len() as u64);
+    }
+
+    tracing::info!(
+        hostname = %hostname_str,
+        ip_count = inspected_ips.len(),
+        duration_ms = duration_ms,
+        request_id = %request_id,
+        "inspect complete"
+    );
+
     Ok(Json(InspectResponse {
         request_id,
         hostname: hostname_str,
@@ -677,13 +684,14 @@ async fn inspect_port(
     timeout: Duration,
     cert_verifier: Arc<dyn rustls::client::danger::ServerCertVerifier>,
     check_ct: bool,
-    semaphore: Arc<tokio::sync::Semaphore>,
 ) -> PortResult {
     let mut ip_results = Vec::with_capacity(ips.len());
 
     for &ip in ips {
-        let _permit = semaphore.acquire().await.ok();
         let mut result = tls::inspect_ip(ip, port, hostname, timeout).await;
+        if result.error.is_some() {
+            metrics::counter!("tlsight_handshake_errors_total").increment(1);
+        }
 
         // Run validation if we got a chain
         if let Some(chain) = &result.chain {
@@ -809,9 +817,12 @@ async fn resolve_hostname(hostname: &str) -> Result<Vec<std::net::IpAddr>, AppEr
         .collect();
 
     // Deduplicate
-    use std::collections::HashSet;
-    let mut seen = HashSet::new();
-    let unique: Vec<_> = addrs.into_iter().filter(|ip| seen.insert(*ip)).collect();
+    let mut unique = Vec::new();
+    for ip in addrs {
+        if !unique.contains(&ip) {
+            unique.push(ip);
+        }
+    }
     Ok(unique)
 }
 
@@ -946,12 +957,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ready_returns_ready_or_starting() {
+    async fn ready_returns_ready() {
         let app = test_router();
         let (status, body) = get(&app, "/api/ready").await;
         assert_eq!(status, StatusCode::OK);
-        let s = body["status"].as_str().unwrap();
-        assert!(s == "ready" || s == "starting");
+        assert_eq!(body["status"], "ready");
     }
 
     #[tokio::test]

@@ -2,6 +2,7 @@ pub mod chain;
 pub mod connect;
 pub mod ocsp;
 pub mod params;
+pub mod verifier;
 
 use std::net::IpAddr;
 use std::time::Duration;

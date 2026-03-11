@@ -50,7 +50,9 @@ export default function ConsistencyView(props: Props) {
 function Badge(props: { label: string; match: boolean }) {
   return (
     <span class={`consistency-badge consistency-badge--${props.match ? 'match' : 'mismatch'}`}>
-      {props.match ? '*' : '!'} {props.label}
+      <span aria-hidden="true">{props.match ? '*' : '!'}</span>
+      <span class="sr-only">{props.match ? 'consistent' : 'mismatch'}</span>
+      {' '}{props.label}
     </span>
   );
 }

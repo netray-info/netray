@@ -145,6 +145,18 @@ pub fn check_key_strength(chain: &[CertInfo]) -> HealthCheck {
                 ),
             };
         }
+        if key_type.starts_with("ECDSA") && key_size > 0 && key_size < 256 {
+            return HealthCheck {
+                id: "key_strength".to_string(),
+                category: Category::Certificate,
+                status: CheckStatus::Fail,
+                label: "Key strength".to_string(),
+                detail: format!(
+                    "{} {} has {key_type} {key_size}-bit key (< P-256)",
+                    cert.position, cert.subject
+                ),
+            };
+        }
     }
     let detail = chain
         .first()
@@ -386,7 +398,7 @@ pub fn check_consistency(consistency: Option<&ConsistencyResult>) -> HealthCheck
         HealthCheck {
             id: "consistency".to_string(),
             category: Category::Configuration,
-            status: CheckStatus::Fail,
+            status: CheckStatus::Warn,
             label: "IP consistency".to_string(),
             detail: format!("mismatch in: {}", fields.join(", ")),
         }
@@ -556,6 +568,12 @@ mod tests {
     fn key_strength_ecdsa_pass() {
         let chain = vec![leaf_cert(300, "ECDSA P-256", 256)];
         assert_eq!(check_key_strength(&chain).status, CheckStatus::Pass);
+    }
+
+    #[test]
+    fn key_strength_ecdsa_p192_fail() {
+        let chain = vec![leaf_cert(300, "ECDSA P-192", 192)];
+        assert_eq!(check_key_strength(&chain).status, CheckStatus::Fail);
     }
 
     #[test]
@@ -794,7 +812,7 @@ mod tests {
     }
 
     #[test]
-    fn consistency_fail_with_mismatches() {
+    fn consistency_warn_with_mismatches() {
         use crate::routes::ConsistencyMismatch;
         use std::collections::HashMap;
         let c = ConsistencyResult {
@@ -807,7 +825,7 @@ mod tests {
             }],
         };
         let check = check_consistency(Some(&c));
-        assert_eq!(check.status, CheckStatus::Fail);
+        assert_eq!(check.status, CheckStatus::Warn);
         assert!(check.detail.contains("leaf_certificate"));
     }
 }

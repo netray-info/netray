@@ -14,6 +14,7 @@ pub struct DnsResolver {
 }
 
 impl DnsResolver {
+    // TODO: resolver selection not yet wired; config.dns.resolver is parsed but ignored here
     pub async fn new(timeout_secs: u64) -> Result<Self, mhost::Error> {
         let resolvers = ResolverGroupBuilder::new()
             .system()

@@ -7,7 +7,6 @@ use crate::dns::DnsResolver;
 use crate::enrichment::EnrichmentClient;
 use crate::security::{IpExtractor, RateLimitState};
 use rustls::client::danger::ServerCertVerifier;
-use tokio::sync::Semaphore;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -19,7 +18,6 @@ pub struct AppState {
     pub cert_verifier: Arc<dyn ServerCertVerifier>,
     pub dns_resolver: Option<Arc<DnsResolver>>,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
-    pub handshake_semaphore: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -53,7 +51,6 @@ impl AppState {
             cert_verifier,
             dns_resolver: None, // Initialized async in main
             enrichment_client,
-            handshake_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
             config: Arc::new(config.clone()),
         }
     }
@@ -207,5 +204,31 @@ mod tests {
             "trust store should have many root CAs, got {}",
             state.trust_store.len()
         );
+    }
+
+    #[test]
+    #[should_panic(expected = "does not exist")]
+    fn load_custom_cas_panics_on_missing_dir() {
+        let mut root_store = rustls::RootCertStore::empty();
+        load_custom_cas(&mut root_store, "/nonexistent/directory/that/cannot/exist");
+    }
+
+    #[test]
+    fn load_custom_cas_empty_dir_loads_nothing() {
+        ensure_crypto_provider();
+        let dir = std::env::temp_dir().join(format!(
+            "tlsight_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let before = root_store.len();
+        load_custom_cas(&mut root_store, dir.to_str().unwrap());
+        assert_eq!(root_store.len(), before);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

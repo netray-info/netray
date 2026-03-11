@@ -122,6 +122,10 @@ export default function HostInput(props: Props) {
             onFocus={() => { if (history().length > 0 && !value().trim()) setHistoryOpen(true); }}
             disabled={props.loading}
             autofocus
+            role="combobox"
+            aria-expanded={historyOpen() ? "true" : "false"}
+            aria-autocomplete="list"
+            aria-controls="host-history-listbox"
           />
           <Show when={value().trim()}>
             <button
@@ -139,13 +143,14 @@ export default function HostInput(props: Props) {
       </form>
 
       <Show when={historyOpen() && history().length > 0}>
-        <div class="host-input__history">
+        <div class="host-input__history" role="listbox" id="host-history-listbox">
           <For each={history()}>
             {(q, i) => (
               <button
                 class="host-input__history-item"
                 classList={{ 'host-input__history-item--active': i() === historyIdx() }}
                 onMouseDown={() => selectHistoryItem(q)}
+                role="option"
               >
                 <span class="mono">{q}</span>
               </button>

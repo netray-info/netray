@@ -683,11 +683,11 @@ Quality assessment is accounted for in rate limiting (§5.5). If the budget is i
 
 ### 11.2 Integration Tests
 
-- `do_inspect` with `grade=true` against rcgen test server — `quality` field present on both top-level and port, all certificate and protocol checks populated.
-- `grade=false` — `quality` field absent on both levels, no HTTP connections attempted.
-- `grade=true` with IP-mode input — HTTP checks are `skip`, certificate checks still run.
+- `do_inspect` against rcgen test server — `quality` field present on both top-level and port, all certificate and protocol checks populated.
+- `config.quality.enabled = false` — `quality` field absent on both levels, no HTTP connections attempted.
+- IP-mode input — HTTP checks are `skip`, certificate checks still run.
 - Quality computation failure (e.g., mock a panic) — inspection data still returned without `quality`.
-- Rate limiting with grade cost — verify quality skipped when budget insufficient.
+- Rate limiting — verify quality skipped when budget insufficient.
 - Multi-port — verify hostname-scoped checks appear once at top level, port-scoped checks appear per-port.
 
 ### 11.3 Frontend Tests
@@ -695,8 +695,6 @@ Quality assessment is accounted for in rate limiting (§5.5). If the budget is i
 - Health check section renders hostname-scoped and per-port groups.
 - Correct icons for each status (pass/warn/fail/skip).
 - Section hidden when `quality` field absent.
-- Grade toggle persists in localStorage.
-- Toggle triggers re-query.
 - Export includes quality data when present.
 
 ---

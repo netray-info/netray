@@ -17,6 +17,11 @@ pub fn check_caa_compliance(caa: &CaaLookup, leaf_issuer: &str) -> CheckStatus {
         return CheckStatus::Pass;
     }
 
+    // RFC 8659 §4: an unknown critical tag means no CA is authorized
+    if caa.records.iter().any(|r| r.issuer_critical) {
+        return CheckStatus::Fail;
+    }
+
     let issue_domains = caa.issue_domains();
     if issue_domains.is_empty() {
         return CheckStatus::Pass;
@@ -236,5 +241,20 @@ mod tests {
     #[test]
     fn empty_domain_no_match() {
         assert!(!issuer_domain_matches("O=Any", ""));
+    }
+
+    #[test]
+    fn issuer_critical_blocks_all_issuance() {
+        let caa = CaaLookup {
+            records: vec![CaaRecord {
+                tag: "issue".into(),
+                value: "letsencrypt.org".into(),
+                issuer_critical: true,
+            }],
+        };
+        assert_eq!(
+            check_caa_compliance(&caa, "CN=R3, O=Let's Encrypt, C=US"),
+            CheckStatus::Fail
+        );
     }
 }

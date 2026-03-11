@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import type { InspectResponse } from '../lib/types';
 
 interface Props {
@@ -5,6 +6,8 @@ interface Props {
 }
 
 export default function ExportButtons(props: Props) {
+  const [copyStatus, setCopyStatus] = createSignal<'idle' | 'success' | 'error'>('idle');
+
   const downloadJson = () => {
     const blob = new Blob([JSON.stringify(props.result, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -64,13 +67,26 @@ export default function ExportButtons(props: Props) {
 
     lines.push(`_Inspected in ${r.duration_ms}ms_`);
 
-    await navigator.clipboard.writeText(lines.join('\n'));
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      setCopyStatus('success');
+      setTimeout(() => setCopyStatus('idle'), 2000);
+    } catch {
+      setCopyStatus('error');
+      setTimeout(() => setCopyStatus('idle'), 2000);
+    }
   };
 
   return (
     <div class="export-buttons">
-      <button class="export-buttons__btn" onClick={copyMarkdown}>copy MD</button>
-      <button class="export-buttons__btn" onClick={downloadJson}>JSON</button>
+      <button
+        class="export-buttons__btn"
+        onClick={copyMarkdown}
+        aria-label="Copy as Markdown"
+      >
+        {copyStatus() === 'success' ? 'copied!' : copyStatus() === 'error' ? 'failed' : 'copy MD'}
+      </button>
+      <button class="export-buttons__btn" onClick={downloadJson} aria-label="Download as JSON">JSON</button>
     </div>
   );
 }

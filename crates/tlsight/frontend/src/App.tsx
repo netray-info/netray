@@ -262,6 +262,7 @@ export default function App() {
             class="header-btn"
             onClick={toggleTheme}
             title={themeTitle()}
+            aria-label={themeTitle()}
           >
             {themeIcon()}
           </button>
@@ -269,6 +270,7 @@ export default function App() {
             class="header-btn"
             onClick={openHelp}
             title="Help (?)"
+            aria-label="Help"
           >?</button>
         </div>
       </header>
@@ -283,11 +285,11 @@ export default function App() {
         />
 
         <Show when={error()}>
-          <div class="error-banner">{error()}</div>
+          <div class="error-banner" role="alert">{error()}</div>
         </Show>
 
         <Show when={loading()}>
-          <div class="loading-indicator">
+          <div role="status" aria-live="polite" class="loading-indicator">
             <div class="spinner" />
             Inspecting...
           </div>

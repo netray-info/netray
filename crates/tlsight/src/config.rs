@@ -70,7 +70,8 @@ pub struct LimitsConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DnsConfig {
-    #[allow(dead_code)] // Used by config deserialization; Phase 2 will use it
+    // TODO: resolver selection not yet implemented; always uses system defaults (see dns/mod.rs)
+    #[allow(dead_code)]
     #[serde(default = "default_resolver")]
     pub resolver: String,
     #[serde(default = "default_dns_timeout_secs")]

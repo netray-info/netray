@@ -291,6 +291,20 @@ mod tests {
     }
 
     #[test]
+    fn select_representative_all_ipv6_budget_one() {
+        let ips: Vec<IpAddr> = vec![
+            "2001:db8::1".parse().unwrap(),
+            "2001:db8::2".parse().unwrap(),
+            "2001:db8::3".parse().unwrap(),
+        ];
+        let (selected, skipped) = select_representative_ips(&ips, 1);
+        assert_eq!(selected.len(), 1);
+        assert_eq!(skipped.len(), 2);
+        // The selected IP must be an IPv6 address
+        assert!(matches!(selected[0], IpAddr::V6(_)));
+    }
+
+    #[test]
     fn rate_limited_error_has_scope() {
         let state = RateLimitState::new(&test_config());
         let ip: IpAddr = "198.51.100.1".parse().unwrap();

@@ -17,7 +17,7 @@ export default function TlsParams(props: Props) {
 
   return (
     <div class="tls-params" data-card>
-      <button class="dns-section__toggle" onClick={() => setExpanded(!expanded())}>
+      <button class="dns-section__toggle" onClick={() => setExpanded(!expanded())} aria-expanded={expanded() ? "true" : "false"}>
         <span class="dns-section__toggle-left">
           TLS Parameters
           <span class="ip-card__badge">{props.params.version}</span>

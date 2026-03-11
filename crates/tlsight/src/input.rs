@@ -170,6 +170,13 @@ fn validate_hostname(hostname: &str) -> Result<(), AppError> {
         )));
     }
 
+    // Reject single-label hostnames (no dot) — these resolve to intranet/internal names
+    if !hostname.contains('.') {
+        return Err(AppError::InvalidHostname(
+            "single-label hostname not allowed".to_string(),
+        ));
+    }
+
     // Reject wildcards
     if hostname.contains('*') {
         return Err(AppError::InvalidHostname(
@@ -432,16 +439,16 @@ mod tests {
     // --- Edge cases ---
 
     #[test]
-    fn single_label_hostname() {
-        let result = parse_input("localhost", MAX_PORTS).unwrap();
-        assert_eq!(result.target, Target::Hostname("localhost".to_string()));
+    fn single_label_hostname_rejected() {
+        let err = parse_input("localhost", MAX_PORTS).unwrap_err();
+        assert!(matches!(err, AppError::InvalidHostname(_)));
     }
 
     #[test]
-    fn numeric_hostname_not_ip() {
-        // "12345" is not a valid IP, treated as hostname
-        let result = parse_input("12345", MAX_PORTS).unwrap();
-        assert_eq!(result.target, Target::Hostname("12345".to_string()));
+    fn numeric_hostname_not_ip_rejected() {
+        // "12345" is not a valid IP, but also single-label — rejected
+        let err = parse_input("12345", MAX_PORTS).unwrap_err();
+        assert!(matches!(err, AppError::InvalidHostname(_)));
     }
 
     #[test]

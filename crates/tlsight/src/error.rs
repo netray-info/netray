@@ -124,8 +124,14 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status = self.status_code();
 
-        if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error = %self, "internal server error");
+        match status {
+            StatusCode::BAD_GATEWAY => {
+                tracing::warn!(error = %self, "upstream error");
+            }
+            StatusCode::GATEWAY_TIMEOUT => {
+                tracing::warn!(error = %self, "request timeout");
+            }
+            _ => {}
         }
 
         let body = ErrorResponse {

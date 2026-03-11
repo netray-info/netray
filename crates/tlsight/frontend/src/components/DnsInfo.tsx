@@ -24,7 +24,7 @@ export function CaaView(props: { caa: DnsContext['caa']; explain?: boolean; expa
     <Show when={props.caa}>
       {(caa) => (
         <div class="dns-section" data-card>
-          <button class="dns-section__toggle" onClick={() => setExpanded(!expanded())}>
+          <button class="dns-section__toggle" onClick={() => setExpanded(!expanded())} aria-expanded={expanded() ? "true" : "false"}>
             <span class="dns-section__toggle-left">
               CAA Records
               <Show when={caa().issuer_allowed !== null}>
@@ -59,20 +59,36 @@ export function CaaView(props: { caa: DnsContext['caa']; explain?: boolean; expa
 }
 
 export function TlsaView(props: { tlsa: TlsaInfo; explain?: boolean }) {
+  const [expanded, setExpanded] = createSignal(false);
+
   return (
-    <div class="dns-section">
-      <h3 class="dns-section__title">
-        TLSA Records
-        <Show when={!props.tlsa.dnssec_signed}>
-          <span class="badge badge--skip">No DNSSEC</span>
-        </Show>
-      </h3>
+    <div class="dns-section" data-card>
+      <button class="dns-section__toggle" onClick={() => setExpanded(!expanded())} aria-expanded={expanded() ? "true" : "false"}>
+        <span class="dns-section__toggle-left">
+          TLSA Records
+          <Show when={!props.tlsa.dnssec_signed}>
+            <span class="badge badge--skip">No DNSSEC</span>
+          </Show>
+          <Show when={props.tlsa.records.length > 0}>
+            <span class="dns-section__count">{props.tlsa.records.length}</span>
+          </Show>
+        </span>
+        <span class="ip-card__chevron" classList={{ 'ip-card__chevron--open': expanded() }}>
+          &#x25B8;
+        </span>
+      </button>
       <Explain when={!!props.explain}>TLSA records enable DANE — pinning certificates or CAs in DNS via DNSSEC. This provides an alternative trust path independent of the CA system. Requires DNSSEC to be meaningful.</Explain>
-      <ul class="dns-records">
-        <For each={props.tlsa.records}>
-          {(record) => <li class="dns-records__item mono">{record}</li>}
-        </For>
-      </ul>
+      <Show when={expanded()}>
+        <div class="dns-section__body">
+          <Show when={props.tlsa.records.length > 0} fallback={<p class="dns-section__empty">No TLSA records found.</p>}>
+            <ul class="dns-records">
+              <For each={props.tlsa.records}>
+                {(record) => <li class="dns-records__item mono">{record}</li>}
+              </For>
+            </ul>
+          </Show>
+        </div>
+      </Show>
     </div>
   );
 }
