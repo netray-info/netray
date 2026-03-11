@@ -13,6 +13,12 @@ Items deferred until there's a clear need or upstream support.
 
 ## Infrastructure
 
+### High Priority
+
+- **Trusted CIDR / network-based access** — replace the current single trusted-IP config with a list of trusted CIDR ranges (e.g. `10.0.0.0/8`, `172.16.0.0/12`). Required for realistic deployment behind a private load balancer or within a cluster network where the egress IP is not a single stable address. Affects `config.rs` (add `trusted_networks: Vec<IpNet>`), `security/ip_extract.rs` (CIDR match instead of exact IP), and config documentation. Use the `ipnet` crate (already a transitive dep via `hickory-proto` — check before adding directly).
+
+### Deferred
+
 Handler-level wiring deferred from Tier 4 architectural investments:
 
 - **Resolver pool wiring** — integrate TTL+LRU resolver cache into `build_resolver_group` (infrastructure exists, not yet wired)
