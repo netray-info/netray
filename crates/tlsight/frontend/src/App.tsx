@@ -11,9 +11,9 @@ import { CaaView, TlsaView } from './components/DnsInfo';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
 import type { InspectResponse, PortResult } from './lib/types';
-import { createTheme } from '@netray/common-frontend/theme';
-import { createKeyboardShortcuts } from '@netray/common-frontend/keyboard';
-import { createFocusTrap } from '@netray/common-frontend/focus-trap';
+import { createTheme } from '@netray-info/common-frontend/theme';
+import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
+import { createFocusTrap } from '@netray-info/common-frontend/focus-trap';
 
 const EXAMPLES: { title: string; desc: string; queries: string[] }[] = [
   {
