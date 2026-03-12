@@ -1,5 +1,5 @@
 {
-  "name": "@netray/common-frontend",
+  "name": "@netray-info/common-frontend",
   "version": "0.1.0",
   "type": "module",
   "files": ["src"],
