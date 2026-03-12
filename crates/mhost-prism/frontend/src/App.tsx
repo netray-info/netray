@@ -7,9 +7,9 @@ import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/
 import { TransportComparison } from './components/TransportComparison';
 import { AuthComparison } from './components/AuthComparison';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
-import { createTheme } from '../../../netray-common-frontend/src/theme';
-import { createKeyboardShortcuts } from '../../../netray-common-frontend/src/keyboard';
-import { createFocusTrap } from '../../../netray-common-frontend/src/focus-trap';
+import { createTheme } from '@netray/common-frontend/theme';
+import { createKeyboardShortcuts } from '@netray/common-frontend/keyboard';
+import { createFocusTrap } from '@netray/common-frontend/focus-trap';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'transport' | 'auth';
