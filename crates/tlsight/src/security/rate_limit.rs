@@ -13,7 +13,7 @@ use std::num::NonZeroU32;
 
 use governor::Quota;
 use governor::RateLimiter;
-use netray_common::rate_limit::{check_keyed_cost, KeyedLimiter};
+use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 
 use crate::config::LimitsConfig;
 use crate::error::AppError;
@@ -69,11 +69,12 @@ impl RateLimitState {
         let cost_nz = NonZeroU32::new(cost.max(1)).expect("max(1) is non-zero");
 
         // Per-IP check
-        check_keyed_cost(&self.per_ip, &client_ip, cost_nz, "per_ip", "tlsight")
-            .map_err(|r| AppError::RateLimited {
+        check_keyed_cost(&self.per_ip, &client_ip, cost_nz, "per_ip", "tlsight").map_err(|r| {
+            AppError::RateLimited {
                 retry_after_secs: r.retry_after_secs,
                 scope: r.scope,
-            })?;
+            }
+        })?;
 
         // Per-target check
         check_keyed_cost(
