@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  REGISTRY_IMAGE: ghcr.io/lukaspustina/tlsight
+  REGISTRY_IMAGE: ghcr.io/netray-info/tlsight
 
 jobs:
   ci:
@@ -40,6 +40,8 @@ jobs:
 
       - name: Install frontend dependencies
         run: make frontend-install
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run CI
         run: make ci
