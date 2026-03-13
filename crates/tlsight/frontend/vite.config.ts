@@ -15,7 +15,7 @@ function cargoVersion(): string {
 export default defineConfig({
   plugins: [solidPlugin()],
   test: {
-    environment: 'jsdom',
+    environment: 'node',
   },
   define: {
     __APP_VERSION__: JSON.stringify(cargoVersion()),
