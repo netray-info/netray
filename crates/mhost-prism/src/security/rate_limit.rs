@@ -111,14 +111,8 @@ impl RateLimitState {
 
         // 3. Per-target rate limit (each target only charged its share: record_types).
         for key in target_keys {
-            rate_limit::check_keyed_cost(
-                &self.per_target,
-                key,
-                target_nz,
-                "per_target",
-                "prism",
-            )
-            .map_err(|r| ApiError::RateLimited {
+            rate_limit::check_keyed_cost(&self.per_target, key, target_nz, "per_target", "prism")
+                .map_err(|r| ApiError::RateLimited {
                 retry_after_secs: r.retry_after_secs,
                 scope: r.scope,
             })?;

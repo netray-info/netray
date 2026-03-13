@@ -230,8 +230,8 @@ mod tests {
 
     fn test_config() -> crate::config::Config {
         use crate::config::{
-            CircuitBreakerConfig, Config, DnsConfig, EcosystemConfig, LimitsConfig,
-            ServerConfig, TelemetryConfig, TraceConfig,
+            CircuitBreakerConfig, Config, DnsConfig, EcosystemConfig, LimitsConfig, ServerConfig,
+            TelemetryConfig, TraceConfig,
         };
         Config {
             site_name: "prism".to_string(),

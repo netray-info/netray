@@ -479,8 +479,8 @@ mod tests {
         // Build a state with a tiny per-IP rate limit so we can exhaust it
         // without sending hundreds of requests.
         use crate::config::{
-            CircuitBreakerConfig, DnsConfig, EcosystemConfig, LimitsConfig,
-            ServerConfig, TelemetryConfig, TraceConfig,
+            CircuitBreakerConfig, DnsConfig, EcosystemConfig, LimitsConfig, ServerConfig,
+            TelemetryConfig, TraceConfig,
         };
 
         let config = Config {

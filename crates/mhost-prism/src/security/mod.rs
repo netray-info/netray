@@ -37,15 +37,14 @@ pub fn cors_layer() -> CorsLayer {
 ///
 /// The API docs page loads Scalar from a CDN, so /docs paths get a relaxed
 /// CSP with `https://cdn.jsdelivr.net` added to `script-src`.
-pub fn security_headers_layer(
-) -> impl Fn(
+pub fn security_headers_layer() -> impl Fn(
     axum::extract::Request,
     axum::middleware::Next,
 ) -> std::pin::Pin<
     Box<dyn std::future::Future<Output = axum::response::Response> + Send>,
 > + Clone
-     + Send
-     + 'static {
++ Send
++ 'static {
     netray_common::security_headers::security_headers_layer(
         netray_common::security_headers::SecurityHeadersConfig {
             extra_script_src: vec!["https://cdn.jsdelivr.net".into()],
@@ -57,12 +56,12 @@ pub fn security_headers_layer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::Router;
     use axum::body::Body;
     use axum::http::{Request as HttpRequest, StatusCode};
     use axum::middleware;
     use axum::response::Response;
     use axum::routing::get;
-    use axum::Router;
     use tower::ServiceExt;
 
     async fn ok_handler() -> &'static str {

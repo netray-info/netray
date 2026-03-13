@@ -113,7 +113,6 @@ pub struct DnsConfig {
     pub allow_arbitrary_servers: bool,
 }
 
-
 /// Log output format.
 ///
 /// Configurable via `telemetry.log_format` in the TOML config or
