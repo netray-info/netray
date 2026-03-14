@@ -4,21 +4,50 @@
   "type": "module",
   "files": [
     "src",
-    "styles"
+    "styles",
+    "dist/types"
   ],
   "exports": {
-    "./theme": "./src/theme.ts",
-    "./keyboard": "./src/keyboard.ts",
-    "./focus-trap": "./src/focus-trap.ts",
-    "./storage": "./src/storage.ts",
-    "./utils": "./src/utils.ts",
+    "./theme": {
+      "types": "./dist/types/theme.d.ts",
+      "import": "./src/theme.ts"
+    },
+    "./keyboard": {
+      "types": "./dist/types/keyboard.d.ts",
+      "import": "./src/keyboard.ts"
+    },
+    "./focus-trap": {
+      "types": "./dist/types/focus-trap.d.ts",
+      "import": "./src/focus-trap.ts"
+    },
+    "./storage": {
+      "types": "./dist/types/storage.d.ts",
+      "import": "./src/storage.ts"
+    },
+    "./utils": {
+      "types": "./dist/types/utils.d.ts",
+      "import": "./src/utils.ts"
+    },
     "./styles/theme.css": "./styles/theme.css",
     "./styles/reset.css": "./styles/reset.css",
     "./styles/layout.css": "./styles/layout.css",
     "./styles/components.css": "./styles/components.css",
-    "./components/ThemeToggle": "./src/components/ThemeToggle.tsx",
-    "./components/Modal": "./src/components/Modal.tsx",
-    "./components/SiteFooter": "./src/components/SiteFooter.tsx"
+    "./components/ThemeToggle": {
+      "types": "./dist/types/components/ThemeToggle.d.ts",
+      "import": "./src/components/ThemeToggle.tsx"
+    },
+    "./components/Modal": {
+      "types": "./dist/types/components/Modal.d.ts",
+      "import": "./src/components/Modal.tsx"
+    },
+    "./components/SiteFooter": {
+      "types": "./dist/types/components/SiteFooter.d.ts",
+      "import": "./src/components/SiteFooter.tsx"
+    },
+    "./components/CrossLinks": {
+      "types": "./dist/types/components/CrossLinks.d.ts",
+      "import": "./src/components/CrossLinks.tsx"
+    }
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com"
@@ -28,6 +57,7 @@
     "url": "git+https://github.com/netray-info/netray-common-frontend.git"
   },
   "scripts": {
+    "build:types": "tsc --project tsconfig.build.json",
     "test": "vitest run"
   },
   "devDependencies": {
