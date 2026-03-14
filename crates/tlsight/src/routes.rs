@@ -268,7 +268,7 @@ async fn health_handler() -> Json<HealthResponse> {
 async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let config = state.config.load();
 
-    // DNS resolver is required when CAA or DANE checks are enabled.
+    // DNS resolver is required when CAA or DANE checks are enabled, or for hostname resolution.
     if (config.validation.check_caa || config.validation.check_dane)
         && state.dns_resolver.is_none()
     {
@@ -277,7 +277,8 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
             Json(ReadyResponse {
                 status: "not_ready",
                 reason: Some(
-                    "DNS resolver unavailable; CAA/DANE checks cannot run".to_owned(),
+                    "DNS resolver unavailable; CAA/DANE checks and hostname inspection cannot run"
+                        .to_owned(),
                 ),
             }),
         )

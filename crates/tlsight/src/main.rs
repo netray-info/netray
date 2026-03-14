@@ -44,15 +44,19 @@ async fn main() {
 
     let mut state = state::AppState::new(&config);
 
-    if config.validation.check_caa || config.validation.check_dane {
-        match dns::DnsResolver::new(config.dns.timeout_secs).await {
-            Ok(resolver) => {
-                state.dns_resolver = Some(std::sync::Arc::new(resolver));
-                tracing::info!("DNS resolver initialized for CAA/DANE lookups");
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "failed to initialize DNS resolver, CAA/DANE checks disabled");
-            }
+    // The DNS resolver is used for A/AAAA resolution (replacing tokio's system resolver)
+    // and for CAA/DANE lookups when those checks are enabled. Always initialize it.
+    match dns::DnsResolver::new(config.dns.timeout_secs).await {
+        Ok(resolver) => {
+            state.dns_resolver = Some(std::sync::Arc::new(resolver));
+            tracing::info!(
+                check_caa = config.validation.check_caa,
+                check_dane = config.validation.check_dane,
+                "DNS resolver initialized"
+            );
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to initialize DNS resolver; hostname inspection will fail");
         }
     }
 
