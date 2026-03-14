@@ -7,7 +7,7 @@ description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
 mhost = { version = "0.11", default-features = false, features = ["dot", "doh"] }
-netray-common = { version = "0.2.1", features = ["schema"] }
+netray-common = { version = "0.2.1", features = ["schema", "middleware"] }
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }

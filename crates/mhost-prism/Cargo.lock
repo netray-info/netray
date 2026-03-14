@@ -1500,6 +1500,7 @@ dependencies = [
  "serde",
  "tracing",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]

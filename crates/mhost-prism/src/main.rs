@@ -22,15 +22,7 @@ mod result_cache;
 mod security;
 mod telemetry;
 
-// ---------------------------------------------------------------------------
-// Request ID newtype
-// ---------------------------------------------------------------------------
-
-/// Wraps the per-request UUID v7 so it can be stored in request extensions
-/// and extracted by SSE handlers to correlate the `X-Request-Id` response
-/// header with SSE event payloads.
-#[derive(Clone)]
-pub struct RequestId(pub String);
+pub use netray_common::middleware::RequestId;
 
 // ---------------------------------------------------------------------------
 // Embedded frontend assets
@@ -95,8 +87,10 @@ async fn main() {
         .merge(api::health_router())
         .merge(api::api_router(state))
         .fallback(static_handler)
-        .layer(axum::middleware::from_fn(http_metrics_middleware))
-        .layer(axum::middleware::from_fn(request_id_middleware))
+        .layer(axum::middleware::from_fn(|req, next| {
+            netray_common::middleware::http_metrics("prism", req, next)
+        }))
+        .layer(axum::middleware::from_fn(netray_common::middleware::request_id))
         .layer(axum::middleware::from_fn(move |req, next| {
             let f = security_headers_fn.clone();
             async move { f(req, next).await }
@@ -149,56 +143,6 @@ async fn main() {
 
     // Flush pending OTel spans on shutdown.
     telemetry::shutdown();
-}
-
-// ---------------------------------------------------------------------------
-// Request ID middleware
-// ---------------------------------------------------------------------------
-
-/// Injects a `X-Request-Id` header (UUID v7) into every response and stores
-/// the same ID in request extensions so SSE handlers can correlate the header
-/// with their `request_id` SSE field.
-pub(crate) async fn request_id_middleware(
-    mut request: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> axum::response::Response {
-    let id = uuid::Uuid::now_v7().to_string();
-    request.extensions_mut().insert(RequestId(id.clone()));
-    let mut response = next.run(request).await;
-    response.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-request-id"),
-        axum::http::HeaderValue::from_str(&id)
-            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("invalid")),
-    );
-    response
-}
-
-// ---------------------------------------------------------------------------
-// HTTP metrics middleware
-// ---------------------------------------------------------------------------
-
-/// Increments `prism_http_requests_total{method, path, status}` for every
-/// HTTP request, enabling error-rate SLO calculations.
-async fn http_metrics_middleware(
-    request: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> axum::response::Response {
-    let method = request.method().to_string();
-    let path = request
-        .extensions()
-        .get::<axum::extract::MatchedPath>()
-        .map(|mp| mp.as_str().to_owned())
-        .unwrap_or_else(|| "unknown".to_owned());
-    let response = next.run(request).await;
-    let status = response.status().as_u16().to_string();
-    metrics::counter!(
-        "prism_http_requests_total",
-        "method" => method,
-        "path" => path,
-        "status" => status,
-    )
-    .increment(1);
-    response
 }
 
 // ---------------------------------------------------------------------------
