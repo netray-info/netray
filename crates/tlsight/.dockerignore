@@ -7,5 +7,4 @@ frontend/dist/
 docs/
 *.md
 tlsight.dev.toml
-tlsight.example.toml
 Makefile
