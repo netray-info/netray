@@ -115,7 +115,8 @@ impl<'a> QueryPolicy<'a> {
 /// Validate that a target IP address is safe to query.
 ///
 /// Rejects loopback, unspecified, multicast, private (RFC 1918), link-local,
-/// CGNAT (RFC 6598), documentation, and IPv6 unique-local (ULA) addresses.
+/// CGNAT (RFC 6598), documentation, IPv6 unique-local (ULA), IPv4-mapped private
+/// addresses, 6to4 addresses embedding private IPv4, and NAT64 addresses.
 /// This prevents the service from being used to probe internal networks.
 pub(crate) fn is_allowed_target(ip: IpAddr) -> Result<(), ApiError> {
     if ip.is_loopback() {
@@ -141,6 +142,15 @@ pub(crate) fn is_allowed_target(ip: IpAddr) -> Result<(), ApiError> {
     }
     if is_ipv6_ula(ip) {
         return Err(blocked_ip(ip, "IPv6 unique-local address (ULA, fc00::/7)"));
+    }
+    if is_ipv4_mapped_private(ip) {
+        return Err(blocked_ip(ip, "IPv4-mapped private address (::ffff:0:0/96)"));
+    }
+    if is_6to4_private(ip) {
+        return Err(blocked_ip(ip, "6to4 address embedding private IPv4 (2002::/16)"));
+    }
+    if is_nat64(ip) {
+        return Err(blocked_ip(ip, "NAT64 address (64:ff9b::/96)"));
     }
     Ok(())
 }
@@ -218,6 +228,77 @@ fn is_documentation(ip: IpAddr) -> bool {
             // 2001:db8::/32
             v6.segments()[0] == 0x2001 && v6.segments()[1] == 0x0db8
         }
+    }
+}
+
+/// Blocks IPv4-mapped IPv6 addresses (::ffff:0:0/96) that embed private/special IPv4.
+fn is_ipv4_mapped_private(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V6(v6) => {
+            if let Some(v4) = v6.to_ipv4_mapped() {
+                let v4_addr = IpAddr::V4(v4);
+                v4_addr.is_loopback()
+                    || v4_addr.is_unspecified()
+                    || is_rfc1918(v4_addr)
+                    || is_link_local(v4_addr)
+                    || is_cgnat(v4_addr)
+                    || is_documentation(v4_addr)
+            } else {
+                false
+            }
+        }
+        IpAddr::V4(_) => false,
+    }
+}
+
+/// Blocks 6to4 addresses (2002::/16) that embed private/special IPv4.
+///
+/// 6to4 encodes an IPv4 address in bits 16–47 of the IPv6 address. An attacker
+/// could supply e.g. 2002:c0a8:0101:: (embedding 192.168.1.1) to bypass the
+/// RFC 1918 check if only the raw IPv6 address is validated.
+fn is_6to4_private(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V6(v6) => {
+            let segs = v6.segments();
+            if segs[0] != 0x2002 {
+                return false;
+            }
+            // Embedded IPv4 is in segments[1] and segments[2]
+            let octets = [
+                (segs[1] >> 8) as u8,
+                (segs[1] & 0xff) as u8,
+                (segs[2] >> 8) as u8,
+                (segs[2] & 0xff) as u8,
+            ];
+            let v4 = std::net::Ipv4Addr::from(octets);
+            let v4_addr = IpAddr::V4(v4);
+            v4_addr.is_loopback()
+                || v4_addr.is_unspecified()
+                || is_rfc1918(v4_addr)
+                || is_link_local(v4_addr)
+                || is_cgnat(v4_addr)
+                || is_documentation(v4_addr)
+        }
+        IpAddr::V4(_) => false,
+    }
+}
+
+/// Blocks the entire NAT64 well-known prefix (64:ff9b::/96).
+///
+/// Any address in this range translates to an IPv4 address via a NAT64 gateway,
+/// including private ranges. Block the whole prefix to prevent SSRF.
+fn is_nat64(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V6(v6) => {
+            let segs = v6.segments();
+            segs[0] == 0x0064
+                && segs[1] == 0xff9b
+                && segs[2] == 0
+                && segs[3] == 0
+                && segs[4] == 0
+                && segs[5] == 0
+        }
+        IpAddr::V4(_) => false,
     }
 }
 

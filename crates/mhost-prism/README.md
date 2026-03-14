@@ -247,7 +247,7 @@ server {
 
 ```toml
 [server]
-trusted_proxies = ["127.0.0.1"]   # individual IPs only — CIDR ranges are not supported
+trusted_proxies = ["127.0.0.1", "10.0.0.0/8"]   # individual IPs or CIDR ranges
 ```
 
 </details>
@@ -267,7 +267,7 @@ dns.example.com {
 
 - `allow_arbitrary_servers = false` (default) -- no custom resolver IPs
 - `allow_system_resolvers = false` if you don't want `/etc/resolv.conf` exposed
-- `trusted_proxies` lists your reverse proxy IP addresses (individual IPs only, not CIDR)
+- `trusted_proxies` lists your reverse proxy IP addresses or CIDR ranges (e.g. `["10.0.0.1", "172.16.0.0/12"]`)
 - Metrics port (`:9090`) stays on loopback
 - Rate limits tuned for your traffic
 

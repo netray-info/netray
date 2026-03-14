@@ -151,9 +151,10 @@ function LintCard(props: { category: LintCategory }) {
   return (
     <div class={`lint-card lint-card--${status()}`}>
       <div class="lint-card-header">
-        <span class={`lint-status-icon lint-status-icon--${status()}`}>
+        <span class={`lint-status-icon lint-status-icon--${status()}`} aria-hidden="true">
           {statusIcon(status())}
         </span>
+        <span class="sr-only">{status()}</span>
         <span class="lint-card-label">{label()}</span>
       </div>
       <ul class="lint-results-list">
@@ -247,7 +248,8 @@ export function LintTab(props: LintTabProps) {
               return (
                 <div class="lint-card lint-card--pending">
                   <div class="lint-card-header">
-                    <span class="lint-status-icon lint-status-icon--pending">·</span>
+                    <span class="lint-status-icon lint-status-icon--pending" aria-hidden="true">·</span>
+                    <span class="sr-only">pending</span>
                     <span class="lint-card-label">{categoryLabel(item)}</span>
                   </div>
                   <div class="lint-card-pending-text">Checking…</div>

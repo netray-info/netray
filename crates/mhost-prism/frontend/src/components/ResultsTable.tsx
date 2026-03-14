@@ -545,7 +545,6 @@ function LookupRows(props: {
                       class={`expandable-row navigable-row ${isExpanded() ? 'expanded' : ''} ${isFocused() ? 'row-focused' : ''}${i() === 0 && props.lookupIndex > 0 ? ' lookup-separator' : ''}`}
                       tabIndex={0}
                       role="row"
-                      aria-expanded={isExpanded()}
                       onClick={() => props.onRowClick(rowKey())}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -554,7 +553,14 @@ function LookupRows(props: {
                         }
                       }}
                     >
-                      <td data-label="Name">{record.name}</td>
+                      <td data-label="Name">
+                        <button
+                          class="row-expand-btn"
+                          tabIndex={-1}
+                          aria-expanded={isExpanded()}
+                          onClick={(e) => { e.stopPropagation(); props.onRowClick(rowKey()); }}
+                        >{record.name}</button>
+                      </td>
                       <td data-label="TTL" class="ttl-value">{record.ttl}s</td>
                       <td data-label="Value" class="record-value">
                         {(() => {

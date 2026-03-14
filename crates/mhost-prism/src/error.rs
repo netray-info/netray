@@ -1,30 +1,7 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use serde::Serialize;
 
-// ---------------------------------------------------------------------------
-// Wire + schema types (single representation for both HTTP response body and OpenAPI docs)
-//
-// These mirror netray_common::error::{ErrorResponse, ErrorInfo} but add
-// utoipa::ToSchema derives required for OpenAPI spec generation.
-// ---------------------------------------------------------------------------
-
-/// JSON body returned for all error responses.
-///
-/// Wire format: `{"error": {"code": "...", "message": "..."}}`
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct ErrorResponse {
-    pub error: ErrorInfo,
-}
-
-/// Error detail contained in an error response.
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct ErrorInfo {
-    /// Machine-readable error code (e.g. `INVALID_DOMAIN`).
-    pub code: &'static str,
-    /// Human-readable error message.
-    pub message: String,
-}
+pub use netray_common::error::{ErrorInfo, ErrorResponse};
 
 /// Structured API errors that map to specific HTTP status codes and error codes.
 ///

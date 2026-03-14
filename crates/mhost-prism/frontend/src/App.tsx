@@ -1165,6 +1165,7 @@ export default function App() {
           <button
             class="header-btn"
             onClick={toggleTheme}
+            aria-label="Toggle theme"
             title={
               theme() === 'system' ? 'Theme: System — click for Dark'
               : theme() === 'dark'  ? 'Theme: Dark — click for Light'
@@ -1176,6 +1177,7 @@ export default function App() {
           <button
             class="header-btn"
             onClick={() => setShowHelp((v) => !v)}
+            aria-label="Open help"
             title="Help (?)"
           >
             ?
@@ -1296,22 +1298,22 @@ export default function App() {
           <div class="tabs">
             <div class="tabs-left" role="tablist">
               <Show when={isAuthMode()}>
-                <button role="tab" aria-selected={activeTab() === 'auth'} class={`tab${activeTab() === 'auth' ? ' active' : ''}`} onClick={() => setActiveTab('auth')}>Auth</button>
+                <button role="tab" aria-selected={activeTab() === 'auth'} aria-controls="panel-auth" class={`tab${activeTab() === 'auth' ? ' active' : ''}`} onClick={() => setActiveTab('auth')}>Auth</button>
               </Show>
               <Show when={isCompareMode()}>
-                <button role="tab" aria-selected={activeTab() === 'transport'} class={`tab${activeTab() === 'transport' ? ' active' : ''}`} onClick={() => setActiveTab('transport')}>Transport</button>
+                <button role="tab" aria-selected={activeTab() === 'transport'} aria-controls="panel-transport" class={`tab${activeTab() === 'transport' ? ' active' : ''}`} onClick={() => setActiveTab('transport')}>Transport</button>
               </Show>
               <Show when={isDnssecMode()}>
-                <button role="tab" aria-selected={activeTab() === 'dnssec'} class={`tab${activeTab() === 'dnssec' ? ' active' : ''}${dnssecIssueCounts().errors ? ' tab--failed' : dnssecIssueCounts().warnings ? ' tab--warning' : ''}`} onClick={() => setActiveTab('dnssec')}>DNSSEC{dnssecTabBadge()}</button>
+                <button role="tab" aria-selected={activeTab() === 'dnssec'} aria-controls="panel-dnssec" class={`tab${activeTab() === 'dnssec' ? ' active' : ''}${dnssecIssueCounts().errors ? ' tab--failed' : dnssecIssueCounts().warnings ? ' tab--warning' : ''}`} onClick={() => setActiveTab('dnssec')}>DNSSEC{dnssecTabBadge()}</button>
               </Show>
               <Show when={isTraceMode()}>
-                <button role="tab" aria-selected={activeTab() === 'trace'} class={`tab${activeTab() === 'trace' ? ' active' : ''}`} onClick={() => setActiveTab('trace')}>Trace</button>
+                <button role="tab" aria-selected={activeTab() === 'trace'} aria-controls="panel-trace" class={`tab${activeTab() === 'trace' ? ' active' : ''}`} onClick={() => setActiveTab('trace')}>Trace</button>
               </Show>
               <Show when={isCheckMode()}>
-                <button role="tab" aria-selected={activeTab() === 'lint'} class={`tab${activeTab() === 'lint' ? ' active' : ''}${checkStats()?.failed ? ' tab--failed' : checkStats()?.warnings ? ' tab--warning' : ''}`} onClick={() => setActiveTab('lint')}>Lint{lintTabBadge()}</button>
+                <button role="tab" aria-selected={activeTab() === 'lint'} aria-controls="panel-lint" class={`tab${activeTab() === 'lint' ? ' active' : ''}${checkStats()?.failed ? ' tab--failed' : checkStats()?.warnings ? ' tab--warning' : ''}`} onClick={() => setActiveTab('lint')}>Lint{lintTabBadge()}</button>
               </Show>
-              <button role="tab" aria-selected={activeTab() === 'results'} class={`tab ${activeTab() === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Results</button>
-              <button role="tab" aria-selected={activeTab() === 'servers'} class={`tab ${activeTab() === 'servers' ? 'active' : ''}`} onClick={() => setActiveTab('servers')}>Servers</button>
+              <button role="tab" aria-selected={activeTab() === 'results'} aria-controls="main-content" class={`tab ${activeTab() === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Results</button>
+              <button role="tab" aria-selected={activeTab() === 'servers'} aria-controls="main-content" class={`tab ${activeTab() === 'servers' ? 'active' : ''}`} onClick={() => setActiveTab('servers')}>Servers</button>
 
             </div>
           </div>
@@ -1429,7 +1431,7 @@ export default function App() {
 
         {/* Auth tab pane — mounted once auth mode starts */}
         <Show when={isAuthMode()}>
-          <div style={{ display: activeTab() === 'auth' ? 'block' : 'none' }}>
+          <div id="panel-auth" role="tabpanel" style={{ display: activeTab() === 'auth' ? 'block' : 'none' }}>
             <AuthComparison
               results={authResults()}
               activeTab={activeTab()}
@@ -1443,7 +1445,7 @@ export default function App() {
 
         {/* Transport tab pane — mounted once compare mode starts */}
         <Show when={isCompareMode()}>
-          <div style={{ display: activeTab() === 'transport' ? 'block' : 'none' }}>
+          <div id="panel-transport" role="tabpanel" style={{ display: activeTab() === 'transport' ? 'block' : 'none' }}>
             <TransportComparison
               results={compareResults()}
               activeTab={activeTab()}
@@ -1456,7 +1458,7 @@ export default function App() {
 
         {/* DNSSEC tab pane — mounted once dnssec mode starts */}
         <Show when={isDnssecMode()}>
-          <div style={{ display: activeTab() === 'dnssec' ? 'block' : 'none' }}>
+          <div id="panel-dnssec" role="tabpanel" style={{ display: activeTab() === 'dnssec' ? 'block' : 'none' }}>
             <DnssecView
               levels={dnssecLevels()}
               doneStats={dnssecDoneStats()}
@@ -1468,7 +1470,7 @@ export default function App() {
 
         {/* Trace tab pane — mounted once trace mode starts */}
         <Show when={isTraceMode()}>
-          <div style={{ display: activeTab() === 'trace' ? 'block' : 'none' }}>
+          <div id="panel-trace" role="tabpanel" style={{ display: activeTab() === 'trace' ? 'block' : 'none' }}>
             <TraceView
               hops={traceHops()}
               doneStats={traceDoneStats()}
@@ -1482,7 +1484,7 @@ export default function App() {
 
         {/* Lint tab pane — mounted once check mode starts */}
         <Show when={isCheckMode()}>
-          <div style={{ display: activeTab() === 'lint' ? 'block' : 'none' }}>
+          <div id="panel-lint" role="tabpanel" style={{ display: activeTab() === 'lint' ? 'block' : 'none' }}>
             <LintTab
               categories={lintCategories()}
               doneStats={checkStats()}
@@ -1552,6 +1554,7 @@ export default function App() {
               <h2 id="help-modal-title">Help</h2>
               <button
                 class="modal-close"
+                aria-label="Close"
                 onClick={() => setShowHelp(false)}
               >&times;</button>
             </div>

@@ -7,7 +7,7 @@ description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
 mhost = { version = "0.11", default-features = false, features = ["dot", "doh"] }
-netray-common = "0.2.1"
+netray-common = { version = "0.2.1", features = ["schema"] }
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }
@@ -70,3 +70,6 @@ utoipa = { version = "5", features = ["axum_extras"] }
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+
+[patch.crates-io]
+netray-common = { path = "../netray-common" }
