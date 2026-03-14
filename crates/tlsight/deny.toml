@@ -6,6 +6,8 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "ISC",
+    "OpenSSL",
+    "CDLA-Permissive-2.0",
     "Unicode-DFS-2016",
     "Unicode-3.0",
     "Zlib",
@@ -15,7 +17,11 @@ allow = [
 multiple-versions = "warn"
 
 [advisories]
-ignore = []
+ignore = [
+    # rustls-pemfile is unmaintained (RUSTSEC-2025-0134); no safe upgrade available,
+    # it's a transitive dependency via rustls ecosystem. Tracked for future removal.
+    "RUSTSEC-2025-0134",
+]
 
 [sources]
 unknown-registry = "warn"
