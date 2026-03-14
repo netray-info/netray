@@ -185,7 +185,10 @@ fn classify_server(value: &str) -> &'static str {
         return "server_partial";
     }
     // Group aliases
-    if GROUP_ALIAS_NAMES.iter().any(|a| name.eq_ignore_ascii_case(a)) {
+    if GROUP_ALIAS_NAMES
+        .iter()
+        .any(|a| name.eq_ignore_ascii_case(a))
+    {
         return "server";
     }
     if name.eq_ignore_ascii_case("system") || PredefinedProvider::from_str(name).is_ok() {

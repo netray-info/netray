@@ -60,7 +60,6 @@ pub struct CollectedResponse {
     pub truncated: bool,
 }
 
-
 /// Hard cap on simultaneous in-flight DNS resolver tasks across all fan-outs.
 ///
 /// Each record-type × server pair acquires one permit before spawning, so the
@@ -248,9 +247,7 @@ mod tests {
         let hot_state = HotState::new(&config);
         AppState {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
-            ip_extractor: Arc::new(
-                IpExtractor::new(&config.server.trusted_proxies),
-            ),
+            ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
             result_cache: Arc::new(ResultCache::new()),
             hot_state,
             ip_enrichment: None,
@@ -558,9 +555,7 @@ mod tests {
         let hot_state = HotState::new(&config);
         let state = AppState {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
-            ip_extractor: Arc::new(
-                IpExtractor::new(&config.server.trusted_proxies),
-            ),
+            ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
             result_cache: Arc::new(ResultCache::new()),
             hot_state,
             ip_enrichment: None,

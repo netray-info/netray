@@ -12,8 +12,23 @@ use mhost::nameserver::predefined::PredefinedProvider;
 /// Single-provider names (cloudflare, google, quad9, mullvad, …) are handled
 /// by `PredefinedProvider::from_str` and must NOT appear here.
 const SERVER_GROUP_ALIASES: &[(&str, &[PredefinedProvider])] = &[
-    ("public", &[PredefinedProvider::Google, PredefinedProvider::Cloudflare, PredefinedProvider::Quad9]),
-    ("all",    &[PredefinedProvider::Google, PredefinedProvider::Cloudflare, PredefinedProvider::Quad9, PredefinedProvider::Mullvad]),
+    (
+        "public",
+        &[
+            PredefinedProvider::Google,
+            PredefinedProvider::Cloudflare,
+            PredefinedProvider::Quad9,
+        ],
+    ),
+    (
+        "all",
+        &[
+            PredefinedProvider::Google,
+            PredefinedProvider::Cloudflare,
+            PredefinedProvider::Quad9,
+            PredefinedProvider::Mullvad,
+        ],
+    ),
 ];
 
 /// Maximum number of record types allowed in a single query (SDD section 8).
@@ -143,7 +158,14 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
         if let Some(server_name) = token.strip_prefix('@') {
             parse_server(server_name, &mut servers, &mut warnings);
         } else if let Some(flag_name) = token.strip_prefix('+') {
-            parse_flag(flag_name, &mut transport, &mut dnssec, &mut short, &mut recursive, &mut warnings);
+            parse_flag(
+                flag_name,
+                &mut transport,
+                &mut dnssec,
+                &mut short,
+                &mut recursive,
+                &mut warnings,
+            );
         } else {
             parse_record_type(token, &mut record_types, &mut has_all, &mut warnings);
         }

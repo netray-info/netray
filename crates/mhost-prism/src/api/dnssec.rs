@@ -14,8 +14,8 @@ use axum::Json;
 use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::Response;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
@@ -23,9 +23,9 @@ use tokio_stream::wrappers::ReceiverStream;
 use crate::RequestId;
 use crate::api::query::{StreamParams, make_error_event};
 use crate::api::{AppState, CollectedResponse, STREAM_TIMEOUT_SECS};
-use crate::result_cache::CachedEvent;
 use crate::dns_dnssec;
 use crate::error::{ApiError, ErrorResponse};
+use crate::result_cache::CachedEvent;
 
 // Flat rate limit cost — same as trace (queries public infrastructure).
 const DNSSEC_COST: u32 = 16;
@@ -231,9 +231,11 @@ pub async fn post_handler(
 
     let sse_stream = ReceiverStream::new(rx);
 
-    Ok(Sse::new(sse_stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("keep-alive"),
-    ).into_response())
+    Ok(Sse::new(sse_stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        )
+        .into_response())
 }

@@ -18,12 +18,12 @@ use tower::ServiceExt;
 // ---------------------------------------------------------------------------
 
 use prism::api::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
-use tokio::sync::Semaphore;
 use prism::circuit_breaker::CircuitBreakerRegistry;
 use prism::config::Config;
 use prism::reload::HotState;
 use prism::result_cache::ResultCache;
 use prism::security::IpExtractor;
+use tokio::sync::Semaphore;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,9 +34,7 @@ fn default_state() -> AppState {
     let hot_state = HotState::new(&config);
     AppState {
         circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
-        ip_extractor: Arc::new(
-            IpExtractor::new(&config.server.trusted_proxies),
-        ),
+        ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
         result_cache: Arc::new(ResultCache::new()),
         hot_state,
         ip_enrichment: None,
@@ -220,9 +218,7 @@ async fn rate_limit_returns_429() {
     let hot_state = HotState::new(&config);
     let state = AppState {
         circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
-        ip_extractor: Arc::new(
-            IpExtractor::new(&config.server.trusted_proxies),
-        ),
+        ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
         result_cache: Arc::new(ResultCache::new()),
         hot_state,
         ip_enrichment: None,

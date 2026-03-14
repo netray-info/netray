@@ -16,8 +16,8 @@ use axum::Json;
 use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::Response;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::stream::{FuturesUnordered, StreamExt};
 use mhost::RecordType;
 use mhost::lints::{
@@ -32,13 +32,13 @@ use tokio::sync::{Semaphore, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::RequestId;
-use crate::dns_raw;
 use crate::api::query::{
     StreamParams, build_resolver_group, effective_server_specs, extract_ips_from_cached_events,
     make_error_event, parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
 };
 use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
+use crate::dns_raw;
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::ParsedQuery;
 use crate::record_format;
@@ -379,7 +379,8 @@ pub async fn post_handler(
         // ------------------------------------------------------------------
         let query_timeout = Duration::from_secs(3);
         let lame_results = check_ns_lame_delegation(&all_lookups, &domain, query_timeout).await;
-        let delegation_results = check_ns_delegation_consistency(&all_lookups, &domain, query_timeout).await;
+        let delegation_results =
+            check_ns_delegation_consistency(&all_lookups, &domain, query_timeout).await;
         let dnssec_rollover_results = check_dnssec_rollover(&all_lookups);
 
         // ------------------------------------------------------------------
@@ -513,11 +514,13 @@ pub async fn post_handler(
 
     let sse_stream = ReceiverStream::new(rx);
 
-    Ok(Sse::new(sse_stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("keep-alive"),
-    ).into_response())
+    Ok(Sse::new(sse_stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        )
+        .into_response())
 }
 
 // ---------------------------------------------------------------------------
@@ -606,15 +609,24 @@ fn check_dnskey_algorithms(lookups: &mhost::resolver::Lookups) -> Vec<CheckResul
     for key in &keys {
         match key.algorithm() {
             DnssecAlgorithm::RsaMd5 => {
-                results.push(CheckResult::Failed("DNSKEY uses RSAMD5 (algorithm 1) — deprecated, must not be used (RFC 8624)".to_string()));
+                results.push(CheckResult::Failed(
+                    "DNSKEY uses RSAMD5 (algorithm 1) — deprecated, must not be used (RFC 8624)"
+                        .to_string(),
+                ));
                 any_deprecated = true;
             }
             DnssecAlgorithm::Dsa => {
-                results.push(CheckResult::Failed("DNSKEY uses DSA (algorithm 3) — deprecated, must not be used (RFC 8624)".to_string()));
+                results.push(CheckResult::Failed(
+                    "DNSKEY uses DSA (algorithm 3) — deprecated, must not be used (RFC 8624)"
+                        .to_string(),
+                ));
                 any_deprecated = true;
             }
             DnssecAlgorithm::RsaSha1 => {
-                results.push(CheckResult::Warning("DNSKEY uses RSASHA1 (algorithm 5) — deprecated, should not be used (RFC 8624)".to_string()));
+                results.push(CheckResult::Warning(
+                    "DNSKEY uses RSASHA1 (algorithm 5) — deprecated, should not be used (RFC 8624)"
+                        .to_string(),
+                ));
                 any_deprecated = true;
             }
             DnssecAlgorithm::RsaSha1Nsec3Sha1 => {
@@ -687,21 +699,15 @@ async fn check_ns_lame_delegation(
     domain: &str,
     timeout: Duration,
 ) -> Vec<CheckResult> {
-    let ns_names: Vec<String> = lookups
-        .ns()
-        .into_iter()
-        .map(|n| n.to_ascii())
-        .collect();
+    let ns_names: Vec<String> = lookups.ns().into_iter().map(|n| n.to_ascii()).collect();
 
     if ns_names.is_empty() {
         return vec![CheckResult::NotFound()];
     }
 
     // Resolve NS hostnames to IPs.
-    let mut ns_ips: HashMap<String, Vec<IpAddr>> = ns_names
-        .iter()
-        .map(|n| (n.clone(), Vec::new()))
-        .collect();
+    let mut ns_ips: HashMap<String, Vec<IpAddr>> =
+        ns_names.iter().map(|n| (n.clone(), Vec::new())).collect();
     dns_raw::resolve_missing_glue(&mut ns_ips).await;
 
     let domain_name = match hickory_proto::rr::Name::from_ascii(domain) {
@@ -721,7 +727,13 @@ async fn check_ns_lame_delegation(
         )];
     }
 
-    let results_raw = dns_raw::parallel_queries(&servers, &domain_name, hickory_proto::rr::RecordType::SOA, timeout).await;
+    let results_raw = dns_raw::parallel_queries(
+        &servers,
+        &domain_name,
+        hickory_proto::rr::RecordType::SOA,
+        timeout,
+    )
+    .await;
 
     let mut lame_servers: Vec<String> = Vec::new();
     let mut ok_count = 0usize;
@@ -804,7 +816,8 @@ async fn check_ns_delegation_consistency(
 
     if servers.is_empty() {
         return vec![CheckResult::Warning(
-            "NS delegation consistency: could not resolve NS server IPs for direct query".to_owned(),
+            "NS delegation consistency: could not resolve NS server IPs for direct query"
+                .to_owned(),
         )];
     }
 
@@ -813,7 +826,13 @@ async fn check_ns_delegation_consistency(
         Err(_) => return vec![CheckResult::NotFound()],
     };
 
-    let results_raw = dns_raw::parallel_queries(&servers, &domain_name, hickory_proto::rr::RecordType::NS, timeout).await;
+    let results_raw = dns_raw::parallel_queries(
+        &servers,
+        &domain_name,
+        hickory_proto::rr::RecordType::NS,
+        timeout,
+    )
+    .await;
 
     // Collect NS names from direct (authoritative) responses.
     let mut auth_ns: Vec<String> = Vec::new();
@@ -832,7 +851,8 @@ async fn check_ns_delegation_consistency(
 
     if auth_ns.is_empty() {
         return vec![CheckResult::Warning(
-            "NS delegation consistency: no NS records returned from direct authoritative query".to_owned(),
+            "NS delegation consistency: no NS records returned from direct authoritative query"
+                .to_owned(),
         )];
     }
 
@@ -845,8 +865,14 @@ async fn check_ns_delegation_consistency(
             recursive_ns.len()
         ))]
     } else {
-        let only_recursive: Vec<&String> = recursive_ns.iter().filter(|n| !auth_ns.contains(n)).collect();
-        let only_auth: Vec<&String> = auth_ns.iter().filter(|n| !recursive_ns.contains(n)).collect();
+        let only_recursive: Vec<&String> = recursive_ns
+            .iter()
+            .filter(|n| !auth_ns.contains(n))
+            .collect();
+        let only_auth: Vec<&String> = auth_ns
+            .iter()
+            .filter(|n| !recursive_ns.contains(n))
+            .collect();
 
         let mut results = Vec::new();
         for ns in &only_recursive {
@@ -900,7 +926,12 @@ fn check_dnssec_rollover(lookups: &Lookups) -> Vec<CheckResult> {
 
     // DS records with no matching DNSKEY (orphaned DS).
     for &ds_tag in &ds_tags {
-        if !ksk_tags.contains(&ds_tag) && !dnskeys.iter().filter_map(|k| k.key_tag()).any(|t| t == ds_tag) {
+        if !ksk_tags.contains(&ds_tag)
+            && !dnskeys
+                .iter()
+                .filter_map(|k| k.key_tag())
+                .any(|t| t == ds_tag)
+        {
             results.push(CheckResult::Failed(format!(
                 "DS key tag {ds_tag} has no matching DNSKEY — orphaned DS record (old key removed before DS was removed)"
             )));

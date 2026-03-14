@@ -61,15 +61,11 @@ async fn main() {
         circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(
             &config.circuit_breaker,
         )),
-        ip_extractor: Arc::new(
-            security::IpExtractor::new(&config.server.trusted_proxies),
-        ),
+        ip_extractor: Arc::new(security::IpExtractor::new(&config.server.trusted_proxies)),
         result_cache: Arc::new(result_cache::ResultCache::new()),
         hot_state: hot_state.clone(),
         ip_enrichment,
-        query_semaphore: Arc::new(tokio::sync::Semaphore::new(
-            api::QUERY_SEMAPHORE_PERMITS,
-        )),
+        query_semaphore: Arc::new(tokio::sync::Semaphore::new(api::QUERY_SEMAPHORE_PERMITS)),
         config: Arc::new(config.clone()),
     };
 

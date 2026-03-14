@@ -13,8 +13,8 @@ use axum::Json;
 use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
 use axum::response::IntoResponse;
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::Response;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use hickory_proto::rr::RecordType;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
@@ -293,9 +293,11 @@ pub async fn post_handler(
 
     let sse_stream = ReceiverStream::new(rx);
 
-    Ok(Sse::new(sse_stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("keep-alive"),
-    ).into_response())
+    Ok(Sse::new(sse_stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        )
+        .into_response())
 }

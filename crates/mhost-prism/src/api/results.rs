@@ -43,4 +43,3 @@ pub async fn get_handler(
         None => Err(StatusCode::NOT_FOUND),
     }
 }
-

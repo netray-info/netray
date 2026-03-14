@@ -246,7 +246,15 @@ pub async fn post_handler(
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::debug!(%client_ip, %peer_addr, "query POST");
 
-    execute_query(parsed, state, client_ip, request_id.0, query_display, stream_params.stream).await
+    execute_query(
+        parsed,
+        state,
+        client_ip,
+        request_id.0,
+        query_display,
+        stream_params.stream,
+    )
+    .await
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -685,11 +693,13 @@ async fn execute_query(
 
     let sse_stream = ReceiverStream::new(rx);
 
-    Ok(Sse::new(sse_stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(15))
-            .text("keep-alive"),
-    ).into_response())
+    Ok(Sse::new(sse_stream)
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        )
+        .into_response())
 }
 
 /// Record circuit breaker outcomes from lookup results.
