@@ -36,11 +36,11 @@ use crate::api::query::{
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
-use netray_common::enrichment::IpInfo;
 use crate::parser::ParsedQuery;
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::security::QueryPolicy;
+use netray_common::enrichment::IpInfo;
 
 // ---------------------------------------------------------------------------
 // Record types queried for the base domain (15 types)

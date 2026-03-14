@@ -31,11 +31,11 @@ use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ApiError, ErrorResponse};
-use netray_common::enrichment::{EnrichmentClient, IpInfo};
 use crate::parser::{self, ParsedQuery, ServerSpec, Transport};
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::security::QueryPolicy;
+use netray_common::enrichment::{EnrichmentClient, IpInfo};
 
 // ---------------------------------------------------------------------------
 // SSE event payloads

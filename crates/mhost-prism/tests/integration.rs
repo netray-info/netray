@@ -106,7 +106,10 @@ async fn ready_returns_200_or_503_with_status_field() {
     );
     let body = body_string(resp.into_body()).await;
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
-    assert!(json["status"].is_string(), "missing status field; body: {body}");
+    assert!(
+        json["status"].is_string(),
+        "missing status field; body: {body}"
+    );
 }
 
 // ---------------------------------------------------------------------------

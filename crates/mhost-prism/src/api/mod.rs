@@ -22,10 +22,10 @@ use utoipa::OpenApi;
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ErrorInfo, ErrorResponse};
-use netray_common::enrichment::EnrichmentClient;
 use crate::reload::HotState;
 use crate::result_cache::ResultCache;
 use crate::security::IpExtractor;
+use netray_common::enrichment::EnrichmentClient;
 
 /// Hard cap on total SSE stream duration (SDD §8.1).
 pub const STREAM_TIMEOUT_SECS: u64 = 30;

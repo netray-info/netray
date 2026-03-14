@@ -88,7 +88,9 @@ async fn main() {
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("prism", req, next)
         }))
-        .layer(axum::middleware::from_fn(netray_common::middleware::request_id))
+        .layer(axum::middleware::from_fn(
+            netray_common::middleware::request_id,
+        ))
         .layer(axum::middleware::from_fn(move |req, next| {
             let f = security_headers_fn.clone();
             async move { f(req, next).await }

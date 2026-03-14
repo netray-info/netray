@@ -42,6 +42,12 @@ pub struct ResultCache {
     inner: moka::future::Cache<String, CachedResult>,
 }
 
+impl Default for ResultCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ResultCache {
     pub fn new() -> Self {
         let inner = moka::future::Cache::builder()
