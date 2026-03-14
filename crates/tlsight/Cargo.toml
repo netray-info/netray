@@ -1,6 +1,6 @@
 [package]
 name = "tlsight"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 license = "MIT"
 description = "Web-based TLS certificate inspection and diagnostics service"
@@ -13,6 +13,8 @@ tokio-rustls = "0.26"
 webpki-roots = "0.26"
 x509-parser = { version = "0.17", features = ["verify"] }
 x509-ocsp = "0.2"
+x509-cert = "0.2"
+spki = "0.7"
 
 # DNS
 mhost = { version = "0.11", default-features = false }
