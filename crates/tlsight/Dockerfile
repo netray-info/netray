@@ -16,7 +16,8 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates wget \
  && addgroup -S tlsight && adduser -S tlsight -G tlsight
 WORKDIR /tlsight
-COPY tlsight.prod.toml tlsight.toml
+COPY tlsight.example.toml tlsight.toml
+ENV TLSIGHT_SERVER__BIND=0.0.0.0:8081
 COPY --from=builder /tlsight .
 RUN chown -R tlsight:tlsight /tlsight
 USER tlsight
