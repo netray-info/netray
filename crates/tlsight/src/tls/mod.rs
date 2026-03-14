@@ -36,7 +36,7 @@ pub struct IpInspectionResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ct: Option<crate::validate::ct::CtInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub enrichment: Option<crate::enrichment::IpEnrichment>,
+    pub enrichment: Option<netray_common::enrichment::IpInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<InspectionError>,
     /// Raw DER-encoded certificates from the handshake, used for chain trust validation.

@@ -13,7 +13,7 @@ use utoipa::ToSchema;
 
 use utoipa::OpenApi;
 
-use crate::enrichment::{CloudInfo, IpEnrichment};
+use netray_common::enrichment::{CloudInfo, IpInfo};
 use crate::error::{AppError, ErrorResponse};
 use crate::input::{self, Target};
 use crate::security::rate_limit::select_representative_ips;
@@ -209,7 +209,7 @@ fn default_ports() -> Vec<u16> {
         validate::ValidationResult,
         validate::ct::CtInfo,
         validate::ct::SctEntry,
-        IpEnrichment,
+        IpInfo,
         CloudInfo,
         crate::quality::QualityResult,
         crate::quality::PortQualityResult,

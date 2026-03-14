@@ -1537,6 +1537,7 @@ name = "netray-common"
 version = "0.2.1"
 dependencies = [
  "axum",
+ "futures",
  "governor",
  "ip_network",
  "metrics",
@@ -1545,6 +1546,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "reqwest",
  "rust-embed",
  "serde",
  "tokio",
@@ -2743,7 +2745,6 @@ dependencies = [
  "chrono",
  "config",
  "der",
- "futures",
  "governor",
  "http-body-util",
  "metrics",
@@ -2753,7 +2754,6 @@ dependencies = [
  "netray-common",
  "percent-encoding",
  "rcgen",
- "reqwest",
  "rust-embed",
  "rustls",
  "rustls-pemfile",

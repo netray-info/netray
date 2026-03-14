@@ -6,7 +6,7 @@ use arc_swap::ArcSwap;
 
 use crate::config::Config;
 use crate::dns::DnsResolver;
-use crate::enrichment::EnrichmentClient;
+use netray_common::enrichment::EnrichmentClient;
 use crate::security::{IpExtractor, RateLimitState};
 use rustls::client::danger::ServerCertVerifier;
 use tokio::sync::Semaphore;
@@ -49,6 +49,8 @@ impl AppState {
             Arc::new(EnrichmentClient::new(
                 url,
                 Duration::from_millis(config.ecosystem.enrichment_timeout_ms),
+                "tlsight",
+                None,
             ))
         });
 

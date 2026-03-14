@@ -5,7 +5,6 @@
 
 pub mod config;
 pub mod dns;
-pub mod enrichment;
 pub mod error;
 pub mod input;
 pub mod quality;

@@ -6,7 +6,6 @@ use tower_http::trace::TraceLayer;
 
 mod config;
 mod dns;
-mod enrichment;
 mod error;
 mod input;
 mod quality;

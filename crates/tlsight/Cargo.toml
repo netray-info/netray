@@ -29,7 +29,7 @@ axum = { version = "0.8", features = ["json"] }
 tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
 governor = "0.10"
-netray-common = { version = "0.2.1", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa"] }
+netray-common = { version = "0.2.1", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -65,9 +65,6 @@ chrono = { version = "0.4", default-features = false, features = ["serde", "cloc
 # Percent-decoding for URL params
 percent-encoding = "2"
 
-# IP enrichment (ifconfig-rs backend-to-backend calls)
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-futures = "0.3"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
