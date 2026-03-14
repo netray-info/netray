@@ -99,6 +99,7 @@ interface ResultsTableProps {
   devOnly: boolean;
   sort: boolean;
   explain: boolean;
+  short?: boolean;
   expandAll?: number;
   collapseAll?: number;
   ifconfigUrl?: string | null;
@@ -411,6 +412,7 @@ function RecordGroup(props: {
   onRowClick: (key: string) => void;
   compact: boolean;
   explain: boolean;
+  short?: boolean;
   ifconfigUrl?: string | null;
   enrichments?: Record<string, IpInfo>;
 }) {
@@ -477,7 +479,7 @@ function RecordGroup(props: {
           <thead>
             <tr>
               <th>Name</th>
-              <th>TTL</th>
+              <Show when={!props.short}><th>TTL</th></Show>
               <th>Value</th>
               <th>Server</th>
               <th>Time</th>
@@ -496,6 +498,7 @@ function RecordGroup(props: {
                   maxResponseTimeMs={maxResponseTimeMs()}
                   serverOverride={serverAgreementLabel()}
                   explain={props.explain}
+                  short={props.short}
                   ifconfigUrl={props.ifconfigUrl}
                   enrichments={props.enrichments}
                 />
@@ -522,6 +525,7 @@ function LookupRows(props: {
   maxResponseTimeMs: number;
   serverOverride?: string | null;
   explain: boolean;
+  short?: boolean;
   ifconfigUrl?: string | null;
   enrichments?: Record<string, IpInfo>;
 }) {
@@ -564,7 +568,7 @@ function LookupRows(props: {
                           onClick={(e) => { e.stopPropagation(); props.onRowClick(rowKey()); }}
                         >{record.name}</button>
                       </td>
-                      <td data-label="TTL" class="ttl-value">{record.ttl}s</td>
+                      <Show when={!props.short}><td data-label="TTL" class="ttl-value">{record.ttl}s</td></Show>
                       <td data-label="Value" class="record-value">
                         {(() => {
                           const ip = (props.recordType === 'A' || props.recordType === 'AAAA') ? extractIpFromData(record.data) : null;
@@ -634,7 +638,7 @@ function LookupRows(props: {
               onClick={() => props.onRowClick(rowKey)}
             >
               <td data-label="Name">{props.lookup.query.name}</td>
-              <td data-label="TTL">-</td>
+              <Show when={!props.short}><td data-label="TTL">-</td></Show>
               <td data-label="Value" class="nxdomain-value">NXDOMAIN</td>
               <td data-label="Server">{server()}</td>
               <td data-label="Time"><TimeCell rt={nx.response_time} maxMs={props.maxResponseTimeMs} /></td>
@@ -652,7 +656,7 @@ function LookupRows(props: {
               onClick={() => props.onRowClick(rowKey)}
             >
               <td data-label="Name">{props.lookup.query.name}</td>
-              <td data-label="TTL">-</td>
+              <Show when={!props.short}><td data-label="TTL">-</td></Show>
               <td data-label="Value" class="error-value">{formatLookupError(props.lookup.result)}</td>
               <td data-label="Server">{server()}</td>
               <td data-label="Time">-</td>
@@ -854,7 +858,7 @@ export function ResultsTable(props: ResultsTableProps) {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>TTL</th>
+                  <Show when={!props.short}><th>TTL</th></Show>
                   <th>Value</th>
                   <th>Server</th>
                   <th>Time</th>
@@ -864,7 +868,7 @@ export function ResultsTable(props: ResultsTableProps) {
                 {[0, 1, 2, 3].map(() => (
                   <tr class="skeleton-row">
                     <td><div class="skeleton-bar skeleton-bar--name" /></td>
-                    <td><div class="skeleton-bar skeleton-bar--ttl" /></td>
+                    <Show when={!props.short}><td><div class="skeleton-bar skeleton-bar--ttl" /></td></Show>
                     <td><div class="skeleton-bar skeleton-bar--value" /></td>
                     <td><div class="skeleton-bar skeleton-bar--server" /></td>
                     <td><div class="skeleton-bar skeleton-bar--time" /></td>
@@ -895,6 +899,7 @@ export function ResultsTable(props: ResultsTableProps) {
               onRowClick={handleRowClick}
               compact={props.compact}
               explain={props.explain}
+              short={props.short}
               ifconfigUrl={props.ifconfigUrl}
               enrichments={props.enrichments}
             />

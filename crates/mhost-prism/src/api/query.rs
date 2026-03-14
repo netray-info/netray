@@ -308,6 +308,7 @@ pub(crate) fn convert_post_body(body: PostQueryRequest) -> Result<ParsedQuery, A
         servers,
         transport,
         dnssec: body.dnssec,
+        short: false,
         warnings: Vec::new(),
     })
 }

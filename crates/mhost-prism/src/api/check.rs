@@ -23,7 +23,7 @@ use mhost::lints::{
 };
 use mhost::resolver::lookup::Uniquify;
 use mhost::resolver::{Lookups, MultiQuery, Resolver};
-use mhost::resources::rdata::TXT;
+use mhost::resources::rdata::{DnssecAlgorithm, TXT};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Semaphore, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
@@ -162,6 +162,7 @@ pub async fn post_handler(
         servers,
         transport: None,
         dnssec: false,
+        short: false,
         warnings: Vec::new(),
     };
 
@@ -373,6 +374,7 @@ pub async fn post_handler(
             ("caa", check_caa(&all_lookups)),
             ("cname_apex", check_cname_apex(&all_lookups)),
             ("dnssec", check_dnssec(&all_lookups)),
+            ("dnskey_algorithm", check_dnskey_algorithms(&all_lookups)),
             ("https_svcb", check_https_svcb_mode(&all_lookups)),
             ("mx", check_mx_sync(&all_lookups)),
             ("ns", check_ns_count(&all_lookups)),
@@ -552,6 +554,55 @@ async fn fan_out_lookup(
     }
 
     merged
+}
+
+/// DNSKEY algorithm lint: warn on deprecated DNSSEC signing algorithms (RFC 8624).
+fn check_dnskey_algorithms(lookups: &mhost::resolver::Lookups) -> Vec<CheckResult> {
+    let keys = lookups.dnskey();
+    if keys.is_empty() {
+        return vec![CheckResult::NotFound()];
+    }
+
+    let mut results = Vec::new();
+    let mut any_deprecated = false;
+
+    for key in &keys {
+        match key.algorithm() {
+            DnssecAlgorithm::RsaMd5 => {
+                results.push(CheckResult::Failed(format!(
+                    "DNSKEY uses RSAMD5 (algorithm 1) — deprecated, must not be used (RFC 8624)"
+                )));
+                any_deprecated = true;
+            }
+            DnssecAlgorithm::Dsa => {
+                results.push(CheckResult::Failed(format!(
+                    "DNSKEY uses DSA (algorithm 3) — deprecated, must not be used (RFC 8624)"
+                )));
+                any_deprecated = true;
+            }
+            DnssecAlgorithm::RsaSha1 => {
+                results.push(CheckResult::Warning(format!(
+                    "DNSKEY uses RSASHA1 (algorithm 5) — deprecated, should not be used (RFC 8624)"
+                )));
+                any_deprecated = true;
+            }
+            DnssecAlgorithm::RsaSha1Nsec3Sha1 => {
+                results.push(CheckResult::Warning(format!(
+                    "DNSKEY uses RSASHA1-NSEC3-SHA1 (algorithm 7) — deprecated, should not be used (RFC 8624)"
+                )));
+                any_deprecated = true;
+            }
+            _ => {}
+        }
+    }
+
+    if !any_deprecated {
+        results.push(CheckResult::Ok(
+            "All DNSKEY algorithms are current (RFC 8624)".to_owned(),
+        ));
+    }
+
+    results
 }
 
 /// Infrastructure lint: flag threat indicators and unusual hosting from enrichment data.

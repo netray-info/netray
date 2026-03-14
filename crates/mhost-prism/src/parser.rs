@@ -72,6 +72,8 @@ pub struct ParsedQuery {
     pub transport: Option<Transport>,
     /// Whether DNSSEC validation was requested.
     pub dnssec: bool,
+    /// Whether short output was requested (suppresses TTLs and metadata).
+    pub short: bool,
     /// Non-fatal warnings accumulated during parsing.
     pub warnings: Vec<String>,
 }
@@ -110,6 +112,7 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
     let mut servers = Vec::new();
     let mut transport = None;
     let mut dnssec = false;
+    let mut short = false;
     let mut warnings = Vec::new();
     let mut has_all = false;
 
@@ -117,7 +120,7 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
         if let Some(server_name) = token.strip_prefix('@') {
             parse_server(server_name, &mut servers, &mut warnings);
         } else if let Some(flag_name) = token.strip_prefix('+') {
-            parse_flag(flag_name, &mut transport, &mut dnssec, &mut warnings);
+            parse_flag(flag_name, &mut transport, &mut dnssec, &mut short, &mut warnings);
         } else {
             parse_record_type(token, &mut record_types, &mut has_all, &mut warnings);
         }
@@ -160,6 +163,7 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
         servers,
         transport,
         dnssec,
+        short,
         warnings,
     })
 }
@@ -281,6 +285,7 @@ fn parse_flag(
     name: &str,
     transport: &mut Option<Transport>,
     dnssec: &mut bool,
+    short: &mut bool,
     warnings: &mut Vec<String>,
 ) {
     match name.to_ascii_lowercase().as_str() {
@@ -289,6 +294,7 @@ fn parse_flag(
         "tls" => *transport = Some(Transport::Tls),
         "https" => *transport = Some(Transport::Https),
         "dnssec" => *dnssec = true,
+        "short" => *short = true,
         // +check and +trace are routing hints for the frontend; the backend
         // routes them via dedicated endpoints, not via query-string flags.
         "check" | "trace" | "compare" | "auth" => {}

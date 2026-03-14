@@ -93,6 +93,7 @@ const FLAG_INFO: &[(&str, &str)] = &[
     ("+tls", "DNS-over-TLS"),
     ("+https", "DNS-over-HTTPS"),
     ("+dnssec", "DNSSEC validation"),
+    ("+short", "Suppress TTLs and metadata"),
     ("+check", "DNS health check"),
     ("+trace", "Delegation trace"),
     ("+compare", "Transport comparison"),
@@ -198,9 +199,8 @@ fn classify_server(value: &str) -> &'static str {
 
 fn classify_flag(value: &str) -> &'static str {
     match value[1..].to_ascii_lowercase().as_str() {
-        "udp" | "tcp" | "tls" | "https" | "dnssec" | "check" | "trace" | "compare" | "auth" => {
-            "flag"
-        }
+        "udp" | "tcp" | "tls" | "https" | "dnssec" | "short" | "check" | "trace" | "compare"
+        | "auth" => "flag",
         _ => "flag_partial",
     }
 }

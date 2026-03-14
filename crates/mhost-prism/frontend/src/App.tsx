@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
 import { QueryInput } from './components/QueryInput';
 import { ResultsTable, parseBatchEvent, groupByRecordType, lookupsAgree, hasDeviation, type BatchEvent, type DoneStats } from './components/ResultsTable';
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
@@ -85,6 +85,11 @@ function hasCompareFlag(q: string): boolean {
 /** Returns true if the query string contains the +auth flag. */
 function hasAuthFlag(q: string): boolean {
   return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+auth');
+}
+
+/** Returns true if the query string contains the +short flag. */
+function hasShortFlag(q: string): boolean {
+  return q.trim().toLowerCase().split(/\s+/).some((t) => t === '+short');
 }
 
 /** Extract domain (first token) and @server specs from a query string. */
@@ -247,6 +252,9 @@ export default function App() {
   const [authResults, setAuthResults] = createSignal<BatchEvent[]>([]);
   const [authServers, setAuthServers] = createSignal<string[]>([]);
 
+  // Short mode state
+  const [isShortMode, setIsShortMode] = createSignal(false);
+
   // Site metadata
   const [siteName, setSiteName] = createSignal('prism');
   const [siteVersion, setSiteVersion] = createSignal<string | null>(null);
@@ -261,6 +269,18 @@ export default function App() {
   // Permalink state
   const [cacheKey, setCacheKey] = createSignal<string | null>(null);
   const [shareMessage, setShareMessage] = createSignal<string | null>(null);
+
+  // Reactive document title — updated whenever mode or site name changes.
+  createEffect(() => {
+    const base = siteName();
+    const mode = isCheckMode() ? 'Check'
+      : isTraceMode() ? 'Trace'
+      : isDnssecMode() ? 'DNSSEC'
+      : isCompareMode() ? 'Compare'
+      : isAuthMode() ? 'Auth'
+      : null;
+    document.title = mode ? `${base} • ${mode}` : base;
+  });
 
   let eventSource: EventSource | null = null;
   let checkAbortController: AbortController | null = null;
@@ -365,6 +385,7 @@ export default function App() {
     setIsTraceMode(false);
     setIsDnssecMode(false);
     setIsCompareMode(false);
+    setIsShortMode(false);
     setCompareResults([]);
     setIsAuthMode(false);
     setAuthResults([]);
@@ -553,6 +574,7 @@ export default function App() {
     const wantDnssec = hasDnssecFlag(q);
     const wantCompare = hasCompareFlag(q);
     const wantAuth = hasAuthFlag(q);
+    const wantShort = hasShortFlag(q);
 
     const { domain, record_type } = extractTraceParams(q);
     const { domain: checkDomain, servers } = extractCheckParams(q);
@@ -577,6 +599,7 @@ export default function App() {
     setIsDnssecMode(wantDnssec);
     setIsCompareMode(wantCompare);
     setIsAuthMode(wantAuth);
+    setIsShortMode(wantShort);
     setEnrichments({});
     setCacheKey(null);
     setStatus('loading');
@@ -1044,7 +1067,6 @@ export default function App() {
       .then((cfg: { site_name?: string; version?: string; ifconfig_url?: string; tls_url?: string }) => {
         if (cfg.site_name) {
           setSiteName(cfg.site_name);
-          document.title = cfg.site_name;
         }
         if (cfg.version) setSiteVersion(cfg.version);
         if (cfg.ifconfig_url) setIfconfigUrl(cfg.ifconfig_url);
@@ -1489,6 +1511,7 @@ export default function App() {
               devOnly={devOnly()}
               sort={sortView()}
               explain={explain()}
+              short={isShortMode()}
               expandAll={expandAllTrigger()}
               collapseAll={collapseAllTrigger()}
               ifconfigUrl={ifconfigUrl()}

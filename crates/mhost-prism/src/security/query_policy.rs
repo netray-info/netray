@@ -187,6 +187,7 @@ mod tests {
             servers: vec![],
             transport: None,
             dnssec: false,
+            short: false,
             warnings: vec![],
         }
     }
