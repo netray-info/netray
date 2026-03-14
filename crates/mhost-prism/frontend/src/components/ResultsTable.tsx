@@ -446,6 +446,8 @@ function RecordGroup(props: {
   short?: boolean;
   ifconfigUrl?: string | null;
   enrichments?: Record<string, IpInfo>;
+  tick: number;
+  receivedAt: ReceivedAtMap;
 }) {
   const [collapsed, setCollapsed] = createSignal(false);
 
@@ -532,6 +534,8 @@ function RecordGroup(props: {
                   short={props.short}
                   ifconfigUrl={props.ifconfigUrl}
                   enrichments={props.enrichments}
+                  tick={props.tick}
+                  receivedAt={props.receivedAt.get(props.group.recordType)}
                 />
               )}
             </For>
@@ -559,6 +563,8 @@ function LookupRows(props: {
   short?: boolean;
   ifconfigUrl?: string | null;
   enrichments?: Record<string, IpInfo>;
+  tick: number;
+  receivedAt: number | undefined;
 }) {
   const server = createMemo(() => props.serverOverride ?? formatServer(props.lookup.name_server));
   const transport = createMemo(() => extractTransport(props.lookup.name_server));
@@ -599,7 +605,9 @@ function LookupRows(props: {
                           onClick={(e) => { e.stopPropagation(); props.onRowClick(rowKey()); }}
                         >{record.name}</button>
                       </td>
-                      <Show when={!props.short}><td data-label="TTL" class="ttl-value">{record.ttl}s</td></Show>
+                      <Show when={!props.short}>
+                        <TtlCell originalTtl={record.ttl} receivedAt={props.receivedAt} tick={props.tick} />
+                      </Show>
                       <td data-label="Value" class="record-value">
                         {(() => {
                           const ip = (props.recordType === 'A' || props.recordType === 'AAAA') ? extractIpFromData(record.data) : null;
@@ -730,11 +738,76 @@ function formatTTLHuman(ttl: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// TTL countdown helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Map from a stable row identity key to the timestamp (Date.now()) when that
+ * batch of records was first received.  We key by `record_type` because that
+ * is the granularity at which batches arrive from the SSE stream.
+ */
+type ReceivedAtMap = Map<string, number>;
+
+/** Compute the live (countdown) TTL for a record. */
+function liveTtl(originalTtl: number, receivedAt: number): number {
+  return Math.max(0, originalTtl - Math.floor((Date.now() - receivedAt) / 1000));
+}
+
+/**
+ * TTL table cell with live countdown.  Reading `props.tick` inside this
+ * component subscribes it to the per-second signal, triggering a re-render
+ * that recomputes `remaining` via `Date.now()`.
+ */
+function TtlCell(props: { originalTtl: number; receivedAt: number | undefined; tick: number }) {
+  const remaining = () => {
+    // Depend on tick so this re-runs every second.
+    void props.tick;
+    return props.receivedAt !== undefined
+      ? liveTtl(props.originalTtl, props.receivedAt)
+      : props.originalTtl;
+  };
+  return (
+    <td
+      data-label="TTL"
+      class={`ttl-value${remaining() === 0 ? ' ttl-expired' : ''}`}
+    >{remaining()}s</td>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
 export function ResultsTable(props: ResultsTableProps) {
   const groups = createMemo(() => groupByRecordType(props.results));
+
+  // -------------------------------------------------------------------------
+  // TTL countdown — single interval for the whole table
+  // -------------------------------------------------------------------------
+
+  // Monotonically incrementing counter; reading it in a reactive context
+  // causes a re-render every second.
+  const [tick, setTick] = createSignal(0);
+
+  // Map record_type → Date.now() when that batch first appeared in results.
+  const receivedAt: ReceivedAtMap = new Map();
+
+  // Track which record types we've already stamped so we only record the
+  // first arrival time (not on subsequent re-renders).
+  createEffect(() => {
+    for (const batch of props.results) {
+      if (!receivedAt.has(batch.record_type)) {
+        receivedAt.set(batch.record_type, Date.now());
+      }
+    }
+  });
+
+  // Start interval only when the TTL column is visible (+short hides it).
+  createEffect(() => {
+    if (props.short) return;
+    const id = setInterval(() => setTick((n) => n + 1), 1000);
+    onCleanup(() => clearInterval(id));
+  });
 
   // Apply view filters and optional sort on top of the grouped data
   const displayGroups = createMemo(() => {
@@ -945,6 +1018,8 @@ export function ResultsTable(props: ResultsTableProps) {
               short={props.short}
               ifconfigUrl={props.ifconfigUrl}
               enrichments={props.enrichments}
+              tick={tick()}
+              receivedAt={receivedAt}
             />
           )}
         </For>
