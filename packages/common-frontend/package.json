@@ -3,7 +3,8 @@
   "version": "0.2.0",
   "type": "module",
   "files": [
-    "src"
+    "src",
+    "styles"
   ],
   "exports": {
     "./theme": "./src/theme.ts",
@@ -11,10 +12,10 @@
     "./focus-trap": "./src/focus-trap.ts",
     "./storage": "./src/storage.ts",
     "./utils": "./src/utils.ts",
-    "./styles/theme.css": "./src/styles/theme.css",
-    "./styles/reset.css": "./src/styles/reset.css",
-    "./styles/layout.css": "./src/styles/layout.css",
-    "./styles/components.css": "./src/styles/components.css",
+    "./styles/theme.css": "./styles/theme.css",
+    "./styles/reset.css": "./styles/reset.css",
+    "./styles/layout.css": "./styles/layout.css",
+    "./styles/components.css": "./styles/components.css",
     "./components/ThemeToggle": "./src/components/ThemeToggle.tsx",
     "./components/Modal": "./src/components/Modal.tsx",
     "./components/SiteFooter": "./src/components/SiteFooter.tsx"
