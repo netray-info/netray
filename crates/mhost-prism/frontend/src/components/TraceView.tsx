@@ -1,5 +1,6 @@
 import { createSignal, createEffect, onMount, onCleanup, For, Show } from 'solid-js';
 import type { IpInfo } from '../App';
+import { responseTimeColor } from './ResultsTable';
 
 // ---------------------------------------------------------------------------
 // Types (mirror the Rust backend structs in dns_trace.rs)
@@ -47,6 +48,28 @@ export interface TraceDoneStats {
   duration_ms: number;
   hops: number;
   cache_key?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Latency helpers
+// ---------------------------------------------------------------------------
+
+/** Median latency in ms across all server results for a hop. */
+function hopMedianLatencyMs(hop: TraceHop): number | null {
+  const times = hop.server_results.map((r) => r.latency_ms).filter((ms) => ms >= 0);
+  if (times.length === 0) return null;
+  times.sort((a, b) => a - b);
+  return times[Math.floor(times.length / 2)];
+}
+
+/** Maximum median latency across all hops, used to normalize bar widths. */
+function maxHopLatency(hops: TraceHop[]): number {
+  let max = 0;
+  for (const hop of hops) {
+    const m = hopMedianLatencyMs(hop);
+    if (m !== null && m > max) max = m;
+  }
+  return max;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +155,7 @@ interface HopCardProps {
   isExpanded: boolean;
   onToggle: () => void;
   onClick: () => void;
+  maxHopLatencyMs: number;
   ifconfigUrl?: string | null;
   enrichments?: Record<string, IpInfo>;
 }
@@ -142,6 +166,17 @@ function HopCard(props: HopCardProps) {
   const hasDivergence = () => hop.referral_groups.length > 1;
   const majority      = () => hop.referral_groups.find((g) => g.is_majority);
   const minorities    = () => hop.referral_groups.filter((g) => !g.is_majority);
+
+  const medianMs   = () => hopMedianLatencyMs(hop);
+  const barWidthPct = () => {
+    const m = medianMs();
+    if (m === null || props.maxHopLatencyMs <= 0) return 0;
+    return Math.max(2, (m / props.maxHopLatencyMs) * 100);
+  };
+  const barColor = () => {
+    const m = medianMs();
+    return m !== null ? responseTimeColor(m) : 'transparent';
+  };
 
   const cardClass = () => {
     const parts = ['trace-hop'];
@@ -174,6 +209,15 @@ function HopCard(props: HopCardProps) {
         </Show>
         <Show when={hasDivergence()}>
           <span class="trace-hop-badge trace-hop-badge--diverged">diverged</span>
+        </Show>
+        <Show when={medianMs() !== null}>
+          <div class="trace-hop-latency">
+            <span class="trace-hop-latency-text">{Math.round(medianMs()!)}ms</span>
+            <div
+              class="trace-hop-latency-bar"
+              style={{ width: `${barWidthPct()}%`, 'background-color': barColor() }}
+            />
+          </div>
         </Show>
       </div>
 
@@ -374,6 +418,7 @@ export function TraceView(props: TraceViewProps) {
                 isExpanded={expandedIndices().has(i())}
                 onToggle={() => toggleExpanded(i())}
                 onClick={() => setFocusedIndex(i())}
+                maxHopLatencyMs={maxHopLatency(props.hops)}
                 ifconfigUrl={props.ifconfigUrl}
                 enrichments={props.enrichments}
               />

@@ -991,6 +991,12 @@ body {
   border-color: rgba(0, 119, 204, 0.25);
 }
 
+.soa-serial-age {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* ===================================================================
    Row-level keyboard navigation
    =================================================================== */
@@ -1037,6 +1043,37 @@ body {
   background: var(--bg-secondary);
   padding: 2px 6px;
   border-radius: 3px;
+}
+
+.sc-latency-summary {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+}
+
+.sc-latency-summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.sc-latency-summary-cells {
+  display: grid;
+  gap: 8px;
+}
+
+.sc-latency-cell {
+  min-width: 0;
+}
+
+.sc-latency-na {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .sc-type-group {
@@ -2541,6 +2578,27 @@ body {
   background: rgba(255, 170, 0, 0.1);
   color: var(--warning);
   border: 1px solid rgba(255, 170, 0, 0.3);
+}
+
+.trace-hop-latency {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.trace-hop-latency-text {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.trace-hop-latency-bar {
+  height: 4px;
+  border-radius: 2px;
+  min-width: 2px;
+  max-width: 80px;
 }
 
 /* Answer records (final hop) */

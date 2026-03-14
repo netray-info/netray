@@ -110,6 +110,24 @@ function getStatusLabel(lookup: Lookup): { text: string; className: string } {
   return { text: keys[0] ?? 'Error', className: 'status-error' };
 }
 
+/**
+ * Median response time in ms for a given formatted server name across all
+ * record type groups. Returns null when no successful latency data exists.
+ */
+function medianLatencyMs(server: string, batches: BatchEvent[]): number | null {
+  const times: number[] = [];
+  for (const batch of batches) {
+    for (const lookup of batch.lookups) {
+      if (formatServer(lookup.name_server) !== server) continue;
+      const ms = getResponseTimeMs(lookup);
+      if (ms !== null) times.push(ms);
+    }
+  }
+  if (times.length === 0) return null;
+  times.sort((a, b) => a - b);
+  return times[Math.floor(times.length / 2)];
+}
+
 /** CSS custom property name for a record type color. */
 function typeColorVar(recordType: string): string {
   const rt = recordType.toLowerCase();
@@ -175,6 +193,56 @@ function buildComparisons(batches: BatchEvent[]): RecordTypeComparison[] {
 // ---------------------------------------------------------------------------
 // Components
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Latency summary row (above per-record-type results)
+// ---------------------------------------------------------------------------
+
+function LatencySummaryRow(props: { serverNames: string[]; batches: BatchEvent[] }) {
+  const maxMs = createMemo(() => {
+    let max = 0;
+    for (const name of props.serverNames) {
+      const m = medianLatencyMs(name, props.batches);
+      if (m !== null && m > max) max = m;
+    }
+    return max;
+  });
+
+  return (
+    <div class="sc-latency-summary">
+      <div class="sc-latency-summary-label">Median latency</div>
+      <div class="sc-latency-summary-cells" style={{ 'grid-template-columns': `repeat(${props.serverNames.length}, 1fr)` }}>
+        <For each={props.serverNames}>
+          {(name) => {
+            const ms = () => medianLatencyMs(name, props.batches);
+            const barWidth = () => {
+              const m = ms();
+              if (m === null || maxMs() <= 0) return 0;
+              return Math.max(2, (m / maxMs()) * 100);
+            };
+            const barColor = () => {
+              const m = ms();
+              return m !== null ? responseTimeColor(m) : 'transparent';
+            };
+            return (
+              <div class="sc-latency-cell">
+                <Show when={ms() !== null} fallback={<span class="sc-latency-na">-</span>}>
+                  <div class="sc-time-container">
+                    <span class="sc-time">{Math.round(ms()!)}ms</span>
+                    <div
+                      class="time-bar"
+                      style={{ width: `${barWidth()}%`, 'background-color': barColor() }}
+                    />
+                  </div>
+                </Show>
+              </div>
+            );
+          }}
+        </For>
+      </div>
+    </div>
+  );
+}
 
 function ServerColumn(props: { server: ServerGroup; maxMs: number; recordType: string; explain: boolean }) {
   return (
@@ -297,6 +365,22 @@ export function ServerComparison(props: ServerComparisonProps) {
     }
     return comps;
   });
+
+  /** Unique server names across all results, in insertion order. */
+  const serverNames = createMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const batch of props.results) {
+      for (const lookup of batch.lookups) {
+        const name = formatServer(lookup.name_server);
+        if (!seen.has(name)) {
+          seen.add(name);
+          names.push(name);
+        }
+      }
+    }
+    return names;
+  });
   const [focusedIndex, setFocusedIndex] = createSignal<number | null>(null);
   let containerRef: HTMLDivElement | undefined;
 
@@ -373,6 +457,9 @@ export function ServerComparison(props: ServerComparisonProps) {
           </div>
         }
       >
+        <Show when={serverNames().length > 1}>
+          <LatencySummaryRow serverNames={serverNames()} batches={props.results} />
+        </Show>
         <For each={comparisons()}>
           {(comp, i) => <ComparisonRow comparison={comp} index={i()} isFocused={focusedIndex() === i()} explain={props.explain} />}
         </For>

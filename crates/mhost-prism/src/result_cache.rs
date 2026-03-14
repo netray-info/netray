@@ -6,6 +6,7 @@
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Maximum number of cached results.
 const MAX_ENTRIES: u64 = 1_000;
@@ -17,7 +18,7 @@ const TTL_SECS: u64 = 3_600; // 1 hour
 const KEY_LENGTH: usize = 12;
 
 /// A single SSE event captured during streaming.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CachedEvent {
     /// SSE event type (e.g., "batch", "lint", "hop", "done").
     pub event_type: String,
@@ -26,7 +27,7 @@ pub struct CachedEvent {
 }
 
 /// The full cached result for a completed query/check/trace.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CachedResult {
     /// The original query string that produced these results.
     pub query: String,

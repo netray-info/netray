@@ -194,6 +194,37 @@ function formatStructuredRecord(rtype: string, value: Record<string, unknown>): 
   }
 }
 
+// ---------------------------------------------------------------------------
+// SOA serial age
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a SOA serial in YYYYMMDDNN format.
+ * Returns the embedded date and how many days ago it was, or nulls if the
+ * serial does not match the pattern.
+ */
+export function parseSoaSerial(serial: string | number): { date: Date | null; daysAgo: number | null } {
+  const s = String(serial);
+  // YYYYMMDDNN — exactly 10 digits
+  if (!/^\d{10}$/.test(s)) return { date: null, daysAgo: null };
+  const year  = parseInt(s.slice(0, 4), 10);
+  const month = parseInt(s.slice(4, 6), 10);
+  const day   = parseInt(s.slice(6, 8), 10);
+  // Basic range checks
+  if (year < 1990 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return { date: null, daysAgo: null };
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (isNaN(date.getTime())) return { date: null, daysAgo: null };
+  const nowUtc = Date.UTC(
+    new Date().getUTCFullYear(),
+    new Date().getUTCMonth(),
+    new Date().getUTCDate(),
+  );
+  const daysAgo = Math.round((nowUtc - date.getTime()) / 86_400_000);
+  return { date, daysAgo };
+}
+
 /** Format name_server string like "udp:1.1.1.1:53,name=Cloudflare 1" for display. */
 export function formatServer(ns: string): string {
   // Extract the name if present: "udp:1.1.1.1:53,name=Cloudflare 1" -> "Cloudflare 1"
@@ -579,7 +610,19 @@ function LookupRows(props: {
                               <Show when={info}>{(i) => <IpBadges info={i()} />}</Show>
                             </>;
                           }
-                          return formatRecordData(record.data);
+                          const formatted = formatRecordData(record.data);
+                          // For SOA records, show serial age if it matches YYYYMMDDNN
+                          if (props.recordType === 'SOA') {
+                            const soaObj = record.data['SOA'] as Record<string, unknown> | undefined;
+                            const serial = soaObj?.['serial'];
+                            if (serial !== undefined) {
+                              const { daysAgo } = parseSoaSerial(serial as string | number);
+                              if (daysAgo !== null) {
+                                return <>{formatted}<span class="soa-serial-age" title={`Serial: ${serial}`}> ({daysAgo === 0 ? 'today' : daysAgo === 1 ? '1 day ago' : `${daysAgo} days ago`})</span></>;
+                              }
+                            }
+                          }
+                          return formatted;
                         })()}
                         <Show when={explanation()}>
                           <div class="record-explanation">{explanation()}</div>
