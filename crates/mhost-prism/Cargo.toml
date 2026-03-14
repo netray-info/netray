@@ -7,7 +7,7 @@ description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
 mhost = { version = "0.11", default-features = false, features = ["dot", "doh"] }
-netray-common = { version = "0.2.1", features = ["schema", "middleware"] }
+netray-common = { version = "0.2.1", features = ["schema", "middleware", "telemetry", "otel", "cors"] }
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }
@@ -36,13 +36,6 @@ thiserror = "2"
 
 # Logging / tracing
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "registry"] }
-
-# OpenTelemetry (opt-in)
-opentelemetry = "0.28"
-opentelemetry_sdk = { version = "0.28", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.28", features = ["http-proto"] }
-tracing-opentelemetry = "0.29"
 
 # Metrics
 metrics = "0.24"

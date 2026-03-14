@@ -20,7 +20,6 @@ mod record_format;
 mod reload;
 mod result_cache;
 mod security;
-mod telemetry;
 
 pub use netray_common::middleware::RequestId;
 
@@ -46,7 +45,7 @@ async fn main() {
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
     // 2. Initialize tracing (with optional OpenTelemetry layer).
-    telemetry::init_subscriber(&config.telemetry);
+    netray_common::telemetry::init_subscriber(&config.telemetry, "prism=info,tower_http=info");
 
     tracing::info!(bind = %config.server.bind, "starting prism");
 
@@ -142,7 +141,7 @@ async fn main() {
     .expect("server error");
 
     // Flush pending OTel spans on shutdown.
-    telemetry::shutdown();
+    netray_common::telemetry::shutdown();
 }
 
 // ---------------------------------------------------------------------------

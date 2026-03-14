@@ -113,46 +113,7 @@ pub struct DnsConfig {
     pub allow_arbitrary_servers: bool,
 }
 
-/// Log output format.
-///
-/// Configurable via `telemetry.log_format` in the TOML config or
-/// `PRISM_TELEMETRY__LOG_FORMAT=json` environment variable.
-///
-/// - `text` (default): human-readable, colour-coded output for local development.
-/// - `json`: structured JSON lines for log aggregators (Loki, CloudWatch, Datadog).
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LogFormat {
-    #[default]
-    Text,
-    Json,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct TelemetryConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default = "default_otlp_endpoint")]
-    pub otlp_endpoint: String,
-    #[serde(default = "default_service_name")]
-    pub service_name: String,
-    #[serde(default = "default_sample_rate")]
-    pub sample_rate: f64,
-    #[serde(default)]
-    pub log_format: LogFormat,
-}
-
-impl Default for TelemetryConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            otlp_endpoint: default_otlp_endpoint(),
-            service_name: default_service_name(),
-            sample_rate: default_sample_rate(),
-            log_format: LogFormat::default(),
-        }
-    }
-}
+pub use netray_common::telemetry::TelemetryConfig;
 
 const HARD_CAP_ENRICHMENT_TIMEOUT_MS: u64 = 2000;
 
@@ -195,16 +156,6 @@ impl EcosystemConfig {
 
 fn default_enrichment_timeout_ms() -> u64 {
     500
-}
-
-fn default_otlp_endpoint() -> String {
-    "http://localhost:4318".to_owned()
-}
-fn default_service_name() -> String {
-    "prism".to_owned()
-}
-fn default_sample_rate() -> f64 {
-    1.0
 }
 
 /// Hot-reloadable subset of the configuration.
