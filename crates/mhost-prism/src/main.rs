@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::Router;
-use axum::response::IntoResponse;
 use tower_http::compression::CompressionLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
@@ -22,6 +21,7 @@ mod result_cache;
 mod security;
 
 pub use netray_common::middleware::RequestId;
+pub use netray_common::middleware::request_id as request_id_middleware;
 
 // ---------------------------------------------------------------------------
 // Embedded frontend assets
@@ -85,7 +85,7 @@ async fn main() {
     let app = Router::new()
         .merge(api::health_router())
         .merge(api::api_router(state))
-        .fallback(static_handler)
+        .fallback(netray_common::server::static_handler::<Assets>())
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("prism", req, next)
         }))
@@ -105,7 +105,7 @@ async fn main() {
     // 5. Single shutdown channel shared by both servers.
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
-        shutdown_signal().await;
+        netray_common::server::shutdown_signal().await;
         let _ = shutdown_tx.send(true);
     });
 
@@ -121,7 +121,7 @@ async fn main() {
         "metrics server starting — ensure this address is NOT publicly reachable"
     );
     tokio::spawn(async move {
-        if let Err(e) = serve_metrics(metrics_addr, metrics_shutdown).await {
+        if let Err(e) = netray_common::server::serve_metrics(metrics_addr, metrics_shutdown).await {
             tracing::error!(error = %e, "metrics server failed");
         }
     });
@@ -144,107 +144,7 @@ async fn main() {
     netray_common::telemetry::shutdown();
 }
 
-// ---------------------------------------------------------------------------
-// Static file serving (rust-embed)
-// ---------------------------------------------------------------------------
-
-async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {
-    let path = uri.path().trim_start_matches('/');
-
-    match Assets::get(if path.is_empty() { "index.html" } else { path }) {
-        Some(file) => {
-            let mime = mime_guess::from_path(if path.is_empty() { "index.html" } else { path })
-                .first_or_octet_stream();
-            // index.html: no-cache so the SPA picks up new deployments.
-            // Hashed assets (JS/CSS bundles from Vite): immutable.
-            let cache = if path.is_empty() || path == "index.html" {
-                "no-cache"
-            } else {
-                "public, max-age=31536000, immutable"
-            };
-            (
-                [
-                    (axum::http::header::CONTENT_TYPE, mime.as_ref().to_string()),
-                    (axum::http::header::CACHE_CONTROL, cache.to_string()),
-                ],
-                file.data.to_vec(),
-            )
-                .into_response()
-        }
-        None => {
-            // SPA fallback: serve index.html for unrecognized paths so
-            // client-side routing works.
-            match Assets::get("index.html") {
-                Some(index) => (
-                    [(axum::http::header::CONTENT_TYPE, "text/html".to_string())],
-                    index.data.to_vec(),
-                )
-                    .into_response(),
-                None => (
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                    "frontend not found",
-                )
-                    .into_response(),
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Graceful shutdown
-// ---------------------------------------------------------------------------
-
-async fn shutdown_signal() {
-    let ctrl_c = tokio::signal::ctrl_c();
-
-    #[cfg(unix)]
-    {
-        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install SIGTERM handler");
-        tokio::select! {
-            _ = ctrl_c => {},
-            _ = sigterm.recv() => {},
-        }
-    }
-
-    #[cfg(not(unix))]
-    {
-        ctrl_c.await.ok();
-    }
-
-    tracing::info!("shutdown signal received");
-}
-
 /// Returns a future that resolves once the shutdown watch channel is set to `true`.
 async fn wait_for_shutdown(mut rx: tokio::sync::watch::Receiver<bool>) {
     let _ = rx.wait_for(|v| *v).await;
-}
-
-// ---------------------------------------------------------------------------
-// Prometheus metrics server
-// ---------------------------------------------------------------------------
-
-async fn serve_metrics(
-    addr: SocketAddr,
-    shutdown: tokio::sync::watch::Receiver<bool>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
-    let handle = builder.install_recorder()?;
-
-    let app = Router::new().route(
-        "/metrics",
-        axum::routing::get(move || {
-            let handle = handle.clone();
-            async move { handle.render() }
-        }),
-    );
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!(addr = %addr, "metrics server listening");
-
-    axum::serve(listener, app)
-        .with_graceful_shutdown(wait_for_shutdown(shutdown))
-        .await?;
-
-    Ok(())
 }
