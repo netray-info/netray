@@ -5,7 +5,6 @@
 //! following the pattern used in `src/state.rs` unit tests.
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
 
 use axum::body::Body;
 use axum::extract::ConnectInfo;
@@ -199,8 +198,8 @@ async fn rate_limit_returns_429() {
             per_target_burst: 20,
             max_concurrent_connections: 256,
             max_concurrent_handshakes: 10,
-            handshake_timeout_secs: 5,
-            request_timeout_secs: 15,
+            handshake_timeout_secs: 1,
+            request_timeout_secs: 3,
             max_ports: 7,
             max_ips_per_hostname: 10,
             max_domain_length: 253,
