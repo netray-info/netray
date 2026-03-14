@@ -46,6 +46,13 @@ example.com A AAAA MX @cloudflare @google @quad9
 
 Full domain audit in one shot: 15 record types plus DMARC lint. Catches broken SPF, missing CAA, DNSSEC mismatches, stale MX, and more — the kind of things that bite you at 2am.
 
+Additional checks included:
+
+- **NS lame delegation**: validates the AA bit per nameserver to detect lame delegations
+- **Delegation-consistent NS**: diffs parent vs. child NS sets and flags discrepancies
+- **DNSSEC rollover detection**: identifies multiple KSKs, orphaned DS records, and missing DS for a new KSK
+- **DNSKEY algorithm security**: flags deprecated algorithms (RSA/MD5, RSA/SHA-1)
+
 ```
 example.com +check
 ```
@@ -82,6 +89,14 @@ Fetch DNSKEY and DS records alongside your query. Inspect the chain of trust wit
 example.com +dnssec
 ```
 
+## Frontend features
+
+- **TTL countdown**: displayed TTLs decrement live in the browser after records arrive
+- **SOA serial age**: badge next to SOA serial shows how long ago it was set (e.g. "45 days ago")
+- **Trace latency heatmap**: per-hop coloured latency bars in Trace view
+- **Server latency summary**: median latency per resolver shown in the Servers tab
+- **TTL-only divergence**: shown in amber; data divergence remains red
+
 ## The query language
 
 A `dig`-inspired single-line syntax. Type a domain, add what you want, hit Enter.
@@ -96,9 +111,11 @@ Tab-complete everything. Works in the search bar, the API, and shareable URLs.
 |-------|-------------|---------|
 | Domain | Name or IP to query | `example.com`, `192.0.2.1` |
 | Record type | DNS record types | `A` `AAAA` `MX` `TXT` `NS` `SOA` `CAA` `CNAME` `SRV` `PTR` `HTTPS` `SVCB` `SSHFP` `TLSA` `NAPTR` `DNSKEY` `DS` |
-| Server | Resolver(s) to ask | `@cloudflare` `@google` `@quad9` `@mullvad` `@wikimedia` `@dns4eu` `@system` `@1.1.1.1` |
+| Server | Individual resolver | `@cloudflare` `@google` `@quad9` `@mullvad` `@wikimedia` `@dns4eu` `@system` `@1.1.1.1` |
+| Server group | Alias expanding to multiple resolvers | `@public` (Google + Cloudflare + Quad9), `@cloudflare` (1.1.1.1 + 1.0.0.1), `@google` (8.8.8.8 + 8.8.4.4), `@quad9` (9.9.9.9 + 149.112.112.112), `@all` (all public resolvers, capped to 4) |
 | Transport | Protocol | `+udp` `+tcp` `+tls` `+https` |
 | Mode | Switch endpoint | `+check` `+trace` `+compare` `+auth` `+dnssec` |
+| Flag | Query behaviour | `+norecurse` (set RD=0, non-recursive query), `+short` (suppress TTLs in output) |
 
 ```sh
 # Compare three resolvers over TLS with DNSSEC
@@ -132,6 +149,19 @@ curl -sN -X POST http://localhost:8080/api/query \
   -d '{"domain":"example.com","record_types":["A","MX"],"servers":["cloudflare","google"]}'
 ```
 
+**Non-streaming mode:** Any endpoint accepts `?stream=false` (or `Accept: application/json`) to collect the full SSE stream server-side and return a single JSON response:
+
+```json
+{ "events": [...], "truncated": true }
+```
+
+`truncated` is `true` if the stream hit the 30s deadline before completing.
+
+```sh
+# Collect full response as JSON
+curl -s 'http://localhost:8080/api/query?q=example.com+A&stream=false'
+```
+
 **SSE events:** `batch` (per record type), `lint` (check mode), `hop` (trace mode), `enrichment` (IP metadata), `done` (always last).
 
 Interactive docs at `GET /docs` (Scalar UI). OpenAPI spec at `GET /api-docs/openapi.json`.
@@ -142,6 +172,7 @@ Interactive docs at `GET /docs` (Scalar UI). OpenAPI spec at `GET /api-docs/open
 | `GET /api/ready` | Readiness probe (503 when a circuit breaker is open) |
 | `GET /api/servers` | Predefined resolvers and IPs |
 | `GET /api/record-types` | Queryable record types |
+| `GET /api/results/{key}` | Retrieve a cached result by permalink key |
 
 ## Deployment
 

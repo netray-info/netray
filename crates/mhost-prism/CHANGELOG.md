@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-03-14
+
+### Added
+
+- Server group aliases: `@public` (Google + Cloudflare + Quad9), `@cloudflare` (1.1.1.1 + 1.0.0.1), `@google` (8.8.8.8 + 8.8.4.4), `@quad9` (9.9.9.9 + 149.112.112.112), `@all` (all public resolvers, capped to 4); `ParsedQuery` gains `truncated_servers: bool`
+- `+norecurse` flag: sets RD=0 for non-recursive queries; `ParsedQuery` gains `recursive: bool`
+- `+short` flag: suppresses TTL display in output
+- Non-streaming JSON mode: all endpoints accept `?stream=false` or `Accept: application/json`; returns `{ "events": [...], "truncated": bool }` collected server-side
+- `/api/results/{key}` permalink endpoint: retrieve a cached result by its share key
+- Check mode — NS lame delegation: validates AA bit per nameserver
+- Check mode — delegation-consistent NS: diffs parent vs. child NS sets and reports discrepancies
+- Check mode — DNSSEC rollover detection: identifies multiple KSKs, orphaned DS records, and missing DS for a new KSK
+- Check mode — DNSKEY algorithm security rating: flags RSA/MD5 and RSA/SHA-1 as deprecated
+- Frontend: TTL countdown — displayed TTLs decrement live in the browser after records arrive
+- Frontend: SOA serial age badge — shows relative age (e.g. "45 days ago") next to the SOA serial number
+- Frontend: trace latency heatmap — per-hop coloured latency bars in Trace view
+- Frontend: server latency summary — median latency per resolver in the Servers tab
+- Frontend: TTL-only divergence shown in amber (data divergence remains red)
+- Semaphore-bounded fan-out to cap concurrent DNS queries per request
+- `/api/ready` readiness probe (503 when a circuit breaker is open)
+- `tls_url` ecosystem config option for cross-links to tlsight
+- Bumped `netray-common` to v0.4.1
+
+### Changed
+
+- Migrated frontend to `@netray-info/common-frontend` v0.2.0 (shared theme, hooks, CSS custom properties)
+- Migrated backend to `netray-common` v0.3.0+ (shared enrichment, telemetry, CORS, middleware, IP filter)
+- Removed `query_dedup` and `resolver_pool` modules (superseded by simpler per-request resolver construction)
+
+### Fixed
+
+- SSRF blocklist: additional private ranges blocked; glue IPs from delegation walk validated through `is_allowed_target`
+- Schema feature flag and OpenAPI doc corrections
+- Accessibility fixes in frontend components
+
 ## [0.1.3] - 2026-03-11
 
 ### Fixed

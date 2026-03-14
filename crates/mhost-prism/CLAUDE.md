@@ -124,6 +124,11 @@ mhost-prism/                  # standalone crate (not a workspace member)
     main.rs                   # Entry point, axum server setup, graceful shutdown,
                               #   request_id_middleware, http_metrics_middleware
     parser.rs                 # Query language parser (single source of truth for query semantics)
+                              #   ParsedQuery fields: truncated_servers: bool (set when @all/@public
+                              #   exceed cap), recursive: bool (false when +norecurse)
+                              #   Server group aliases: @public → Google+Cloudflare+Quad9,
+                              #   @cloudflare → 1.1.1.1+1.0.0.1, @google → 8.8.8.8+8.8.4.4,
+                              #   @quad9 → 9.9.9.9+149.112.112.112, @all → all public (capped to 4)
     config.rs                 # config crate: TOML + env vars (PRISM_ prefix)
     error.rs                  # thiserror ApiError enum → HTTP status + error codes
     record_format.rs          # Human-readable formatting for TXT, CAA, MX, SOA, SVCB, TLSA, etc.
@@ -139,6 +144,10 @@ mhost-prism/                  # standalone crate (not a workspace member)
       mod.rs                  # Route definitions, AppState, shared BatchEvent / STREAM_TIMEOUT_SECS
       query.rs                # GET/POST /api/query → SSE stream (FuturesUnordered fan-out)
       check.rs                # POST /api/check → SSE stream (15 types + DMARC lint)
+                              #   Additional checks: lame delegation (AA bit per NS), delegation
+                              #   consistency (parent vs. child NS diff), DNSSEC rollover detection
+                              #   (multiple KSKs, orphaned DS, missing DS for new KSK), DNSKEY
+                              #   algorithm security rating (RSA/MD5 and RSA/SHA-1 deprecated)
       trace.rs                # POST /api/trace → SSE stream (iterative delegation walk)
       compare.rs              # POST /api/compare → SSE stream (transport comparison)
       authcompare.rs          # POST /api/authcompare → SSE stream (auth vs recursive)
@@ -180,13 +189,14 @@ mhost-prism/                  # standalone crate (not a workspace member)
 
 ## Common Patterns
 
-- **SSE streaming**: Per-record-type queries via `FuturesUnordered`, all record types in parallel; each completed batch streamed as a `batch` SSE event. All streams have a hard 30s deadline.
+- **SSE streaming**: Per-record-type queries via `FuturesUnordered`, all record types in parallel; each completed batch streamed as a `batch` SSE event. All streams have a hard 30s deadline. All streaming endpoints also accept `?stream=false` (or `Accept: application/json`) to collect the full stream server-side and return `{ "events": [...], "truncated": bool }` as a single JSON response.
 - **Per-request ResolverGroup**: Fresh `ResolverGroup` per API request — no shared resolver pool.
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
 - **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens. Compare endpoint cost = `record_types * servers * 4` (4 transports). Auth compare cost = `record_types * servers + 16` (recursive + NS discovery + auth queries).
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
 - **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps are upper bounds that config cannot exceed. Notable options: `PRISM_TELEMETRY__LOG_FORMAT=json` switches to JSON log lines; `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs and CIDR ranges (e.g. `["10.0.0.1", "172.16.0.0/12"]`); invalid entries are skipped with a warning at startup.
 - **Routing flags**: `+check`, `+trace`, `+compare`, and `+auth` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
+- **Query flags**: `+norecurse` sets RD=0 (non-recursive query, stored as `recursive: false` on `ParsedQuery`). `+short` suppresses TTL display in output.
 
 ## Key Dependencies
 
