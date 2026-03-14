@@ -1,8 +1,10 @@
 {
   "name": "@netray-info/common-frontend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "files": ["src"],
+  "files": [
+    "src"
+  ],
   "exports": {
     "./theme": "./src/theme.ts",
     "./keyboard": "./src/keyboard.ts",
