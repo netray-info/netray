@@ -78,9 +78,11 @@ const RECORD_TYPE_INFO: &[(&str, &str)] = &[
 ];
 
 const SERVER_INFO: &[(&str, &str)] = &[
+    ("@public", "Google + Cloudflare + Quad9"),
     ("@cloudflare", "1.1.1.1 / 1.0.0.1"),
     ("@google", "8.8.8.8 / 8.8.4.4"),
-    ("@quad9", "9.9.9.9"),
+    ("@quad9", "9.9.9.9 / 149.112.112.112"),
+    ("@all", "All public resolvers (truncated to 4)"),
     ("@mullvad", "Mullvad DNS"),
     ("@wikimedia", "Wikimedia DNS"),
     ("@dns4eu", "DNS4EU"),
@@ -94,6 +96,7 @@ const FLAG_INFO: &[(&str, &str)] = &[
     ("+https", "DNS-over-HTTPS"),
     ("+dnssec", "DNSSEC validation"),
     ("+short", "Suppress TTLs and metadata"),
+    ("+norecurse", "Non-recursive query (RD=0)"),
     ("+check", "DNS health check"),
     ("+trace", "Delegation trace"),
     ("+compare", "Transport comparison"),
@@ -173,10 +176,17 @@ fn tokenize(input: &str) -> Vec<TokenInfo> {
     tokens
 }
 
+/// Group alias names (must match SERVER_GROUP_ALIASES in parser.rs).
+const GROUP_ALIAS_NAMES: &[&str] = &["public", "cloudflare", "google", "quad9", "all"];
+
 fn classify_server(value: &str) -> &'static str {
     let name = &value[1..];
     if name.is_empty() {
         return "server_partial";
+    }
+    // Group aliases
+    if GROUP_ALIAS_NAMES.iter().any(|a| name.eq_ignore_ascii_case(a)) {
+        return "server";
     }
     if name.eq_ignore_ascii_case("system") || PredefinedProvider::from_str(name).is_ok() {
         return "server";
@@ -199,8 +209,8 @@ fn classify_server(value: &str) -> &'static str {
 
 fn classify_flag(value: &str) -> &'static str {
     match value[1..].to_ascii_lowercase().as_str() {
-        "udp" | "tcp" | "tls" | "https" | "dnssec" | "short" | "check" | "trace" | "compare"
-        | "auth" => "flag",
+        "udp" | "tcp" | "tls" | "https" | "dnssec" | "short" | "norecurse" | "check" | "trace"
+        | "compare" | "auth" => "flag",
         _ => "flag_partial",
     }
 }

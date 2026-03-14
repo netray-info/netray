@@ -47,6 +47,20 @@ pub struct BatchEvent {
     pub source: Option<String>,
 }
 
+// ---------------------------------------------------------------------------
+// Non-streaming JSON collection
+// ---------------------------------------------------------------------------
+
+/// Collected SSE events returned as a single JSON body when `?stream=false`.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct CollectedResponse {
+    /// All SSE event payloads, each entry is `{"type": "<event_type>", "data": {...}}`.
+    pub events: Vec<serde_json::Value>,
+    /// True if the stream was truncated by the hard deadline.
+    pub truncated: bool,
+}
+
+
 /// Hard cap on simultaneous in-flight DNS resolver tasks across all fan-outs.
 ///
 /// Each record-type × server pair acquires one permit before spawning, so the

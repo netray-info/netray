@@ -24,6 +24,12 @@ interface RecordTypeComparison {
   servers: ServerGroup[];
   /** Whether all servers agree on the answer set. */
   allAgree: boolean;
+  /**
+   * Type of divergence when allAgree is false:
+   * - 'data': servers return different record values
+   * - 'ttl': servers agree on values but have different TTLs
+   */
+  divergenceType: 'data' | 'ttl' | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,7 +50,7 @@ function isNxDomain(result: LookupResult): boolean {
   return 'NxDomain' in result;
 }
 
-/** Extract a canonical set of answer values for comparison. */
+/** Extract a canonical set of answer values for comparison (ignores TTLs). */
 function answerFingerprint(lookup: Lookup): string {
   const result = lookup.result;
   if ('Response' in result) {
@@ -56,6 +62,21 @@ function answerFingerprint(lookup: Lookup): string {
   }
   if ('NxDomain' in result) return 'nxdomain';
   // Error variant
+  const keys = Object.keys(result);
+  return `error:${keys[0] ?? 'unknown'}`;
+}
+
+/** Extract a canonical fingerprint including TTLs for TTL divergence detection. */
+function answerFingerprintWithTtl(lookup: Lookup): string {
+  const result = lookup.result;
+  if ('Response' in result) {
+    const resp = (result as { Response: { records: Array<{ data: Record<string, unknown>; ttl?: number }> } }).Response;
+    const values = resp.records
+      .map((r) => `${JSON.stringify(r.data)}:ttl=${r.ttl ?? 0}`)
+      .sort();
+    return `response:${values.join('|')}`;
+  }
+  if ('NxDomain' in result) return 'nxdomain';
   const keys = Object.keys(result);
   return `error:${keys[0] ?? 'unknown'}`;
 }
@@ -136,12 +157,14 @@ function typeColorVar(recordType: string): string {
   return 'var(--rt-default)';
 }
 
-/** Sort tier: divergences first (0), then normal records (1), then all-NXDOMAIN (2). */
+/** Sort tier: data divergences first (0), TTL divergences (1), normal records (2), all-NXDOMAIN (3). */
 function comparisonTier(c: RecordTypeComparison): number {
-  if (!c.allAgree) return 0;
+  if (!c.allAgree) {
+    return c.divergenceType === 'ttl' ? 1 : 0;
+  }
   const allNx = c.servers.every((s) => s.lookups.every((l) => isNxDomain(l.result)));
-  if (allNx) return 2;
-  return 1;
+  if (allNx) return 3;
+  return 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,14 +200,29 @@ function buildComparisons(batches: BatchEvent[]): RecordTypeComparison[] {
       ([serverName, lookups]) => ({ serverName, lookups }),
     );
 
-    // Check if all servers agree
-    const fingerprints = new Set<string>();
+    // Check if all servers agree on data (ignoring TTL).
+    const dataFingerprints = new Set<string>();
     for (const lookup of lookups) {
-      fingerprints.add(answerFingerprint(lookup));
+      dataFingerprints.add(answerFingerprint(lookup));
     }
-    const allAgree = fingerprints.size <= 1;
+    const allAgree = dataFingerprints.size <= 1;
 
-    comparisons.push({ recordType, servers, allAgree });
+    // Determine divergence type when servers disagree.
+    let divergenceType: 'data' | 'ttl' | null = null;
+    if (!allAgree) {
+      // Check if disagreement is only in TTLs (same data, different TTLs).
+      const fullFingerprints = new Set<string>();
+      for (const lookup of lookups) {
+        fullFingerprints.add(answerFingerprintWithTtl(lookup));
+      }
+      if (fullFingerprints.size > 1 && dataFingerprints.size <= 1) {
+        divergenceType = 'ttl';
+      } else {
+        divergenceType = 'data';
+      }
+    }
+
+    comparisons.push({ recordType, servers, allAgree, divergenceType });
   }
 
   return comparisons;
@@ -334,8 +372,12 @@ function ComparisonRow(props: { comparison: RecordTypeComparison; index: number;
         <span class="type-badge" style={{ 'background-color': typeColorVar(props.comparison.recordType) }}>
           {props.comparison.recordType}
         </span>
-        <span class={`sc-agreement ${props.comparison.allAgree ? 'agree' : 'diverge'}`}>
-          {props.comparison.allAgree ? 'All servers agree' : 'Servers diverge'}
+        <span class={`sc-agreement ${props.comparison.allAgree ? 'agree' : props.comparison.divergenceType === 'ttl' ? 'diverge--ttl' : 'diverge--data'}`}>
+          {props.comparison.allAgree
+            ? 'All servers agree'
+            : props.comparison.divergenceType === 'ttl'
+              ? 'TTL divergence only'
+              : 'Data divergence'}
         </span>
       </div>
       <div class="sc-server-grid" style={{ 'grid-template-columns': `repeat(${props.comparison.servers.length}, 1fr)` }}>

@@ -1106,7 +1106,12 @@ body {
   color: var(--success);
 }
 
-.sc-agreement.diverge {
+.sc-agreement.diverge,
+.sc-agreement.diverge--data {
+  color: var(--error);
+}
+
+.sc-agreement.diverge--ttl {
   color: var(--warning);
 }
 

@@ -6,16 +6,19 @@
 //! Phase 2 streams lint events (one per lint category, synchronous pure checks).
 //! Phase 3 sends a done event with summary counts.
 
+use std::collections::HashMap;
 use std::convert::Infallible;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::Json;
-use axum::extract::{ConnectInfo, State};
+use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
+use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use futures::stream::{FuturesUnordered, Stream, StreamExt};
+use axum::response::Response;
+use futures::stream::{FuturesUnordered, StreamExt};
 use mhost::RecordType;
 use mhost::lints::{
     CheckResult, check_caa, check_cname_apex, check_dmarc_records, check_dnssec,
@@ -29,11 +32,12 @@ use tokio::sync::{Semaphore, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::RequestId;
+use crate::dns_raw;
 use crate::api::query::{
-    build_resolver_group, effective_server_specs, extract_ips_from_cached_events, make_error_event,
-    parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
+    StreamParams, build_resolver_group, effective_server_specs, extract_ips_from_cached_events,
+    make_error_event, parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
 };
-use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
+use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::ParsedQuery;
@@ -135,14 +139,9 @@ pub async fn post_handler(
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
-    raw_query: axum::extract::RawQuery,
+    Query(stream_params): Query<StreamParams>,
     Json(body): Json<CheckRequest>,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
-    // Reject POST with a query string -- ambiguous input.
-    if raw_query.0.is_some() {
-        return Err(ApiError::AmbiguousInput);
-    }
-
+) -> Result<Response, ApiError> {
     let domain = body.domain.to_ascii_lowercase();
     if domain.is_empty() {
         return Err(ApiError::InvalidDomain("empty domain".into()));
@@ -163,6 +162,8 @@ pub async fn post_handler(
         transport: None,
         dnssec: false,
         short: false,
+        recursive: true,
+        truncated_servers: false,
         warnings: Vec::new(),
     };
 
@@ -196,6 +197,12 @@ pub async fn post_handler(
 
     let resolvers = resolver_group.resolvers().to_vec();
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
+    let (done_tx, done_rx) = if !stream_params.stream {
+        let (s, r) = tokio::sync::oneshot::channel::<Vec<crate::result_cache::CachedEvent>>();
+        (Some(s), Some(r))
+    } else {
+        (None, None)
+    };
 
     let rid = request_id.0;
     let circuit_breakers = state.circuit_breakers.clone();
@@ -368,6 +375,14 @@ pub async fn post_handler(
         };
 
         // ------------------------------------------------------------------
+        // Phase 1.75: Async NS checks (lame delegation + delegation consistency)
+        // ------------------------------------------------------------------
+        let query_timeout = Duration::from_secs(3);
+        let lame_results = check_ns_lame_delegation(&all_lookups, &domain, query_timeout).await;
+        let delegation_results = check_ns_delegation_consistency(&all_lookups, &domain, query_timeout).await;
+        let dnssec_rollover_results = check_dnssec_rollover(&all_lookups);
+
+        // ------------------------------------------------------------------
         // Phase 2: Lint checks (synchronous, pure)
         // ------------------------------------------------------------------
         let mut lint_checks: Vec<(&'static str, Vec<CheckResult>)> = vec![
@@ -375,9 +390,12 @@ pub async fn post_handler(
             ("cname_apex", check_cname_apex(&all_lookups)),
             ("dnssec", check_dnssec(&all_lookups)),
             ("dnskey_algorithm", check_dnskey_algorithms(&all_lookups)),
+            ("dnssec_rollover", dnssec_rollover_results),
             ("https_svcb", check_https_svcb_mode(&all_lookups)),
             ("mx", check_mx_sync(&all_lookups)),
             ("ns", check_ns_count(&all_lookups)),
+            ("ns_lame", lame_results),
+            ("ns_delegation", delegation_results),
             ("spf", check_spf(&all_lookups)),
             ("ttl", check_ttl(&all_lookups)),
             ("dmarc", check_dmarc_records(&dmarc_txts)),
@@ -457,10 +475,14 @@ pub async fn post_handler(
                 CachedResult {
                     query: query_string,
                     mode: "check".to_owned(),
-                    events: cached_events,
+                    events: cached_events.clone(),
                 },
             )
             .await;
+
+        if let Some(dtx) = done_tx {
+            let _ = dtx.send(cached_events);
+        }
 
         let event = Event::default()
             .event("done")
@@ -474,13 +496,28 @@ pub async fn post_handler(
         metrics::gauge!("prism_active_checks").decrement(1.0);
     });
 
-    let stream = ReceiverStream::new(rx);
+    if let Some(drx) = done_rx {
+        let timeout = Duration::from_secs(STREAM_TIMEOUT_SECS + 5);
+        let (events, truncated) = match tokio::time::timeout(timeout, drx).await {
+            Ok(Ok(cached)) => {
+                let vals = cached
+                    .into_iter()
+                    .map(|e| serde_json::json!({"type": e.event_type, "data": e.data}))
+                    .collect();
+                (vals, false)
+            }
+            _ => (Vec::new(), true),
+        };
+        return Ok(axum::Json(CollectedResponse { events, truncated }).into_response());
+    }
 
-    Ok(Sse::new(stream).keep_alive(
+    let sse_stream = ReceiverStream::new(rx);
+
+    Ok(Sse::new(sse_stream).keep_alive(
         KeepAlive::new()
             .interval(Duration::from_secs(15))
             .text("keep-alive"),
-    ))
+    ).into_response())
 }
 
 // ---------------------------------------------------------------------------
@@ -645,6 +682,259 @@ fn check_infrastructure(
         results.push(CheckResult::Ok(
             "No infrastructure concerns detected".to_owned(),
         ));
+    }
+
+    results
+}
+
+/// NS lame delegation check: query each authoritative NS server with RD=0
+/// and check whether it answers authoritatively (AA=1) for the domain.
+/// A lame server answers but with AA=0 — indicating misconfiguration.
+async fn check_ns_lame_delegation(
+    lookups: &Lookups,
+    domain: &str,
+    timeout: Duration,
+) -> Vec<CheckResult> {
+    let ns_names: Vec<String> = lookups
+        .ns()
+        .into_iter()
+        .map(|n| n.to_ascii())
+        .collect();
+
+    if ns_names.is_empty() {
+        return vec![CheckResult::NotFound()];
+    }
+
+    // Resolve NS hostnames to IPs.
+    let mut ns_ips: HashMap<String, Vec<IpAddr>> = ns_names
+        .iter()
+        .map(|n| (n.clone(), Vec::new()))
+        .collect();
+    dns_raw::resolve_missing_glue(&mut ns_ips).await;
+
+    let domain_name = match hickory_proto::rr::Name::from_ascii(domain) {
+        Ok(n) => n,
+        Err(_) => return vec![CheckResult::NotFound()],
+    };
+
+    let servers: Vec<SocketAddr> = ns_ips
+        .values()
+        .flat_map(|ips| ips.iter().filter(|ip| ip.is_ipv4()).copied())
+        .map(|ip| SocketAddr::new(ip, 53))
+        .collect();
+
+    if servers.is_empty() {
+        return vec![CheckResult::Warning(
+            "NS lame delegation: could not resolve any NS server IPs for direct query".to_owned(),
+        )];
+    }
+
+    let results_raw = dns_raw::parallel_queries(&servers, &domain_name, hickory_proto::rr::RecordType::SOA, timeout).await;
+
+    let mut lame_servers: Vec<String> = Vec::new();
+    let mut ok_count = 0usize;
+
+    for qr in &results_raw {
+        match &qr.result {
+            Ok(resp) => {
+                if resp.is_authoritative() {
+                    ok_count += 1;
+                } else {
+                    lame_servers.push(qr.server.ip().to_string());
+                }
+            }
+            Err(e) => {
+                tracing::debug!(server = %qr.server, error = %e, "lame delegation check query failed");
+            }
+        }
+    }
+
+    if lame_servers.is_empty() && ok_count == 0 {
+        return vec![CheckResult::Warning(
+            "NS lame delegation: no servers responded to SOA query".to_owned(),
+        )];
+    }
+
+    let mut results = Vec::new();
+    if lame_servers.is_empty() {
+        results.push(CheckResult::Ok(format!(
+            "All {ok_count} NS server(s) answered authoritatively (AA=1)"
+        )));
+    } else {
+        for server in &lame_servers {
+            results.push(CheckResult::Failed(format!(
+                "NS server {server} is lame: answered with AA=0 (not authoritative for {domain})"
+            )));
+        }
+        if ok_count > 0 {
+            results.push(CheckResult::Warning(format!(
+                "{ok_count} NS server(s) answered correctly; {} server(s) lame",
+                lame_servers.len()
+            )));
+        }
+    }
+    results
+}
+
+/// NS delegation consistency check: compare NS names from recursive resolution
+/// with NS names obtained by querying the zone's authoritative servers directly.
+/// Inconsistency indicates stale delegation or incomplete NS synchronization.
+async fn check_ns_delegation_consistency(
+    lookups: &Lookups,
+    domain: &str,
+    timeout: Duration,
+) -> Vec<CheckResult> {
+    // Recursive NS names (already collected).
+    let mut recursive_ns: Vec<String> = lookups
+        .ns()
+        .into_iter()
+        .map(|n| n.to_ascii().to_ascii_lowercase())
+        .collect();
+    recursive_ns.sort();
+    recursive_ns.dedup();
+
+    if recursive_ns.is_empty() {
+        return vec![CheckResult::NotFound()];
+    }
+
+    // Query the authoritative NS servers directly for NS records.
+    let mut ns_ips: HashMap<String, Vec<IpAddr>> = recursive_ns
+        .iter()
+        .map(|n| (n.clone(), Vec::new()))
+        .collect();
+    dns_raw::resolve_missing_glue(&mut ns_ips).await;
+
+    let servers: Vec<SocketAddr> = ns_ips
+        .values()
+        .flat_map(|ips| ips.iter().filter(|ip| ip.is_ipv4()).copied())
+        .map(|ip| SocketAddr::new(ip, 53))
+        .collect();
+
+    if servers.is_empty() {
+        return vec![CheckResult::Warning(
+            "NS delegation consistency: could not resolve NS server IPs for direct query".to_owned(),
+        )];
+    }
+
+    let domain_name = match hickory_proto::rr::Name::from_ascii(domain) {
+        Ok(n) => n,
+        Err(_) => return vec![CheckResult::NotFound()],
+    };
+
+    let results_raw = dns_raw::parallel_queries(&servers, &domain_name, hickory_proto::rr::RecordType::NS, timeout).await;
+
+    // Collect NS names from direct (authoritative) responses.
+    let mut auth_ns: Vec<String> = Vec::new();
+    for qr in &results_raw {
+        if let Ok(resp) = &qr.result {
+            for record in resp.answers() {
+                if let hickory_proto::rr::RData::NS(ns) = record.data() {
+                    let name = ns.0.to_ascii().to_ascii_lowercase();
+                    if !auth_ns.contains(&name) {
+                        auth_ns.push(name);
+                    }
+                }
+            }
+        }
+    }
+
+    if auth_ns.is_empty() {
+        return vec![CheckResult::Warning(
+            "NS delegation consistency: no NS records returned from direct authoritative query".to_owned(),
+        )];
+    }
+
+    auth_ns.sort();
+    auth_ns.dedup();
+
+    if recursive_ns == auth_ns {
+        vec![CheckResult::Ok(format!(
+            "NS delegation is consistent: {} name server(s) match between parent and child",
+            recursive_ns.len()
+        ))]
+    } else {
+        let only_recursive: Vec<&String> = recursive_ns.iter().filter(|n| !auth_ns.contains(n)).collect();
+        let only_auth: Vec<&String> = auth_ns.iter().filter(|n| !recursive_ns.contains(n)).collect();
+
+        let mut results = Vec::new();
+        for ns in &only_recursive {
+            results.push(CheckResult::Warning(format!(
+                "NS '{ns}' is in parent delegation but not in child zone NS records"
+            )));
+        }
+        for ns in &only_auth {
+            results.push(CheckResult::Warning(format!(
+                "NS '{ns}' is in child zone but not in parent delegation"
+            )));
+        }
+        results
+    }
+}
+
+/// DNSSEC rollover detection: check for multiple KSKs, orphaned DS records (DS
+/// with no matching DNSKEY key tag), and new KSKs that have no DS record yet.
+fn check_dnssec_rollover(lookups: &Lookups) -> Vec<CheckResult> {
+    let dnskeys = lookups.dnskey();
+    let ds_records = lookups.ds();
+
+    if dnskeys.is_empty() && ds_records.is_empty() {
+        return vec![CheckResult::NotFound()];
+    }
+
+    if dnskeys.is_empty() {
+        return vec![CheckResult::Warning(
+            "DS record(s) present but no DNSKEY records found — possible rollover in progress or lame DNSSEC delegation".to_owned(),
+        )];
+    }
+
+    // Collect KSK key tags (SEP bit set, zone key bit set).
+    let ksk_tags: Vec<u16> = dnskeys
+        .iter()
+        .filter(|k| k.is_zone_key() && k.is_secure_entry_point())
+        .filter_map(|k| k.key_tag())
+        .collect();
+
+    let ds_tags: Vec<u16> = ds_records.iter().map(|d| d.key_tag()).collect();
+
+    let mut results = Vec::new();
+
+    // Multiple KSKs — potential double-KSK rollover window.
+    if ksk_tags.len() > 1 {
+        results.push(CheckResult::Warning(format!(
+            "Multiple KSKs present ({} KSKs) — DNSSEC key rollover may be in progress",
+            ksk_tags.len()
+        )));
+    }
+
+    // DS records with no matching DNSKEY (orphaned DS).
+    for &ds_tag in &ds_tags {
+        if !ksk_tags.contains(&ds_tag) && !dnskeys.iter().filter_map(|k| k.key_tag()).any(|t| t == ds_tag) {
+            results.push(CheckResult::Failed(format!(
+                "DS key tag {ds_tag} has no matching DNSKEY — orphaned DS record (old key removed before DS was removed)"
+            )));
+        }
+    }
+
+    // KSKs with no matching DS record.
+    for &ksk_tag in &ksk_tags {
+        if !ds_tags.contains(&ksk_tag) {
+            results.push(CheckResult::Warning(format!(
+                "KSK with key tag {ksk_tag} has no matching DS record — new KSK not yet published in parent zone"
+            )));
+        }
+    }
+
+    if results.is_empty() {
+        if ksk_tags.is_empty() {
+            results.push(CheckResult::Warning(
+                "DNSKEY records present but no KSK (SEP bit) found".to_owned(),
+            ));
+        } else {
+            results.push(CheckResult::Ok(format!(
+                "DNSSEC rollover state is clean: {} KSK(s) each matched by a DS record",
+                ksk_tags.len()
+            )));
+        }
     }
 
     results

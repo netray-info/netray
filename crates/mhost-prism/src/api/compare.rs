@@ -12,10 +12,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::Json;
-use axum::extract::{ConnectInfo, State};
+use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
+use axum::response::IntoResponse;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use futures::stream::{FuturesUnordered, Stream, StreamExt};
+use axum::response::Response;
+use futures::stream::{FuturesUnordered, StreamExt};
 use mhost::resolver::MultiQuery;
 use serde::Serialize;
 use tokio::sync::mpsc;
@@ -23,11 +25,11 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::RequestId;
 use crate::api::query::{
-    PostQueryRequest, build_resolver_group, convert_post_body, effective_server_specs,
+    PostQueryRequest, StreamParams, build_resolver_group, convert_post_body, effective_server_specs,
     extract_ips_from_cached_events, make_error_event, record_breaker_outcomes,
     send_enrichment_event, target_keys_from_servers,
 };
-use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
+use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::Transport;
 use crate::record_format;
@@ -97,13 +99,9 @@ pub async fn post_handler(
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
-    raw_query: axum::extract::RawQuery,
+    Query(stream_params): Query<StreamParams>,
     Json(body): Json<PostQueryRequest>,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
-    if raw_query.0.is_some() {
-        return Err(ApiError::AmbiguousInput);
-    }
-
+) -> Result<Response, ApiError> {
     let query_display = body.domain.clone();
     // Strip any transport override — we'll iterate all transports ourselves.
     let mut parsed = convert_post_body(PostQueryRequest {
@@ -162,6 +160,12 @@ pub async fn post_handler(
     }
 
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(64);
+    let (done_tx, done_rx) = if !stream_params.stream {
+        let (s, r) = tokio::sync::oneshot::channel::<Vec<crate::result_cache::CachedEvent>>();
+        (Some(s), Some(r))
+    } else {
+        (None, None)
+    };
     let rid = request_id.0;
     let warnings = parsed.warnings.clone();
     let record_types = parsed.record_types.clone();
@@ -405,10 +409,14 @@ pub async fn post_handler(
                     CachedResult {
                         query: query_display,
                         mode: "compare".to_owned(),
-                        events: cached_events,
+                        events: cached_events.clone(),
                     },
                 )
                 .await;
+
+            if let Some(dtx) = done_tx {
+                let _ = dtx.send(cached_events);
+            }
 
             let event = Event::default()
                 .event("done")
@@ -424,11 +432,26 @@ pub async fn post_handler(
         metrics::gauge!("prism_active_compares").decrement(1.0);
     });
 
-    let stream = ReceiverStream::new(rx);
+    if let Some(drx) = done_rx {
+        let timeout = Duration::from_secs(STREAM_TIMEOUT_SECS + 5);
+        let (events, truncated) = match tokio::time::timeout(timeout, drx).await {
+            Ok(Ok(cached)) => {
+                let vals = cached
+                    .into_iter()
+                    .map(|e| serde_json::json!({"type": e.event_type, "data": e.data}))
+                    .collect();
+                (vals, false)
+            }
+            _ => (Vec::new(), true),
+        };
+        return Ok(axum::Json(CollectedResponse { events, truncated }).into_response());
+    }
 
-    Ok(Sse::new(stream).keep_alive(
+    let sse_stream = ReceiverStream::new(rx);
+
+    Ok(Sse::new(sse_stream).keep_alive(
         KeepAlive::new()
             .interval(Duration::from_secs(15))
             .text("keep-alive"),
-    ))
+    ).into_response())
 }

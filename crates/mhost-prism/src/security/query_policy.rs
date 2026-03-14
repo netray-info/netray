@@ -188,6 +188,8 @@ mod tests {
             transport: None,
             dnssec: false,
             short: false,
+            recursive: true,
+            truncated_servers: false,
             warnings: vec![],
         }
     }

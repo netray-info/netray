@@ -17,7 +17,8 @@ use axum::Json;
 use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
-use futures::stream::{FuturesUnordered, Stream, StreamExt};
+use axum::response::{IntoResponse, Response};
+use futures::stream::{FuturesUnordered, StreamExt};
 use mhost::RecordType;
 use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
@@ -143,11 +144,27 @@ pub(crate) async fn send_enrichment_event(
 // GET handler
 // ---------------------------------------------------------------------------
 
+/// Shared query parameters for all streaming endpoints.
+#[derive(Deserialize, utoipa::IntoParams)]
+pub struct StreamParams {
+    /// Set to `false` to collect all events and return a single JSON response
+    /// instead of streaming Server-Sent Events.
+    #[serde(default = "default_stream")]
+    pub stream: bool,
+}
+
+fn default_stream() -> bool {
+    true
+}
+
 #[derive(Deserialize, utoipa::IntoParams)]
 pub struct QueryParams {
     /// Query string in dig-inspired syntax: `domain [TYPE...] [@server...] [+flag...]`.
     /// Example: `example.com MX @cloudflare +tls`
     q: Option<String>,
+    /// Set to `false` to receive a single JSON response instead of SSE.
+    #[serde(default = "default_stream")]
+    stream: bool,
 }
 
 /// Run a DNS query using the dig-inspired query language.
@@ -177,7 +194,7 @@ pub async fn get_handler(
     headers: HeaderMap,
     axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
     Query(params): Query<QueryParams>,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+) -> Result<Response, ApiError> {
     let q = params
         .q
         .ok_or(ApiError::ParseError("missing query parameter 'q'".into()))?;
@@ -187,7 +204,7 @@ pub async fn get_handler(
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::debug!(%client_ip, %peer_addr, "query GET");
 
-    execute_query(parsed, state, client_ip, request_id.0, q).await
+    execute_query(parsed, state, client_ip, request_id.0, q, params.stream).await
 }
 
 // ---------------------------------------------------------------------------
@@ -220,21 +237,16 @@ pub async fn post_handler(
     ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     axum::extract::Extension(request_id): axum::extract::Extension<RequestId>,
-    raw_query: axum::extract::RawQuery,
+    Query(stream_params): Query<StreamParams>,
     Json(body): Json<PostQueryRequest>,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
-    // Reject POST with a query string -- ambiguous input.
-    if raw_query.0.is_some() {
-        return Err(ApiError::AmbiguousInput);
-    }
-
+) -> Result<Response, ApiError> {
     let query_display = body.domain.clone();
     let parsed = convert_post_body(body)?;
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::debug!(%client_ip, %peer_addr, "query POST");
 
-    execute_query(parsed, state, client_ip, request_id.0, query_display).await
+    execute_query(parsed, state, client_ip, request_id.0, query_display, stream_params.stream).await
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -309,6 +321,8 @@ pub(crate) fn convert_post_body(body: PostQueryRequest) -> Result<ParsedQuery, A
         transport,
         dnssec: body.dnssec,
         short: false,
+        recursive: true,
+        truncated_servers: false,
         warnings: Vec::new(),
     })
 }
@@ -344,7 +358,8 @@ async fn execute_query(
     client_ip: IpAddr,
     request_id: String,
     query_string: String,
-) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    stream: bool,
+) -> Result<Response, ApiError> {
     // Validate against query policy.
     let policy = QueryPolicy::new(&state.config);
     policy.validate(&parsed)?;
@@ -389,6 +404,13 @@ async fn execute_query(
     let resolvers: Vec<Resolver> = resolver_group.resolvers().to_vec();
 
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
+    // When non-streaming, use a oneshot to receive all cached events after completion.
+    let (done_tx, done_rx) = if !stream {
+        let (s, r) = tokio::sync::oneshot::channel::<Vec<crate::result_cache::CachedEvent>>();
+        (Some(s), Some(r))
+    } else {
+        (None, None)
+    };
 
     let warnings = parsed.warnings.clone();
     let record_types = parsed.record_types.clone();
@@ -621,10 +643,15 @@ async fn execute_query(
                     CachedResult {
                         query: query_string,
                         mode: "query".to_owned(),
-                        events: cached_events,
+                        events: cached_events.clone(),
                     },
                 )
                 .await;
+
+            // Signal non-streaming callers with all collected events.
+            if let Some(dtx) = done_tx {
+                let _ = dtx.send(cached_events);
+            }
 
             let event = Event::default()
                 .event("done")
@@ -639,13 +666,30 @@ async fn execute_query(
         metrics::gauge!("prism_active_queries").decrement(1.0);
     });
 
-    let stream = ReceiverStream::new(rx);
+    if let Some(drx) = done_rx {
+        // Non-streaming mode: wait for the task to complete and return JSON.
+        use crate::api::CollectedResponse;
+        let timeout = Duration::from_secs(STREAM_TIMEOUT_SECS + 5);
+        let (events, truncated) = match tokio::time::timeout(timeout, drx).await {
+            Ok(Ok(cached)) => {
+                let vals = cached
+                    .into_iter()
+                    .map(|e| serde_json::json!({"type": e.event_type, "data": e.data}))
+                    .collect();
+                (vals, false)
+            }
+            _ => (Vec::new(), true),
+        };
+        return Ok(axum::Json(CollectedResponse { events, truncated }).into_response());
+    }
 
-    Ok(Sse::new(stream).keep_alive(
+    let sse_stream = ReceiverStream::new(rx);
+
+    Ok(Sse::new(sse_stream).keep_alive(
         KeepAlive::new()
             .interval(Duration::from_secs(15))
             .text("keep-alive"),
-    ))
+    ).into_response())
 }
 
 /// Record circuit breaker outcomes from lookup results.

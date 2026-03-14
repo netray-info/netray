@@ -4,9 +4,26 @@ use std::str::FromStr;
 use mhost::RecordType;
 use mhost::nameserver::predefined::PredefinedProvider;
 
+// ---------------------------------------------------------------------------
+// Server group aliases
+// ---------------------------------------------------------------------------
+
+/// IP addresses for each named server group.
+/// Each entry is (alias_name, &[ip_addresses]).
+const SERVER_GROUP_ALIASES: &[(&str, &[&str])] = &[
+    ("public", &["8.8.8.8", "1.1.1.1", "9.9.9.9"]),
+    ("cloudflare", &["1.1.1.1", "1.0.0.1"]),
+    ("google", &["8.8.8.8", "8.8.4.4"]),
+    ("quad9", &["9.9.9.9", "149.112.112.112"]),
+    ("all", &["8.8.8.8", "1.1.1.1", "9.9.9.9", "8.8.4.4", "1.0.0.1", "149.112.112.112"]),
+];
+
 /// Maximum number of record types allowed in a single query (SDD section 8).
 /// Must equal `config::HARD_CAP_RECORD_TYPES` — enforced by a const assertion in config.rs.
 pub(crate) const MAX_RECORD_TYPES: usize = 10;
+
+/// Maximum number of servers after alias expansion.
+pub(crate) const MAX_SERVERS: usize = 4;
 
 /// Default record types when none are specified and the domain is not an IP address.
 const DEFAULT_RECORD_TYPES: [RecordType; 4] = [
@@ -74,6 +91,10 @@ pub struct ParsedQuery {
     pub dnssec: bool,
     /// Whether short output was requested (suppresses TTLs and metadata).
     pub short: bool,
+    /// Whether the RD (Recursion Desired) bit should be set. Default true.
+    pub recursive: bool,
+    /// Whether server list was truncated due to exceeding the max_servers limit.
+    pub truncated_servers: bool,
     /// Non-fatal warnings accumulated during parsing.
     pub warnings: Vec<String>,
 }
@@ -113,6 +134,7 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
     let mut transport = None;
     let mut dnssec = false;
     let mut short = false;
+    let mut recursive = true;
     let mut warnings = Vec::new();
     let mut has_all = false;
 
@@ -120,7 +142,7 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
         if let Some(server_name) = token.strip_prefix('@') {
             parse_server(server_name, &mut servers, &mut warnings);
         } else if let Some(flag_name) = token.strip_prefix('+') {
-            parse_flag(flag_name, &mut transport, &mut dnssec, &mut short, &mut warnings);
+            parse_flag(flag_name, &mut transport, &mut dnssec, &mut short, &mut recursive, &mut warnings);
         } else {
             parse_record_type(token, &mut record_types, &mut has_all, &mut warnings);
         }
@@ -157,6 +179,17 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
         }
     }
 
+    // Enforce server limit (max 4) after alias expansion.
+    // MAX_RECORD_TYPES is reused for context; the server cap is a separate constant.
+    let truncated_servers = servers.len() > crate::parser::MAX_SERVERS;
+    if truncated_servers {
+        servers.truncate(crate::parser::MAX_SERVERS);
+        warnings.push(format!(
+            "server list truncated to {} after alias expansion",
+            crate::parser::MAX_SERVERS
+        ));
+    }
+
     Ok(ParsedQuery {
         domain,
         record_types,
@@ -164,6 +197,8 @@ pub fn parse(input: &str) -> Result<ParsedQuery, ParseError> {
         transport,
         dnssec,
         short,
+        recursive,
+        truncated_servers,
         warnings,
     })
 }
@@ -211,11 +246,26 @@ fn parse_record_type(
 
 /// Parse a server specification after stripping the `@` prefix.
 ///
-/// Tries, in order: predefined provider name, "system", IP:port, bare IP.
+/// Tries, in order: group alias, predefined provider name, "system", IP:port, bare IP.
 fn parse_server(name: &str, servers: &mut Vec<ServerSpec>, warnings: &mut Vec<String>) {
     if name.is_empty() {
         warnings.push("empty server specification after @".to_string());
         return;
+    }
+
+    // Check group aliases (case-insensitive).
+    let lower = name.to_ascii_lowercase();
+    for &(alias, ips) in SERVER_GROUP_ALIASES {
+        if lower == alias {
+            for ip_str in ips {
+                let addr: IpAddr = ip_str.parse().expect("hardcoded alias IP is valid");
+                let spec = ServerSpec::Ip { addr, port: 53 };
+                if !servers.contains(&spec) {
+                    servers.push(spec);
+                }
+            }
+            return;
+        }
     }
 
     // "system" (case-insensitive)
@@ -286,6 +336,7 @@ fn parse_flag(
     transport: &mut Option<Transport>,
     dnssec: &mut bool,
     short: &mut bool,
+    recursive: &mut bool,
     warnings: &mut Vec<String>,
 ) {
     match name.to_ascii_lowercase().as_str() {
@@ -295,6 +346,7 @@ fn parse_flag(
         "https" => *transport = Some(Transport::Https),
         "dnssec" => *dnssec = true,
         "short" => *short = true,
+        "norecurse" => *recursive = false,
         // +check and +trace are routing hints for the frontend; the backend
         // routes them via dedicated endpoints, not via query-string flags.
         "check" | "trace" | "compare" | "auth" => {}
