@@ -62,6 +62,7 @@ Decisions made during project setup, supplementing the SDD:
 | **Trust store** | `webpki-roots` + optional CA directory (`custom_ca_dir` config) | Mozilla bundle as baseline; operators drop PEM/CRT files into a directory for private CAs. All `*.pem` and `*.crt` files loaded at startup. Supports internal PKI (e.g., Step-CA) without rebuilds |
 | **Cert parsing** | `x509-parser` + `x509-ocsp` | DER/PEM parsing, extension extraction, OID mapping. `x509-ocsp` for OCSP staple parsing |
 | **DNS resolution** | `mhost` (not `hickory-resolver`) | Ecosystem consistency, proven DNSSEC support, same-team maintenance. Heavier than needed but accepted cost |
+| **STARTTLS** | Auto-detected by port (25 → SMTP, 587 → SMTP, 143 → IMAP stub, 21 → FTP stub) | SMTP STARTTLS implemented; IMAP/FTP are stubs. No separate config flag — port-based inference keeps the API simple |
 | **Response model** | Synchronous JSON (not SSE) | TLS handshakes complete in milliseconds; SSE is unnecessary overhead |
 | **Rate limiting** | `governor = "0.8"` (GCRA), two-tier + cap-and-warn | Per-source-IP + per-target-hostname. Multi-IP fan-out degrades gracefully instead of rejecting |
 | **CSS** | Plain CSS with custom properties | Small frontend, zero build config, maps to ecosystem design language |
@@ -140,14 +141,15 @@ tlsight/
     enrichment.rs                 # IP enrichment client (geo, ASN, rDNS via ip_api_url)
     tls/
       mod.rs                      # TLS inspection orchestration
-      connect.rs                  # TCP connect + TLS handshake execution
-      chain.rs                    # Certificate chain parsing and validation
-      params.rs                   # TLS version, cipher suite, ALPN extraction
-      ocsp.rs                     # OCSP stapling check
+      connect.rs                  # TCP connect + TLS handshake execution; STARTTLS upgrade (SMTP ports 25, 587); key exchange group capture
+      chain.rs                    # Certificate chain parsing and validation; AIA URL extraction (OCSP responder + CA Issuers); cert policy classification (EV/OV/DV); lifetime_days field
+      params.rs                   # TLS version, cipher suite, ALPN, key_exchange_group extraction
+      ocsp.rs                     # OCSP staple parsing (OcspInfo); live OCSP check stub (OcspRevocationResult) — stub returns "unknown" pending full OCSP request builder
     dns/
-      mod.rs                      # DNS lookups for CAA, TLSA, A/AAAA
+      mod.rs                      # DNS lookups for CAA, TLSA, A/AAAA, HTTPS
       caa.rs                      # CAA record fetch + issuer cross-check
       tlsa.rs                     # TLSA record fetch + DANE validation
+      https_record.rs             # HTTPS DNS record query (type 65) for ECH advertisement detection
     validate/
       mod.rs                      # Cross-validation orchestration
       chain_trust.rs              # Chain completeness, expiry, signature algo checks
@@ -161,7 +163,7 @@ tlsight/
       target_policy.rs            # Target validation (no internal IPs, port restrictions)
     quality/
       mod.rs                      # Quality/health assessment orchestration
-      checks.rs                   # Individual quality check implementations
+      checks.rs                   # Individual quality check implementations; includes cert_lifetime (398/825-day), alpn_consistency, ech_advertised, tls_version (Warn on TLS 1.2)
       http.rs                     # HTTP reachability and redirect checks
       types.rs                    # Quality check result types
   frontend/                       # SolidJS + Vite (strict TypeScript)
@@ -252,6 +254,7 @@ When modifying API endpoints or adding features, verify:
 - [ ] Timeouts enforced (5s per-handshake, 15s per-request)
 - [ ] Rate limiting applied with correct cost calculation (ports * inspected_ips)
 - [ ] `AcceptAnyCert` verifier used only for inspection connections
+- [ ] STARTTLS targets pass the same target policy validation (RFC 1918 / loopback blocklist) as direct TLS targets
 - [ ] No application data sent after TLS handshake (handshake only, then close)
 - [ ] No PII in logs (no full certificate content)
 - [ ] Security headers present on all responses
