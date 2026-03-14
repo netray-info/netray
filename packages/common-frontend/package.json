@@ -16,8 +16,12 @@
     "type": "git",
     "url": "git+https://github.com/netray-info/netray-common-frontend.git"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "devDependencies": {
-    "solid-js": "^1.9.0"
+    "solid-js": "^1.9.0",
+    "vitest": "^2.0.0"
   },
   "peerDependencies": {
     "solid-js": "^1.0.0"
