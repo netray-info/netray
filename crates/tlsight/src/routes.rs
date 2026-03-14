@@ -13,7 +13,6 @@ use utoipa::ToSchema;
 
 use utoipa::OpenApi;
 
-use netray_common::enrichment::{CloudInfo, IpInfo};
 use crate::error::{AppError, ErrorResponse};
 use crate::input::{self, Target};
 use crate::security::rate_limit::select_representative_ips;
@@ -21,6 +20,7 @@ use crate::security::target_policy;
 use crate::state::AppState;
 use crate::tls;
 use crate::validate;
+use netray_common::enrichment::{CloudInfo, IpInfo};
 
 // ---------------------------------------------------------------------------
 // Response types
@@ -269,8 +269,7 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let config = state.config.load();
 
     // DNS resolver is required when CAA or DANE checks are enabled, or for hostname resolution.
-    if (config.validation.check_caa || config.validation.check_dane)
-        && state.dns_resolver.is_none()
+    if (config.validation.check_caa || config.validation.check_dane) && state.dns_resolver.is_none()
     {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -288,7 +287,7 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     (
         StatusCode::OK,
         Json(ReadyResponse {
-            status: "ok",
+            status: "ready",
             reason: None,
         }),
     )
@@ -910,11 +909,8 @@ async fn inspect_port(
         });
     }
 
-    let mut indexed: Vec<(usize, tls::IpInspectionResult)> = join_set
-        .join_all()
-        .await
-        .into_iter()
-        .collect();
+    let mut indexed: Vec<(usize, tls::IpInspectionResult)> =
+        join_set.join_all().await.into_iter().collect();
     indexed.sort_by_key(|(idx, _)| *idx);
     let ip_results: Vec<tls::IpInspectionResult> = indexed.into_iter().map(|(_, r)| r).collect();
 
@@ -1027,11 +1023,12 @@ async fn resolve_hostname(
     // Spawn on a blocking thread because mhost uses rand::thread_rng which is !Send in rand 0.9.
     // This matches the existing DNS task pattern used for CAA/TLSA in do_inspect.
     let rt = tokio::runtime::Handle::current();
-    let ips = tokio::task::spawn_blocking(move || {
-        rt.block_on(resolver.lookup_ips(&hostname_owned))
-    })
-    .await
-    .map_err(|e| AppError::DnsResolutionFailed(format!("{hostname}: task join error: {e}")))?;
+    let ips =
+        tokio::task::spawn_blocking(move || rt.block_on(resolver.lookup_ips(&hostname_owned)))
+            .await
+            .map_err(|e| {
+                AppError::DnsResolutionFailed(format!("{hostname}: task join error: {e}"))
+            })?;
 
     if ips.is_empty() {
         return Err(AppError::DnsResolutionFailed(format!(
@@ -1094,9 +1091,7 @@ mod tests {
                 max_domain_length: 253,
                 allow_blocked_targets: false,
             },
-            dns: crate::config::DnsConfig {
-                timeout_secs: 3,
-            },
+            dns: crate::config::DnsConfig { timeout_secs: 3 },
             validation: crate::config::ValidationConfig {
                 expiry_warning_days: 30,
                 expiry_critical_days: 14,
@@ -1145,7 +1140,13 @@ mod tests {
 
     #[tokio::test]
     async fn ready_returns_ready() {
-        let app = test_router();
+        // test_config enables DANE/CAA but DNS resolver is always None in tests (set async in
+        // main). Build a config with DNS checks disabled so the service reports ready.
+        let mut config = test_config();
+        config.validation.check_caa = false;
+        config.validation.check_dane = false;
+        let state = AppState::new(&config);
+        let app = health_router().merge(api_router(state));
         let (status, body) = get(&app, "/api/ready").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], "ready");

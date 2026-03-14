@@ -129,11 +129,7 @@ async fn rfc1918_target_returns_403() {
     assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     let body = body_string(resp.into_body()).await;
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
-    assert_eq!(
-        json["error"]["code"],
-        "BLOCKED_TARGET",
-        "body: {body}"
-    );
+    assert_eq!(json["error"]["code"], "BLOCKED_TARGET", "body: {body}");
 }
 
 // ---------------------------------------------------------------------------
@@ -251,9 +247,5 @@ async fn rate_limit_returns_429() {
     assert_eq!(resp2.status(), StatusCode::TOO_MANY_REQUESTS);
     let body = body_string(resp2.into_body()).await;
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
-    assert_eq!(
-        json["error"]["code"],
-        "RATE_LIMITED",
-        "body: {body}"
-    );
+    assert_eq!(json["error"]["code"], "RATE_LIMITED", "body: {body}");
 }

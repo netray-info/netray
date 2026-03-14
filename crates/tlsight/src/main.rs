@@ -41,7 +41,9 @@ async fn main() {
     tracing::info!(bind = %config.server.bind, "starting tlsight");
 
     if config.limits.allow_blocked_targets {
-        tracing::warn!("allow_blocked_targets is enabled — target IP restrictions are DISABLED; do not use in production");
+        tracing::warn!(
+            "allow_blocked_targets is enabled — target IP restrictions are DISABLED; do not use in production"
+        );
     }
 
     let mut state = state::AppState::new(&config);
@@ -75,7 +77,9 @@ async fn main() {
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("tlsight", req, next)
         }))
-        .layer(axum::middleware::from_fn(netray_common::middleware::request_id))
+        .layer(axum::middleware::from_fn(
+            netray_common::middleware::request_id,
+        ))
         .layer(axum::middleware::from_fn(security::security_headers))
         .layer(security::cors_layer())
         .layer(CompressionLayer::new())

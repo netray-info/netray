@@ -6,8 +6,8 @@ use arc_swap::ArcSwap;
 
 use crate::config::Config;
 use crate::dns::DnsResolver;
-use netray_common::enrichment::EnrichmentClient;
 use crate::security::{IpExtractor, RateLimitState};
+use netray_common::enrichment::EnrichmentClient;
 use rustls::client::danger::ServerCertVerifier;
 use tokio::sync::Semaphore;
 
@@ -167,9 +167,7 @@ mod tests {
                 max_domain_length: 253,
                 allow_blocked_targets: false,
             },
-            dns: crate::config::DnsConfig {
-                timeout_secs: 3,
-            },
+            dns: crate::config::DnsConfig { timeout_secs: 3 },
             validation: crate::config::ValidationConfig {
                 expiry_warning_days: 30,
                 expiry_critical_days: 14,
