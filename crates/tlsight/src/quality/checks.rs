@@ -204,6 +204,42 @@ pub fn check_expiry_window(chain: &[CertInfo]) -> HealthCheck {
     }
 }
 
+pub fn check_cert_lifetime(chain: &[CertInfo]) -> HealthCheck {
+    let Some(leaf) = chain
+        .iter()
+        .find(|c| c.position == "leaf" || c.position == "leaf_self_signed")
+    else {
+        return HealthCheck {
+            id: "cert_lifetime".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Skip,
+            label: "Certificate lifetime".to_string(),
+            detail: "no leaf cert".to_string(),
+        };
+    };
+    let days = leaf.lifetime_days;
+    let (status, detail) = if days > 825 {
+        (
+            CheckStatus::Fail,
+            format!("validity period {days} days exceeds 825-day limit"),
+        )
+    } else if days > 398 {
+        (
+            CheckStatus::Warn,
+            format!("validity period {days} days exceeds 398-day recommendation"),
+        )
+    } else {
+        (CheckStatus::Pass, format!("validity period {days} days"))
+    };
+    HealthCheck {
+        id: "cert_lifetime".to_string(),
+        category: Category::Certificate,
+        status,
+        label: "Certificate lifetime".to_string(),
+        detail,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Protocol checks
 // ---------------------------------------------------------------------------
@@ -211,7 +247,10 @@ pub fn check_expiry_window(chain: &[CertInfo]) -> HealthCheck {
 pub fn check_tls_version(version: &str) -> HealthCheck {
     let (status, detail) = match version {
         "TLSv1.3" => (CheckStatus::Pass, "TLS 1.3".to_string()),
-        "TLSv1.2" => (CheckStatus::Pass, "TLS 1.2".to_string()),
+        "TLSv1.2" => (
+            CheckStatus::Warn,
+            "TLS 1.2 (upgrade to TLS 1.3 recommended)".to_string(),
+        ),
         other => (CheckStatus::Fail, format!("outdated: {other}")),
     };
     HealthCheck {
@@ -438,6 +477,8 @@ mod tests {
             key_size,
             signature_algorithm: "sha256WithRSAEncryption".to_string(),
             fingerprint_sha256: "AA:BB".to_string(),
+            fingerprint_sha1: "AA:BB".to_string(),
+            lifetime_days: 365,
             is_expired: days < 0,
             is_self_signed: false,
         }
@@ -627,8 +668,8 @@ mod tests {
     }
 
     #[test]
-    fn tls_version_12_pass() {
-        assert_eq!(check_tls_version("TLSv1.2").status, CheckStatus::Pass);
+    fn tls_version_12_warn() {
+        assert_eq!(check_tls_version("TLSv1.2").status, CheckStatus::Warn);
     }
 
     #[test]

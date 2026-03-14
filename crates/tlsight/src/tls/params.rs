@@ -12,6 +12,8 @@ pub struct TlsParams {
     pub alpn: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sni: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key_exchange_group: Option<String>,
     pub ocsp: ocsp::OcspInfo,
     pub handshake_ms: u32,
 }
@@ -39,6 +41,7 @@ pub fn extract_params(result: &HandshakeResult, sni: Option<&str>) -> TlsParams 
         cipher_suite,
         alpn,
         sni: sni.map(|s| s.to_string()),
+        key_exchange_group: result.key_exchange_group.clone(),
         ocsp: ocsp_info,
         handshake_ms: result.handshake_ms,
     }

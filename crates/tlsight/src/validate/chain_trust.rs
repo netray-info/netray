@@ -166,6 +166,8 @@ mod tests {
             key_size: 2048,
             signature_algorithm: "sha256WithRSAEncryption".to_string(),
             fingerprint_sha256: "AA:BB".to_string(),
+            fingerprint_sha1: "AA:BB".to_string(),
+            lifetime_days: 365,
             is_expired: false,
             is_self_signed: false,
         }
@@ -185,6 +187,8 @@ mod tests {
             key_size: 2048,
             signature_algorithm: "sha256WithRSAEncryption".to_string(),
             fingerprint_sha256: "CC:DD".to_string(),
+            fingerprint_sha1: "CC:DD".to_string(),
+            lifetime_days: 365,
             is_expired: false,
             is_self_signed: false,
         }

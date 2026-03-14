@@ -64,7 +64,20 @@ export default function CertDetail(props: Props) {
               <tr><th>Days remaining</th><td>{props.cert.days_remaining}</td></tr>
               <tr><th>Key</th><td>{props.cert.key_type} {props.cert.key_size}</td></tr>
               <tr><th>Signature</th><td>{props.cert.signature_algorithm}</td></tr>
-              <tr><th>SHA-256</th><td class="mono">{props.cert.fingerprint_sha256}</td></tr>
+              <tr>
+                <th>SHA-256</th>
+                <td class="mono">
+                  {props.cert.fingerprint_sha256}
+                  {' '}
+                  <a
+                    class="eco-link eco-link--badge"
+                    href={`https://crt.sh/?q=${props.cert.fingerprint_sha256.replace(/:/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >crt.sh ↗</a>
+                </td>
+              </tr>
+              <tr><th>SHA-1</th><td class="mono">{props.cert.fingerprint_sha1}</td></tr>
               <tr><th>Self-signed</th><td>{props.cert.is_self_signed ? 'yes' : 'no'}</td></tr>
               <tr><th>Expired</th><td>{props.cert.is_expired ? 'yes' : 'no'}</td></tr>
             </tbody>

@@ -76,6 +76,7 @@ export interface TlsInfo {
   cipher_suite: string;
   alpn: string | null;
   sni: string | null;
+  key_exchange_group?: string;
   ocsp: OcspInfo;
   handshake_ms: number;
 }
@@ -100,6 +101,8 @@ export interface CertInfo {
   key_size: number;
   signature_algorithm: string;
   fingerprint_sha256: string;
+  fingerprint_sha1: string;
+  lifetime_days: number;
   is_expired: boolean;
   is_self_signed: boolean;
 }

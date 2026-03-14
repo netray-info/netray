@@ -72,6 +72,7 @@ pub struct HandshakeResult {
     pub alpn: Option<Vec<u8>>,
     pub peer_certs: Option<Vec<CertificateDer<'static>>>,
     pub ocsp_response: Option<Vec<u8>>,
+    pub key_exchange_group: Option<String>,
     pub handshake_ms: u32,
 }
 
@@ -123,6 +124,9 @@ pub async fn tls_handshake(
             .map(|c| CertificateDer::from(c.as_ref().to_vec()))
             .collect()
     });
+    let key_exchange_group = conn
+        .negotiated_key_exchange_group()
+        .map(|g| format_kx_group(g.name()));
 
     let ocsp_response = captured.lock().ok().and_then(|c| c.ocsp_response.clone());
 
@@ -132,8 +136,20 @@ pub async fn tls_handshake(
         alpn,
         peer_certs,
         ocsp_response,
+        key_exchange_group,
         handshake_ms,
     })
+}
+
+fn format_kx_group(group: rustls::NamedGroup) -> String {
+    match group {
+        rustls::NamedGroup::X25519 => "X25519".to_string(),
+        rustls::NamedGroup::secp256r1 => "P-256".to_string(),
+        rustls::NamedGroup::secp384r1 => "P-384".to_string(),
+        rustls::NamedGroup::secp521r1 => "P-521".to_string(),
+        rustls::NamedGroup::X448 => "X448".to_string(),
+        other => format!("{other:?}"),
+    }
 }
 
 #[cfg(test)]

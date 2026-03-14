@@ -49,6 +49,7 @@ pub fn assess_port(
     if let Some(chain) = &ip_result.chain {
         all_checks.push(checks::check_key_strength(chain));
         all_checks.push(checks::check_expiry_window(chain));
+        all_checks.push(checks::check_cert_lifetime(chain));
     }
 
     // Protocol checks

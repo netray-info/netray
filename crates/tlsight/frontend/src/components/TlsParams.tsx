@@ -1,4 +1,4 @@
-import { createSignal, createEffect } from 'solid-js';
+import { createSignal, createEffect, Show } from 'solid-js';
 import Explain from './Explain';
 import type { TlsInfo } from '../lib/types';
 
@@ -37,6 +37,9 @@ export default function TlsParams(props: Props) {
               <tr><th>Cipher Suite</th><td class="mono">{props.params.cipher_suite}</td></tr>
               <tr><th>ALPN</th><td>{props.params.alpn ?? 'none'}</td></tr>
               <tr><th>SNI</th><td>{props.params.sni ?? 'none'}</td></tr>
+              <Show when={props.params.key_exchange_group}>
+                <tr><th>Key Exchange</th><td>{props.params.key_exchange_group}</td></tr>
+              </Show>
               <tr><th>OCSP</th><td>{props.params.ocsp.stapled ? `stapled (${props.params.ocsp.status})` : 'not stapled'}</td></tr>
               <tr><th>Handshake</th><td>{props.params.handshake_ms}ms</td></tr>
             </tbody>

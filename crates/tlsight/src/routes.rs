@@ -4,7 +4,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::extract::{ConnectInfo, Extension, Query, RawQuery, State};
-use axum::response::{Html, IntoResponse};
+use axum::http::HeaderValue;
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -362,7 +363,7 @@ async fn inspect_handler(
     Extension(request_id): Extension<crate::RequestId>,
     headers: axum::http::HeaderMap,
     query: Query<InspectQuery>,
-) -> Result<Json<InspectResponse>, AppError> {
+) -> Result<Response, AppError> {
     let client_ip = state.ip_extractor.extract(&headers, addr);
     let config = state.config.load();
     let parsed = input::parse_input(&query.h, config.limits.max_ports)?;
@@ -390,7 +391,7 @@ async fn inspect_post_handler(
     headers: axum::http::HeaderMap,
     raw_query: RawQuery,
     Json(body): Json<InspectPostBody>,
-) -> Result<Json<InspectResponse>, AppError> {
+) -> Result<Response, AppError> {
     // Reject if query string contains h= param
     if let Some(ref qs) = raw_query.0
         && qs.contains("h=")
@@ -437,7 +438,7 @@ async fn do_inspect(
     _headers: &axum::http::HeaderMap,
     parsed: input::ParsedInput,
     request_id: String,
-) -> Result<Json<InspectResponse>, AppError> {
+) -> Result<Response, AppError> {
     let request_start = Instant::now();
     let config = state.config.load();
 
@@ -858,7 +859,18 @@ async fn do_inspect(
         "inspect complete"
     );
 
-    Ok(Json(InspectResponse {
+    // Extract soonest-expiring leaf cert for response headers
+    let cert_expiry_info: Option<(String, i64)> = port_results
+        .iter()
+        .flat_map(|pr| pr.ips.iter())
+        .filter(|r| r.error.is_none())
+        .filter_map(|r| r.chain.as_ref())
+        .flat_map(|chain| chain.iter())
+        .filter(|c| c.position == "leaf" || c.position == "leaf_self_signed")
+        .min_by_key(|c| c.days_remaining)
+        .map(|c| (c.not_after.clone(), c.days_remaining));
+
+    let mut response = Json(InspectResponse {
         request_id,
         hostname: hostname_str,
         input_mode,
@@ -869,7 +881,19 @@ async fn do_inspect(
         warnings,
         skipped_ips,
         duration_ms,
-    }))
+    })
+    .into_response();
+
+    if let Some((expiry, days)) = cert_expiry_info {
+        if let Ok(v) = HeaderValue::from_str(&expiry) {
+            response.headers_mut().insert("x-cert-expiry", v);
+        }
+        if let Ok(v) = HeaderValue::from_str(&days.to_string()) {
+            response.headers_mut().insert("x-cert-days-remaining", v);
+        }
+    }
+
+    Ok(response)
 }
 
 /// Inspect a single port across all IPs.

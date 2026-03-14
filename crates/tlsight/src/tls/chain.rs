@@ -1,5 +1,6 @@
 use rustls::pki_types::CertificateDer;
 use serde::Serialize;
+use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use utoipa::ToSchema;
 use x509_parser::prelude::*;
@@ -19,6 +20,8 @@ pub struct CertInfo {
     pub key_size: u32,
     pub signature_algorithm: String,
     pub fingerprint_sha256: String,
+    pub fingerprint_sha1: String,
+    pub lifetime_days: i64,
     pub is_expired: bool,
     pub is_self_signed: bool,
 }
@@ -33,7 +36,8 @@ pub fn parse_chain(certs: &[CertificateDer<'_>]) -> Vec<CertInfo> {
 }
 
 fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
-    let fingerprint = format_fingerprint(&Sha256::digest(der));
+    let fingerprint_sha256 = format_fingerprint(&Sha256::digest(der));
+    let fingerprint_sha1 = format_fingerprint(&Sha1::digest(der));
 
     let (_, cert) = match X509Certificate::from_der(der) {
         Ok(parsed) => parsed,
@@ -50,7 +54,9 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
                 key_type: String::new(),
                 key_size: 0,
                 signature_algorithm: String::new(),
-                fingerprint_sha256: fingerprint,
+                fingerprint_sha256,
+                fingerprint_sha1,
+                lifetime_days: 0,
                 is_expired: false,
                 is_self_signed: false,
             };
@@ -67,9 +73,11 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
     let not_before = cert.validity().not_before.to_string();
     let not_after = cert.validity().not_after.to_string();
 
+    let not_before_ts = cert.validity().not_before.timestamp();
     let not_after_ts = cert.validity().not_after.timestamp();
     let now_ts = ::time::OffsetDateTime::now_utc().unix_timestamp();
     let days_remaining = (not_after_ts - now_ts) / 86400;
+    let lifetime_days = (not_after_ts - not_before_ts) / 86400;
     let is_expired = days_remaining < 0;
 
     let (key_type, key_size) = extract_key_info(&cert);
@@ -87,7 +95,9 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
         key_type,
         key_size,
         signature_algorithm,
-        fingerprint_sha256: fingerprint,
+        fingerprint_sha256,
+        fingerprint_sha1,
+        lifetime_days,
         is_expired,
         is_self_signed,
     }
