@@ -1424,6 +1424,75 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
+   Cert validity timeline
+   ================================================================ */
+
+.cert-timeline {
+  margin-top: 6px;
+}
+
+.cert-timeline__bar {
+  position: relative;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  overflow: visible;
+}
+
+.cert-timeline__fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 3px 0 0 3px;
+}
+
+.cert-timeline__fill--ok     { background: var(--pass); opacity: 0.55; }
+.cert-timeline__fill--warn   { background: var(--warn); opacity: 0.65; }
+.cert-timeline__fill--expired { background: var(--fail); opacity: 0.65; }
+
+.cert-timeline__marker {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  background: var(--text-primary);
+  border-radius: 1px;
+  transform: translateX(-50%);
+  opacity: 0.8;
+}
+
+.cert-timeline__labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+}
+
+.cert-timeline__label {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+
+/* ================================================================
+   OCSP staple badge
+   ================================================================ */
+
+.ocsp-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ocsp-badge__freshness {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--mono);
+}
+
+/* ================================================================
    Copy button
    ================================================================ */
 

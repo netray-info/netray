@@ -1,11 +1,76 @@
 import { createSignal, createEffect, Show } from 'solid-js';
 import Explain from './Explain';
-import type { TlsInfo } from '../lib/types';
+import type { TlsInfo, OcspInfo } from '../lib/types';
 
 interface Props {
   params: TlsInfo;
   explain?: boolean;
   expanded?: boolean;
+}
+
+function formatRelativeTime(isoStr: string): string {
+  const then = new Date(isoStr);
+  const diffMs = Date.now() - then.getTime();
+  const diffMins = Math.round(diffMs / 60_000);
+  if (diffMins < 0) return 'in the future';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.round(diffMins / 60);
+  if (diffHours < 48) return `${diffHours}h ago`;
+  return `${Math.round(diffHours / 24)}d ago`;
+}
+
+function formatDuration(fromIso: string, toIso: string): string {
+  const from = new Date(fromIso);
+  const to = new Date(toIso);
+  const diffMs = to.getTime() - from.getTime();
+  if (diffMs <= 0) return 'expired';
+  const diffMins = Math.round(diffMs / 60_000);
+  if (diffMins < 60) return `${diffMins}m`;
+  const diffHours = Math.round(diffMins / 60);
+  if (diffHours < 48) return `${diffHours}h`;
+  return `${Math.round(diffHours / 24)}d`;
+}
+
+function OcspBadge(props: { ocsp: OcspInfo }) {
+  const stapled = () => props.ocsp.stapled;
+  const status = () => props.ocsp.status;
+  const thisUpdate = () => props.ocsp.this_update;
+  const nextUpdate = () => props.ocsp.next_update;
+
+  const badgeClass = () => {
+    if (!stapled()) return 'badge badge--skip';
+    if (status() === 'good') return 'badge badge--pass';
+    if (status() === 'revoked') return 'badge badge--fail';
+    return 'badge badge--warn';
+  };
+
+  const badgeLabel = () => {
+    if (!stapled()) return 'Not stapled';
+    if (status()) return `Stapled \u00b7 ${status()}`;
+    return 'Stapled';
+  };
+
+  const freshness = () => {
+    const tu = thisUpdate();
+    const nu = nextUpdate();
+    if (!stapled() || !tu) return null;
+    const updated = formatRelativeTime(tu);
+    if (nu) {
+      const valid = formatDuration(tu, nu);
+      const expired = new Date(nu) < new Date();
+      return `updated ${updated}, valid for ${valid}${expired ? ' (expired)' : ''}`;
+    }
+    return `updated ${updated}`;
+  };
+
+  return (
+    <span class="ocsp-badge">
+      <span class={badgeClass()}>{badgeLabel()}</span>
+      <Show when={freshness()}>
+        <span class="ocsp-badge__freshness">{freshness()}</span>
+      </Show>
+    </span>
+  );
 }
 
 export default function TlsParams(props: Props) {
@@ -40,7 +105,7 @@ export default function TlsParams(props: Props) {
               <Show when={props.params.key_exchange_group}>
                 <tr><th>Key Exchange</th><td>{props.params.key_exchange_group}</td></tr>
               </Show>
-              <tr><th>OCSP</th><td>{props.params.ocsp.stapled ? `stapled (${props.params.ocsp.status})` : 'not stapled'}</td></tr>
+              <tr><th>OCSP</th><td><OcspBadge ocsp={props.params.ocsp} /></td></tr>
               <tr><th>Handshake</th><td>{props.params.handshake_ms}ms</td></tr>
             </tbody>
           </table>

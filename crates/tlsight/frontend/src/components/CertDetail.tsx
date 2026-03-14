@@ -3,6 +3,39 @@ import Explain from './Explain';
 import type { CertInfo } from '../lib/types';
 import { certDisplayName } from '../lib/cert';
 
+function CertTimeline(props: { cert: CertInfo }) {
+  const notBefore = () => new Date(props.cert.not_before);
+  const notAfter = () => new Date(props.cert.not_after);
+  const now = new Date();
+
+  const totalMs = () => notAfter().getTime() - notBefore().getTime();
+  const elapsedMs = () => Math.min(Math.max(now.getTime() - notBefore().getTime(), 0), totalMs());
+  const elapsedPct = () => totalMs() > 0 ? (elapsedMs() / totalMs()) * 100 : 0;
+  const todayPct = () => Math.min(Math.max(elapsedPct(), 0), 100);
+
+  const colorClass = () => {
+    if (props.cert.is_expired) return 'cert-timeline__fill--expired';
+    if (props.cert.days_remaining <= 30) return 'cert-timeline__fill--warn';
+    return 'cert-timeline__fill--ok';
+  };
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  return (
+    <div class="cert-timeline">
+      <div class="cert-timeline__bar">
+        <div class={`cert-timeline__fill ${colorClass()}`} style={{ width: `${elapsedPct()}%` }} />
+        <div class="cert-timeline__marker" style={{ left: `${todayPct()}%` }} />
+      </div>
+      <div class="cert-timeline__labels">
+        <span class="cert-timeline__label">{fmt(notBefore())}</span>
+        <span class="cert-timeline__label">{fmt(notAfter())}</span>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   cert: CertInfo;
   expanded?: boolean;
@@ -87,7 +120,13 @@ export default function CertDetail(props: Props) {
                 <th>Serial</th>
                 <td class="mono">{props.cert.serial} <CopyBtn value={props.cert.serial} /></td>
               </tr>
-              <tr><th>Valid</th><td>{props.cert.not_before} — {props.cert.not_after}</td></tr>
+              <tr>
+                <th>Valid</th>
+                <td>
+                  {props.cert.not_before} — {props.cert.not_after}
+                  <CertTimeline cert={props.cert} />
+                </td>
+              </tr>
               <tr><th>Days remaining</th><td>{props.cert.days_remaining}</td></tr>
               <tr><th>Key</th><td>{props.cert.key_type} {props.cert.key_size}</td></tr>
               <tr><th>Signature</th><td>{props.cert.signature_algorithm}</td></tr>
