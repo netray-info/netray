@@ -14,8 +14,7 @@ use netray_common::enrichment::{CloudInfo, IpInfo};
 
 /// The fixture is ifconfig-rs's `Network` struct serialized to JSON,
 /// exactly as returned by GET /network/json?ip=8.8.8.8 on a populated instance.
-const NETWORK_FIXTURE: &str =
-    include_str!("../../ifconfig-rs/tests/fixtures/network_response.json");
+const NETWORK_FIXTURE: &str = include_str!("fixtures/network_response.json");
 
 #[test]
 fn deserializes_full_network_response() {

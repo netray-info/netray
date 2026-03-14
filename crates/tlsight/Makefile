@@ -23,7 +23,7 @@ CARGO_FLAGS  ?=
 NPM_CI_FLAGS ?=
 
 # ── Phony targets ────────────────────────────────────────────────
-.PHONY: all build check test lint ci clean dev run \
+.PHONY: all build check test lint ci pre-push clean dev run \
         frontend frontend-install frontend-dev frontend-test \
         test-rust test-frontend \
         fmt fmt-check clippy \
@@ -97,6 +97,13 @@ test-frontend: frontend-test ## Alias for frontend-test
 lint: clippy fmt-check ## Run all lints (clippy + fmt-check)
 
 ci: lint test frontend ## Full CI pipeline (lint + test + frontend build)
+
+# NOTE: NODE_AUTH_TOKEN must be exported in your shell before running pre-push
+#       (required for npm ci to authenticate against GitHub Packages).
+#       Example: export NODE_AUTH_TOKEN=$(gh auth token)
+pre-push: fmt-check clippy test frontend ## Run all checks locally before pushing (fmt-check → clippy → test → frontend)
+	@echo ""
+	@echo "All checks passed. Safe to push."
 
 # ══════════════════════════════════════════════════════════════════
 #  Development
