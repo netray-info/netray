@@ -103,6 +103,7 @@ pub struct MetaResponse {
     pub version: &'static str,
     pub features: MetaFeatures,
     pub limits: MetaLimits,
+    pub custom_ca_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ecosystem: Option<MetaEcosystem>,
 }
@@ -338,6 +339,7 @@ async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
             handshake_timeout_secs: config.limits.handshake_timeout_secs,
             request_timeout_secs: config.limits.request_timeout_secs,
         },
+        custom_ca_count: state.custom_ca_count,
         ecosystem,
     })
 }

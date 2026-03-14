@@ -105,6 +105,7 @@ export interface CertInfo {
   lifetime_days: number;
   is_expired: boolean;
   is_self_signed: boolean;
+  cert_policy: string;
 }
 
 export interface ValidationInfo {
@@ -193,6 +194,7 @@ export interface MetaResponse {
   version: string;
   features: Record<string, boolean>;
   limits: Record<string, number>;
+  custom_ca_count: number;
   ecosystem?: {
     dns_base_url?: string;
     ip_base_url?: string;

@@ -24,6 +24,8 @@ pub struct CertInfo {
     pub lifetime_days: i64,
     pub is_expired: bool,
     pub is_self_signed: bool,
+    /// Certificate policy classification: "EV", "OV", "DV", or "unknown".
+    pub cert_policy: String,
 }
 
 /// Parse a chain of DER-encoded certificates into structured CertInfo.
@@ -59,6 +61,7 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
                 lifetime_days: 0,
                 is_expired: false,
                 is_self_signed: false,
+                cert_policy: "unknown".to_string(),
             };
         }
     };
@@ -82,6 +85,7 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
 
     let (key_type, key_size) = extract_key_info(&cert);
     let signature_algorithm = format_sig_algo(&cert.signature_algorithm.algorithm.to_id_string());
+    let cert_policy = classify_cert_policy(&cert);
 
     CertInfo {
         position: classify_position(index, chain_len, is_self_signed),
@@ -100,6 +104,44 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
         lifetime_days,
         is_expired,
         is_self_signed,
+        cert_policy,
+    }
+}
+
+/// Classify certificate policy as EV, OV, DV, or unknown.
+///
+/// EV: cert policies extension contains CA/B Forum EV OID (2.23.140.1.1) or
+///     Microsoft EV OID (1.3.6.1.4.1.311.60.1.1).
+/// OV: subject O field is non-empty (organization validated).
+/// DV: subject O field absent or empty (domain only).
+fn classify_cert_policy(cert: &X509Certificate) -> String {
+    // Check Certificate Policies extension for EV OIDs
+    const EV_OIDS: &[&str] = &[
+        "2.23.140.1.1",           // CA/B Forum EV
+        "1.3.6.1.4.1.311.60.1.1", // Microsoft EV indicator
+    ];
+
+    for ext in cert.extensions() {
+        if let ParsedExtension::CertificatePolicies(policies) = ext.parsed_extension() {
+            for policy in policies.iter() {
+                let oid_str = policy.policy_id.to_id_string();
+                if EV_OIDS.contains(&oid_str.as_str()) {
+                    return "EV".to_string();
+                }
+            }
+        }
+    }
+
+    // Check subject O field for OV
+    let has_org = cert
+        .subject()
+        .iter_organization()
+        .any(|attr| !attr.as_str().unwrap_or("").trim().is_empty());
+
+    if has_org {
+        "OV".to_string()
+    } else {
+        "DV".to_string()
     }
 }
 

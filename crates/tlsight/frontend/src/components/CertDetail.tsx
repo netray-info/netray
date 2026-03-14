@@ -20,6 +20,20 @@ function isDnsSan(san: string): boolean {
   return true;
 }
 
+function CopyBtn(props: { value: string }) {
+  const [copied, setCopied] = createSignal(false);
+  const copy = () => {
+    navigator.clipboard.writeText(props.value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button class="copy-btn" onClick={copy} title="Copy">
+      {copied() ? '\u2713' : '\u29c9'}
+    </button>
+  );
+}
+
 export default function CertDetail(props: Props) {
   const [expanded, setExpanded] = createSignal(props.expanded ?? false);
   createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
@@ -34,7 +48,15 @@ export default function CertDetail(props: Props) {
           <Explain when={!!props.explain}>Full details for this certificate. SANs list all hostnames this certificate covers. The SHA-256 fingerprint uniquely identifies this certificate.</Explain>
           <table class="cert-detail__table">
             <tbody>
-              <tr><th>Issuer</th><td>{props.cert.issuer}</td></tr>
+              <tr>
+                <th>Subject</th>
+                <td>{props.cert.subject} <CopyBtn value={props.cert.subject} /></td>
+              </tr>
+              <tr>
+                <th>Issuer</th>
+                <td>{props.cert.issuer} <CopyBtn value={props.cert.issuer} /></td>
+              </tr>
+              <tr><th>Policy</th><td>{props.cert.cert_policy}</td></tr>
               <tr><th>SANs</th><td class="mono">
                 <Show when={props.cert.sans.length > 0} fallback="none">
                   <For each={props.cert.sans}>
@@ -51,15 +73,20 @@ export default function CertDetail(props: Props) {
                               target="_blank"
                               rel="noopener noreferrer"
                               title={`Inspect DNS for ${san}`}
-                            >DNS ↗</a>
+                            >DNS &#x2197;</a>
                           </>
                         )}
                       </>
                     )}
                   </For>
+                  {' '}
+                  <CopyBtn value={props.cert.sans.join(', ')} />
                 </Show>
               </td></tr>
-              <tr><th>Serial</th><td class="mono">{props.cert.serial}</td></tr>
+              <tr>
+                <th>Serial</th>
+                <td class="mono">{props.cert.serial} <CopyBtn value={props.cert.serial} /></td>
+              </tr>
               <tr><th>Valid</th><td>{props.cert.not_before} — {props.cert.not_after}</td></tr>
               <tr><th>Days remaining</th><td>{props.cert.days_remaining}</td></tr>
               <tr><th>Key</th><td>{props.cert.key_type} {props.cert.key_size}</td></tr>
@@ -74,10 +101,15 @@ export default function CertDetail(props: Props) {
                     href={`https://crt.sh/?q=${props.cert.fingerprint_sha256.replace(/:/g, '')}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                  >crt.sh ↗</a>
+                  >crt.sh &#x2197;</a>
+                  {' '}
+                  <CopyBtn value={props.cert.fingerprint_sha256} />
                 </td>
               </tr>
-              <tr><th>SHA-1</th><td class="mono">{props.cert.fingerprint_sha1}</td></tr>
+              <tr>
+                <th>SHA-1</th>
+                <td class="mono">{props.cert.fingerprint_sha1} <CopyBtn value={props.cert.fingerprint_sha1} /></td>
+              </tr>
               <tr><th>Self-signed</th><td>{props.cert.is_self_signed ? 'yes' : 'no'}</td></tr>
               <tr><th>Expired</th><td>{props.cert.is_expired ? 'yes' : 'no'}</td></tr>
             </tbody>

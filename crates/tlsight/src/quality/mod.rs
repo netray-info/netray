@@ -67,6 +67,7 @@ pub fn assess_port(
     all_checks.push(checks::check_caa_compliant(caa_status));
     all_checks.push(checks::check_dane_valid(dane_status));
     all_checks.push(checks::check_consistency(consistency));
+    all_checks.push(checks::check_alpn_consistency(ips));
 
     let verdict = types::compute_verdict(&all_checks);
     PortQualityResult {

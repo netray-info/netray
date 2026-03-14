@@ -170,6 +170,7 @@ mod tests {
             lifetime_days: 365,
             is_expired: false,
             is_self_signed: false,
+            cert_policy: "DV".to_string(),
         }
     }
 
@@ -191,6 +192,7 @@ mod tests {
             lifetime_days: 365,
             is_expired: false,
             is_self_signed: false,
+            cert_policy: "DV".to_string(),
         }
     }
 

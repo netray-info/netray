@@ -23,17 +23,20 @@ pub struct AppState {
     pub hsts_tls_connector: Arc<tokio_rustls::TlsConnector>,
     pub dns_resolver: Option<Arc<DnsResolver>>,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
+    pub custom_ca_count: usize,
 }
 
 impl AppState {
     pub fn new(config: &Config) -> Self {
         let mut root_store = rustls::RootCertStore::empty();
         root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        let mozilla_count = webpki_roots::TLS_SERVER_ROOTS.len();
 
         if let Some(ref ca_dir) = config.validation.custom_ca_dir {
             load_custom_cas(&mut root_store, ca_dir);
         }
 
+        let custom_ca_count = root_store.len().saturating_sub(mozilla_count);
         let trust_store = Arc::new(root_store);
         let cert_verifier = rustls::client::WebPkiServerVerifier::builder(Arc::clone(&trust_store))
             .build()
@@ -65,6 +68,7 @@ impl AppState {
             hsts_tls_connector,
             dns_resolver: None, // Initialized async in main
             enrichment_client,
+            custom_ca_count,
             config: Arc::new(ArcSwap::from_pointee(config.clone())),
         }
     }

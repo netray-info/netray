@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use crate::routes::ConsistencyResult;
-use crate::tls::CertInfo;
+use crate::tls::{CertInfo, IpInspectionResult};
 use crate::validate::{CheckStatus, ValidationResult};
 
 use super::types::{Category, HealthCheck};
@@ -444,6 +446,58 @@ pub fn check_consistency(consistency: Option<&ConsistencyResult>) -> HealthCheck
     }
 }
 
+pub fn check_alpn_consistency(ips: &[IpInspectionResult]) -> HealthCheck {
+    let successful: Vec<_> = ips.iter().filter(|r| r.tls.is_some()).collect();
+
+    if successful.len() < 2 {
+        return HealthCheck {
+            id: "alpn_consistency".to_string(),
+            category: Category::Configuration,
+            status: CheckStatus::Skip,
+            label: "ALPN consistency".to_string(),
+            detail: "fewer than 2 IPs inspected".to_string(),
+        };
+    }
+
+    // Collect per-IP ALPN values (normalize None → "none")
+    let alpn_map: HashMap<String, String> = successful
+        .iter()
+        .map(|r| {
+            let alpn = r
+                .tls
+                .as_ref()
+                .and_then(|t| t.alpn.clone())
+                .unwrap_or_else(|| "none".to_string());
+            (r.ip.clone(), alpn)
+        })
+        .collect();
+
+    let unique: std::collections::HashSet<_> = alpn_map.values().collect();
+    if unique.len() <= 1 {
+        let value = alpn_map.values().next().cloned().unwrap_or_default();
+        HealthCheck {
+            id: "alpn_consistency".to_string(),
+            category: Category::Configuration,
+            status: CheckStatus::Pass,
+            label: "ALPN consistency".to_string(),
+            detail: format!("consistent: {value}"),
+        }
+    } else {
+        let detail = alpn_map
+            .iter()
+            .map(|(ip, alpn)| format!("{ip}={alpn}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        HealthCheck {
+            id: "alpn_consistency".to_string(),
+            category: Category::Configuration,
+            status: CheckStatus::Warn,
+            label: "ALPN consistency".to_string(),
+            detail: format!("inconsistent ALPN across IPs: {detail}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -481,6 +535,7 @@ mod tests {
             lifetime_days: 365,
             is_expired: days < 0,
             is_self_signed: false,
+            cert_policy: "DV".to_string(),
         }
     }
 

@@ -314,6 +314,7 @@ export default function App() {
                     ports={r.ports.map(p => p.port)}
                     selected={selectedPort()}
                     onSelect={setSelectedPort}
+                    portQuality={Object.fromEntries(r.ports.map(p => [p.port, p.quality]))}
                   />
                 </Show>
 
