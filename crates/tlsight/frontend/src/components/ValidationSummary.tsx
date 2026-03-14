@@ -112,7 +112,8 @@ function qualityVerdict(quality?: QualityResult, portQualities?: { port: number;
 function CheckRow(props: { check: HealthCheck }) {
   return (
     <div class={`quality-check quality-check--${props.check.status}`} title={DETAIL_EXPLANATIONS[props.check.id]}>
-      <span class="quality-check__icon">{STATUS_ICON[props.check.status]}</span>
+      <span class="quality-check__icon" aria-hidden="true">{STATUS_ICON[props.check.status]}</span>
+      <span class="sr-only">{props.check.status}</span>
       <span class="quality-check__label">{props.check.label}</span>
       <span class="quality-check__sep">&mdash;</span>
       <span class="quality-check__detail">{props.check.detail}</span>
@@ -164,7 +165,9 @@ export default function ValidationSummary(props: Props) {
       <div class="validation-summary__checks">
         {Object.entries(props.summary.checks).map(([key, status]) => (
           <span class={`check check--${status}`} title={CHECK_EXPLANATIONS[key]}>
-            {STATUS_ICON[status]} {CHECK_LABELS[key] ?? key}
+            <span aria-hidden="true">{STATUS_ICON[status]}</span>
+            <span class="sr-only">{status}</span>
+            {' '}{CHECK_LABELS[key] ?? key}
           </span>
         ))}
       </div>

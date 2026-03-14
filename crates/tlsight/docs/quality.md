@@ -188,7 +188,7 @@ Parse the `Strict-Transport-Security` response header:
 
 **HEAD vs GET limitation.** Some servers only return `Strict-Transport-Security` on GET responses or specific paths. A `HEAD /` may miss the header. This is a known limitation, documented in the check detail when HSTS is not found: "HSTS header not found in HEAD / response; some servers may only return it on GET requests."
 
-**Security model exception.** The core SDD (§8) states "no application data sent after TLS handshake" for inspection connections. The HSTS check uses a **separate** connection specifically for HTTP data, clearly delineated from inspection handshakes. The parent SDD must be updated to document this exception (see §7).
+**Security model exception.** The core SDD (§8) states "no application data sent after TLS handshake" for inspection connections. The HSTS check uses a **separate** connection specifically for HTTP data, clearly delineated from inspection handshakes. This exception is documented in §7 and reflected in `docs/done/sdd-2026-03-08.md`.
 
 **Timeout**: 5-second hard cap, independent of the handshake timeout. HSTS check failure is non-fatal — the health check status is `skip`, and a warning explains why.
 
@@ -559,13 +559,13 @@ The `ExportButtons` component includes quality data when present. The JSON expor
 
 ## 7. Parent SDD Update
 
-The core SDD (`docs/sdd.md`) must be updated alongside the implementation (not as a separate phase):
+The core SDD (`docs/done/sdd-2026-03-08.md`) was updated alongside the implementation. The following changes were made:
 
-1. **§8 Security**: Add an exception to the "no application data after TLS handshake" rule: "Exception: when quality assessment is enabled, separate HTTP connections are made for HSTS and redirect checking. These are distinct from inspection handshakes and governed by the quality SDD (§3.3) security constraints."
+1. **§8 Security**: Added an exception to the "no application data after TLS handshake" rule: "Exception: when quality assessment is enabled, separate HTTP connections are made for HSTS and redirect checking. These are distinct from inspection handshakes and governed by the quality SDD (§3.3) security constraints."
 
-2. **§7 Backend**: Reference the `quality/` module in the inspection pipeline.
+2. **§7 Backend**: Referenced the `quality/` module in the inspection pipeline.
 
-3. **§14 Phased delivery**: Add quality assessment phases.
+3. **§14 Phased delivery**: Added quality assessment phases.
 
 ---
 

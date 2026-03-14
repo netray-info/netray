@@ -1,5 +1,5 @@
 # tlsight configuration
-# See docs/sdd.md for full documentation.
+# See docs/done/sdd-2026-03-08.md for the design document.
 
 # Display name shown in the UI header, footer, and page title.
 # Default: "tlsight"
@@ -23,7 +23,6 @@ handshake_timeout_secs = 5
 request_timeout_secs = 15
 
 [dns]
-resolver = "cloudflare"
 timeout_secs = 3
 
 [validation]

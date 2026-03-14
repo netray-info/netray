@@ -75,10 +75,6 @@ pub struct LimitsConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DnsConfig {
-    // TODO: resolver selection not yet implemented; always uses system defaults (see dns/mod.rs)
-    #[allow(dead_code)]
-    #[serde(default = "default_resolver")]
-    pub resolver: String,
     #[serde(default = "default_dns_timeout_secs")]
     pub timeout_secs: u64,
 }
@@ -244,7 +240,6 @@ fn default_limits() -> LimitsConfig {
 
 fn default_dns() -> DnsConfig {
     DnsConfig {
-        resolver: default_resolver(),
         timeout_secs: default_dns_timeout_secs(),
     }
 }
@@ -310,10 +305,6 @@ fn default_max_ips_per_hostname() -> usize {
 
 fn default_max_domain_length() -> usize {
     253
-}
-
-fn default_resolver() -> String {
-    "cloudflare".to_owned()
 }
 
 fn default_dns_timeout_secs() -> u64 {

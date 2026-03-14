@@ -1,27 +1,8 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use netray_common::error::ApiError;
-use serde::Serialize;
 
-/// JSON body returned for all error responses.
-///
-/// Wire format: `{"error": {"code": "...", "message": "..."}}`
-///
-/// Local re-definition with `utoipa::ToSchema` for OpenAPI schema generation.
-/// The actual response body is produced by `netray_common::error::into_error_response`.
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct ErrorResponse {
-    pub error: ErrorInfo,
-}
-
-/// Error detail contained in an error response.
-#[derive(Serialize, utoipa::ToSchema)]
-pub struct ErrorInfo {
-    /// Machine-readable error code (e.g. `INVALID_HOSTNAME`).
-    pub code: &'static str,
-    /// Human-readable error message.
-    pub message: String,
-}
+pub use netray_common::error::{ErrorInfo, ErrorResponse};
 
 /// Structured API errors that map to specific HTTP status codes and error codes.
 ///

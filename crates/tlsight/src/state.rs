@@ -166,7 +166,6 @@ mod tests {
                 allow_blocked_targets: false,
             },
             dns: crate::config::DnsConfig {
-                resolver: "cloudflare".to_owned(),
                 timeout_secs: 3,
             },
             validation: crate::config::ValidationConfig {

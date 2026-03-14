@@ -3,7 +3,8 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use axum::extract::{ConnectInfo, Query, RawQuery, State};
+use axum::extract::{ConnectInfo, Extension, Query, RawQuery, State};
+use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -137,6 +138,13 @@ pub struct HealthResponse {
     pub status: &'static str,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ReadyResponse {
+    pub status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Query params
 // ---------------------------------------------------------------------------
@@ -187,6 +195,7 @@ fn default_ports() -> Vec<u16> {
         MetaLimits,
         MetaEcosystem,
         HealthResponse,
+        ReadyResponse,
         ErrorResponse,
         crate::error::ErrorInfo,
         tls::IpInspectionResult,
@@ -217,13 +226,12 @@ pub struct ApiDoc;
 // ---------------------------------------------------------------------------
 
 pub fn health_router() -> Router {
-    Router::new()
-        .route("/api/health", get(health_handler))
-        .route("/api/ready", get(ready_handler))
+    Router::new().route("/api/health", get(health_handler))
 }
 
 pub fn api_router(state: AppState) -> Router {
     Router::new()
+        .route("/api/ready", get(ready_handler))
         .route(
             "/api/inspect",
             get(inspect_handler).post(inspect_post_handler),
@@ -253,11 +261,37 @@ async fn health_handler() -> Json<HealthResponse> {
     get,
     path = "/api/ready",
     responses(
-        (status = 200, description = "Service is ready", body = HealthResponse),
+        (status = 200, description = "Service is ready", body = ReadyResponse),
+        (status = 503, description = "Service not ready", body = ReadyResponse),
     )
 )]
-async fn ready_handler() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ready" })
+async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let config = state.config.load();
+
+    // DNS resolver is required when CAA or DANE checks are enabled.
+    if (config.validation.check_caa || config.validation.check_dane)
+        && state.dns_resolver.is_none()
+    {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(ReadyResponse {
+                status: "not_ready",
+                reason: Some(
+                    "DNS resolver unavailable; CAA/DANE checks cannot run".to_owned(),
+                ),
+            }),
+        )
+            .into_response();
+    }
+
+    (
+        StatusCode::OK,
+        Json(ReadyResponse {
+            status: "ok",
+            reason: None,
+        }),
+    )
+        .into_response()
 }
 
 #[utoipa::path(
@@ -318,13 +352,14 @@ async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
 async fn inspect_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(request_id): Extension<crate::RequestId>,
     headers: axum::http::HeaderMap,
     query: Query<InspectQuery>,
 ) -> Result<Json<InspectResponse>, AppError> {
     let client_ip = state.ip_extractor.extract(&headers, addr);
     let config = state.config.load();
     let parsed = input::parse_input(&query.h, config.limits.max_ports)?;
-    do_inspect(state, client_ip, &headers, parsed).await
+    do_inspect(state, client_ip, &headers, parsed, request_id.0).await
 }
 
 #[utoipa::path(
@@ -344,6 +379,7 @@ async fn inspect_handler(
 async fn inspect_post_handler(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(request_id): Extension<crate::RequestId>,
     headers: axum::http::HeaderMap,
     raw_query: RawQuery,
     Json(body): Json<InspectPostBody>,
@@ -385,7 +421,7 @@ async fn inspect_post_handler(
     };
 
     let client_ip = state.ip_extractor.extract(&headers, addr);
-    do_inspect(state, client_ip, &headers, parsed).await
+    do_inspect(state, client_ip, &headers, parsed, request_id.0).await
 }
 
 async fn do_inspect(
@@ -393,12 +429,11 @@ async fn do_inspect(
     client_ip: IpAddr,
     _headers: &axum::http::HeaderMap,
     parsed: input::ParsedInput,
+    request_id: String,
 ) -> Result<Json<InspectResponse>, AppError> {
     let request_start = Instant::now();
     let config = state.config.load();
 
-    // Extract request ID from extensions (set by middleware)
-    let request_id = uuid::Uuid::now_v7().to_string();
     tracing::Span::current().record("request_id", &request_id);
     metrics::counter!("tlsight_inspections_total").increment(1);
 
@@ -1001,7 +1036,6 @@ mod tests {
                 allow_blocked_targets: false,
             },
             dns: crate::config::DnsConfig {
-                resolver: "cloudflare".to_owned(),
                 timeout_secs: 3,
             },
             validation: crate::config::ValidationConfig {

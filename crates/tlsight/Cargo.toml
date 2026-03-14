@@ -29,7 +29,7 @@ axum = { version = "0.8", features = ["json"] }
 tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
 governor = "0.10"
-netray-common = "0.2.1"
+netray-common = { version = "0.2.1", features = ["schema"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -83,3 +83,6 @@ futures = "0.3"
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 rcgen = "0.13"
+
+[patch.crates-io]
+netray-common = { path = "../netray-common" }

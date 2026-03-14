@@ -70,7 +70,6 @@ export default function IpCard(props: Props) {
         class="ip-card__header"
         onClick={() => hasBody() && setExpanded(!expanded())}
         disabled={!hasBody()}
-        aria-disabled={!hasBody() ? "true" : undefined}
       >
         <div class="ip-card__left">
           <span class="ip-card__ip">{props.result.ip}</span>

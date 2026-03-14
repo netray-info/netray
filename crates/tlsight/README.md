@@ -4,7 +4,7 @@
 
 tlsight is a web-based tool that performs a full TLS handshake against a hostname, extracts and validates the certificate chain, cross-checks DNS records, and surfaces everything in a structured, readable interface. No dependencies, no plugins — just a URL and a result.
 
-Live at [tls.pdt.sh](https://tls.pdt.sh) · Part of the [pdt.sh](https://pdt.sh) toolchain alongside [dns.pdt.sh](https://dns.pdt.sh) and [ip.pdt.sh](https://ip.pdt.sh).
+Live at [tls.pdt.sh](https://tls.pdt.sh) · Part of the [netray.info](https://netray.info) toolchain alongside [dns.pdt.sh](https://dns.pdt.sh) and [ip.netray.info](https://ip.netray.info).
 
 ---
 
@@ -20,7 +20,7 @@ Given a hostname (with optional ports), tlsight:
 - **Extracts Certificate Transparency SCTs** — from the TLS extension
 - **Cross-checks DNS** — CAA records (is the issuing CA authorized?) and TLSA/DANE records
 - **Compares across IPs** — detects cert mismatches, TLS version or cipher suite inconsistencies between servers
-- **Runs health checks** — 13 graded checks across certificate, protocol, and configuration categories
+- **Runs health checks** — 15 checks per port (certificate, protocol, configuration) plus 2 hostname-scoped checks (HSTS, HTTPS redirect)
 - **Checks HSTS and HTTPS redirect** — makes a live HEAD request to verify security headers
 
 All of this happens in a single request, typically in under two seconds.
@@ -121,11 +121,17 @@ check_ct = false
 # custom_ca_dir = "/etc/tlsight/ca.d/"   # load private CAs from *.pem files
 
 [ecosystem]
-dns_url = "https://dns.pdt.sh"   # cross-links to DNS tool
-ip_url  = "https://ip.pdt.sh"    # cross-links to IP tool
+dns_base_url = "https://dns.pdt.sh"   # cross-links to DNS tool
+ip_base_url  = "https://ip.pdt.sh"    # cross-links to IP tool
+# ip_api_url = "https://ip.pdt.sh"    # enables IP enrichment (geo, ASN, rDNS badges)
+
+[quality]
+# enabled = true                    # health checks always-on (default: true)
+# http_check_timeout_secs = 5       # timeout for HSTS/redirect checks (hard cap: 5s)
+# skip_http_checks = false          # set true if outbound HTTP is blocked
 ```
 
-Configuration is loaded from a TOML file (default: `tlsight.toml`, override with `TLSIGHT_CONFIG`). Environment variables take precedence over the file, using the `TLSIGHT__` prefix with `__` as the section separator — e.g. `TLSIGHT__SERVER__BIND=0.0.0.0:8080`.
+Configuration is loaded from a TOML file (default: `tlsight.toml`, override with `TLSIGHT_CONFIG`). Environment variables take precedence over the file, using the `TLSIGHT_` prefix with `__` as the section separator — e.g. `TLSIGHT_SERVER__BIND=0.0.0.0:8080`.
 
 Hardcoded safety caps (handshake timeout 5s, request timeout 15s, max 7 ports, max 10 IPs) cannot be exceeded by configuration.
 
