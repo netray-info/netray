@@ -13,7 +13,9 @@ import { addToHistory } from './lib/history';
 import type { InspectResponse, PortResult } from './lib/types';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
-import { createFocusTrap } from '@netray-info/common-frontend/focus-trap';
+import Modal from '@netray-info/common-frontend/components/Modal';
+import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
+import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
 
 const EXAMPLES: { title: string; desc: string; queries: string[] }[] = [
   {
@@ -38,7 +40,7 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [selectedPort, setSelectedPort] = createSignal<number>(443);
-  const { theme, toggleTheme } = createTheme('tlsight_theme', 'dark');
+  const themeResult = createTheme('tlsight_theme', 'dark');
   const [showHelp, setShowHelp] = createSignal(false);
   const [lastQuery, setLastQuery] = createSignal('');
   const [allExpanded, setAllExpanded] = createSignal<boolean | undefined>(undefined);
@@ -50,17 +52,6 @@ export default function App() {
   const ipUrl = () => meta()?.ecosystem?.ip_base_url;
 
   let inputEl: HTMLInputElement | undefined;
-  let helpModalEl: HTMLDivElement | undefined;
-
-  const helpTrap = createFocusTrap(() => helpModalEl, () => setShowHelp(false));
-
-  const themeIcon = () =>
-    theme() === 'system' ? '\u25D0' : theme() === 'dark' ? '\u263E' : '\u2600';
-
-  const themeTitle = () =>
-    theme() === 'system' ? 'Theme: System'
-    : theme() === 'dark' ? 'Theme: Dark'
-    : 'Theme: Light';
 
   function clearCardActive() {
     document.querySelector('[data-card-active]')?.removeAttribute('data-card-active');
@@ -69,13 +60,6 @@ export default function App() {
   createEffect(() => {
     const name = siteName();
     if (name) document.title = name;
-  });
-
-  createEffect(() => {
-    if (showHelp()) {
-      helpTrap.activate();
-      onCleanup(() => helpTrap.deactivate());
-    }
   });
 
   // Escape needs special handling (works inside editors/inputs too)
@@ -206,14 +190,7 @@ export default function App() {
         <h1 class="logo">{siteName()}</h1>
         <span class="tagline">TLS, illuminated</span>
         <div class="header-actions">
-          <button
-            class="header-btn"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            title={themeTitle()}
-          >
-            {themeIcon()}
-          </button>
+          <ThemeToggle theme={themeResult} class="header-btn" />
           <button
             class="header-btn"
             onClick={openHelp}
@@ -407,62 +384,46 @@ export default function App() {
       </main>
 
       {/* Help modal */}
-      <Show when={showHelp()}>
-        <div class="modal-overlay" onClick={closeHelp}>
-          <div
-            class="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="help-title"
-            ref={helpModalEl}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div class="modal__header">
-              <h2 id="help-title">Help</h2>
-              <button class="modal__close" onClick={closeHelp}>&times;</button>
-            </div>
+      <Modal open={showHelp()} onClose={closeHelp} title="Help">
+        <div class="help-section">
+          <div class="help-section__title">Input syntax</div>
+          <code class="help-syntax">hostname[:port[,port...]]</code>
+          <p class="help-desc">Enter a hostname to inspect its TLS certificate. Optionally append ports separated by commas.</p>
+        </div>
 
-            <div class="help-section">
-              <div class="help-section__title">Input syntax</div>
-              <code class="help-syntax">hostname[:port[,port...]]</code>
-              <p class="help-desc">Enter a hostname to inspect its TLS certificate. Optionally append ports separated by commas.</p>
-            </div>
-
-            <div class="help-section">
-              <div class="help-section__title">Keyboard shortcuts</div>
-              <div class="help-keys">
-                <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
-                <div class="help-key"><kbd>Enter</kbd><span>Submit query</span></div>
-                <div class="help-key"><kbd>r</kbd><span>Re-run last query</span></div>
-                <div class="help-key"><kbd>e</kbd><span>Toggle explain mode</span></div>
-                <div class="help-key"><kbd>j</kbd> / <kbd>k</kbd><span>Next / previous IP card</span></div>
-                <div class="help-key"><kbd>Enter</kbd><span>Expand / collapse IP card</span></div>
-                <div class="help-key"><kbd>Escape</kbd><span>Blur input / close help</span></div>
-                <div class="help-key"><kbd>?</kbd><span>Toggle help</span></div>
-              </div>
-            </div>
-
-            <div class="help-section">
-              <div class="help-section__title">History</div>
-              <p class="help-desc">Previous queries are available via arrow keys when the input is focused.</p>
-              <div class="help-keys">
-                <div class="help-key"><kbd>&darr;</kbd> / <kbd>Ctrl+j</kbd><span>Next (older) query</span></div>
-                <div class="help-key"><kbd>&uarr;</kbd> / <kbd>Ctrl+k</kbd><span>Previous (newer) query</span></div>
-              </div>
-            </div>
-
-            <div class="help-section">
-              <div class="help-section__title">What the results mean</div>
-              <p class="help-desc"><strong>CAA records</strong> — DNS Certification Authority Authorization. These records declare which CAs are allowed to issue certificates for a domain. If the issuing CA is not listed, the certificate may violate the domain owner's policy.</p>
-              <p class="help-desc"><strong>IP consistency</strong> — When a hostname resolves to multiple IPs, this check compares whether all IPs serve the same certificate, TLS version, and cipher suite. Mismatches may indicate misconfigured servers, stale deployments, or CDN inconsistencies.</p>
-              <p class="help-desc"><strong>DANE/TLSA</strong> — DNS-based Authentication of Named Entities. TLSA records pin certificates or CAs in DNS, validated via DNSSEC. Provides an alternative trust path independent of the CA system.</p>
-            </div>
+        <div class="help-section">
+          <div class="help-section__title">Keyboard shortcuts</div>
+          <div class="help-keys">
+            <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
+            <div class="help-key"><kbd>Enter</kbd><span>Submit query</span></div>
+            <div class="help-key"><kbd>r</kbd><span>Re-run last query</span></div>
+            <div class="help-key"><kbd>e</kbd><span>Toggle explain mode</span></div>
+            <div class="help-key"><kbd>j</kbd> / <kbd>k</kbd><span>Next / previous IP card</span></div>
+            <div class="help-key"><kbd>Enter</kbd><span>Expand / collapse IP card</span></div>
+            <div class="help-key"><kbd>Escape</kbd><span>Blur input / close help</span></div>
+            <div class="help-key"><kbd>?</kbd><span>Toggle help</span></div>
           </div>
         </div>
-      </Show>
 
-      <footer class="footer">
-        <div class="footer-about">
+        <div class="help-section">
+          <div class="help-section__title">History</div>
+          <p class="help-desc">Previous queries are available via arrow keys when the input is focused.</p>
+          <div class="help-keys">
+            <div class="help-key"><kbd>&darr;</kbd> / <kbd>Ctrl+j</kbd><span>Next (older) query</span></div>
+            <div class="help-key"><kbd>&uarr;</kbd> / <kbd>Ctrl+k</kbd><span>Previous (newer) query</span></div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section__title">What the results mean</div>
+          <p class="help-desc"><strong>CAA records</strong> — DNS Certification Authority Authorization. These records declare which CAs are allowed to issue certificates for a domain. If the issuing CA is not listed, the certificate may violate the domain owner's policy.</p>
+          <p class="help-desc"><strong>IP consistency</strong> — When a hostname resolves to multiple IPs, this check compares whether all IPs serve the same certificate, TLS version, and cipher suite. Mismatches may indicate misconfigured servers, stale deployments, or CDN inconsistencies.</p>
+          <p class="help-desc"><strong>DANE/TLSA</strong> — DNS-based Authentication of Named Entities. TLSA records pin certificates or CAs in DNS, validated via DNSSEC. Provides an alternative trust path independent of the CA system.</p>
+        </div>
+      </Modal>
+
+      <SiteFooter
+        aboutText={<>
           <em>{siteName()}</em> is a TLS certificate inspection and diagnostics service.
           Inspects certificate chains, TLS parameters, DANE/TLSA records, and CAA compliance across all resolved IPs.
           Built in <a href="https://www.rust-lang.org/" target="_blank" rel="noopener noreferrer">Rust</a>{" "}
@@ -470,19 +431,14 @@ export default function App() {
           <a href="https://github.com/rustls/rustls" target="_blank" rel="noopener noreferrer">rustls</a>,{" "}
           and <a href="https://www.solidjs.com/" target="_blank" rel="noopener noreferrer">SolidJS</a>.
           Open to use — rate limiting applies.
-        </div>
-        <div class="footer-links">
-          <a class="footer-link" href="https://github.com/lukaspustina/tlsight" target="_blank" rel="noopener noreferrer">GitHub</a>
-          <span class="footer-sep">&middot;</span>
-          <a class="footer-link" href="/docs" target="_blank" rel="noopener noreferrer">API Docs</a>
-          <span class="footer-sep">&middot;</span>
-          <a class="footer-link" href="https://lukas.pustina.de" target="_blank" rel="noopener noreferrer">Author</a>
-          <Show when={meta()?.version}>
-            <span class="footer-sep">&middot;</span>
-            <span class="footer-text">v{meta()!.version}</span>
-          </Show>
-        </div>
-      </footer>
+        </>}
+        links={[
+          { href: 'https://github.com/lukaspustina/tlsight', label: 'GitHub', external: true },
+          { href: '/docs', label: 'API Docs', external: true },
+          { href: 'https://lukas.pustina.de', label: 'Author', external: true },
+        ]}
+        version={meta()?.version}
+      />
     </div>
   );
 }

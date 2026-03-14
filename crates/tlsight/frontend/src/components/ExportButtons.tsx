@@ -1,5 +1,6 @@
 import { createSignal } from 'solid-js';
 import type { InspectResponse } from '../lib/types';
+import { downloadFile, copyToClipboard } from '@netray-info/common-frontend/utils';
 
 interface Props {
   result: InspectResponse;
@@ -9,13 +10,11 @@ export default function ExportButtons(props: Props) {
   const [copyStatus, setCopyStatus] = createSignal<'idle' | 'success' | 'error'>('idle');
 
   const downloadJson = () => {
-    const blob = new Blob([JSON.stringify(props.result, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `tlsight-${props.result.hostname}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(
+      JSON.stringify(props.result, null, 2),
+      `tlsight-${props.result.hostname}.json`,
+      'application/json',
+    );
   };
 
   const copyMarkdown = async () => {
@@ -67,14 +66,9 @@ export default function ExportButtons(props: Props) {
 
     lines.push(`_Inspected in ${r.duration_ms}ms_`);
 
-    try {
-      await navigator.clipboard.writeText(lines.join('\n'));
-      setCopyStatus('success');
-      setTimeout(() => setCopyStatus('idle'), 2000);
-    } catch {
-      setCopyStatus('error');
-      setTimeout(() => setCopyStatus('idle'), 2000);
-    }
+    const ok = await copyToClipboard(lines.join('\n'));
+    setCopyStatus(ok ? 'success' : 'error');
+    setTimeout(() => setCopyStatus('idle'), 2000);
   };
 
   return (
