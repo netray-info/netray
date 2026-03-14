@@ -16,8 +16,8 @@ pub struct AppState {
     pub config: Arc<ArcSwap<Config>>,
     pub ip_extractor: Arc<IpExtractor>,
     pub rate_limiter: Arc<RateLimitState>,
-    #[allow(dead_code)] // Kept alive for cert_verifier which holds an Arc reference to it
-    pub trust_store: Arc<rustls::RootCertStore>,
+    /// Trust store wrapped in ArcSwap so it can be hot-reloaded on SIGHUP.
+    pub trust_store: Arc<ArcSwap<rustls::RootCertStore>>,
     pub cert_verifier: Arc<dyn ServerCertVerifier>,
     pub handshake_semaphore: Arc<Semaphore>,
     pub hsts_tls_connector: Arc<tokio_rustls::TlsConnector>,
@@ -37,10 +37,12 @@ impl AppState {
         }
 
         let custom_ca_count = root_store.len().saturating_sub(mozilla_count);
-        let trust_store = Arc::new(root_store);
-        let cert_verifier = rustls::client::WebPkiServerVerifier::builder(Arc::clone(&trust_store))
-            .build()
-            .expect("failed to build WebPki verifier");
+        let trust_store_inner = Arc::new(root_store);
+        let cert_verifier =
+            rustls::client::WebPkiServerVerifier::builder(Arc::clone(&trust_store_inner))
+                .build()
+                .expect("failed to build WebPki verifier");
+        let trust_store = Arc::new(ArcSwap::from(trust_store_inner));
 
         let hsts_config = rustls::ClientConfig::builder()
             .dangerous()
@@ -140,6 +142,36 @@ fn load_custom_cas(root_store: &mut rustls::RootCertStore, ca_dir: &str) {
     );
 }
 
+/// Rebuild the `RootCertStore` from scratch (Mozilla bundle + custom CA dir) and
+/// store it into the shared `ArcSwap`. Returns the new custom CA count.
+pub fn reload_custom_cas(
+    ca_dir: Option<&str>,
+    trust_store: &ArcSwap<rustls::RootCertStore>,
+) -> usize {
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    let mozilla_count = webpki_roots::TLS_SERVER_ROOTS.len();
+
+    if let Some(dir) = ca_dir {
+        let path = Path::new(dir);
+        if path.is_dir() {
+            load_custom_cas(&mut root_store, dir);
+        } else {
+            tracing::warn!(dir = dir, "custom_ca_dir not found during reload");
+        }
+    }
+
+    let custom_ca_count = root_store.len().saturating_sub(mozilla_count);
+    trust_store.store(Arc::new(root_store));
+
+    tracing::info!(
+        custom_cas = custom_ca_count,
+        "custom CA directory reloaded"
+    );
+
+    custom_ca_count
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,7 +228,7 @@ mod tests {
 
         // Trust store should contain Mozilla root certificates.
         assert!(
-            !state.trust_store.is_empty(),
+            !state.trust_store.load().is_empty(),
             "trust store should contain root CAs"
         );
     }
@@ -217,9 +249,9 @@ mod tests {
 
         // Mozilla's root store typically has 100+ CAs.
         assert!(
-            state.trust_store.len() > 50,
+            state.trust_store.load().len() > 50,
             "trust store should have many root CAs, got {}",
-            state.trust_store.len()
+            state.trust_store.load().len()
         );
     }
 

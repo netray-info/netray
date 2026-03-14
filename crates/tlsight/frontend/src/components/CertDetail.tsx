@@ -41,6 +41,8 @@ interface Props {
   expanded?: boolean;
   explain?: boolean;
   dnsUrl?: string | null;
+  host?: string;
+  port?: number;
 }
 
 /** Returns true if the SAN looks like a DNS hostname (not an IP address or email). */
@@ -67,12 +69,167 @@ function CopyBtn(props: { value: string }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Cert history (Feature 5: localStorage-based change diff)
+// ---------------------------------------------------------------------------
+
+interface StoredCertSnapshot {
+  fingerprint: string;
+  not_after: string;
+  sans: string[];
+  issuer: string;
+}
+
+function certHistoryKey(host: string, port: number): string {
+  return `tlsight:cert:${host}:${port}`;
+}
+
+function loadStoredSnapshot(host: string, port: number): StoredCertSnapshot | null {
+  try {
+    const raw = localStorage.getItem(certHistoryKey(host, port));
+    return raw ? (JSON.parse(raw) as StoredCertSnapshot) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSnapshot(host: string, port: number, cert: CertInfo) {
+  try {
+    const snap: StoredCertSnapshot = {
+      fingerprint: cert.fingerprint_sha256,
+      not_after: cert.not_after,
+      sans: cert.sans.slice().sort(),
+      issuer: cert.issuer,
+    };
+    localStorage.setItem(certHistoryKey(host, port), JSON.stringify(snap));
+  } catch {
+    // Storage may be unavailable; ignore
+  }
+}
+
+function clearSnapshot(host: string, port: number) {
+  try {
+    localStorage.removeItem(certHistoryKey(host, port));
+  } catch {}
+}
+
+interface CertDiff {
+  expiry_changed: boolean;
+  prev_expiry: string;
+  cur_expiry: string;
+  issuer_changed: boolean;
+  prev_issuer: string;
+  cur_issuer: string;
+  sans_added: string[];
+  sans_removed: string[];
+}
+
+function computeDiff(prev: StoredCertSnapshot, cur: CertInfo): CertDiff | null {
+  const curSansSorted = cur.sans.slice().sort();
+  const prevSansSorted = prev.sans.slice().sort();
+
+  const expiry_changed = prev.not_after !== cur.not_after;
+  const issuer_changed = prev.issuer !== cur.issuer;
+  const sans_added = curSansSorted.filter(s => !prevSansSorted.includes(s));
+  const sans_removed = prevSansSorted.filter(s => !curSansSorted.includes(s));
+
+  if (!expiry_changed && !issuer_changed && sans_added.length === 0 && sans_removed.length === 0) {
+    return null;
+  }
+
+  return {
+    expiry_changed,
+    prev_expiry: prev.not_after,
+    cur_expiry: cur.not_after,
+    issuer_changed,
+    prev_issuer: prev.issuer,
+    cur_issuer: cur.issuer,
+    sans_added,
+    sans_removed,
+  };
+}
+
+function CertChangeBanner(props: { diff: CertDiff; onClear: () => void }) {
+  return (
+    <div class="cert-change-banner" role="alert">
+      <div class="cert-change-banner__header">
+        <strong>Certificate changed since last visit</strong>
+        <button class="cert-change-banner__clear" onClick={props.onClear} title="Clear history">clear</button>
+      </div>
+      <table class="cert-change-banner__table">
+        <tbody>
+          <Show when={props.diff.expiry_changed}>
+            <tr>
+              <th>Expiry</th>
+              <td><del>{props.diff.prev_expiry}</del> &rarr; {props.diff.cur_expiry}</td>
+            </tr>
+          </Show>
+          <Show when={props.diff.issuer_changed}>
+            <tr>
+              <th>Issuer</th>
+              <td><del>{props.diff.prev_issuer}</del> &rarr; {props.diff.cur_issuer}</td>
+            </tr>
+          </Show>
+          <Show when={props.diff.sans_added.length > 0}>
+            <tr>
+              <th>SANs added</th>
+              <td class="mono cert-change-banner__added">{props.diff.sans_added.join(', ')}</td>
+            </tr>
+          </Show>
+          <Show when={props.diff.sans_removed.length > 0}>
+            <tr>
+              <th>SANs removed</th>
+              <td class="mono cert-change-banner__removed">{props.diff.sans_removed.join(', ')}</td>
+            </tr>
+          </Show>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function CertDetail(props: Props) {
   const [expanded, setExpanded] = createSignal(props.expanded ?? false);
   createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
 
+  // Cert change diff: only for leaf certs with host/port context
+  const isLeaf = () =>
+    props.cert.position === 'leaf' || props.cert.position === 'leaf_self_signed';
+
+  const [diff, setDiff] = createSignal<CertDiff | null>(null);
+  const [historyHost, setHistoryHost] = createSignal('');
+  const [historyPort, setHistoryPort] = createSignal(0);
+
+  createEffect(() => {
+    const host = props.host;
+    const port = props.port;
+    if (!host || !port || !isLeaf()) return;
+
+    setHistoryHost(host);
+    setHistoryPort(port);
+
+    const prev = loadStoredSnapshot(host, port);
+    if (prev) {
+      if (prev.fingerprint !== props.cert.fingerprint_sha256) {
+        setDiff(computeDiff(prev, props.cert));
+      } else {
+        setDiff(null);
+      }
+    }
+    // Always save current snapshot
+    saveSnapshot(host, port, props.cert);
+  });
+
+  const handleClearHistory = () => {
+    clearSnapshot(historyHost(), historyPort());
+    setDiff(null);
+  };
+
   return (
     <div class="cert-detail" data-card>
+      <Show when={diff()}>
+        {(d) => <CertChangeBanner diff={d()} onClear={handleClearHistory} />}
+      </Show>
       <button class="cert-detail__toggle" onClick={() => setExpanded(!expanded())} aria-expanded={expanded() ? "true" : "false"}>
         {expanded() ? '\u25BC' : '\u25B6'} {certDisplayName(props.cert.subject)} ({props.cert.position})
       </button>
@@ -151,6 +308,26 @@ export default function CertDetail(props: Props) {
               </tr>
               <tr><th>Self-signed</th><td>{props.cert.is_self_signed ? 'yes' : 'no'}</td></tr>
               <tr><th>Expired</th><td>{props.cert.is_expired ? 'yes' : 'no'}</td></tr>
+              <Show when={props.cert.ocsp_url}>
+                <tr>
+                  <th>OCSP URL</th>
+                  <td class="mono">
+                    <a href={props.cert.ocsp_url} target="_blank" rel="noopener noreferrer">
+                      {props.cert.ocsp_url}
+                    </a>
+                  </td>
+                </tr>
+              </Show>
+              <Show when={props.cert.ca_issuers_url}>
+                <tr>
+                  <th>CA Issuers URL</th>
+                  <td class="mono">
+                    <a href={props.cert.ca_issuers_url} target="_blank" rel="noopener noreferrer">
+                      {props.cert.ca_issuers_url}
+                    </a>
+                  </td>
+                </tr>
+              </Show>
             </tbody>
           </table>
         </div>

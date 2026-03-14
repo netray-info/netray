@@ -446,6 +446,45 @@ pub fn check_consistency(consistency: Option<&ConsistencyResult>) -> HealthCheck
     }
 }
 
+pub fn check_ech_advertised(ech_advertised: Option<bool>, port: u16) -> HealthCheck {
+    // Only relevant for port 443
+    if port != 443 {
+        return HealthCheck {
+            id: "ech_advertised".to_string(),
+            category: Category::Configuration,
+            status: CheckStatus::Skip,
+            label: "ECH advertised".to_string(),
+            detail: "ECH check only applies to port 443".to_string(),
+        };
+    }
+    let Some(advertised) = ech_advertised else {
+        return HealthCheck {
+            id: "ech_advertised".to_string(),
+            category: Category::Configuration,
+            status: CheckStatus::Skip,
+            label: "ECH advertised".to_string(),
+            detail: "ECH check skipped (no HTTPS DNS record lookup)".to_string(),
+        };
+    };
+    if advertised {
+        HealthCheck {
+            id: "ech_advertised".to_string(),
+            category: Category::Configuration,
+            status: CheckStatus::Pass,
+            label: "ECH advertised".to_string(),
+            detail: "ECH config present in HTTPS DNS record".to_string(),
+        }
+    } else {
+        HealthCheck {
+            id: "ech_advertised".to_string(),
+            category: Category::Configuration,
+            status: CheckStatus::Warn,
+            label: "ECH advertised".to_string(),
+            detail: "ECH not advertised in HTTPS DNS record".to_string(),
+        }
+    }
+}
+
 pub fn check_alpn_consistency(ips: &[IpInspectionResult]) -> HealthCheck {
     let successful: Vec<_> = ips.iter().filter(|r| r.tls.is_some()).collect();
 
@@ -536,6 +575,8 @@ mod tests {
             is_expired: days < 0,
             is_self_signed: false,
             cert_policy: "DV".to_string(),
+            ocsp_url: None,
+            ca_issuers_url: None,
         }
     }
 

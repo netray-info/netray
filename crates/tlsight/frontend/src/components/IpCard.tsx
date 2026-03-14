@@ -16,6 +16,8 @@ interface Props {
   explain?: boolean;
   ipUrl?: string;
   dnsUrl?: string | null;
+  host?: string;
+  port?: number;
 }
 
 type Status = 'pass' | 'warn' | 'fail' | 'error' | 'neutral';
@@ -174,7 +176,7 @@ export default function IpCard(props: Props) {
                 </Show>
                 <div class="cert-details">
                   <For each={chain()}>
-                    {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} explain={props.explain} dnsUrl={props.dnsUrl} />}
+                    {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} explain={props.explain} dnsUrl={props.dnsUrl} host={props.host} port={props.port} />}
                   </For>
                 </div>
               </>

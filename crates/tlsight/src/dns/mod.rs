@@ -1,4 +1,5 @@
 pub mod caa;
+pub mod https_record;
 pub mod tlsa;
 
 use std::net::IpAddr;
@@ -33,6 +34,11 @@ impl DnsResolver {
 
     pub async fn lookup_tlsa(&self, hostname: &str, port: u16) -> TlsaLookup {
         tlsa::lookup_tlsa(&self.resolvers, hostname, port).await
+    }
+
+    /// Check if the HTTPS DNS record for `hostname` advertises ECH support.
+    pub async fn lookup_ech_advertised(&self, hostname: &str) -> bool {
+        https_record::has_ech_advertised(&self.resolvers, hostname).await
     }
 
     /// Resolve a hostname to IPv4 and IPv6 addresses using mhost.

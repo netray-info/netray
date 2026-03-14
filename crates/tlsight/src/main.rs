@@ -68,7 +68,11 @@ async fn main() {
         tracing::info!("IP enrichment enabled");
     }
 
-    reload::spawn_reload_watcher(config_path.clone(), state.config.clone());
+    reload::spawn_reload_watcher(
+        config_path.clone(),
+        state.config.clone(),
+        state.trust_store.clone(),
+    );
 
     let app = Router::new()
         .merge(routes::health_router())

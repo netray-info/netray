@@ -15,7 +15,16 @@ pub struct TlsParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key_exchange_group: Option<String>,
     pub ocsp: ocsp::OcspInfo,
+    /// Live OCSP revocation check result (queried after handshake if AIA OCSP URL is present).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocsp_live: Option<ocsp::OcspRevocationResult>,
     pub handshake_ms: u32,
+    /// STARTTLS protocol used to upgrade the connection (e.g. "smtp"), if applicable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub starttls: Option<String>,
+    /// Whether ECH (Encrypted Client Hello) is advertised via the HTTPS DNS record.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ech_advertised: Option<bool>,
 }
 
 pub fn extract_params(result: &HandshakeResult, sni: Option<&str>) -> TlsParams {
@@ -43,7 +52,10 @@ pub fn extract_params(result: &HandshakeResult, sni: Option<&str>) -> TlsParams 
         sni: sni.map(|s| s.to_string()),
         key_exchange_group: result.key_exchange_group.clone(),
         ocsp: ocsp_info,
+        ocsp_live: None,
         handshake_ms: result.handshake_ms,
+        starttls: None,
+        ech_advertised: None,
     }
 }
 

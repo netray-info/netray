@@ -18,6 +18,7 @@ pub fn hsts_port(ports: &[u16]) -> u16 {
 /// Assess quality for a single port's inspection data.
 pub fn assess_port(
     ips: &[IpInspectionResult],
+    port: u16,
     is_hostname: bool,
     caa_status: CheckStatus,
     dane_status: CheckStatus,
@@ -68,6 +69,12 @@ pub fn assess_port(
     all_checks.push(checks::check_dane_valid(dane_status));
     all_checks.push(checks::check_consistency(consistency));
     all_checks.push(checks::check_alpn_consistency(ips));
+
+    // ECH check: read from the first successful IP's tls params
+    let ech_advertised = first_ok
+        .and_then(|r| r.tls.as_ref())
+        .and_then(|t| t.ech_advertised);
+    all_checks.push(checks::check_ech_advertised(ech_advertised, port));
 
     let verdict = types::compute_verdict(&all_checks);
     PortQualityResult {

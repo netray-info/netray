@@ -204,6 +204,7 @@ fn default_ports() -> Vec<u16> {
         tls::CertInfo,
         tls::TlsParams,
         tls::ocsp::OcspInfo,
+        tls::ocsp::OcspRevocationResult,
         validate::CheckStatus,
         validate::Summary,
         validate::SummaryChecks,
@@ -293,7 +294,7 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     }
 
     // Check that the trust store loaded at least the Mozilla root CAs.
-    if state.trust_store.is_empty() {
+    if state.trust_store.load().is_empty() {
         warnings.push("trust store contains no CA certificates".to_owned());
     }
 
@@ -587,7 +588,9 @@ async fn do_inspect(
                     }
                 }
 
-                (caa, tlsa)
+                let ech = resolver.lookup_ech_advertised(&hostname).await;
+
+                (caa, tlsa, ech)
             })
         }))
     } else {
@@ -627,16 +630,16 @@ async fn do_inspect(
     .map_err(|_| AppError::RequestTimeout)?;
 
     // Collect DNS results
-    let (caa_lookup, tlsa_lookups) = if let Some(handle) = dns_handle {
+    let (caa_lookup, tlsa_lookups, ech_advertised) = if let Some(handle) = dns_handle {
         match handle.await {
             Ok(result) => result,
             Err(e) => {
                 tracing::warn!(error = %e, "DNS task failed or was cancelled");
-                (None, HashMap::new())
+                (None, HashMap::new(), false)
             }
         }
     } else {
-        (None, HashMap::new())
+        (None, HashMap::new(), false)
     };
 
     // Collect enrichment results
@@ -732,13 +735,22 @@ async fn do_inspect(
         None
     };
 
-    // Inject enrichment data into IP results
+    // Inject enrichment data and ECH into IP results
     let mut port_results = port_results;
-    if !enrichments.is_empty() {
-        for pr in &mut port_results {
-            for ip_result in &mut pr.ips {
-                if let Ok(ip) = ip_result.ip.parse::<IpAddr>() {
+    let ech_for_port = if is_hostname && do_dns { Some(ech_advertised) } else { None };
+    for pr in &mut port_results {
+        for ip_result in &mut pr.ips {
+            if let Ok(ip) = ip_result.ip.parse::<IpAddr>() {
+                if !enrichments.is_empty() {
                     ip_result.enrichment = enrichments.get(&ip).cloned();
+                }
+            }
+            // Set ECH and STARTTLS on TLS params
+            if let Some(ref mut tls) = ip_result.tls {
+                tls.ech_advertised = ech_for_port;
+                // STARTTLS: set based on port
+                if tls.starttls.is_none() {
+                    tls.starttls = starttls_protocol_for_port(pr.port);
                 }
             }
         }
@@ -834,6 +846,7 @@ async fn do_inspect(
         for pr in &mut port_results {
             let port_quality = crate::quality::assess_port(
                 &pr.ips,
+                pr.port,
                 is_hostname,
                 caa_status,
                 dane_status,
@@ -896,6 +909,16 @@ async fn do_inspect(
     }
 
     Ok(response)
+}
+
+/// Map well-known STARTTLS ports to a protocol name.
+fn starttls_protocol_for_port(port: u16) -> Option<String> {
+    match port {
+        25 | 587 => Some("smtp".to_string()),
+        143 => Some("imap".to_string()),
+        21 => Some("ftp".to_string()),
+        _ => None,
+    }
 }
 
 /// Inspect a single port across all IPs.

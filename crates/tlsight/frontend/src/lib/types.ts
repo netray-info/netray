@@ -71,6 +71,13 @@ export interface SctEntry {
   timestamp: string;
 }
 
+export interface OcspRevocationResult {
+  status: 'good' | 'revoked' | 'unknown';
+  reason?: string;
+  revoked_at?: string;
+  checked_at: string;
+}
+
 export interface TlsInfo {
   version: string;
   cipher_suite: string;
@@ -78,7 +85,10 @@ export interface TlsInfo {
   sni: string | null;
   key_exchange_group?: string;
   ocsp: OcspInfo;
+  ocsp_live?: OcspRevocationResult;
   handshake_ms: number;
+  starttls?: string;
+  ech_advertised?: boolean;
 }
 
 export interface OcspInfo {
@@ -106,6 +116,8 @@ export interface CertInfo {
   is_expired: boolean;
   is_self_signed: boolean;
   cert_policy: string;
+  ocsp_url?: string;
+  ca_issuers_url?: string;
 }
 
 export interface ValidationInfo {

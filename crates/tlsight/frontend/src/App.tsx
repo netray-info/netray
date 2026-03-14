@@ -346,7 +346,7 @@ export default function App() {
                         </Show>
 
                         <Show when={useUnified()}>
-                          <UnifiedIpView ips={successfulIps()} explain={explain()} expanded={allExpanded()} ipUrl={ipUrl()} dnsUrl={dnsUrl()} />
+                          <UnifiedIpView ips={successfulIps()} explain={explain()} expanded={allExpanded()} ipUrl={ipUrl()} dnsUrl={dnsUrl()} host={r.hostname} port={p.port} />
                           <For each={errorIps()}>
                             {(ipResult) => (
                               <IpCard
@@ -356,6 +356,8 @@ export default function App() {
                                 explain={explain()}
                                 ipUrl={ipUrl()}
                                 dnsUrl={dnsUrl()}
+                                host={r.hostname}
+                                port={p.port}
                               />
                             )}
                           </For>
@@ -371,6 +373,8 @@ export default function App() {
                                 explain={explain()}
                                 ipUrl={ipUrl()}
                                 dnsUrl={dnsUrl()}
+                                host={r.hostname}
+                                port={p.port}
                               />
                             )}
                           </For>

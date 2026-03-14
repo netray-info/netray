@@ -3,6 +3,8 @@ use std::net::IpAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
 use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use rustls::{DigitallySignedStruct, Error as TlsError, SignatureScheme};
@@ -76,6 +78,88 @@ pub struct HandshakeResult {
     pub handshake_ms: u32,
 }
 
+/// Protocols that require a STARTTLS upgrade before the TLS handshake.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StartTlsProtocol {
+    Smtp,
+    Imap,
+    Ftp,
+}
+
+impl StartTlsProtocol {
+    /// Detect STARTTLS protocol from port number.
+    pub fn from_port(port: u16) -> Option<Self> {
+        match port {
+            25 | 587 => Some(Self::Smtp),
+            143 => Some(Self::Imap),
+            21 => Some(Self::Ftp),
+            _ => None,
+        }
+    }
+}
+
+/// Perform the SMTP STARTTLS upgrade on an established TCP stream.
+/// Sends EHLO, waits for 250, sends STARTTLS, waits for 220.
+async fn smtp_starttls(stream: &mut tokio::net::TcpStream) -> io::Result<()> {
+    let mut buf = [0u8; 1024];
+
+    // Read server greeting (220 ...)
+    let n = stream.read(&mut buf).await?;
+    let greeting = String::from_utf8_lossy(&buf[..n]);
+    if !greeting.starts_with("220") {
+        return Err(io::Error::other(format!(
+            "unexpected SMTP greeting: {}",
+            greeting.trim()
+        )));
+    }
+
+    // Send EHLO
+    stream.write_all(b"EHLO tlsight.local\r\n").await?;
+
+    // Read EHLO response (may be multi-line; read until non-'250-' line)
+    let mut ehlo_ok = false;
+    loop {
+        let n = stream.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        let resp = String::from_utf8_lossy(&buf[..n]);
+        if resp.contains("250 ") || resp.contains("250\r\n") || resp.ends_with("250\r\n") {
+            ehlo_ok = true;
+            break;
+        }
+        if resp.starts_with("250-") {
+            // multi-line, keep reading
+            continue;
+        }
+        // Accept any 250 response that got through
+        if resp.starts_with("250") {
+            ehlo_ok = true;
+            break;
+        }
+        break;
+    }
+
+    if !ehlo_ok {
+        return Err(io::Error::other("EHLO failed"));
+    }
+
+    // Send STARTTLS
+    stream.write_all(b"STARTTLS\r\n").await?;
+
+    // Read STARTTLS response (220 Go ahead)
+    let n = stream.read(&mut buf).await?;
+    let resp = String::from_utf8_lossy(&buf[..n]);
+    if !resp.starts_with("220") {
+        return Err(io::Error::other(format!(
+            "STARTTLS rejected: {}",
+            resp.trim()
+        )));
+    }
+
+    Ok(())
+}
+
 /// Perform a TLS handshake with a target IP and port.
 pub async fn tls_handshake(
     ip: IpAddr,
@@ -101,10 +185,23 @@ pub async fn tls_handshake(
 
     let connector = TlsConnector::from(Arc::new(config));
     let start = Instant::now();
+    let starttls = StartTlsProtocol::from_port(port);
 
     let tls_stream = tokio::time::timeout(timeout, async {
-        let tcp = TcpStream::connect((ip, port)).await?;
+        let mut tcp = TcpStream::connect((ip, port)).await?;
         tcp.set_nodelay(true)?;
+
+        // STARTTLS upgrade before TLS handshake
+        if let Some(proto) = starttls {
+            match proto {
+                StartTlsProtocol::Smtp => {
+                    smtp_starttls(&mut tcp).await?;
+                }
+                // IMAP and FTP are stubs — not yet implemented
+                StartTlsProtocol::Imap | StartTlsProtocol::Ftp => {}
+            }
+        }
+
         let tls = connector.connect(server_name, tcp).await?;
         Ok::<_, io::Error>(tls)
     })

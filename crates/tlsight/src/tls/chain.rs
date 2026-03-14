@@ -26,6 +26,12 @@ pub struct CertInfo {
     pub is_self_signed: bool,
     /// Certificate policy classification: "EV", "OV", "DV", or "unknown".
     pub cert_policy: String,
+    /// OCSP responder URL from AIA extension (OID 1.3.6.1.5.5.7.48.1).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocsp_url: Option<String>,
+    /// CA Issuers URL from AIA extension (OID 1.3.6.1.5.5.7.48.2).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ca_issuers_url: Option<String>,
 }
 
 /// Parse a chain of DER-encoded certificates into structured CertInfo.
@@ -62,6 +68,8 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
                 is_expired: false,
                 is_self_signed: false,
                 cert_policy: "unknown".to_string(),
+                ocsp_url: None,
+                ca_issuers_url: None,
             };
         }
     };
@@ -86,6 +94,7 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
     let (key_type, key_size) = extract_key_info(&cert);
     let signature_algorithm = format_sig_algo(&cert.signature_algorithm.algorithm.to_id_string());
     let cert_policy = classify_cert_policy(&cert);
+    let (ocsp_url, ca_issuers_url) = extract_aia_urls(&cert);
 
     CertInfo {
         position: classify_position(index, chain_len, is_self_signed),
@@ -105,6 +114,8 @@ fn parse_cert(der: &[u8], index: usize, chain_len: usize) -> CertInfo {
         is_expired,
         is_self_signed,
         cert_policy,
+        ocsp_url,
+        ca_issuers_url,
     }
 }
 
@@ -143,6 +154,34 @@ fn classify_cert_policy(cert: &X509Certificate) -> String {
     } else {
         "DV".to_string()
     }
+}
+
+/// Extract AIA extension URLs: OCSP responder (OID 1.3.6.1.5.5.7.48.1)
+/// and CA Issuers (OID 1.3.6.1.5.5.7.48.2).
+fn extract_aia_urls(cert: &X509Certificate) -> (Option<String>, Option<String>) {
+    let mut ocsp_url: Option<String> = None;
+    let mut ca_issuers_url: Option<String> = None;
+
+    for ext in cert.extensions() {
+        if let ParsedExtension::AuthorityInfoAccess(aia) = ext.parsed_extension() {
+            for ad in aia.accessdescs.iter() {
+                let oid_str = ad.access_method.to_id_string();
+                if let GeneralName::URI(uri) = &ad.access_location {
+                    match oid_str.as_str() {
+                        "1.3.6.1.5.5.7.48.1" => {
+                            ocsp_url = Some((*uri).to_string());
+                        }
+                        "1.3.6.1.5.5.7.48.2" => {
+                            ca_issuers_url = Some((*uri).to_string());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    (ocsp_url, ca_issuers_url)
 }
 
 /// Classify certificate position per SDD 7.4.

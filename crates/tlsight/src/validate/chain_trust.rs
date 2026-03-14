@@ -171,6 +171,8 @@ mod tests {
             is_expired: false,
             is_self_signed: false,
             cert_policy: "DV".to_string(),
+            ocsp_url: None,
+            ca_issuers_url: None,
         }
     }
 
@@ -193,6 +195,8 @@ mod tests {
             is_expired: false,
             is_self_signed: false,
             cert_policy: "DV".to_string(),
+            ocsp_url: None,
+            ca_issuers_url: None,
         }
     }
 

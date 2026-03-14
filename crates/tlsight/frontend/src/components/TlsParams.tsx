@@ -1,6 +1,6 @@
 import { createSignal, createEffect, Show } from 'solid-js';
 import Explain from './Explain';
-import type { TlsInfo, OcspInfo } from '../lib/types';
+import type { TlsInfo, OcspInfo, OcspRevocationResult } from '../lib/types';
 
 interface Props {
   params: TlsInfo;
@@ -73,6 +73,27 @@ function OcspBadge(props: { ocsp: OcspInfo }) {
   );
 }
 
+function OcspLiveBadge(props: { result: OcspRevocationResult }) {
+  const statusClass = () => {
+    if (props.result.status === 'good') return 'badge badge--pass';
+    if (props.result.status === 'revoked') return 'badge badge--fail';
+    return 'badge badge--warn';
+  };
+  const label = () => {
+    if (props.result.status === 'revoked') {
+      const reason = props.result.reason ? ` (${props.result.reason})` : '';
+      return `Revoked${reason}`;
+    }
+    return props.result.status.charAt(0).toUpperCase() + props.result.status.slice(1);
+  };
+  return (
+    <span class="ocsp-badge">
+      <span class={statusClass()}>{label()}</span>
+      <span class="ocsp-badge__freshness">checked {new Date(props.result.checked_at).toLocaleTimeString()}</span>
+    </span>
+  );
+}
+
 export default function TlsParams(props: Props) {
   const [expanded, setExpanded] = createSignal(false);
   createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
@@ -105,7 +126,29 @@ export default function TlsParams(props: Props) {
               <Show when={props.params.key_exchange_group}>
                 <tr><th>Key Exchange</th><td>{props.params.key_exchange_group}</td></tr>
               </Show>
-              <tr><th>OCSP</th><td><OcspBadge ocsp={props.params.ocsp} /></td></tr>
+              <tr><th>OCSP staple</th><td><OcspBadge ocsp={props.params.ocsp} /></td></tr>
+              <Show when={props.params.ocsp_live}>
+                {(live) => (
+                  <tr><th>OCSP live check</th><td><OcspLiveBadge result={live()} /></td></tr>
+                )}
+              </Show>
+              <Show when={props.params.starttls}>
+                <tr>
+                  <th>STARTTLS</th>
+                  <td><span class="badge badge--pass">{props.params.starttls?.toUpperCase()}</span></td>
+                </tr>
+              </Show>
+              <Show when={props.params.ech_advertised !== undefined}>
+                <tr>
+                  <th>ECH</th>
+                  <td>
+                    {props.params.ech_advertised
+                      ? <span class="badge badge--pass">Advertised</span>
+                      : <span class="badge badge--warn">Not advertised</span>
+                    }
+                  </td>
+                </tr>
+              </Show>
               <tr><th>Handshake</th><td>{props.params.handshake_ms}ms</td></tr>
             </tbody>
           </table>

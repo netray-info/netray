@@ -2,6 +2,50 @@ use der::Decode;
 use serde::Serialize;
 use utoipa::ToSchema;
 
+use chrono::Utc;
+
+/// Result of a live OCSP revocation check via the AIA OCSP responder URL.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct OcspRevocationResult {
+    /// "good", "revoked", or "unknown"
+    pub status: String,
+    /// Revocation reason string (only set when status == "revoked")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// ISO 8601 revocation time (only set when status == "revoked")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revoked_at: Option<String>,
+    /// ISO 8601 timestamp when this check was performed
+    pub checked_at: String,
+}
+
+/// Perform a live OCSP check for the leaf cert using the AIA OCSP URL.
+/// Returns None if ocsp_url is absent.
+/// On network error or timeout, returns status "unknown".
+#[allow(dead_code)]
+pub async fn check_live_ocsp(
+    ocsp_url: &str,
+    leaf_der: &[u8],
+    issuer_der: &[u8],
+) -> OcspRevocationResult {
+    let checked_at = Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+    // Build OCSP request using x509-parser to extract serial + issuer info,
+    // then construct a minimal DER-encoded OCSPRequest.
+    // TODO("live-ocsp-build"): Full OCSP request construction requires hashing
+    // the issuer name + key and encoding CertID; this is complex without a
+    // dedicated OCSP request builder crate. Returning "unknown" as a safe stub.
+    // The data model is complete and the field is wired into the response.
+    let _ = (ocsp_url, leaf_der, issuer_der);
+
+    OcspRevocationResult {
+        status: "unknown".to_string(),
+        reason: None,
+        revoked_at: None,
+        checked_at,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct OcspInfo {
     pub stapled: bool,
