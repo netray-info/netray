@@ -61,5 +61,3 @@ utoipa = { version = "5", features = ["axum_extras"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 
-[patch.crates-io]
-netray-common = { path = "../netray-common" }
