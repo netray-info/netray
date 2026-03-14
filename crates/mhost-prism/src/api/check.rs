@@ -606,27 +606,19 @@ fn check_dnskey_algorithms(lookups: &mhost::resolver::Lookups) -> Vec<CheckResul
     for key in &keys {
         match key.algorithm() {
             DnssecAlgorithm::RsaMd5 => {
-                results.push(CheckResult::Failed(format!(
-                    "DNSKEY uses RSAMD5 (algorithm 1) — deprecated, must not be used (RFC 8624)"
-                )));
+                results.push(CheckResult::Failed("DNSKEY uses RSAMD5 (algorithm 1) — deprecated, must not be used (RFC 8624)".to_string()));
                 any_deprecated = true;
             }
             DnssecAlgorithm::Dsa => {
-                results.push(CheckResult::Failed(format!(
-                    "DNSKEY uses DSA (algorithm 3) — deprecated, must not be used (RFC 8624)"
-                )));
+                results.push(CheckResult::Failed("DNSKEY uses DSA (algorithm 3) — deprecated, must not be used (RFC 8624)".to_string()));
                 any_deprecated = true;
             }
             DnssecAlgorithm::RsaSha1 => {
-                results.push(CheckResult::Warning(format!(
-                    "DNSKEY uses RSASHA1 (algorithm 5) — deprecated, should not be used (RFC 8624)"
-                )));
+                results.push(CheckResult::Warning("DNSKEY uses RSASHA1 (algorithm 5) — deprecated, should not be used (RFC 8624)".to_string()));
                 any_deprecated = true;
             }
             DnssecAlgorithm::RsaSha1Nsec3Sha1 => {
-                results.push(CheckResult::Warning(format!(
-                    "DNSKEY uses RSASHA1-NSEC3-SHA1 (algorithm 7) — deprecated, should not be used (RFC 8624)"
-                )));
+                results.push(CheckResult::Warning("DNSKEY uses RSASHA1-NSEC3-SHA1 (algorithm 7) — deprecated, should not be used (RFC 8624)".to_string()));
                 any_deprecated = true;
             }
             _ => {}

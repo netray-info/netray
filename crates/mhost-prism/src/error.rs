@@ -24,6 +24,7 @@ pub enum ApiError {
     #[error("parse error: {0}")]
     ParseError(String),
 
+    #[allow(dead_code)] // defensive variant: POST with both body and query string; not yet wired to a handler
     #[error("ambiguous input: POST with query string")]
     AmbiguousInput,
 

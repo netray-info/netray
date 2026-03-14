@@ -88,10 +88,13 @@ pub struct ParsedQuery {
     /// Whether DNSSEC validation was requested.
     pub dnssec: bool,
     /// Whether short output was requested (suppresses TTLs and metadata).
+    #[allow(dead_code)] // parsed from +short; not yet consumed by handlers
     pub short: bool,
     /// Whether the RD (Recursion Desired) bit should be set. Default true.
+    #[allow(dead_code)] // parsed from +norecurse; not yet consumed by handlers
     pub recursive: bool,
     /// Whether server list was truncated due to exceeding the max_servers limit.
+    #[allow(dead_code)] // set during server group expansion; not yet included in API response
     pub truncated_servers: bool,
     /// Non-fatal warnings accumulated during parsing.
     pub warnings: Vec<String>,
