@@ -8,14 +8,12 @@ use mhost::nameserver::predefined::PredefinedProvider;
 // Server group aliases
 // ---------------------------------------------------------------------------
 
-/// IP addresses for each named server group.
-/// Each entry is (alias_name, &[ip_addresses]).
-const SERVER_GROUP_ALIASES: &[(&str, &[&str])] = &[
-    ("public", &["8.8.8.8", "1.1.1.1", "9.9.9.9"]),
-    ("cloudflare", &["1.1.1.1", "1.0.0.1"]),
-    ("google", &["8.8.8.8", "8.8.4.4"]),
-    ("quad9", &["9.9.9.9", "149.112.112.112"]),
-    ("all", &["8.8.8.8", "1.1.1.1", "9.9.9.9", "8.8.4.4", "1.0.0.1", "149.112.112.112"]),
+/// Multi-provider group aliases that expand to multiple `Predefined` entries.
+/// Single-provider names (cloudflare, google, quad9, mullvad, …) are handled
+/// by `PredefinedProvider::from_str` and must NOT appear here.
+const SERVER_GROUP_ALIASES: &[(&str, &[PredefinedProvider])] = &[
+    ("public", &[PredefinedProvider::Google, PredefinedProvider::Cloudflare, PredefinedProvider::Quad9]),
+    ("all",    &[PredefinedProvider::Google, PredefinedProvider::Cloudflare, PredefinedProvider::Quad9, PredefinedProvider::Mullvad]),
 ];
 
 /// Maximum number of record types allowed in a single query (SDD section 8).
@@ -253,13 +251,12 @@ fn parse_server(name: &str, servers: &mut Vec<ServerSpec>, warnings: &mut Vec<St
         return;
     }
 
-    // Check group aliases (case-insensitive).
+    // Check multi-provider group aliases (case-insensitive).
     let lower = name.to_ascii_lowercase();
-    for &(alias, ips) in SERVER_GROUP_ALIASES {
+    for &(alias, providers) in SERVER_GROUP_ALIASES {
         if lower == alias {
-            for ip_str in ips {
-                let addr: IpAddr = ip_str.parse().expect("hardcoded alias IP is valid");
-                let spec = ServerSpec::Ip { addr, port: 53 };
+            for &provider in providers {
+                let spec = ServerSpec::Predefined(provider);
                 if !servers.contains(&spec) {
                     servers.push(spec);
                 }
