@@ -58,10 +58,12 @@
   },
   "scripts": {
     "build:types": "tsc --project tsconfig.build.json",
+    "prepublishOnly": "npm run build:types",
     "test": "vitest run"
   },
   "devDependencies": {
     "solid-js": "^1.9.0",
+    "typescript": "^5.0.0",
     "vitest": "^2.0.0"
   },
   "peerDependencies": {
