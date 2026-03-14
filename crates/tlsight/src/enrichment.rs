@@ -104,7 +104,7 @@ impl EnrichmentClient {
             if !seen.insert(ip) {
                 continue;
             }
-            if is_private_or_loopback(ip) {
+            if netray_common::ip_filter::is_blocked_ip(ip) {
                 continue;
             }
             futures.push(async move {
@@ -120,17 +120,6 @@ impl EnrichmentClient {
             }
         }
         results
-    }
-}
-
-fn is_private_or_loopback(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
-        IpAddr::V6(v6) => {
-            v6.is_loopback()
-                || (v6.segments()[0] & 0xfe00) == 0xfc00
-                || (v6.segments()[0] & 0xffc0) == 0xfe80
-        }
     }
 }
 
@@ -169,18 +158,18 @@ mod tests {
 
     #[test]
     fn private_ips_detected() {
-        assert!(is_private_or_loopback("127.0.0.1".parse().unwrap()));
-        assert!(is_private_or_loopback("10.0.0.1".parse().unwrap()));
-        assert!(is_private_or_loopback("192.168.1.1".parse().unwrap()));
-        assert!(is_private_or_loopback("::1".parse().unwrap()));
-        assert!(is_private_or_loopback("fc00::1".parse().unwrap()));
-        assert!(is_private_or_loopback("fe80::1".parse().unwrap()));
+        assert!(netray_common::ip_filter::is_blocked_ip("127.0.0.1".parse().unwrap()));
+        assert!(netray_common::ip_filter::is_blocked_ip("10.0.0.1".parse().unwrap()));
+        assert!(netray_common::ip_filter::is_blocked_ip("192.168.1.1".parse().unwrap()));
+        assert!(netray_common::ip_filter::is_blocked_ip("::1".parse().unwrap()));
+        assert!(netray_common::ip_filter::is_blocked_ip("fc00::1".parse().unwrap()));
+        assert!(netray_common::ip_filter::is_blocked_ip("fe80::1".parse().unwrap()));
     }
 
     #[test]
     fn public_ips_not_private() {
-        assert!(!is_private_or_loopback("8.8.8.8".parse().unwrap()));
-        assert!(!is_private_or_loopback("1.1.1.1".parse().unwrap()));
-        assert!(!is_private_or_loopback("2606:4700::1".parse().unwrap()));
+        assert!(!netray_common::ip_filter::is_blocked_ip("8.8.8.8".parse().unwrap()));
+        assert!(!netray_common::ip_filter::is_blocked_ip("1.1.1.1".parse().unwrap()));
+        assert!(!netray_common::ip_filter::is_blocked_ip("2606:4700::1".parse().unwrap()));
     }
 }

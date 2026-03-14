@@ -19,8 +19,7 @@ mod telemetry;
 mod tls;
 mod validate;
 
-#[derive(Clone)]
-pub struct RequestId(pub String);
+pub use netray_common::middleware::RequestId;
 
 #[derive(rust_embed::RustEmbed)]
 #[folder = "frontend/dist"]
@@ -68,8 +67,10 @@ async fn main() {
         .merge(routes::health_router())
         .merge(routes::api_router(state))
         .fallback(static_handler)
-        .layer(axum::middleware::from_fn(http_metrics_middleware))
-        .layer(axum::middleware::from_fn(request_id_middleware))
+        .layer(axum::middleware::from_fn(|req, next| {
+            netray_common::middleware::http_metrics("tlsight", req, next)
+        }))
+        .layer(axum::middleware::from_fn(netray_common::middleware::request_id))
         .layer(axum::middleware::from_fn(security::security_headers))
         .layer(security::cors_layer())
         .layer(CompressionLayer::new())
@@ -112,39 +113,6 @@ async fn main() {
 
     // Flush pending OTel spans on shutdown.
     telemetry::shutdown();
-}
-
-pub(crate) async fn request_id_middleware(
-    mut request: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> axum::response::Response {
-    let id = uuid::Uuid::now_v7().to_string();
-    request.extensions_mut().insert(RequestId(id.clone()));
-    let mut response = next.run(request).await;
-    response.headers_mut().insert(
-        axum::http::HeaderName::from_static("x-request-id"),
-        axum::http::HeaderValue::from_str(&id)
-            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("invalid")),
-    );
-    response
-}
-
-async fn http_metrics_middleware(
-    request: axum::extract::Request,
-    next: axum::middleware::Next,
-) -> axum::response::Response {
-    let method = request.method().to_string();
-    let path = request.uri().path().to_owned();
-    let response = next.run(request).await;
-    let status = response.status().as_u16().to_string();
-    metrics::counter!(
-        "tlsight_http_requests_total",
-        "method" => method,
-        "path" => path,
-        "status" => status,
-    )
-    .increment(1);
-    response
 }
 
 async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {

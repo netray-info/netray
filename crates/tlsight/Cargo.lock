@@ -1543,6 +1543,7 @@ dependencies = [
  "serde",
  "tracing",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -2761,7 +2762,6 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "utoipa",
- "uuid",
  "webpki-roots 0.26.11",
  "x509-ocsp",
  "x509-parser",

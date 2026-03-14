@@ -29,7 +29,7 @@ axum = { version = "0.8", features = ["json"] }
 tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
 governor = "0.10"
-netray-common = { version = "0.2.1", features = ["schema"] }
+netray-common = { version = "0.2.1", features = ["schema", "middleware"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -62,9 +62,6 @@ metrics-exporter-prometheus = "0.18"
 # Embedded frontend
 rust-embed = "8"
 mime_guess = "2"
-
-# Request IDs
-uuid = { version = "1", features = ["v7"] }
 
 # OpenAPI
 utoipa = { version = "5", features = ["axum_extras"] }
