@@ -10,7 +10,6 @@ pub mod dns_dnssec;
 pub mod dns_raw;
 pub mod dns_trace;
 pub mod error;
-pub mod ip_enrichment;
 pub mod parser;
 pub mod record_format;
 pub mod reload;

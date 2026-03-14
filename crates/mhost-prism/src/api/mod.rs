@@ -22,7 +22,7 @@ use utoipa::OpenApi;
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ErrorInfo, ErrorResponse};
-use crate::ip_enrichment::IpEnrichmentService;
+use netray_common::enrichment::EnrichmentClient;
 use crate::reload::HotState;
 use crate::result_cache::ResultCache;
 use crate::security::IpExtractor;
@@ -54,7 +54,7 @@ pub struct AppState {
     pub ip_extractor: Arc<IpExtractor>,
     pub result_cache: Arc<ResultCache>,
     pub hot_state: HotState,
-    pub ip_enrichment: Option<Arc<IpEnrichmentService>>,
+    pub ip_enrichment: Option<Arc<EnrichmentClient>>,
 }
 
 // ---------------------------------------------------------------------------

@@ -13,7 +13,6 @@ mod dns_dnssec;
 mod dns_raw;
 mod dns_trace;
 mod error;
-mod ip_enrichment;
 mod parser;
 mod record_format;
 mod reload;
@@ -55,7 +54,7 @@ async fn main() {
     let ip_enrichment = config.ecosystem.effective_api_url().map(|url| {
         let timeout = std::time::Duration::from_millis(config.ecosystem.enrichment_timeout_ms);
         tracing::info!(url = %url, timeout_ms = config.ecosystem.enrichment_timeout_ms, "IP enrichment enabled");
-        Arc::new(ip_enrichment::IpEnrichmentService::new(url, timeout))
+        Arc::new(netray_common::enrichment::EnrichmentClient::new(url, timeout, "prism", Some("prism")))
     });
 
     let state = api::AppState {

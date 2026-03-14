@@ -36,7 +36,7 @@ use crate::api::query::{
 use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::error::{ApiError, ErrorResponse};
-use crate::ip_enrichment::IpInfo;
+use netray_common::enrichment::IpInfo;
 use crate::parser::ParsedQuery;
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};

@@ -7,7 +7,7 @@ description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
 mhost = { version = "0.11", default-features = false, features = ["dot", "doh"] }
-netray-common = { version = "0.2.1", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa"] }
+netray-common = { version = "0.2.1", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment-cache"] }
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }
@@ -44,9 +44,6 @@ metrics-exporter-prometheus = "0.18"
 # Embedded frontend
 rust-embed = "8"
 mime_guess = "2"
-
-# IP enrichment
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 # Result caching
 moka = { version = "0.12", features = ["future"] }

@@ -31,7 +31,7 @@ use crate::api::{AppState, BatchEvent, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ApiError, ErrorResponse};
-use crate::ip_enrichment::{IpEnrichmentService, IpInfo};
+use netray_common::enrichment::{EnrichmentClient, IpInfo};
 use crate::parser::{self, ParsedQuery, ServerSpec, Transport};
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
@@ -104,7 +104,7 @@ pub(crate) fn extract_ips_from_cached_events(events: &[CachedEvent]) -> Vec<IpAd
 
 /// Send an enrichment SSE event if enrichment is enabled and IPs are found.
 pub(crate) async fn send_enrichment_event(
-    enrichment_svc: &Arc<IpEnrichmentService>,
+    enrichment_svc: &Arc<EnrichmentClient>,
     ips: &[IpAddr],
     request_id: &str,
     tx: &mpsc::Sender<Result<Event, Infallible>>,
