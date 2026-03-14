@@ -876,34 +876,47 @@ async fn inspect_port(
     check_ct: bool,
     semaphore: Arc<tokio::sync::Semaphore>,
 ) -> PortResult {
-    let mut ip_results = Vec::with_capacity(ips.len());
+    let mut join_set = tokio::task::JoinSet::new();
 
-    for &ip in ips {
-        let _permit = semaphore.acquire().await.ok();
-        let mut result = tls::inspect_ip(ip, port, hostname, timeout).await;
-        if result.error.is_some() {
-            metrics::counter!("tlsight_handshake_errors_total").increment(1);
-        }
-
-        // Run validation if we got a chain
-        if let Some(chain) = &result.chain {
-            let raw_certs = result.raw_certs.as_deref().unwrap_or(&[]);
-            let validation = validate::chain_trust::validate_chain(
-                chain,
-                hostname,
-                cert_verifier.as_ref(),
-                raw_certs,
-            );
-            result.validation = Some(validation);
-
-            // Extract SCTs from leaf certificate
-            if check_ct && let Some(leaf_der) = raw_certs.first() {
-                result.ct = validate::ct::extract_ct_info(leaf_der.as_ref());
+    for (idx, &ip) in ips.iter().enumerate() {
+        let semaphore = Arc::clone(&semaphore);
+        let cert_verifier = Arc::clone(&cert_verifier);
+        let hostname = hostname.map(|h| h.to_string());
+        join_set.spawn(async move {
+            let _permit = semaphore.acquire().await.ok();
+            let mut result = tls::inspect_ip(ip, port, hostname.as_deref(), timeout).await;
+            if result.error.is_some() {
+                metrics::counter!("tlsight_handshake_errors_total").increment(1);
             }
-        }
 
-        ip_results.push(result);
+            // Run validation if we got a chain
+            if let Some(chain) = &result.chain {
+                let raw_certs = result.raw_certs.as_deref().unwrap_or(&[]);
+                let validation = validate::chain_trust::validate_chain(
+                    chain,
+                    hostname.as_deref(),
+                    cert_verifier.as_ref(),
+                    raw_certs,
+                );
+                result.validation = Some(validation);
+
+                // Extract SCTs from leaf certificate
+                if check_ct && let Some(leaf_der) = raw_certs.first() {
+                    result.ct = validate::ct::extract_ct_info(leaf_der.as_ref());
+                }
+            }
+
+            (idx, result)
+        });
     }
+
+    let mut indexed: Vec<(usize, tls::IpInspectionResult)> = join_set
+        .join_all()
+        .await
+        .into_iter()
+        .collect();
+    indexed.sort_by_key(|(idx, _)| *idx);
+    let ip_results: Vec<tls::IpInspectionResult> = indexed.into_iter().map(|(_, r)| r).collect();
 
     let consistency = compute_consistency(&ip_results);
 

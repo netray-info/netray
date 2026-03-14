@@ -40,6 +40,10 @@ async fn main() {
 
     tracing::info!(bind = %config.server.bind, "starting tlsight");
 
+    if config.limits.allow_blocked_targets {
+        tracing::warn!("allow_blocked_targets is enabled — target IP restrictions are DISABLED; do not use in production");
+    }
+
     let mut state = state::AppState::new(&config);
 
     // The DNS resolver is used for A/AAAA resolution (replacing tokio's system resolver)
