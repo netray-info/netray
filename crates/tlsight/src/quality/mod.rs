@@ -16,6 +16,7 @@ pub fn hsts_port(ports: &[u16]) -> u16 {
 }
 
 /// Assess quality for a single port's inspection data.
+#[allow(clippy::too_many_arguments)]
 pub fn assess_port(
     ips: &[IpInspectionResult],
     port: u16,

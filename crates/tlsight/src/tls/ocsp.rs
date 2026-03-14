@@ -26,6 +26,7 @@ pub struct OcspRevocationResult {
 
 /// Perform a live OCSP check for the leaf cert using the AIA OCSP URL.
 /// On network error or timeout, returns status "unknown".
+#[allow(dead_code)] // implemented but not yet wired into the inspection pipeline
 pub async fn check_live_ocsp(
     ocsp_url: &str,
     leaf_der: &[u8],

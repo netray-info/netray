@@ -740,11 +740,10 @@ async fn do_inspect(
     let ech_for_port = if is_hostname && do_dns { Some(ech_advertised) } else { None };
     for pr in &mut port_results {
         for ip_result in &mut pr.ips {
-            if let Ok(ip) = ip_result.ip.parse::<IpAddr>() {
-                if !enrichments.is_empty() {
+            if let Ok(ip) = ip_result.ip.parse::<IpAddr>()
+                && !enrichments.is_empty() {
                     ip_result.enrichment = enrichments.get(&ip).cloned();
                 }
-            }
             // Set ECH and STARTTLS on TLS params
             if let Some(ref mut tls) = ip_result.tls {
                 tls.ech_advertised = ech_for_port;
