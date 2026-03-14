@@ -175,21 +175,4 @@ export function toJson(batches: BatchEvent[], stats: DoneStats | null): string {
 // Download / clipboard helpers
 // ---------------------------------------------------------------------------
 
-export function downloadFile(content: string, filename: string, mime: string): void {
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { downloadFile, copyToClipboard } from '@netray-info/common-frontend/utils';

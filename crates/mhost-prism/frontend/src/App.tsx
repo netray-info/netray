@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, onMount, onCleanup, Show } from 'solid-js';
 import { QueryInput } from './components/QueryInput';
 import { ResultsTable, parseBatchEvent, groupByRecordType, lookupsAgree, hasDeviation, type BatchEvent, type DoneStats } from './components/ResultsTable';
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
@@ -9,7 +9,10 @@ import { AuthComparison } from './components/AuthComparison';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
-import { createFocusTrap } from '@netray-info/common-frontend/focus-trap';
+import { storageGet, storageSet } from '@netray-info/common-frontend/storage';
+import Modal from '@netray-info/common-frontend/components/Modal';
+import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
+import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
 
 type Status = 'idle' | 'loading' | 'done' | 'error';
 type ActiveTab = 'dnssec' | 'trace' | 'lint' | 'results' | 'servers' | 'transport' | 'auth';
@@ -39,32 +42,20 @@ const MAX_HISTORY = 50;
 interface ViewPrefs { hideNx: boolean; compact: boolean; devOnly: boolean; sort: boolean; explain: boolean; }
 
 function loadViewPrefs(): ViewPrefs {
-  try {
-    const raw = localStorage.getItem(VIEW_PREFS_KEY);
-    if (raw) {
-      const p = JSON.parse(raw);
-      return { hideNx: Boolean(p.hideNx), compact: Boolean(p.compact), devOnly: Boolean(p.devOnly), sort: Boolean(p.sort), explain: Boolean(p.explain) };
-    }
-  } catch { /* ignore */ }
-  return { hideNx: true, compact: true, devOnly: false, sort: true, explain: false };
+  const p = storageGet<Partial<ViewPrefs>>(VIEW_PREFS_KEY, {});
+  return { hideNx: Boolean(p.hideNx ?? true), compact: Boolean(p.compact ?? true), devOnly: Boolean(p.devOnly ?? false), sort: Boolean(p.sort ?? true), explain: Boolean(p.explain ?? false) };
 }
 
 function saveViewPrefs(prefs: ViewPrefs) {
-  try { localStorage.setItem(VIEW_PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore */ }
+  storageSet(VIEW_PREFS_KEY, prefs);
 }
 
 function loadHistory(): string[] {
-  try {
-    const raw = localStorage.getItem(HISTORY_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return [];
+  return storageGet<string[]>(HISTORY_KEY, []);
 }
 
 function saveHistory(history: string[]) {
-  try {
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
-  } catch { /* ignore */ }
+  storageSet(HISTORY_KEY, history.slice(0, MAX_HISTORY));
 }
 
 // ---------------------------------------------------------------------------
@@ -193,7 +184,7 @@ export default function App() {
   const [stats, setStats] = createSignal<DoneStats | null>(null);
   const [activeTab, setActiveTab] = createSignal<ActiveTab>('results');
   const [history, setHistory] = createSignal<string[]>(loadHistory());
-  const { theme, toggleTheme } = createTheme('prism_theme', 'dark');
+  const themeResult = createTheme('prism_theme', 'dark');
   const [showHelp, setShowHelp] = createSignal(false);
 
 
@@ -277,25 +268,10 @@ export default function App() {
   let focusEditor: (() => void) | undefined;
   let clearEditor: (() => void) | undefined;
   let setEditorValue: ((v: string) => void) | undefined;
-  let helpModalEl: HTMLDivElement | undefined;
-
-  const helpTrap = createFocusTrap(() => helpModalEl, () => setShowHelp(false));
-
   function fillQuery(q: string) {
     setEditorValue?.(q);
     submitCombined(q);
   }
-
-  // ---------------------------------------------------------------------------
-  // Help modal focus trap
-  // ---------------------------------------------------------------------------
-
-  createEffect(() => {
-    if (showHelp()) {
-      helpTrap.activate();
-      onCleanup(() => helpTrap.deactivate());
-    }
-  });
 
   // ---------------------------------------------------------------------------
   // Connection teardown
@@ -1162,18 +1138,7 @@ export default function App() {
         <h1 class="logo">{siteName()}</h1>
         <span class="tagline">DNS, refracted</span>
         <div class="header-actions">
-          <button
-            class="header-btn"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            title={
-              theme() === 'system' ? 'Theme: System — click for Dark'
-              : theme() === 'dark'  ? 'Theme: Dark — click for Light'
-              :                       'Theme: Light — click for System'
-            }
-          >
-            {theme() === 'system' ? '\u25D0' : theme() === 'dark' ? '\u263E' : '\u2600'}
-          </button>
+          <ThemeToggle theme={themeResult} class="header-btn" />
           <button
             class="header-btn"
             onClick={() => setShowHelp((v) => !v)}
@@ -1516,8 +1481,8 @@ export default function App() {
         </Show>
       </main>
 
-      <footer class="footer">
-        <div class="footer-about">
+      <SiteFooter
+        aboutText={<>
           <em>{siteName()}</em> is a multi-server DNS debugging and inspection service.
           Fan-out queries across resolvers with streaming results, DNSSEC validation, delegation tracing, and transport comparison.
           Built in <a href="https://www.rust-lang.org/" target="_blank" rel="noopener noreferrer">Rust</a>{" "}
@@ -1525,106 +1490,81 @@ export default function App() {
           and <a href="https://www.solidjs.com/" target="_blank" rel="noopener noreferrer">SolidJS</a>,{" "}
           powered by <a href="https://github.com/lukaspustina/mhost" target="_blank" rel="noopener noreferrer">mhost</a>.
           Open to use — rate limiting applies.
-        </div>
-        <div class="footer-links">
-          <a class="footer-link" href="https://github.com/lukaspustina/mhost-prism" target="_blank" rel="noopener noreferrer">GitHub</a>
-          <span class="footer-sep">&middot;</span>
-          <a class="footer-link" href="/docs">API Docs</a>
-          <span class="footer-sep">&middot;</span>
-          <a class="footer-link" href="https://lukas.pustina.de" target="_blank" rel="noopener noreferrer">Author</a>
-          <span class="footer-sep">&middot;</span>
-          <Show when={siteVersion()}>
-            <span class="footer-text">v{siteVersion()}</span>
-          </Show>
-        </div>
-      </footer>
+        </>}
+        links={[
+          { href: 'https://github.com/lukaspustina/mhost-prism', label: 'GitHub', external: true },
+          { href: '/docs', label: 'API Docs' },
+          { href: 'https://lukas.pustina.de', label: 'Author', external: true },
+        ]}
+        version={siteVersion() ?? undefined}
+      />
 
       {/* Help modal */}
-      <Show when={showHelp()}>
-        <div class="modal-overlay" onClick={() => setShowHelp(false)}>
-          <div
-            class="modal modal-help"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="help-modal-title"
-            ref={helpModalEl}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div class="modal-header">
-              <h2 id="help-modal-title">Help</h2>
-              <button
-                class="modal-close"
-                aria-label="Close"
-                onClick={() => setShowHelp(false)}
-              >&times;</button>
-            </div>
-
-            <div class="help-section">
-              <div class="help-section-title">Query syntax</div>
-              <code class="help-syntax">domain [TYPE...] [@server...] [+flag...]</code>
-              <p class="help-syntax-desc">Tokens are space-separated. Order within each group doesn't matter.</p>
-            </div>
-
-            <div class="help-section">
-              <div class="help-section-title">Predefined servers</div>
-              <table class="help-ref-table">
-                <tbody>
-                  <tr><td class="help-token">@cloudflare</td><td>1.1.1.1 / 1.0.0.1</td></tr>
-                  <tr><td class="help-token">@google</td><td>8.8.8.8 / 8.8.4.4</td></tr>
-                  <tr><td class="help-token">@quad9</td><td>9.9.9.9</td></tr>
-                  <tr><td class="help-token">@mullvad</td><td>Mullvad DNS</td></tr>
-                  <tr><td class="help-token">@wikimedia</td><td>Wikimedia DNS</td></tr>
-                  <tr><td class="help-token">@dns4eu</td><td>DNS4EU</td></tr>
-                  <tr><td class="help-token">@system</td><td>/etc/resolv.conf</td></tr>
-                  <tr><td class="help-token">@1.2.3.4</td><td>Custom IP (if enabled by operator)</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="help-section">
-              <div class="help-section-title">Flags</div>
-              <table class="help-ref-table">
-                <tbody>
-                  <tr><td class="help-token">+udp</td><td>UDP transport (default)</td></tr>
-                  <tr><td class="help-token">+tcp</td><td>TCP transport</td></tr>
-                  <tr><td class="help-token">+tls</td><td>DNS-over-TLS</td></tr>
-                  <tr><td class="help-token">+https</td><td>DNS-over-HTTPS</td></tr>
-                  <tr><td class="help-token">+dnssec</td><td>DNSSEC chain-of-trust validation</td></tr>
-                  <tr><td class="help-token">+check</td><td>Domain health check (15 types + DMARC lint)</td></tr>
-                  <tr><td class="help-token">+trace</td><td>Delegation trace (root → authoritative)</td></tr>
-                  <tr><td class="help-token">+compare</td><td>Transport comparison (UDP/TCP/TLS/HTTPS)</td></tr>
-                  <tr><td class="help-token">+auth</td><td>Authoritative vs recursive comparison</td></tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="help-section">
-              <div class="help-section-title">Record types</div>
-              <p class="help-types">A &nbsp;AAAA &nbsp;MX &nbsp;TXT &nbsp;NS &nbsp;SOA &nbsp;CAA &nbsp;CNAME &nbsp;DNSKEY &nbsp;DS &nbsp;HTTPS &nbsp;SVCB &nbsp;SRV &nbsp;SSHFP &nbsp;TLSA &nbsp;NAPTR &nbsp;PTR &nbsp;HINFO &nbsp;OPENPGPKEY</p>
-            </div>
-
-            <div class="help-section">
-              <div class="help-section-title">Keyboard shortcuts</div>
-              <table class="shortcuts-table">
-                <thead>
-                  <tr><th>Key</th><th>Action</th></tr>
-                </thead>
-                <tbody>
-                  <tr><td class="shortcut-key">/</td><td>Focus query input</td></tr>
-                  <tr><td class="shortcut-key">Enter</td><td>Submit query (when input focused)</td></tr>
-                  <tr><td class="shortcut-key">Tab</td><td>Accept autocomplete suggestion</td></tr>
-                  <tr><td class="shortcut-key">Escape</td><td>Dismiss autocomplete / blur input</td></tr>
-                  <tr><td class="shortcut-key">j / k</td><td>Navigate result rows</td></tr>
-                  <tr><td class="shortcut-key">h / l</td><td>Previous / next tab</td></tr>
-                  <tr><td class="shortcut-key">&uarr; / &darr;</td><td>Browse query history (in input)</td></tr>
-                  <tr><td class="shortcut-key">r</td><td>Re-run current query</td></tr>
-                  <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+      <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
+        <div class="help-section">
+          <div class="help-section-title">Query syntax</div>
+          <code class="help-syntax">domain [TYPE...] [@server...] [+flag...]</code>
+          <p class="help-syntax-desc">Tokens are space-separated. Order within each group doesn't matter.</p>
         </div>
-      </Show>
+
+        <div class="help-section">
+          <div class="help-section-title">Predefined servers</div>
+          <table class="help-ref-table">
+            <tbody>
+              <tr><td class="help-token">@cloudflare</td><td>1.1.1.1 / 1.0.0.1</td></tr>
+              <tr><td class="help-token">@google</td><td>8.8.8.8 / 8.8.4.4</td></tr>
+              <tr><td class="help-token">@quad9</td><td>9.9.9.9</td></tr>
+              <tr><td class="help-token">@mullvad</td><td>Mullvad DNS</td></tr>
+              <tr><td class="help-token">@wikimedia</td><td>Wikimedia DNS</td></tr>
+              <tr><td class="help-token">@dns4eu</td><td>DNS4EU</td></tr>
+              <tr><td class="help-token">@system</td><td>/etc/resolv.conf</td></tr>
+              <tr><td class="help-token">@1.2.3.4</td><td>Custom IP (if enabled by operator)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section-title">Flags</div>
+          <table class="help-ref-table">
+            <tbody>
+              <tr><td class="help-token">+udp</td><td>UDP transport (default)</td></tr>
+              <tr><td class="help-token">+tcp</td><td>TCP transport</td></tr>
+              <tr><td class="help-token">+tls</td><td>DNS-over-TLS</td></tr>
+              <tr><td class="help-token">+https</td><td>DNS-over-HTTPS</td></tr>
+              <tr><td class="help-token">+dnssec</td><td>DNSSEC chain-of-trust validation</td></tr>
+              <tr><td class="help-token">+check</td><td>Domain health check (15 types + DMARC lint)</td></tr>
+              <tr><td class="help-token">+trace</td><td>Delegation trace (root → authoritative)</td></tr>
+              <tr><td class="help-token">+compare</td><td>Transport comparison (UDP/TCP/TLS/HTTPS)</td></tr>
+              <tr><td class="help-token">+auth</td><td>Authoritative vs recursive comparison</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section-title">Record types</div>
+          <p class="help-types">A &nbsp;AAAA &nbsp;MX &nbsp;TXT &nbsp;NS &nbsp;SOA &nbsp;CAA &nbsp;CNAME &nbsp;DNSKEY &nbsp;DS &nbsp;HTTPS &nbsp;SVCB &nbsp;SRV &nbsp;SSHFP &nbsp;TLSA &nbsp;NAPTR &nbsp;PTR &nbsp;HINFO &nbsp;OPENPGPKEY</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section-title">Keyboard shortcuts</div>
+          <table class="shortcuts-table">
+            <thead>
+              <tr><th>Key</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="shortcut-key">/</td><td>Focus query input</td></tr>
+              <tr><td class="shortcut-key">Enter</td><td>Submit query (when input focused)</td></tr>
+              <tr><td class="shortcut-key">Tab</td><td>Accept autocomplete suggestion</td></tr>
+              <tr><td class="shortcut-key">Escape</td><td>Dismiss autocomplete / blur input</td></tr>
+              <tr><td class="shortcut-key">j / k</td><td>Navigate result rows</td></tr>
+              <tr><td class="shortcut-key">h / l</td><td>Previous / next tab</td></tr>
+              <tr><td class="shortcut-key">&uarr; / &darr;</td><td>Browse query history (in input)</td></tr>
+              <tr><td class="shortcut-key">r</td><td>Re-run current query</td></tr>
+              <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </Modal>
 
     </div>
   );

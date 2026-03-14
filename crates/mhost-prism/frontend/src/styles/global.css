@@ -1,4 +1,7 @@
 @import '@netray-info/common-frontend/styles/theme.css';
+@import '@netray-info/common-frontend/styles/reset.css';
+@import '@netray-info/common-frontend/styles/layout.css';
+@import '@netray-info/common-frontend/styles/components.css';
 
 /* ===================================================================
    prism — project-specific overrides
@@ -65,25 +68,10 @@
 }
 
 /* ===================================================================
-   Reset
+   Reset extensions (beyond shared reset.css)
    =================================================================== */
 
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-}
-
 html {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   /* Chrome/Firefox: reserve scrollbar gutter without forcing scrollbar visible. */
   scrollbar-gutter: stable;
 }
@@ -98,10 +86,6 @@ html {
 }
 
 body {
-  font-family: var(--font-sans);
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  line-height: 1.5;
   min-height: 100vh;
   /* iOS safe area: pad left/right for notch/island on landscape */
   padding-left: env(safe-area-inset-left);
@@ -150,11 +134,6 @@ body {
   background-clip: text;
 }
 
-.tagline {
-  font-size: 14px;
-  color: var(--text-muted);
-  font-weight: 400;
-}
 
 .header-actions {
   margin-left: auto;
@@ -744,12 +723,6 @@ body {
   width: 14px;
   height: 14px;
   border-width: 1.5px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* ===================================================================
@@ -1562,44 +1535,6 @@ body {
 /* ===================================================================
    Modal (shared for Help and ToS)
    =================================================================== */
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fade-in 150ms ease;
-}
-
-[data-theme="light"] .modal-overlay {
-  background: rgba(0, 0, 0, 0.35);
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.modal {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 24px;
-  max-width: 480px;
-  width: 90vw;
-  max-height: 80vh;
-  overflow-y: auto;
-  animation: modal-in 150ms ease;
-}
-
-
-@keyframes modal-in {
-  from { opacity: 0; transform: scale(0.95) translateY(8px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
-}
 
 .modal-header {
   display: flex;
