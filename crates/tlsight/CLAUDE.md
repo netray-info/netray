@@ -243,6 +243,20 @@ tlsight/
 - `solid-js` — Reactive UI (~7KB)
 - `vite` + `vite-plugin-solid` — Build tooling
 
+## CI/CD
+
+GitHub Actions: fmt → clippy → test → frontend → audit. Pushing to `prod` branch auto-builds and pushes Docker image to GHCR.
+
+**GitHub Packages auth**: Any CI step that runs `npm ci` for the frontend must set `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` as an env var on that step. The project `.npmrc` uses `${NODE_AUTH_TOKEN}` as a placeholder (not a hardcoded token) so the token must be injected at runtime. Missing this env var causes E401 from `https://npm.pkg.github.com`.
+
+```yaml
+- name: frontend build
+  run: npm ci && npm run build
+  working-directory: frontend
+  env:
+    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
 ## Security Checklist
 
 When modifying API endpoints or adding features, verify:
