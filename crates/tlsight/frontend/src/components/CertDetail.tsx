@@ -1,4 +1,4 @@
-import { createSignal, createEffect } from 'solid-js';
+import { createSignal, createEffect, For, Show } from 'solid-js';
 import Explain from './Explain';
 import type { CertInfo } from '../lib/types';
 import { certDisplayName } from '../lib/cert';
@@ -7,6 +7,17 @@ interface Props {
   cert: CertInfo;
   expanded?: boolean;
   explain?: boolean;
+  dnsUrl?: string | null;
+}
+
+/** Returns true if the SAN looks like a DNS hostname (not an IP address or email). */
+function isDnsSan(san: string): boolean {
+  if (san.includes('@')) return false;
+  // IPv4: four decimal octets
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(san)) return false;
+  // IPv6: contains colons
+  if (san.includes(':')) return false;
+  return true;
 }
 
 export default function CertDetail(props: Props) {
@@ -24,7 +35,30 @@ export default function CertDetail(props: Props) {
           <table class="cert-detail__table">
             <tbody>
               <tr><th>Issuer</th><td>{props.cert.issuer}</td></tr>
-              <tr><th>SANs</th><td class="mono">{props.cert.sans.join(', ') || 'none'}</td></tr>
+              <tr><th>SANs</th><td class="mono">
+                <Show when={props.cert.sans.length > 0} fallback="none">
+                  <For each={props.cert.sans}>
+                    {(san, i) => (
+                      <>
+                        {i() > 0 ? ', ' : ''}
+                        {san}
+                        {props.dnsUrl && isDnsSan(san) && (
+                          <>
+                            {' '}
+                            <a
+                              class="eco-link eco-link--badge"
+                              href={`${props.dnsUrl}/?q=${encodeURIComponent(san)}&ref=tlsight`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title={`Inspect DNS for ${san}`}
+                            >DNS ↗</a>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </For>
+                </Show>
+              </td></tr>
               <tr><th>Serial</th><td class="mono">{props.cert.serial}</td></tr>
               <tr><th>Valid</th><td>{props.cert.not_before} — {props.cert.not_after}</td></tr>
               <tr><th>Days remaining</th><td>{props.cert.days_remaining}</td></tr>

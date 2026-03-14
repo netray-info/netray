@@ -15,6 +15,7 @@ interface Props {
   expanded?: boolean;
   explain?: boolean;
   ipUrl?: string;
+  dnsUrl?: string | null;
 }
 
 type Status = 'pass' | 'warn' | 'fail' | 'error' | 'neutral';
@@ -173,7 +174,7 @@ export default function IpCard(props: Props) {
                 </Show>
                 <div class="cert-details">
                   <For each={chain()}>
-                    {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} explain={props.explain} />}
+                    {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} explain={props.explain} dnsUrl={props.dnsUrl} />}
                   </For>
                 </div>
               </>

@@ -4,7 +4,7 @@
 
 tlsight is a web-based tool that performs a full TLS handshake against a hostname, extracts and validates the certificate chain, cross-checks DNS records, and surfaces everything in a structured, readable interface. No dependencies, no plugins — just a URL and a result.
 
-Live at [tls.pdt.sh](https://tls.pdt.sh) · Part of the [netray.info](https://netray.info) toolchain alongside [dns.pdt.sh](https://dns.pdt.sh) and [ip.netray.info](https://ip.netray.info).
+Live at [tls.netray.info](https://tls.netray.info) · Part of the [netray.info](https://netray.info) toolchain alongside [dns.netray.info](https://dns.netray.info) and [ip.netray.info](https://ip.netray.info).
 
 ---
 
@@ -54,7 +54,7 @@ GET /api/inspect?h=hostname[:port[,port...]]
 Returns a structured JSON document with the full inspection result. See the [API docs](/docs) or [OpenAPI spec](/api-docs/openapi.json) for the full schema.
 
 ```sh
-curl 'https://tls.pdt.sh/api/inspect?h=example.com'
+curl 'https://tls.netray.info/api/inspect?h=example.com'
 ```
 
 Additional endpoints:
@@ -121,9 +121,9 @@ check_ct = false
 # custom_ca_dir = "/etc/tlsight/ca.d/"   # load private CAs from *.pem files
 
 [ecosystem]
-dns_base_url = "https://dns.pdt.sh"   # cross-links to DNS tool
-ip_base_url  = "https://ip.pdt.sh"    # cross-links to IP tool
-# ip_api_url = "https://ip.pdt.sh"    # enables IP enrichment (geo, ASN, rDNS badges)
+dns_base_url = "https://dns.netray.info"   # cross-links to DNS tool
+ip_base_url  = "https://ip.netray.info"    # cross-links to IP tool
+# ip_api_url = "https://ip.netray.info"    # enables IP enrichment (geo, ASN, rDNS badges)
 
 [quality]
 # enabled = true                    # health checks always-on (default: true)

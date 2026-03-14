@@ -14,6 +14,7 @@ interface Props {
   explain?: boolean;
   expanded?: boolean;
   ipUrl?: string;
+  dnsUrl?: string | null;
 }
 
 function daysLabel(days: number): string {
@@ -129,7 +130,7 @@ export default function UnifiedIpView(props: Props) {
               </Show>
               <div class="cert-details">
                 <For each={chain()}>
-                  {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} explain={props.explain} />}
+                  {(cert) => <CertDetail cert={cert} expanded={certsExpanded()} explain={props.explain} dnsUrl={props.dnsUrl} />}
                 </For>
               </div>
             </>

@@ -26,7 +26,7 @@
 
 ## Project Overview
 
-**tlsight** is a web-based TLS certificate inspection and diagnostics service — the third tool in the `*.pdt.sh` ecosystem (`tls.pdt.sh`). It serves an embedded SPA and performs TLS handshake inspection against user-specified hostnames: full certificate chain extraction, TLS parameter analysis, DNS cross-checks (DANE/TLSA, CAA), and multi-IP consistency comparison.
+**tlsight** is a web-based TLS certificate inspection and diagnostics service — the third tool in the `*.netray.info` ecosystem (`tls.netray.info`). It serves an embedded SPA and performs TLS handshake inspection against user-specified hostnames: full certificate chain extraction, TLS parameter analysis, DNS cross-checks (DANE/TLSA, CAA), and multi-IP consistency comparison.
 
 - **Author**: Lukas Pustina | **License**: MIT
 - **Repository**: Standalone repo. Depends on `mhost` as a published crate (no `app` feature).
@@ -184,7 +184,7 @@ tlsight/
         PortTabs.tsx              # Multi-port tab navigation
         QueryHistory.tsx          # Recent query history (localStorage)
         ExportButtons.tsx         # JSON download + markdown copy
-        CrossLinks.tsx            # Links to dns.pdt.sh and ip.pdt.sh
+        CrossLinks.tsx            # Links to dns.netray.info and ip.netray.info
         Explain.tsx               # Reusable explain-mode info card wrapper
       lib/
         types.ts                  # TypeScript interfaces matching Rust response

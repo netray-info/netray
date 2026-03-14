@@ -269,7 +269,7 @@ export default function App() {
                     </Show>
                     <Show when={dnsUrl()}>
                       <span class="results-summary-sep">/</span>
-                      <a class="eco-link" href={`${dnsUrl()}/?q=${encodeURIComponent(r.hostname)}`} target="_blank" rel="noopener noreferrer">DNS ↗</a>
+                      <a class="eco-link" href={`${dnsUrl()}/?q=${encodeURIComponent(r.hostname)}&ref=tlsight`} target="_blank" rel="noopener noreferrer">DNS ↗</a>
                     </Show>
                   </div>
                   <ExportButtons result={r} />
@@ -345,7 +345,7 @@ export default function App() {
                         </Show>
 
                         <Show when={useUnified()}>
-                          <UnifiedIpView ips={successfulIps()} explain={explain()} expanded={allExpanded()} ipUrl={ipUrl()} />
+                          <UnifiedIpView ips={successfulIps()} explain={explain()} expanded={allExpanded()} ipUrl={ipUrl()} dnsUrl={dnsUrl()} />
                           <For each={errorIps()}>
                             {(ipResult) => (
                               <IpCard
@@ -354,6 +354,7 @@ export default function App() {
                                 expanded={undefined}
                                 explain={explain()}
                                 ipUrl={ipUrl()}
+                                dnsUrl={dnsUrl()}
                               />
                             )}
                           </For>
@@ -368,6 +369,7 @@ export default function App() {
                                 expanded={p.ips.length > 1 ? allExpanded() : undefined}
                                 explain={explain()}
                                 ipUrl={ipUrl()}
+                                dnsUrl={dnsUrl()}
                               />
                             )}
                           </For>

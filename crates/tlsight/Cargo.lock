@@ -1534,9 +1534,9 @@ dependencies = [
 
 [[package]]
 name = "netray-common"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e78c9bac14a0fb060a9e4b98d27c719cee4e982ee09032fed0a4c6fbdb2ef8a5"
+checksum = "a78c0de58da30e4ca26d4a653b0a7b600cd07fd3a81847d44d355d565c27c881"
 dependencies = [
  "axum",
  "futures",
@@ -2756,6 +2756,7 @@ dependencies = [
  "netray-common",
  "percent-encoding",
  "rcgen",
+ "reqwest",
  "rust-embed",
  "rustls",
  "rustls-pemfile",

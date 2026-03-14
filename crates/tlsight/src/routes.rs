@@ -4,7 +4,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::extract::{ConnectInfo, Extension, Query, RawQuery, State};
-use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse};
 use axum::routing::get;
 use axum::{Json, Router};
@@ -141,8 +140,8 @@ pub struct HealthResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ReadyResponse {
     pub status: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -261,37 +260,45 @@ async fn health_handler() -> Json<HealthResponse> {
     get,
     path = "/api/ready",
     responses(
-        (status = 200, description = "Service is ready", body = ReadyResponse),
-        (status = 503, description = "Service not ready", body = ReadyResponse),
+        (status = 200, description = "Service is ready; warnings array lists any degraded conditions", body = ReadyResponse),
     )
 )]
 async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let config = state.config.load();
+    let mut warnings: Vec<String> = Vec::new();
 
-    // DNS resolver is required when CAA or DANE checks are enabled, or for hostname resolution.
-    if (config.validation.check_caa || config.validation.check_dane) && state.dns_resolver.is_none()
-    {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ReadyResponse {
-                status: "not_ready",
-                reason: Some(
-                    "DNS resolver unavailable; CAA/DANE checks and hostname inspection cannot run"
-                        .to_owned(),
-                ),
-            }),
-        )
-            .into_response();
+    // Check enrichment service reachability (2 s timeout HEAD request).
+    if let Some(ref url) = config.ecosystem.ip_api_url {
+        let health_url = format!("{}/health", url.trim_end_matches('/'));
+        let probe = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(2))
+            .build();
+        let reachable = match probe {
+            Ok(client) => client.get(&health_url).send().await.is_ok(),
+            Err(_) => false,
+        };
+        if !reachable {
+            warnings.push("enrichment service unreachable".to_owned());
+        }
     }
 
-    (
-        StatusCode::OK,
-        Json(ReadyResponse {
-            status: "ready",
-            reason: None,
-        }),
-    )
-        .into_response()
+    // Check custom CA directory exists and is readable.
+    if let Some(ref ca_dir) = config.validation.custom_ca_dir {
+        let dir = std::path::Path::new(ca_dir);
+        if !dir.is_dir() || std::fs::read_dir(dir).is_err() {
+            warnings.push(format!("custom_ca_dir not accessible: {ca_dir}"));
+        }
+    }
+
+    // Check that the trust store loaded at least the Mozilla root CAs.
+    if state.trust_store.is_empty() {
+        warnings.push("trust store contains no CA certificates".to_owned());
+    }
+
+    Json(ReadyResponse {
+        status: "ok",
+        warnings,
+    })
 }
 
 #[utoipa::path(
@@ -1139,9 +1146,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn ready_returns_ready() {
-        // test_config enables DANE/CAA but DNS resolver is always None in tests (set async in
-        // main). Build a config with DNS checks disabled so the service reports ready.
+    async fn ready_returns_ok() {
+        // No enrichment URL configured, no custom_ca_dir — should return "ok" with no warnings.
         let mut config = test_config();
         config.validation.check_caa = false;
         config.validation.check_dane = false;
@@ -1149,7 +1155,7 @@ mod tests {
         let app = health_router().merge(api_router(state));
         let (status, body) = get(&app, "/api/ready").await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["status"], "ready");
+        assert_eq!(body["status"], "ok");
     }
 
     #[tokio::test]

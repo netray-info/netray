@@ -56,8 +56,7 @@ impl AppState {
 
         Self {
             ip_extractor: Arc::new(
-                IpExtractor::new(&config.server.trusted_proxies)
-                    .expect("invalid trusted_proxies configuration"),
+                IpExtractor::new(&config.server.trusted_proxies),
             ),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             trust_store,
