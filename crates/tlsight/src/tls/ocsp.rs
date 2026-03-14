@@ -1,4 +1,4 @@
-use der::{asn1::OctetString, Any, Decode, Encode};
+use der::{Any, Decode, Encode, asn1::OctetString};
 use serde::Serialize;
 use sha1::{Digest, Sha1};
 use spki::AlgorithmIdentifierOwned;
@@ -78,26 +78,18 @@ fn build_ocsp_request(leaf_der: &[u8], issuer_der: &[u8]) -> Result<Vec<u8>, ()>
     let (_, issuer) = x509_parser::parse_x509_certificate(issuer_der).map_err(|_| ())?;
 
     let issuer_name_hash: [u8; 20] = Sha1::digest(issuer.tbs_certificate.subject.as_raw()).into();
-    let issuer_key_hash: [u8; 20] = Sha1::digest(
-        issuer
-            .tbs_certificate
-            .subject_pki
-            .subject_public_key
-            .data,
-    )
-    .into();
+    let issuer_key_hash: [u8; 20] =
+        Sha1::digest(issuer.tbs_certificate.subject_pki.subject_public_key.data).into();
 
     // SHA-1 OID: 1.3.14.3.2.26
-    let sha1_oid =
-        der::asn1::ObjectIdentifier::new_unwrap("1.3.14.3.2.26");
+    let sha1_oid = der::asn1::ObjectIdentifier::new_unwrap("1.3.14.3.2.26");
     let hash_algorithm = AlgorithmIdentifierOwned {
         oid: sha1_oid,
         parameters: Some(Any::from(der::asn1::Null)),
     };
 
     let serial_bytes = leaf.tbs_certificate.raw_serial();
-    let serial_number =
-        SerialNumber::new(serial_bytes).map_err(|_| ())?;
+    let serial_number = SerialNumber::new(serial_bytes).map_err(|_| ())?;
 
     let cert_id = CertId {
         hash_algorithm,
@@ -120,7 +112,10 @@ fn build_ocsp_request(leaf_der: &[u8], issuer_der: &[u8]) -> Result<Vec<u8>, ()>
     ocsp_req.to_der().map_err(|_| ())
 }
 
-fn parse_live_ocsp_response(resp: x509_ocsp::OcspResponse, checked_at: String) -> OcspRevocationResult {
+fn parse_live_ocsp_response(
+    resp: x509_ocsp::OcspResponse,
+    checked_at: String,
+) -> OcspRevocationResult {
     let unknown = || OcspRevocationResult {
         status: "unknown".to_string(),
         reason: None,

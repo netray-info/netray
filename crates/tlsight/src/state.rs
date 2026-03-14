@@ -60,9 +60,7 @@ impl AppState {
         });
 
         Self {
-            ip_extractor: Arc::new(
-                IpExtractor::new(&config.server.trusted_proxies),
-            ),
+            ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             trust_store,
             cert_verifier,
@@ -164,10 +162,7 @@ pub fn reload_custom_cas(
     let custom_ca_count = root_store.len().saturating_sub(mozilla_count);
     trust_store.store(Arc::new(root_store));
 
-    tracing::info!(
-        custom_cas = custom_ca_count,
-        "custom CA directory reloaded"
-    );
+    tracing::info!(custom_cas = custom_ca_count, "custom CA directory reloaded");
 
     custom_ca_count
 }

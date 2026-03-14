@@ -23,7 +23,11 @@ fn deserializes_full_network_response() {
         .expect("fixture must parse into IpInfo without error");
 
     assert_eq!(info.asn, Some(15169), "asn field missing or wrong");
-    assert_eq!(info.org.as_deref(), Some("Google LLC"), "org field missing or wrong");
+    assert_eq!(
+        info.org.as_deref(),
+        Some("Google LLC"),
+        "org field missing or wrong"
+    );
     assert_eq!(
         info.ip_type.as_deref(),
         Some("cloud"),
@@ -41,9 +45,21 @@ fn deserializes_cloud_sub_object() {
     let info: IpInfo = serde_json::from_str(NETWORK_FIXTURE).expect("fixture must parse");
 
     let cloud: CloudInfo = info.cloud.expect("cloud field missing");
-    assert_eq!(cloud.provider.as_deref(), Some("gcp"), "cloud.provider missing");
-    assert_eq!(cloud.service.as_deref(), Some("DNS"), "cloud.service missing");
-    assert_eq!(cloud.region.as_deref(), Some("us-central1"), "cloud.region missing");
+    assert_eq!(
+        cloud.provider.as_deref(),
+        Some("gcp"),
+        "cloud.provider missing"
+    );
+    assert_eq!(
+        cloud.service.as_deref(),
+        Some("DNS"),
+        "cloud.service missing"
+    );
+    assert_eq!(
+        cloud.region.as_deref(),
+        Some("us-central1"),
+        "cloud.region missing"
+    );
 }
 
 #[test]
@@ -67,9 +83,18 @@ fn deserializes_minimal_network_response() {
     let info: IpInfo = serde_json::from_str(minimal).expect("minimal fixture must parse");
 
     assert_eq!(info.ip_type.as_deref(), Some("residential"));
-    assert!(info.asn.is_none(), "asn should be None for minimal response");
-    assert!(info.org.is_none(), "org should be None for minimal response");
-    assert!(info.cloud.is_none(), "cloud should be None for minimal response");
+    assert!(
+        info.asn.is_none(),
+        "asn should be None for minimal response"
+    );
+    assert!(
+        info.org.is_none(),
+        "org should be None for minimal response"
+    );
+    assert!(
+        info.cloud.is_none(),
+        "cloud should be None for minimal response"
+    );
     assert!(!info.is_datacenter);
     assert!(!info.is_tor);
 }

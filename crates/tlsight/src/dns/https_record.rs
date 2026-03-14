@@ -20,7 +20,8 @@ pub async fn has_ech_advertised(resolvers: &ResolverGroup, hostname: &str) -> bo
 
     // lookups.https() returns Vec<&SVCB>; SvcParam key is a string in mhost.
     // ECH is advertised as svcparam key "ech" (SvcParamKey 5 in RFC 9460).
-    lookups.https().into_iter().any(|svcb| {
-        svcb.svc_params().iter().any(|param| param.key() == "ech")
-    })
+    lookups
+        .https()
+        .into_iter()
+        .any(|svcb| svcb.svc_params().iter().any(|param| param.key() == "ech"))
 }
