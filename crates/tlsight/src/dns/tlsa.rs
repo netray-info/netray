@@ -21,7 +21,6 @@ pub struct TlsaRecord {
     /// Raw certificate association data (not serialized). Used by DANE matching.
     #[serde(skip)]
     #[schema(ignore)]
-    #[allow(dead_code)] // Used in validate::dane tests, runtime DANE deferred until DNSSEC
     pub cert_data: Vec<u8>,
 }
 

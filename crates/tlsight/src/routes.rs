@@ -456,17 +456,17 @@ async fn do_inspect(
         "inspect start"
     );
 
-    // Resolve IPs
+    // Resolve IPs via mhost (same resolver used for CAA/TLSA — unified DNS path).
+    // Resolved IPs are re-checked against target_policy below (DNS rebinding protection).
     let ips = match &parsed.target {
-        Target::Hostname(h) => resolve_hostname(h).await?,
+        Target::Hostname(h) => {
+            let resolver = state.dns_resolver.as_ref().ok_or_else(|| {
+                AppError::DnsResolutionFailed("DNS resolver not available".to_string())
+            })?;
+            resolve_hostname(h, resolver).await?
+        }
         Target::Ip(ip) => vec![*ip],
     };
-
-    if ips.is_empty() {
-        return Err(AppError::DnsResolutionFailed(format!(
-            "no addresses found for {hostname_str}"
-        )));
-    }
 
     // Filter blocked IPs
     let allow_blocked = config.limits.allow_blocked_targets;
@@ -658,8 +658,43 @@ async fn do_inspect(
         (None, _) => validate::CheckStatus::Skip,
     };
 
-    // DANE status: Skip without DNSSEC
-    let dane_status = validate::CheckStatus::Skip;
+    // Compute per-port DANE status by matching TLSA records against the presented cert chain.
+    // DNSSEC signature verification is not yet available, so dnssec_signed is always false for now.
+    // We perform structural DANE matching (RFC 6698) regardless; callers can check dnssec_signed.
+    let mut port_dane_valid: HashMap<u16, Option<bool>> = HashMap::new();
+    for pr in &port_results {
+        if let Some(tlsa) = tlsa_lookups.get(&pr.port)
+            && !tlsa.is_empty()
+        {
+            // Take raw certs from the first successful IP result for this port.
+            let raw_certs_opt = pr
+                .ips
+                .iter()
+                .find(|r| r.error.is_none())
+                .and_then(|r| r.raw_certs.as_deref());
+
+            let dane_ok = if let Some(raw_certs) = raw_certs_opt {
+                tlsa.records
+                    .iter()
+                    .any(|record| validate::dane::dane_match(record, raw_certs))
+            } else {
+                false
+            };
+            port_dane_valid.insert(pr.port, Some(dane_ok));
+        }
+    }
+
+    // Global DANE status: Pass if all ports with TLSA records matched; Skip if none had records.
+    let dane_status = {
+        let results: Vec<bool> = port_dane_valid.values().filter_map(|v| *v).collect();
+        if results.is_empty() {
+            validate::CheckStatus::Skip
+        } else if results.iter().all(|&ok| ok) {
+            validate::CheckStatus::Pass
+        } else {
+            validate::CheckStatus::Fail
+        }
+    };
 
     // Build DNS context for response
     let dns_context = if do_dns {
@@ -707,7 +742,7 @@ async fn do_inspect(
             pr.tlsa = Some(TlsaInfo {
                 records: tlsa.records.iter().map(|r| r.display.clone()).collect(),
                 dnssec_signed: tlsa.dnssec_signed,
-                dane_valid: None, // DNSSEC not available
+                dane_valid: port_dane_valid.get(&pr.port).copied().flatten(),
             });
         }
     }
@@ -963,23 +998,33 @@ fn compute_consistency(ip_results: &[tls::IpInspectionResult]) -> Option<Consist
     })
 }
 
-/// Resolve a hostname to IP addresses using tokio's built-in resolver.
-/// Phase 1: Simple resolution. Phase 2+ will use mhost for DNSSEC.
-async fn resolve_hostname(hostname: &str) -> Result<Vec<std::net::IpAddr>, AppError> {
-    let addrs: Vec<_> = tokio::net::lookup_host(format!("{hostname}:0"))
-        .await
-        .map_err(|e| AppError::DnsResolutionFailed(format!("{hostname}: {e}")))?
-        .map(|addr| addr.ip())
-        .collect();
+/// Resolve a hostname to IP addresses using the mhost resolver from AppState.
+///
+/// Falls back to an error if the resolver is unavailable or returns no addresses.
+/// IP filtering (DNS rebinding protection) is applied by the caller via
+/// `target_policy::check_allowed_with_policy` immediately after this returns.
+async fn resolve_hostname(
+    hostname: &str,
+    resolver: &Arc<crate::dns::DnsResolver>,
+) -> Result<Vec<std::net::IpAddr>, AppError> {
+    let resolver = Arc::clone(resolver);
+    let hostname_owned = hostname.to_string();
 
-    // Deduplicate
-    let mut unique = Vec::new();
-    for ip in addrs {
-        if !unique.contains(&ip) {
-            unique.push(ip);
-        }
+    // Spawn on a blocking thread because mhost uses rand::thread_rng which is !Send in rand 0.9.
+    // This matches the existing DNS task pattern used for CAA/TLSA in do_inspect.
+    let rt = tokio::runtime::Handle::current();
+    let ips = tokio::task::spawn_blocking(move || {
+        rt.block_on(resolver.lookup_ips(&hostname_owned))
+    })
+    .await
+    .map_err(|e| AppError::DnsResolutionFailed(format!("{hostname}: task join error: {e}")))?;
+
+    if ips.is_empty() {
+        return Err(AppError::DnsResolutionFailed(format!(
+            "no addresses found for {hostname}"
+        )));
     }
-    Ok(unique)
+    Ok(ips)
 }
 
 async fn openapi_handler() -> impl IntoResponse {

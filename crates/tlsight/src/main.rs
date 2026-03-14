@@ -15,7 +15,6 @@ mod reload;
 mod routes;
 mod security;
 mod state;
-mod telemetry;
 mod tls;
 mod validate;
 
@@ -39,7 +38,7 @@ async fn main() {
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
     // 2. Initialize tracing (with optional OpenTelemetry layer).
-    telemetry::init_subscriber(&config.telemetry);
+    netray_common::telemetry::init_subscriber(&config.telemetry, "tlsight=info,tower_http=info");
 
     tracing::info!(bind = %config.server.bind, "starting tlsight");
 
@@ -112,7 +111,7 @@ async fn main() {
     .expect("server error");
 
     // Flush pending OTel spans on shutdown.
-    telemetry::shutdown();
+    netray_common::telemetry::shutdown();
 }
 
 async fn static_handler(uri: axum::http::Uri) -> impl IntoResponse {

@@ -1,7 +1,6 @@
 pub mod caa_compliance;
 pub mod chain_trust;
 pub mod ct;
-#[allow(dead_code)] // Fully tested, not called at runtime until DNSSEC is available
 pub mod dane;
 
 use serde::Serialize;

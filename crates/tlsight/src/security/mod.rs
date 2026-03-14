@@ -18,22 +18,8 @@ use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::Response;
 use netray_common::security_headers::{SecurityHeadersConfig, security_headers_layer};
-use tower_http::cors::CorsLayer;
 
-/// Create the CORS layer for the application.
-///
-/// No origin allowlist is configured, so `CorsLayer` rejects all cross-origin
-/// requests by default. Same-origin requests from the embedded SPA never
-/// trigger CORS preflight and are unaffected.
-///
-/// Only GET and POST are permitted. No custom request headers are allowed
-/// (the frontend uses standard `fetch` for JSON requests).
-pub fn cors_layer() -> CorsLayer {
-    CorsLayer::new()
-        .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
-        .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::ACCEPT])
-        .max_age(std::time::Duration::from_secs(3600))
-}
+pub use netray_common::cors::cors_layer;
 
 /// Axum middleware that injects security headers on every response.
 ///
