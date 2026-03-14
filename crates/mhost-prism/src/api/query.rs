@@ -394,6 +394,7 @@ async fn execute_query(
     let domain = parsed.domain.clone();
     let rid = request_id;
     let circuit_breakers = state.circuit_breakers.clone();
+    let query_semaphore = state.query_semaphore.clone();
     let transport_name = match parsed.transport {
         Some(Transport::Udp) => "udp",
         Some(Transport::Tcp) => "tcp",
@@ -440,6 +441,7 @@ async fn execute_query(
                 let circuit_breakers = Arc::clone(&circuit_breakers);
                 let tx_err = tx.clone();
                 let degraded = Arc::clone(&degraded);
+                let semaphore = Arc::clone(&query_semaphore);
                 async move {
                     let query = match MultiQuery::single(domain.as_str(), rt) {
                         Ok(q) => q,
@@ -477,7 +479,11 @@ async fn execute_query(
                         }
                         let r = resolver.clone();
                         let q = query.clone();
-                        handles.push(tokio::spawn(async move { r.lookup(q).await }));
+                        let sem = Arc::clone(&semaphore);
+                        handles.push(tokio::spawn(async move {
+                            let _permit = sem.acquire().await;
+                            r.lookup(q).await
+                        }));
                     }
 
                     let mut merged = Lookups::empty();

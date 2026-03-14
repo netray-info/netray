@@ -255,6 +255,9 @@ export default function App() {
   const [ifconfigUrl, setIfconfigUrl] = createSignal<string | null>(null);
   const [enrichments, setEnrichments] = createSignal<Record<string, IpInfo>>({});
 
+  // TLS inspector cross-link
+  const [tlsUrl, setTlsUrl] = createSignal<string | null>(null);
+
   // Permalink state
   const [cacheKey, setCacheKey] = createSignal<string | null>(null);
   const [shareMessage, setShareMessage] = createSignal<string | null>(null);
@@ -1038,13 +1041,14 @@ export default function App() {
     // Fetch client config (site name, version, ifconfig URL for IP links).
     fetch('/api/config')
       .then((r) => r.json())
-      .then((cfg: { site_name?: string; version?: string; ifconfig_url?: string }) => {
+      .then((cfg: { site_name?: string; version?: string; ifconfig_url?: string; tls_url?: string }) => {
         if (cfg.site_name) {
           setSiteName(cfg.site_name);
           document.title = cfg.site_name;
         }
         if (cfg.version) setSiteVersion(cfg.version);
         if (cfg.ifconfig_url) setIfconfigUrl(cfg.ifconfig_url);
+        if (cfg.tls_url) setTlsUrl(cfg.tls_url);
       })
       .catch(() => { /* non-critical */ });
 
@@ -1310,6 +1314,19 @@ export default function App() {
                 <span class="results-summary-item">{results().length} batches</span>
                 <span class="results-summary-sep">/</span>
                 <span class="results-summary-item">{stats()!.duration_ms}ms</span>
+                <Show when={tlsUrl()}>
+                  {(tls) => (
+                    <>
+                      <span class="results-summary-sep">/</span>
+                      <a
+                        class="eco-link"
+                        href={`${tls()}/?h=${encodeURIComponent(extractTraceParams(query()).domain)}&ref=prism`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >TLS ↗</a>
+                    </>
+                  )}
+                </Show>
                 <Show when={stats()!.transport && stats()!.transport !== 'udp'}>
                   <span class="results-summary-sep">/</span>
                   <span class="results-summary-item status-badge transport-badge">{stats()!.transport!.toUpperCase()}</span>

@@ -19,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: cargo test
         run: cargo test --locked
 
@@ -80,6 +80,16 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
           secrets: |
             NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked --quiet
+      - name: Generate SBOM
+        run: cargo cyclonedx --format json --output-file sbom.json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
 
       - name: Export digest
         run: |

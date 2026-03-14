@@ -170,6 +170,7 @@ pub async fn post_handler(
     let result_cache = state.result_cache.clone();
     let enrichment_svc = state.ip_enrichment.clone();
     let config = state.config.clone();
+    let query_semaphore = state.query_semaphore.clone();
     let total_batches = (record_types.len() as u32) * num_transports;
 
     tokio::spawn(async move {
@@ -201,6 +202,7 @@ pub async fn post_handler(
             let tx_err = tx.clone();
             let record_types = record_types.clone();
             let domain = domain.clone();
+            let query_semaphore = Arc::clone(&query_semaphore);
 
             transport_futs.push(Box::pin(async move {
                 let (resolver_group, breaker_keys) =
@@ -234,6 +236,7 @@ pub async fn post_handler(
                         let breaker_keys = breaker_keys.clone();
                         let circuit_breakers = Arc::clone(&circuit_breakers);
                         let tx_err = tx_err.clone();
+                        let semaphore = Arc::clone(&query_semaphore);
                         async move {
                             let query = match MultiQuery::single(domain.as_str(), rt) {
                                 Ok(q) => q,
@@ -258,7 +261,11 @@ pub async fn post_handler(
                                 }
                                 let r = resolver.clone();
                                 let q = query.clone();
-                                handles.push(tokio::spawn(async move { r.lookup(q).await }));
+                                let sem = Arc::clone(&semaphore);
+                                handles.push(tokio::spawn(async move {
+                                    let _permit = sem.acquire().await;
+                                    r.lookup(q).await
+                                }));
                             }
 
                             let mut merged = mhost::resolver::Lookups::empty();

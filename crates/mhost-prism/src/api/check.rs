@@ -25,7 +25,7 @@ use mhost::resolver::lookup::Uniquify;
 use mhost::resolver::{Lookups, MultiQuery, Resolver};
 use mhost::resources::rdata::TXT;
 use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc;
+use tokio::sync::{Semaphore, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::RequestId;
@@ -201,6 +201,7 @@ pub async fn post_handler(
     let result_cache = state.result_cache.clone();
     let query_string = domain.clone();
     let enrichment_svc = state.ip_enrichment.clone();
+    let query_semaphore = state.query_semaphore.clone();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
@@ -225,6 +226,7 @@ pub async fn post_handler(
             let breaker_keys = breaker_keys.clone();
             let circuit_breakers = Arc::clone(&circuit_breakers);
             let tx_err = tx.clone();
+            let semaphore = Arc::clone(&query_semaphore);
             futs.push(Box::pin(async move {
                 let lookups = fan_out_lookup(
                     &domain,
@@ -233,6 +235,7 @@ pub async fn post_handler(
                     &breaker_keys,
                     &circuit_breakers,
                     &tx_err,
+                    &semaphore,
                 )
                 .await;
                 (rt.to_string(), lookups, false)
@@ -243,6 +246,7 @@ pub async fn post_handler(
             let breaker_keys = breaker_keys.clone();
             let circuit_breakers = Arc::clone(&circuit_breakers);
             let tx_err = tx.clone();
+            let semaphore = Arc::clone(&query_semaphore);
             futs.push(Box::pin(async move {
                 let lookups = fan_out_lookup(
                     &dmarc_domain,
@@ -251,6 +255,7 @@ pub async fn post_handler(
                     &breaker_keys,
                     &circuit_breakers,
                     &tx_err,
+                    &semaphore,
                 )
                 .await;
                 ("_dmarc".to_string(), lookups, true)
@@ -489,6 +494,7 @@ async fn fan_out_lookup(
     breaker_keys: &[String],
     circuit_breakers: &Arc<CircuitBreakerRegistry>,
     tx: &mpsc::Sender<Result<Event, Infallible>>,
+    semaphore: &Arc<Semaphore>,
 ) -> Lookups {
     let query = match MultiQuery::single(domain, rt) {
         Ok(q) => q,
@@ -516,7 +522,11 @@ async fn fan_out_lookup(
         }
         let r = resolver.clone();
         let q = query.clone();
-        handles.push(tokio::spawn(async move { r.lookup(q).await }));
+        let sem = Arc::clone(semaphore);
+        handles.push(tokio::spawn(async move {
+            let _permit = sem.acquire().await;
+            r.lookup(q).await
+        }));
     }
 
     let mut merged = Lookups::empty();

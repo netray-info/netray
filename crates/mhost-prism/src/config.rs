@@ -128,6 +128,9 @@ pub struct EcosystemConfig {
     /// Timeout for enrichment HTTP requests in milliseconds (default 500, hard cap 2000).
     #[serde(default = "default_enrichment_timeout_ms")]
     pub enrichment_timeout_ms: u64,
+    /// Public URL for the TLS inspector (frontend cross-links).
+    #[serde(default)]
+    pub tls_url: Option<String>,
 }
 
 impl Default for EcosystemConfig {
@@ -136,6 +139,7 @@ impl Default for EcosystemConfig {
             ifconfig_url: None,
             ifconfig_api_url: None,
             enrichment_timeout_ms: default_enrichment_timeout_ms(),
+            tls_url: None,
         }
     }
 }

@@ -2839,6 +2839,20 @@ body {
   color: var(--text-muted);
 }
 
+/* Ecosystem cross-links (inline links to sibling tools) */
+
+.eco-link {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.eco-link:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
 .dnssec-chain {
   display: flex;
   flex-direction: column;

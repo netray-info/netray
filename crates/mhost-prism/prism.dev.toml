@@ -18,6 +18,7 @@ allow_arbitrary_servers = true
 
 [ecosystem]
 ifconfig_url = "https://ip.netray.info"
+tls_url = "https://tls.netray.info"
 
 [telemetry]
 # Human-readable text output for local development.

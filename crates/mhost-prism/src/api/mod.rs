@@ -17,6 +17,7 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use mhost::resolver::Lookups;
 use serde::Serialize;
+use tokio::sync::Semaphore;
 use utoipa::OpenApi;
 
 use crate::circuit_breaker::CircuitBreakerRegistry;
@@ -46,6 +47,15 @@ pub struct BatchEvent {
     pub source: Option<String>,
 }
 
+/// Hard cap on simultaneous in-flight DNS resolver tasks across all fan-outs.
+///
+/// Each record-type × server pair acquires one permit before spawning, so the
+/// total number of concurrent resolver tasks is bounded to this value regardless
+/// of how many queries are in flight. 16 permits cover a worst-case single-query
+/// fan-out (10 types × ~2 resolvers per provider = ~20 spawns) at half capacity,
+/// leaving room for concurrent requests without starvation.
+pub const QUERY_SEMAPHORE_PERMITS: usize = 16;
+
 /// Shared state passed to all API handlers via axum's `State` extractor.
 #[derive(Clone)]
 pub struct AppState {
@@ -55,6 +65,8 @@ pub struct AppState {
     pub result_cache: Arc<ResultCache>,
     pub hot_state: HotState,
     pub ip_enrichment: Option<Arc<EnrichmentClient>>,
+    /// Semaphore bounding concurrent in-flight DNS resolver tasks.
+    pub query_semaphore: Arc<Semaphore>,
 }
 
 // ---------------------------------------------------------------------------
@@ -199,13 +211,15 @@ mod tests {
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
+    use tokio::sync::Semaphore;
+
     use crate::circuit_breaker::CircuitBreakerRegistry;
     use crate::config::Config;
     use crate::reload::HotState;
     use crate::result_cache::ResultCache;
     use crate::security::IpExtractor;
 
-    use super::{AppState, api_router, health_router};
+    use super::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
 
     // -----------------------------------------------------------------------
     // Test helpers
@@ -218,12 +232,12 @@ mod tests {
         AppState {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
             ip_extractor: Arc::new(
-                IpExtractor::new(&config.server.trusted_proxies)
-                    .expect("invalid trusted_proxies configuration"),
+                IpExtractor::new(&config.server.trusted_proxies),
             ),
             result_cache: Arc::new(ResultCache::new()),
             hot_state,
             ip_enrichment: None,
+            query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
             config: Arc::new(config),
         }
     }
@@ -289,12 +303,14 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[tokio::test]
-    async fn ready_returns_200_when_no_open_circuit_breakers() {
+    async fn ready_returns_200_with_ok_status() {
         let router = test_router(default_state());
         let resp = router.oneshot(get("/api/ready")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body = body_string(resp.into_body()).await;
-        assert!(body.contains("\"ready\""), "body: {body}");
+        assert!(body.contains("\"ok\""), "body: {body}");
+        // warnings array must be present (empty when no enrichment configured)
+        assert!(body.contains("\"warnings\""), "body: {body}");
     }
 
     // -----------------------------------------------------------------------
@@ -526,12 +542,12 @@ mod tests {
         let state = AppState {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
             ip_extractor: Arc::new(
-                IpExtractor::new(&config.server.trusted_proxies)
-                    .expect("invalid trusted_proxies configuration"),
+                IpExtractor::new(&config.server.trusted_proxies),
             ),
             result_cache: Arc::new(ResultCache::new()),
             hot_state,
             ip_enrichment: None,
+            query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
             config: Arc::new(config),
         };
 

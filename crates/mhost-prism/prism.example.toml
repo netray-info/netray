@@ -132,6 +132,10 @@
 # Enrichment never blocks DNS results — it runs after all DNS queries complete.
 #enrichment_timeout_ms = 500
 
+# Public URL for the TLS inspector (frontend cross-links to tls.netray.info).
+# When set, a "TLS →" link appears next to the queried domain.
+#tls_url = "https://tls.netray.info"
+
 # ---------------------------------------------------------------------------
 # [telemetry] — Logging and distributed tracing
 # ---------------------------------------------------------------------------

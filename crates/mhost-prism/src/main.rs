@@ -62,12 +62,14 @@ async fn main() {
             &config.circuit_breaker,
         )),
         ip_extractor: Arc::new(
-            security::IpExtractor::new(&config.server.trusted_proxies)
-                .expect("invalid trusted_proxies configuration"),
+            security::IpExtractor::new(&config.server.trusted_proxies),
         ),
         result_cache: Arc::new(result_cache::ResultCache::new()),
         hot_state: hot_state.clone(),
         ip_enrichment,
+        query_semaphore: Arc::new(tokio::sync::Semaphore::new(
+            api::QUERY_SEMAPHORE_PERMITS,
+        )),
         config: Arc::new(config.clone()),
     };
 

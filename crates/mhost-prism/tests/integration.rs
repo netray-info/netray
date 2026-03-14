@@ -17,7 +17,8 @@ use tower::ServiceExt;
 // Bring internal modules into scope (integration tests link against the crate).
 // ---------------------------------------------------------------------------
 
-use prism::api::{AppState, api_router, health_router};
+use prism::api::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
+use tokio::sync::Semaphore;
 use prism::circuit_breaker::CircuitBreakerRegistry;
 use prism::config::Config;
 use prism::reload::HotState;
@@ -34,12 +35,12 @@ fn default_state() -> AppState {
     AppState {
         circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
         ip_extractor: Arc::new(
-            IpExtractor::new(&config.server.trusted_proxies)
-                .expect("invalid trusted_proxies configuration"),
+            IpExtractor::new(&config.server.trusted_proxies),
         ),
         result_cache: Arc::new(ResultCache::new()),
         hot_state,
         ip_enrichment: None,
+        query_semaphore: Arc::new(tokio::sync::Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
         config: Arc::new(config),
     }
 }
@@ -220,12 +221,12 @@ async fn rate_limit_returns_429() {
     let state = AppState {
         circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
         ip_extractor: Arc::new(
-            IpExtractor::new(&config.server.trusted_proxies)
-                .expect("invalid trusted_proxies configuration"),
+            IpExtractor::new(&config.server.trusted_proxies),
         ),
         result_cache: Arc::new(ResultCache::new()),
         hot_state,
         ip_enrichment: None,
+        query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
         config: Arc::new(config),
     };
 

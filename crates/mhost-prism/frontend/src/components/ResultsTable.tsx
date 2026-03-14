@@ -103,6 +103,9 @@ interface ResultsTableProps {
   collapseAll?: number;
   ifconfigUrl?: string | null;
   enrichments?: Record<string, IpInfo>;
+  tlsUrl?: string | null;
+  /** The queried domain name, used for the "TLS →" cross-link. */
+  queryDomain?: string | null;
 }
 
 // ---------------------------------------------------------------------------

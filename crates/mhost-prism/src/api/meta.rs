@@ -38,39 +38,45 @@ pub async fn health() -> Json<HealthResponse> {
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadyResponse {
-    /// `"ready"` when all circuit breakers are closed; `"degraded"` when any is open.
+    /// Always `"ok"`. Degraded state is indicated via the `warnings` array.
     status: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reason: Option<&'static str>,
+    /// Non-fatal warnings about degraded dependencies (e.g. enrichment unreachable).
+    warnings: Vec<String>,
 }
 
-/// Readiness probe. Returns 200 when no circuit breakers are open, 503 when degraded.
+/// Readiness probe. Always returns 200; degraded state is reported via `warnings`.
+///
+/// Checks:
+/// - Open circuit breakers
+/// - Enrichment service reachability (HEAD request, 2 s timeout)
 #[utoipa::path(
     get, path = "/api/ready",
     tag = "Probes",
     responses(
-        (status = 200, description = "Service is ready to handle traffic", body = ReadyResponse),
-        (status = 503, description = "Service is degraded (circuit breaker open)", body = ReadyResponse),
+        (status = 200, description = "Service is ready (warnings array may be non-empty if degraded)", body = ReadyResponse),
     )
 )]
 pub async fn ready(State(state): State<AppState>) -> (StatusCode, Json<ReadyResponse>) {
+    let mut warnings: Vec<String> = Vec::new();
+
     if state.circuit_breakers.any_open() {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ReadyResponse {
-                status: "degraded",
-                reason: Some("circuit breaker open"),
-            }),
-        )
-    } else {
-        (
-            StatusCode::OK,
-            Json(ReadyResponse {
-                status: "ready",
-                reason: None,
-            }),
-        )
+        warnings.push("circuit breaker open for one or more DNS providers".to_owned());
     }
+
+    if let Some(url) = state.config.ecosystem.effective_api_url() {
+        let reachable = probe_tcp(url).await;
+        if !reachable {
+            warnings.push(format!("enrichment service unreachable: {url}"));
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(ReadyResponse {
+            status: "ok",
+            warnings,
+        }),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -152,6 +158,8 @@ pub struct ClientConfig {
     version: &'static str,
     /// Public ifconfig URL for IP lookups, or null if not configured.
     ifconfig_url: Option<String>,
+    /// Public TLS inspector URL for cross-links, or null if not configured.
+    tls_url: Option<String>,
 }
 
 /// Returns client-facing configuration (e.g. site name, ifconfig URL for IP links).
@@ -167,6 +175,7 @@ pub async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> 
         site_name: state.config.site_name.clone(),
         version: env!("CARGO_PKG_VERSION"),
         ifconfig_url: state.config.ecosystem.ifconfig_url.clone(),
+        tls_url: state.config.ecosystem.tls_url.clone(),
     })
 }
 
@@ -201,4 +210,44 @@ pub async fn record_types() -> Json<Vec<RecordTypeInfo>> {
         })
         .collect();
     Json(types)
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/// Attempt a TCP connect to the host:port derived from `url` within 2 seconds.
+///
+/// Returns `true` if the connection succeeds, `false` on timeout or error.
+/// Used by the readiness probe to check enrichment service reachability without
+/// adding a full HTTP client dependency.
+async fn probe_tcp(url: &str) -> bool {
+    // Strip scheme and path — only the host and port matter.
+    let hostport = url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .split('/')
+        .next()
+        .unwrap_or("");
+
+    // Infer default port from scheme.
+    let addr = if hostport.contains(':') {
+        hostport.to_owned()
+    } else if url.starts_with("https://") {
+        format!("{hostport}:443")
+    } else {
+        format!("{hostport}:80")
+    };
+
+    if addr.is_empty() {
+        return false;
+    }
+
+    tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        tokio::net::TcpStream::connect(addr.as_str()),
+    )
+    .await
+    .map(|r| r.is_ok())
+    .unwrap_or(false)
 }
