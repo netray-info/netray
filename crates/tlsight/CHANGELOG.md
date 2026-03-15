@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-03-15
+
+### Fixed
+
+- **CAA false fail**: CAA `issue` values wrapped in literal double quotes (a common DNS editor mistake) now match correctly — surrounding `"` are stripped before the issuer lookup
+- **OCSP staple false warn**: `ocsp_stapled` check now returns Skip (not Warn) when the issuing CA's certificate contains no AIA OCSP URL; affects all Let's Encrypt certs from intermediates R10–R14 and E5–E6 which use CRL-only revocation
+
+### Changed
+
+- **Badge row**: `dane_valid`, `ct_logged`, `ocsp_stapled`, and `consistency` badges are now hidden in the compact summary row when their status is Skip — they appear only when they carry actual signal (pass/warn/fail)
+- **ALPN consistency detail**: `"consistent: none"` replaced with `"all IPs: no ALPN negotiated"` (or `"all IPs: {proto}"` when a protocol is negotiated)
+- **CAA issuer table**: refreshed from SSLMate + CCADB sources
+- Dev config: CT checking enabled by default (`check_ct = true`)
+
+### Fixed (UI)
+
+- Added missing expand-mode explanations for `ech_advertised` and `cert_lifetime` checks
+- Added badge tooltip for `alpn_consistency`
+- Corrected `tls_version` explanation (warns on TLS 1.2 since 0.4.0, does not pass)
+
 ## [0.5.2] - 2026-03-15
 
 ### Changed

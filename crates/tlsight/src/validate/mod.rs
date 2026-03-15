@@ -50,6 +50,7 @@ pub struct ValidationResult {
 }
 
 /// Compute the summary verdict from validation results.
+#[allow(clippy::too_many_arguments)]
 pub fn summarize(
     validation: Option<&ValidationResult>,
     hostname: Option<&str>,
