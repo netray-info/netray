@@ -29,7 +29,13 @@ impl CaaLookup {
             .filter(|r| r.tag == "issue")
             .map(|r| {
                 // Strip parameters: "letsencrypt.org; accounturi=..." → "letsencrypt.org"
-                r.value.split(';').next().unwrap_or("").trim()
+                // Strip surrounding double quotes: some DNS editors produce "\"letsencrypt.org\""
+                r.value
+                    .split(';')
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .trim_matches('"')
             })
             .collect()
     }
@@ -135,6 +141,18 @@ mod tests {
         assert!(lookup.is_empty());
         assert!(lookup.issue_domains().is_empty());
         assert!(!lookup.issuewild_present());
+    }
+
+    #[test]
+    fn issue_domains_strips_surrounding_quotes() {
+        let lookup = CaaLookup {
+            records: vec![CaaRecord {
+                tag: "issue".into(),
+                value: "\"letsencrypt.org\"".into(),
+                issuer_critical: false,
+            }],
+        };
+        assert_eq!(lookup.issue_domains(), vec!["letsencrypt.org"]);
     }
 
     #[test]
