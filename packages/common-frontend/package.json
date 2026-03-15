@@ -43,10 +43,6 @@
     "./components/SiteFooter": {
       "types": "./dist/types/components/SiteFooter.d.ts",
       "import": "./src/components/SiteFooter.tsx"
-    },
-    "./components/CrossLinks": {
-      "types": "./dist/types/components/CrossLinks.d.ts",
-      "import": "./src/components/CrossLinks.tsx"
     }
   },
   "publishConfig": {
