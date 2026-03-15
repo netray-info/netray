@@ -24,3 +24,7 @@ tlsight.toml
 .claude/worktrees/
 
 custom_cas/
+
+# CA data — raw fetched files (caa_domains.tsv is committed)
+data/sslmate_issuers.json
+data/ccadb_caa_identifiers.csv

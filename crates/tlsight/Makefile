@@ -28,6 +28,7 @@ NPM_CI_FLAGS ?=
         test-rust test-frontend \
         fmt fmt-check clippy \
         docker docker-run \
+        data \
         acceptance \
         help
 
@@ -111,6 +112,9 @@ pre-push: fmt-check clippy test frontend ## Run all checks locally before pushin
 
 dev: ## Run dev server with tlsight.dev.toml
 	$(CARGO) run $(CARGO_FLAGS) -- tlsight.dev.toml
+
+data: ## Fetch and process CA/CAA data into data/caa_domains.tsv
+	$(MAKE) -C data
 
 clean: ## Remove target/, frontend/dist/, node_modules/
 	$(CARGO) clean

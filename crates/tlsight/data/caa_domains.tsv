@@ -1,0 +1,155 @@
+1and1.digitalcertvalidation.com	DigiCert
+accv.es	Government of Spain - ACCV
+acme.jprs.jp	CN=JPRS OV RSA CA 2024 G1; O=Japan Registry Services Co., Ltd.; C=JP
+acme.trust.telia.com	Telia
+actalis.it	Actalis
+admin.ch	CN=Swiss Government Public Trust Standard CA 03; OU=Services, Certification Authorities; O=Swiss Government PKI; C=CH
+admin@domain	CN=SISP QWAC; OU=SISP-Sociedade Interbancaria e Sistemas de Pagamentos; O=SISP; C=CV
+affirmtrust.com	Entrust
+almostfreessl.com	CN=Fermat Crypto TLS CA G1; OU=Certificate Services; O=SSLCom Group ltd.; C=IL
+amazon.com	Amazon Trust Services
+amazonaws.com	Amazon Trust Services
+amazontrust.com	Amazon Trust Services
+anf.es	ANF AC
+aoc.cat	CATCert
+atos.net	Eviden
+aws.amazon.com	Amazon Trust Services
+awstrust.com	Amazon Trust Services
+bjca.cn	BEIJING CERTIFICATE AUTHORITY
+buypass.com	Buypass
+buypass.no	Buypass
+camerfirma.com	Camerfirma
+certainly.com	Certainly
+certicamara.com	CN=AC SUB CERTICAMARA; OU=NIT 830084433-7; O=CERTICAMARA S.A; L=BOGOTA; ST=DISTRITO CAPITAL; C=CO; StreetAddress=www.certicamara.com
+certification authority authorization (caa) domain names recognized in a caa record's issue and issue wild property tags. comma-separated list.	CN=ServerAuth Test Sub CA2; O=Test; C=US
+certifyid.com	OISTE
+certigna.com	Certigna
+certigna.fr	Certigna
+certsign.ro	certSIGN
+certum.eu	Certum
+certum.pl	Certum
+cfca.com.cn	CFCA
+cisco.com	CN=Cisco XSSL-R2; O=Cisco Systems; C=US
+comodo.com	Sectigo
+comodoca.com	Sectigo
+comsign.co.il	ComSign
+comsign.co.uk	ComSign
+comsigneurope.com	ComSign
+cybertrust.co.jp	Cybertrust Japan / JCSI
+cybertrust.ne.jp	Cybertrust Japan / JCSI
+d-trust.de	D-Trust
+d-trust.net	D-Trust
+darkmatter.ae	CN=DigitalTrust High Assurance CA G3; O=DigitalTrust L.L.C.; C=AE
+desc.gov.ae	CN=Ethaq Plus Certification Authority; O=UAE Government; C=AE
+dfn.de	DFN-PKI
+digicert.com	DigiCert
+digicert.ne.jp	DigiCert
+digitalcertvalidation.com	DigiCert
+disig.sk	Disig
+docusign.fr	DocuSign
+dtrust.de	D-Trust
+dvv.fi	CN=DVV Service Certificates - G5R; OU=Palveluvarmenteet; O=Digi- ja vaestotietovirasto CA; C=FI
+e-szigno.hu	Microsec
+e-tugra.com	E-Tugra
+e-tugra.com.tr	E-Tugra
+eca.hinet.net	Chunghwa Telecom
+ecert.gov.hk	Certizen
+edicomgroup.com	EDICOM
+elektronicznypodpis.pl	Krajowa Izba Rozliczeniowa S.A. (KIR)
+emsign.com	emSign
+entrust.net	Entrust
+epki.com.tw	Chunghwa Telecom
+etugra.com	E-Tugra
+etugra.com.tr	E-Tugra
+fineid.fi	CN=DVV Service Certificates - G5R; OU=Palveluvarmenteet; O=Digi- ja vaestotietovirasto CA; C=FI
+firmaprofesional.com	Firmaprofesional
+fnmt.es	Government of Spain - FNMT
+gca.nat.gov.tw	GRCA
+gdca.com.cn	GDCA
+geotrust.com	DigiCert
+globalsign.com	GlobalSign
+globaltrust.eu	GLOBALTRUST
+godaddy.com	GoDaddy
+gtlsca.nat.gov.tw	CN=政府伺服器數位憑證管理中心 - G1; O=行政院; C=TW
+harica.gr	HARICA
+hightrusted.com	OISTE
+hongkongpost.gov.hk	Certizen
+identrust.com	IdenTrust Services
+imtrust.cn	CN=SanFront OV TLS RSA CA G1; O=北京中科三方网络技术有限公司; C=CN
+intermediatecertificate.digitalcertvalidation.com	DigiCert
+itrus.cn	iTrusChina
+izenpe.com	Izenpe
+izenpe.eus	Izenpe
+jprs.jp	CN=JPRS OV RSA CA 2024 G1; O=Japan Registry Services Co., Ltd.; C=JP
+kamusm.gov.tr	Kamu SM
+kpn.com	KPN
+letsencrypt.org	Let's Encrypt
+master@domain	CN=SISP QWAC; OU=SISP-Sociedade Interbancaria e Sistemas de Pagamentos; O=SISP; C=CV
+microsoft.com	Microsoft
+msctrustgate.com	CN=Trustgate SMIME Enterprise ECC CA; O=MSC Trustgate.com Sdn. Bhd.; C=MY
+multicert.com	CN=MULTICERT Advanced Certification Authority 005; OU=Certification Authority; O=MULTICERT - Serviços de Certificação Electrónica S.A.; C=PT
+n/a	CN=UZI-register Zorgverlener CA G3; O=CIBG; C=NL; OrganizationIdentifier=NTRNL-50000535
+navercloudtrust.com	NAVER Cloud Trust Services
+netlock.com	NETLOCK
+netlock.eu	NETLOCK
+netlock.hu	NETLOCK
+netlock.net	NETLOCK
+networksolutions.com	Network Solutions
+none	CN=LAWtrust Secure CA01; O=LAWtrust; C=ZA
+nrca.go.th	CN=Thai Digital ID CA G3; O=Thai Digital ID Company Limited; C=TH
+oaticerts.com	CN=webCARES Server Issuing CA 2025; O=Open Access Technology International Inc; L=Minneapolis; ST=MN; C=US
+oiste.org	OISTE
+pki.apple.com	Apple
+pki.dfn.de	DFN-PKI
+pki.eviden.com	Eviden
+pki.goog	Google Trust Services
+pki.hinet.net	Chunghwa Telecom
+pkiworks.com	CommScope
+postsignum.cz	CN=PostSignum Qualified CA 4; O=Česká pošta, s.p.; C=CZ; OrganizationIdentifier=NTRCZ-47114983
+publicca.hinet.net	Chunghwa Telecom
+quovadisglobal.com	QuoVadis
+rapidssl.com	DigiCert
+secomtrust.net	SECOM Trust Systems
+sectigo.com	Sectigo
+securetrust.com	Viking Cloud
+sheca.com	Shanghai Electronic Certification Authority
+skidsolutions.eu	SK ID Solutions AS
+solutissl.com	CN=Soluti SSL OV CA; O=Soluti; C=BR
+ssl.com	SSL.com
+ssl.gov.sa	CN=Saudi National SSL CA; O=National Information Center; C=SA
+ssl.gpki.go.kr	CN=MOIS SSL Server CA; O=Ministry of the Interior and Safety; C=KR
+ssladmin.microsoft.com	Microsoft IT
+sslcomgroup.com	CN=Fermat Crypto TLS CA G1; OU=Certificate Services; O=SSLCom Group ltd.; C=IL
+starfieldtech.com	GoDaddy
+startcomca.com	CN=StartCom Class 1 DV Server CA; OU=StartCom Certification Authority; O=StartCom Ltd.; C=IL
+startssl.com	CN=StartCom Class 1 DV Server CA; OU=StartCom Certification Authority; O=StartCom Ltd.; C=IL
+stratossl.digitalcertvalidation.com	DigiCert
+swisssign.com	SwissSign
+symantec.com	DigiCert
+telesec.de	Deutsche Telekom Security
+telia.com	Telia
+telia.fi	Telia
+telia.se	Telia
+thawte.com	DigiCert
+tls.hinet.net	Chunghwa Telecom
+trust-provider.com	Sectigo
+trust.telia.com	Telia
+trustasia.com	TrustAsia Technologies
+trustcor.ca	TrustCor Systems
+trustfactory.net	CN=TrustFactory SSL Issuing Certificate Authority; OU=TrustFactory PKI Operations; O=TrustFactory(Pty)Ltd; L=Johannesburg; ST=Gauteng; C=ZA
+trustproviderbv.digitalcertvalidation.com	Networking4all
+trustwave.com	Viking Cloud
+tuntrust.tn	Government of Tunisia
+twca.com.tw	Taiwan-CA Inc. (TWCA)
+usertrust.com	Sectigo
+vikingcloud.com	Viking Cloud
+vincasign.net	CN=vinCAsign nebulaSUITE5 Authority; OU=vinCAsign; O=VINTEGRIS SL; L=HOSPITALET DE LLOBREGAT; ST=BARCELONA; C=ES; OrganizationIdentifier=VATES-B62913926
+visa.com	CN=Visa TLS Issuing CA; O=VISA; C=US
+volusion.digitalcertvalidation.com	DigiCert
+web.com	Network Solutions
+wisekey.com	OISTE
+wosign.com	CN=WoSign Class 3 PDF Signing CA G2; O=WoSign CA Limited; C=CN
+www.certinomis.com	Certinomis
+www.certinomis.fr	Certinomis
+www.digicert.com	DigiCert
+www.identrust.com	IdenTrust Services

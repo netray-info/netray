@@ -41,46 +41,53 @@ pub fn check_caa_compliance(caa: &CaaLookup, leaf_issuer: &str) -> CheckStatus {
     }
 }
 
-/// Heuristic match between a cert issuer DN field and a CAA domain.
+/// Match a cert issuer DN against a CAA `issue` domain value.
 ///
-/// The CAA `issue` value is a domain (e.g., "letsencrypt.org") while the cert
-/// issuer is a Distinguished Name (e.g., "O=Let's Encrypt"). We check:
-/// 1. Issuer DN contains the domain's second-level label ("digicert" in "digicert.com")
-/// 2. Domain label starts with any word from the issuer DN ("amazonaws" starts with "amazon")
+/// Looks up the CAA domain in the generated CA table (data/caa_domains.tsv)
+/// and checks whether the issuer DN's O= or CN= field corresponds to that CA
+/// name. Returns false for any CAA domain not present in the table.
 fn issuer_domain_matches(issuer: &str, caa_domain: &str) -> bool {
-    let issuer_norm = normalize(issuer);
-    // Use the second-level domain label: "letsencrypt.org" → "letsencrypt"
-    let domain_label = caa_domain.split('.').next().unwrap_or(caa_domain);
-    let domain_norm = normalize(domain_label);
-
-    if domain_norm.is_empty() {
+    let Some(ca_name) = super::caa_issuers::lookup_caa_issuer(caa_domain) else {
         return false;
-    }
-
-    // Direct: issuer DN contains domain label
-    if issuer_norm.contains(&domain_norm) {
-        return true;
-    }
-
-    // Reverse: domain label starts with an issuer DN word.
-    // Handles "amazonaws.com" matching issuer "O=Amazon" — "amazonaws" starts with "amazon".
-    issuer_words(issuer).any(|word| word.len() >= 4 && domain_norm.starts_with(&word))
+    };
+    issuer_matches_ca_name(issuer, ca_name)
 }
 
-/// Extract normalized words (len >= 4) from an issuer DN's O= and CN= fields.
-fn issuer_words(issuer: &str) -> impl Iterator<Item = String> + '_ {
-    issuer
-        .split(',')
-        .flat_map(|part| {
-            let part = part.trim();
-            if part.starts_with("O=") || part.starts_with("CN=") {
-                let value = part.split_once('=').map(|(_, v)| v).unwrap_or("");
-                Some(value.split_whitespace().map(normalize).collect::<Vec<_>>())
-            } else {
-                None
-            }
-        })
-        .flatten()
+/// Check whether any O= or CN= field in the issuer DN corresponds to `ca_name`.
+///
+/// Uses two strategies:
+/// - Bidirectional containment: one fully includes the other (handles cases
+///   where the O= field is shorter or longer than the CA name, e.g.
+///   "Amazon" ⊂ "Amazon Trust Services").
+/// - Significant-word overlap: any word ≥6 chars from `ca_name` appears in
+///   the normalized field value (handles "Cybertrust Japan / JCSI" vs
+///   "Cybertrust Japan Co., Ltd.").
+fn issuer_matches_ca_name(issuer: &str, ca_name: &str) -> bool {
+    let ca_norm = normalize(ca_name);
+    for part in issuer.split(',') {
+        let part = part.trim();
+        if !part.starts_with("O=") && !part.starts_with("CN=") {
+            continue;
+        }
+        let value = part.split_once('=').map(|(_, v)| v).unwrap_or("");
+        let field_norm = normalize(value);
+        if field_norm.is_empty() {
+            continue;
+        }
+        if ca_norm.contains(&field_norm) || field_norm.contains(&ca_norm) {
+            return true;
+        }
+        // Word overlap for cases with diverging suffixes.
+        if ca_name
+            .split_whitespace()
+            .map(normalize)
+            .filter(|w| w.len() >= 6)
+            .any(|w| field_norm.contains(&w))
+        {
+            return true;
+        }
+    }
+    false
 }
 
 /// Normalize a string for comparison: lowercase, keep only alphanumeric.
@@ -193,54 +200,32 @@ mod tests {
         );
     }
 
-    // --- issuer_domain_matches ---
-
     #[test]
-    fn letsencrypt_match() {
-        assert!(issuer_domain_matches("O=Let's Encrypt", "letsencrypt.org"));
-    }
-
-    #[test]
-    fn digicert_match() {
-        assert!(issuer_domain_matches("O=DigiCert Inc", "digicert.com"));
-    }
-
-    #[test]
-    fn case_insensitive() {
-        assert!(issuer_domain_matches("O=DIGICERT INC", "DigiCert.com"));
-    }
-
-    #[test]
-    fn no_match() {
-        assert!(!issuer_domain_matches("O=Let's Encrypt", "digicert.com"));
-    }
-
-    #[test]
-    fn amazonaws_matches_amazon_issuer() {
-        assert!(issuer_domain_matches(
-            "C=US, O=Amazon, CN=Amazon RSA 2048 M04",
-            "amazonaws.com"
-        ));
-    }
-
-    #[test]
-    fn amazon_issuer_matches_amazon_domain() {
-        let caa = caa_with_issues(&["amazonaws.com"]);
+    fn google_trust_services_matches_pki_goog() {
+        let caa = caa_with_issues(&["pki.goog"]);
         assert_eq!(
-            check_caa_compliance(&caa, "C=US, O=Amazon, CN=Amazon RSA 2048 M04"),
+            check_caa_compliance(&caa, "CN=WE2, O=Google Trust Services, C=US"),
             CheckStatus::Pass
         );
     }
 
     #[test]
-    fn short_issuer_word_not_matched() {
-        // "US" is too short (< 4 chars) to match via reverse heuristic
-        assert!(!issuer_domain_matches("C=US, O=AB", "uscdn.com"));
+    fn unknown_caa_domain_is_fail() {
+        // A CAA domain not in the table cannot be matched.
+        let caa = caa_with_issues(&["unknown-ca-not-in-table.example"]);
+        assert_eq!(
+            check_caa_compliance(&caa, "O=Unknown CA"),
+            CheckStatus::Fail
+        );
     }
 
     #[test]
-    fn empty_domain_no_match() {
-        assert!(!issuer_domain_matches("O=Any", ""));
+    fn amazon_issuer_matches_amazonaws_domain() {
+        let caa = caa_with_issues(&["amazonaws.com"]);
+        assert_eq!(
+            check_caa_compliance(&caa, "C=US, O=Amazon, CN=Amazon RSA 2048 M04"),
+            CheckStatus::Pass
+        );
     }
 
     #[test]
@@ -256,5 +241,47 @@ mod tests {
             check_caa_compliance(&caa, "CN=R3, O=Let's Encrypt, C=US"),
             CheckStatus::Fail
         );
+    }
+
+    // --- issuer_matches_ca_name ---
+
+    #[test]
+    fn exact_ca_name_match() {
+        assert!(issuer_matches_ca_name(
+            "CN=R3, O=Let's Encrypt, C=US",
+            "Let's Encrypt"
+        ));
+    }
+
+    #[test]
+    fn ca_name_longer_than_o_field() {
+        // "Amazon" ⊂ "Amazon Trust Services"
+        assert!(issuer_matches_ca_name(
+            "C=US, O=Amazon, CN=Amazon RSA 2048 M04",
+            "Amazon Trust Services"
+        ));
+    }
+
+    #[test]
+    fn o_field_longer_than_ca_name() {
+        // "DigiCert" ⊂ "DigiCert Inc"
+        assert!(issuer_matches_ca_name("O=DigiCert Inc", "DigiCert"));
+    }
+
+    #[test]
+    fn word_overlap_for_diverging_suffixes() {
+        // "Cybertrust" (≥6 chars) appears in both
+        assert!(issuer_matches_ca_name(
+            "C=JP, O=Cybertrust Japan Co., Ltd.",
+            "Cybertrust Japan / JCSI"
+        ));
+    }
+
+    #[test]
+    fn no_match_between_different_cas() {
+        assert!(!issuer_matches_ca_name(
+            "CN=R3, O=Let's Encrypt, C=US",
+            "DigiCert"
+        ));
     }
 }

@@ -93,9 +93,16 @@ make dev            # cargo run with tlsight.dev.toml
 # Tests
 make test           # Rust + frontend
 make ci             # Full CI: lint + test + frontend build
+
+# CA/CAA data (contributors only — commit the result)
+make data           # re-fetch SSLMate + CCADB CA lists and regenerate data/caa_domains.tsv
 ```
 
 The release binary embeds the compiled frontend. No separate static file hosting required.
+
+### CA data
+
+`data/caa_domains.tsv` maps CAA `issue` domain values (e.g. `pki.goog`) to CA display names and is committed to the repository. `build.rs` embeds it as a sorted lookup table at compile time. Run `make data` to refresh it when CAs are added or renamed, then commit the updated TSV.
 
 ---
 
@@ -177,7 +184,7 @@ Each port inspection runs a set of health checks, producing a Pass / Warn / Fail
 
 **Configuration**
 - DANE valid — TLSA record match (skipped without DNSSEC)
-- CAA compliant — issuing CA authorized by CAA records
+- CAA compliant — issuing CA authorized by CAA records (matched via a compiled-in table of ~155 CA→domain mappings sourced from SSLMate and CCADB; unknown CAA domains → Fail)
 - IP consistency — all IPs serve matching cert, TLS version, cipher, and ALPN
 - ALPN consistency — ALPN protocol identical across all IPs
 - ECH advertised — Warn if absent on port 443

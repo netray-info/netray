@@ -1,4 +1,5 @@
 pub mod caa_compliance;
+pub(crate) mod caa_issuers;
 pub mod chain_trust;
 pub mod ct;
 pub mod dane;
