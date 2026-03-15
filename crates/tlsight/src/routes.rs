@@ -963,6 +963,20 @@ async fn inspect_port(
                 if check_ct && let Some(leaf_der) = raw_certs.first() {
                     result.ct = validate::ct::extract_ct_info(leaf_der.as_ref());
                 }
+
+                // Live OCSP revocation check via AIA OCSP URL
+                let live_ocsp = if let (Some(ocsp_url), Some(leaf_der), Some(issuer_der)) = (
+                    chain.first().and_then(|c| c.ocsp_url.clone()),
+                    raw_certs.first().map(|c| c.as_ref().to_vec()),
+                    raw_certs.get(1).map(|c| c.as_ref().to_vec()),
+                ) {
+                    Some(tls::ocsp::check_live_ocsp(&ocsp_url, &leaf_der, &issuer_der).await)
+                } else {
+                    None
+                };
+                if let (Some(ocsp_result), Some(tls_params)) = (live_ocsp, result.tls.as_mut()) {
+                    tls_params.ocsp_live = Some(ocsp_result);
+                }
             }
 
             (idx, result)
