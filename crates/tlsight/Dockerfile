@@ -9,6 +9,7 @@ FROM clux/muslrust:stable AS builder
 WORKDIR /build
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src src/
+COPY data/ data/
 COPY --from=frontend /build/frontend/dist frontend/dist/
 RUN cargo build --release --bins && cp $(find /build -xdev -name tlsight) /
 
