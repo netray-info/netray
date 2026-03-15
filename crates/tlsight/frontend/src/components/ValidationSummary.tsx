@@ -30,6 +30,7 @@ const CHECK_EXPLANATIONS: Record<string, string> = {
   ct_logged: 'The certificate has Signed Certificate Timestamps (SCTs) proving it was logged in CT logs.',
   ocsp_stapled: 'The server includes an OCSP response, allowing clients to check revocation without contacting the CA.',
   consistency: 'All IP addresses for this hostname serve the same certificate and TLS configuration.',
+  alpn_consistency: 'When multiple IPs are inspected, checks that all negotiate the same ALPN protocol (e.g. h2 vs http/1.1). Divergence means some IPs offer HTTP/2 and others do not.',
 };
 
 const STATUS_ICON: Record<CheckStatus, string> = {
@@ -53,14 +54,17 @@ const DETAIL_EXPLANATIONS: Record<string, string> = {
   strong_signature: 'Checks that no certificate uses a weak signature algorithm (SHA-1 or MD5).',
   key_strength: 'Verifies RSA keys are at least 2048 bits. ECDSA and Ed25519 keys always pass.',
   expiry_window: 'Warns when any certificate expires within 30 days, fails within 7 days.',
-  tls_version: 'Passes for TLS 1.2 and 1.3. Older versions (TLS 1.0, 1.1, SSLv3) are insecure.',
+  cert_lifetime: 'Checks the leaf certificate validity period against CA/B Forum limits: warns above 398 days, fails above 825 days. Browsers enforce these limits independently of the stated expiry.',
+  tls_version: 'Warns for TLS 1.2 (deprecated, prefer TLS 1.3). Fails for TLS 1.0, 1.1, and SSLv3 (insecure).',
   forward_secrecy: 'Checks the cipher suite uses ECDHE or DHE key exchange. Static RSA key exchange does not provide forward secrecy.',
   aead_cipher: 'Checks the cipher suite uses an AEAD mode (GCM, ChaCha20-Poly1305, CCM). CBC mode ciphers are vulnerable to padding oracle attacks.',
   ct_logged: 'Checks for Signed Certificate Timestamps (SCTs) proving the certificate was logged in Certificate Transparency logs. Chrome requires 2+ SCTs.',
   ocsp_stapled: 'Checks that the server staples an OCSP response so clients can verify revocation without contacting the CA.',
   caa_compliant: 'Verifies the issuing CA is authorized by the domain\'s CAA DNS records.',
   dane_valid: 'Checks that TLSA records in DNS match the presented certificate (requires DNSSEC).',
+  ech_advertised: 'Checks whether Encrypted Client Hello (ECH) is advertised in the HTTPS DNS record. ECH prevents the SNI from being visible to passive observers. Only checked on port 443.',
   consistency: 'When multiple IPs are inspected, checks that all serve the same certificate and TLS configuration.',
+  alpn_consistency: 'When multiple IPs are inspected, checks that all negotiate the same ALPN protocol (e.g. h2 vs http/1.1). Divergence means some IPs offer HTTP/2 and others do not.',
   hsts: 'HTTP Strict Transport Security tells browsers to always use HTTPS. A max-age of at least 6 months (15768000s) is recommended.',
   https_redirect: 'Checks whether port 80 redirects HTTP requests to HTTPS on the same host.',
 };
@@ -163,13 +167,17 @@ export default function ValidationSummary(props: Props) {
       </button>
 
       <div class="validation-summary__checks">
-        {Object.entries(props.summary.checks).map(([key, status]) => (
-          <span class={`check check--${status}`} title={CHECK_EXPLANATIONS[key]}>
-            <span aria-hidden="true">{STATUS_ICON[status]}</span>
-            <span class="sr-only">{status}</span>
-            {' '}{CHECK_LABELS[key] ?? key}
-          </span>
-        ))}
+        {Object.entries(props.summary.checks).map(([key, status]) => {
+          const conditional = ['dane_valid', 'ct_logged', 'ocsp_stapled', 'consistency'];
+          if (conditional.includes(key) && status === 'skip') return null;
+          return (
+            <span class={`check check--${status}`} title={CHECK_EXPLANATIONS[key]}>
+              <span aria-hidden="true">{STATUS_ICON[status]}</span>
+              <span class="sr-only">{status}</span>
+              {' '}{CHECK_LABELS[key] ?? key}
+            </span>
+          );
+        })}
       </div>
 
       <Explain when={!!props.explain}>This is the overall validation summary. Green = good, orange = warning, red = problem, grey = skipped.</Explain>

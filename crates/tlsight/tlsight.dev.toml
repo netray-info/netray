@@ -15,6 +15,7 @@ allow_blocked_targets = true
 
 [validation]
 custom_ca_dir = "custom_cas"
+check_ct = true
 
 [ecosystem]
 ip_api_url = "https://ip.netray.info"
