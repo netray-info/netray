@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.2] - 2026-03-15
+
+### Changed
+
+- Live OCSP revocation check wired into the inspection pipeline; `tls_params.ocsp_live` is now populated for certificates with an AIA OCSP URL and an issuer in the chain (previously the implementation existed but was never called)
+- UI: added favicon with lock motif
+
+## [0.5.1] - 2026-03-14
+
+### Changed
+
+- CAA issuer matching replaced with a compile-time lookup table generated from SSLMate + CCADB sources (155 entries); eliminates the heuristic and makes unknown CAA domains an explicit Fail
+- CI: fixed `cargo-cyclonedx` flag, `deny.toml` deprecated keys, RUSTSEC advisory allowlist, `.dockerignore`
+- Added deploy task for release pipeline
+
+## [0.5.0] - 2026-03-14
+
+### Changed
+
+- Bumped version following Phase 2 feature work; removed `prod.toml` from repository (config injected at deploy time)
+- Live OCSP check infrastructure added (`OcspRevocationResult` type, `check_live_ocsp` function); returns `"unknown"` until wired in 0.5.2
+
 ## [0.4.0] - 2026-03-14
 
 ### Added
