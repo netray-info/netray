@@ -1,12 +1,12 @@
 1and1.digitalcertvalidation.com	DigiCert
 accv.es	Government of Spain - ACCV
-acme.jprs.jp	CN=JPRS OV RSA CA 2024 G1; O=Japan Registry Services Co., Ltd.; C=JP
+acme.jprs.jp	CN=JPRS Organization Validation Authority - G4; O=Japan Registry Services Co., Ltd.; C=JP
 acme.trust.telia.com	Telia
 actalis.it	Actalis
 admin.ch	CN=Swiss Government Public Trust Standard CA 03; OU=Services, Certification Authorities; O=Swiss Government PKI; C=CH
 admin@domain	CN=SISP QWAC; OU=SISP-Sociedade Interbancaria e Sistemas de Pagamentos; O=SISP; C=CV
 affirmtrust.com	Entrust
-almostfreessl.com	CN=Fermat Crypto TLS CA G1; OU=Certificate Services; O=SSLCom Group ltd.; C=IL
+almostfreessl.com	CN=SSLCom Secure Certification Authority G1; OU=Certificate Services; O=SSLCom Group ltd.; C=IL
 amazon.com	Amazon Trust Services
 amazonaws.com	Amazon Trust Services
 amazontrust.com	Amazon Trust Services
@@ -40,7 +40,7 @@ cybertrust.ne.jp	Cybertrust Japan / JCSI
 d-trust.de	D-Trust
 d-trust.net	D-Trust
 darkmatter.ae	CN=DigitalTrust High Assurance CA G3; O=DigitalTrust L.L.C.; C=AE
-desc.gov.ae	CN=Ethaq Plus Certification Authority; O=UAE Government; C=AE
+desc.gov.ae	CN=Code Signing Certification Authority; O=UAE Government; C=AE
 dfn.de	DFN-PKI
 digicert.com	DigiCert
 digicert.ne.jp	DigiCert
@@ -48,7 +48,7 @@ digitalcertvalidation.com	DigiCert
 disig.sk	Disig
 docusign.fr	DocuSign
 dtrust.de	D-Trust
-dvv.fi	CN=DVV Service Certificates - G5R; OU=Palveluvarmenteet; O=Digi- ja vaestotietovirasto CA; C=FI
+dvv.fi	CN=DVV Social Welfare and Healthcare Service Certificates - G3R; OU=Sosiaali- ja terveydenhuollon palveluvarmenteet; O=Digi- ja vaestotietovirasto CA; C=FI
 e-szigno.hu	Microsec
 e-tugra.com	E-Tugra
 e-tugra.com.tr	E-Tugra
@@ -61,7 +61,7 @@ entrust.net	Entrust
 epki.com.tw	Chunghwa Telecom
 etugra.com	E-Tugra
 etugra.com.tr	E-Tugra
-fineid.fi	CN=DVV Service Certificates - G5R; OU=Palveluvarmenteet; O=Digi- ja vaestotietovirasto CA; C=FI
+fineid.fi	CN=DVV Social Welfare and Healthcare Service Certificates - G3R; OU=Sosiaali- ja terveydenhuollon palveluvarmenteet; O=Digi- ja vaestotietovirasto CA; C=FI
 firmaprofesional.com	Firmaprofesional
 fnmt.es	Government of Spain - FNMT
 gca.nat.gov.tw	GRCA
@@ -75,20 +75,20 @@ harica.gr	HARICA
 hightrusted.com	OISTE
 hongkongpost.gov.hk	Certizen
 identrust.com	IdenTrust Services
-imtrust.cn	CN=SanFront OV TLS RSA CA G1; O=北京中科三方网络技术有限公司; C=CN
+imtrust.cn	CN=SanFront DV TLS RSA CA G1; O=北京中科三方网络技术有限公司; C=CN
 intermediatecertificate.digitalcertvalidation.com	DigiCert
 itrus.cn	iTrusChina
 izenpe.com	Izenpe
 izenpe.eus	Izenpe
-jprs.jp	CN=JPRS OV RSA CA 2024 G1; O=Japan Registry Services Co., Ltd.; C=JP
+jprs.jp	CN=JPRS Organization Validation Authority - G4; O=Japan Registry Services Co., Ltd.; C=JP
 kamusm.gov.tr	Kamu SM
 kpn.com	KPN
 letsencrypt.org	Let's Encrypt
 master@domain	CN=SISP QWAC; OU=SISP-Sociedade Interbancaria e Sistemas de Pagamentos; O=SISP; C=CV
 microsoft.com	Microsoft
-msctrustgate.com	CN=Trustgate SMIME Enterprise ECC CA; O=MSC Trustgate.com Sdn. Bhd.; C=MY
-multicert.com	CN=MULTICERT Advanced Certification Authority 005; OU=Certification Authority; O=MULTICERT - Serviços de Certificação Electrónica S.A.; C=PT
-n/a	CN=UZI-register Zorgverlener CA G3; O=CIBG; C=NL; OrganizationIdentifier=NTRNL-50000535
+msctrustgate.com	CN=Trustgate SMIME Enterprise RSA CA; O=MSC Trustgate.com Sdn. Bhd.; C=MY
+multicert.com	CN=MULTICERT QWAC Certification Authority 005; OU=Certification Authority; O=MULTICERT - Serviços de Certificação Electrónica S.A.; C=PT
+n/a	CN=Staat der Nederlanden Organization Person CA - 2023; O=Staat der Nederlanden; C=NL
 navercloudtrust.com	NAVER Cloud Trust Services
 netlock.com	NETLOCK
 netlock.eu	NETLOCK
@@ -96,8 +96,8 @@ netlock.hu	NETLOCK
 netlock.net	NETLOCK
 networksolutions.com	Network Solutions
 none	CN=LAWtrust Secure CA01; O=LAWtrust; C=ZA
-nrca.go.th	CN=Thai Digital ID CA G3; O=Thai Digital ID Company Limited; C=TH
-oaticerts.com	CN=webCARES Server Issuing CA 2025; O=Open Access Technology International Inc; L=Minneapolis; ST=MN; C=US
+nrca.go.th	CN=ThaiCA ECC V1; O=TURNKEY COMMUNICATION SERVICES PUBLIC COMPANY LIMITED; C=TH
+oaticerts.com	CN=webCARES Client Issuing CA 2025; O=Open Access Technology International Inc; L=Minneapolis; ST=MN; C=US
 oiste.org	OISTE
 pki.apple.com	Apple
 pki.dfn.de	DFN-PKI
@@ -119,10 +119,10 @@ ssl.com	SSL.com
 ssl.gov.sa	CN=Saudi National SSL CA; O=National Information Center; C=SA
 ssl.gpki.go.kr	CN=MOIS SSL Server CA; O=Ministry of the Interior and Safety; C=KR
 ssladmin.microsoft.com	Microsoft IT
-sslcomgroup.com	CN=Fermat Crypto TLS CA G1; OU=Certificate Services; O=SSLCom Group ltd.; C=IL
+sslcomgroup.com	CN=SSLCom Secure Certification Authority G1; OU=Certificate Services; O=SSLCom Group ltd.; C=IL
 starfieldtech.com	GoDaddy
-startcomca.com	CN=StartCom Class 1 DV Server CA; OU=StartCom Certification Authority; O=StartCom Ltd.; C=IL
-startssl.com	CN=StartCom Class 1 DV Server CA; OU=StartCom Certification Authority; O=StartCom Ltd.; C=IL
+startcomca.com	CN=StartCom Certification Authority G2; O=StartCom Ltd.; C=IL
+startssl.com	CN=StartCom Certification Authority G2; O=StartCom Ltd.; C=IL
 stratossl.digitalcertvalidation.com	DigiCert
 swisssign.com	SwissSign
 symantec.com	DigiCert
@@ -143,12 +143,12 @@ tuntrust.tn	Government of Tunisia
 twca.com.tw	Taiwan-CA Inc. (TWCA)
 usertrust.com	Sectigo
 vikingcloud.com	Viking Cloud
-vincasign.net	CN=vinCAsign nebulaSUITE5 Authority; OU=vinCAsign; O=VINTEGRIS SL; L=HOSPITALET DE LLOBREGAT; ST=BARCELONA; C=ES; OrganizationIdentifier=VATES-B62913926
-visa.com	CN=Visa TLS Issuing CA; O=VISA; C=US
+vincasign.net	CN=CA Vintegris SSL TrustServices; O=VINTEGRIS SLU; L=HOSPITALET DE LLOBREGAT; ST=BARCELONA; C=ES; OrganizationIdentifier=VATES-B62913926
+visa.com	CN=Visa eCommerce Issuing CA - G2; OU=Visa International Service Association; O=VISA; C=US
 volusion.digitalcertvalidation.com	DigiCert
 web.com	Network Solutions
 wisekey.com	OISTE
-wosign.com	CN=WoSign Class 3 PDF Signing CA G2; O=WoSign CA Limited; C=CN
+wosign.com	CN=CA 沃通 EV 服务器证书 G2; O=WoSign CA Limited; C=CN
 www.certinomis.com	Certinomis
 www.certinomis.fr	Certinomis
 www.digicert.com	DigiCert
