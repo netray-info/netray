@@ -63,7 +63,12 @@ pub fn assess_port(
 
     let sct_count = ip_result.ct.as_ref().map(|ct| ct.sct_count);
     all_checks.push(checks::check_ct_logged(ct_enabled, sct_count));
-    all_checks.push(checks::check_ocsp_stapled(ocsp_stapled));
+    let has_ocsp_url = ip_result
+        .chain
+        .as_ref()
+        .and_then(|c| c.first())
+        .is_some_and(|leaf| leaf.ocsp_url.is_some());
+    all_checks.push(checks::check_ocsp_stapled(ocsp_stapled, has_ocsp_url));
 
     // Configuration checks
     all_checks.push(checks::check_caa_compliant(caa_status));

@@ -366,8 +366,13 @@ pub fn check_ct_logged(ct_enabled: bool, sct_count: Option<usize>) -> HealthChec
 // Configuration checks (per-port)
 // ---------------------------------------------------------------------------
 
-pub fn check_ocsp_stapled(stapled: bool) -> HealthCheck {
-    let (status, detail) = if stapled {
+pub fn check_ocsp_stapled(stapled: bool, has_ocsp_url: bool) -> HealthCheck {
+    let (status, detail) = if !has_ocsp_url {
+        (
+            CheckStatus::Skip,
+            "CA does not provide OCSP (CRL only)".to_string(),
+        )
+    } else if stapled {
         (CheckStatus::Pass, "OCSP response stapled".to_string())
     } else {
         (
@@ -514,12 +519,17 @@ pub fn check_alpn_consistency(ips: &[IpInspectionResult]) -> HealthCheck {
     let unique: std::collections::HashSet<_> = alpn_map.values().collect();
     if unique.len() <= 1 {
         let value = alpn_map.values().next().cloned().unwrap_or_default();
+        let detail = if value == "none" {
+            "all IPs: no ALPN negotiated".to_string()
+        } else {
+            format!("all IPs: {value}")
+        };
         HealthCheck {
             id: "alpn_consistency".to_string(),
             category: Category::Configuration,
             status: CheckStatus::Pass,
             label: "ALPN consistency".to_string(),
-            detail: format!("consistent: {value}"),
+            detail,
         }
     } else {
         let detail = alpn_map
@@ -884,14 +894,21 @@ mod tests {
 
     #[test]
     fn ocsp_stapled_pass() {
-        assert_eq!(check_ocsp_stapled(true).status, CheckStatus::Pass);
+        assert_eq!(check_ocsp_stapled(true, true).status, CheckStatus::Pass);
     }
 
     #[test]
     fn ocsp_stapled_warn() {
-        let c = check_ocsp_stapled(false);
+        let c = check_ocsp_stapled(false, true);
         assert_eq!(c.status, CheckStatus::Warn);
         assert!(c.detail.contains("no OCSP staple"));
+    }
+
+    #[test]
+    fn ocsp_stapled_skip_when_no_ocsp_url() {
+        let c = check_ocsp_stapled(false, false);
+        assert_eq!(c.status, CheckStatus::Skip);
+        assert!(c.detail.contains("CRL"));
     }
 
     // --- DANE valid ---

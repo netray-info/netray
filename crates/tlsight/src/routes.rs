@@ -808,12 +808,18 @@ async fn do_inspect(
     };
 
     // Compute summary from first successful port result
-    let (validation_ref, ocsp_stapled) = port_results
+    let (validation_ref, ocsp_stapled, has_ocsp_url) = port_results
         .iter()
         .flat_map(|pr| pr.ips.iter())
         .find(|ip_result| ip_result.error.is_none())
-        .map(|ip_result| (&ip_result.validation, ip_result.ocsp_stapled()))
-        .unwrap_or((&None, false));
+        .map(|ip_result| {
+            (
+                &ip_result.validation,
+                ip_result.ocsp_stapled(),
+                ip_result.leaf_has_ocsp_url(),
+            )
+        })
+        .unwrap_or((&None, false, false));
 
     // Compute CT status from first successful IP result
     let ct_status = if config.validation.check_ct {
@@ -838,6 +844,7 @@ async fn do_inspect(
         validation_ref.as_ref(),
         parsed.target.hostname(),
         ocsp_stapled,
+        has_ocsp_url,
         has_consistency_mismatch,
         caa_status,
         dane_status,
@@ -1129,6 +1136,13 @@ async fn docs_handler() -> Html<&'static str> {
 impl tls::IpInspectionResult {
     fn ocsp_stapled(&self) -> bool {
         self.tls.as_ref().is_some_and(|t| t.ocsp.stapled)
+    }
+
+    fn leaf_has_ocsp_url(&self) -> bool {
+        self.chain
+            .as_ref()
+            .and_then(|c| c.first())
+            .is_some_and(|leaf| leaf.ocsp_url.is_some())
     }
 }
 

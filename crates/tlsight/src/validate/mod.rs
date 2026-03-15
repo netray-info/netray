@@ -54,6 +54,7 @@ pub fn summarize(
     validation: Option<&ValidationResult>,
     hostname: Option<&str>,
     ocsp_stapled: bool,
+    has_ocsp_url: bool,
     has_consistency_mismatch: bool,
     caa_status: CheckStatus,
     dane_status: CheckStatus,
@@ -85,7 +86,9 @@ pub fn summarize(
         None => (CheckStatus::Skip, CheckStatus::Skip, CheckStatus::Skip),
     };
 
-    let ocsp = if ocsp_stapled {
+    let ocsp = if !has_ocsp_url {
+        CheckStatus::Skip
+    } else if ocsp_stapled {
         CheckStatus::Pass
     } else {
         CheckStatus::Warn
@@ -150,7 +153,7 @@ mod tests {
         }
     }
 
-    /// Helper: summarize with CAA/DANE/CT defaulting to Skip.
+    /// Helper: summarize with CAA/DANE/CT defaulting to Skip; has_ocsp_url defaults to true.
     fn summarize_skip(
         validation: Option<&ValidationResult>,
         hostname: Option<&str>,
@@ -161,6 +164,7 @@ mod tests {
             validation,
             hostname,
             ocsp_stapled,
+            true,
             has_consistency_mismatch,
             CheckStatus::Skip,
             CheckStatus::Skip,
@@ -228,6 +232,22 @@ mod tests {
     }
 
     #[test]
+    fn no_ocsp_url_verdict_is_skip_not_warn() {
+        let summary = summarize(
+            Some(&passing_validation()),
+            Some("example.com"),
+            false,
+            false, // has_ocsp_url = false
+            false,
+            CheckStatus::Skip,
+            CheckStatus::Skip,
+            CheckStatus::Skip,
+        );
+        assert_eq!(summary.checks.ocsp_stapled, CheckStatus::Skip);
+        assert_eq!(summary.verdict, CheckStatus::Pass);
+    }
+
+    #[test]
     fn ip_input_skips_hostname_check() {
         let summary = summarize_skip(Some(&passing_validation()), None, true, false);
         assert_eq!(summary.checks.hostname_match, CheckStatus::Skip);
@@ -261,6 +281,7 @@ mod tests {
             Some(&passing_validation()),
             Some("example.com"),
             true,
+            true,
             false,
             CheckStatus::Fail,
             CheckStatus::Skip,
@@ -275,6 +296,7 @@ mod tests {
         let summary = summarize(
             Some(&passing_validation()),
             Some("example.com"),
+            true,
             true,
             false,
             CheckStatus::Pass,
