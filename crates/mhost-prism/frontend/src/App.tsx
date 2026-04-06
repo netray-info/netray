@@ -191,7 +191,7 @@ export default function App() {
   const [stats, setStats] = createSignal<DoneStats | null>(null);
   const [activeTab, setActiveTab] = createSignal<ActiveTab>('results');
   const [history, setHistory] = createSignal<string[]>(loadHistory());
-  const themeResult = createTheme('prism_theme', 'dark');
+  const themeResult = createTheme('prism_theme', 'system');
   const [showHelp, setShowHelp] = createSignal(false);
 
 
