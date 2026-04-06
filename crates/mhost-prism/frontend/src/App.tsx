@@ -6,6 +6,8 @@ import { TraceView, type TraceHop, type TraceDoneStats } from './components/Trac
 import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/DnssecView';
 import { TransportComparison } from './components/TransportComparison';
 import { AuthComparison } from './components/AuthComparison';
+import { SuiteNav } from './components/SuiteNav';
+import { DnsCrossLinks } from './components/DnsCrossLinks';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
@@ -228,6 +230,26 @@ export default function App() {
   const [completedTypes, setCompletedTypes] = createSignal<string[]>([]);
   const [copied, setCopied] = createSignal(false);
 
+  // Stream timeout feedback
+  const [streamTimedOut, setStreamTimedOut] = createSignal(false);
+  let streamTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  function startStreamTimeout() {
+    clearStreamTimeout();
+    streamTimeoutId = setTimeout(() => {
+      closeConnections();
+      setStreamTimedOut(true);
+      if (status() === 'loading') setStatus('done');
+    }, 30_000);
+  }
+
+  function clearStreamTimeout() {
+    if (streamTimeoutId !== null) {
+      clearTimeout(streamTimeoutId);
+      streamTimeoutId = null;
+    }
+  }
+
   // Check mode state
   const [isCheckMode, setIsCheckMode] = createSignal(false);
   const [lintCategories, setLintCategories] = createSignal<LintCategory[]>([]);
@@ -343,6 +365,7 @@ export default function App() {
   }
 
   function closeConnections() {
+    clearStreamTimeout();
     closeEventSource();
     abortCheck();
     abortTrace();
@@ -400,6 +423,7 @@ export default function App() {
     setEnrichments({});
     setCacheKey(null);
     setShareMessage(null);
+    setStreamTimedOut(false);
     clearEditor?.();
     focusEditor?.();
     const url = new URL(window.location.href);
@@ -602,6 +626,7 @@ export default function App() {
     setIsShortMode(wantShort);
     setEnrichments({});
     setCacheKey(null);
+    setStreamTimedOut(false);
     setStatus('loading');
     // Pick the first active tab: auth > transport > dnssec > trace > lint
     setActiveTab(wantAuth ? 'auth' : wantCompare ? 'transport' : wantDnssec ? 'dnssec' : wantTrace ? 'trace' : 'lint');
@@ -610,6 +635,8 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.set('q', q);
     window.history.pushState(null, '', url.toString());
+
+    startStreamTimeout();
 
     // Count how many streams we launch; status → done when all finish.
     let streamCount = 0;
@@ -622,7 +649,10 @@ export default function App() {
     let doneCount = 0;
     function onStreamDone() {
       doneCount++;
-      if (doneCount >= streamCount) setStatus('done');
+      if (doneCount >= streamCount) {
+        clearStreamTimeout();
+        setStatus('done');
+      }
     }
 
     // Background query to populate Results tab (strip all routing flags).
@@ -950,6 +980,7 @@ export default function App() {
     setCheckStats(null);
     setEnrichments({});
     setCacheKey(null);
+    setStreamTimedOut(false);
     setStatus('loading');
     setActiveTab('results');
     addToHistory(q);
@@ -957,6 +988,8 @@ export default function App() {
     const url = new URL(window.location.href);
     url.searchParams.set('q', q);
     window.history.pushState(null, '', url.toString());
+
+    startStreamTimeout();
 
     const sseUrl = `/api/query?q=${encodeURIComponent(q)}`;
     const es = new EventSource(sseUrl);
@@ -999,6 +1032,7 @@ export default function App() {
       } catch (e) {
         console.error('Failed to parse done event:', e);
       }
+      clearStreamTimeout();
       setStatus('done');
       closeEventSource();
     });
@@ -1158,7 +1192,9 @@ export default function App() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div class="app">
+    <>
+      <SuiteNav current="dns" />
+      <div class="app">
       <a href="#main-content" class="skip-link">Skip to results</a>
       <header class="header">
         <h1 class="logo">{siteName()}</h1>
@@ -1187,6 +1223,7 @@ export default function App() {
           shareLabel={status() === 'done' && cacheKey() ? (shareMessage() ?? 'Share') : undefined}
           onShare={copyShareLink}
         />
+        <p class="stream-hint">Results stream as they arrive — no waiting for all resolvers</p>
 
         {/* Empty state — shown on landing before any query */}
         <Show when={!hasContent()}>
@@ -1519,6 +1556,14 @@ export default function App() {
             />
           </div>
         </Show>
+
+        <Show when={status() === 'done' && query()}>
+          <DnsCrossLinks domain={query()} />
+        </Show>
+
+        <Show when={streamTimedOut()}>
+          <p class="stream-timeout-msg">Stream timed out — showing partial results</p>
+        </Show>
       </main>
 
       <SiteFooter
@@ -1607,5 +1652,6 @@ export default function App() {
       </Modal>
 
     </div>
+    </>
   );
 }

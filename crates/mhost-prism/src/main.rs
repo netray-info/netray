@@ -82,6 +82,8 @@ async fn main() {
     let app = Router::new()
         .merge(api::health_router())
         .merge(api::api_router(state))
+        // robots.txt — explicit route so crawlers get text/plain, not the SPA fallback
+        .route("/robots.txt", axum::routing::get(robots_txt))
         .fallback(netray_common::server::static_handler::<Assets>())
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("prism", req, next)
@@ -141,6 +143,13 @@ async fn main() {
 
     // Flush pending OTel spans on shutdown.
     netray_common::telemetry::shutdown();
+}
+
+async fn robots_txt() -> impl axum::response::IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        "User-agent: *\nAllow: /\n",
+    )
 }
 
 /// Returns a future that resolves once the shutdown watch channel is set to `true`.

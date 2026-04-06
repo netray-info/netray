@@ -28,7 +28,7 @@
   --rt-ptr: #c084fc;
   --rt-default: #94a3b8;
 
-  --radius: 6px;
+  --radius: 8px;
 }
 
 [data-theme="light"] {
@@ -3416,4 +3416,54 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ===================================================================
+   Stream hint
+   =================================================================== */
+
+.stream-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-align: center;
+  margin: 0.25rem 0 0.75rem;
+  opacity: 0.7;
+}
+
+/* ===================================================================
+   Cross-links (DNS → TLS)
+   =================================================================== */
+
+.cross-links {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.cross-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.cross-link:hover {
+  color: var(--accent);
+}
+
+/* ===================================================================
+   Stream timeout message
+   =================================================================== */
+
+.stream-timeout-msg {
+  font-size: 0.8rem;
+  color: var(--warning);
+  font-family: var(--font-mono);
+  text-align: center;
+  margin: 0.5rem 0;
+  opacity: 0.85;
 }

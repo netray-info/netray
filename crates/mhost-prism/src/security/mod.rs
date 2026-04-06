@@ -21,6 +21,9 @@ pub use netray_common::cors::cors_layer;
 ///
 /// The API docs page loads Scalar from a CDN, so /docs paths get a relaxed
 /// CSP with `https://cdn.jsdelivr.net` added to `script-src`.
+///
+/// Also sets `Cache-Control: private, no-store` on all responses — DNS results
+/// are always live and must not be cached by shared caches or browsers.
 pub fn security_headers_layer() -> impl Fn(
     axum::extract::Request,
     axum::middleware::Next,
@@ -29,12 +32,23 @@ pub fn security_headers_layer() -> impl Fn(
 > + Clone
 + Send
 + 'static {
-    netray_common::security_headers::security_headers_layer(
+    let inner = netray_common::security_headers::security_headers_layer(
         netray_common::security_headers::SecurityHeadersConfig {
             extra_script_src: vec!["https://cdn.jsdelivr.net".into()],
             ..Default::default()
         },
-    )
+    );
+    move |request: axum::extract::Request, next: axum::middleware::Next| {
+        let inner = inner.clone();
+        Box::pin(async move {
+            let mut response = inner(request, next).await;
+            response.headers_mut().insert(
+                axum::http::header::CACHE_CONTROL,
+                axum::http::HeaderValue::from_static("private, no-store"),
+            );
+            response
+        })
+    }
 }
 
 #[cfg(test)]

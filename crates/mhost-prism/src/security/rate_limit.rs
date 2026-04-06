@@ -70,6 +70,11 @@ impl RateLimitState {
         }
     }
 
+    // TODO(Task 6.2): expose rate-limit remaining for X-RateLimit-Remaining header.
+    // Governor's KeyedLimiter does not expose remaining capacity per key. Implementing
+    // X-RateLimit-Limit / X-RateLimit-Remaining would require either switching to a
+    // limiter that supports state introspection or maintaining a separate counter.
+
     /// Check whether a query with the given cost is allowed.
     ///
     /// `target_keys` are derived from the server specs (provider name, "system", or IP string).

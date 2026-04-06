@@ -16,6 +16,8 @@
   <a href="#deployment">Deployment</a>
 </p>
 
+Part of the [netray.info](https://netray.info) network intelligence suite.
+
 ---
 
 **prism** is a web-based DNS inspector powered by [mhost](https://github.com/lukaspustina/mhost). It asks the questions `dig` can't ask — like "do all my resolvers agree?" and "is my ISP lying to me?" — then streams the answers to your browser as they arrive.
