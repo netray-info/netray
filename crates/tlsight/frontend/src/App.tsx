@@ -42,7 +42,7 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [selectedPort, setSelectedPort] = createSignal<number>(443);
-  const themeResult = createTheme('tlsight_theme', 'dark');
+  const themeResult = createTheme('tlsight_theme', 'system');
   const [showHelp, setShowHelp] = createSignal(false);
   const [lastQuery, setLastQuery] = createSignal('');
   const [allExpanded, setAllExpanded] = createSignal<boolean | undefined>(undefined);
