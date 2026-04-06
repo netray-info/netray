@@ -8,7 +8,6 @@ import IpCard from './components/IpCard';
 import UnifiedIpView from './components/UnifiedIpView';
 
 import { CaaView, TlsaView } from './components/DnsInfo';
-import { ValueProp } from './components/ValueProp';
 import SuiteNav from './components/SuiteNav';
 import { CrossLinks } from './components/CrossLinks';
 import { inspect, fetchMeta } from './lib/api';
@@ -214,7 +213,6 @@ export default function App() {
           inputRef={el => (inputEl = el)}
         />
 
-        <ValueProp visible={!result() && !loading() && !error()} />
 
         <Show when={error()}>
           <div class="error-banner" role="alert">{error()}</div>
@@ -231,7 +229,7 @@ export default function App() {
         <Show when={!result() && !loading() && !error()}>
           <div class="welcome">
             <p class="welcome-tagline">
-              Full certificate chain inspection, TLS configuration analysis, and DNS cross-validation — in one view.
+              Full certificate chain inspection, TLS configuration analysis, and DNS cross-validation — in one view. DANE/TLSA. Multi-IP. JSON API.
             </p>
             <div class="welcome-cards">
               <For each={EXAMPLES}>
