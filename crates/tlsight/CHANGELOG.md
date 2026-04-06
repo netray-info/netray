@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-04-06
+
+### Added
+- Suite nav, TLS→DNS cross-links, Cache-Control headers, OpenAPI CORS note (4dceaa7)
+- Explicit robots.txt route returning text/plain before SPA fallback (4dceaa7)
+
+### Fixed
+- Move SuiteNav outside .app to span full viewport width (81dfce3)
+
+### Changed
+- Replace ValueProp card with extended subtitle line (a33115c)
+- body font-size aligned to 16px across suite (4dceaa7)
+- Meta tags: title, OG, Twitter cards added to index.html (4dceaa7)
+
 ## [0.6.0] - 2026-03-15
 
 ### Fixed
