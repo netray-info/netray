@@ -26,6 +26,7 @@ pub use netray_common::cors::cors_layer;
 /// Uses `netray_common::security_headers::security_headers_layer` with:
 /// - Relaxed CSP for `/docs` (Scalar CDN)
 /// - Permissions-Policy enabled
+/// - `Cache-Control: private, no-store` (TLS results are always live)
 ///
 /// Compatible with axum 0.8 `middleware::from_fn`.
 pub async fn security_headers(request: Request, next: Next) -> Response {
@@ -35,7 +36,12 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
         relaxed_csp_path_prefix: "/docs".to_string(),
         include_permissions_policy: true,
     });
-    layer_fn(request, next).await
+    let mut response = layer_fn(request, next).await;
+    response.headers_mut().insert(
+        axum::http::header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("private, no-store"),
+    );
+    response
 }
 
 #[cfg(test)]

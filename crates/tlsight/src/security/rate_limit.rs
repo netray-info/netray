@@ -57,6 +57,11 @@ impl RateLimitState {
     ///
     /// Governor doesn't expose remaining capacity, so we use the burst size as a
     /// conservative estimate. The actual `check_cost` call will reject if insufficient.
+    ///
+    /// TODO(Task 6.2): expose rate-limit remaining for X-RateLimit-Remaining header.
+    /// Governor's KeyedLimiter does not expose remaining capacity per key. Implementing
+    /// X-RateLimit-Limit / X-RateLimit-Remaining would require either switching to a
+    /// limiter that supports state introspection or maintaining a separate counter.
     pub fn remaining_budget(&self, _client_ip: IpAddr) -> u32 {
         self.per_ip_burst
     }

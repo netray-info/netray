@@ -8,6 +8,9 @@ import IpCard from './components/IpCard';
 import UnifiedIpView from './components/UnifiedIpView';
 
 import { CaaView, TlsaView } from './components/DnsInfo';
+import { ValueProp } from './components/ValueProp';
+import SuiteNav from './components/SuiteNav';
+import { CrossLinks } from './components/CrossLinks';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
 import type { InspectResponse, PortResult } from './lib/types';
@@ -185,6 +188,7 @@ export default function App() {
   return (
     <div class="app">
       <a href="#main-content" class="skip-link">Skip to results</a>
+      <SuiteNav current="tls" />
 
       <header class="header">
         <h1 class="logo">{siteName()}</h1>
@@ -208,6 +212,8 @@ export default function App() {
           value={lastQuery()}
           inputRef={el => (inputEl = el)}
         />
+
+        <ValueProp visible={!result() && !loading() && !error()} />
 
         <Show when={error()}>
           <div class="error-banner" role="alert">{error()}</div>
@@ -384,6 +390,7 @@ export default function App() {
                   }}
                 </Show>
 
+                <CrossLinks hostname={r.hostname} />
               </div>
             );
           }}

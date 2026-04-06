@@ -174,7 +174,9 @@ fn default_ports() -> Vec<u16> {
 #[openapi(
     info(
         title = "tlsight",
-        description = "TLS certificate inspection and diagnostics API"
+        description = "TLS certificate inspection and diagnostics API\n\n\
+            ## Cross-Origin Requests\n\
+            Cross-origin requests from browsers are not supported. Use server-side calls or curl for API integration."
     ),
     paths(
         health_handler,
