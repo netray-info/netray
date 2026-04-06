@@ -132,7 +132,10 @@ async fn main() {
 
 async fn robots_txt() -> impl axum::response::IntoResponse {
     (
-        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; charset=utf-8",
+        )],
         "User-agent: *\nAllow: /\n",
     )
 }
