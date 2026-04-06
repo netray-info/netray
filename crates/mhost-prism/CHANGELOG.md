@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.1] - 2026-04-06
+
+### Added
+- Default theme to system preference (cb438a6)
+
+### Changed
+- Bump @netray-info/common-frontend to 0.2.2 (2e076f6)
+- Update Cargo.lock; omit dev deps from npm audit (7488dea)
+
 ## [0.5.0] - 2026-04-06
 
 ### Added
