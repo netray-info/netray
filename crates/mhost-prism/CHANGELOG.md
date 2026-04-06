@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-04-06
+
+### Added
+- Suite nav, DNS→TLS cross-links, stream timeout feedback, Cache-Control headers, OpenAPI CORS note (f3c6d7c)
+- Favicon with prism motif in purple (229e5f8)
+- Explicit robots.txt route returning text/plain before SPA fallback (f3c6d7c)
+
+### Changed
+- border-radius aligned to 8px across suite (f3c6d7c)
+- Add deploy task for release pipeline (5459467)
+
 ## [0.3.0] - 2026-03-14
 
 ### Added
