@@ -24,7 +24,6 @@ export default function SuiteNav(props: SuiteNavProps) {
           font-size: 0.8rem;
           flex-wrap: wrap;
           row-gap: 0.25rem;
-          margin: -1.5rem -1rem 1.5rem;
         }
 
         .suite-nav__brand {

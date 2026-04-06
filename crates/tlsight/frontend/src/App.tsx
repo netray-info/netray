@@ -186,9 +186,10 @@ export default function App() {
   }
 
   return (
-    <div class="app">
-      <a href="#main-content" class="skip-link">Skip to results</a>
+    <>
       <SuiteNav current="tls" />
+      <div class="app">
+      <a href="#main-content" class="skip-link">Skip to results</a>
 
       <header class="header">
         <h1 class="logo">{siteName()}</h1>
@@ -454,5 +455,6 @@ export default function App() {
         version={meta()?.version}
       />
     </div>
+    </>
   );
 }
