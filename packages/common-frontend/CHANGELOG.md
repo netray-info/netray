@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-07
+
+### Added
+- SuiteNav component: meta-driven cross-tool navigation with BEM classes, aria-current, fallback URLs (cc4c955)
+- createQueryHistory factory: deduped, capped history with storageGet/storageSet integration (cc4c955)
+- fetchWithTimeout: AbortController-based fetch helper (cc4c955)
+- Shared CSS: header system, .filter-toggle variants, .skip-link, .sr-only (cc4c955)
+- MIT LICENSE file (1bc5459)
+
 ## [0.2.2] - 2026-04-06
 
 ### Fixed
