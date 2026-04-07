@@ -120,6 +120,7 @@ export default function HostInput(props: Props) {
             onInput={e => { setValue(e.currentTarget.value); setHistoryIdx(-1); }}
             onKeyDown={handleKeyDown}
             onFocus={() => { if (history().length > 0 && !value().trim()) setHistoryOpen(true); }}
+            aria-label="Hostname to inspect"
             disabled={props.loading}
             autofocus
             role="combobox"
