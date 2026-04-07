@@ -17,6 +17,7 @@
   --success: #22c55e;
   --warning: #f59e0b;
   --error: #ef4444;
+  --bg-card-hover: #0f3460;
   --border: #2a2a4a;
   --border-subtle: #222240;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
@@ -39,6 +40,7 @@
   --success: #008800;
   --warning: #b86e00;
   --error: #cc0000;
+  --bg-card-hover: #edf0f5;
   --border: #d0d4dc;
   --border-subtle: #e4e8ee;
 }
