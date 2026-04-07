@@ -54,3 +54,15 @@ export interface DoneEvent {
 }
 
 export type CheckState = 'idle' | 'loading' | 'done' | 'error';
+
+export interface MetaEcosystem {
+  dns_base_url?: string;
+  tls_base_url?: string;
+  ip_base_url?: string;
+}
+
+export interface MetaResponse {
+  site_name: string;
+  version: string;
+  ecosystem?: MetaEcosystem;
+}

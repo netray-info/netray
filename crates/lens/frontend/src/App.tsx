@@ -1,18 +1,35 @@
-import { createSignal, onCleanup, Show } from 'solid-js';
+import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
 import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
+import Modal from '@netray-info/common-frontend/components/Modal';
+import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
+import SuiteNav from './components/SuiteNav';
 import DomainInput from './components/DomainInput';
 import DnsSection from './components/DnsSection';
 import TlsSection from './components/TlsSection';
 import IpSection from './components/IpSection';
 import Summary from './components/Summary';
+import ValidationChips from './components/ValidationChips';
 import { startCheck } from './lib/sse';
-import type { CheckState, DnsEvent, TlsEvent, IpEvent, SummaryEvent, DoneEvent } from './lib/types';
+import { fetchMeta } from './lib/api';
+import { addToHistory } from './lib/history';
+import type {
+  CheckState,
+  DnsEvent,
+  TlsEvent,
+  IpEvent,
+  SummaryEvent,
+  DoneEvent,
+  MetaResponse,
+} from './lib/types';
 
 export default function App() {
   const themeResult = createTheme('lens_theme', 'system');
 
+  const [meta, setMeta] = createSignal<MetaResponse | null>(null);
+  const [showHelp, setShowHelp] = createSignal(false);
+  const [explain, setExplain] = createSignal(false);
   const [checkState, setCheckState] = createSignal<CheckState>('idle');
   const [dns, setDns] = createSignal<DnsEvent | null>(null);
   const [tls, setTls] = createSignal<TlsEvent | null>(null);
@@ -22,7 +39,28 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [currentDomain, setCurrentDomain] = createSignal('');
 
-  let cleanup: (() => void) | null = null;
+  let inputEl: HTMLInputElement | undefined;
+  let ssCleanup: (() => void) | null = null;
+
+  onMount(() => {
+    fetchMeta().then(m => {
+      setMeta(m);
+      if (m?.site_name) document.title = m.site_name;
+    });
+
+    const cleanupShortcuts = createKeyboardShortcuts({
+      '/':      (e) => { e.preventDefault(); inputEl?.focus(); },
+      '?':      (e) => { e.preventDefault(); setShowHelp(v => !v); },
+      'e':      (e) => { e.preventDefault(); setExplain(v => !v); },
+      'r':      (e) => {
+        const d = currentDomain();
+        if (d && checkState() !== 'loading') { e.preventDefault(); handleSubmit(d); }
+      },
+      'Escape': () => setShowHelp(false),
+    });
+
+    onCleanup(cleanupShortcuts);
+  });
 
   function clearState() {
     setDns(null);
@@ -34,29 +72,44 @@ export default function App() {
   }
 
   function handleSubmit(domain: string) {
-    if (cleanup) { cleanup(); cleanup = null; }
+    if (ssCleanup) { ssCleanup(); ssCleanup = null; }
     clearState();
     setCurrentDomain(domain);
     setCheckState('loading');
+    addToHistory(domain);
 
     const url = new URL(window.location.href);
     url.searchParams.set('d', domain);
     window.history.replaceState(null, '', url.toString());
 
-    cleanup = startCheck(domain, {
-      onDns: (data) => setDns(data),
-      onTls: (data) => setTls(data),
-      onIp: (data) => setIp(data),
+    ssCleanup = startCheck(domain, {
+      onDns:     (data) => setDns(data),
+      onTls:     (data) => setTls(data),
+      onIp:      (data) => setIp(data),
       onSummary: (data) => setSummary(data),
-      onDone: (data) => { setDone(data); setCheckState('done'); },
-      onError: (err) => { setError(err); setCheckState('error'); },
+      onDone:    (data) => { setDone(data); setCheckState('done'); },
+      onError:   (err)  => { setError(err); setCheckState('error'); },
     });
   }
 
-  onCleanup(() => { if (cleanup) cleanup(); });
+  function handleClear() {
+    if (ssCleanup) { ssCleanup(); ssCleanup = null; }
+    clearState();
+    setCurrentDomain('');
+    setCheckState('idle');
+    window.history.replaceState(null, '', window.location.pathname);
+  }
 
-  const isLoading = () => checkState() === 'loading';
+  onCleanup(() => { if (ssCleanup) ssCleanup(); });
+
+  const isLoading  = () => checkState() === 'loading';
   const hasResults = () => dns() !== null || tls() !== null || ip() !== null;
+
+  const allChecks = () => [
+    ...(dns()?.checks ?? []),
+    ...(tls()?.checks ?? []),
+    ...(ip()?.checks ?? []),
+  ];
 
   // Restore domain from URL on load
   const params = new URLSearchParams(window.location.search);
@@ -69,28 +122,44 @@ export default function App() {
     <>
       <a href="#main-content" class="skip-link">Skip to results</a>
       <div class="app">
-        <nav class="suite-nav" aria-label="Suite navigation">
-          <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
-          <span class="suite-nav__sep">/</span>
-          <a class="suite-nav__link suite-nav__link--current" href="/" aria-current="page">lens</a>
-          <span class="suite-nav__sep">·</span>
-          <a class="suite-nav__link" href="https://dns.netray.info">dns</a>
-          <span class="suite-nav__sep">·</span>
-          <a class="suite-nav__link" href="https://tls.netray.info">tls</a>
-          <span class="suite-nav__sep">·</span>
-          <a class="suite-nav__link" href="https://ip.netray.info">ip</a>
-        </nav>
+        <SuiteNav current="lens" meta={meta()?.ecosystem} />
 
         <header class="header">
           <h1 class="logo">lens</h1>
           <span class="tagline">Domain health at a glance</span>
           <div class="header-actions">
+            <Show when={hasResults() || isLoading()}>
+              <button
+                class={`header-btn filter-toggle${explain() ? ' filter-toggle--active' : ''}`}
+                type="button"
+                aria-pressed={explain()}
+                onClick={() => setExplain(v => !v)}
+                title="Toggle explain mode (e)"
+              >
+                explain
+              </button>
+            </Show>
+            <button
+              class="header-btn"
+              type="button"
+              aria-label="Open help"
+              onClick={() => setShowHelp(true)}
+              title="Help (?)"
+            >
+              ?
+            </button>
             <ThemeToggle theme={themeResult} class="header-btn" />
           </div>
         </header>
 
         <main class="main" id="main-content">
-          <DomainInput onSubmit={handleSubmit} loading={isLoading()} />
+          <DomainInput
+            onSubmit={handleSubmit}
+            onClear={handleClear}
+            loading={isLoading()}
+            value={currentDomain()}
+            inputRef={(el) => { inputEl = el; }}
+          />
 
           <Show when={error()}>
             <div class="error-banner" role="alert">{error()}</div>
@@ -104,43 +173,69 @@ export default function App() {
             </div>
           </Show>
 
+          <Show when={summary()}>
+            {(s) => <Summary summary={s()} done={done()} />}
+          </Show>
+
           <Show when={hasResults() || isLoading()}>
-            <div class="section-grid">
+            <ValidationChips checks={allChecks()} />
+            <div class="section-grid" role="status" aria-live="polite" aria-label="Check results">
               <DnsSection
                 data={dns()}
                 loading={isLoading() && dns() === null}
                 error={error() ?? undefined}
+                explain={explain()}
               />
               <TlsSection
                 data={tls()}
                 loading={isLoading() && tls() === null}
                 error={error() ?? undefined}
+                explain={explain()}
               />
               <IpSection
                 data={ip()}
                 loading={isLoading() && ip() === null}
                 error={error() ?? undefined}
+                explain={explain()}
               />
             </div>
-          </Show>
-
-          <Show when={summary()}>
-            {(s) => <Summary summary={s()} done={done()} />}
           </Show>
         </main>
 
         <SiteFooter
           aboutText={
             <>
-              <em>lens</em> checks DNS health, TLS certificate validity, and IP reputation for any domain — results stream in as each check completes.
-              Part of the <a href="https://netray.info">netray.info</a> suite.
+              <em>lens</em> checks DNS health, TLS certificate validity, and IP reputation for any
+              domain — results stream in as each check completes. Part of the{' '}
+              <a href="https://netray.info">netray.info</a> suite.
             </>
           }
           links={[
-            { href: '/docs', label: 'API Docs', external: true },
-            { href: 'https://netray.info', label: 'Suite', external: true },
+            { href: '/docs',                    label: 'API Docs', external: true },
+            { href: 'https://lukas.pustina.de', label: 'Author',   external: true },
           ]}
+          version={meta()?.version}
         />
+
+        <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
+          <div class="help-section">
+            <div class="help-section__title">Input</div>
+            <code class="help-syntax">example.com</code>
+            <p class="help-desc">
+              Enter any domain name to check its DNS health, TLS certificate validity, and IP reputation simultaneously.
+            </p>
+          </div>
+          <div class="help-section">
+            <div class="help-section__title">Keyboard shortcuts</div>
+            <div class="help-keys">
+              <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
+              <div class="help-key"><kbd>Enter</kbd><span>Submit</span></div>
+              <div class="help-key"><kbd>r</kbd><span>Re-run last check</span></div>
+              <div class="help-key"><kbd>e</kbd><span>Toggle explain mode</span></div>
+              <div class="help-key"><kbd>?</kbd><span>Open this help</span></div>
+            </div>
+          </div>
+        </Modal>
       </div>
     </>
   );

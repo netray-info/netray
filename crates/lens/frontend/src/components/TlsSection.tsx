@@ -8,6 +8,7 @@ interface Props {
   data: TlsEvent | null;
   loading: boolean;
   error?: string;
+  explain: boolean;
 }
 
 export default function TlsSection(props: Props) {
@@ -49,19 +50,20 @@ export default function TlsSection(props: Props) {
               <VerdictDot verdict={data().status} />
               <span class="section-card__title">TLS</span>
               <span class="section-card__headline">{data().headline}</span>
+              <a
+                class="section-detail-link section-card__link"
+                href={data().detail_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View in tlsight →
+              </a>
               <span class={`section-card__chevron${open() ? ' section-card__chevron--open' : ''}`}>▼</span>
             </div>
             <Show when={open()}>
               <div class="section-card__body">
-                <CheckList checks={data().checks} />
-                <a
-                  class="section-detail-link"
-                  href={data().detail_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View in tlsight →
-                </a>
+                <CheckList checks={data().checks} explain={props.explain} />
               </div>
             </Show>
           </div>

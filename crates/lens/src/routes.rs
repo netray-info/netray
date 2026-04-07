@@ -120,6 +120,28 @@ pub struct CheckPostBody {
 }
 
 // ---------------------------------------------------------------------------
+// Meta response types
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize)]
+pub struct MetaResponse {
+    pub site_name: String,
+    pub version: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ecosystem: Option<MetaEcosystem>,
+}
+
+#[derive(Serialize)]
+pub struct MetaEcosystem {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dns_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ip_base_url: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Health / Ready response types
 // ---------------------------------------------------------------------------
 
@@ -153,6 +175,7 @@ pub fn health_router() -> Router {
 
 pub fn api_router(state: AppState) -> Router {
     Router::new()
+        .route("/api/meta", get(meta_handler))
         .route("/api/check/{domain}", get(check_get_handler))
         .route("/api/check", post(check_post_handler))
         .route("/api/ready", get(ready_handler))
@@ -165,6 +188,21 @@ pub fn api_router(state: AppState) -> Router {
 
 pub async fn health_handler() -> impl IntoResponse {
     Json(HealthResponse { status: "ok" })
+}
+
+pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    let backends = &state.config.backends;
+    let ecosystem = Some(MetaEcosystem {
+        dns_base_url: Some(backends.dns_url.clone()),
+        tls_base_url: Some(backends.tls_url.clone()),
+        ip_base_url: Some(backends.ip_url.clone()),
+    });
+    Json(MetaResponse {
+        site_name: "lens — Domain Health Check".to_string(),
+        version: VERSION,
+        ecosystem,
+    })
 }
 
 pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -720,5 +758,24 @@ pub mod tests {
         // Note: due to timing, the second request may be MISS if cache insert
         // hasn't completed — but with moka's async insert + await above, HIT is expected.
         assert_eq!(cache_header2.as_deref(), Some("HIT"));
+    }
+
+    #[tokio::test]
+    async fn meta_returns_version() {
+        let state = make_test_state();
+        let app = Router::new()
+            .route("/api/meta", get(meta_handler))
+            .with_state(state);
+        let req = Request::builder()
+            .uri("/api/meta")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = to_bytes(resp.into_body(), 4096).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(json["site_name"], "lens — Domain Health Check");
+        assert!(json["ecosystem"].is_object());
     }
 }

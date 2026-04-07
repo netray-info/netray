@@ -18,6 +18,7 @@ interface Props {
   data: IpEvent | null;
   loading: boolean;
   error?: string;
+  explain: boolean;
 }
 
 export default function IpSection(props: Props) {
@@ -59,6 +60,26 @@ export default function IpSection(props: Props) {
               <VerdictDot verdict={data().status} />
               <span class="section-card__title">IP</span>
               <span class="section-card__headline">{data().headline}</span>
+              <Show when={data().guide_url}>
+                <a
+                  class="check-item__guide-link"
+                  href={data().guide_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Learn why
+                </a>
+              </Show>
+              <a
+                class="section-detail-link section-card__link"
+                href={data().detail_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View in ifconfig →
+              </a>
               <span class={`section-card__chevron${open() ? ' section-card__chevron--open' : ''}`}>▼</span>
             </div>
             <Show when={open()}>
@@ -81,25 +102,7 @@ export default function IpSection(props: Props) {
                     )}
                   </For>
                 </ul>
-                <CheckList checks={data().checks} />
-                <Show when={data().guide_url}>
-                  <a
-                    class="check-item__guide-link"
-                    href={data().guide_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Learn why
-                  </a>
-                </Show>
-                <a
-                  class="section-detail-link"
-                  href={data().detail_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  View in ifconfig →
-                </a>
+                <CheckList checks={data().checks} explain={props.explain} />
               </div>
             </Show>
           </div>
