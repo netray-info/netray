@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Server Error | netray.info</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      color-scheme: light;
+      --bg:        #f6f8fb;
+      --surface:   #ffffff;
+      --border:    #dde3ed;
+      --text:      #0d1521;
+      --muted:     #6b7c93;
+      --faint:     #eef1f6;
+      --shadow:    rgba(0,0,0,.07);
+      --dot:       #d5dce8;
+      --spotlight: rgba(90,120,180,.05);
+      --h1-from:   #0d1521;
+      --h1-to:     #3b5278;
+      --err:       #b45309;
+      --err-glow:  rgba(180,83,9,.09);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg:        #07090f;
+        --surface:   #0d1220;
+        --border:    #1a2438;
+        --text:      #dce6f5;
+        --muted:     #4d6480;
+        --faint:     #1a2438;
+        --shadow:    rgba(0,0,0,.4);
+        --dot:       #1a2438;
+        --spotlight: rgba(100,130,200,.06);
+        --h1-from:   #ffffff;
+        --h1-to:     #6b8db5;
+        --err:       #d97706;
+        --err-glow:  rgba(217,119,6,.12);
+      }
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg:        #07090f;
+      --surface:   #0d1220;
+      --border:    #1a2438;
+      --text:      #dce6f5;
+      --muted:     #4d6480;
+      --faint:     #1a2438;
+      --shadow:    rgba(0,0,0,.4);
+      --dot:       #1a2438;
+      --spotlight: rgba(100,130,200,.06);
+      --h1-from:   #ffffff;
+      --h1-to:     #6b8db5;
+      --err:       #d97706;
+      --err-glow:  rgba(217,119,6,.12);
+    }
+
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg:        #f6f8fb;
+      --surface:   #ffffff;
+      --border:    #dde3ed;
+      --text:      #0d1521;
+      --muted:     #6b7c93;
+      --faint:     #eef1f6;
+      --shadow:    rgba(0,0,0,.07);
+      --dot:       #d5dce8;
+      --spotlight: rgba(90,120,180,.05);
+      --h1-from:   #0d1521;
+      --h1-to:     #3b5278;
+      --err:       #b45309;
+      --err-glow:  rgba(180,83,9,.09);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      line-height: 1.65;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: background .25s, color .25s;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px;
+      height: 600px;
+      background: radial-gradient(ellipse, var(--spotlight) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 100;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      box-shadow: 0 2px 12px var(--shadow);
+    }
+
+    .theme-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      color: var(--muted);
+      transition: background .15s, color .15s;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .theme-btn:hover { color: var(--text); background: var(--faint); }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 48px 24px;
+      max-width: 480px;
+    }
+
+    .error-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(5rem, 20vw, 9rem);
+      font-weight: 700;
+      letter-spacing: -.04em;
+      line-height: 1;
+      background: linear-gradient(160deg, var(--h1-from) 30%, var(--h1-to) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 16px;
+    }
+
+    .error-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .78rem;
+      font-weight: 500;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--err);
+      background: var(--err-glow);
+      border: 1px solid var(--err);
+      padding: 4px 14px;
+      border-radius: 999px;
+      display: inline-block;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    p {
+      font-size: .95rem;
+      color: var(--muted);
+      margin-bottom: 36px;
+      line-height: 1.7;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .8rem;
+      font-weight: 500;
+      text-decoration: none;
+      padding: 9px 20px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: var(--surface);
+      transition: color .15s, border-color .15s;
+    }
+
+    .btn:hover { color: var(--text); border-color: var(--muted); }
+
+    .btn--primary {
+      color: var(--err);
+      border-color: var(--err);
+      background: var(--err-glow);
+    }
+
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 1;
+      border-top: 1px solid var(--border);
+      padding: 16px 24px;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+
+    footer a { color: var(--muted); text-decoration: none; transition: color .15s; }
+    footer a:hover { color: var(--text); }
+    footer .sep { margin: 0 10px; }
+  </style>
+</head>
+<body>
+
+<div class="theme-toggle">
+  <button class="theme-btn" id="theme-btn" aria-label="Toggle color theme">
+    <span id="theme-icon"></span>
+  </button>
+</div>
+
+<div class="container">
+  <div class="error-code">5xx</div>
+  <span class="error-label">server error</span>
+  <h1>Something went wrong on our end.</h1>
+  <p>The server encountered an error and could not complete your request. This is temporary — please try again in a moment.</p>
+  <div class="actions">
+    <a href="/" class="btn btn--primary">← Back to netray.info</a>
+    <a href="javascript:location.reload()" class="btn">Try again</a>
+  </div>
+</div>
+
+<footer>
+  <a href="https://ip.netray.info">ip.netray.info</a>
+  <span class="sep">&middot;</span>
+  <a href="https://dns.netray.info">dns.netray.info</a>
+  <span class="sep">&middot;</span>
+  <a href="https://tls.netray.info">tls.netray.info</a>
+</footer>
+
+<script>
+  const THEMES = ['auto', 'light', 'dark'];
+  const stored = localStorage.getItem('theme') || 'auto';
+  const ICONS  = { auto: '⊙', light: '☀︎', dark: '☾' };
+  let current  = THEMES.includes(stored) ? stored : 'auto';
+  const iconEl = document.getElementById('theme-icon');
+  const btn    = document.getElementById('theme-btn');
+  function apply(t) {
+    if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', t);
+    iconEl.textContent = ICONS[t] + ' ';
+  }
+  apply(current);
+  btn.addEventListener('click', () => {
+    current = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
+    localStorage.setItem('theme', current);
+    apply(current);
+  });
+</script>
+</body>
+</html>
