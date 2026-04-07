@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0] - 2026-04-07
+
+### Added
+- BIMI, MTA-STS, TLSRPT checks; deep links; mobile UX; trace ID propagation (cbc3cd7)
+- MIT LICENSE file (f535ee9)
+
+### Fixed
+- Render MTA-STS, TLSRPT, BIMI TXT records as human-readable text (3bfc708)
+
+### Changed
+- Frontend: use shared SuiteNav and history factory from common-frontend (d59aeb5)
+- Frontend: bump @netray-info/common-frontend to ^0.3.0 (51eaccc)
+- Add human-readable docs link to OpenAPI description; CI integration examples in README (0ad52f2)
+
 ## [0.5.2] - 2026-04-07
 
 ### Fixed
