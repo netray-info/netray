@@ -506,6 +506,116 @@
       .tools { padding: 48px 16px 80px; }
       .theme-toggle { top: 12px; right: 12px; }
     }
+
+    /* ── Learn / Guides section ────────────────────── */
+    .learn {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px 100px;
+      animation: fadeUp .55s .18s ease both;
+    }
+
+    .learn-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .learn-header h2 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+
+    .learn-header p {
+      font-size: .95rem;
+      color: var(--muted);
+    }
+
+    .guide-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .guide-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 24px;
+      text-decoration: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: transform .15s, border-color .15s, box-shadow .15s;
+      box-shadow: 0 1px 6px var(--shadow);
+    }
+
+    .guide-card:hover {
+      transform: translateY(-3px);
+    }
+
+    .guide-card--ip:hover  { border-color: var(--ip);  box-shadow: 0 8px 28px var(--ip-glow); }
+    .guide-card--dns:hover { border-color: var(--dns); box-shadow: 0 8px 28px var(--dns-glow); }
+    .guide-card--tls:hover { border-color: var(--tls); box-shadow: 0 8px 28px var(--tls-glow); }
+    .guide-card--all:hover { border-color: var(--muted); box-shadow: 0 8px 28px var(--shadow); }
+
+    .guide-card__tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 999px;
+      align-self: flex-start;
+      border: 1px solid;
+    }
+
+    .guide-card--ip  .guide-card__tag { color: var(--ip);  border-color: var(--ip);  background: var(--ip-glow); }
+    .guide-card--dns .guide-card__tag { color: var(--dns); border-color: var(--dns); background: var(--dns-glow); }
+    .guide-card--tls .guide-card__tag { color: var(--tls); border-color: var(--tls); background: var(--tls-glow); }
+    .guide-card--all .guide-card__tag { color: var(--muted); border-color: var(--border); background: var(--faint); }
+
+    .guide-card__title {
+      font-size: .95rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.35;
+    }
+
+    .guide-card__desc {
+      font-size: .82rem;
+      color: var(--muted);
+      line-height: 1.55;
+      flex: 1;
+    }
+
+    .guide-card__cta {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .75rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .learn-all {
+      text-align: center;
+    }
+
+    .learn-all a {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .82rem;
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      padding: 8px 20px;
+      border-radius: 999px;
+      transition: color .15s, border-color .15s;
+    }
+
+    .learn-all a:hover { color: var(--text); border-color: var(--muted); }
   </style>
 </head>
 <body>
@@ -628,6 +738,63 @@
     </div>
 
   </section>
+
+  <section class="learn" aria-label="Guides">
+    <div class="learn-header">
+      <h2>Learn</h2>
+      <p>Guides on the protocols and concepts behind the tools.</p>
+    </div>
+
+    <div class="guide-grid">
+
+      <a href="/guide/email-auth" class="guide-card guide-card--dns">
+        <span class="guide-card__tag">DNS / Email</span>
+        <span class="guide-card__title">Email Authentication: SPF, DKIM, and DMARC</span>
+        <span class="guide-card__desc">How the three email authentication protocols work together, why they matter, and how to debug delivery failures.</span>
+        <span class="guide-card__cta">Read →</span>
+      </a>
+
+      <a href="/guide/certificate-chain" class="guide-card guide-card--tls">
+        <span class="guide-card__tag">TLS</span>
+        <span class="guide-card__title">TLS Certificate Chain Explained</span>
+        <span class="guide-card__desc">What leaf, intermediate, and root certificates are, how chain validation works, and why incomplete chains break things.</span>
+        <span class="guide-card__cta">Read →</span>
+      </a>
+
+      <a href="/guide/dnssec" class="guide-card guide-card--dns">
+        <span class="guide-card__tag">DNS</span>
+        <span class="guide-card__title">DNSSEC: How to Enable and Verify It</span>
+        <span class="guide-card__desc">How DNSSEC signs DNS responses, how to enable it, and how to verify the chain of trust is intact.</span>
+        <span class="guide-card__cta">Read →</span>
+      </a>
+
+      <a href="/guide/hsts" class="guide-card guide-card--tls">
+        <span class="guide-card__tag">TLS / HTTP</span>
+        <span class="guide-card__title">HSTS Preloading: A Practical Guide</span>
+        <span class="guide-card__desc">How HTTP Strict Transport Security works, how to configure it correctly, and what preloading means for your domain.</span>
+        <span class="guide-card__cta">Read →</span>
+      </a>
+
+      <a href="/guide/ip-enrichment" class="guide-card guide-card--ip">
+        <span class="guide-card__tag">IP</span>
+        <span class="guide-card__title">What Your IP Address Reveals</span>
+        <span class="guide-card__desc">Geolocation, ASN, network classification, and how IP reputation systems categorise cloud, VPN, Tor, and residential addresses.</span>
+        <span class="guide-card__cta">Read →</span>
+      </a>
+
+      <a href="/guide/domain-security-audit" class="guide-card guide-card--all">
+        <span class="guide-card__tag">All tools</span>
+        <span class="guide-card__title">How to Audit Your Domain Security in 5 Minutes</span>
+        <span class="guide-card__desc">A step-by-step walkthrough of DNS, TLS, and IP health checks you can run right now to find issues before they become incidents.</span>
+        <span class="guide-card__cta">Read →</span>
+      </a>
+
+    </div>
+
+    <div class="learn-all">
+      <a href="/guide/">View all guides →</a>
+    </div>
+  </section>
 </main>
 
 <footer>
@@ -636,6 +803,8 @@
   <a href="https://dns.netray.info">dns.netray.info</a>
   <span class="sep">&middot;</span>
   <a href="https://tls.netray.info">tls.netray.info</a>
+  <span class="sep">&middot;</span>
+  <a href="/guide/">Guides</a>
   <span class="sep">&middot;</span>
   <a href="https://lukas.pustina.de">Lukas Pustina</a>
 </footer>

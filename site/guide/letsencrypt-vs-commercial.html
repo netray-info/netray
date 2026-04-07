@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Let's Encrypt vs Commercial CAs: Which Should You Use? | netray.info</title>
+  <meta name="description" content="A practical comparison of Let's Encrypt and paid certificate authorities — coverage, features, automation, use cases, and when a commercial CA is worth the cost.">
+  <link rel="canonical" href="https://netray.info/guide/letsencrypt-vs-commercial">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Let's Encrypt vs Commercial CAs: Which Should You Use?">
+  <meta property="og:description" content="A practical comparison of Let's Encrypt and paid certificate authorities — coverage, features, automation, use cases, and when a commercial CA is worth the cost.">
+  <meta property="og:url" content="https://netray.info/guide/letsencrypt-vs-commercial">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Let's Encrypt vs Commercial CAs: Which Should You Use?">
+  <meta name="twitter:description" content="A practical comparison of Let's Encrypt and paid certificate authorities — coverage, features, automation, use cases, and when a commercial CA is worth the cost.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Let's Encrypt vs Commercial CAs: Which Should You Use?",
+    "description": "A practical comparison of Let's Encrypt and paid certificate authorities — coverage, features, automation, use cases, and when a commercial CA is worth the cost.",
+    "url": "https://netray.info/guide/letsencrypt-vs-commercial",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/letsencrypt-vs-commercial"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Let's Encrypt vs Commercial CAs: Which Should You Use?</h1>
+  <p class="page-subtitle">When free automated certificates are the right choice and when a commercial CA is worth the cost.</p>
+
+  <article>
+    <h2>What Let's Encrypt is</h2>
+    <p>Let's Encrypt is a free, automated, open certificate authority operated by the Internet Security Research Group (ISRG), a nonprofit. It issues Domain Validation (DV) certificates only — it verifies that you control the domain, not who you are as an organization. Certificates have a 90-day validity period by design.</p>
+    <p>The ACME protocol (RFC 8555) is the standard interface for automated certificate issuance and renewal. Let's Encrypt supports two challenge types: HTTP-01 (place a token at a well-known URL on the domain) and DNS-01 (place a TXT record in the domain's DNS). DNS-01 is required for wildcard certificates (<code>*.example.com</code>) and for issuance when the server is not publicly reachable. HTTP-01 is simpler and supported by almost every ACME client.</p>
+    <p>Every Let's Encrypt certificate is logged to multiple CT logs before delivery. Issuance is subject to rate limits (50 certificates per registered domain per week), which are rarely a concern for typical deployments but matter for large-scale automation.</p>
+
+    <h2>What commercial CAs offer</h2>
+    <p>Commercial CAs (DigiCert, Sectigo, GlobalSign, Entrust, and others) offer the same DV certificates as Let's Encrypt plus two additional validation tiers:</p>
+    <ul>
+      <li><strong>Organization Validation (OV)</strong> — the CA verifies the legal existence of the organization via business registry checks, phone verification, and document review. The organization's name appears in the certificate's Subject field. OV costs $50–$300/year depending on provider and volume.</li>
+      <li><strong>Extended Validation (EV)</strong> — a more rigorous vetting process with stricter identity verification requirements defined by the CA/Browser Forum. EV was historically displayed with a green address bar and the organization's name prominently shown. Major browsers removed the prominent EV UI in 2019, significantly reducing its visible differentiation from OV.</li>
+    </ul>
+    <p>Commercial CAs also offer multi-year purchase options, wildcard certificates without requiring DNS-01 (using OV or EV vetting instead), SLA guarantees on issuance and revocation, dedicated support contracts, and compatibility warranties (financial indemnification if a certificate is mis-issued).</p>
+
+    <h2>Trust: are they equivalent?</h2>
+    <p>For DV certificates, browser trust is equivalent. A DV certificate from Let's Encrypt and a DV certificate from DigiCert provide the same cryptographic guarantee to the browser: the domain name in the certificate matches the domain the browser is connecting to, and the certificate was issued by a CA in the browser's trust store.</p>
+    <p>Neither a DV certificate from LE nor from a commercial CA proves anything about who operates the website, the legal identity of the organization, or the legitimacy of the service. That information is not part of DV — it is the purpose of OV and EV.</p>
+    <p>OV and EV certificates include verified organization data (legal name, country, sometimes jurisdiction). This information is in the certificate and can be inspected, but browsers do not surface it prominently anymore. Some enterprise security tools, EDR products, and firewall deep-packet inspection rulesets do differentiate on OV/EV. For human-facing trust signals, the practical difference today is minimal for most web applications.</p>
+    <p>Legacy client compatibility is occasionally raised as a reason to prefer commercial CAs. Let's Encrypt's root certificates (ISRG Root X1 and X2) are widely trusted, but very old systems (Android < 7.1, older embedded devices) may not have ISRG Root X1. LE addressed this via a cross-signature with IdenTrust DST Root CA X3 (now expired) and currently chains to ISRG Root X1. If you have evidence of clients on these very old platforms, test compatibility before assuming LE will work.</p>
+
+    <h2>Automation: the great equalizer</h2>
+    <p>ACME is no longer exclusive to Let's Encrypt. ZeroSSL, Buypass, and several commercial CAs including DigiCert and Sectigo now support ACME for automated issuance. This means the automation benefits of LE are achievable with a commercial CA if needed.</p>
+    <p>The 90-day certificate lifetime is often cited as a drawback of Let's Encrypt. In practice, it is a forcing function for automation. Organizations that successfully automate renewal for 90-day certs are more resilient than those manually managing 1-year or 2-year certs — manual processes fail silently, and an expired cert is discovered by users, not by the operations team.</p>
+    <p>The argument "we need longer certs to avoid frequent renewals" is only valid without automation. With a working ACME client (Certbot, acme.sh, cert-manager in Kubernetes, Caddy's built-in ACME), renewal is fully automatic. The operational burden of a 90-day cert with automation is lower than a 1-year cert managed manually.</p>
+    <p>The CAB Forum voted in 2023 to move toward 90-day maximum certificate lifetimes as a baseline requirement, and further discussion targets 47-day certificates. Commercial CAs will be required to support this. Organizations invested in manual certificate management are facing a forced migration to automation regardless of CA choice.</p>
+
+    <h2>When to choose Let's Encrypt</h2>
+    <p>Let's Encrypt is the correct choice for the vast majority of use cases:</p>
+    <ul>
+      <li>Public-facing websites, APIs, and web applications where DV trust is sufficient</li>
+      <li>Internal services where you can use DNS-01 challenge</li>
+      <li>Developer tooling, staging environments, and non-production infrastructure</li>
+      <li>Any deployment where ACME automation is feasible</li>
+      <li>Cost-conscious environments — "free" eliminates certificate budget discussions entirely</li>
+      <li>High-volume automation (hundreds or thousands of certificates) — LE rate limits accommodate significant scale at zero cost</li>
+    </ul>
+
+    <h2>When to choose a commercial CA</h2>
+    <p>Commercial CAs are justified in specific circumstances:</p>
+    <ul>
+      <li><strong>Legacy systems that do not support ACME</strong> — some older load balancers, appliances, and enterprise software require manual certificate installation. If automation is not feasible, longer-lived commercial certs reduce operational overhead.</li>
+      <li><strong>OV or EV requirements</strong> — regulated industries, government contracts, or enterprise sales processes may require OV or EV certificates to satisfy compliance requirements or procurement criteria. LE does not issue OV or EV.</li>
+      <li><strong>Support SLA requirements</strong> — if your certificate issuance process needs a contractual SLA with a named support contact, commercial CAs provide this. LE does not offer support contracts.</li>
+      <li><strong>Code signing certificates</strong> — Let's Encrypt does not issue code signing certificates. These require a commercial CA, typically Sectigo or DigiCert, with OV or EV vetting.</li>
+      <li><strong>S/MIME email certificates</strong> — LE does not issue S/MIME certificates for email signing and encryption. These require a separate CA.</li>
+      <li><strong>Multi-year budget commitments</strong> — some organizations prepay multi-year certificates for budget predictability. This is an organizational constraint, not a technical one.</li>
+    </ul>
+
+    <h2>The certificate lifetime trend</h2>
+    <p>The industry is converging on shorter certificate lifetimes. The CAB Forum's "Shifting Gears" proposal targets a maximum of 47 days for TLS certificates within the next few years. The security rationale is sound: shorter lifetimes limit the window during which a compromised private key or a mis-issued certificate can be exploited before automatic replacement occurs. Revocation has historically been unreliable (OCSP soft-fail, CRL caching), and short-lived certs are a more robust substitute for revocation checks.</p>
+    <p>For organizations still on manually managed multi-year certificates, the direction of travel is clear: automation is not optional in the medium term. Investing in ACME automation now — whether with LE or a commercial CA — is the technically sound choice regardless of the CA selected.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect your certificate issuer and validity</h2>
+    <form class="tool-entry__form" action="https://tls.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="h"
+        placeholder="example.com"
+        aria-label="Domain to inspect"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect</button>
+    </form>
+    <p class="tool-entry__hint">Shows your certificate issuer, validity period, chain trust, and full TLS configuration.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/certificate-transparency">Understanding Certificate Transparency</a></li>
+      <li><a href="/guide/hsts">HTTP Strict Transport Security (HSTS)</a></li>
+      <li><a href="/guide/caa-records">CAA Records: Restricting Certificate Issuance</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DNS Lame Delegation: What It Is and How to Fix It | netray.info</title>
+  <meta name="description" content="What lame delegation means in DNS, why it causes resolution failures, how to detect it, and how to fix it at the registrar and DNS provider.">
+  <link rel="canonical" href="https://netray.info/guide/lame-delegation">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="DNS Lame Delegation: What It Is and How to Fix It">
+  <meta property="og:description" content="What lame delegation means in DNS, why it causes resolution failures, how to detect it, and how to fix it at the registrar and DNS provider.">
+  <meta property="og:url" content="https://netray.info/guide/lame-delegation">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="DNS Lame Delegation: What It Is and How to Fix It">
+  <meta name="twitter:description" content="What lame delegation means in DNS, why it causes resolution failures, how to detect it, and how to fix it at the registrar and DNS provider.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "DNS Lame Delegation: What It Is and How to Fix It",
+    "description": "What lame delegation means in DNS, why it causes resolution failures, how to detect it, and how to fix it at the registrar and DNS provider.",
+    "url": "https://netray.info/guide/lame-delegation",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/lame-delegation"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">DNS Lame Delegation: What It Is and How to Fix It</h1>
+  <p class="page-subtitle">How misconfigured nameserver delegation silently breaks DNS resolution and how to detect and fix it.</p>
+
+  <article>
+    <h2>What lame delegation means</h2>
+    <p>A DNS delegation is lame when a nameserver is listed in the parent zone as authoritative for a child zone, but the nameserver itself does not actually hold the zone — or does not know it is supposed to be authoritative for it. There is a mismatch between what the parent zone says and what the nameserver believes.</p>
+    <p>To understand this precisely, consider how DNS resolution works. When a resolver looks up <code>example.com</code>, it queries the root zone for the <code>.com</code> TLD nameservers, then queries the TLD zone for the nameservers responsible for <code>example.com</code>. These nameservers are the <em>delegation</em> recorded at the registrar. The resolver then contacts those nameservers and expects them to respond with authority — with the AA (Authoritative Answer) bit set in the response.</p>
+    <p>Lame delegation occurs when the nameserver the resolver contacts responds without the AA bit, or returns REFUSED, or returns SERVFAIL. The nameserver is saying "I don't know about this zone" to a resolver that was told — by the parent zone — that this nameserver is authoritative. The resolver cannot get a definitive answer and either tries the next listed nameserver, returns SERVFAIL, or gives up, depending on implementation.</p>
+
+    <h2>How it causes problems</h2>
+    <p>The symptoms of lame delegation are intermittent and misleading. If a domain has three nameservers and one is lame, resolution may succeed most of the time — resolvers that happen to query one of the two working nameservers get correct answers, while resolvers that query the lame one get a failure. The failure rate depends on how resolvers select nameservers and whether they learn to prefer the working ones.</p>
+    <p>Modern resolvers use RTT-weighted server selection and do learn to deprioritize unresponsive servers, but this learning is per-resolver and not guaranteed. A resolver that has cached the failure may retry the lame nameserver at the next TTL expiry and fail again. From the outside, the domain appears to have intermittent DNS failures with no obvious cause.</p>
+    <p>The practical impacts are varied. SMTP delivery failures are common — SMTP servers do their own DNS lookups and may hit the lame nameserver for MX resolution, causing mail to bounce or queue. API clients with strict DNS failure handling fail hard. DNSSEC-validating resolvers may return SERVFAIL for the entire zone if the lame nameserver provides an inconsistent or empty response. Certificate issuance may fail if the ACME DNS-01 challenge is directed to the lame nameserver.</p>
+
+    <h2>Common causes</h2>
+    <p>The most frequent cause is a DNS provider migration where the registrar's NS records were not updated. The process should be: provision the zone at the new DNS provider, populate all records, verify they are correct, then update the registrar NS records to point to the new provider. Organizations often do this in the wrong order, or update the registrar but forget to remove the zone from the old provider's nameservers (or remove it too quickly before the new NS records have propagated).</p>
+    <p>Account or subscription expiry at the DNS provider is another cause. If a DNS provider account lapses and the zones are deleted, the nameservers remain reachable but are no longer authoritative for the zone. The registrar NS records still point to the old provider's nameservers, which now return REFUSED because they have no record of the zone.</p>
+    <p>Secondary nameserver misconfiguration is a subtler case. An organization runs primary and secondary nameservers. The secondary is configured to receive zone transfers from the primary (AXFR/IXFR), but the zone transfer is failing — blocked by a firewall rule, a misconfigured TSIG key, or a wrong primary IP in the secondary's configuration. The secondary nameserver is listed in the delegation but is serving stale data or returning REFUSED because its zone has expired.</p>
+    <p>Registrar default nameservers are another pitfall. When a domain is first registered, some registrars automatically populate NS records with their own nameservers. If the zone is never created on those nameservers — because the domain owner immediately configured a different DNS provider — the registrar's nameservers are lame for the zone. This is easily missed if the DNS provider was configured correctly and resolution appears to work from the provider's nameservers, while the registrar's default servers sit lame in the delegation.</p>
+
+    <h2>How to detect it</h2>
+    <p>The direct test is to query each nameserver listed in the delegation explicitly and check the response flags. Using <code>dig</code>:</p>
+    <pre><code># Query a specific nameserver directly, bypassing resolver cache
+dig @ns1.example-dns-provider.com example.com SOA +norec
+
+# Check for the AA flag in the response header
+# A healthy response includes: flags: qr aa rd; ANSWER: 1
+# A lame response includes: flags: qr rd; ANSWER: 0 (missing 'aa')
+# Or returns REFUSED or SERVFAIL</code></pre>
+    <p>The key flag is <code>aa</code> in the response header. Its absence from a nameserver that should be authoritative is the definition of lame delegation. A REFUSED response (RCODE 5) is an even clearer signal — the nameserver is explicitly saying it declines to answer for this zone.</p>
+    <p>Also compare the parent zone's NS records against the authoritative zone's own NS records. Query the TLD nameservers for the delegation NS records, then query the authoritative nameservers for their own NS records:</p>
+    <pre><code># Get the delegation NS records from the parent (TLD)
+dig example.com NS @a.gtld-servers.net +norec
+
+# Get the authoritative NS records from the zone itself
+dig example.com NS</code></pre>
+    <p>These two sets of NS records should match exactly. Differences indicate a zone that has been migrated without updating the registrar, or a zone where NS records have been changed in the zone file but not at the registrar.</p>
+
+    <h2>The NS delegation consistency check</h2>
+    <p>NS consistency is a closely related but distinct check from lame delegation. Lame delegation means a named nameserver is not authoritative. NS inconsistency means the set of nameservers differs between the parent delegation and the child zone's own NS record set.</p>
+    <p>A typical inconsistency scenario: the zone is hosted at a provider with four nameservers (ns1–ns4). The registrar has two of them (ns1, ns2) from an older configuration. The zone's own NS records have all four. Resolvers following the delegation will only contact ns1 and ns2, missing ns3 and ns4. This reduces resilience and may cause confusion when debugging — direct queries to ns3 and ns4 work, but recursive resolution only ever reaches ns1 and ns2.</p>
+    <p>The authoritative zone's NS records are what end users' resolvers ultimately receive as the answer to NS queries. The parent delegation controls which nameservers resolvers use to reach the zone. Both should be consistent and authoritative for the zone. An NS record in the zone file that names a server not listed in the parent delegation is a server that resolvers will never independently discover, even if it is functioning correctly.</p>
+
+    <h2>How to fix it</h2>
+    <p>The fix depends on the cause. In the common migration scenario:</p>
+    <ol>
+      <li>Verify that the zone is correctly provisioned at the new DNS provider — all records present, nameservers responding with AA bit set, zone content correct.</li>
+      <li>Log into the registrar and update the NS records to point to the new provider's nameservers. Remove all nameservers from the old provider.</li>
+      <li>Wait for the parent zone TTL to expire. The TLD zone's TTL for NS records is typically set by the registrar and is often 24–48 hours for legacy registrars, though modern providers use shorter TTLs (1–4 hours).</li>
+      <li>Verify with explicit queries to the TLD nameservers that the new delegation is in place.</li>
+    </ol>
+    <p>For a lame secondary nameserver, fix the zone transfer configuration: verify the primary allows AXFR from the secondary's IP, verify TSIG keys match if used, verify the secondary's configuration points to the correct primary. Force a zone transfer and verify the secondary's zone data is current.</p>
+    <p>After any fix, query all nameservers listed in the delegation individually and verify each returns the AA bit and consistent zone data.</p>
+
+    <h2>Prevention</h2>
+    <p>The most effective prevention is procedural: always update the registrar NS records as the final step of a DNS migration, not before provisioning the new zone. Run a consistency check immediately after any DNS-related change — nameserver updates, zone migrations, provider changes.</p>
+    <p>For secondary nameserver setups, monitor zone serial numbers across all nameservers. If the serial numbers diverge, zone transfers are failing. Alert on serial number staleness rather than waiting for a user to report intermittent DNS failures.</p>
+    <p>When decommissioning a DNS provider or deleting a zone, always remove the delegation (update the registrar NS records) before deleting the zone data. A nameserver that returns REFUSED is less harmful than a nameserver that returns stale data — but both indicate a lame or inconsistent delegation that should be cleaned up before the next TTL cycle completes.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check NS records and delegation consistency</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com NS"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Queries NS records from both parent and child zones and flags lame delegations and consistency issues.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/dnssec">DNSSEC Explained</a></li>
+      <li><a href="/guide/dns-propagation">How DNS Propagation Works</a></li>
+      <li><a href="/guide/domain-security-audit">Domain Security Audit in 5 Minutes</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

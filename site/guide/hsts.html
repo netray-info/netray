@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HSTS Preloading: A Practical Guide | netray.info</title>
+  <meta name="description" content="How HTTP Strict Transport Security works, how to configure max-age and includeSubDomains correctly, and how to get your domain onto the browser preload list.">
+  <link rel="canonical" href="https://netray.info/guide/hsts">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="HSTS Preloading: A Practical Guide">
+  <meta property="og:description" content="How HTTP Strict Transport Security works, how to configure max-age and includeSubDomains correctly, and how to get your domain onto the browser preload list.">
+  <meta property="og:url" content="https://netray.info/guide/hsts">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="HSTS Preloading: A Practical Guide">
+  <meta name="twitter:description" content="How to configure Strict-Transport-Security correctly and get your domain onto the browser preload list.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "HSTS Preloading: A Practical Guide",
+    "description": "How HTTP Strict Transport Security works, how to configure max-age and includeSubDomains correctly, and how to get your domain onto the browser preload list.",
+    "url": "https://netray.info/guide/hsts",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/hsts"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">HSTS Preloading: A Practical Guide</h1>
+  <p class="page-subtitle">How to configure Strict-Transport-Security correctly and get your domain onto the browser preload list.</p>
+
+  <article>
+    <h2>What HSTS does</h2>
+    <p>When a user visits <code>http://example.com</code> for the first time, the server redirects them to <code>https://example.com</code>. That redirect happens over plain HTTP — before any TLS is established. An attacker on the same network (coffee shop Wi-Fi, a compromised router) can intercept that initial HTTP request and respond with their own content, or silently proxy the HTTPS session by stripping TLS: the <strong>SSL stripping attack</strong>.</p>
+    <p>HTTP Strict Transport Security (HSTS, RFC 6797) addresses this. Once a browser has visited a site over HTTPS and received the <code>Strict-Transport-Security</code> header, it remembers for the duration of <code>max-age</code> that this domain must only be contacted over HTTPS. Future visits bypass the initial HTTP step entirely — the browser upgrades to HTTPS internally before sending any request.</p>
+    <p>The limitation: HSTS only takes effect after the first successful HTTPS visit. A first-time visitor, or someone who has never visited before, still has no protection. This is the "first-visit problem," and it is why the preload list exists.</p>
+
+    <h2>The header explained</h2>
+    <p>The header is set by your HTTPS server in HTTP responses:</p>
+    <pre><code>Strict-Transport-Security: max-age=63072000; includeSubDomains; preload</code></pre>
+    <p>Each directive:</p>
+    <ul>
+      <li><strong><code>max-age</code></strong>: How long in seconds the browser should enforce HTTPS-only. The HSTS preload list requires at least 31536000 (1 year). The recommended value is 63072000 (2 years). After this window expires, the browser will make a plain HTTP request again — so keep it set.</li>
+      <li><strong><code>includeSubDomains</code></strong>: Extends the policy to all subdomains of the domain that sent the header. Without this, <code>api.example.com</code> and <code>mail.example.com</code> can still be reached over HTTP. Required for preload eligibility.</li>
+      <li><strong><code>preload</code></strong>: A signal to preload list operators that you consent to having your domain baked into browsers. This directive itself does nothing in the browser — you still need to submit to hstspreload.org.</li>
+    </ul>
+
+    <h2>The preload list</h2>
+    <p>The HSTS preload list (maintained at hstspreload.org and baked into Chrome, Firefox, Safari, and Edge) contains domains that browsers will always connect to over HTTPS — even on a completely fresh install with no browsing history. These domains have HTTPS enforced before the first byte is sent, eliminating the first-visit problem.</p>
+    <p>Eligibility requirements:</p>
+    <ul>
+      <li>Serve a valid HTTPS response on the root domain</li>
+      <li>Redirect all HTTP traffic to HTTPS (including on all subdomains)</li>
+      <li>Serve the HSTS header on the HTTPS response, not just the redirect</li>
+      <li><code>max-age</code> of at least 31536000 seconds (1 year)</li>
+      <li><code>includeSubDomains</code> directive present</li>
+      <li><code>preload</code> directive present</li>
+    </ul>
+    <p>The <strong>commitment this implies</strong>: once you are on the preload list, all subdomains must serve valid HTTPS for as long as browsers have your entry. Removing a subdomain from DNS, or letting a certificate expire, will make that subdomain unreachable in browsers. Getting removed from the preload list takes months and you remain in older browser versions for years. Do not submit until every subdomain has working HTTPS.</p>
+
+    <h2>Deployment checklist</h2>
+    <p>Deploy HSTS safely in stages:</p>
+    <ol>
+      <li><strong>Inventory all subdomains</strong>. Check DNS for every active subdomain. Each one needs a valid, auto-renewing certificate before you add <code>includeSubDomains</code>.</li>
+      <li><strong>Deploy HTTPS everywhere</strong>. Ensure every subdomain redirects HTTP to HTTPS and has a valid certificate. Test certificate renewal.</li>
+      <li><strong>Start with a short max-age</strong>. Set <code>max-age=300</code> (5 minutes) on your production HTTPS responses. Monitor for breakage over several days. This gives you a fast exit if something is wrong — the browser forgets quickly.</li>
+      <li><strong>Increase gradually</strong>. 300 → 86400 → 604800 → 2592000 → 63072000. Each step, wait for the previous max-age to expire in testing environments before proceeding.</li>
+      <li><strong>Add <code>includeSubDomains</code> and <code>preload</code></strong> once you are confident in the long max-age with the base domain only.</li>
+      <li><strong>Submit to hstspreload.org</strong>.</li>
+    </ol>
+
+    <h2>Common mistakes</h2>
+    <ul>
+      <li><strong>Setting HSTS before HTTPS is fully working</strong>: If a user receives the HSTS header and then your certificate expires or HTTPS breaks, the browser will refuse to load the site for the duration of <code>max-age</code>. There is no server-side reset for this — the browser holds the state.</li>
+      <li><strong>Sending HSTS on the HTTP redirect</strong>: Browsers only honor HSTS headers received over HTTPS. The header on your HTTP-to-HTTPS redirect is ignored.</li>
+      <li><strong>Forgetting a subdomain that cannot serve HTTPS</strong>: <code>legacy.example.com</code> running an old HTTP-only service will become completely unreachable once <code>includeSubDomains</code> is set and the browser has cached the policy.</li>
+      <li><strong>Removing the HSTS header after preloading</strong>: The preload list is the source of truth for fresh browsers, not your server. To get removed from the preload list, submit a removal request at hstspreload.org, then wait — it takes months to propagate and years to leave all browser versions.</li>
+      <li><strong>Naked vs www confusion</strong>: The HSTS header on <code>www.example.com</code> does not cover <code>example.com</code> and vice versa. If you redirect the naked domain to www, set HSTS on both the redirect response's destination and the final HTTPS response of the canonical domain.</li>
+    </ul>
+
+    <h2>How to verify</h2>
+    <p>Check the HSTS header by fetching your domain's HTTPS response and inspecting the headers:</p>
+    <ul>
+      <li>Confirm <code>Strict-Transport-Security</code> is present on the HTTPS response (not on HTTP redirects)</li>
+      <li>Confirm <code>max-age</code> is at least 31536000 for preload eligibility</li>
+      <li>Confirm <code>includeSubDomains</code> is present if you intend to preload</li>
+      <li>Check preload status at hstspreload.org — it shows whether your domain is pending, preloaded, or ineligible</li>
+    </ul>
+    <p>The TLS inspector checks the HSTS header, redirect chain, and certificate together, so you can see at a glance whether HTTPS is correctly configured end-to-end.</p>
+
+    <h2>HSTS and HTTPS redirects</h2>
+    <p>HSTS depends on HTTPS redirects being in place, but they are different mechanisms. The redirect (HTTP 301 from port 80) handles clients that have not yet learned the policy. HSTS handles clients that have learned it — they skip port 80 entirely. Both must work correctly. A broken redirect does not affect browsers that already have the HSTS policy cached, but it affects all first-time visitors and any client that does not validate HSTS. Check that your HTTP-to-HTTPS redirect returns a permanent 301 (not 302) and does not introduce redirect loops.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check your domain's HSTS and TLS configuration</h2>
+    <form class="tool-entry__form" action="https://tls.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="h"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Checks HSTS header, redirect chain, and TLS configuration for your domain.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/certificate-transparency">Certificate Transparency</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/domain-security-audit">Domain Security Audit</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

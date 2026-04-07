@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>What Is an ASN and Why Does It Matter? | netray.info</title>
+  <meta name="description" content="What Autonomous System Numbers are, how the internet's routing works, how to look up an ASN, and why ASN data is used for geolocation, reputation, and access control.">
+  <link rel="canonical" href="https://netray.info/guide/asn">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="What Is an ASN and Why Does It Matter?">
+  <meta property="og:description" content="What Autonomous System Numbers are, how the internet's routing works, how to look up an ASN, and why ASN data is used for geolocation, reputation, and access control.">
+  <meta property="og:url" content="https://netray.info/guide/asn">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="What Is an ASN and Why Does It Matter?">
+  <meta name="twitter:description" content="How internet routing works, what Autonomous System Numbers tell you about an IP address, and why they matter for security.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "What Is an ASN and Why Does It Matter?",
+    "description": "What Autonomous System Numbers are, how the internet's routing works, how to look up an ASN, and why ASN data is used for geolocation, reputation, and access control.",
+    "url": "https://netray.info/guide/asn",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/asn"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">What Is an ASN and Why Does It Matter?</h1>
+  <p class="page-subtitle">How internet routing works, what Autonomous System Numbers tell you about an IP address, and why they matter for security.</p>
+
+  <article>
+    <h2>What an Autonomous System is</h2>
+    <p>The internet is not a single network — it is tens of thousands of independently operated networks that agree to exchange routing information with each other. Each of these networks is called an <strong>Autonomous System (AS)</strong>: a collection of IP prefixes under the control of a single administrative entity with a unified routing policy.</p>
+    <p>An AS might be an internet service provider (ISP), a content delivery network (CDN), a cloud provider, a large enterprise with its own IP address space, a university, or a government agency. What they have in common is that they control a set of IP prefixes and are responsible for how traffic routes into and out of their network.</p>
+    <p>The protocol that connects autonomous systems is <strong>BGP (Border Gateway Protocol)</strong>. BGP is the internet's routing protocol: each AS announces its IP prefixes to its BGP peers, and those peers propagate the announcements further. Every router on the internet's backbone maintains a table of which AS to route each prefix through. The internet is, at a high level, a directed graph where the nodes are autonomous systems and the edges are BGP peering relationships.</p>
+    <p>ASNs are assigned by the Regional Internet Registries (ARIN, RIPE NCC, APNIC, LACNIC, AFRINIC) from the pool allocated by IANA. Originally 16-bit (AS1 through AS65535), ASN space was extended to 32-bit to accommodate growth.</p>
+
+    <h2>How to read an ASN</h2>
+    <p>ASNs are written as <code>AS</code> followed by the number: <code>AS15169</code>, <code>AS13335</code>, <code>AS16509</code>. Given an IP address, you can determine its ASN via a WHOIS query to the appropriate RIR or via a BGP-aware lookup service.</p>
+    <p>A WHOIS result for an IP includes:</p>
+    <ul>
+      <li><strong>ASN</strong>: the number identifying the autonomous system</li>
+      <li><strong>AS name / handle</strong>: a short identifier (e.g., <code>GOOGLE</code>, <code>AMAZON-02</code>)</li>
+      <li><strong>Organization</strong>: the legal entity or registered name</li>
+      <li><strong>Route/prefix</strong>: the IP range announced by that AS covering this IP</li>
+      <li><strong>Country</strong>: the country of registration (not necessarily where the server is located)</li>
+    </ul>
+    <p>The AS name and org field are the most informative for quickly classifying an IP. "CLOUDFLARENET" or "AMAZON-02" tells you immediately that the IP belongs to a major cloud or CDN provider — more useful than just a country code.</p>
+
+    <h2>ASNs and IP reputation</h2>
+    <p>Security tools and threat intelligence feeds lean heavily on ASN data to classify IP addresses, because the AS an IP belongs to predicts its likely purpose more reliably than geography alone.</p>
+    <p>Consider: an IP in Frankfurt might belong to a residential ISP, a datacenter hosting legitimate services, an AWS EC2 instance, a Tor exit node, or a VPN provider. All would show the same country. The ASN disambiguates this entirely.</p>
+    <p>Classification approaches based on ASN:</p>
+    <ul>
+      <li><strong>Cloud / hosting detection</strong>: IP prefixes belonging to major cloud providers (AWS, GCP, Azure, Cloudflare, DigitalOcean, Linode) are well-known and can be matched by ASN even before checking cloud-provider CIDR lists.</li>
+      <li><strong>VPN and proxy detection</strong>: Many commercial VPN providers operate their own ASNs or purchase IP space that security researchers have catalogued.</li>
+      <li><strong>ISP vs datacenter</strong>: Residential ISPs have specific ASNs. IPs from those ASNs are unlikely to be servers. IPs from datacenter ASNs are unlikely to be end users.</li>
+      <li><strong>Known-bad ASNs</strong>: Some ASNs have historical association with spam, botnets, or bullet-proof hosting. Threat intelligence feeds include ASN-level block recommendations alongside IP-level listings.</li>
+    </ul>
+
+    <h2>Cloud provider ASNs</h2>
+    <p>The major cloud and CDN providers operate well-known ASNs that appear frequently in security tooling and firewall rules:</p>
+    <ul>
+      <li><strong>AWS</strong>: AS16509 (primary compute), AS14618 (Amazon.com corporate), plus several others for specific regions</li>
+      <li><strong>Google Cloud / GCP</strong>: AS15169</li>
+      <li><strong>Microsoft Azure</strong>: AS8075</li>
+      <li><strong>Cloudflare</strong>: AS13335</li>
+      <li><strong>DigitalOcean</strong>: AS14061</li>
+      <li><strong>Akamai / Linode</strong>: AS63949 (Linode), AS16625 (Akamai CDN)</li>
+    </ul>
+    <p>These ASNs are also used by cloud provider IP range feeds. When a service publishes its IP ranges (AWS ip-ranges.json, GCP cloud.json, Azure ServiceTags), those ranges map back to these ASNs. Cross-referencing ASN data with cloud provider CIDR lists gives higher-confidence classification.</p>
+
+    <h2>ASN-based access control</h2>
+    <p>Network operators and application security teams use ASNs as a coarse-grained firewall primitive:</p>
+    <ul>
+      <li><strong>Blocking cloud ASNs</strong>: Some security teams block inbound traffic from cloud provider ASNs on administrative interfaces, reasoning that legitimate users do not access admin panels from AWS IP ranges. This is effective at blocking automated credential-stuffing attacks that rent cloud instances.</li>
+      <li><strong>Blocking entire countries vs blocking ASNs</strong>: Country-based blocking relies on geolocation databases that can be wrong. ASN-based blocking is more precise — an IP's ASN is verifiable from public BGP tables, while geolocation is an estimate. Blocking residential AS traffic from certain countries is a different policy than blocking cloud AS traffic globally.</li>
+      <li><strong>Allowlisting</strong>: Conversely, if a legitimate partner always connects from a known corporate ASN, allowlisting by ASN is more stable than by IP (corporate IPs can change within an ASN).</li>
+    </ul>
+    <p>BGP routing also means IP-to-ASN mapping can change. An IP transferred between providers changes ASN. ASN-based rules need periodic review against current BGP tables.</p>
+
+    <h2>BGP routing and security</h2>
+    <p>BGP was designed for trust between cooperating networks, not for adversarial environments. Two well-known attack classes exploit this:</p>
+    <ul>
+      <li><strong>BGP route hijacking</strong>: An AS announces a more-specific prefix than the legitimate owner, attracting traffic to its own network. This can be used for traffic interception or cryptocurrency theft.</li>
+      <li><strong>BGP route leaks</strong>: An AS accidentally re-announces routes it received from one peer to another peer, causing traffic to route through unexpected paths.</li>
+    </ul>
+    <p><strong>RPKI (Resource Public Key Infrastructure)</strong> is the mitigation: it cryptographically links IP prefixes to their authorized origin ASN via Route Origin Authorizations (ROAs). Routers performing RPKI validation will reject BGP announcements that do not match a valid ROA. RPKI adoption has grown significantly but is not universal.</p>
+
+    <h2>How to look up an ASN</h2>
+    <p>Given an IP address, the enrichment API returns the ASN, AS name, organization, network type, and additional classification signals in a single JSON response. You can query any public IP to see its full enrichment including ASN data, prefix, geolocation, and whether the IP is classified as cloud, VPN, datacenter, or residential.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Look up ASN and IP enrichment</h2>
+    <form class="tool-entry__form" action="https://ip.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="ip"
+        placeholder="1.2.3.4"
+        aria-label="IP address to look up"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Look up</button>
+    </form>
+    <p class="tool-entry__hint">Shows geolocation, ASN, network type, and full IP enrichment for any address.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
+      <li><a href="/guide/vpn-leak">VPN Leak Detection</a></li>
+      <li><a href="/guide/domain-security-audit">Domain Security Audit</a></li>
+      <li><a href="/guide/domain-investigation">Domain Investigation</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

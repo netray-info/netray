@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VPN Leak Detection: What Your IP Reveals | netray.info</title>
+  <meta name="description" content="How to detect VPN and DNS leaks, what information a VPN should and shouldn't hide, and how to verify your VPN is actually protecting your traffic.">
+  <link rel="canonical" href="https://netray.info/guide/vpn-leak">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="VPN Leak Detection: What Your IP Reveals">
+  <meta property="og:description" content="How to detect VPN and DNS leaks, what information a VPN should and shouldn't hide, and how to verify your VPN is actually protecting your traffic.">
+  <meta property="og:url" content="https://netray.info/guide/vpn-leak">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="VPN Leak Detection: What Your IP Reveals">
+  <meta name="twitter:description" content="How to detect VPN and DNS leaks, what information a VPN should and shouldn't hide, and how to verify your VPN is actually protecting your traffic.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "VPN Leak Detection: What Your IP Reveals",
+    "description": "How to detect VPN and DNS leaks, what information a VPN should and shouldn't hide, and how to verify your VPN is actually protecting your traffic.",
+    "url": "https://netray.info/guide/vpn-leak",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/vpn-leak"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">VPN Leak Detection: What Your IP Reveals</h1>
+  <p class="page-subtitle">How to verify your VPN is working and what information your IP address exposes when it shouldn't.</p>
+
+  <article>
+    <h2>What a VPN should hide</h2>
+    <p>A VPN creates an encrypted tunnel between your device and the VPN server. Traffic exiting to the internet appears to originate from the VPN server's IP address, not your own. Done correctly, this hides three things from the destination server: your real IP address, your ISP's identity (derivable from the ASN assigned to your IP), and your approximate geographic location.</p>
+    <p>A VPN does not hide everything. Your browser fingerprint — the combination of screen resolution, installed fonts, canvas rendering, and dozens of other attributes — is unaffected by a VPN. Cookies and existing logged-in sessions persist through the tunnel. Tracking pixels and login state follow the user, not the IP. A VPN is a network-layer control; it does not protect against application-layer tracking.</p>
+    <p>Understanding this scope is important when evaluating whether a VPN is "working." The relevant question is: does the destination server see the VPN's IP instead of yours? Everything else requires different controls.</p>
+
+    <h2>Types of leaks</h2>
+    <p>Three distinct leak types are commonly encountered:</p>
+    <ul>
+      <li><strong>IP leak</strong> — the VPN tunnel drops or fails to establish, and traffic is sent directly over the default network interface. The destination sees your real IP. This happens during VPN reconnections, on network changes (switching from Wi-Fi to mobile data), or when the VPN client crashes. A <em>kill switch</em> is the mitigation: block all traffic if the tunnel is not active.</li>
+      <li><strong>DNS leak</strong> — DNS queries bypass the VPN tunnel and are sent to the system resolver — typically your ISP's DNS server. Your browsing habits are exposed to your ISP even though payload traffic goes through the VPN. This is particularly common with split-tunnel configurations, where only some traffic is routed through the VPN.</li>
+      <li><strong>WebRTC leak</strong> — browsers implement WebRTC for peer-to-peer communication (video calls, file transfer). The WebRTC STUN protocol reveals local and public IP addresses as part of ICE candidate gathering, bypassing the VPN tunnel entirely. This is a browser-level bypass, not a VPN client failure. It can be mitigated by disabling WebRTC in browser settings or using a browser extension that restricts it.</li>
+    </ul>
+
+    <h2>How to detect an IP leak</h2>
+    <p>The baseline test is straightforward: check your visible IP before enabling the VPN, enable the VPN, then check again. If the IP address is the same, the tunnel is not working. If it has changed but shows your ISP rather than the VPN provider's ASN, you may have a partial or split-tunnel configuration that is not routing all traffic.</p>
+    <p>Reading the IP enrichment output tells you more than just the address. The key fields to examine are:</p>
+    <ul>
+      <li><strong>ASN and organization</strong> — should show the VPN provider, not your home ISP or mobile carrier.</li>
+      <li><strong>Network type classification</strong> — should show <code>vpn</code> or <code>datacenter</code>, not <code>residential</code> or <code>isp</code>. A residential classification while connected to a VPN is a strong signal of a leak.</li>
+      <li><strong>Geolocation</strong> — should match the VPN exit server's location, not your physical location.</li>
+    </ul>
+    <p>Note that geolocation accuracy varies significantly. MaxMind and similar databases are accurate to the city level for most residential and datacenter IPs, but VPN exit nodes in unusual locations may show stale or coarse geolocation data. Treat geolocation as a supporting signal, not a definitive check.</p>
+
+    <h2>How to detect a DNS leak</h2>
+    <p>A DNS leak is invisible from the IP check alone. Your traffic IP may show the VPN, but DNS queries may still reach your ISP's resolver. The test requires querying a DNS server that logs and returns the resolver identity — several specialized test services exist for this purpose.</p>
+    <p>The mechanism behind DNS leaks is usually one of three causes: the OS resolver is configured separately from the VPN's DNS settings, the VPN client does not override DNS on the current network interface, or a split-tunnel configuration routes DNS queries outside the tunnel. On Windows, the OS may use Smart Multi-Homed Name Resolution (SMHNR) and send queries to all configured resolvers simultaneously, which bypasses the VPN's DNS.</p>
+    <p>A clean DNS test should show only the VPN provider's resolver or a third-party resolver (like Cloudflare 1.1.1.1) that you have explicitly configured, with no queries reaching your ISP. If your ISP appears in the results alongside or instead of the VPN resolver, you have a DNS leak.</p>
+
+    <h2>What IP enrichment reveals</h2>
+    <p>Even with a VPN active and no leak, the VPN exit IP carries information. IP enrichment databases classify IP ranges by network type and usage patterns. Common classifications include residential, ISP, datacenter, CDN, VPN, Tor exit, hosting, and mobile. VPN exit IPs are frequently already classified as VPN because VPN providers operate predictable IP ranges that researchers and threat intelligence services have catalogued.</p>
+    <p>This has practical implications. Many websites and services use IP classification to apply friction to VPN users — CAPTCHAs, additional verification steps, or outright blocks. If your VPN exit IP is classified as a known VPN range, destination services know you are using a VPN even if they cannot see your real IP. Some VPN providers rotate IPs or use residential proxy networks to avoid this, but these introduce their own trust and performance tradeoffs.</p>
+
+    <h2>VPN provider IP ranges and reputation</h2>
+    <p>Shared VPN exit IPs are a two-edged property. You benefit from anonymity in the crowd — your traffic is indistinguishable from other users on the same exit IP. But the IP also carries the history of every other user who has used it. If previous users triggered abuse reports, sent spam, or engaged in credential stuffing, the exit IP may be on blocklists. This causes legitimate requests to be blocked or challenged by destination services.</p>
+    <p>Dedicated IPs (offered by some VPN providers as an add-on) avoid shared reputation risk but are trivially linked to your account. The tradeoff is between reliability and anonymity. For corporate VPN use cases — remote access to internal systems — the reputation concern is usually secondary to performance and reliability. For privacy-sensitive use cases, shared IPs are generally preferable despite the reputation risk.</p>
+
+    <h2>What to do if you have a leak</h2>
+    <p>For an IP leak, the immediate fix is enabling the VPN client's kill switch. This blocks all non-tunnel traffic at the firewall level, ensuring that if the tunnel drops, the machine goes offline rather than routing traffic over the default interface. On Linux, this is typically implemented with <code>iptables</code> or <code>nftables</code> rules; on macOS and Windows, the VPN client handles it.</p>
+    <p>For a DNS leak, override the DNS resolver at the OS level to use one explicitly routed through the tunnel. Most modern VPN clients provide a "prevent DNS leaks" option that sets the DNS server and blocks DNS queries not going through the tunnel. On Linux with systemd-resolved, ensure the VPN's DNS settings are pushed and applied to the correct interface.</p>
+    <p>For WebRTC leaks, the fix is browser-level: disable WebRTC entirely in Firefox (<code>about:config</code>, set <code>media.peerconnection.enabled</code> to false), use an extension in Chrome, or accept that WebRTC-dependent features will not work. There is no VPN-side fix for WebRTC leaks because the browser bypasses the tunnel by design.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check your current IP and network classification</h2>
+    <form class="tool-entry__form" action="https://ip.netray.info/" method="get">
+      <button class="tool-entry__submit" type="submit">Check my IP</button>
+    </form>
+    <p class="tool-entry__hint">Shows your current IP, ASN, network type classification, and whether you appear as a VPN exit node.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
+      <li><a href="/guide/asn">Understanding ASNs</a></li>
+      <li><a href="/guide/domain-investigation">Suspicious Domain Investigation Checklist</a></li>
+      <li><a href="/guide/domain-security-audit">Domain Security Audit in 5 Minutes</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

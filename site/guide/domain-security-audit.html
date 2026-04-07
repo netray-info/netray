@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to Audit Your Domain Security in 5 Minutes | netray.info</title>
+  <meta name="description" content="A step-by-step domain security audit covering DNS health, TLS certificate validity, email authentication, and IP reputation — using only free tools.">
+  <link rel="canonical" href="https://netray.info/guide/domain-security-audit">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="How to Audit Your Domain Security in 5 Minutes">
+  <meta property="og:description" content="A step-by-step domain security audit covering DNS health, TLS certificate validity, email authentication, and IP reputation — using only free tools.">
+  <meta property="og:url" content="https://netray.info/guide/domain-security-audit">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="How to Audit Your Domain Security in 5 Minutes">
+  <meta name="twitter:description" content="A step-by-step domain security audit covering DNS health, TLS certificate validity, email authentication, and IP reputation — using only free tools.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "How to Audit Your Domain Security in 5 Minutes",
+    "description": "A step-by-step domain security audit covering DNS health, TLS certificate validity, email authentication, and IP reputation — using only free tools.",
+    "url": "https://netray.info/guide/domain-security-audit",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/domain-security-audit"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">How to Audit Your Domain Security in 5 Minutes</h1>
+  <p class="page-subtitle">A practical checklist for DNS health, TLS configuration, email authentication, and IP reputation you can run right now.</p>
+
+  <article>
+    <h2>What a domain audit covers</h2>
+    <p>A domain security audit examines four pillars: DNS integrity, TLS and certificate health, email authentication, and IP reputation. Each pillar has distinct failure modes, and weaknesses in one do not cancel out strengths in another — a domain with perfect TLS but no DMARC is still trivially spoofable in email.</p>
+    <p><strong>DNS integrity</strong> covers nameserver configuration, DNSSEC signing, and CAA records. Failures here can redirect traffic, enable cache poisoning, or allow unauthorized certificate issuance. <strong>TLS health</strong> covers certificate validity, chain completeness, protocol version, and HSTS. An expired certificate or broken chain drops connections; weak protocol versions expose users to downgrade attacks. <strong>Email authentication</strong> (SPF, DKIM, DMARC) prevents impersonation and affects deliverability. <strong>IP reputation</strong> covers whether your hosting IPs are on blocklists and how they are classified — relevant for deliverability, API access, and trust signals.</p>
+    <p>The audit described here uses only free tools and can be completed in under five minutes for a typical domain. The goal is to identify the most impactful gaps quickly, not to produce an exhaustive penetration test report.</p>
+
+    <h2>Step 1: DNS health</h2>
+    <p>Start with the DNS foundation. Run a <code>+check</code> query in the DNS inspector — this queries NS, SOA, A, AAAA, MX, and TXT records, then applies lint rules across them.</p>
+    <p>Key things to look for:</p>
+    <ul>
+      <li><strong>Lame delegation</strong> — nameservers listed in the parent zone (registrar) that do not answer authoritatively for the zone. Causes intermittent resolution failures.</li>
+      <li><strong>NS consistency</strong> — the NS records in the parent zone and the NS records returned by the authoritative nameservers should match exactly. Mismatches indicate a partial migration or stale registrar records.</li>
+      <li><strong>DNSSEC</strong> — check whether the zone is signed and whether the DS record in the parent zone is present and valid. A signed zone with a missing or wrong DS record causes DNSSEC-validating resolvers to hard-fail the entire zone.</li>
+      <li><strong>CAA records</strong> — restricts which CAs may issue certificates. Absence is not a misconfiguration, but presence with the correct CA greatly reduces unauthorized issuance risk.</li>
+    </ul>
+    <p>A clean DNS check takes 30 seconds. Any lame delegation or DNSSEC validation failure is a P1 issue — fix it before proceeding.</p>
+
+    <h2>Step 2: Email authentication</h2>
+    <p>Email authentication is the most commonly neglected pillar for domains that do not send transactional email — and the most exploited. Even a domain used only for a website can be spoofed in phishing campaigns if DMARC is absent.</p>
+    <p>The minimum viable configuration is:</p>
+    <ul>
+      <li><strong>SPF</strong>: a TXT record on the root domain listing authorized sending IPs. Use <code>-all</code> (hard fail) once all senders are enumerated. Watch the 10-lookup limit.</li>
+      <li><strong>DMARC</strong>: a TXT record at <code>_dmarc.example.com</code> with at minimum <code>p=quarantine</code>. A <code>p=none</code>-only policy provides monitoring but no protection. Include <code>rua</code> to receive aggregate reports.</li>
+      <li><strong>DKIM</strong>: configured on each sending platform. Required for DMARC alignment when messages are forwarded.</li>
+    </ul>
+    <p>If the domain does not send email at all, publish <code>v=spf1 -all</code> and <code>v=DMARC1; p=reject</code> to tell receivers to reject any mail claiming to be from this domain. This is the strongest possible posture for a non-sending domain and takes two DNS records to implement.</p>
+    <p>The DNS inspector's <code>+check</code> mode reports all email authentication records and flags common issues: multiple SPF records (a permerror), DMARC stuck at p=none, missing MX, and MTA-STS configuration mismatches.</p>
+
+    <h2>Step 3: TLS certificate</h2>
+    <p>Certificate issues are operationally impactful and often the most visible to end users. Check four things:</p>
+    <ul>
+      <li><strong>Validity and expiry</strong> — is the certificate currently valid? How many days until expiry? Under 14 days is a P1 for most organizations; under 30 days should trigger immediate review of the renewal process.</li>
+      <li><strong>Chain completeness</strong> — the server must send the full chain (leaf + intermediates). A missing intermediate causes failures in some clients even if the root CA is trusted, because the client cannot build the path to the root. This is a very common misconfiguration.</li>
+      <li><strong>Protocol version</strong> — TLS 1.0 and 1.1 are deprecated and disabled in all modern browsers. TLS 1.2 is acceptable but TLS 1.3 should be the preferred version where supported. Check whether the server correctly negotiates 1.3 with clients that support it.</li>
+      <li><strong>HSTS</strong> — the <code>Strict-Transport-Security</code> header should be present with a <code>max-age</code> of at least 6 months (15768000 seconds). HSTS preloading requires 1 year, <code>includeSubDomains</code>, and <code>preload</code> directive.</li>
+    </ul>
+    <p>For multi-IP deployments (CDN, load balancer, anycast), check whether all IPs serve the same certificate. Certificate mismatches across IPs cause intermittent failures that are hard to debug from a single-IP vantage point.</p>
+
+    <h2>Step 4: IP reputation</h2>
+    <p>Look up the IP addresses your domain resolves to. The key signals from IP enrichment are:</p>
+    <ul>
+      <li><strong>Network type classification</strong> — <code>hosting</code> or <code>cdn</code> is expected for most production services. <code>residential</code> on a production IP is unusual and warrants investigation.</li>
+      <li><strong>Blacklist membership</strong> — if your IP is on Spamhaus DROP or similar lists, outbound email will be rejected and some security tools will flag inbound connections from your infrastructure.</li>
+      <li><strong>ASN and organization</strong> — confirms the IP is actually hosted with your expected cloud or CDN provider. An unexpected ASN can indicate DNS hijacking or a misconfigured CDN origin.</li>
+    </ul>
+    <p>For email-sending IPs specifically, reputation matters more. Shared hosting IPs carry the history of all tenants. If deliverability is a concern, check whether your sending IP is listed on major email-specific blocklists (Spamhaus ZEN, Barracuda, etc.).</p>
+
+    <h2>Reading the results</h2>
+    <p>Not all findings are equally urgent. A practical priority order:</p>
+    <ol>
+      <li><strong>Expired certificate</strong> — users cannot connect. Fix immediately.</li>
+      <li><strong>Missing or broken SPF/DMARC</strong> — active spoofing risk. Fix within 24 hours.</li>
+      <li><strong>Lame delegation or broken DNSSEC</strong> — intermittent resolution failures or hard failures for DNSSEC-validating resolvers. Fix within 24 hours.</li>
+      <li><strong>Weak TLS version (1.0/1.1 enabled)</strong> — deprecated, potential downgrade risk. Schedule within the current sprint.</li>
+      <li><strong>Missing HSTS or short max-age</strong> — leaves users vulnerable to SSL stripping on first visit. Schedule within the current sprint.</li>
+      <li><strong>No CAA records</strong> — increases unauthorized issuance risk. Low urgency; add when convenient.</li>
+      <li><strong>Missing DANE/TLSA</strong> — advanced protection, rarely deployed. Backlog unless you have specific requirements.</li>
+    </ol>
+
+    <h2>Automating the audit</h2>
+    <p>All three tools expose JSON APIs. A basic automation loop using <code>curl</code>:</p>
+    <pre><code># DNS check (returns JSON with lint results)
+curl -s "https://dns.netray.info/api/query?q=example.com+check" | jq .
+
+# TLS inspection (returns JSON with cert, chain, graded checks)
+curl -s "https://tls.netray.info/api/inspect?h=example.com" | jq .
+
+# IP enrichment for the domain's A record
+IP=$(dig +short example.com | head -1)
+curl -s "https://ip.netray.info/${IP}" | jq .</code></pre>
+    <p>Wrapping these in a CI job or cron script with alerting on specific fields (days-until-expiry, dmarc-policy, lint-errors) produces a continuous audit with minimal overhead. The DNS and TLS APIs return structured data with explicit pass/warn/fail fields, making threshold alerting straightforward.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Run a DNS health check on your domain</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com +check"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Runs full DNS health check including email authentication, DNSSEC, and CAA records.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/domain-investigation">Suspicious Domain Investigation Checklist</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

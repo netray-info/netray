@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>A Suspicious Domain Investigation Checklist | netray.info</title>
+  <meta name="description" content="How to systematically investigate a suspicious domain: DNS history, TLS certificate details, IP reputation, registration patterns, and what each finding means.">
+  <link rel="canonical" href="https://netray.info/guide/domain-investigation">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="A Suspicious Domain Investigation Checklist">
+  <meta property="og:description" content="How to systematically investigate a suspicious domain: DNS history, TLS certificate details, IP reputation, registration patterns, and what each finding means.">
+  <meta property="og:url" content="https://netray.info/guide/domain-investigation">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="A Suspicious Domain Investigation Checklist">
+  <meta name="twitter:description" content="How to systematically investigate a suspicious domain: DNS history, TLS certificate details, IP reputation, registration patterns, and what each finding means.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "A Suspicious Domain Investigation Checklist",
+    "description": "How to systematically investigate a suspicious domain: DNS history, TLS certificate details, IP reputation, registration patterns, and what each finding means.",
+    "url": "https://netray.info/guide/domain-investigation",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/domain-investigation"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">A Suspicious Domain Investigation Checklist</h1>
+  <p class="page-subtitle">How to systematically investigate a domain you don't trust — from DNS records to certificate details to IP reputation.</p>
+
+  <article>
+    <h2>When to investigate</h2>
+    <p>Domain investigation is a first-responder skill for several scenarios: a phishing URL surfaces in your email gateway logs, a user reports clicking a suspicious link, an unfamiliar domain appears in firewall or proxy logs, or a security alert flags a newly registered domain communicating with internal infrastructure.</p>
+    <p>The goal of a rapid investigation is not a definitive verdict — it is to gather enough signals in 5 minutes to make a triage decision: block immediately, escalate for deeper analysis, or clear as benign. The checklist below produces those signals systematically. Work top-to-bottom; earlier steps inform interpretation of later ones.</p>
+
+    <h2>Step 1: DNS reconnaissance</h2>
+    <p>Start by establishing basic facts about who controls the domain and where it points.</p>
+    <p><strong>NS records</strong> reveal the DNS provider. Legitimate enterprises typically use their cloud provider's DNS (Route 53, Cloud DNS, Azure DNS) or a managed DNS service. Consumer-grade providers (Namecheap free DNS, Freenom) are common with malicious domains. Bulletproof DNS providers — services that advertise abuse resistance and ignore takedown requests — are a hard signal.</p>
+    <p><strong>A/AAAA records</strong> show where the domain resolves. Note the IP and ASN. Cross-reference with WHOIS for the domain registration date. Domains registered within the past 30 days hosting what purports to be a legitimate business are suspicious by default — established organizations do not appear overnight.</p>
+    <p><strong>MX records</strong> show where email is destined. A domain with no MX records but a functioning website that is soliciting credentials is suspicious. A domain with MX pointing to a free email provider rather than a corporate mail server is also unusual for a claimed business.</p>
+    <p><strong>WHOIS</strong> provides registration date, registrar, and registrant information. Privacy protection masking the registrant is common for both legitimate and malicious domains, so its presence alone is not a signal. However, the registrar and registration date are rarely masked: recently registered via a known abuse-tolerant registrar is a meaningful pattern.</p>
+
+    <h2>Step 2: Certificate inspection</h2>
+    <p>The TLS certificate is a rich source of signals that are often overlooked in domain investigation. Run a full TLS inspection before loading the domain in a browser.</p>
+    <p><strong>Issuer</strong> — Let's Encrypt is the dominant issuer for both legitimate sites and malicious infrastructure, because it is free and automated. A LE certificate is neutral evidence; the rest of the certificate matters more. A paid commercial CA (DigiCert, Sectigo) with a short-lived cert is unusual — they are expensive and typically used for longer terms.</p>
+    <p><strong>First issuance date via CT logs</strong> — search <a href="https://crt.sh">crt.sh</a> for the domain. The earliest logged certificate reveals when the domain first had HTTPS. A domain claiming to be a long-established company with a first certificate from last week is contradictory evidence. CT log history also shows whether the domain has changed CAs, changed SANs, or had periods of no HTTPS.</p>
+    <p><strong>Subject Alternative Names (SANs)</strong> — the SAN list shows every domain covered by the certificate. Shared certificates covering dozens of unrelated domains indicate cheap hosting on a shared platform. A wildcard covering <code>*.example-bank-login.com</code> covering only that domain was purpose-built. SANs that include both legitimate-looking and suspicious domain names on a single cert are a pivot point — investigate the other domains in the SAN list.</p>
+    <p><strong>Certificate lifetime</strong> — 90-day certificates are standard with ACME automation (LE, ZeroSSL). Very short-lived certificates (under 7 days) or automated rotation with high frequency suggest programmatic abuse infrastructure. Multi-year certificates on domains registered last week are inconsistent (legacy CAs stopped issuing these, but the pattern occasionally appears).</p>
+
+    <h2>Step 3: IP reputation</h2>
+    <p>Resolve the domain and run the resulting IP through enrichment. The key classification signals:</p>
+    <ul>
+      <li><strong>Tor exit node</strong> — the domain is hosted on a Tor exit or the request came from one. Critical risk for most threat models.</li>
+      <li><strong>Known C2 / botnet infrastructure</strong> — the IP appears in feeds like Feodo Tracker (Emotet, Dridex, TrickBot C2s). Block immediately and escalate.</li>
+      <li><strong>Residential classification</strong> — a domain claiming to be a business but hosted on a residential IP (home internet connection) is a strong fraud signal. Legitimate businesses do not host production services on residential IPs.</li>
+      <li><strong>Bulletproof hosting</strong> — certain ASNs are known for hosting abuse-tolerant infrastructure. The ASN org name and reputation are visible in enrichment output.</li>
+      <li><strong>Blacklist membership</strong> — Spamhaus DROP/EDROP lists IPs used for spam and malware distribution. Membership confirms prior abuse history.</li>
+    </ul>
+    <p>Geographic location can also be a signal in context. A domain claiming to be a US financial services company hosted on an IP geolocated to a country not known for US financial services warrants scrutiny, though VPNs and CDNs complicate this signal.</p>
+
+    <h2>Step 4: Email authentication signals</h2>
+    <p>Even for a domain you are not receiving email from, its email authentication posture tells you about intent. Query SPF, DMARC, and MX records.</p>
+    <p>A domain with no DMARC and a permissive SPF (<code>~all</code> or <code>?all</code>) is configured to allow spoofing. This is consistent with a domain set up specifically to send phishing while avoiding hard failures. A domain with no MX records but a valid SPF record is often a spoofing-optimized configuration — it can send mail but cannot receive it, which is unusual for anything other than automated sending or malicious use.</p>
+    <p>Conversely, a domain with <code>v=spf1 -all</code> and <code>v=DMARC1; p=reject</code> and no MX has explicitly declared "this domain sends no mail" — this is a strong configuration seen on legitimate parked or redirect-only domains. It is not a sign of malicious intent.</p>
+    <p>The absence of any email authentication records on a domain that is actively being used to send email is a red flag. It suggests either a hastily configured abuse domain or an organization with very poor security hygiene.</p>
+
+    <h2>Patterns that indicate malicious domains</h2>
+    <p>No single signal is definitive, but combinations are highly predictive. High-confidence malicious patterns:</p>
+    <ul>
+      <li>Registered within 30 days + fresh CT log entry + residential or bulletproof hosting + no email auth</li>
+      <li>Domain name that is a typosquat or homoglyph of a known brand + wildcard cert + no MX + recently registered</li>
+      <li>SAN list containing known-malicious domains alongside the target domain</li>
+      <li>IP on Spamhaus DROP or Feodo Tracker + domain registered via abuse-tolerant registrar</li>
+      <li>Inconsistent claims: domain name suggests a US business, registered 2 weeks ago, hosted on a residential IP in a different continent, with no email auth</li>
+    </ul>
+    <p>A domain matching two or more of these patterns warrants blocking without waiting for further evidence.</p>
+
+    <h2>What to do with findings</h2>
+    <p>For immediate threats (known C2, Tor exit, Spamhaus-listed): block at the network perimeter and update threat intelligence feeds. Document the indicators of compromise (IOCs): domain, IP, certificate fingerprint, first-seen timestamp.</p>
+    <p>For suspected phishing targeting your brand: report to the registrar's abuse contact (<code>abuse@registrar.tld</code>), the hosting provider's abuse contact (derivable from the IP ASN's WHOIS), and relevant CERTs. Submit phishing URLs to Google Safe Browsing and Microsoft SmartScreen. For certificate misuse, report to the issuing CA.</p>
+    <p>Document your evidence before reporting. Screenshot the DNS records, certificate details, and IP enrichment output with timestamps. Takedowns can move quickly and the original evidence may disappear. A preserved record supports escalation if the initial report is ignored.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect a suspicious domain's TLS certificate</h2>
+    <form class="tool-entry__form" action="https://tls.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="h"
+        placeholder="example.com"
+        aria-label="Domain to inspect"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect</button>
+    </form>
+    <p class="tool-entry__hint">Inspects TLS certificate chain, SANs, issuer, and multi-IP consistency — useful for domain investigation.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
+      <li><a href="/guide/asn">Understanding ASNs</a></li>
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+      <li><a href="/guide/domain-security-audit">Domain Security Audit in 5 Minutes</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

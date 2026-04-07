@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to Check DNS Propagation | netray.info</title>
+  <meta name="description" content="What DNS propagation means, why it takes time, how to check whether your record changes have reached resolvers worldwide, and how to speed things up.">
+  <link rel="canonical" href="https://netray.info/guide/dns-propagation">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="How to Check DNS Propagation">
+  <meta property="og:description" content="What DNS propagation means, why it takes time, how to check whether your record changes have reached resolvers worldwide, and how to speed things up.">
+  <meta property="og:url" content="https://netray.info/guide/dns-propagation">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="How to Check DNS Propagation">
+  <meta name="twitter:description" content="What DNS propagation means, why it takes time, and how to check whether your record changes have reached resolvers worldwide.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "How to Check DNS Propagation",
+    "description": "What DNS propagation means, why it takes time, how to check whether your record changes have reached resolvers worldwide, and how to speed things up.",
+    "url": "https://netray.info/guide/dns-propagation",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/dns-propagation"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">How to Check DNS Propagation</h1>
+  <p class="page-subtitle">Why DNS changes take time and how to verify that your record updates have reached resolvers worldwide.</p>
+
+  <article>
+    <h2>What propagation means</h2>
+    <p>"DNS propagation" is a widely-used but slightly misleading term. DNS records do not push out to resolvers when you make a change — resolvers pull answers on demand and cache them for a period defined by the record's TTL. The "propagation" that takes time is actually cache expiry: resolvers around the world holding cached copies of your old records will continue serving them until their cache entries expire.</p>
+    <p>The important distinction is between <strong>authoritative answers</strong> and <strong>cached answers</strong>. If you query your domain's authoritative nameserver directly, you always get the current record immediately after making a change. If you query a public recursive resolver (Cloudflare 1.1.1.1, Google 8.8.8.8, your ISP's resolver), you get whatever that resolver has cached — which may be minutes or hours old.</p>
+    <p>This is why "it works for me but not for my colleague" is a common post-change experience. You flushed your local DNS cache and your resolver picked up the new record quickly. Your colleague's resolver still has the old value cached.</p>
+
+    <h2>How TTL works</h2>
+    <p>The Time-to-Live field on a DNS record tells resolvers how many seconds to cache the answer before re-querying. A record with <code>TTL 3600</code> will be cached for up to one hour by compliant resolvers. After that, the resolver discards the cached entry and makes a fresh query to the authoritative server.</p>
+    <p>Important nuances:</p>
+    <ul>
+      <li><strong>Negative caching (NXDOMAIN TTL)</strong>: When a resolver queries for a name that does not exist, the nameserver returns an NXDOMAIN response with a TTL (sourced from the SOA record's minimum field). Resolvers cache this negative result too. If you add a new record for a name that was previously queried and got an NXDOMAIN, resolvers will continue returning NXDOMAIN until their negative cache entry expires.</li>
+      <li><strong>The TTL countdown starts at query time</strong>: A resolver may query for a record at second 0 and cache it for 3600 seconds. Another resolver might query at second 1800 and also cache it for 3600 seconds. At second 3600, the first resolver re-queries; the second does not until second 5400.</li>
+      <li><strong>Low TTL vs caching efficiency</strong>: Lower TTL means faster propagation but higher query load on your authoritative servers. Most operators use 300–3600 for records that may change, and 86400 or higher for stable records like root MX or NS.</li>
+    </ul>
+
+    <h2>Lowering TTL before changes</h2>
+    <p>The standard operational procedure for minimizing propagation time is to lower the TTL well before making the change:</p>
+    <ol>
+      <li><strong>Check the current TTL</strong> of the record you intend to change.</li>
+      <li><strong>Lower the TTL to 300</strong> (5 minutes) at least 24–48 hours before the planned change — enough time for all resolvers with cached copies to refresh at the new low TTL.</li>
+      <li><strong>Make the record change</strong>. With a 5-minute TTL, most resolvers will pick up the new value within minutes.</li>
+      <li><strong>After the change is stable</strong>, raise the TTL back to a sensible value (e.g., 3600 or 86400).</li>
+    </ol>
+    <p>If you forget to pre-lower the TTL and change a record with a 24-hour TTL, some resolvers may serve the old answer for up to 24 hours after your change.</p>
+
+    <h2>Checking propagation</h2>
+    <p>The most reliable way to check whether your change has propagated is to query multiple resolvers simultaneously and compare the answers. Resolvers in different geographic locations and operated by different organizations will have independent caches at different stages of expiry.</p>
+    <p>Useful public resolvers to query:</p>
+    <ul>
+      <li>Cloudflare: <code>1.1.1.1</code> and <code>1.0.0.1</code></li>
+      <li>Google: <code>8.8.8.8</code> and <code>8.8.4.4</code></li>
+      <li>Quad9: <code>9.9.9.9</code></li>
+      <li>Mullvad: <code>194.242.2.2</code></li>
+    </ul>
+    <p>If all four return the new record, propagation is effectively complete for the major resolvers. If some return old values, note the TTL remaining in their response — that tells you when they will re-query.</p>
+    <p>Use the Compare mode in the DNS inspector to fan out a query to all resolvers simultaneously and display differences side-by-side. Disagreements between resolvers are highlighted, making it immediately clear which resolvers are still serving stale data.</p>
+
+    <h2>Common propagation scenarios</h2>
+    <ul>
+      <li><strong>MX record change (email switchover)</strong>: New MX records propagate like any other record. However, mail senders cache MX lookups aggressively. Expect some mail to go to the old provider for up to the old TTL after the change. Stage the cutover by accepting mail at both old and new providers during the transition window.</li>
+      <li><strong>A record change (hosting migration)</strong>: With a 5-minute TTL pre-lowered, most users will reach the new server within 10–15 minutes. Plan for the old server to remain reachable during the transition and keep any sessions or state synchronized if applicable.</li>
+      <li><strong>CAA record addition</strong>: Propagates quickly because CAA records are rarely cached at all (most resolvers only check them on-demand during certificate issuance). However, CAs may cache negative responses — if a CA queried and found no CAA record, check whether the CA honors low TTLs on negative cache.</li>
+      <li><strong>NS delegation change (slowest)</strong>: Changing nameservers requires the parent zone (e.g., <code>.com</code> registry) to update its delegation record. This can take 24–48 hours to propagate through the registry infrastructure, independent of TTL. The old nameservers must remain authoritative and serving correct records throughout.</li>
+    </ul>
+
+    <h2>Why some resolvers are slower</h2>
+    <p>Not all resolvers honor TTL as specified. ISP-operated resolvers may apply a minimum cache floor (often 5 minutes regardless of TTL) or a maximum cap (extending long TTLs). Some Anycast deployments have per-node caches, so different instances of <code>8.8.8.8</code> may have different cache states depending on which anycast node your query reaches. Negative caching (NXDOMAIN) sometimes outlasts the SOA minimum TTL due to implementation quirks.</p>
+
+    <h2>What you cannot control</h2>
+    <p>Once a record is cached by a third-party resolver, you have no mechanism to flush it remotely. CDN edge caches (which may issue their own DNS lookups for origin health checking) can also hold stale data. The local OS DNS cache on user machines may add another layer — Windows and macOS both cache DNS responses independently of the resolver. After making a change, communicate the expected propagation timeline to your team rather than treating a specific cutover time as hard.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check DNS propagation across resolvers</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com A"
+        aria-label="DNS query"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Compares your DNS record across Cloudflare, Google, Quad9, and Mullvad resolvers simultaneously.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/dnssec">DNSSEC: How to Enable and Verify It</a></li>
+      <li><a href="/guide/lame-delegation">Lame Delegation and DNS Misconfigurations</a></li>
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

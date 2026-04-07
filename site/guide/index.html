@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>All Guides — netray.info</title>
+  <meta name="description" content="Reference guides, how-tos, and deep dives on DNS, TLS, IP, and email security for DevOps engineers and SREs.">
+  <link rel="canonical" href="https://netray.info/guide/">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="All Guides — netray.info">
+  <meta property="og:description" content="Reference guides, how-tos, and deep dives on DNS, TLS, IP, and email security for DevOps engineers and SREs.">
+  <meta property="og:url" content="https://netray.info/guide/">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="All Guides — netray.info">
+  <meta name="twitter:description" content="Reference guides, how-tos, and deep dives on DNS, TLS, IP, and email security for DevOps engineers and SREs.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"netray.info","item":"https://netray.info"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://netray.info/guide/"}]}
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">All Guides</h1>
+  <p class="page-subtitle">Reference guides, how-tos, and deep dives on DNS, TLS, IP, and email security.</p>
+
+  <section>
+    <h2>Email Security</h2>
+    <ul>
+      <li><a href="email-auth">Email Authentication: SPF, DKIM, and DMARC</a> — How the three email authentication protocols work together, why they matter, and how to debug delivery failures.</li>
+      <li><a href="email-deliverability">How to Diagnose Email Deliverability Problems</a> — A systematic approach to finding why your email lands in spam or gets rejected.</li>
+      <li><a href="mta-sts">MTA-STS: Enforcing Encrypted Email Transport</a> — How MTA-STS prevents downgrade attacks on SMTP and how to publish and verify the policy.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>TLS &amp; HTTPS</h2>
+    <ul>
+      <li><a href="certificate-chain">TLS Certificate Chain Explained</a> — What leaf, intermediate, and root certificates are, how chain validation works, and why incomplete chains break things.</li>
+      <li><a href="hsts">HSTS Preloading: A Practical Guide</a> — How HTTP Strict Transport Security works, how to configure it correctly, and what preloading means for your domain.</li>
+      <li><a href="certificate-transparency">Understanding Certificate Transparency</a> — How CT logs work, what SCTs are, and how to monitor for unauthorized certificates issued for your domain.</li>
+      <li><a href="letsencrypt-vs-commercial">Let's Encrypt vs Commercial CAs</a> — When free automated certificates are the right choice and when a commercial CA still makes sense.</li>
+      <li><a href="multi-ip-tls">Understanding Multi-IP TLS Consistency</a> — Why CDN and load-balanced deployments can serve different certificates and how to detect mismatches.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>DNS</h2>
+    <ul>
+      <li><a href="record-types">DNS Record Types Reference</a> — A practical reference covering A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, TLSA, and more.</li>
+      <li><a href="dnssec">DNSSEC: How to Enable and Verify It</a> — How DNSSEC signs DNS responses, how to enable it, and how to verify the chain of trust is intact.</li>
+      <li><a href="dns-propagation">How to Check DNS Propagation</a> — Why DNS changes take time, how TTLs work, and how to verify propagation across resolvers.</li>
+      <li><a href="caa-records">CAA Records: Locking Down Certificate Issuance</a> — How CAA records restrict which CAs can issue certificates for your domain and how to configure them.</li>
+      <li><a href="lame-delegation">DNS Lame Delegation: What It Is and How to Fix It</a> — What causes lame delegations, why they break resolution, and how to diagnose and fix them.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>IP &amp; Reputation</h2>
+    <ul>
+      <li><a href="ip-enrichment">What Your IP Address Reveals</a> — Geolocation, ASN, network classification, and how IP reputation systems categorise cloud, VPN, Tor, and residential addresses.</li>
+      <li><a href="asn">What Is an ASN and Why Does It Matter?</a> — How autonomous system numbers work, what they reveal about IP ownership, and how routing policy is published.</li>
+      <li><a href="vpn-leak">VPN Leak Detection: What Your IP Reveals</a> — How DNS, WebRTC, and IPv6 leaks expose your real location and how to check for them.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Domain Audits</h2>
+    <ul>
+      <li><a href="domain-security-audit">How to Audit Your Domain Security in 5 Minutes</a> — A step-by-step walkthrough of DNS, TLS, and IP health checks you can run right now to find issues before they become incidents.</li>
+      <li><a href="dane-tlsa">DANE/TLSA: Binding Certificates to DNS</a> — How DANE uses TLSA records in DNS to pin certificates, and how to verify DANE is configured correctly.</li>
+      <li><a href="domain-investigation">A Suspicious Domain Investigation Checklist</a> — A systematic checklist for investigating an unfamiliar or potentially malicious domain using DNS, TLS, and IP data.</li>
+    </ul>
+  </section>
+
+  <footer class="page-footer">
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>
