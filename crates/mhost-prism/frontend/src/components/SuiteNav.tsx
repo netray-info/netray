@@ -14,10 +14,10 @@ export function SuiteNav(props: SuiteNavProps) {
     <>
       <style>{`
         .suite-nav { display: flex; align-items: center; gap: 0; background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 0 1rem; font-family: var(--font-mono); font-size: 0.8rem; }
-        .suite-nav-home { color: var(--text-muted); text-decoration: none; padding: 0.6rem 0.75rem; }
+        .suite-nav-home { color: var(--text-muted); text-decoration: none; padding: 0.6rem 0.75rem; min-height: 44px; display: inline-flex; align-items: center; }
         .suite-nav-home:hover { color: var(--text-primary); }
         .suite-nav-sep { color: var(--border); padding: 0 0.25rem; user-select: none; }
-        .suite-nav-link { color: var(--text-secondary); text-decoration: none; padding: 0.6rem 0.75rem; border-bottom: 2px solid transparent; transition: color 0.15s; }
+        .suite-nav-link { color: var(--text-secondary); text-decoration: none; padding: 0.6rem 0.75rem; border-bottom: 2px solid transparent; transition: color 0.15s; min-height: 44px; display: inline-flex; align-items: center; }
         .suite-nav-link:hover { color: var(--text-primary); }
         .suite-nav-link.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
         @media (max-width: 400px) { .suite-nav { font-size: 0.72rem; } .suite-nav-home, .suite-nav-link { padding: 0.5rem 0.5rem; } }

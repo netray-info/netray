@@ -2256,6 +2256,14 @@ body {
   .lint-grid {
     grid-template-columns: 1fr;
   }
+  .cm-tooltip-autocomplete {
+    max-width: calc(100vw - 2rem);
+    overflow-x: auto;
+  }
+  .history-dropdown {
+    max-width: calc(100vw - 2rem);
+    overflow-x: auto;
+  }
 }
 
 /* ===================================================================

@@ -114,7 +114,7 @@ pub(crate) async fn send_enrichment_event(
     if ips.is_empty() {
         return;
     }
-    let enrichments = enrichment_svc.lookup_batch(ips).await;
+    let enrichments = enrichment_svc.lookup_batch(ips, Some(request_id)).await;
     if enrichments.is_empty() {
         return;
     }

@@ -1558,7 +1558,7 @@ export default function App() {
         </Show>
 
         <Show when={status() === 'done' && query()}>
-          <DnsCrossLinks domain={query()} />
+          <DnsCrossLinks domain={query()} tlsUrl={tlsUrl()} />
         </Show>
 
         <Show when={streamTimedOut()}>

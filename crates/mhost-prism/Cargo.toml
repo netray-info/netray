@@ -7,7 +7,8 @@ description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
 mhost = { version = "0.11", default-features = false, features = ["dot", "doh"] }
-netray-common = { version = "0.4.1", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment-cache"] }
+# TODO: netray-common 0.5.0 must be published to crates.io before this compiles
+netray-common = { version = "0.5", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment-cache"] }
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }

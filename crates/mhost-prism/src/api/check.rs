@@ -68,8 +68,8 @@ const CHECK_RECORD_TYPES: [RecordType; 15] = [
     RecordType::TXT,
 ];
 
-// Total SSE batch steps = 15 base types + 1 DMARC lookup.
-const CHECK_TOTAL_STEPS: u32 = 16;
+// Total SSE batch steps = 15 base types + 4 subdomain TXT lookups (DMARC, BIMI, MTA-STS, TLSRPT).
+const CHECK_TOTAL_STEPS: u32 = 19;
 
 // ---------------------------------------------------------------------------
 // SSE event payloads
@@ -113,8 +113,9 @@ pub struct CheckRequest {
 
 /// Run a comprehensive DNS health check for a domain.
 ///
-/// Queries 15 record types plus `_dmarc.<domain>` TXT, then runs 9 lint categories
-/// (CAA, CNAME apex, DNSSEC, HTTPS/SVCB, MX, NS count, SPF, TTL consistency, DMARC).
+/// Queries 15 record types plus subdomain TXT lookups for DMARC, BIMI, MTA-STS, and
+/// TLSRPT, then runs 12 lint categories (CAA, CNAME apex, DNSSEC, HTTPS/SVCB, MX,
+/// NS count, SPF, TTL consistency, DMARC, BIMI, MTA-STS, TLSRPT).
 /// Results stream as Server-Sent Events.
 ///
 /// ## SSE Events
@@ -180,7 +181,7 @@ pub async fn post_handler(
         .unwrap_or(state.config.limits.max_timeout_secs);
     let timeout = Duration::from_secs(timeout_secs);
 
-    // Rate limiting: cost = 16 (15 base types + 1 DMARC) × server_count.
+    // Rate limiting: cost = 19 (15 base types + 4 subdomain TXT lookups: DMARC, BIMI, MTA-STS, TLSRPT) x server_count.
     let effective_servers = effective_server_specs(&parsed, &state.config);
     let target_keys = target_keys_from_servers(&effective_servers);
     let num_servers = effective_servers.len().max(1) as u32;
@@ -222,10 +223,21 @@ pub async fn post_handler(
         // Phase 1: DNS lookups — all 16 types in parallel (FuturesUnordered)
         // ------------------------------------------------------------------
         let dmarc_domain = format!("_dmarc.{domain}");
+        let bimi_domain = format!("default._bimi.{domain}");
+        let mta_sts_domain = format!("_mta-sts.{domain}");
+        let tlsrpt_domain = format!("_smtp._tls.{domain}");
 
-        // Each future yields (record_type_label, Lookups, is_dmarc_lookup).
+        #[derive(Clone, Copy)]
+        enum LookupKind {
+            Base,
+            Dmarc,
+            Bimi,
+            MtaSts,
+            Tlsrpt,
+        }
+
         type LookupFut =
-            std::pin::Pin<Box<dyn std::future::Future<Output = (String, Lookups, bool)> + Send>>;
+            std::pin::Pin<Box<dyn std::future::Future<Output = (String, Lookups, LookupKind)> + Send>>;
         let futs: FuturesUnordered<LookupFut> = FuturesUnordered::new();
         for rt in CHECK_RECORD_TYPES.iter() {
             let rt = *rt;
@@ -246,7 +258,7 @@ pub async fn post_handler(
                     &semaphore,
                 )
                 .await;
-                (rt.to_string(), lookups, false)
+                (rt.to_string(), lookups, LookupKind::Base)
             }));
         }
         {
@@ -266,13 +278,76 @@ pub async fn post_handler(
                     &semaphore,
                 )
                 .await;
-                ("_dmarc".to_string(), lookups, true)
+                ("_dmarc".to_string(), lookups, LookupKind::Dmarc)
+            }));
+        }
+        {
+            let resolvers = resolvers.clone();
+            let breaker_keys = breaker_keys.clone();
+            let circuit_breakers = Arc::clone(&circuit_breakers);
+            let tx_err = tx.clone();
+            let semaphore = Arc::clone(&query_semaphore);
+            futs.push(Box::pin(async move {
+                let lookups = fan_out_lookup(
+                    &bimi_domain,
+                    RecordType::TXT,
+                    &resolvers,
+                    &breaker_keys,
+                    &circuit_breakers,
+                    &tx_err,
+                    &semaphore,
+                )
+                .await;
+                ("_bimi".to_string(), lookups, LookupKind::Bimi)
+            }));
+        }
+        {
+            let resolvers = resolvers.clone();
+            let breaker_keys = breaker_keys.clone();
+            let circuit_breakers = Arc::clone(&circuit_breakers);
+            let tx_err = tx.clone();
+            let semaphore = Arc::clone(&query_semaphore);
+            futs.push(Box::pin(async move {
+                let lookups = fan_out_lookup(
+                    &mta_sts_domain,
+                    RecordType::TXT,
+                    &resolvers,
+                    &breaker_keys,
+                    &circuit_breakers,
+                    &tx_err,
+                    &semaphore,
+                )
+                .await;
+                ("_mta-sts".to_string(), lookups, LookupKind::MtaSts)
+            }));
+        }
+        {
+            let resolvers = resolvers.clone();
+            let breaker_keys = breaker_keys.clone();
+            let circuit_breakers = Arc::clone(&circuit_breakers);
+            let tx_err = tx.clone();
+            let semaphore = Arc::clone(&query_semaphore);
+            futs.push(Box::pin(async move {
+                let lookups = fan_out_lookup(
+                    &tlsrpt_domain,
+                    RecordType::TXT,
+                    &resolvers,
+                    &breaker_keys,
+                    &circuit_breakers,
+                    &tx_err,
+                    &semaphore,
+                )
+                .await;
+                ("_tlsrpt".to_string(), lookups, LookupKind::Tlsrpt)
             }));
         }
 
         tokio::pin!(futs);
         let mut all_lookups = Lookups::empty();
         let mut dmarc_lookups = Lookups::empty();
+        let mut bimi_lookups = Lookups::empty();
+        let mut mta_sts_lookups = Lookups::empty();
+        let mut tlsrpt_lookups = Lookups::empty();
         let mut completed: u32 = 0;
 
         loop {
@@ -280,7 +355,7 @@ pub async fn post_handler(
                 maybe = futs.next() => {
                     match maybe {
                         None => break,
-                        Some((label, lookups, is_dmarc_lookup)) => {
+                        Some((label, lookups, kind)) => {
                             completed += 1;
                             let batch = BatchEvent {
                                 request_id: rid.clone(),
@@ -311,10 +386,12 @@ pub async fn post_handler(
                                 metrics::gauge!("prism_active_checks").decrement(1.0);
                                 return;
                             }
-                            if is_dmarc_lookup {
-                                dmarc_lookups = lookups;
-                            } else {
-                                all_lookups = all_lookups.merge(lookups);
+                            match kind {
+                                LookupKind::Dmarc => dmarc_lookups = lookups,
+                                LookupKind::Bimi => bimi_lookups = lookups,
+                                LookupKind::MtaSts => mta_sts_lookups = lookups,
+                                LookupKind::Tlsrpt => tlsrpt_lookups = lookups,
+                                LookupKind::Base => all_lookups = all_lookups.merge(lookups),
                             }
                         }
                     }
@@ -347,7 +424,7 @@ pub async fn post_handler(
         // ------------------------------------------------------------------
         let enrichment_map = if let Some(ref svc) = enrichment_svc {
             let ips = extract_ips_from_cached_events(&cached_events);
-            let map = svc.lookup_batch(&ips).await;
+            let map = svc.lookup_batch(&ips, Some(&rid)).await;
             if !map.is_empty() {
                 use crate::api::query::EnrichmentEvent;
                 let enrichment_event = EnrichmentEvent {
@@ -401,6 +478,12 @@ pub async fn post_handler(
             ("ttl", check_ttl(&all_lookups)),
             ("dmarc", check_dmarc_records(&dmarc_txts)),
         ];
+        let bimi_results = check_bimi(&bimi_lookups);
+        let mta_sts_results = check_mta_sts(&mta_sts_lookups);
+        let tlsrpt_results = check_tlsrpt(&tlsrpt_lookups, &mta_sts_lookups);
+        lint_checks.push(("bimi", bimi_results));
+        lint_checks.push(("mta_sts", mta_sts_results));
+        lint_checks.push(("tlsrpt", tlsrpt_results));
         if !enrichment_map.is_empty() {
             lint_checks.push(("infrastructure", check_infrastructure(&enrichment_map)));
         }
@@ -961,4 +1044,438 @@ fn check_dnssec_rollover(lookups: &Lookups) -> Vec<CheckResult> {
     }
 
     results
+}
+
+/// Parse TXT record tags: split on `;`, trim each segment, split on first `=`.
+/// Returns (tag_name, tag_value) pairs.
+fn parse_txt_tags(txt: &str) -> Vec<(&str, &str)> {
+    txt.split(';')
+        .map(|seg| seg.trim())
+        .filter(|seg| !seg.is_empty())
+        .map(|seg| {
+            if let Some(pos) = seg.find('=') {
+                (seg[..pos].trim(), seg[pos + 1..].trim())
+            } else {
+                (seg.trim(), "")
+            }
+        })
+        .collect()
+}
+
+/// BIMI record check: validate `default._bimi.<domain>` TXT record.
+fn check_bimi(lookups: &Lookups) -> Vec<CheckResult> {
+    let txt_vec = lookups.txt();
+    if txt_vec.is_empty() {
+        return vec![CheckResult::NotFound()];
+    }
+
+    let unique = txt_vec.unique();
+    let bimi_txts: Vec<String> = unique
+        .iter()
+        .map(TXT::as_string)
+        .filter(|s| s.contains("v=BIMI1"))
+        .collect();
+
+    if bimi_txts.is_empty() {
+        return vec![CheckResult::Warning(
+            "TXT record found but no v=BIMI1 tag".into(),
+        )];
+    }
+
+    if bimi_txts.len() > 1 {
+        return vec![CheckResult::Failed(
+            "Multiple BIMI records found; only one is permitted".into(),
+        )];
+    }
+
+    let record = &bimi_txts[0];
+    let tags = parse_txt_tags(record);
+
+    let l_tag = tags.iter().find(|(name, _)| *name == "l");
+    let a_tag = tags.iter().find(|(name, _)| *name == "a");
+
+    let Some((_, l_value)) = l_tag else {
+        return vec![CheckResult::Failed(
+            "Missing l= tag in BIMI record".into(),
+        )];
+    };
+
+    if l_value.is_empty() {
+        return vec![CheckResult::Ok("BIMI self-assertion (no logo)".into())];
+    }
+
+    if l_value.starts_with("http://") {
+        return vec![CheckResult::Warning(
+            "BIMI logo URL must use HTTPS".into(),
+        )];
+    }
+
+    let mut results = vec![CheckResult::Ok("BIMI record valid".into())];
+
+    if let Some((_, a_value)) = a_tag
+        && a_value.starts_with("http://")
+    {
+        results.push(CheckResult::Warning(
+            "BIMI authority URL must use HTTPS".into(),
+        ));
+    }
+
+    results
+}
+
+/// MTA-STS record check: validate `_mta-sts.<domain>` TXT record.
+fn check_mta_sts(lookups: &Lookups) -> Vec<CheckResult> {
+    let txt_vec = lookups.txt();
+    if txt_vec.is_empty() {
+        return vec![CheckResult::NotFound()];
+    }
+
+    let unique = txt_vec.unique();
+    let sts_txts: Vec<String> = unique
+        .iter()
+        .map(TXT::as_string)
+        .filter(|s| s.contains("v=STSv1"))
+        .collect();
+
+    if sts_txts.len() > 1 {
+        return vec![CheckResult::Failed(
+            "Multiple MTA-STS records found; only one is permitted".into(),
+        )];
+    }
+
+    if sts_txts.is_empty() {
+        return vec![CheckResult::Failed(
+            "Unrecognized MTA-STS version tag".into(),
+        )];
+    }
+
+    let record = &sts_txts[0];
+    let tags = parse_txt_tags(record);
+
+    let id_tag = tags.iter().find(|(name, _)| *name == "id");
+
+    let Some((_, id_value)) = id_tag else {
+        return vec![CheckResult::Failed(
+            "id= is required in MTA-STS record".into(),
+        )];
+    };
+
+    if id_value.is_empty()
+        || id_value.len() > 32
+        || !id_value.chars().all(|c| c.is_ascii_alphanumeric())
+    {
+        return vec![CheckResult::Failed(
+            "Invalid id= value: must be alphanumeric, max 32 chars".into(),
+        )];
+    }
+
+    vec![
+        CheckResult::Ok("MTA-STS DNS record valid".into()),
+        CheckResult::Warning(
+            "Policy DNS record found; policy file fetch not implemented".into(),
+        ),
+    ]
+}
+
+/// TLSRPT record check: validate `_smtp._tls.<domain>` TXT record.
+/// Also checks co-existence with MTA-STS.
+fn check_tlsrpt(lookups: &Lookups, mta_sts_lookups: &Lookups) -> Vec<CheckResult> {
+    let txt_vec = lookups.txt();
+    let mut results = if txt_vec.is_empty() {
+        vec![CheckResult::NotFound()]
+    } else {
+        let unique = txt_vec.unique();
+        let rpt_txts: Vec<String> = unique
+            .iter()
+            .map(TXT::as_string)
+            .filter(|s| s.contains("v=TLSRPTv1"))
+            .collect();
+
+        if rpt_txts.len() > 1 {
+            return vec![CheckResult::Failed(
+                "Multiple TLSRPT records found; only one is permitted".into(),
+            )];
+        } else if rpt_txts.is_empty() {
+            return vec![CheckResult::Failed(
+                "Unrecognized TLSRPT version tag".into(),
+            )];
+        } else {
+            let record = &rpt_txts[0];
+            let tags = parse_txt_tags(record);
+
+            let rua_tag = tags.iter().find(|(name, _)| *name == "rua");
+
+            let Some((_, rua_value)) = rua_tag else {
+                return vec![CheckResult::Failed(
+                    "rua= is required in TLSRPT record".into(),
+                )];
+            };
+
+            let uris: Vec<&str> = rua_value.split(',').map(|u| u.trim()).collect();
+            let all_valid = uris
+                .iter()
+                .all(|uri| uri.starts_with("mailto:") || uri.starts_with("https:"));
+
+            if !all_valid {
+                return vec![CheckResult::Failed(
+                    "rua= must be mailto: or https: URI".into(),
+                )];
+            }
+
+            vec![CheckResult::Ok("TLSRPT record valid".into())]
+        }
+    };
+
+    // Co-existence check: warn if MTA-STS is present but TLSRPT is absent.
+    let is_not_found = results.len() == 1 && matches!(results[0], CheckResult::NotFound());
+    if is_not_found {
+        let mta_txt_vec = mta_sts_lookups.txt();
+        let mta_unique = mta_txt_vec.unique();
+        let has_mta_sts = mta_unique
+            .iter()
+            .map(TXT::as_string)
+            .any(|s| s.contains("v=STSv1"));
+        if has_mta_sts {
+            results.push(CheckResult::Warning(
+                "TLSRPT record missing; TLS reporting recommended when MTA-STS is deployed".into(),
+            ));
+        }
+    }
+
+    results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a `Lookups` containing TXT records via JSON deserialization.
+    /// The mhost crate's `new_for_test` constructors are `#[cfg(test)]`-gated
+    /// and only available within the mhost crate itself. We use serde round-trip
+    /// through the public `Serialize`/`Deserialize` impls instead.
+    fn make_txt_lookups(domain: &str, txts: &[&str]) -> Lookups {
+        // txt_data is Box<[Box<[u8]>]> — serialized as array of arrays of u8.
+        let records: Vec<serde_json::Value> = txts
+            .iter()
+            .map(|txt| {
+                let bytes: Vec<Vec<u8>> = vec![txt.as_bytes().to_vec()];
+                serde_json::json!({
+                    "name": domain,
+                    "type": "TXT",
+                    "ttl": 300,
+                    "data": { "TXT": { "txt_data": bytes } }
+                })
+            })
+            .collect();
+
+        let lookups_json = serde_json::json!({
+            "lookups": [{
+                "query": {
+                    "name": domain,
+                    "record_type": "TXT"
+                },
+                "name_server": "udp:127.0.0.1:53",
+                "result": {
+                    "Response": {
+                        "records": records,
+                        "response_time": { "secs": 0, "nanos": 10000000 },
+                        "valid_until": "2099-01-01T00:00:00Z"
+                    }
+                }
+            }]
+        });
+
+        serde_json::from_value(lookups_json).expect("failed to deserialize test Lookups")
+    }
+
+    #[test]
+    fn test_check_total_steps_is_19() {
+        assert_eq!(CHECK_TOTAL_STEPS, 19);
+    }
+
+    // -- BIMI tests --
+
+    #[test]
+    fn test_check_bimi_valid() {
+        let lookups = make_txt_lookups(
+            "default._bimi.example.com",
+            &["v=BIMI1; l=https://example.com/logo.svg"],
+        );
+        let results = check_bimi(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Ok(msg) if msg.contains("BIMI record valid")));
+    }
+
+    #[test]
+    fn test_check_bimi_http_logo() {
+        let lookups = make_txt_lookups(
+            "default._bimi.example.com",
+            &["v=BIMI1; l=http://example.com/logo.svg"],
+        );
+        let results = check_bimi(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Warning(msg) if msg.contains("HTTPS")));
+    }
+
+    #[test]
+    fn test_check_bimi_missing_l() {
+        let lookups = make_txt_lookups("default._bimi.example.com", &["v=BIMI1"]);
+        let results = check_bimi(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Failed(msg) if msg.contains("Missing l=")));
+    }
+
+    #[test]
+    fn test_check_bimi_empty_l() {
+        let lookups = make_txt_lookups("default._bimi.example.com", &["v=BIMI1; l="]);
+        let results = check_bimi(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Ok(msg) if msg.contains("self-assertion")));
+    }
+
+    #[test]
+    fn test_check_bimi_http_authority() {
+        let lookups = make_txt_lookups(
+            "default._bimi.example.com",
+            &["v=BIMI1; l=https://example.com/logo.svg; a=http://example.com/auth"],
+        );
+        let results = check_bimi(&lookups);
+        assert_eq!(results.len(), 2);
+        assert!(matches!(&results[0], CheckResult::Ok(msg) if msg.contains("BIMI record valid")));
+        assert!(
+            matches!(&results[1], CheckResult::Warning(msg) if msg.contains("BIMI authority URL must use HTTPS"))
+        );
+    }
+
+    #[test]
+    fn test_check_bimi_multiple_records() {
+        let lookups = make_txt_lookups(
+            "default._bimi.example.com",
+            &[
+                "v=BIMI1; l=https://example.com/a.svg",
+                "v=BIMI1; l=https://example.com/b.svg",
+            ],
+        );
+        let results = check_bimi(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(
+            matches!(&results[0], CheckResult::Failed(msg) if msg.contains("Multiple BIMI records"))
+        );
+    }
+
+    #[test]
+    fn test_check_bimi_not_found() {
+        let lookups = Lookups::empty();
+        let results = check_bimi(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::NotFound()));
+    }
+
+    // -- MTA-STS tests --
+
+    #[test]
+    fn test_check_mta_sts_valid() {
+        let lookups = make_txt_lookups("_mta-sts.example.com", &["v=STSv1; id=20240101000000"]);
+        let results = check_mta_sts(&lookups);
+        assert_eq!(results.len(), 2);
+        assert!(
+            matches!(&results[0], CheckResult::Ok(msg) if msg.contains("MTA-STS DNS record valid"))
+        );
+        assert!(matches!(&results[1], CheckResult::Warning(msg) if msg.contains("policy file fetch not implemented")));
+    }
+
+    #[test]
+    fn test_check_mta_sts_missing_id() {
+        let lookups = make_txt_lookups("_mta-sts.example.com", &["v=STSv1"]);
+        let results = check_mta_sts(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Failed(msg) if msg.contains("id=")));
+    }
+
+    #[test]
+    fn test_check_mta_sts_invalid_id() {
+        let lookups = make_txt_lookups("_mta-sts.example.com", &["v=STSv1; id=foo bar!"]);
+        let results = check_mta_sts(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Failed(msg) if msg.contains("Invalid id=")));
+    }
+
+    #[test]
+    fn test_check_mta_sts_not_found() {
+        let lookups = Lookups::empty();
+        let results = check_mta_sts(&lookups);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::NotFound()));
+    }
+
+    // -- TLSRPT tests --
+
+    #[test]
+    fn test_check_tlsrpt_valid_mailto() {
+        let lookups = make_txt_lookups(
+            "_smtp._tls.example.com",
+            &["v=TLSRPTv1; rua=mailto:tls@example.com"],
+        );
+        let mta_sts = Lookups::empty();
+        let results = check_tlsrpt(&lookups, &mta_sts);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Ok(msg) if msg.contains("TLSRPT record valid")));
+    }
+
+    #[test]
+    fn test_check_tlsrpt_valid_https() {
+        let lookups = make_txt_lookups(
+            "_smtp._tls.example.com",
+            &["v=TLSRPTv1; rua=https://example.com/report"],
+        );
+        let mta_sts = Lookups::empty();
+        let results = check_tlsrpt(&lookups, &mta_sts);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Ok(msg) if msg.contains("TLSRPT record valid")));
+    }
+
+    #[test]
+    fn test_check_tlsrpt_multiple_rua() {
+        let lookups = make_txt_lookups(
+            "_smtp._tls.example.com",
+            &["v=TLSRPTv1; rua=mailto:a@example.com,https://example.com/r"],
+        );
+        let mta_sts = Lookups::empty();
+        let results = check_tlsrpt(&lookups, &mta_sts);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Ok(msg) if msg.contains("TLSRPT record valid")));
+    }
+
+    #[test]
+    fn test_check_tlsrpt_invalid_rua() {
+        let lookups = make_txt_lookups(
+            "_smtp._tls.example.com",
+            &["v=TLSRPTv1; rua=ftp://example.com"],
+        );
+        let mta_sts = Lookups::empty();
+        let results = check_tlsrpt(&lookups, &mta_sts);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::Failed(_)));
+    }
+
+    #[test]
+    fn test_check_tlsrpt_coexistence_warning() {
+        let tlsrpt = Lookups::empty();
+        let mta_sts = make_txt_lookups("_mta-sts.example.com", &["v=STSv1; id=abc123"]);
+        let results = check_tlsrpt(&tlsrpt, &mta_sts);
+        assert_eq!(results.len(), 2);
+        assert!(matches!(&results[0], CheckResult::NotFound()));
+        assert!(
+            matches!(&results[1], CheckResult::Warning(msg) if msg.contains("TLSRPT record missing"))
+        );
+    }
+
+    #[test]
+    fn test_check_tlsrpt_both_absent() {
+        let tlsrpt = Lookups::empty();
+        let mta_sts = Lookups::empty();
+        let results = check_tlsrpt(&tlsrpt, &mta_sts);
+        assert_eq!(results.len(), 1);
+        assert!(matches!(&results[0], CheckResult::NotFound()));
+    }
 }

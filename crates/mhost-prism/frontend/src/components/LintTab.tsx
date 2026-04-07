@@ -45,6 +45,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   spf:            'SPF',
   ttl:            'TTL Consistency',
   dmarc:          'DMARC',
+  bimi:           'BIMI',
+  mta_sts:        'MTA-STS',
+  tlsrpt:         'TLS Reporting',
   infrastructure: 'Infrastructure',
 };
 
@@ -112,6 +115,18 @@ function getHint(category: string, results: CheckResult[]): string | null {
         return 'Add _dmarc.domain TXT "v=DMARC1; p=reject; rua=mailto:dmarc@example.com".';
       if (kind === 'warning' && msg.includes('p=none'))
         return 'Consider upgrading to p=quarantine or p=reject.';
+    }
+    if (category === 'bimi') {
+      if (kind === 'failed' || kind === 'not_found')
+        return 'Add default._bimi.domain TXT "v=BIMI1; l=https://example.com/logo.svg".';
+    }
+    if (category === 'mta_sts') {
+      if (kind === 'failed' || kind === 'not_found')
+        return 'Add _mta-sts.domain TXT "v=STSv1; id=20240101000000" and publish a policy file.';
+    }
+    if (category === 'tlsrpt') {
+      if (kind === 'failed' || kind === 'not_found' || kind === 'warning')
+        return 'Add _smtp._tls.domain TXT "v=TLSRPTv1; rua=mailto:tls-reports@example.com".';
     }
     if (category === 'dnssec' && kind === 'failed')
       return 'Contact your DNS provider to enable DNSSEC signing.';
@@ -186,7 +201,8 @@ interface LintTabProps {
 export function LintTab(props: LintTabProps) {
   // All 9 known categories in display order; missing ones shown as pending
   const ORDERED_CATEGORIES = [
-    'dmarc', 'spf', 'dnssec', 'caa', 'ns', 'mx',
+    'dmarc', 'spf', 'bimi', 'mta_sts', 'tlsrpt',
+    'dnssec', 'caa', 'ns', 'mx',
     'cname_apex', 'https_svcb', 'ttl', 'infrastructure',
   ];
 
