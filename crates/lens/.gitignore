@@ -1,8 +1,6 @@
 /target/
 /frontend/dist/
 /frontend/node_modules/
-*.toml
 !lens.example.toml
-!profiles/
 .env
 .DS_Store

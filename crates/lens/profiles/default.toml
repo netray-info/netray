@@ -1,0 +1,66 @@
+[meta]
+name = "default"
+version = 1
+
+[dns]
+spf = 10
+dmarc = 10
+dnssec = 5
+caa = 5
+mx = 5
+ns = 3
+ns_lame = 5
+ns_delegation = 3
+mta_sts = 3
+tlsrpt = 2
+bimi = 1
+cname_apex = 5
+https_svcb = 2
+ttl = 2
+dnskey_algorithm = 3
+dnssec_rollover = 2
+
+[tls]
+chain_trusted = 10
+not_expired = 10
+hostname_match = 10
+chain_complete = 5
+strong_signature = 5
+key_strength = 5
+expiry_window = 5
+cert_lifetime = 3
+san_quality = 2
+aia_reachability = 2
+tls_version = 5
+forward_secrecy = 5
+aead_cipher = 5
+ocsp_stapled = 3
+ct_logged = 3
+caa_compliant = 5
+dane_valid = 3
+consistency = 3
+alpn_consistency = 2
+ech_advertised = 2
+hsts = 5
+https_redirect = 5
+
+[ip]
+reputation = 5
+
+[section_weights]
+dns = 35
+tls = 45
+ip = 20
+
+[thresholds]
+"A+" = 97
+"A"  = 90
+"B"  = 75
+"C"  = 60
+"D"  = 40
+"F"  = 0
+
+[hard_fail]
+tls = ["chain_trusted", "not_expired"]
+dns = ["spf", "dmarc"]
+ip = []
