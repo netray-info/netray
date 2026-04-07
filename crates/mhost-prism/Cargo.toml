@@ -2,7 +2,7 @@
 name = "prism"
 version = "0.5.2"
 edition = "2024"
-license = "MIT OR Apache-2.0"
+license = "MIT"
 description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
