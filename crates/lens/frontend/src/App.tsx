@@ -4,7 +4,7 @@ import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
 import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
 import Modal from '@netray-info/common-frontend/components/Modal';
 import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
-import SuiteNav from './components/SuiteNav';
+import SuiteNav from '@netray-info/common-frontend/components/SuiteNav';
 import DomainInput from './components/DomainInput';
 import DnsSection from './components/DnsSection';
 import TlsSection from './components/TlsSection';
@@ -106,8 +106,8 @@ export default function App() {
   const hasResults = () => dns() !== null || tls() !== null || ip() !== null;
 
   const allChecks = () => [
-    ...(dns()?.checks ?? []),
     ...(tls()?.checks ?? []),
+    ...(dns()?.checks ?? []),
     ...(ip()?.checks ?? []),
   ];
 
@@ -128,17 +128,6 @@ export default function App() {
           <h1 class="logo">lens</h1>
           <span class="tagline">Domain health at a glance</span>
           <div class="header-actions">
-            <Show when={hasResults() || isLoading()}>
-              <button
-                class={`header-btn filter-toggle${explain() ? ' filter-toggle--active' : ''}`}
-                type="button"
-                aria-pressed={explain()}
-                onClick={() => setExplain(v => !v)}
-                title="Toggle explain mode (e)"
-              >
-                explain
-              </button>
-            </Show>
             <button
               class="header-btn"
               type="button"
@@ -161,6 +150,18 @@ export default function App() {
             inputRef={(el) => { inputEl = el; }}
           />
 
+          <Show when={hasResults() || isLoading()}>
+            <div class="explain-bar">
+              <button
+                class={`filter-toggle${explain() ? ' filter-toggle--active' : ''}`}
+                type="button"
+                aria-pressed={explain()}
+                onClick={() => setExplain(v => !v)}
+                title="Toggle explanations (e)"
+              >explain</button>
+            </div>
+          </Show>
+
           <Show when={error()}>
             <div class="error-banner" role="alert">{error()}</div>
           </Show>
@@ -168,7 +169,7 @@ export default function App() {
           <Show when={!hasResults() && !isLoading() && !error()}>
             <div class="welcome">
               <p class="welcome-tagline">
-                DNS health, TLS certificate status, and IP reputation — checked together, streamed as they arrive.
+                TLS certificate status, DNS health, and IP reputation — checked together, streamed as they arrive.
               </p>
             </div>
           </Show>
@@ -180,15 +181,15 @@ export default function App() {
           <Show when={hasResults() || isLoading()}>
             <ValidationChips checks={allChecks()} />
             <div class="section-grid" role="status" aria-live="polite" aria-label="Check results">
-              <DnsSection
-                data={dns()}
-                loading={isLoading() && dns() === null}
-                error={error() ?? undefined}
-                explain={explain()}
-              />
               <TlsSection
                 data={tls()}
                 loading={isLoading() && tls() === null}
+                error={error() ?? undefined}
+                explain={explain()}
+              />
+              <DnsSection
+                data={dns()}
+                loading={isLoading() && dns() === null}
                 error={error() ?? undefined}
                 explain={explain()}
               />
@@ -205,7 +206,7 @@ export default function App() {
         <SiteFooter
           aboutText={
             <>
-              <em>lens</em> checks DNS health, TLS certificate validity, and IP reputation for any
+              <em>lens</em> checks TLS certificate validity, DNS health, and IP reputation for any
               domain — results stream in as each check completes. Part of the{' '}
               <a href="https://netray.info">netray.info</a> suite.
             </>
@@ -222,7 +223,7 @@ export default function App() {
             <div class="help-section__title">Input</div>
             <code class="help-syntax">example.com</code>
             <p class="help-desc">
-              Enter any domain name to check its DNS health, TLS certificate validity, and IP reputation simultaneously.
+              Enter any domain name to check its TLS certificate validity, DNS health, and IP reputation simultaneously.
             </p>
           </div>
           <div class="help-section">

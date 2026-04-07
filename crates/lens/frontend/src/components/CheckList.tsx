@@ -89,7 +89,7 @@ export default function CheckList(props: Props) {
             <span class="check-item__name">
               {check.name}
               <Show when={props.explain && CHECK_DESCRIPTIONS[check.name] !== undefined}>
-                <span class="check-item__desc">{CHECK_DESCRIPTIONS[check.name]}</span>
+                <div class="explain-card">{CHECK_DESCRIPTIONS[check.name]}</div>
               </Show>
             </span>
             {check.message && (

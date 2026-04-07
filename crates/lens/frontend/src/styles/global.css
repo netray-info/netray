@@ -49,18 +49,6 @@
    Accessibility
    ================================================================ */
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* ================================================================
    Base
    ================================================================ */
@@ -88,80 +76,6 @@ a:hover { text-decoration: underline; }
 }
 
 .main { flex: 1; }
-
-/* ================================================================
-   Skip link
-   ================================================================ */
-
-.skip-link {
-  position: absolute;
-  left: -9999px;
-  top: 0;
-  background: var(--accent);
-  color: #fff;
-  padding: 0.5rem 1rem;
-  z-index: 100;
-  border-radius: 0 0 var(--radius) 0;
-  font-size: 0.875rem;
-}
-
-.skip-link:focus { left: 0; }
-
-/* ================================================================
-   Header
-   ================================================================ */
-
-.header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.logo {
-  font-family: var(--mono);
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, var(--accent), #7b68ee);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.tagline {
-  color: var(--text-muted);
-  font-size: 0.875rem;
-}
-
-.header-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-}
-
-.header-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 1rem;
-  transition: color var(--transition), border-color var(--transition), background var(--transition);
-}
-
-.header-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--text-secondary);
-  background: var(--accent-glow);
-}
 
 /* ================================================================
    SuiteNav
@@ -248,23 +162,27 @@ a:hover { text-decoration: underline; }
 }
 
 .domain-input__btn {
-  padding: 0.625rem 1.25rem;
+  padding: 0.5rem 1.25rem;
   background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius);
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity var(--transition), background var(--transition);
+  transition: background var(--transition), box-shadow var(--transition);
   display: flex;
   align-items: center;
   gap: 6px;
   min-height: 44px;
 }
 
-.domain-input__btn:hover:not(:disabled) { opacity: 0.85; }
+.domain-input__btn:hover:not(:disabled) {
+  background: var(--accent-dim);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
 .domain-input__btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .domain-input__clear {
@@ -324,10 +242,6 @@ a:hover { text-decoration: underline; }
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 /* ================================================================
@@ -460,13 +374,15 @@ a:hover { text-decoration: underline; }
   line-height: 1.4;
 }
 
-.check-item__desc {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  line-height: 1.4;
-  margin-top: 2px;
-  padding-left: 1.25rem;
+.explain-card {
+  padding: 8px 12px;
+  margin: 4px 0 2px;
+  background: var(--explain-bg);
+  border: 1px solid var(--explain-border);
+  border-radius: var(--radius);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .check-item__guide-link {
@@ -736,35 +652,12 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
-   Filter / explain toggle
+   Explain bar (below input, above results)
    ================================================================ */
 
-.filter-toggle {
-  padding: 3px 10px;
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  transition: color var(--transition), border-color var(--transition), background var(--transition);
-  height: 32px;
-}
-
-.filter-toggle:hover {
-  color: var(--text-primary);
-  border-color: var(--text-secondary);
-}
-
-.filter-toggle--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.filter-toggle--active:hover {
-  opacity: 0.9;
+.explain-bar {
+  margin-top: -1.25rem;
+  margin-bottom: 1.5rem;
 }
 
 /* ================================================================

@@ -1,18 +1,7 @@
 import type { MetaResponse } from './types';
+import { fetchWithTimeout } from '@netray-info/common-frontend/api';
 
-export async function fetchWithTimeout(
-  url: string,
-  init?: RequestInit,
-  timeoutMs = 20000,
-): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(id);
-  }
-}
+export { fetchWithTimeout };
 
 export async function fetchMeta(): Promise<MetaResponse | null> {
   try {
