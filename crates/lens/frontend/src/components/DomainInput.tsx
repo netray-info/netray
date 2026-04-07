@@ -99,7 +99,7 @@ export default function DomainInput(props: Props) {
         disabled={props.loading || !value().trim()}
         aria-busy={props.loading}
       >
-        <Show when={props.loading} fallback={'Check \u2192'}>
+        <Show when={props.loading} fallback={'Check'}>
           <span class="spinner" aria-hidden="true" />{' '}Checking...
         </Show>
       </button>

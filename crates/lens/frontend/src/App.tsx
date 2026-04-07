@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
 import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
@@ -14,6 +14,8 @@ import ValidationChips from './components/ValidationChips';
 import { startCheck } from './lib/sse';
 import { fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
+import { toJson, toMarkdown } from './lib/export';
+import { CHECK_LABELS, CHECK_DESCRIPTIONS } from './lib/checkMeta';
 import type {
   CheckState,
   DnsEvent,
@@ -38,6 +40,7 @@ export default function App() {
   const [done, setDone] = createSignal<DoneEvent | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [currentDomain, setCurrentDomain] = createSignal('');
+  const [toastMsg, setToastMsg] = createSignal<string | null>(null);
   const [allExpanded, setAllExpanded] = createSignal<boolean | undefined>(undefined);
 
   let inputEl: HTMLInputElement | undefined;
@@ -92,6 +95,27 @@ export default function App() {
       onDone:    (data) => { setDone(data); setCheckState('done'); },
       onError:   (err)  => { setError(err); setCheckState('error'); },
     });
+  }
+
+  function handleCopyMd() {
+    const md = toMarkdown(currentDomain(), dns(), tls(), ip(), summary(), done());
+    navigator.clipboard.writeText(md).then(() => {
+      setToastMsg('Copied!');
+      setTimeout(() => setToastMsg(null), 2000);
+    });
+  }
+
+  function handleDownloadJson() {
+    const blob = new Blob(
+      [toJson(currentDomain(), dns(), tls(), ip(), summary(), done())],
+      { type: 'application/json' },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentDomain()}-lens.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   function handleClear() {
@@ -186,7 +210,15 @@ export default function App() {
           </Show>
 
           <Show when={hasResults() || isLoading()}>
-            <ValidationChips checks={allChecks()} />
+            <div class="chips-row">
+              <ValidationChips checks={allChecks()} />
+              <Show when={summary() && done()}>
+                <div class="export-actions">
+                  <button class="export-btn" type="button" onClick={handleCopyMd}>copy MD</button>
+                  <button class="export-btn" type="button" onClick={handleDownloadJson}>JSON</button>
+                </div>
+              </Show>
+            </div>
             <div class="section-grid" role="status" aria-live="polite" aria-label="Check results">
               <TlsSection
                 data={tls()}
@@ -228,6 +260,10 @@ export default function App() {
           version={meta()?.version}
         />
 
+        <Show when={toastMsg()}>
+          <div class="toast" role="status" aria-live="polite">{toastMsg()}</div>
+        </Show>
+
         <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
           <div class="help-section">
             <div class="help-section__title">Input</div>
@@ -235,6 +271,39 @@ export default function App() {
             <p class="help-desc">
               Enter any domain name to check its TLS certificate validity, DNS health, and IP reputation simultaneously.
             </p>
+          </div>
+          <div class="help-section">
+            <div class="help-section__title">Scoring</div>
+            <p class="help-desc">
+              Each check contributes a weighted score. The overall grade is a weighted average
+              across TLS (45%), DNS (35%), and IP (20%).
+            </p>
+            <Show when={meta()?.profile}>
+              {(profile) => (
+                <div class="help-scoring">
+                  <div class="help-scoring__thresholds">
+                    {Object.entries(profile().thresholds)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([grade, min]) => (
+                        <span class="help-scoring__grade-chip">{grade} ≥ {min}%</span>
+                      ))}
+                  </div>
+                  <div class="help-hard-fail">
+                    <p class="help-hard-fail__heading">Hard fail checks — any of these force grade F:</p>
+                    <For each={[...profile().hard_fail.tls, ...profile().hard_fail.dns]}>
+                      {(name) => (
+                        <div class="help-hard-fail__item">
+                          <span class="help-hard-fail__label">{CHECK_LABELS[name] ?? name}</span>
+                          <Show when={CHECK_DESCRIPTIONS[name]}>
+                            <span class="help-hard-fail__desc">{CHECK_DESCRIPTIONS[name]}</span>
+                          </Show>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              )}
+            </Show>
           </div>
           <div class="help-section">
             <div class="help-section__title">Keyboard shortcuts</div>

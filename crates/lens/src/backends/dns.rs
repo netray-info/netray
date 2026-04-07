@@ -2,7 +2,8 @@ use std::collections::HashSet;
 use std::net::IpAddr;
 use std::time::Duration;
 
-use serde::Deserialize;
+use futures::StreamExt;
+use serde_json::Value;
 
 use crate::error::AppError;
 use crate::scoring::engine::{CheckResult, CheckVerdict};
@@ -20,18 +21,6 @@ pub struct DnsBackendResult {
 }
 
 // ---------------------------------------------------------------------------
-// Deserialization types for prism's CollectedResponse
-// ---------------------------------------------------------------------------
-
-/// Top-level response from prism when `?stream=false`.
-#[derive(Deserialize)]
-struct CollectedResponse {
-    events: Vec<serde_json::Value>,
-    #[allow(dead_code)]
-    truncated: bool,
-}
-
-// ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
 
@@ -42,19 +31,27 @@ pub async fn check_dns(
     timeout: Duration,
 ) -> Result<DnsBackendResult, AppError> {
     let url = format!(
-        "{}/api/check?stream=false",
+        "{}/api/check",
         dns_url.trim_end_matches('/'),
     );
 
     let body = serde_json::json!({ "domain": domain });
 
-    let resp = tokio::time::timeout(timeout, client.post(&url).json(&body).send())
-        .await
-        .map_err(|_| AppError::Timeout)?
-        .map_err(|e| AppError::BackendError {
-            backend: "dns",
-            message: e.to_string(),
-        })?;
+    // Connect and get headers — SSE stream starts immediately.
+    let resp = tokio::time::timeout(
+        timeout,
+        client
+            .post(&url)
+            .header("Accept", "text/event-stream")
+            .json(&body)
+            .send(),
+    )
+    .await
+    .map_err(|_| AppError::Timeout)?
+    .map_err(|e| AppError::BackendError {
+        backend: "dns",
+        message: e.to_string(),
+    })?;
 
     if !resp.status().is_success() {
         return Err(AppError::BackendError {
@@ -63,21 +60,80 @@ pub async fn check_dns(
         });
     }
 
-    let collected: CollectedResponse =
-        resp.json().await.map_err(|e| AppError::BackendError {
+    // Collect SSE events until "done" or timeout.
+    let events = tokio::time::timeout(timeout, collect_sse(resp))
+        .await
+        .map_err(|_| AppError::Timeout)?
+        .map_err(|e| AppError::BackendError {
             backend: "dns",
-            message: format!("failed to decode prism response: {e}"),
+            message: format!("failed to read prism stream: {e}"),
         })?;
 
-    parse_collected(collected, domain, dns_url)
+    parse_events(events, domain, dns_url)
+}
+
+// ---------------------------------------------------------------------------
+// SSE stream reader
+// ---------------------------------------------------------------------------
+
+/// Read an SSE stream from a reqwest response.
+///
+/// Returns events as `{"type": "...", "data": {...}}` values — the same shape
+/// the former `stream=false` CollectedResponse used, so `parse_events` works
+/// without changes.
+async fn collect_sse(resp: reqwest::Response) -> Result<Vec<Value>, String> {
+    let mut stream = resp.bytes_stream();
+    let mut buf = String::new();
+    let mut events: Vec<Value> = Vec::new();
+    let mut cur_type = String::new();
+    let mut cur_data = String::new();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+
+        loop {
+            match buf.find('\n') {
+                None => break,
+                Some(pos) => {
+                    let line = buf[..pos].trim_end_matches('\r').to_string();
+                    buf = buf[pos + 1..].to_string();
+
+                    if line.is_empty() {
+                        // Blank line = dispatch current event.
+                        if !cur_data.is_empty() {
+                            if let Ok(data) = serde_json::from_str::<Value>(&cur_data) {
+                                let done = cur_type == "done";
+                                events.push(serde_json::json!({
+                                    "type": cur_type,
+                                    "data": data,
+                                }));
+                                if done {
+                                    return Ok(events);
+                                }
+                            }
+                        }
+                        cur_type.clear();
+                        cur_data.clear();
+                    } else if let Some(rest) = line.strip_prefix("event: ") {
+                        cur_type = rest.to_string();
+                    } else if let Some(rest) = line.strip_prefix("data: ") {
+                        cur_data = rest.to_string();
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(events)
 }
 
 // ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
 
-fn parse_collected(
-    collected: CollectedResponse,
+fn parse_events(
+    events: Vec<Value>,
     domain: &str,
     dns_url: &str,
 ) -> Result<DnsBackendResult, AppError> {
@@ -85,7 +141,7 @@ fn parse_collected(
     let mut resolved_ips: Vec<IpAddr> = Vec::new();
     let mut seen_ips: HashSet<IpAddr> = HashSet::new();
 
-    for event in &collected.events {
+    for event in &events {
         let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
         match event_type {
@@ -125,11 +181,11 @@ fn parse_collected(
 /// Batch event data shape (first resolver):
 /// ```json
 /// { "record_type": "A", "lookups": { "lookups": [ { "result": { "Response": { "records": [
-///   { "name": "...", "type": "A", "data": "1.2.3.4" }
+///   { "name": "...", "type": "A", "data": {"A": "1.2.3.4"} }
 /// ] } } } ] } }
 /// ```
 fn collect_ips_from_batch(
-    data: &serde_json::Value,
+    data: &Value,
     resolved_ips: &mut Vec<IpAddr>,
     seen: &mut HashSet<IpAddr>,
 ) {
@@ -142,7 +198,6 @@ fn collect_ips_from_batch(
         return;
     }
 
-    // Walk all resolvers to collect unique IPs.
     let lookups = data
         .pointer("/lookups/lookups")
         .and_then(|v| v.as_array());
@@ -184,7 +239,7 @@ fn collect_ips_from_batch(
 /// ```json
 /// { "category": "spf", "results": [ {"Ok": "msg"} | {"Warning": "msg"} | {"Failed": "msg"} | {"NotFound": null} ] }
 /// ```
-fn parse_lint_event(data: &serde_json::Value) -> Option<CheckResult> {
+fn parse_lint_event(data: &Value) -> Option<CheckResult> {
     let category = data.get("category").and_then(|v| v.as_str())?;
     let results = data.get("results").and_then(|v| v.as_array())?;
 
@@ -220,7 +275,7 @@ fn verdict_rank(v: &CheckVerdict) -> u8 {
 }
 
 /// Map a single lint result item to (CheckVerdict, optional message).
-fn classify_lint_result(result: &serde_json::Value) -> (CheckVerdict, Option<String>) {
+fn classify_lint_result(result: &Value) -> (CheckVerdict, Option<String>) {
     if let Some(obj) = result.as_object() {
         if obj.contains_key("Ok") {
             return (CheckVerdict::Pass, None);
@@ -266,7 +321,7 @@ fn build_headline(checks: &[CheckResult]) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// URL encoding helper (avoids pulling in an extra dep if not present)
+// URL encoding helper
 // ---------------------------------------------------------------------------
 
 mod urlencoding {

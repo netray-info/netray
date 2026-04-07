@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -32,6 +33,8 @@ pub struct CheckItem {
     pub verdict: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub guide_url: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weight: Option<u32>,
 }
 
 /// Return the guide URL for a check name if the verdict is fail or warn.
@@ -86,6 +89,7 @@ pub struct TlsEvent {
 pub struct IpEvent {
     pub status: &'static str,
     pub headline: String,
+    pub checks: Vec<CheckItem>,
     pub addresses: Vec<IpAddressInfo>,
     pub detail_url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,6 +105,7 @@ pub struct SummaryEvent {
     pub grade: String,
     pub score: f64,
     pub hard_fail: bool,
+    pub hard_fail_checks: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -124,11 +129,36 @@ pub struct CheckPostBody {
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
+pub struct ProfileData {
+    pub name: String,
+    pub version: u32,
+    pub checks: HashMap<String, u32>,
+    pub section_weights: ProfileSectionWeights,
+    pub thresholds: BTreeMap<String, u32>,
+    pub hard_fail: ProfileHardFail,
+}
+
+#[derive(Serialize)]
+pub struct ProfileSectionWeights {
+    pub dns: u32,
+    pub tls: u32,
+    pub ip: u32,
+}
+
+#[derive(Serialize)]
+pub struct ProfileHardFail {
+    pub dns: Vec<String>,
+    pub tls: Vec<String>,
+    pub ip: Vec<String>,
+}
+
+#[derive(Serialize)]
 pub struct MetaResponse {
     pub site_name: String,
     pub version: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ecosystem: Option<MetaEcosystem>,
+    pub profile: ProfileData,
 }
 
 #[derive(Serialize)]
@@ -198,10 +228,32 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
         tls_base_url: Some(backends.tls_url.clone()),
         ip_base_url: Some(backends.ip_url.clone()),
     });
+    let profile = &state.scoring_profile;
+    let mut all_checks = HashMap::new();
+    all_checks.extend(profile.dns.iter().map(|(k, v)| (k.clone(), *v)));
+    all_checks.extend(profile.tls.iter().map(|(k, v)| (k.clone(), *v)));
+    all_checks.extend(profile.ip.iter().map(|(k, v)| (k.clone(), *v)));
+    let profile_data = ProfileData {
+        name: profile.meta.name.clone(),
+        version: profile.meta.version,
+        checks: all_checks,
+        section_weights: ProfileSectionWeights {
+            dns: profile.section_weights.dns,
+            tls: profile.section_weights.tls,
+            ip: profile.section_weights.ip,
+        },
+        thresholds: profile.thresholds.clone(),
+        hard_fail: ProfileHardFail {
+            dns: profile.hard_fail.dns.clone(),
+            tls: profile.hard_fail.tls.clone(),
+            ip: profile.hard_fail.ip.clone(),
+        },
+    };
     Json(MetaResponse {
         site_name: "lens — Domain Health Check".to_string(),
         version: VERSION,
         ecosystem,
+        profile: profile_data,
     })
 }
 
@@ -295,7 +347,7 @@ async fn run_check_handler(state: AppState, client_ip: IpAddr, domain_raw: Strin
     if let Some(cache) = &state.cache {
         if let Some(cached) = cache.get(&key).await {
             if is_fresh(&cached, state.config.cache.ttl_seconds) {
-                return sse_response_from_cached(domain, &cached, true);
+                return sse_response_from_cached(domain, &cached, true, &state.scoring_profile);
             }
         }
     }
@@ -319,7 +371,7 @@ async fn run_check_handler(state: AppState, client_ip: IpAddr, domain_raw: Strin
     }
 
     // 6. Stream SSE from output.
-    let events = build_sse_events(domain_out, output, false);
+    let events = build_sse_events(domain_out, output, false, &state.scoring_profile);
     make_sse_stream(events, "MISS")
 }
 
@@ -358,7 +410,7 @@ fn section_status_from_checks<T>(
     }
 }
 
-fn dns_event_from(result: &Result<DnsBackendResult, SectionError>) -> Event {
+fn dns_event_from(result: &Result<DnsBackendResult, SectionError>, weights: &HashMap<String, u32>) -> Event {
     let status = section_status_from_checks(result, |r| &r.checks);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
@@ -371,6 +423,7 @@ fn dns_event_from(result: &Result<DnsBackendResult, SectionError>) -> Event {
                         guide_url: guide_url_for(&c.name, verdict),
                         name: c.name.clone(),
                         verdict,
+                        weight: weights.get(&c.name).copied(),
                     }
                 })
                 .collect();
@@ -390,7 +443,7 @@ fn dns_event_from(result: &Result<DnsBackendResult, SectionError>) -> Event {
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
-fn tls_event_from(result: &Result<TlsBackendResult, SectionError>) -> Event {
+fn tls_event_from(result: &Result<TlsBackendResult, SectionError>, weights: &HashMap<String, u32>) -> Event {
     let status = section_status_from_checks(result, |r| &r.checks);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
@@ -403,6 +456,7 @@ fn tls_event_from(result: &Result<TlsBackendResult, SectionError>) -> Event {
                         guide_url: guide_url_for(&c.name, verdict),
                         name: c.name.clone(),
                         verdict,
+                        weight: weights.get(&c.name).copied(),
                     }
                 })
                 .collect();
@@ -422,10 +476,23 @@ fn tls_event_from(result: &Result<TlsBackendResult, SectionError>) -> Event {
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
-fn ip_event_from(result: &Result<IpBackendResult, SectionError>) -> Event {
+fn ip_event_from(result: &Result<IpBackendResult, SectionError>, weights: &HashMap<String, u32>) -> Event {
     let status = section_status_from_checks(result, |r| &r.checks);
-    let (headline, addresses, detail_url) = match result {
+    let (headline, checks, addresses, detail_url) = match result {
         Ok(r) => {
+            let items = r
+                .checks
+                .iter()
+                .map(|c| {
+                    let verdict = verdict_str(&c.verdict);
+                    CheckItem {
+                        guide_url: guide_url_for(&c.name, verdict),
+                        name: c.name.clone(),
+                        verdict,
+                        weight: weights.get(&c.name).copied(),
+                    }
+                })
+                .collect();
             let addrs = r
                 .addresses
                 .iter()
@@ -436,14 +503,14 @@ fn ip_event_from(result: &Result<IpBackendResult, SectionError>) -> Event {
                     network_type: a.network_type.clone(),
                 })
                 .collect();
-            (r.raw_headline.clone(), addrs, r.detail_url.clone())
+            (r.raw_headline.clone(), items, addrs, r.detail_url.clone())
         }
         Err(e) => {
             let msg = match e {
                 SectionError::Timeout => "timeout",
                 SectionError::BackendError(_) => "backend error",
             };
-            (msg.to_string(), vec![], String::new())
+            (msg.to_string(), vec![], vec![], String::new())
         }
     };
     let guide_url = if status == "fail" || status == "warn" {
@@ -451,7 +518,7 @@ fn ip_event_from(result: &Result<IpBackendResult, SectionError>) -> Event {
     } else {
         None
     };
-    let payload = IpEvent { status, headline, addresses, detail_url, guide_url };
+    let payload = IpEvent { status, headline, checks, addresses, detail_url, guide_url };
     Event::default()
         .event("ip")
         .data(serde_json::to_string(&payload).unwrap_or_default())
@@ -486,6 +553,7 @@ fn summary_event_from(
         grade: score.grade.clone(),
         score: (score.overall_percentage * 10.0).round() / 10.0,
         hard_fail: score.hard_fail_triggered,
+        hard_fail_checks: score.hard_fail_checks.clone(),
     };
     Event::default()
         .event("summary")
@@ -503,18 +571,18 @@ fn done_event(domain: &str, duration_ms: u64, cached: bool) -> Event {
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
-fn build_sse_events(domain: String, output: CheckOutput, cached: bool) -> Vec<Event> {
+fn build_sse_events(domain: String, output: CheckOutput, cached: bool, profile: &crate::scoring::profile::ScoringProfile) -> Vec<Event> {
     let duration_ms = output.duration_ms;
     vec![
-        dns_event_from(&output.dns),
-        tls_event_from(&output.tls),
-        ip_event_from(&output.ip),
+        dns_event_from(&output.dns, &profile.dns),
+        tls_event_from(&output.tls, &profile.tls),
+        ip_event_from(&output.ip, &profile.ip),
         summary_event_from(&output.dns, &output.tls, &output.ip, &output.score),
         done_event(&domain, duration_ms, cached),
     ]
 }
 
-fn build_sse_events_from_cached(domain: &str, cached: &CachedResult) -> Vec<Event> {
+fn build_sse_events_from_cached(domain: &str, cached: &CachedResult, profile: &crate::scoring::profile::ScoringProfile) -> Vec<Event> {
     let dummy_output = CheckOutput {
         domain: domain.to_string(),
         dns: cached.dns.clone(),
@@ -523,7 +591,7 @@ fn build_sse_events_from_cached(domain: &str, cached: &CachedResult) -> Vec<Even
         score: clone_score(&cached.score),
         duration_ms: cached.duration_ms,
     };
-    build_sse_events(domain.to_string(), dummy_output, true)
+    build_sse_events(domain.to_string(), dummy_output, true, profile)
 }
 
 fn make_sse_stream(events: Vec<Event>, cache_header: &'static str) -> Response {
@@ -537,8 +605,8 @@ fn make_sse_stream(events: Vec<Event>, cache_header: &'static str) -> Response {
     response
 }
 
-fn sse_response_from_cached(domain: String, cached: &CachedResult, is_cached: bool) -> Response {
-    let events = build_sse_events_from_cached(&domain, cached);
+fn sse_response_from_cached(domain: String, cached: &CachedResult, is_cached: bool, profile: &crate::scoring::profile::ScoringProfile) -> Response {
+    let events = build_sse_events_from_cached(&domain, cached, profile);
     make_sse_stream(events, if is_cached { "HIT" } else { "MISS" })
 }
 

@@ -1,5 +1,6 @@
 import { Show } from 'solid-js';
 import type { SummaryEvent, DoneEvent, Verdict } from '../lib/types';
+import { CHECK_LABELS } from '../lib/checkMeta';
 import VerdictDot from './VerdictDot';
 
 function gradeStyle(grade: string): string {
@@ -74,7 +75,7 @@ export default function Summary(props: Props) {
 
       <Show when={s().hard_fail}>
         <div class="summary-hard-fail" role="alert">
-          Hard fail triggered — one or more critical checks failed.
+          Hard fail: {(s().hard_fail_checks ?? []).map(name => CHECK_LABELS[name] ?? name).join(', ')}
         </div>
       </Show>
 

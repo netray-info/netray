@@ -2,6 +2,7 @@ import { createEffect, createSignal, For, Show } from 'solid-js';
 import type { IpEvent } from '../lib/types';
 import VerdictDot from './VerdictDot';
 import CheckList from './CheckList';
+import SectionHeadline from './SectionHeadline';
 import SectionSkeleton from './SectionSkeleton';
 
 function networkTypeBadgeClass(networkType: string): string {
@@ -23,7 +24,7 @@ interface Props {
 }
 
 export default function IpSection(props: Props) {
-  const [open, setOpen] = createSignal(true);
+  const [open, setOpen] = createSignal(false);
   createEffect(() => { if (props.expanded !== undefined) setOpen(props.expanded); });
 
   return (
@@ -61,7 +62,7 @@ export default function IpSection(props: Props) {
             >
               <VerdictDot verdict={data().status} />
               <span class="section-card__title">IP</span>
-              <span class="section-card__headline">{data().headline}</span>
+              <SectionHeadline checks={data().checks} />
               <Show when={data().guide_url}>
                 <a
                   class="check-item__guide-link"
@@ -74,13 +75,13 @@ export default function IpSection(props: Props) {
                 </a>
               </Show>
               <a
-                class="section-detail-link section-card__link"
+                class="section-card__link"
                 href={data().detail_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
               >
-                View in ifconfig →
+                IP ↗
               </a>
               <span class={`section-card__chevron${open() ? ' section-card__chevron--open' : ''}`}>▼</span>
             </div>

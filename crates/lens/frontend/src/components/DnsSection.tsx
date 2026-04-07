@@ -2,6 +2,7 @@ import { createEffect, createSignal, Show } from 'solid-js';
 import type { DnsEvent } from '../lib/types';
 import VerdictDot from './VerdictDot';
 import CheckList from './CheckList';
+import SectionHeadline from './SectionHeadline';
 import SectionSkeleton from './SectionSkeleton';
 
 interface Props {
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export default function DnsSection(props: Props) {
-  const [open, setOpen] = createSignal(true);
+  const [open, setOpen] = createSignal(false);
   createEffect(() => { if (props.expanded !== undefined) setOpen(props.expanded); });
 
   return (
@@ -51,15 +52,15 @@ export default function DnsSection(props: Props) {
             >
               <VerdictDot verdict={data().status} />
               <span class="section-card__title">DNS</span>
-              <span class="section-card__headline">{data().headline}</span>
+              <SectionHeadline checks={data().checks} />
               <a
-                class="section-detail-link section-card__link"
+                class="section-card__link"
                 href={data().detail_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
               >
-                View in prism →
+                DNS ↗
               </a>
               <span class={`section-card__chevron${open() ? ' section-card__chevron--open' : ''}`}>▼</span>
             </div>

@@ -5,6 +5,7 @@ export interface CheckItem {
   verdict: Verdict;
   message?: string;
   guide_url?: string;
+  weight?: number;
 }
 
 export interface DnsEvent {
@@ -45,6 +46,7 @@ export interface SummaryEvent {
   grade: string;
   score: number;
   hard_fail: boolean;
+  hard_fail_checks: string[];
 }
 
 export interface DoneEvent {
@@ -62,8 +64,18 @@ export interface MetaEcosystem {
   lens_base_url?: string;
 }
 
+export interface ProfileData {
+  name: string;
+  version: number;
+  checks: Record<string, number>;
+  section_weights: { dns: number; tls: number; ip: number };
+  thresholds: Record<string, number>;
+  hard_fail: { dns: string[]; tls: string[]; ip: string[] };
+}
+
 export interface MetaResponse {
   site_name: string;
   version: string;
   ecosystem?: MetaEcosystem;
+  profile?: ProfileData;
 }

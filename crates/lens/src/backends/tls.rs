@@ -57,7 +57,6 @@ struct TlsParams {
 #[derive(Deserialize)]
 struct CertInfo {
     days_remaining: Option<i64>,
-    issuer: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -182,38 +181,10 @@ fn build_headline(ports: &[PortResult]) -> String {
         .and_then(|cert| cert.days_remaining)
         .map(|days| format!(", expires in {days}d"));
 
-    let issuer = first_ip
-        .and_then(|ip| ip.chain.as_ref())
-        .and_then(|chain| {
-            // Find the intermediate or root to show issuer org.
-            chain.get(1).or_else(|| chain.first())
-        })
-        .and_then(|cert| cert.issuer.as_deref())
-        .and_then(extract_issuer_org)
-        .map(|org| format!(", {org}"));
-
-    match (expiry, issuer) {
-        (Some(e), Some(i)) => format!("{version}{e}{i}"),
-        (Some(e), None) => format!("{version}{e}"),
-        (None, Some(i)) => format!("{version}{i}"),
-        (None, None) => "TLS inspection complete".to_string(),
+    match expiry {
+        Some(e) => format!("{version}{e}"),
+        None => "TLS inspection complete".to_string(),
     }
-}
-
-/// Extract a short organization name from an X.509 issuer DN string.
-///
-/// The DN is formatted as `O=Foo, CN=Bar, ...`.  We try to extract `O=` first,
-/// then fall back to `CN=`.
-fn extract_issuer_org(issuer: &str) -> Option<&str> {
-    find_dn_value(issuer, "O=").or_else(|| find_dn_value(issuer, "CN="))
-}
-
-fn find_dn_value<'a>(dn: &'a str, prefix: &str) -> Option<&'a str> {
-    let start = dn.find(prefix).map(|i| i + prefix.len())?;
-    let rest = &dn[start..];
-    let end = rest.find(',').unwrap_or(rest.len());
-    let value = rest[..end].trim();
-    if value.is_empty() { None } else { Some(value) }
 }
 
 // ---------------------------------------------------------------------------
