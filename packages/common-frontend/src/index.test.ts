@@ -5,6 +5,9 @@ import { createFocusTrap } from './focus-trap.js';
 import ThemeToggle from './components/ThemeToggle.js';
 import Modal from './components/Modal.js';
 import SiteFooter from './components/SiteFooter.js';
+import SuiteNav from './components/SuiteNav.js';
+import { createQueryHistory } from './history.js';
+import { fetchWithTimeout } from './api.js';
 
 describe('exports', () => {
   it('createTheme is a function', () => {
@@ -29,5 +32,17 @@ describe('exports', () => {
 
   it('SiteFooter is a function', () => {
     expect(typeof SiteFooter).toBe('function');
+  });
+
+  it('SuiteNav is a function', () => {
+    expect(typeof SuiteNav).toBe('function');
+  });
+
+  it('createQueryHistory is a function', () => {
+    expect(typeof createQueryHistory).toBe('function');
+  });
+
+  it('fetchWithTimeout is a function', () => {
+    expect(typeof fetchWithTimeout).toBe('function');
   });
 });

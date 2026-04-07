@@ -1,6 +1,6 @@
 {
   "name": "@netray-info/common-frontend",
-  "version": "0.2.3",
+  "version": "0.2.5",
   "license": "MIT",
   "type": "module",
   "files": [
@@ -44,6 +44,18 @@
     "./components/SiteFooter": {
       "types": "./dist/types/components/SiteFooter.d.ts",
       "import": "./src/components/SiteFooter.tsx"
+    },
+    "./components/SuiteNav": {
+      "types": "./dist/types/components/SuiteNav.d.ts",
+      "import": "./src/components/SuiteNav.tsx"
+    },
+    "./history": {
+      "types": "./dist/types/history.d.ts",
+      "import": "./src/history.ts"
+    },
+    "./api": {
+      "types": "./dist/types/api.d.ts",
+      "import": "./src/api.ts"
     }
   },
   "publishConfig": {
