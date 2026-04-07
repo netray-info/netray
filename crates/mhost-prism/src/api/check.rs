@@ -236,8 +236,9 @@ pub async fn post_handler(
             Tlsrpt,
         }
 
-        type LookupFut =
-            std::pin::Pin<Box<dyn std::future::Future<Output = (String, Lookups, LookupKind)> + Send>>;
+        type LookupFut = std::pin::Pin<
+            Box<dyn std::future::Future<Output = (String, Lookups, LookupKind)> + Send>,
+        >;
         let futs: FuturesUnordered<LookupFut> = FuturesUnordered::new();
         for rt in CHECK_RECORD_TYPES.iter() {
             let rt = *rt;
@@ -1095,9 +1096,7 @@ fn check_bimi(lookups: &Lookups) -> Vec<CheckResult> {
     let a_tag = tags.iter().find(|(name, _)| *name == "a");
 
     let Some((_, l_value)) = l_tag else {
-        return vec![CheckResult::Failed(
-            "Missing l= tag in BIMI record".into(),
-        )];
+        return vec![CheckResult::Failed("Missing l= tag in BIMI record".into())];
     };
 
     if l_value.is_empty() {
@@ -1105,9 +1104,7 @@ fn check_bimi(lookups: &Lookups) -> Vec<CheckResult> {
     }
 
     if l_value.starts_with("http://") {
-        return vec![CheckResult::Warning(
-            "BIMI logo URL must use HTTPS".into(),
-        )];
+        return vec![CheckResult::Warning("BIMI logo URL must use HTTPS".into())];
     }
 
     let mut results = vec![CheckResult::Ok("BIMI record valid".into())];
@@ -1171,9 +1168,7 @@ fn check_mta_sts(lookups: &Lookups) -> Vec<CheckResult> {
 
     vec![
         CheckResult::Ok("MTA-STS DNS record valid".into()),
-        CheckResult::Warning(
-            "Policy DNS record found; policy file fetch not implemented".into(),
-        ),
+        CheckResult::Warning("Policy DNS record found; policy file fetch not implemented".into()),
     ]
 }
 
@@ -1381,7 +1376,9 @@ mod tests {
         assert!(
             matches!(&results[0], CheckResult::Ok(msg) if msg.contains("MTA-STS DNS record valid"))
         );
-        assert!(matches!(&results[1], CheckResult::Warning(msg) if msg.contains("policy file fetch not implemented")));
+        assert!(
+            matches!(&results[1], CheckResult::Warning(msg) if msg.contains("policy file fetch not implemented"))
+        );
     }
 
     #[test]
