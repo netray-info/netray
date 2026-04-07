@@ -73,6 +73,22 @@ Additional endpoints:
 | `GET /api-docs/openapi.json` | OpenAPI 3.1 spec |
 | `GET /docs` | Interactive API documentation |
 
+### CI / Pipeline Integration
+
+Use in GitHub Actions or any CI system to validate TLS health:
+
+```yaml
+# Check TLS health passes
+- run: |
+    curl -sf 'https://tls.netray.info/api/inspect?h=$DOMAIN' \
+      | jq -e '.quality.verdict == "Pass"'
+
+# Check certificate expiry (fail if < 30 days)
+- run: |
+    curl -sf 'https://tls.netray.info/api/inspect?h=$DOMAIN' \
+      | jq -e '[.quality.checks[] | select(.name == "expiry_window" and .status == "pass")] | length > 0'
+```
+
 ---
 
 ## Building

@@ -176,7 +176,9 @@ fn default_ports() -> Vec<u16> {
         title = "tlsight",
         description = "TLS certificate inspection and diagnostics API\n\n\
             ## Cross-Origin Requests\n\
-            Cross-origin requests from browsers are not supported. Use server-side calls or curl for API integration."
+            Cross-origin requests from browsers are not supported. Use server-side calls or curl for API integration.\n\n\
+            ## Human-Readable Docs\n\
+            See also: [TLS API reference](https://netray.info/api/tls) — curl-focused documentation with examples."
     ),
     paths(
         health_handler,
