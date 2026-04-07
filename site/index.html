@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>netray.info — Network Intelligence Tools</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="description" content="Three open-source tools for understanding your network: IP enrichment, DNS inspection, and TLS analysis.">
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://netray.info/" />
+  <meta property="og:title" content="netray.info — Network Intelligence Tools" />
+  <meta property="og:description" content="Three open-source tools for understanding your network: IP enrichment, DNS inspection, and TLS analysis. Self-hostable, Rust-based, no account needed." />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="netray.info — Network Intelligence Tools" />
+  <meta name="twitter:description" content="Three open-source tools for understanding your network: IP enrichment, DNS inspection, and TLS analysis." />
+  <meta name="theme-color" content="#07090f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f6f8fb" media="(prefers-color-scheme: light)" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Light theme (default) ─────────────────── */
+    :root {
+      color-scheme: light;
+      --bg:       #f6f8fb;
+      --surface:  #ffffff;
+      --surface2: #eef1f6;
+      --border:   #dde3ed;
+      --text:     #0d1521;
+      --muted:    #6b7c93;
+      --faint:    #eef1f6;
+      --shadow:   rgba(0,0,0,.07);
+      --dot:      #d5dce8;
+      --spotlight: rgba(90,120,180,.05);
+      --h1-from:  #0d1521;
+      --h1-to:    #3b5278;
+
+      --ip:       #b45309;
+      --ip-glow:  rgba(180,83,9,.09);
+      --dns:      #6d28d9;
+      --dns-glow: rgba(109,40,217,.09);
+      --tls:      #0e7490;
+      --tls-glow: rgba(14,116,144,.09);
+    }
+
+    /* ── Dark theme ────────────────────────────── */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg:       #07090f;
+        --surface:  #0d1220;
+        --surface2: #111827;
+        --border:   #1a2438;
+        --text:     #dce6f5;
+        --muted:    #4d6480;
+        --faint:    #1a2438;
+        --shadow:   rgba(0,0,0,.4);
+        --dot:      #1a2438;
+        --spotlight: rgba(100,130,200,.06);
+        --h1-from:  #ffffff;
+        --h1-to:    #6b8db5;
+
+        --ip:       #d97706;
+        --ip-glow:  rgba(217,119,6,.12);
+        --dns:      #8b5cf6;
+        --dns-glow: rgba(139,92,246,.12);
+        --tls:      #06b6d4;
+        --tls-glow: rgba(6,182,212,.12);
+      }
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg:       #07090f;
+      --surface:  #0d1220;
+      --surface2: #111827;
+      --border:   #1a2438;
+      --text:     #dce6f5;
+      --muted:    #4d6480;
+      --faint:    #1a2438;
+      --shadow:   rgba(0,0,0,.4);
+      --dot:      #1a2438;
+      --spotlight: rgba(100,130,200,.06);
+      --h1-from:  #ffffff;
+      --h1-to:    #6b8db5;
+
+      --ip:       #d97706;
+      --ip-glow:  rgba(217,119,6,.12);
+      --dns:      #8b5cf6;
+      --dns-glow: rgba(139,92,246,.12);
+      --tls:      #06b6d4;
+      --tls-glow: rgba(6,182,212,.12);
+    }
+
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg:       #f6f8fb;
+      --surface:  #ffffff;
+      --surface2: #eef1f6;
+      --border:   #dde3ed;
+      --text:     #0d1521;
+      --muted:    #6b7c93;
+      --faint:    #eef1f6;
+      --shadow:   rgba(0,0,0,.07);
+      --dot:      #d5dce8;
+      --spotlight: rgba(90,120,180,.05);
+      --h1-from:  #0d1521;
+      --h1-to:    #3b5278;
+
+      --ip:       #b45309;
+      --ip-glow:  rgba(180,83,9,.09);
+      --dns:      #6d28d9;
+      --dns-glow: rgba(109,40,217,.09);
+      --tls:      #0e7490;
+      --tls-glow: rgba(14,116,144,.09);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      line-height: 1.65;
+      min-height: 100vh;
+      transition: background .25s, color .25s;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+      z-index: 0;
+      transition: background-image .25s;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 900px;
+      height: 600px;
+      background: radial-gradient(ellipse, var(--spotlight) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    main { position: relative; z-index: 1; }
+
+    /* ── Theme toggle ──────────────────────────── */
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 100;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      box-shadow: 0 2px 12px var(--shadow);
+    }
+
+    .theme-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 7px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      color: var(--muted);
+      transition: background .15s, color .15s;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .theme-btn:hover { color: var(--text); background: var(--surface2); }
+    .theme-label { display: none; }
+
+    /* ── Hero ──────────────────────────────────── */
+    .hero {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 110px 24px 72px;
+      text-align: center;
+      animation: fadeUp .55s ease both;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 16px;
+      font-size: 11.5px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--muted);
+      letter-spacing: .04em;
+      margin-bottom: 40px;
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+
+    .pulse {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 8px #22c55e88;
+      animation: pulse 2.5s ease infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: .4; }
+    }
+
+    h1 {
+      font-size: clamp(2.6rem, 7vw, 4.8rem);
+      font-weight: 700;
+      letter-spacing: -.035em;
+      line-height: 1.08;
+      margin-bottom: 22px;
+      background: linear-gradient(160deg, var(--h1-from) 30%, var(--h1-to) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: var(--muted);
+      max-width: 520px;
+      margin: 0 auto 52px;
+      line-height: 1.7;
+    }
+
+    /* ── Tool chips ────────────────────────────── */
+    .tool-chips {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      font-weight: 500;
+      text-decoration: none;
+      border: 1px solid;
+      transition: transform .15s, box-shadow .15s, background .15s;
+    }
+
+    .chip:hover { transform: translateY(-2px); }
+
+    .chip--ip  { color: var(--ip);  border-color: rgba(var(--ip-rgb, 217,119,6),.3);  background: var(--ip-glow); }
+    .chip--dns { color: var(--dns); border-color: rgba(var(--dns-rgb,124,58,237),.3); background: var(--dns-glow); }
+    .chip--tls { color: var(--tls); border-color: rgba(var(--tls-rgb, 8,145,178),.3); background: var(--tls-glow); }
+
+    .chip--ip:hover  { box-shadow: 0 6px 20px var(--ip-glow); }
+    .chip--dns:hover { box-shadow: 0 6px 20px var(--dns-glow); }
+    .chip--tls:hover { box-shadow: 0 6px 20px var(--tls-glow); }
+
+    .chip-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: .6;
+    }
+
+    /* ── Tools grid ────────────────────────────── */
+    .tools {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 72px 24px 100px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      animation: fadeUp .55s .12s ease both;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+      box-shadow: 0 2px 12px var(--shadow);
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      border-radius: 18px 18px 0 0;
+    }
+
+    .card--ip::before  { background: linear-gradient(90deg, var(--ip), transparent); }
+    .card--dns::before { background: linear-gradient(90deg, var(--dns), transparent); }
+    .card--tls::before { background: linear-gradient(90deg, var(--tls), transparent); }
+
+    .card:hover { transform: translateY(-5px); }
+
+    .card--ip:hover  { border-color: var(--ip);  box-shadow: 0 20px 50px var(--ip-glow); }
+    .card--dns:hover { border-color: var(--dns); box-shadow: 0 20px 50px var(--dns-glow); }
+    .card--tls:hover { border-color: var(--tls); box-shadow: 0 20px 50px var(--tls-glow); }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+    }
+
+    .card-icon { font-size: 1.7rem; line-height: 1; }
+
+    .card-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: .08em;
+      padding: 4px 11px;
+      border-radius: 999px;
+    }
+
+    .card--ip  .card-badge { background: var(--ip-glow);  color: var(--ip);  border: 1px solid var(--ip); }
+    .card--dns .card-badge { background: var(--dns-glow); color: var(--dns); border: 1px solid var(--dns); }
+    .card--tls .card-badge { background: var(--tls-glow); color: var(--tls); border: 1px solid var(--tls); }
+
+    .card h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -.025em;
+      margin-bottom: 8px;
+    }
+
+    .card-tag {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      margin-bottom: 14px;
+    }
+
+    .card--ip  .card-tag { color: var(--ip); }
+    .card--dns .card-tag { color: var(--dns); }
+    .card--tls .card-tag { color: var(--tls); }
+
+    .card-desc {
+      font-size: .88rem;
+      color: var(--muted);
+      margin-bottom: 24px;
+      line-height: 1.65;
+    }
+
+    .features {
+      list-style: none;
+      margin-bottom: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      flex-grow: 1;
+    }
+
+    .features li {
+      font-size: .83rem;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+    }
+
+    .feat-arrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .8rem;
+      flex-shrink: 0;
+    }
+
+    .card--ip  .feat-arrow { color: var(--ip); }
+    .card--dns .feat-arrow { color: var(--dns); }
+    .card--tls .feat-arrow { color: var(--tls); }
+
+    .card-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: .82rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid;
+      align-self: flex-start;
+      transition: background .15s;
+    }
+
+    .card--ip  .card-cta { color: var(--ip);  border-color: var(--ip); }
+    .card--dns .card-cta { color: var(--dns); border-color: var(--dns); }
+    .card--tls .card-cta { color: var(--tls); border-color: var(--tls); }
+
+    .card--ip:hover  .card-cta { background: var(--ip-glow); }
+    .card--dns:hover .card-cta { background: var(--dns-glow); }
+    .card--tls:hover .card-cta { background: var(--tls-glow); }
+
+    /* ── Footer ────────────────────────────────── */
+    footer {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid var(--border);
+      padding: 28px 24px;
+      text-align: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+
+    footer a { color: var(--muted); text-decoration: none; transition: color .15s; }
+    footer a:hover { color: var(--text); }
+    footer .sep { margin: 0 10px; }
+
+    /* ── Animations ────────────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Card forms ────────────────────────────── */
+    .card-form {
+      margin-bottom: 16px;
+      display: flex;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .card-form-input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .8rem;
+      outline: none;
+      transition: border-color .15s;
+      min-width: 0;
+    }
+
+    .card-form-input::placeholder { color: var(--muted); }
+
+    .card--ip  .card-form-input:focus { border-color: var(--ip); }
+    .card--dns .card-form-input:focus { border-color: var(--dns); }
+    .card--tls .card-form-input:focus { border-color: var(--tls); }
+
+    .card-form-btn {
+      padding: 8px 14px;
+      border-radius: 7px;
+      border: 1px solid;
+      background: transparent;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: .78rem;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background .15s;
+    }
+
+    .card--ip  .card-form-btn { color: var(--ip);  border-color: var(--ip);  }
+    .card--dns .card-form-btn { color: var(--dns); border-color: var(--dns); }
+    .card--tls .card-form-btn { color: var(--tls); border-color: var(--tls); }
+
+    .card--ip  .card-form-btn:hover { background: var(--ip-glow); }
+    .card--dns .card-form-btn:hover { background: var(--dns-glow); }
+    .card--tls .card-form-btn:hover { background: var(--tls-glow); }
+
+    /* ── Suite narrative ───────────────────────── */
+    .suite-narrative {
+      font-size: .97rem;
+      color: var(--muted);
+      max-width: 580px;
+      margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+
+    /* ── Responsive ────────────────────────────── */
+    @media (max-width: 600px) {
+      .hero  { padding: 72px 20px 52px; }
+      .tools { padding: 48px 16px 80px; }
+      .theme-toggle { top: 12px; right: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="theme-toggle">
+  <button class="theme-btn" id="theme-btn" aria-label="Toggle color theme">
+    <span id="theme-icon"></span><span class="theme-label" id="theme-label"></span>
+  </button>
+</div>
+
+<main>
+  <section class="hero">
+    <div class="status-pill">
+      <span class="pulse"></span>
+      open source &middot; self-hosted &middot; built in rust
+    </div>
+
+    <h1>Network intelligence,<br>laid bare.</h1>
+
+    <p class="subtitle">
+      Three tools for understanding what's really happening on the network —
+      your IP, your DNS, your TLS certificates.
+    </p>
+
+    <p class="suite-narrative">
+      Built for DevOps, SRE, and Security Engineers who need DNS, TLS, and IP
+      context in the same workflow — without switching between SSL Labs,
+      DNSChecker, and ifconfig.co. All three tools are self-hostable,
+      open-source, and built in Rust.
+    </p>
+
+    <div class="tool-chips">
+      <a href="https://ip.netray.info"  class="chip chip--ip">
+        <span class="chip-dot"></span>ip.netray.info
+      </a>
+      <a href="https://dns.netray.info" class="chip chip--dns">
+        <span class="chip-dot"></span>dns.netray.info
+      </a>
+      <a href="https://tls.netray.info" class="chip chip--tls">
+        <span class="chip-dot"></span>tls.netray.info
+      </a>
+    </div>
+  </section>
+
+  <section class="tools">
+
+    <div class="card card--ip">
+      <div class="card-head">
+        <span class="card-icon">🌐</span>
+        <span class="card-badge">ip.netray.info</span>
+      </div>
+      <h2>ifconfig-rs</h2>
+      <div class="card-tag">// IP enrichment API</div>
+      <p class="card-desc">
+        Any IP, enriched. Look up geolocation, ASN, reverse DNS, and network
+        classification — cloud provider, VPN, Tor exit node, or bot network.
+        Friendly to browsers and <code style="font-family:monospace;background:var(--faint);padding:1px 5px;border-radius:3px;font-size:.9em">curl</code> alike.
+      </p>
+      <ul class="features">
+        <li><span class="feat-arrow">→</span> GeoIP &amp; ASN lookup for any address</li>
+        <li><span class="feat-arrow">→</span> Cloud provider, VPN, Tor &amp; bot detection</li>
+        <li><span class="feat-arrow">→</span> JSON, YAML, TOML, CSV output formats</li>
+        <li><span class="feat-arrow">→</span> Batch lookup, field filtering, rate limiting</li>
+      </ul>
+      <form class="card-form" action="https://ip.netray.info/" method="get">
+        <button class="card-form-btn" type="submit">→ Show my IP</button>
+      </form>
+      <a href="https://ip.netray.info" class="card-cta">Open tool ↗</a>
+    </div>
+
+    <div class="card card--dns">
+      <div class="card-head">
+        <span class="card-icon">🔮</span>
+        <span class="card-badge">dns.netray.info</span>
+      </div>
+      <h2>prism</h2>
+      <div class="card-tag">// DNS, refracted.</div>
+      <p class="card-desc">
+        Fan out DNS queries to multiple resolvers simultaneously and stream
+        results as they arrive. Spot disagreements, trace delegation chains,
+        audit your whole domain in one shot.
+      </p>
+      <ul class="features">
+        <li><span class="feat-arrow">→</span> Query, Check, Trace, Compare, Auth, DNSSEC modes</li>
+        <li><span class="feat-arrow">→</span> Cloudflare, Google, Quad9, Mullvad &amp; more</li>
+        <li><span class="feat-arrow">→</span> dig-inspired query language with tab completion</li>
+        <li><span class="feat-arrow">→</span> Streaming results — no waiting for all resolvers</li>
+      </ul>
+      <form class="card-form" action="https://dns.netray.info/" method="get">
+        <input class="card-form-input" type="text" name="q" placeholder="example.com" autocomplete="off" spellcheck="false" />
+        <button class="card-form-btn" type="submit">Check DNS →</button>
+      </form>
+      <a href="https://dns.netray.info" class="card-cta">Open tool ↗</a>
+    </div>
+
+    <div class="card card--tls">
+      <div class="card-head">
+        <span class="card-icon">🔒</span>
+        <span class="card-badge">tls.netray.info</span>
+      </div>
+      <h2>tlsight</h2>
+      <div class="card-tag">// TLS inspection &amp; analysis</div>
+      <p class="card-desc">
+        Full certificate chain inspection, TLS configuration analysis, and DNS
+        cross-validation in one view. Catches what
+        <code style="font-family:monospace;background:var(--faint);padding:1px 5px;border-radius:3px;font-size:.9em">openssl s_client</code>
+        buries in noise.
+      </p>
+      <ul class="features">
+        <li><span class="feat-arrow">→</span> Full chain: expiry, algorithm, completeness</li>
+        <li><span class="feat-arrow">→</span> DANE/TLSA validation &amp; CAA record cross-check</li>
+        <li><span class="feat-arrow">→</span> Multi-IP consistency — detects CDN cert mismatches</li>
+        <li><span class="feat-arrow">→</span> Intentionally inspects broken &amp; expired certs</li>
+      </ul>
+      <form class="card-form" action="https://tls.netray.info/" method="get">
+        <input class="card-form-input" type="text" name="h" placeholder="example.com" autocomplete="off" spellcheck="false" />
+        <button class="card-form-btn" type="submit">Inspect TLS →</button>
+      </form>
+      <a href="https://tls.netray.info" class="card-cta">Open tool ↗</a>
+    </div>
+
+  </section>
+</main>
+
+<footer>
+  <a href="https://ip.netray.info">ip.netray.info</a>
+  <span class="sep">&middot;</span>
+  <a href="https://dns.netray.info">dns.netray.info</a>
+  <span class="sep">&middot;</span>
+  <a href="https://tls.netray.info">tls.netray.info</a>
+  <span class="sep">&middot;</span>
+  <a href="https://lukas.pustina.de">Lukas Pustina</a>
+</footer>
+
+<script>
+  const THEMES = ['auto', 'light', 'dark'];
+  const LABELS = { auto: '⊙ auto', light: '☀︎ light', dark: '☾ dark' };
+  const stored  = localStorage.getItem('theme') || 'auto';
+  let current   = THEMES.includes(stored) ? stored : 'auto';
+
+  const iconEl  = document.getElementById('theme-icon');
+  const labelEl = document.getElementById('theme-label');
+  const btn     = document.getElementById('theme-btn');
+
+  function apply(t) {
+    if (t === 'auto') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', t);
+    }
+    const parts = LABELS[t].split(' ');
+    iconEl.textContent  = parts[0] + ' ';
+    labelEl.textContent = parts[1];
+    btn.setAttribute('aria-label', 'Color theme: ' + t);
+  }
+
+  apply(current);
+
+  btn.addEventListener('click', () => {
+    current = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
+    localStorage.setItem('theme', current);
+    apply(current);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IP API Reference - netray.info</title>
+  <meta name="description" content="IP enrichment API reference for ip.netray.info. Geolocation, ASN, reverse DNS, network classification, batch lookups, and format negotiation.">
+  <link rel="canonical" href="https://netray.info/api/ip">
+  <meta property="og:title" content="IP API Reference - netray.info">
+  <meta property="og:description" content="IP enrichment API: geolocation, ASN, reverse DNS, network classification, batch lookups via curl.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://netray.info/api/ip">
+  <meta property="og:site_name" content="netray.info">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="../guide/style.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "IP Enrichment API Reference",
+    "description": "IP enrichment API reference for ip.netray.info. Geolocation, ASN, reverse DNS, network classification, batch lookups, and format negotiation.",
+    "url": "https://netray.info/api/ip",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/api/ip"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">IP Enrichment API</h1>
+  <p class="page-subtitle">Base URL: <code>https://ip.netray.info</code></p>
+
+  <article>
+
+      <p>
+        Returns your public IP address enriched with geolocation, ASN, reverse DNS,
+        network classification, and threat intelligence. Use <code>?ip=</code> to
+        look up any address.
+      </p>
+
+      <p>
+        See also: <a href="https://ip.netray.info/docs">interactive API reference</a>
+        (auto-generated OpenAPI)
+      </p>
+
+      <h2>Format Negotiation</h2>
+
+      <p>All GET endpoints support multiple output formats. Three ways to choose:</p>
+
+      <ol>
+        <li><strong>URL suffix</strong> (highest priority): <code>/ip/json</code>, <code>/all/yaml</code></li>
+        <li><strong>Query parameter</strong>: <code>?format=json</code></li>
+        <li><strong>Accept header</strong>: <code>Accept: application/json</code></li>
+      </ol>
+
+      <p>Supported formats: <code>json</code>, <code>yaml</code>, <code>toml</code>, <code>csv</code>, <code>text</code> (plain text).</p>
+
+      <p>CLI tools (curl, wget, httpie) receive plain text by default. Browsers get the HTML SPA.</p>
+
+<pre><code># Plain text (default for curl)
+curl https://ip.netray.info
+
+# JSON via suffix
+curl -s https://ip.netray.info/ip/json
+
+# YAML via query param
+curl -s 'https://ip.netray.info/ip?format=yaml'
+
+# JSON via Accept header
+curl -s -H 'Accept: application/json' https://ip.netray.info/ip</code></pre>
+
+      <h2>Core Endpoints</h2>
+
+      <h3><code>GET /</code> or <code>GET /ip</code></h3>
+      <p>Your public IP address.</p>
+<pre><code>curl https://ip.netray.info</code></pre>
+<pre><code>203.0.113.42</code></pre>
+
+      <h3><code>GET /ip/cidr</code></h3>
+      <p>Your IP in CIDR notation.</p>
+<pre><code>curl https://ip.netray.info/ip/cidr</code></pre>
+<pre><code>203.0.113.42/32</code></pre>
+
+      <h3><code>GET /all</code></h3>
+      <p>Everything: IP, geo, ASN, rDNS, network classification, headers, user agent.</p>
+<pre><code>curl -s https://ip.netray.info/all/json | jq .</code></pre>
+<pre><code>{
+  "ip": "203.0.113.42",
+  "hostname": "host-42.example.com",
+  "city": "Frankfurt",
+  "region": "Hesse",
+  "country": "DE",
+  "timezone": "Europe/Berlin",
+  "latitude": 50.1109,
+  "longitude": 8.6821,
+  "asn": 64496,
+  "isp": "Example Networks",
+  "network": {
+    "type": "residential",
+    "cloud_provider": null,
+    "is_vpn": false,
+    "is_tor": false
+  },
+  ...
+}</code></pre>
+
+      <h3><code>GET /host</code></h3>
+      <p>Reverse DNS (PTR) hostname.</p>
+<pre><code>curl https://ip.netray.info/host</code></pre>
+<pre><code>host-42.example.com</code></pre>
+
+      <h3><code>GET /location</code></h3>
+      <p>Geolocation data.</p>
+<pre><code>curl -s https://ip.netray.info/location/json | jq .</code></pre>
+<pre><code>{
+  "city": "Frankfurt",
+  "region": "Hesse",
+  "country": "DE",
+  "latitude": 50.1109,
+  "longitude": 8.6821,
+  "timezone": "Europe/Berlin"
+}</code></pre>
+
+      <h3><code>GET /isp</code></h3>
+      <p>ISP and ASN information.</p>
+<pre><code>curl -s https://ip.netray.info/isp/json | jq .</code></pre>
+<pre><code>{
+  "asn": 64496,
+  "isp": "Example Networks",
+  "organization": "Example Networks Ltd"
+}</code></pre>
+
+      <h3><code>GET /network</code></h3>
+      <p>Network classification: cloud provider, VPN, Tor, botnet, datacenter, residential.</p>
+<pre><code>curl -s https://ip.netray.info/network/json | jq .</code></pre>
+<pre><code>{
+  "type": "residential",
+  "cloud_provider": null,
+  "is_vpn": false,
+  "is_tor": false,
+  "is_datacenter": false,
+  "threat_level": "none"
+}</code></pre>
+
+      <h3><code>GET /tcp</code></h3>
+      <p>TCP connection info (source port).</p>
+<pre><code>curl https://ip.netray.info/tcp</code></pre>
+
+      <h3><code>GET /headers</code></h3>
+      <p>Your request headers as seen by the server.</p>
+<pre><code>curl -s https://ip.netray.info/headers/json | jq .</code></pre>
+
+      <h3><code>GET /user_agent</code></h3>
+      <p>Parsed user agent string.</p>
+<pre><code>curl -s https://ip.netray.info/user_agent/json | jq .</code></pre>
+
+      <h2>Individual Field Endpoints</h2>
+
+      <p>Each returns a single value as plain text:</p>
+
+<pre><code>curl https://ip.netray.info/country    # DE
+curl https://ip.netray.info/city       # Frankfurt
+curl https://ip.netray.info/region     # Hesse
+curl https://ip.netray.info/asn        # 64496
+curl https://ip.netray.info/timezone   # Europe/Berlin
+curl https://ip.netray.info/latitude   # 50.1109
+curl https://ip.netray.info/longitude  # 8.6821</code></pre>
+
+      <h2>Protocol-Specific Endpoints</h2>
+
+      <h3><code>GET /ipv4</code></h3>
+      <p>Force resolution over IPv4.</p>
+<pre><code>curl https://ip.netray.info/ipv4</code></pre>
+
+      <h3><code>GET /ipv6</code></h3>
+      <p>Force resolution over IPv6.</p>
+<pre><code>curl https://ip.netray.info/ipv6</code></pre>
+
+      <h2>Lookup Endpoints</h2>
+
+      <h3><code>GET /asn/{number}</code></h3>
+      <p>Look up information about an ASN.</p>
+<pre><code>curl -s https://ip.netray.info/asn/64496/json | jq .</code></pre>
+
+      <h3><code>GET /range?cidr=</code></h3>
+      <p>Classify a CIDR range.</p>
+<pre><code>curl -s 'https://ip.netray.info/range?cidr=203.0.113.0/24&format=json' | jq .</code></pre>
+
+      <h2>Query Parameters</h2>
+
+      <table>
+        <thead>
+          <tr><th>Parameter</th><th>Description</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>ip</code></td>
+            <td>Look up an arbitrary IP instead of the caller's</td>
+            <td><code>?ip=203.0.113.1</code></td>
+          </tr>
+          <tr>
+            <td><code>fields</code></td>
+            <td>Comma-separated list of fields to include</td>
+            <td><code>?fields=ip,country,asn</code></td>
+          </tr>
+          <tr>
+            <td><code>format</code></td>
+            <td>Output format: json, yaml, toml, csv, text</td>
+            <td><code>?format=json</code></td>
+          </tr>
+          <tr>
+            <td><code>dns</code></td>
+            <td>Set to <code>false</code> to skip PTR lookup (faster)</td>
+            <td><code>?dns=false</code></td>
+          </tr>
+          <tr>
+            <td><code>lang</code></td>
+            <td>BCP-47 locale for localized geo names</td>
+            <td><code>?lang=de</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+<pre><code># Look up a specific IP, only country and ASN, in JSON
+curl -s 'https://ip.netray.info/all/json?ip=203.0.113.1&fields=ip,country,asn' | jq .</code></pre>
+
+      <h2>Batch Lookup</h2>
+
+      <h3><code>POST /batch</code></h3>
+      <p>Look up multiple IPs in a single request. Send a JSON array of IP addresses.</p>
+<pre><code>curl -s -X POST https://ip.netray.info/batch \
+  -H 'Content-Type: application/json' \
+  -d '["203.0.113.1", "198.51.100.2", "192.0.2.3"]' | jq .</code></pre>
+
+      <p>The response is an array. Failed lookups include an error object with an index:</p>
+<pre><code>[
+  {"ip": "203.0.113.1", "country": "DE", ...},
+  {"error": {"code": "not_found", "message": "No data for IP"}, "index": 1},
+  {"ip": "192.0.2.3", "country": "US", ...}
+]</code></pre>
+
+      <p>Note: batch requires <code>batch.enabled=true</code> in server configuration.</p>
+
+      <h2>Side-by-Side Comparison</h2>
+
+      <h3><code>POST /diff</code></h3>
+      <p>Compare two IPs side by side.</p>
+<pre><code>curl -s -X POST https://ip.netray.info/diff \
+  -H 'Content-Type: application/json' \
+  -d '{"a": "203.0.113.1", "b": "198.51.100.2"}' | jq .</code></pre>
+
+      <h2>Rate Limits</h2>
+
+      <p>60 requests per minute per IP address, with a burst allowance of 10.</p>
+
+      <table>
+        <thead>
+          <tr><th>Header</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>X-RateLimit-Limit</code></td><td>Maximum requests per window</td></tr>
+          <tr><td><code>X-RateLimit-Remaining</code></td><td>Requests remaining</td></tr>
+          <tr><td><code>Retry-After</code></td><td>Seconds to wait (only on 429)</td></tr>
+        </tbody>
+      </table>
+
+<pre><code># Check your remaining quota
+curl -sI https://ip.netray.info/ip | grep -i x-ratelimit</code></pre>
+
+      <h2>Errors</h2>
+
+<pre><code>{
+  "error": {
+    "code": "rate_limited",
+    "message": "Too many requests. Retry after 12 seconds."
+  }
+}</code></pre>
+  </article>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">API References</h2>
+    <ul class="page-footer__links">
+      <li><a href="index.html">API Overview</a></li>
+      <li><a href="dns.html">DNS API</a></li>
+      <li><a href="tls.html">TLS API</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>What Your IP Address Reveals: IP Enrichment Explained | netray.info</title>
+  <meta name="description" content="Discover what your IP address reveals about you: geolocation, ISP, VPN detection, cloud provider, threat intelligence, and more. Learn how IP enrichment works.">
+  <link rel="canonical" href="https://netray.info/guide/ip-enrichment">
+  <link rel="stylesheet" href="style.css">
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="What Your IP Address Reveals: IP Enrichment Explained">
+  <meta property="og:description" content="Discover what your IP address reveals: geolocation, ISP, VPN detection, cloud provider, and threat intelligence.">
+  <meta property="og:url" content="https://netray.info/guide/ip-enrichment">
+  <meta property="og:site_name" content="netray.info">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="What Your IP Address Reveals: IP Enrichment Explained">
+  <meta name="twitter:description" content="Discover what your IP address reveals: geolocation, ISP, VPN detection, cloud provider, and threat intelligence.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "What Your IP Address Reveals: IP Enrichment Explained",
+    "description": "Discover what your IP address reveals about you: geolocation, ISP, VPN detection, cloud provider, threat intelligence, and more.",
+    "url": "https://netray.info/guide/ip-enrichment",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/ip-enrichment"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">What Your IP Address Reveals</h1>
+  <p class="page-subtitle">Everything an IP address can tell about a connection -- and the layers of enrichment behind it.</p>
+
+  <article>
+    <h2>What is IP enrichment?</h2>
+    <p>Every device connected to the internet has an IP address. On its own, an IP address is just a number. But by cross-referencing it against multiple data sources, you can extract a surprising amount of information: geographic location, internet service provider, whether it belongs to a cloud provider, whether it is a known VPN exit node, and whether it appears on threat intelligence lists.</p>
+    <p>This process is called <strong>IP enrichment</strong>: taking a raw IP address and annotating it with contextual metadata from geolocation databases, WHOIS registries, ASN data, and curated threat feeds.</p>
+
+    <h2>What an IP address reveals</h2>
+
+    <h3>Geolocation</h3>
+    <p>GeoIP databases map IP address ranges to approximate physical locations. The accuracy varies: country-level is reliable (95%+ accuracy), city-level is less so (50-80% depending on the region), and anything more granular than city is unreliable. IP geolocation works by correlating address allocations from Regional Internet Registries (ARIN, RIPE, APNIC, etc.) with ground-truth data from ISPs and measurement networks.</p>
+    <p>Geolocation data includes: country, region/state, city, approximate coordinates, time zone, and postal code. It also indicates whether the IP is in the European Union, which is relevant for GDPR compliance decisions.</p>
+
+    <h3>Network and ISP</h3>
+    <p>Every public IP belongs to an Autonomous System (AS), identified by an ASN (Autonomous System Number). The AS is operated by an organization -- typically an ISP, hosting provider, enterprise, or content delivery network. Looking up the ASN gives you the operator's name, the network prefix the IP belongs to, and the type of network (transit, access, content, etc.).</p>
+    <p>This reveals whether an IP belongs to a residential broadband provider, a mobile carrier, a datacenter, or a cloud platform. The distinction matters for fraud detection, access control, and traffic analysis.</p>
+
+    <h3>Cloud provider detection</h3>
+    <p>Major cloud providers (AWS, Google Cloud, Azure, Cloudflare, and others) publish their IP ranges as machine-readable files. By matching an IP against these published CIDR lists, you can determine not just that an IP is a cloud address, but which provider and sometimes which region or service it belongs to. This is useful for identifying automated traffic, API consumers, and infrastructure-hosted bots.</p>
+
+    <h3>VPN and proxy detection</h3>
+    <p>VPN detection combines multiple signals. Community-maintained lists of known VPN provider IP ranges provide direct matches. ASN heuristic analysis identifies ISP names associated with VPN services. Tor exit node lists are published by the Tor Project. Together, these signals identify traffic that is being routed through privacy infrastructure, which is important context for authentication systems and abuse prevention.</p>
+
+    <h3>Threat intelligence</h3>
+    <p>IP addresses appear on threat intelligence feeds for specific reasons:</p>
+    <ul>
+      <li><strong>Spamhaus DROP/EDROP</strong>: entire netblocks identified as hijacked or leased to spammers. These are not individual bad actors but compromised address space that should be blocked at the network edge.</li>
+      <li><strong>Feodo Tracker</strong>: active command-and-control (C2) servers for banking trojans and botnets. An IP on this list is actively participating in malware operations.</li>
+      <li><strong>CINS Army</strong>: a composite threat list of IPs observed in scanning, brute-force, and exploitation activity.</li>
+    </ul>
+
+    <h3>Reverse DNS</h3>
+    <p>A PTR record lookup reveals the reverse DNS hostname associated with an IP. This often encodes the ISP's naming convention (e.g., <code>cpe-198-51-100-42.socal.res.example.com</code>) and can indicate whether the IP is residential, business, or infrastructure. Not all IPs have PTR records, and they are set by the IP block owner rather than verified, so they are suggestive rather than authoritative.</p>
+
+    <h2>Why it matters</h2>
+    <p>IP enrichment is used across security, operations, and product development:</p>
+    <ul>
+      <li><strong>Authentication</strong>: detect logins from unexpected locations, VPN providers, or datacenter IPs that suggest credential stuffing.</li>
+      <li><strong>Fraud prevention</strong>: flag transactions where the IP's geolocation does not match the billing address or where the IP is a known proxy.</li>
+      <li><strong>Abuse prevention</strong>: rate-limit or block traffic from IPs on threat intelligence lists.</li>
+      <li><strong>Content delivery</strong>: route users to the nearest CDN node based on IP geolocation.</li>
+      <li><strong>Compliance</strong>: determine whether a user is in a jurisdiction subject to specific regulations (EU/GDPR, sanctions lists).</li>
+    </ul>
+
+    <h2>Limitations</h2>
+    <p>IP enrichment is probabilistic, not deterministic. GeoIP databases have accuracy margins. VPN detection has false positives (shared hosting on a VPN provider's ASN) and false negatives (private VPN servers). Threat lists have latency -- an IP may be delisted days after the threat is mitigated, or may not appear until days after it starts attacking. CGNAT (Carrier-Grade NAT) means thousands of users may share a single public IP, making per-IP decisions unreliable for mobile and some residential ISPs.</p>
+    <p>Enrichment data should inform decisions, not make them unilaterally. Use it as one signal among many.</p>
+
+    <h2>How to check</h2>
+    <p>The fastest way to see what your IP reveals is to query an enrichment API. A single lookup returns geolocation, ASN, network classification, cloud provider identification, VPN/Tor/proxy status, and threat intelligence matches -- all derived from the layered data sources described above.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">See what your IP reveals</h2>
+    <form class="tool-entry__form" action="https://ip.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="ip"
+        placeholder="Leave blank for your IP, or enter any IP"
+        aria-label="IP address to look up"
+      >
+      <button class="tool-entry__submit" type="submit">Look up</button>
+    </form>
+    <p class="tool-entry__hint">Returns geolocation, ASN, network type, cloud provider, VPN/proxy status, and threat intelligence.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/email-auth">Email Authentication Guide</a></li>
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

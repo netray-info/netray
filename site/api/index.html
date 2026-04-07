@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API Overview - netray.info</title>
+  <meta name="description" content="Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, and TLS certificate analysis via curl.">
+  <link rel="canonical" href="https://netray.info/api">
+  <meta property="og:title" content="API Overview - netray.info">
+  <meta property="og:description" content="Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, and TLS certificate analysis via curl.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://netray.info/api">
+  <meta property="og:site_name" content="netray.info">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="../guide/style.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "netray.info API Overview",
+    "description": "Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, and TLS certificate analysis via curl.",
+    "url": "https://netray.info/api/",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/api/"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">netray.info API</h1>
+  <p class="page-subtitle">Three tools, three base URLs, one JSON error format. All endpoints are public, rate-limited, and require no authentication.</p>
+
+  <article>
+
+      <table>
+        <thead>
+          <tr><th>Tool</th><th>Base URL</th><th>Reference</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>IP Enrichment</td>
+            <td><code>https://ip.netray.info</code></td>
+            <td><a href="ip.html">IP API docs</a></td>
+          </tr>
+          <tr>
+            <td>DNS Inspector</td>
+            <td><code>https://dns.netray.info</code></td>
+            <td><a href="dns.html">DNS API docs</a></td>
+          </tr>
+          <tr>
+            <td>TLS Inspector</td>
+            <td><code>https://tls.netray.info</code></td>
+            <td><a href="tls.html">TLS API docs</a></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Quick Start</h2>
+
+      <p>Get your public IP and enrichment data:</p>
+<pre><code>curl -s https://ip.netray.info/all/json | jq .</code></pre>
+
+      <p>Look up DNS records for a domain:</p>
+<pre><code>curl -s -X POST https://dns.netray.info/api/query \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com A"}' \
+  --no-buffer</code></pre>
+
+      <p>Inspect a TLS certificate:</p>
+<pre><code>curl -s 'https://tls.netray.info/api/inspect?host=example.com' | jq .</code></pre>
+
+      <h2>Common Headers</h2>
+
+      <p>Every response includes:</p>
+
+      <table>
+        <thead>
+          <tr><th>Header</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>X-Request-Id</code></td>
+            <td>UUID v7 request identifier for debugging</td>
+          </tr>
+          <tr>
+            <td><code>X-RateLimit-Limit</code></td>
+            <td>Requests allowed per window</td>
+          </tr>
+          <tr>
+            <td><code>X-RateLimit-Remaining</code></td>
+            <td>Requests remaining in current window</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Rate Limits</h2>
+
+      <table>
+        <thead>
+          <tr><th>Tool</th><th>Limit</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>IP</td>
+            <td>60 req/min per IP, burst 10</td>
+            <td>Applies to all endpoints</td>
+          </tr>
+          <tr>
+            <td>DNS</td>
+            <td>3-tier GCRA (per-IP, per-target, global)</td>
+            <td>Cost = record_types x servers</td>
+          </tr>
+          <tr>
+            <td>TLS</td>
+            <td>Per-IP + per-target GCRA</td>
+            <td>Cost = ports x inspected IPs</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>
+        When rate-limited, you receive a <code>429 Too Many Requests</code> response
+        with a <code>Retry-After</code> header indicating how many seconds to wait.
+      </p>
+
+      <h2>Error Format</h2>
+
+      <p>All three tools use the same error envelope:</p>
+
+<pre><code>{
+  "error": {
+    "code": "rate_limited",
+    "message": "Too many requests. Retry after 12 seconds."
+  }
+}</code></pre>
+
+      <p>Common error codes:</p>
+
+      <table>
+        <thead>
+          <tr><th>HTTP Status</th><th>Code</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>400</td><td><code>bad_request</code></td><td>Malformed input or missing required parameters</td></tr>
+          <tr><td>404</td><td><code>not_found</code></td><td>Unknown endpoint or resource</td></tr>
+          <tr><td>429</td><td><code>rate_limited</code></td><td>Rate limit exceeded; check <code>Retry-After</code> header</td></tr>
+          <tr><td>500</td><td><code>internal_error</code></td><td>Server error; include <code>X-Request-Id</code> in bug reports</td></tr>
+        </tbody>
+      </table>
+
+      <h2>CI / Pipeline Integration</h2>
+
+      <p>All endpoints work in non-interactive contexts. Minimal GitHub Actions examples:</p>
+
+<pre><code># Check TLS health in CI
+- run: |
+    curl -sf https://tls.netray.info/api/inspect?host=$DOMAIN \
+      | jq -e '.quality.verdict == "Pass"'
+
+# Verify DNS records exist
+- run: |
+    curl -sf -X POST 'https://dns.netray.info/api/query?stream=false' \
+      -H 'Content-Type: application/json' \
+      -d "{\"query\": \"$DOMAIN MX\"}" \
+      | jq -e '.events | length > 0'
+
+# Check IP reputation
+- run: |
+    curl -sf "https://ip.netray.info/network/json?ip=$IP" \
+      | jq -e '.type == "residential"'</code></pre>
+
+      <h2>Interactive API Reference</h2>
+
+      <p>
+        Each tool also exposes auto-generated OpenAPI documentation with a
+        try-it-out interface:
+      </p>
+
+      <ul>
+        <li><a href="https://ip.netray.info/docs">IP API -- interactive reference</a></li>
+        <li><a href="https://dns.netray.info/docs">DNS API -- interactive reference</a></li>
+        <li><a href="https://tls.netray.info/docs">TLS API -- interactive reference</a></li>
+      </ul>
+  </article>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">API References</h2>
+    <ul class="page-footer__links">
+      <li><a href="ip.html">IP API</a></li>
+      <li><a href="dns.html">DNS API</a></li>
+      <li><a href="tls.html">TLS API</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

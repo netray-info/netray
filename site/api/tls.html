@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TLS API Reference - netray.info</title>
+  <meta name="description" content="TLS certificate inspection API reference for tls.netray.info. Certificate chain validation, DANE/TLSA, OCSP, CT, quality grading, and multi-port inspection.">
+  <link rel="canonical" href="https://netray.info/api/tls">
+  <meta property="og:title" content="TLS API Reference - netray.info">
+  <meta property="og:description" content="TLS inspection API: certificate chains, DANE, OCSP, CT logs, quality grading via curl.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://netray.info/api/tls">
+  <meta property="og:site_name" content="netray.info">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="../guide/style.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "TLS Inspector API Reference",
+    "description": "TLS certificate inspection API reference for tls.netray.info. Certificate chain validation, DANE/TLSA, OCSP, CT, quality grading, and multi-port inspection.",
+    "url": "https://netray.info/api/tls",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/api/tls"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">TLS Inspector API</h1>
+  <p class="page-subtitle">Base URL: <code>https://tls.netray.info</code></p>
+
+  <article>
+
+      <p>
+        Full TLS handshake and certificate chain analysis. Connects to the target,
+        inspects the certificate chain, checks DANE/TLSA and CAA records, validates
+        OCSP stapling and CT SCTs, tests HSTS, and runs 15 graded quality checks.
+      </p>
+
+      <p>
+        See also: <a href="https://tls.netray.info/docs">interactive API reference</a>
+        (auto-generated OpenAPI)
+      </p>
+
+      <h2>Endpoints</h2>
+
+      <h3><code>GET /api/inspect?host=</code></h3>
+      <p>Inspect a host's TLS configuration. Returns a synchronous JSON response.</p>
+<pre><code>curl -s 'https://tls.netray.info/api/inspect?host=example.com' | jq .</code></pre>
+
+      <h3><code>POST /api/inspect</code></h3>
+      <p>Same inspection via POST body.</p>
+<pre><code>curl -s -X POST https://tls.netray.info/api/inspect \
+  -H 'Content-Type: application/json' \
+  -d '{"host": "example.com"}' | jq .</code></pre>
+
+      <h3>Custom Port</h3>
+      <p>Append a port number to inspect non-standard TLS ports:</p>
+<pre><code>curl -s 'https://tls.netray.info/api/inspect?host=example.com:8443' | jq .</code></pre>
+
+      <h3>Multi-Port Inspection</h3>
+      <p>Inspect multiple ports in a single request:</p>
+<pre><code>curl -s 'https://tls.netray.info/api/inspect?host=example.com:443,8443' | jq .</code></pre>
+
+      <h2>Response Structure</h2>
+
+      <p>The response contains several top-level sections:</p>
+
+<pre><code>{
+  "summary": {
+    "host": "example.com",
+    "verdict": "Pass",
+    "grade": "A",
+    ...
+  },
+  "ports": [
+    {
+      "port": 443,
+      "ips": [
+        {
+          "ip": "93.184.215.14",
+          "tls_version": "TLSv1.3",
+          "cipher_suite": "TLS_AES_256_GCM_SHA384",
+          "certificate": {
+            "subject": "CN=example.com",
+            "issuer": "CN=DigiCert TLS RSA SHA256 2020 CA1",
+            "not_before": "2024-01-15T00:00:00Z",
+            "not_after": "2025-02-14T23:59:59Z",
+            "serial": "0A:1B:2C:...",
+            "sans": ["example.com", "www.example.com"],
+            "signature_algorithm": "SHA256withRSA",
+            "key_type": "RSA 2048"
+          },
+          "chain": [
+            {"subject": "CN=example.com", "issuer": "CN=DigiCert TLS RSA SHA256 2020 CA1"},
+            {"subject": "CN=DigiCert TLS RSA SHA256 2020 CA1", "issuer": "CN=DigiCert Global Root G2"}
+          ],
+          "ocsp": {
+            "stapled": true,
+            "status": "good"
+          },
+          "scts": [
+            {"log": "Google Argon", "timestamp": "2024-01-15T12:00:00Z"}
+          ],
+          "enrichment": {
+            "asn": 64496,
+            "isp": "Example Networks",
+            "country": "US"
+          }
+        }
+      ]
+    }
+  ],
+  "dns": {
+    "caa": [
+      {"flag": 0, "tag": "issue", "value": "digicert.com"}
+    ],
+    "tlsa": [],
+    "dane_valid": false
+  },
+  "quality": {
+    "verdict": "Pass",
+    "grade": "A",
+    "checks": [
+      {"name": "certificate_validity", "status": "pass", "detail": "Certificate valid for 396 days"},
+      {"name": "chain_completeness", "status": "pass", "detail": "Full chain provided"},
+      {"name": "san_quality", "status": "pass", "detail": "SAN covers primary domain"},
+      {"name": "aia_reachability", "status": "pass", "detail": "AIA OCSP responder reachable"},
+      ...
+    ]
+  },
+  "hsts": {
+    "enabled": true,
+    "max_age": 31536000,
+    "include_subdomains": true,
+    "preloaded": false
+  }
+}</code></pre>
+
+      <h2>Quality Checks</h2>
+
+      <p>
+        The <code>quality.checks</code> array contains up to 15 graded checks.
+        Each check has a <code>status</code> of <code>pass</code>, <code>warn</code>,
+        or <code>fail</code>:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Check</th><th>What It Tests</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>certificate_validity</code></td><td>Certificate is not expired and not expiring soon</td></tr>
+          <tr><td><code>chain_completeness</code></td><td>Full chain is served (no missing intermediates)</td></tr>
+          <tr><td><code>chain_order</code></td><td>Certificates are in correct order</td></tr>
+          <tr><td><code>signature_algorithm</code></td><td>Strong signature algorithm (no SHA-1)</td></tr>
+          <tr><td><code>key_strength</code></td><td>Adequate key size (RSA >= 2048, ECDSA >= 256)</td></tr>
+          <tr><td><code>tls_version</code></td><td>TLS 1.2 or 1.3 (no SSLv3, TLS 1.0/1.1)</td></tr>
+          <tr><td><code>san_quality</code></td><td>SAN list covers the queried hostname</td></tr>
+          <tr><td><code>aia_reachability</code></td><td>AIA OCSP and CA Issuers URLs are reachable</td></tr>
+          <tr><td><code>ocsp_stapling</code></td><td>OCSP stapling is present and valid</td></tr>
+          <tr><td><code>ct_scts</code></td><td>Certificate Transparency SCTs are present</td></tr>
+          <tr><td><code>dane_compliance</code></td><td>TLSA record matches certificate (if TLSA exists)</td></tr>
+          <tr><td><code>caa_compliance</code></td><td>Issuer is authorized by CAA records</td></tr>
+          <tr><td><code>hsts</code></td><td>HSTS header is present with adequate max-age</td></tr>
+          <tr><td><code>redirect</code></td><td>HTTP redirects to HTTPS</td></tr>
+          <tr><td><code>certificate_transparency</code></td><td>Certificate appears in CT logs</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Useful One-Liners</h2>
+
+<pre><code># Get the overall grade
+curl -s 'https://tls.netray.info/api/inspect?host=example.com' | jq '.quality.grade'
+
+# Check certificate expiry date
+curl -s 'https://tls.netray.info/api/inspect?host=example.com' \
+  | jq '.ports[0].ips[0].certificate.not_after'
+
+# List all SANs
+curl -s 'https://tls.netray.info/api/inspect?host=example.com' \
+  | jq '.ports[0].ips[0].certificate.sans[]'
+
+# Check for failing quality checks
+curl -s 'https://tls.netray.info/api/inspect?host=example.com' \
+  | jq '[.quality.checks[] | select(.status == "fail")]'
+
+# Verify DANE/TLSA compliance
+curl -s 'https://tls.netray.info/api/inspect?host=example.com' \
+  | jq '.dns.dane_valid'
+
+# CI gate: fail if grade is below A
+curl -sf 'https://tls.netray.info/api/inspect?host=example.com' \
+  | jq -e '.quality.verdict == "Pass"'</code></pre>
+
+      <h2>Multi-IP Fan-Out</h2>
+
+      <p>
+        When a domain resolves to multiple IPs, tlsight inspects each one
+        independently. The <code>ports[].ips[]</code> array contains per-IP results.
+        If an IP is unreachable, it is included with an error rather than silently
+        dropped (cap-and-warn graceful degradation).
+      </p>
+
+      <h2>Rate Limits</h2>
+
+      <p>
+        Per-IP and per-target GCRA rate limiting. The cost of a request is:
+      </p>
+
+<pre><code>cost = number_of_ports * number_of_inspected_ips</code></pre>
+
+      <p>
+        Inspecting <code>example.com:443,8443</code> where the domain resolves to
+        3 IPs costs 6 (2 ports x 3 IPs).
+      </p>
+
+      <p>
+        When rate-limited, you receive a <code>429</code> response with a
+        <code>Retry-After</code> header.
+      </p>
+
+      <h2>Errors</h2>
+
+<pre><code>{
+  "error": {
+    "code": "bad_request",
+    "message": "Missing required parameter: host"
+  }
+}</code></pre>
+
+      <p>Common error codes:</p>
+      <table>
+        <thead>
+          <tr><th>Code</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>bad_request</code></td><td>Missing or invalid <code>host</code> parameter</td></tr>
+          <tr><td><code>rate_limited</code></td><td>Too many requests; check <code>Retry-After</code></td></tr>
+          <tr><td><code>connection_failed</code></td><td>Could not establish TLS connection to target</td></tr>
+          <tr><td><code>internal_error</code></td><td>Server error; include <code>X-Request-Id</code> in reports</td></tr>
+        </tbody>
+      </table>
+  </article>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">API References</h2>
+    <ul class="page-footer__links">
+      <li><a href="index.html">API Overview</a></li>
+      <li><a href="ip.html">IP API</a></li>
+      <li><a href="dns.html">DNS API</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

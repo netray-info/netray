@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TLS Certificate Chain Explained: How to Check SSL Certificate Chains | netray.info</title>
+  <meta name="description" content="Understand how TLS certificate chains work, from leaf to root. Learn how to check SSL certificate chains, diagnose chain issues, and avoid common mistakes.">
+  <link rel="canonical" href="https://netray.info/guide/certificate-chain">
+  <link rel="stylesheet" href="style.css">
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="TLS Certificate Chain Explained: How to Check SSL Certificate Chains">
+  <meta property="og:description" content="Understand how TLS certificate chains work, from leaf to root. Learn how to diagnose chain issues and avoid common mistakes.">
+  <meta property="og:url" content="https://netray.info/guide/certificate-chain">
+  <meta property="og:site_name" content="netray.info">
+
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="TLS Certificate Chain Explained: How to Check SSL Certificate Chains">
+  <meta name="twitter:description" content="Understand how TLS certificate chains work, from leaf to root. Learn how to diagnose chain issues and avoid common mistakes.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "TLS Certificate Chain Explained: How to Check SSL Certificate Chains",
+    "description": "Understand how TLS certificate chains work, from leaf to root. Learn how to check SSL certificate chains, diagnose chain issues, and avoid common mistakes.",
+    "url": "https://netray.info/guide/certificate-chain",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/certificate-chain"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">TLS Certificate Chain Explained</h1>
+  <p class="page-subtitle">How certificate chains build trust from your server to a root CA, and how to check them.</p>
+
+  <article>
+    <h2>What is a certificate chain?</h2>
+    <p>When a client connects to a server over TLS (HTTPS), the server presents a certificate to prove its identity. But a single certificate is not enough. The client needs a <strong>chain of trust</strong> that links the server's certificate back to a Certificate Authority (CA) it already trusts.</p>
+    <p>A typical chain has three parts:</p>
+    <ol>
+      <li><strong>Leaf certificate</strong> (end-entity): issued to your domain, contains your public key and Subject Alternative Names (SANs).</li>
+      <li><strong>Intermediate certificate(s)</strong>: issued by the root CA to a subordinate CA. Most CAs use at least one intermediate to keep the root key offline and protected.</li>
+      <li><strong>Root certificate</strong>: a self-signed certificate pre-installed in the client's trust store (browsers, operating systems, language runtimes).</li>
+    </ol>
+    <p>During the TLS handshake, the server sends its leaf certificate plus any intermediates. The client walks the chain upward, verifying each signature, until it reaches a root it trusts. If any link is missing or invalid, the connection fails.</p>
+
+    <h2>Why certificate chains matter</h2>
+    <p>A broken chain is one of the most common causes of TLS errors. If the server omits an intermediate certificate, some clients may be able to fetch it themselves (via the Authority Information Access extension), but many will not. The result is intermittent failures: a browser on desktop works fine because its trust store cached the intermediate from a previous connection, while a mobile app or API client fails with a "certificate verify failed" error.</p>
+    <p>Chain issues are particularly insidious because they may not affect your own testing environment but break for a subset of users in production.</p>
+
+    <h2>How chain validation works</h2>
+    <p>For each certificate in the chain, the client verifies:</p>
+    <ul>
+      <li><strong>Signature</strong>: the certificate's signature is valid under the issuer's public key.</li>
+      <li><strong>Validity period</strong>: the current time is between the <code>notBefore</code> and <code>notAfter</code> dates.</li>
+      <li><strong>Revocation status</strong>: the certificate has not been revoked, checked via CRL or OCSP.</li>
+      <li><strong>Name constraints</strong>: the subject or SAN matches the requested hostname.</li>
+      <li><strong>Key usage</strong>: the certificate is authorized for its role (e.g., digital signature for a leaf, certificate signing for an intermediate).</li>
+    </ul>
+    <p>Modern clients also check for Certificate Transparency (CT) Signed Certificate Timestamps (SCTs), which prove the certificate was logged in public CT logs before issuance.</p>
+
+    <h2>How to check a certificate chain</h2>
+    <p>You can inspect a server's certificate chain using command-line tools:</p>
+    <pre><code># Using openssl
+openssl s_client -connect example.com:443 -showcerts
+
+# Using curl with verbose output
+curl -vI https://example.com 2>&1 | grep -A 5 "Server certificate"</code></pre>
+    <p>These tools show you the certificates the server sends during the handshake, including the order and completeness of the chain. Look for the chain depth and verify that each issuer DN matches the next certificate's subject DN.</p>
+    <p>For a more comprehensive analysis -- including expiry warnings, signature algorithm checks, SAN validation, OCSP stapling status, and CT SCT verification -- use a dedicated TLS inspection tool.</p>
+
+    <h2>Chain order and best practices</h2>
+    <p>The server should send certificates in order: leaf first, followed by intermediates, with the root omitted (since clients already have it). Sending the root wastes bandwidth and adds no security benefit. Some servers send certificates out of order, which most modern TLS libraries handle gracefully, but older clients may reject.</p>
+    <p>When configuring your server, include all intermediate certificates in your certificate file. If your CA provided separate files, concatenate them:</p>
+    <pre><code># Correct order for Nginx/Apache
+cat leaf.pem intermediate.pem > fullchain.pem</code></pre>
+
+    <h2>Common mistakes</h2>
+    <ul>
+      <li><strong>Missing intermediate</strong>: The most frequent chain error. The server sends only the leaf certificate, and clients without a cached intermediate fail. Always include the full chain.</li>
+      <li><strong>Expired intermediate</strong>: Intermediates have their own validity periods. A valid leaf with an expired intermediate breaks the chain. Monitor intermediate expiry alongside your leaf certificates.</li>
+      <li><strong>Wrong intermediate</strong>: CAs sometimes issue certificates from different intermediates. Using an intermediate that did not sign your leaf produces a signature verification failure. Match the issuer DN on your leaf to the subject DN of the intermediate.</li>
+      <li><strong>Including the root</strong>: Not harmful but wasteful. Some scanners flag it. The root should come from the client's trust store, not the server.</li>
+      <li><strong>Self-signed certificates in production</strong>: Self-signed certificates have no chain -- the leaf is the root. Clients reject them unless explicitly configured to trust them, which defeats the purpose of public PKI.</li>
+      <li><strong>Cross-signed chain confusion</strong>: During CA transitions (like the Let's Encrypt DST Root CA X3 to ISRG Root X1 migration), servers may need to choose which chain to serve based on their client population's trust store age.</li>
+    </ul>
+
+    <h2>Certificate Transparency</h2>
+    <p>Certificate Transparency (CT) is a framework that requires CAs to log all issued certificates in publicly auditable append-only logs. Browsers like Chrome require SCTs (Signed Certificate Timestamps) as proof of logging. SCTs can be delivered via the certificate itself (embedded), a TLS extension, or OCSP stapling. Missing SCTs cause Chrome to show a warning or reject the certificate entirely.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect a certificate chain</h2>
+    <form class="tool-entry__form" action="https://tls.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="h"
+        placeholder="example.com"
+        aria-label="Hostname to inspect"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect</button>
+    </form>
+    <p class="tool-entry__hint">Performs a full TLS handshake and analyzes the certificate chain, expiry, algorithms, OCSP, and CT.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/email-auth">Email Authentication Guide</a></li>
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>
