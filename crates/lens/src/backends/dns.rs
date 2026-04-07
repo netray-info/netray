@@ -42,12 +42,13 @@ pub async fn check_dns(
     timeout: Duration,
 ) -> Result<DnsBackendResult, AppError> {
     let url = format!(
-        "{}/api/check?q={}+check&stream=false",
+        "{}/api/check?stream=false",
         dns_url.trim_end_matches('/'),
-        urlencoding::encode(domain),
     );
 
-    let resp = tokio::time::timeout(timeout, client.get(&url).send())
+    let body = serde_json::json!({ "domain": domain });
+
+    let resp = tokio::time::timeout(timeout, client.post(&url).json(&body).send())
         .await
         .map_err(|_| AppError::Timeout)?
         .map_err(|e| AppError::BackendError {

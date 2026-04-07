@@ -87,11 +87,13 @@ pub fn score_section(
         }
     }
 
-    let percentage = if possible == 0 {
-        100.0
-    } else {
-        (earned as f64 / possible as f64) * 100.0
-    };
+    // If no weighted checks were present at all, exclude section (return None)
+    // rather than awarding 100% — an empty section carries no signal.
+    if possible == 0 {
+        return None;
+    }
+
+    let percentage = (earned as f64 / possible as f64) * 100.0;
 
     Some(SectionScore {
         earned,
@@ -133,11 +135,20 @@ pub fn compute_score(
         total_weight += profile.section_weights.ip;
     }
 
-    let overall_percentage = if total_weight == 0 {
-        0.0
-    } else {
-        weighted_sum / total_weight as f64
-    };
+    // If all sections errored or had no weighted checks, we have no signal.
+    if total_weight == 0 {
+        return OverallScore {
+            dns: dns_score,
+            tls: tls_score,
+            ip: ip_score,
+            overall_percentage: 0.0,
+            grade: "error".to_string(),
+            hard_fail_triggered: false,
+            hard_fail_checks: vec![],
+        };
+    }
+
+    let overall_percentage = weighted_sum / total_weight as f64;
 
     // Check hard fails before assigning grade.
     let mut hard_fail_checks: Vec<String> = Vec::new();
@@ -296,31 +307,27 @@ mod tests {
     }
 
     #[test]
-    fn all_skipped_returns_100_percent() {
+    fn all_skipped_returns_none() {
+        // All checks skipped → no signal → section excluded (None), not 100%.
         let weights = simple_weights();
         let input = no_error(vec![skip("check_a"), skip("check_b")]);
-        let score = score_section(&weights, &input).unwrap();
-        assert_eq!(score.earned, 0);
-        assert_eq!(score.possible, 0);
-        // possible == 0 → full credit
-        assert_eq!(score.percentage, 100.0);
+        assert!(score_section(&weights, &input).is_none());
     }
 
     #[test]
-    fn empty_checks_returns_100_percent() {
+    fn empty_checks_returns_none() {
+        // No checks at all → no signal → section excluded (None).
         let weights = simple_weights();
         let input = no_error(vec![]);
-        let score = score_section(&weights, &input).unwrap();
-        assert_eq!(score.percentage, 100.0);
+        assert!(score_section(&weights, &input).is_none());
     }
 
     #[test]
-    fn empty_profile_section_returns_100_percent() {
+    fn empty_profile_section_returns_none() {
+        // No weighted checks → no signal → section excluded (None).
         let weights: HashMap<String, u32> = HashMap::new();
         let input = no_error(vec![pass("check_a"), fail("check_b")]);
-        let score = score_section(&weights, &input).unwrap();
-        assert_eq!(score.possible, 0);
-        assert_eq!(score.percentage, 100.0);
+        assert!(score_section(&weights, &input).is_none());
     }
 
     #[test]

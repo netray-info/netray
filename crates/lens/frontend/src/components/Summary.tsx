@@ -41,22 +41,32 @@ interface Props {
 
 export default function Summary(props: Props) {
   const s = () => props.summary;
+  const isError = () => s().grade === 'error';
 
   return (
     <div class="summary-card" role="region" aria-label="Summary">
-      <div class="summary-grade">
-        <span
-          class="summary-grade__letter"
-          style={{ color: gradeStyle(s().grade) }}
-          aria-label={`Grade ${s().grade}`}
-        >
-          {s().grade}
-        </span>
-        <div class="summary-grade__meta">
-          <span class="summary-score">{s().score}%</span>
-          <span class="summary-overall">{overallLabel(s().overall)}</span>
+      <Show when={isError()} fallback={
+        <div class="summary-grade">
+          <span
+            class="summary-grade__letter"
+            style={{ color: gradeStyle(s().grade) }}
+            aria-label={`Grade ${s().grade}`}
+          >
+            {s().grade}
+          </span>
+          <div class="summary-grade__meta">
+            <span class="summary-score">{s().score}%</span>
+            <span class="summary-overall">{overallLabel(s().overall)}</span>
+          </div>
         </div>
-      </div>
+      }>
+        <div class="summary-grade summary-grade--error" role="alert">
+          <span class="summary-grade__letter grade--F" aria-label="Grade unavailable">?</span>
+          <div class="summary-grade__meta">
+            <span class="summary-overall">Grade unavailable — all backends failed</span>
+          </div>
+        </div>
+      </Show>
 
       <div class="summary-dots" role="list" aria-label="Section statuses">
         <div class="summary-dot-item" role="listitem">

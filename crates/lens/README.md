@@ -166,6 +166,8 @@ A check that returns `not_found` (e.g. a missing SPF record, absent DMARC policy
 
 Excluding errored checks means a backend outage degrades score precision but does not artificially inflate or deflate the result.
 
+If all three backends fail and every section is excluded, no numeric score can be computed. The grade is reported as `error` and the UI shows "Grade unavailable" instead of a letter grade.
+
 ### Custom scoring profiles
 
 The scoring profile (weights, thresholds, hard-fail rules) is defined in a TOML file. The default profile is embedded in the binary. You can override it by setting `scoring.profile_path` in `lens.toml`.

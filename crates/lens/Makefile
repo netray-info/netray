@@ -107,8 +107,8 @@ pre-push: fmt-check clippy test frontend ## Run all checks locally before pushin
 #  Development
 # ══════════════════════════════════════════════════════════════════
 
-dev: ## Run dev server
-	$(CARGO) run $(CARGO_FLAGS)
+dev: ## Run dev server with lens.dev.toml
+	$(CARGO) run $(CARGO_FLAGS) -- lens.dev.toml
 
 clean: ## Remove target/, frontend/dist/, node_modules/
 	$(CARGO) clean
