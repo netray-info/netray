@@ -8,7 +8,7 @@ import IpCard from './components/IpCard';
 import UnifiedIpView from './components/UnifiedIpView';
 
 import { CaaView, TlsaView } from './components/DnsInfo';
-import SuiteNav from './components/SuiteNav';
+import SuiteNav from '@netray-info/common-frontend/components/SuiteNav';
 import { CrossLinks } from './components/CrossLinks';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
@@ -186,7 +186,7 @@ export default function App() {
 
   return (
     <>
-      <SuiteNav current="tls" />
+      <SuiteNav current="tls" meta={meta()?.ecosystem} />
       <div class="app">
       <a href="#main-content" class="skip-link">Skip to results</a>
 

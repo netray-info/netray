@@ -1,4 +1,5 @@
 import type { InspectResponse, MetaResponse, ErrorInfo } from './types';
+import { fetchWithTimeout } from '@netray-info/common-frontend/api';
 
 const BASE = '';
 
@@ -15,7 +16,7 @@ export async function inspect(input: string): Promise<InspectResponse> {
 
 export async function fetchMeta(): Promise<MetaResponse | null> {
   try {
-    const res = await fetch(`${BASE}/api/meta`);
+    const res = await fetchWithTimeout(`${BASE}/api/meta`, undefined, 5000);
     if (!res.ok) return null;
     return res.json();
   } catch {

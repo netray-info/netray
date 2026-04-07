@@ -32,18 +32,6 @@
    Accessibility utilities
    ================================================================ */
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* ================================================================
    Reset & base
    ================================================================ */
@@ -71,77 +59,6 @@ a:hover { text-decoration: underline; }
 }
 
 .main { flex: 1; }
-
-/* ================================================================
-   Skip link (accessibility)
-   ================================================================ */
-
-.skip-link {
-  position: absolute;
-  left: -9999px;
-  top: 0;
-  background: var(--accent);
-  color: #fff;
-  padding: 0.5rem 1rem;
-  z-index: 100;
-  border-radius: 0 0 var(--radius) 0;
-  font-size: 0.875rem;
-}
-
-.skip-link:focus {
-  left: 0;
-}
-
-/* ================================================================
-   Header
-   ================================================================ */
-
-.header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.logo {
-  font-family: var(--mono);
-  font-size: 1.75rem;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  background: linear-gradient(135deg, var(--accent), #7b68ee);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.header-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-}
-
-.header-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-size: 1rem;
-  transition: color var(--transition), border-color var(--transition), background var(--transition);
-}
-
-.header-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--text-secondary);
-  background: var(--accent-glow);
-}
 
 /* ================================================================
    Host input
@@ -460,35 +377,6 @@ a:hover { text-decoration: underline; }
 .results-actions__right {
   display: flex;
   gap: 4px;
-}
-
-.filter-toggle {
-  padding: 3px 10px;
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  transition: color var(--transition), border-color var(--transition), background var(--transition);
-}
-
-.filter-toggle:hover {
-  color: var(--text-primary);
-  border-color: var(--text-secondary);
-}
-
-.filter-toggle--active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.filter-toggle--active:hover {
-  background: var(--accent-dim);
-  border-color: var(--accent-dim);
-  color: #fff;
 }
 
 /* ================================================================
