@@ -1,0 +1,250 @@
+use std::time::Duration;
+
+use serde::Deserialize;
+
+use crate::error::AppError;
+use crate::scoring::engine::{CheckResult, CheckVerdict};
+
+// ---------------------------------------------------------------------------
+// Public result type
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+pub struct TlsBackendResult {
+    pub checks: Vec<CheckResult>,
+    pub raw_headline: String,
+    pub detail_url: String,
+}
+
+// ---------------------------------------------------------------------------
+// Deserialization types for tlsight's InspectResponse
+//
+// We only decode what we need; unknown fields are ignored via `#[serde(default)]`.
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, Default)]
+struct InspectResponse {
+    #[serde(default)]
+    ports: Vec<PortResult>,
+    #[serde(default)]
+    quality: Option<QualityResult>,
+}
+
+#[derive(Deserialize)]
+struct PortResult {
+    #[serde(default)]
+    ips: Vec<IpResult>,
+}
+
+#[derive(Deserialize, Default)]
+struct IpResult {
+    tls: Option<TlsParams>,
+    chain: Option<Vec<CertInfo>>,
+}
+
+#[derive(Deserialize)]
+struct TlsParams {
+    version: String,
+}
+
+#[derive(Deserialize)]
+struct CertInfo {
+    days_remaining: Option<i64>,
+    issuer: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct QualityResult {
+    #[serde(default)]
+    checks: Vec<HealthCheck>,
+    hsts: Option<HstsInfo>,
+    https_redirect: Option<RedirectInfo>,
+}
+
+#[derive(Deserialize)]
+struct HealthCheck {
+    id: String,
+    status: String,
+}
+
+#[derive(Deserialize)]
+struct HstsInfo {
+    present: Option<bool>,
+}
+
+#[derive(Deserialize)]
+struct RedirectInfo {
+    status: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+pub async fn check_tls(
+    client: &reqwest::Client,
+    tls_url: &str,
+    domain: &str,
+    timeout: Duration,
+) -> Result<TlsBackendResult, AppError> {
+    let url = format!(
+        "{}/api/inspect?h={}",
+        tls_url.trim_end_matches('/'),
+        percent_encode(domain),
+    );
+
+    let resp = tokio::time::timeout(timeout, client.get(&url).send())
+        .await
+        .map_err(|_| AppError::Timeout)?
+        .map_err(|e| AppError::BackendError {
+            backend: "tls",
+            message: e.to_string(),
+        })?;
+
+    if !resp.status().is_success() {
+        return Err(AppError::BackendError {
+            backend: "tls",
+            message: format!("tlsight returned HTTP {}", resp.status()),
+        });
+    }
+
+    let inspect: InspectResponse =
+        resp.json().await.map_err(|e| AppError::BackendError {
+            backend: "tls",
+            message: format!("failed to decode tlsight response: {e}"),
+        })?;
+
+    Ok(parse_inspect(inspect, domain, tls_url))
+}
+
+// ---------------------------------------------------------------------------
+// Parsing
+// ---------------------------------------------------------------------------
+
+fn parse_inspect(
+    inspect: InspectResponse,
+    domain: &str,
+    tls_url: &str,
+) -> TlsBackendResult {
+    let mut checks: Vec<CheckResult> = Vec::new();
+
+    let quality = inspect.quality.unwrap_or_default();
+
+    // Map quality.checks to CheckResult.
+    for hc in &quality.checks {
+        let verdict = match hc.status.as_str() {
+            "pass" => CheckVerdict::Pass,
+            "warn" => CheckVerdict::Warn,
+            "fail" => CheckVerdict::Fail,
+            "skip" => CheckVerdict::Skip,
+            _ => CheckVerdict::Skip,
+        };
+        checks.push(CheckResult { name: hc.id.clone(), verdict });
+    }
+
+    // HSTS: map to a "hsts" check.
+    if let Some(hsts) = &quality.hsts {
+        let verdict = if hsts.present.unwrap_or(false) {
+            CheckVerdict::Pass
+        } else {
+            CheckVerdict::Fail
+        };
+        // Only add if not already present from quality.checks (avoid duplicates).
+        if !checks.iter().any(|c| c.name == "hsts") {
+            checks.push(CheckResult { name: "hsts".to_string(), verdict });
+        }
+    }
+
+    // HTTPS redirect: map to an "https_redirect" check.
+    if let Some(redirect) = &quality.https_redirect {
+        let verdict = match redirect.status.as_deref() {
+            Some("pass") => CheckVerdict::Pass,
+            Some("warn") => CheckVerdict::Warn,
+            Some("fail") => CheckVerdict::Fail,
+            _ => CheckVerdict::Skip,
+        };
+        if !checks.iter().any(|c| c.name == "https_redirect") {
+            checks.push(CheckResult { name: "https_redirect".to_string(), verdict });
+        }
+    }
+
+    let raw_headline = build_headline(&inspect.ports);
+    let detail_url = format!(
+        "{}/?h={}",
+        tls_url.trim_end_matches('/'),
+        percent_encode(domain),
+    );
+
+    TlsBackendResult { checks, raw_headline, detail_url }
+}
+
+/// Build a human-readable headline from the first port's first IP result.
+fn build_headline(ports: &[PortResult]) -> String {
+    let first_ip = ports
+        .first()
+        .and_then(|p| p.ips.first());
+
+    let version = first_ip
+        .and_then(|ip| ip.tls.as_ref())
+        .map(|t| t.version.as_str())
+        .unwrap_or("TLS");
+
+    let expiry = first_ip
+        .and_then(|ip| ip.chain.as_ref())
+        .and_then(|chain| chain.first())
+        .and_then(|cert| cert.days_remaining)
+        .map(|days| format!(", expires in {days}d"));
+
+    let issuer = first_ip
+        .and_then(|ip| ip.chain.as_ref())
+        .and_then(|chain| {
+            // Find the intermediate or root to show issuer org.
+            chain.get(1).or_else(|| chain.first())
+        })
+        .and_then(|cert| cert.issuer.as_deref())
+        .and_then(extract_issuer_org)
+        .map(|org| format!(", {org}"));
+
+    match (expiry, issuer) {
+        (Some(e), Some(i)) => format!("{version}{e}{i}"),
+        (Some(e), None) => format!("{version}{e}"),
+        (None, Some(i)) => format!("{version}{i}"),
+        (None, None) => "TLS inspection complete".to_string(),
+    }
+}
+
+/// Extract a short organization name from an X.509 issuer DN string.
+///
+/// The DN is formatted as `O=Foo, CN=Bar, ...`.  We try to extract `O=` first,
+/// then fall back to `CN=`.
+fn extract_issuer_org(issuer: &str) -> Option<&str> {
+    find_dn_value(issuer, "O=").or_else(|| find_dn_value(issuer, "CN="))
+}
+
+fn find_dn_value<'a>(dn: &'a str, prefix: &str) -> Option<&'a str> {
+    let start = dn.find(prefix).map(|i| i + prefix.len())?;
+    let rest = &dn[start..];
+    let end = rest.find(',').unwrap_or(rest.len());
+    let value = rest[..end].trim();
+    if value.is_empty() { None } else { Some(value) }
+}
+
+// ---------------------------------------------------------------------------
+// Minimal percent-encoding for query string values
+// ---------------------------------------------------------------------------
+
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => {
+                out.push('%');
+                out.push_str(&format!("{b:02X}"));
+            }
+        }
+    }
+    out
+}

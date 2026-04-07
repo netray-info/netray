@@ -1,0 +1,23 @@
+[server]
+bind = "0.0.0.0:8082"
+metrics_bind = "127.0.0.1:8090"
+# trusted_proxies = ["10.0.0.0/8"]
+
+[backends]
+dns_url = "https://dns.netray.info"
+tls_url = "https://tls.netray.info"
+ip_url  = "https://ip.netray.info"
+# backend_timeout_secs = 20
+
+[cache]
+enabled = true
+ttl_seconds = 300
+
+[rate_limit]
+per_ip_per_minute = 10
+per_ip_burst = 3
+global_per_minute = 100
+global_burst = 20
+
+[scoring]
+# profile_path = "profiles/default.toml"   # override built-in default profile

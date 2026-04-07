@@ -1,0 +1,243 @@
+use std::net::IpAddr;
+use std::time::Duration;
+
+use serde::Deserialize;
+
+use crate::error::AppError;
+use crate::scoring::engine::{CheckResult, CheckVerdict};
+
+// ---------------------------------------------------------------------------
+// Public result types
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+pub struct IpBackendResult {
+    pub checks: Vec<CheckResult>,
+    pub addresses: Vec<IpInfo>,
+    pub raw_headline: String,
+    pub detail_url: String,
+}
+
+#[derive(Clone)]
+pub struct IpInfo {
+    pub ip: IpAddr,
+    pub org: Option<String>,
+    pub geo: Option<String>,
+    pub network_type: String,
+}
+
+// ---------------------------------------------------------------------------
+// ifconfig-rs response types (subset of what we need)
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct EnrichmentEntry {
+    #[serde(default)]
+    network: NetworkInfo,
+    #[serde(default)]
+    geo: GeoInfo,
+    #[serde(default)]
+    asn: AsnInfo,
+}
+
+#[derive(Deserialize, Default)]
+struct NetworkInfo {
+    #[serde(rename = "type", default)]
+    network_type: String,
+}
+
+#[derive(Deserialize, Default)]
+struct GeoInfo {
+    city: Option<String>,
+    country: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct AsnInfo {
+    org: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Public entry point
+// ---------------------------------------------------------------------------
+
+/// Maximum number of IPs to query — cap for safety.
+const MAX_IPS: usize = 5;
+
+pub async fn check_ip(
+    client: &reqwest::Client,
+    ip_url: &str,
+    ips: &[IpAddr],
+    timeout: Duration,
+) -> Result<IpBackendResult, AppError> {
+    if ips.is_empty() {
+        return Ok(IpBackendResult {
+            checks: vec![],
+            addresses: vec![],
+            raw_headline: String::new(),
+            detail_url: ip_url.to_string(),
+        });
+    }
+
+    let capped: Vec<IpAddr> = ips.iter().copied().take(MAX_IPS).collect();
+    let base = ip_url.trim_end_matches('/');
+
+    // Fire off concurrent requests for each IP.
+    let futures: Vec<_> = capped
+        .iter()
+        .map(|ip| {
+            let url = format!("{base}/{ip}/json");
+            let client = client.clone();
+            async move {
+                tokio::time::timeout(timeout, client.get(&url).send())
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+            }
+        })
+        .collect();
+
+    let responses = futures::future::join_all(futures).await;
+
+    let mut addresses: Vec<IpInfo> = Vec::new();
+    let mut worst_verdict = CheckVerdict::Pass;
+
+    for (ip, maybe_resp) in capped.iter().zip(responses.into_iter()) {
+        let entry = match maybe_resp {
+            Some(resp) if resp.status().is_success() => {
+                resp.json::<EnrichmentEntry>().await.ok()
+            }
+            _ => None,
+        };
+
+        match entry {
+            Some(e) => {
+                let network_type = e.network.network_type.clone();
+                let verdict = network_type_verdict(&network_type);
+                if verdict_rank(&verdict) > verdict_rank(&worst_verdict) {
+                    worst_verdict = verdict;
+                }
+
+                let geo = build_geo(&e.geo);
+                let org = e.asn.org.clone();
+
+                addresses.push(IpInfo {
+                    ip: *ip,
+                    org,
+                    geo,
+                    network_type,
+                });
+            }
+            None => {
+                // Enrichment unavailable for this IP — include with unknown type.
+                addresses.push(IpInfo {
+                    ip: *ip,
+                    org: None,
+                    geo: None,
+                    network_type: "unknown".to_string(),
+                });
+            }
+        }
+    }
+
+    let reputation_check = CheckResult {
+        name: "reputation".to_string(),
+        verdict: worst_verdict,
+    };
+
+    let raw_headline = build_headline(&addresses);
+    let detail_url = build_detail_url(ip_url, &capped);
+
+    Ok(IpBackendResult {
+        checks: vec![reputation_check],
+        addresses,
+        raw_headline,
+        detail_url,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Rank verdicts so we can find the worst: higher rank = worse.
+fn verdict_rank(v: &CheckVerdict) -> u8 {
+    match v {
+        CheckVerdict::Pass | CheckVerdict::Skip => 0,
+        CheckVerdict::NotFound => 1,
+        CheckVerdict::Warn => 2,
+        CheckVerdict::Fail => 3,
+    }
+}
+
+/// Map a network.type value to a CheckVerdict.
+///
+/// residential/cloud/datacenter/bot/education/government/business → Pass
+/// vpn → Warn
+/// tor/spamhaus/c2 → Fail
+fn network_type_verdict(network_type: &str) -> CheckVerdict {
+    match network_type {
+        "tor" | "spamhaus" | "c2" => CheckVerdict::Fail,
+        "vpn" => CheckVerdict::Warn,
+        "residential" | "cloud" | "datacenter" | "bot" | "education"
+        | "government" | "business" | "internal" => CheckVerdict::Pass,
+        _ => CheckVerdict::Pass,
+    }
+}
+
+fn build_geo(geo: &GeoInfo) -> Option<String> {
+    match (&geo.city, &geo.country) {
+        (Some(city), Some(country)) => Some(format!("{city}, {country}")),
+        (None, Some(country)) => Some(country.clone()),
+        (Some(city), None) => Some(city.clone()),
+        (None, None) => None,
+    }
+}
+
+/// Build a short headline from org names and geo locations.
+fn build_headline(addresses: &[IpInfo]) -> String {
+    if addresses.is_empty() {
+        return String::new();
+    }
+
+    // Collect unique org names (up to 3).
+    let orgs: Vec<&str> = addresses
+        .iter()
+        .filter_map(|a| a.org.as_deref())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .take(3)
+        .collect();
+
+    // Collect unique geo locations (up to 2).
+    let geos: Vec<&str> = addresses
+        .iter()
+        .filter_map(|a| a.geo.as_deref())
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .take(2)
+        .collect();
+
+    match (orgs.is_empty(), geos.is_empty()) {
+        (false, false) => format!("{} + {}", orgs.join(", "), geos.join(" + ")),
+        (false, true) => orgs.join(", "),
+        (true, false) => geos.join(" + "),
+        (true, true) => format!("{} address(es)", addresses.len()),
+    }
+}
+
+fn build_detail_url(ip_url: &str, ips: &[IpAddr]) -> String {
+    let base = ip_url.trim_end_matches('/');
+    if ips.len() == 1 {
+        format!("{base}/?ip={}", ips[0])
+    } else if ips.is_empty() {
+        base.to_string()
+    } else {
+        let query = ips
+            .iter()
+            .map(|ip| format!("ip={ip}"))
+            .collect::<Vec<_>>()
+            .join("&");
+        format!("{base}/?{query}")
+    }
+}
