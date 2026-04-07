@@ -788,11 +788,11 @@ fn friendly_alpn(alpn: &str) -> String {
 /// `lookups.lookups[*].result.Response.records[*].data.*`.
 ///
 /// Enrichments by record type:
-/// - `"TXT"` / `"_dmarc"` → `txt_string`, `txt_human`, `txt_explain`
+/// - `"TXT"` / `"_dmarc"` / `"_bimi"` / `"_mta-sts"` / `"_tlsrpt"` → `txt_string`, `txt_human`, `txt_explain`
 /// - Other types → `*_human` and `*_explain`
 pub fn enrich_lookups_json(value: &mut serde_json::Value, record_type: &str) {
     match record_type {
-        "TXT" | "_dmarc" => enrich_txt(value),
+        "TXT" | "_dmarc" | "_bimi" | "_mta-sts" | "_tlsrpt" => enrich_txt(value),
         "CAA" => enrich_dual(
             value,
             "CAA",
