@@ -6,7 +6,7 @@ import { TraceView, type TraceHop, type TraceDoneStats } from './components/Trac
 import { DnssecView, type ChainLevel, type DnssecDoneStats } from './components/DnssecView';
 import { TransportComparison } from './components/TransportComparison';
 import { AuthComparison } from './components/AuthComparison';
-import { SuiteNav } from './components/SuiteNav';
+import SuiteNav from '@netray-info/common-frontend/components/SuiteNav';
 import { DnsCrossLinks } from './components/DnsCrossLinks';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
 import { createTheme } from '@netray-info/common-frontend/theme';
