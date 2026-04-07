@@ -38,6 +38,7 @@ export default function App() {
   const [done, setDone] = createSignal<DoneEvent | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [currentDomain, setCurrentDomain] = createSignal('');
+  const [allExpanded, setAllExpanded] = createSignal<boolean | undefined>(undefined);
 
   let inputEl: HTMLInputElement | undefined;
   let ssCleanup: (() => void) | null = null;
@@ -74,6 +75,7 @@ export default function App() {
   function handleSubmit(domain: string) {
     if (ssCleanup) { ssCleanup(); ssCleanup = null; }
     clearState();
+    setAllExpanded(undefined);
     setCurrentDomain(domain);
     setCheckState('loading');
     addToHistory(domain);
@@ -159,6 +161,11 @@ export default function App() {
                 onClick={() => setExplain(v => !v)}
                 title="Toggle explanations (e)"
               >explain</button>
+              <button
+                class="filter-toggle"
+                type="button"
+                onClick={() => setAllExpanded(v => v === true ? false : true)}
+              >{allExpanded() === true ? 'collapse all' : 'expand all'}</button>
             </div>
           </Show>
 
@@ -186,18 +193,21 @@ export default function App() {
                 loading={isLoading() && tls() === null}
                 error={error() ?? undefined}
                 explain={explain()}
+                expanded={allExpanded()}
               />
               <DnsSection
                 data={dns()}
                 loading={isLoading() && dns() === null}
                 error={error() ?? undefined}
                 explain={explain()}
+                expanded={allExpanded()}
               />
               <IpSection
                 data={ip()}
                 loading={isLoading() && ip() === null}
                 error={error() ?? undefined}
                 explain={explain()}
+                expanded={allExpanded()}
               />
             </div>
           </Show>

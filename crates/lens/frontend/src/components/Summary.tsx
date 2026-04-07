@@ -2,17 +2,6 @@ import { Show } from 'solid-js';
 import type { SummaryEvent, DoneEvent, Verdict } from '../lib/types';
 import VerdictDot from './VerdictDot';
 
-function gradeClass(grade: string): string {
-  switch (grade) {
-    case 'A+': return 'summary-grade__letter grade--A\\+';
-    case 'A':  return 'summary-grade__letter grade--A';
-    case 'B':  return 'summary-grade__letter grade--B';
-    case 'C':  return 'summary-grade__letter grade--C';
-    case 'D':  return 'summary-grade__letter grade--D';
-    default:   return 'summary-grade__letter grade--F';
-  }
-}
-
 function gradeStyle(grade: string): string {
   switch (grade) {
     case 'A+':
@@ -70,12 +59,12 @@ export default function Summary(props: Props) {
 
       <div class="summary-dots" role="list" aria-label="Section statuses">
         <div class="summary-dot-item" role="listitem">
-          <VerdictDot verdict={s().dns} />
-          <span>DNS</span>
-        </div>
-        <div class="summary-dot-item" role="listitem">
           <VerdictDot verdict={s().tls} />
           <span>TLS</span>
+        </div>
+        <div class="summary-dot-item" role="listitem">
+          <VerdictDot verdict={s().dns} />
+          <span>DNS</span>
         </div>
         <div class="summary-dot-item" role="listitem">
           <VerdictDot verdict={s().ip} />

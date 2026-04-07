@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import type { IpEvent } from '../lib/types';
 import VerdictDot from './VerdictDot';
 import CheckList from './CheckList';
@@ -19,10 +19,12 @@ interface Props {
   loading: boolean;
   error?: string;
   explain: boolean;
+  expanded?: boolean;
 }
 
 export default function IpSection(props: Props) {
   const [open, setOpen] = createSignal(true);
+  createEffect(() => { if (props.expanded !== undefined) setOpen(props.expanded); });
 
   return (
     <Show

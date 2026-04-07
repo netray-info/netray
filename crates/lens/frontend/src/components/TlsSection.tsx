@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, Show } from 'solid-js';
 import type { TlsEvent } from '../lib/types';
 import VerdictDot from './VerdictDot';
 import CheckList from './CheckList';
@@ -9,10 +9,12 @@ interface Props {
   loading: boolean;
   error?: string;
   explain: boolean;
+  expanded?: boolean;
 }
 
 export default function TlsSection(props: Props) {
   const [open, setOpen] = createSignal(true);
+  createEffect(() => { if (props.expanded !== undefined) setOpen(props.expanded); });
 
   return (
     <Show
