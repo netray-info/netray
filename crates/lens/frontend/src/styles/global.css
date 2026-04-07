@@ -381,6 +381,9 @@ a:hover { text-decoration: underline; }
   color: var(--text-secondary);
   flex: 1;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .section-card__chevron {
@@ -580,17 +583,10 @@ a:hover { text-decoration: underline; }
    ================================================================ */
 
 .section-grid {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   margin-bottom: 1.5rem;
-}
-
-@media (min-width: 640px) {
-  .section-grid {
-    grid-template-columns: repeat(3, 1fr);
-    align-items: start;
-  }
 }
 
 /* ================================================================
