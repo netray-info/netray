@@ -100,7 +100,9 @@ pub struct AppState {
             Cost = `record_types × servers`. The check and trace endpoints charge a\n\
             flat cost of 16 tokens per request.\n\n\
             ## Cross-Origin Requests\n\
-            Cross-origin requests from browsers are not supported. Use server-side calls or curl for API integration.",
+            Cross-origin requests from browsers are not supported. Use server-side calls or curl for API integration.\n\n\
+            ## Human-Readable Docs\n\
+            See also: [DNS API reference](https://netray.info/api/dns) — curl-focused documentation with examples.",
         license(name = "MIT OR Apache-2.0"),
     ),
     paths(

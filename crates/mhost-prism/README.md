@@ -176,6 +176,26 @@ Interactive docs at `GET /docs` (Scalar UI). OpenAPI spec at `GET /api-docs/open
 | `GET /api/record-types` | Queryable record types |
 | `GET /api/results/{key}` | Retrieve a cached result by permalink key |
 
+### CI / Pipeline Integration
+
+Use in GitHub Actions or any CI system to verify DNS records:
+
+```yaml
+# Verify MX records exist
+- run: |
+    curl -sf -X POST 'https://dns.netray.info/api/query?stream=false' \
+      -H 'Content-Type: application/json' \
+      -d "{\"query\": \"$DOMAIN MX\"}" \
+      | jq -e '.events | length > 0'
+
+# Run a domain health check
+- run: |
+    curl -sf -X POST 'https://dns.netray.info/api/check?stream=false' \
+      -H 'Content-Type: application/json' \
+      -d "{\"query\": \"$DOMAIN\"}" \
+      | jq -e '.events | length > 0'
+```
+
 ## Deployment
 
 Single binary, frontend baked in. Copy, configure, run.
