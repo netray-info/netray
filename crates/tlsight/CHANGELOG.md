@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] - 2026-04-07
+
+### Added
+- SAN quality, AIA reachability checks, deep links, mobile UX, trace ID propagation (2f86129)
+- MIT LICENSE file (a69d2b2)
+
+### Changed
+- Frontend: use shared SuiteNav, history factory, fetchWithTimeout from common-frontend (de61a7a)
+- Frontend: bump @netray-info/common-frontend to ^0.3.0 (e2a7dad)
+- Add human-readable docs link to OpenAPI description; CI integration examples in README (4ce2442)
+
 ## [0.7.2] - 2026-04-07
 
 ### Fixed
