@@ -34,6 +34,13 @@ struct InspectResponse {
 struct PortResult {
     #[serde(default)]
     ips: Vec<IpResult>,
+    quality: Option<PortQualityResult>,
+}
+
+#[derive(Deserialize, Default)]
+struct PortQualityResult {
+    #[serde(default)]
+    checks: Vec<HealthCheck>,
 }
 
 #[derive(Deserialize, Default)]
@@ -57,24 +64,12 @@ struct CertInfo {
 struct QualityResult {
     #[serde(default)]
     checks: Vec<HealthCheck>,
-    hsts: Option<HstsInfo>,
-    https_redirect: Option<RedirectInfo>,
 }
 
 #[derive(Deserialize)]
 struct HealthCheck {
     id: String,
     status: String,
-}
-
-#[derive(Deserialize)]
-struct HstsInfo {
-    present: Option<bool>,
-}
-
-#[derive(Deserialize)]
-struct RedirectInfo {
-    status: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -130,8 +125,26 @@ fn parse_inspect(
 
     let quality = inspect.quality.unwrap_or_default();
 
-    // Map quality.checks to CheckResult.
+    // Collect per-port quality checks (cert, protocol, config) from the first port.
+    // These are in ports[0].quality.checks (PortQualityResult).
+    if let Some(port_quality) = inspect.ports.first().and_then(|p| p.quality.as_ref()) {
+        for hc in &port_quality.checks {
+            let verdict = match hc.status.as_str() {
+                "pass" => CheckVerdict::Pass,
+                "warn" => CheckVerdict::Warn,
+                "fail" => CheckVerdict::Fail,
+                "skip" => CheckVerdict::Skip,
+                _ => CheckVerdict::Skip,
+            };
+            checks.push(CheckResult { name: hc.id.clone(), verdict });
+        }
+    }
+
+    // Collect hostname-scoped quality checks (hsts, https_redirect) from top-level quality.checks.
     for hc in &quality.checks {
+        if checks.iter().any(|c| c.name == hc.id) {
+            continue;
+        }
         let verdict = match hc.status.as_str() {
             "pass" => CheckVerdict::Pass,
             "warn" => CheckVerdict::Warn,
@@ -140,32 +153,6 @@ fn parse_inspect(
             _ => CheckVerdict::Skip,
         };
         checks.push(CheckResult { name: hc.id.clone(), verdict });
-    }
-
-    // HSTS: map to a "hsts" check.
-    if let Some(hsts) = &quality.hsts {
-        let verdict = if hsts.present.unwrap_or(false) {
-            CheckVerdict::Pass
-        } else {
-            CheckVerdict::Fail
-        };
-        // Only add if not already present from quality.checks (avoid duplicates).
-        if !checks.iter().any(|c| c.name == "hsts") {
-            checks.push(CheckResult { name: "hsts".to_string(), verdict });
-        }
-    }
-
-    // HTTPS redirect: map to an "https_redirect" check.
-    if let Some(redirect) = &quality.https_redirect {
-        let verdict = match redirect.status.as_deref() {
-            Some("pass") => CheckVerdict::Pass,
-            Some("warn") => CheckVerdict::Warn,
-            Some("fail") => CheckVerdict::Fail,
-            _ => CheckVerdict::Skip,
-        };
-        if !checks.iter().any(|c| c.name == "https_redirect") {
-            checks.push(CheckResult { name: "https_redirect".to_string(), verdict });
-        }
     }
 
     let raw_headline = build_headline(&inspect.ports);

@@ -163,7 +163,12 @@ fn collect_ips_from_batch(
         };
 
         for record in records {
-            let ip_str = record.get("data").and_then(|v| v.as_str()).unwrap_or("");
+            // RData serializes as a tagged enum: {"A": "1.2.3.4"} or {"AAAA": "::1"}
+            let ip_str = record
+                .get("data")
+                .and_then(|d| d.get(record_type))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             if let Ok(ip) = ip_str.parse::<IpAddr>() {
                 if seen.insert(ip) {
                     resolved_ips.push(ip);

@@ -35,26 +35,20 @@ struct EnrichmentEntry {
     #[serde(default)]
     network: NetworkInfo,
     #[serde(default)]
-    geo: GeoInfo,
-    #[serde(default)]
-    asn: AsnInfo,
+    location: LocationInfo,
 }
 
 #[derive(Deserialize, Default)]
 struct NetworkInfo {
     #[serde(rename = "type", default)]
     network_type: String,
+    org: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
-struct GeoInfo {
+struct LocationInfo {
     city: Option<String>,
     country: Option<String>,
-}
-
-#[derive(Deserialize, Default)]
-struct AsnInfo {
-    org: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -86,7 +80,7 @@ pub async fn check_ip(
     let futures: Vec<_> = capped
         .iter()
         .map(|ip| {
-            let url = format!("{base}/{ip}/json");
+            let url = format!("{base}/json?ip={ip}");
             let client = client.clone();
             async move {
                 tokio::time::timeout(timeout, client.get(&url).send())
@@ -118,8 +112,8 @@ pub async fn check_ip(
                     worst_verdict = verdict;
                 }
 
-                let geo = build_geo(&e.geo);
-                let org = e.asn.org.clone();
+                let geo = build_geo(&e.location);
+                let org = e.network.org.clone();
 
                 addresses.push(IpInfo {
                     ip: *ip,
@@ -185,8 +179,8 @@ fn network_type_verdict(network_type: &str) -> CheckVerdict {
     }
 }
 
-fn build_geo(geo: &GeoInfo) -> Option<String> {
-    match (&geo.city, &geo.country) {
+fn build_geo(location: &LocationInfo) -> Option<String> {
+    match (&location.city, &location.country) {
         (Some(city), Some(country)) => Some(format!("{city}, {country}")),
         (None, Some(country)) => Some(country.clone()),
         (Some(city), None) => Some(city.clone()),
