@@ -4,6 +4,7 @@ export interface CheckItem {
   name: string;
   verdict: Verdict;
   message?: string;
+  guide_url?: string;
 }
 
 export interface DnsEvent {
@@ -33,6 +34,7 @@ export interface IpEvent {
   checks: CheckItem[];
   addresses: IpAddress[];
   detail_url: string;
+  guide_url?: string;
 }
 
 export interface SummaryEvent {

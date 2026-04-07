@@ -82,6 +82,16 @@ export default function IpSection(props: Props) {
                   </For>
                 </ul>
                 <CheckList checks={data().checks} />
+                <Show when={data().guide_url}>
+                  <a
+                    class="check-item__guide-link"
+                    href={data().guide_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Learn why
+                  </a>
+                </Show>
                 <a
                   class="section-detail-link"
                   href={data().detail_url}

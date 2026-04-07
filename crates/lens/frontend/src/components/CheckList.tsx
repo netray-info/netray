@@ -1,4 +1,4 @@
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import type { CheckItem, Verdict } from '../lib/types';
 
 function verdictIcon(v: Verdict): string {
@@ -42,6 +42,16 @@ export default function CheckList(props: Props) {
             {check.message && (
               <span class="check-item__message">{check.message}</span>
             )}
+            <Show when={check.guide_url}>
+              <a
+                class="check-item__guide-link"
+                href={check.guide_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Learn why
+              </a>
+            </Show>
           </li>
         )}
       </For>

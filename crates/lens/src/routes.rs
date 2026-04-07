@@ -30,6 +30,30 @@ use crate::state::AppState;
 pub struct CheckItem {
     pub name: String,
     pub verdict: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guide_url: Option<&'static str>,
+}
+
+/// Return the guide URL for a check name if the verdict is fail or warn.
+/// Mapping defined in SDD §4.12.
+fn guide_url_for(name: &str, verdict: &str) -> Option<&'static str> {
+    if verdict != "fail" && verdict != "warn" {
+        return None;
+    }
+    match name {
+        "spf" | "dmarc" | "dkim" | "mta_sts" | "tlsrpt" => {
+            Some("https://netray.info/guide/email-auth")
+        }
+        "dnssec" | "dnskey_algorithm" | "dnssec_rollover" => {
+            Some("https://netray.info/guide/record-types")
+        }
+        "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
+        "chain_trusted" | "chain_complete" | "cert_lifetime" | "strong_signature"
+        | "hsts" | "https_redirect" | "tls_version" => {
+            Some("https://netray.info/guide/certificate-chain")
+        }
+        _ => None,
+    }
 }
 
 #[derive(Serialize)]
@@ -64,6 +88,8 @@ pub struct IpEvent {
     pub headline: String,
     pub addresses: Vec<IpAddressInfo>,
     pub detail_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guide_url: Option<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -301,9 +327,13 @@ fn dns_event_from(result: &Result<DnsBackendResult, SectionError>) -> Event {
             let items = r
                 .checks
                 .iter()
-                .map(|c| CheckItem {
-                    name: c.name.clone(),
-                    verdict: verdict_str(&c.verdict),
+                .map(|c| {
+                    let verdict = verdict_str(&c.verdict);
+                    CheckItem {
+                        guide_url: guide_url_for(&c.name, verdict),
+                        name: c.name.clone(),
+                        verdict,
+                    }
                 })
                 .collect();
             (r.raw_headline.clone(), items, r.detail_url.clone())
@@ -329,9 +359,13 @@ fn tls_event_from(result: &Result<TlsBackendResult, SectionError>) -> Event {
             let items = r
                 .checks
                 .iter()
-                .map(|c| CheckItem {
-                    name: c.name.clone(),
-                    verdict: verdict_str(&c.verdict),
+                .map(|c| {
+                    let verdict = verdict_str(&c.verdict);
+                    CheckItem {
+                        guide_url: guide_url_for(&c.name, verdict),
+                        name: c.name.clone(),
+                        verdict,
+                    }
                 })
                 .collect();
             (r.raw_headline.clone(), items, r.detail_url.clone())
@@ -374,7 +408,12 @@ fn ip_event_from(result: &Result<IpBackendResult, SectionError>) -> Event {
             (msg.to_string(), vec![], String::new())
         }
     };
-    let payload = IpEvent { status, headline, addresses, detail_url };
+    let guide_url = if status == "fail" || status == "warn" {
+        Some("https://netray.info/guide/ip-enrichment")
+    } else {
+        None
+    };
+    let payload = IpEvent { status, headline, addresses, detail_url, guide_url };
     Event::default()
         .event("ip")
         .data(serde_json::to_string(&payload).unwrap_or_default())
