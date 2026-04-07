@@ -312,6 +312,8 @@ export default function App() {
                   portQualities={r.ports.map(p => ({ port: p.port, quality: p.quality }))}
                   explain={explain()}
                   expanded={allExpanded()}
+                  dnsUrl={dnsUrl()}
+                  hostname={r.hostname}
                 />
 
                 <Show when={r.ports.length > 1}>

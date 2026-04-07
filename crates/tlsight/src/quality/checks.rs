@@ -547,6 +547,161 @@ pub fn check_alpn_consistency(ips: &[IpInspectionResult]) -> HealthCheck {
     }
 }
 
+// ---------------------------------------------------------------------------
+// SAN quality check
+// ---------------------------------------------------------------------------
+
+fn is_internal_san(san: &str) -> bool {
+    // Bare single-label hostname (no dots, not an IP address)
+    if !san.contains('.') && san.parse::<std::net::IpAddr>().is_err() {
+        return true;
+    }
+    // RFC 1918 IPv4
+    if let Ok(std::net::IpAddr::V4(v4)) = san.parse::<std::net::IpAddr>() {
+        let octets = v4.octets();
+        // 10.0.0.0/8
+        if octets[0] == 10 {
+            return true;
+        }
+        // 172.16.0.0/12
+        if octets[0] == 172 && (16..=31).contains(&octets[1]) {
+            return true;
+        }
+        // 192.168.0.0/16
+        if octets[0] == 192 && octets[1] == 168 {
+            return true;
+        }
+    }
+    // Private IPv6 (ULA, loopback, link-local) not checked here -- only
+    // RFC 1918 IPv4 and bare single-label hostnames are in scope.
+    false
+}
+
+pub fn check_san_quality(chain: &[CertInfo], _hostname: &str) -> HealthCheck {
+    if chain.is_empty() {
+        return HealthCheck {
+            id: "san_quality".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Skip,
+            label: "SAN quality".to_string(),
+            detail: "No certificate chain available".to_string(),
+        };
+    }
+
+    let Some(leaf) = chain
+        .iter()
+        .find(|c| c.position == "leaf" || c.position == "leaf_self_signed")
+    else {
+        return HealthCheck {
+            id: "san_quality".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Skip,
+            label: "SAN quality".to_string(),
+            detail: "no leaf certificate".to_string(),
+        };
+    };
+
+    let san_count = leaf.sans.len();
+
+    if san_count >= 100 {
+        return HealthCheck {
+            id: "san_quality".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Warn,
+            label: "SAN quality".to_string(),
+            detail: format!(
+                "leaf certificate has {san_count} SANs (excessive; may indicate shared hosting or CDN)"
+            ),
+        };
+    }
+
+    if leaf.sans.iter().any(|s| is_internal_san(s)) {
+        return HealthCheck {
+            id: "san_quality".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Warn,
+            label: "SAN quality".to_string(),
+            detail: "leaf certificate contains internal/non-public SAN entries".to_string(),
+        };
+    }
+
+    if leaf.sans.iter().all(|s| s.starts_with("*.")) {
+        return HealthCheck {
+            id: "san_quality".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Pass,
+            label: "SAN quality".to_string(),
+            detail: "Wildcard certificate".to_string(),
+        };
+    }
+
+    HealthCheck {
+        id: "san_quality".to_string(),
+        category: Category::Certificate,
+        status: CheckStatus::Pass,
+        label: "SAN quality".to_string(),
+        detail: format!("SAN list looks reasonable ({san_count} entries)"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AIA chain reachability check
+// ---------------------------------------------------------------------------
+
+pub fn check_aia_reachability(chain: &[CertInfo], chain_complete: bool) -> HealthCheck {
+    if chain.is_empty() {
+        return HealthCheck {
+            id: "aia_reachability".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Skip,
+            label: "AIA reachability".to_string(),
+            detail: "No certificate chain available".to_string(),
+        };
+    }
+
+    if chain.len() == 1 && chain[0].is_self_signed {
+        return HealthCheck {
+            id: "aia_reachability".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Pass,
+            label: "AIA reachability".to_string(),
+            detail: "Self-signed certificate; no AIA chasing needed".to_string(),
+        };
+    }
+
+    if chain_complete {
+        return HealthCheck {
+            id: "aia_reachability".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Pass,
+            label: "AIA reachability".to_string(),
+            detail: "Chain is complete; AIA URLs not required for verification".to_string(),
+        };
+    }
+
+    // Chain incomplete -- check for CA Issuers AIA URL
+    let aia_url = chain.iter().find_map(|c| c.ca_issuers_url.as_deref());
+    if let Some(url) = aia_url {
+        HealthCheck {
+            id: "aia_reachability".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Warn,
+            label: "AIA reachability".to_string(),
+            detail: format!(
+                "Chain incomplete but CA Issuers AIA URL available ({url}); clients may be able to fetch missing intermediates"
+            ),
+        }
+    } else {
+        HealthCheck {
+            id: "aia_reachability".to_string(),
+            category: Category::Certificate,
+            status: CheckStatus::Fail,
+            label: "AIA reachability".to_string(),
+            detail: "Chain incomplete and no CA Issuers AIA URL found; clients cannot fetch missing intermediates".to_string(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

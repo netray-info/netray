@@ -236,6 +236,7 @@ export default function CertDetail(props: Props) {
       {expanded() && (
         <div class="cert-detail__body">
           <Explain when={!!props.explain}>Full details for this certificate. SANs list all hostnames this certificate covers. The SHA-256 fingerprint uniquely identifies this certificate.</Explain>
+          <div class="cert-table-scroll">
           <table class="cert-detail__table">
             <tbody>
               <tr>
@@ -330,6 +331,7 @@ export default function CertDetail(props: Props) {
               </Show>
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

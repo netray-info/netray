@@ -8,6 +8,8 @@ interface Props {
   portQualities: { port: number; quality?: PortQualityResult }[];
   explain?: boolean;
   expanded?: boolean;
+  dnsUrl?: string;
+  hostname?: string;
 }
 
 const CHECK_LABELS: Record<string, string> = {
@@ -67,6 +69,8 @@ const DETAIL_EXPLANATIONS: Record<string, string> = {
   alpn_consistency: 'When multiple IPs are inspected, checks that all negotiate the same ALPN protocol (e.g. h2 vs http/1.1). Divergence means some IPs offer HTTP/2 and others do not.',
   hsts: 'HTTP Strict Transport Security tells browsers to always use HTTPS. A max-age of at least 6 months (15768000s) is recommended.',
   https_redirect: 'Checks whether port 80 redirects HTTP requests to HTTPS on the same host.',
+  san_quality: 'Checks the leaf certificate\'s Subject Alternative Names for excessive count (100+) or internal/non-public entries.',
+  aia_reachability: 'Checks whether missing intermediate certificates can be fetched via the CA Issuers AIA URL. An incomplete chain with no AIA URL means clients cannot build the trust path.',
 };
 
 function countStatuses(checks: Record<string, CheckStatus>): Record<CheckStatus, number> {
@@ -113,7 +117,7 @@ function qualityVerdict(quality?: QualityResult, portQualities?: { port: number;
   return 'skip';
 }
 
-function CheckRow(props: { check: HealthCheck }) {
+function CheckRow(props: { check: HealthCheck; dnsUrl?: string; hostname?: string }) {
   return (
     <div class={`quality-check quality-check--${props.check.status}`} title={DETAIL_EXPLANATIONS[props.check.id]}>
       <span class="quality-check__icon" aria-hidden="true">{STATUS_ICON[props.check.status]}</span>
@@ -121,16 +125,30 @@ function CheckRow(props: { check: HealthCheck }) {
       <span class="quality-check__label">{props.check.label}</span>
       <span class="quality-check__sep">&mdash;</span>
       <span class="quality-check__detail">{props.check.detail}</span>
+      <Show when={
+        props.dnsUrl && props.hostname &&
+        (props.check.id === 'caa_compliant' || props.check.id === 'dane_valid') &&
+        (props.check.status === 'warn' || props.check.status === 'fail')
+      }>
+        {' '}
+        <a
+          class="eco-link eco-link--badge"
+          href={`${props.dnsUrl}/?q=${encodeURIComponent(props.hostname!)}+check&ref=tlsight`}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Check DNS for ${props.hostname}`}
+        >Check DNS &#x2197;</a>
+      </Show>
     </div>
   );
 }
 
-function CheckGroup(props: { category: string; checks: HealthCheck[] }) {
+function CheckGroup(props: { category: string; checks: HealthCheck[]; dnsUrl?: string; hostname?: string }) {
   return (
     <div class="quality-group">
       <div class="quality-group__title">{CATEGORY_LABELS[props.category as QualityCategory] ?? props.category}</div>
       <For each={props.checks}>
-        {(check) => <CheckRow check={check} />}
+        {(check) => <CheckRow check={check} dnsUrl={props.dnsUrl} hostname={props.hostname} />}
       </For>
     </div>
   );
@@ -188,7 +206,7 @@ export default function ValidationSummary(props: Props) {
           <Show when={props.quality && props.quality!.checks.length > 0}>
             <div class="quality-hostname">
               <For each={props.quality!.checks}>
-                {(check) => <CheckRow check={check} />}
+                {(check) => <CheckRow check={check} dnsUrl={props.dnsUrl} hostname={props.hostname} />}
               </For>
             </div>
           </Show>
@@ -205,7 +223,7 @@ export default function ValidationSummary(props: Props) {
                     </div>
                   </Show>
                   <For each={groupByCategory(pq.quality!.checks)}>
-                    {([cat, checks]) => <CheckGroup category={cat} checks={checks} />}
+                    {([cat, checks]) => <CheckGroup category={cat} checks={checks} dnsUrl={props.dnsUrl} hostname={props.hostname} />}
                   </For>
                 </div>
               </Show>

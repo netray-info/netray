@@ -553,7 +553,8 @@ async fn do_inspect(
     let enrichment_handle = if let Some(ref client) = state.enrichment_client {
         let client = Arc::clone(client);
         let ips = inspected_ips.clone();
-        Some(tokio::spawn(async move { client.lookup_batch(&ips).await }))
+        let rid = request_id.clone();
+        Some(tokio::spawn(async move { client.lookup_batch(&ips, Some(&rid)).await }))
     } else {
         None
     };
@@ -866,6 +867,7 @@ async fn do_inspect(
                 ocsp_stapled,
                 pr.consistency.as_ref(),
                 ct_enabled,
+                if is_hostname { parsed.target.hostname().unwrap_or("") } else { "" },
             );
             pr.quality = Some(port_quality);
         }

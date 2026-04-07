@@ -1749,3 +1749,21 @@ a:hover { text-decoration: underline; }
   color: var(--accent);
 }
 
+.cert-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 600px) {
+  .cert-detail__table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cert-detail__table th,
+  .cert-detail__table td {
+    white-space: normal;
+    word-break: break-word;
+  }
+}
+

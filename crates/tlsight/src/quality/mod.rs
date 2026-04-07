@@ -26,6 +26,7 @@ pub fn assess_port(
     ocsp_stapled: bool,
     consistency: Option<&ConsistencyResult>,
     ct_enabled: bool,
+    hostname: &str,
 ) -> PortQualityResult {
     // Find first successful IP for data
     let first_ok = ips.iter().find(|r| r.error.is_none());
@@ -38,13 +39,16 @@ pub fn assess_port(
     };
 
     let mut all_checks = Vec::new();
+    let mut chain_complete = false;
 
     // Certificate checks
     if let Some(validation) = &ip_result.validation {
         all_checks.push(checks::check_chain_trusted(validation));
         all_checks.push(checks::check_not_expired(validation));
         all_checks.push(checks::check_hostname_match(validation, is_hostname));
-        all_checks.push(checks::check_chain_complete(validation));
+        let chain_complete_check = checks::check_chain_complete(validation);
+        chain_complete = chain_complete_check.status != CheckStatus::Fail;
+        all_checks.push(chain_complete_check);
         all_checks.push(checks::check_strong_signature(validation));
     }
 
@@ -52,6 +56,8 @@ pub fn assess_port(
         all_checks.push(checks::check_key_strength(chain));
         all_checks.push(checks::check_expiry_window(chain));
         all_checks.push(checks::check_cert_lifetime(chain));
+        all_checks.push(checks::check_san_quality(chain, hostname));
+        all_checks.push(checks::check_aia_reachability(chain, chain_complete));
     }
 
     // Protocol checks
