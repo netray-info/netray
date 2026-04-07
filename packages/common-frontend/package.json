@@ -1,6 +1,7 @@
 {
   "name": "@netray-info/common-frontend",
   "version": "0.2.3",
+  "license": "MIT",
   "type": "module",
   "files": [
     "src",
