@@ -167,6 +167,12 @@ Full spec: [`specs/frontend-rules.md`](../specs/frontend-rules.md) in the netray
 - Mock `fetch` via `vi.stubGlobal`; mock `localStorage` in `src/test-setup.ts`
 - Test files co-located: `lib/foo.test.ts` next to `lib/foo.ts`
 
+## CI/CD
+
+Workflow rules: [`specs/workflow-rules.md`](../specs/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+
+Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
+
 ## Build & Test
 
 ```sh
