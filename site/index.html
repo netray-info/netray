@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>netray.info — Network Intelligence Tools</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="description" content="Three open-source tools for understanding your network: IP enrichment, DNS inspection, and TLS analysis.">
+  <meta name="description" content="Four open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, and TLS analysis.">
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://netray.info/" />
   <meta property="og:title" content="netray.info — Network Intelligence Tools" />
-  <meta property="og:description" content="Three open-source tools for understanding your network: IP enrichment, DNS inspection, and TLS analysis. Self-hostable, Rust-based, no account needed." />
+  <meta property="og:description" content="Four open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, and TLS analysis. Self-hostable, Rust-based, no account needed." />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="netray.info — Network Intelligence Tools" />
-  <meta name="twitter:description" content="Three open-source tools for understanding your network: IP enrichment, DNS inspection, and TLS analysis." />
+  <meta name="twitter:description" content="Four open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, and TLS analysis." />
   <meta name="theme-color" content="#07090f" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#f6f8fb" media="(prefers-color-scheme: light)" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -42,6 +42,8 @@
       --dns-glow: rgba(109,40,217,.09);
       --tls:      #0e7490;
       --tls-glow: rgba(14,116,144,.09);
+      --lens:     #16a34a;
+      --lens-glow: rgba(22,163,74,.09);
     }
 
     /* ── Dark theme ────────────────────────────── */
@@ -67,6 +69,8 @@
         --dns-glow: rgba(139,92,246,.12);
         --tls:      #06b6d4;
         --tls-glow: rgba(6,182,212,.12);
+        --lens:     #22c55e;
+        --lens-glow: rgba(34,197,94,.12);
       }
     }
 
@@ -91,6 +95,8 @@
       --dns-glow: rgba(139,92,246,.12);
       --tls:      #06b6d4;
       --tls-glow: rgba(6,182,212,.12);
+      --lens:     #22c55e;
+      --lens-glow: rgba(34,197,94,.12);
     }
 
     [data-theme="light"] {
@@ -114,6 +120,8 @@
       --dns-glow: rgba(109,40,217,.09);
       --tls:      #0e7490;
       --tls-glow: rgba(14,116,144,.09);
+      --lens:     #16a34a;
+      --lens-glow: rgba(22,163,74,.09);
     }
 
     html { scroll-behavior: smooth; }
@@ -285,7 +293,7 @@
     .tools {
       max-width: 1080px;
       margin: 0 auto;
-      padding: 72px 24px 100px;
+      padding: 40px 24px 100px;
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 20px;
@@ -330,7 +338,31 @@
       margin-bottom: 22px;
     }
 
-    .card-icon { font-size: 1.7rem; line-height: 1; }
+    .card-icon { line-height: 1; display: flex; align-items: center; }
+    .card-icon svg { display: block; }
+    .card--ip   .card-icon { color: var(--ip); }
+    .card--dns  .card-icon { color: var(--dns); }
+    .card--tls  .card-icon { color: var(--tls); }
+
+    .card-github {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      font-weight: 500;
+      letter-spacing: .02em;
+      text-decoration: none;
+      opacity: .5;
+      transition: opacity .15s;
+      margin-bottom: 16px;
+    }
+    .card-github:hover { opacity: 1; }
+    .card-github svg { display: block; flex-shrink: 0; }
+    .card--ip   .card-github { color: var(--ip); }
+    .card--dns  .card-github { color: var(--dns); }
+    .card--tls  .card-github { color: var(--tls); }
+    .card--lens .card-github { color: var(--lens); }
 
     .card-badge {
       font-family: 'JetBrains Mono', monospace;
@@ -356,7 +388,7 @@
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
       font-weight: 500;
-      margin-bottom: 14px;
+      margin-bottom: 5px;
     }
 
     .card--ip  .card-tag { color: var(--ip); }
@@ -616,6 +648,38 @@
     }
 
     .learn-all a:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── Lens chip ─────────────────────────────── */
+    .chip--lens { color: var(--lens); border-color: rgba(34,197,94,.3); background: var(--lens-glow); }
+    .chip--lens:hover { box-shadow: 0 6px 20px var(--lens-glow); }
+
+    /* ── Lens card ─────────────────────────────── */
+    .card--lens .card-icon { color: var(--lens); }
+    .card--lens::before  { background: linear-gradient(90deg, var(--lens), transparent); }
+    .card--lens:hover    { border-color: var(--lens); box-shadow: 0 20px 50px var(--lens-glow); }
+    .card--lens .card-badge   { background: var(--lens-glow); color: var(--lens); border: 1px solid var(--lens); }
+    .card--lens .card-tag     { color: var(--lens); }
+    .card--lens .feat-arrow   { color: var(--lens); }
+    .card--lens .card-cta     { color: var(--lens); border-color: var(--lens); }
+    .card--lens:hover .card-cta { background: var(--lens-glow); }
+    .card--lens .card-form-input:focus { border-color: var(--lens); }
+    .card--lens .card-form-btn { color: var(--lens); border-color: var(--lens); }
+    .card--lens .card-form-btn:hover { background: var(--lens-glow); }
+
+    /* ── Lens featured section ─────────────────── */
+    .lens-featured {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 24px;
+      animation: fadeUp .55s .06s ease both;
+    }
+
+    .lens-form .card-form-input { padding: 11px 14px; font-size: .85rem; }
+    .lens-form .card-form-btn   { padding: 11px 22px; font-size: .83rem; }
+
+    /* ── Guide card — lens ─────────────────────── */
+    .guide-card--lens:hover { border-color: var(--lens); box-shadow: 0 8px 28px var(--lens-glow); }
+    .guide-card--lens .guide-card__tag { color: var(--lens); border-color: var(--lens); background: var(--lens-glow); }
   </style>
 </head>
 <body>
@@ -630,24 +694,27 @@
   <section class="hero">
     <div class="status-pill">
       <span class="pulse"></span>
-      open source &middot; self-hosted &middot; built in rust
+      open source &middot; self-hosted &middot; built in Rust
     </div>
 
     <h1>Network intelligence,<br>laid bare.</h1>
 
     <p class="subtitle">
-      Three tools for understanding what's really happening on the network —
-      your IP, your DNS, your TLS certificates.
+      Stop switching between SSL Labs, dig, and ifconfig.co.
+      Everything you need to understand a domain — in one place.
     </p>
 
     <p class="suite-narrative">
-      Built for DevOps, SRE, and Security Engineers who need DNS, TLS, and IP
-      context in the same workflow — without switching between SSL Labs,
-      DNSChecker, and ifconfig.co. All three tools are self-hostable,
-      open-source, and built in Rust.
+      Built for DevOps, SRE, and security engineers who need IP context, DNS
+      health, and TLS details in the same workflow. Start with lens for a
+      single A+–F health grade, or go deep with the individual tools.
+      Self-hostable, open-source, no account needed.
     </p>
 
     <div class="tool-chips">
+      <a href="https://lens.netray.info" class="chip chip--lens">
+        <span class="chip-dot"></span>lens.netray.info
+      </a>
       <a href="https://ip.netray.info"  class="chip chip--ip">
         <span class="chip-dot"></span>ip.netray.info
       </a>
@@ -660,43 +727,69 @@
     </div>
   </section>
 
+  <section class="lens-featured" aria-label="lens — unified domain health check">
+    <div class="card card--lens">
+      <div class="card-head">
+        <span class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="5.5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="1.75" fill="currentColor"/></svg></span>
+        <span class="card-badge">lens.netray.info</span>
+      </div>
+      <h2>lens</h2>
+      <div class="card-tag">// unified domain health check</div>
+      <a href="https://github.com/netray-info/lens" class="card-github" target="_blank" rel="noopener noreferrer" aria-label="lens on GitHub"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>lens</a>
+      <p class="card-desc">One domain. Three signals. One grade — streamed in real time as each check completes. Use the individual tools below to dig deeper into any finding.</p>
+      <ul class="features">
+        <li><span class="feat-arrow">→</span> DNS, TLS, and IP checked in parallel</li>
+        <li><span class="feat-arrow">→</span> A+–F grade with per-section breakdown</li>
+        <li><span class="feat-arrow">→</span> Results arrive in real time — no waiting for the slowest check</li>
+        <li><span class="feat-arrow">→</span> CI-friendly API — gate deploys on a health grade</li>
+      </ul>
+      <form class="card-form lens-form" action="https://lens.netray.info/" method="get">
+        <input class="card-form-input" type="text" name="d" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Domain to check" />
+        <button class="card-form-btn" type="submit">Check health →</button>
+      </form>
+      <a href="https://lens.netray.info" class="card-cta">Open lens ↗</a>
+    </div>
+  </section>
+
   <section class="tools">
 
     <div class="card card--ip">
       <div class="card-head">
-        <span class="card-icon">🌐</span>
+        <span class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><circle cx="12" cy="12" r="6" stroke="currentColor" stroke-width="1.5" opacity="0.55"/><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.2" opacity="0.25"/><line x1="14" y1="10" x2="20" y2="4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
         <span class="card-badge">ip.netray.info</span>
       </div>
-      <h2>ifconfig-rs</h2>
+      <h2>IP Lookup</h2>
       <div class="card-tag">// IP enrichment API</div>
+      <a href="https://github.com/netray-info/ifconfig-rs" class="card-github" target="_blank" rel="noopener noreferrer" aria-label="ifconfig-rs on GitHub"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>ifconfig-rs</a>
       <p class="card-desc">
-        Any IP, enriched. Look up geolocation, ASN, reverse DNS, and network
-        classification — cloud provider, VPN, Tor exit node, or bot network.
-        Friendly to browsers and <code style="font-family:monospace;background:var(--faint);padding:1px 5px;border-radius:3px;font-size:.9em">curl</code> alike.
+        Enter any IP — or nothing, to see your own. Get geolocation, ASN,
+        reverse DNS, and network classification: cloud provider, VPN, Tor
+        exit node, or known botnet. Works from the browser or <code style="font-family:monospace;background:var(--faint);padding:1px 5px;border-radius:3px;font-size:.9em">curl</code>.
       </p>
       <ul class="features">
-        <li><span class="feat-arrow">→</span> GeoIP &amp; ASN lookup for any address</li>
-        <li><span class="feat-arrow">→</span> Cloud provider, VPN, Tor &amp; bot detection</li>
-        <li><span class="feat-arrow">→</span> JSON, YAML, TOML, CSV output formats</li>
-        <li><span class="feat-arrow">→</span> Batch lookup, field filtering, rate limiting</li>
+        <li><span class="feat-arrow">→</span> Geolocation, ASN &amp; reverse DNS for any address</li>
+        <li><span class="feat-arrow">→</span> Cloud provider, VPN, Tor &amp; botnet detection</li>
+        <li><span class="feat-arrow">→</span> JSON, YAML, TOML, CSV — plain text for scripts</li>
+        <li><span class="feat-arrow">→</span> Batch lookups and field filtering for automation</li>
       </ul>
       <form class="card-form" action="https://ip.netray.info/" method="get">
-        <button class="card-form-btn" type="submit">→ Show my IP</button>
+        <button class="card-form-btn" type="submit">Show my IP →</button>
       </form>
       <a href="https://ip.netray.info" class="card-cta">Open tool ↗</a>
     </div>
 
     <div class="card card--dns">
       <div class="card-head">
-        <span class="card-icon">🔮</span>
+        <span class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 3 L21 20 H3 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><line x1="17.5" y1="20" x2="21.5" y2="16.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/><line x1="19.5" y1="20" x2="22.5" y2="14" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/></svg></span>
         <span class="card-badge">dns.netray.info</span>
       </div>
-      <h2>prism</h2>
+      <h2>DNS Inspector</h2>
       <div class="card-tag">// DNS, refracted.</div>
+      <a href="https://github.com/netray-info/mhost-prism" class="card-github" target="_blank" rel="noopener noreferrer" aria-label="mhost-prism on GitHub"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>prism</a>
       <p class="card-desc">
-        Fan out DNS queries to multiple resolvers simultaneously and stream
-        results as they arrive. Spot disagreements, trace delegation chains,
-        audit your whole domain in one shot.
+        Query multiple DNS resolvers at once and stream results as they arrive.
+        Spot resolver disagreements, trace delegation chains, and audit your
+        domain's full DNS health in one shot.
       </p>
       <ul class="features">
         <li><span class="feat-arrow">→</span> Query, Check, Trace, Compare, Auth, DNSSEC modes</li>
@@ -713,16 +806,16 @@
 
     <div class="card card--tls">
       <div class="card-head">
-        <span class="card-icon">🔒</span>
+        <span class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M2 12 C5.5 6 9.5 4 12 4 C14.5 4 18.5 6 22 12 C18.5 18 14.5 20 12 20 C9.5 20 5.5 18 2 12 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg></span>
         <span class="card-badge">tls.netray.info</span>
       </div>
-      <h2>tlsight</h2>
+      <h2>TLS Inspector</h2>
       <div class="card-tag">// TLS inspection &amp; analysis</div>
+      <a href="https://github.com/netray-info/tlsight" class="card-github" target="_blank" rel="noopener noreferrer" aria-label="tlsight on GitHub"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>tlsight</a>
       <p class="card-desc">
-        Full certificate chain inspection, TLS configuration analysis, and DNS
-        cross-validation in one view. Catches what
-        <code style="font-family:monospace;background:var(--faint);padding:1px 5px;border-radius:3px;font-size:.9em">openssl s_client</code>
-        buries in noise.
+        Catches what <code style="font-family:monospace;background:var(--faint);padding:1px 5px;border-radius:3px;font-size:.9em">openssl s_client</code> buries in noise.
+        Full certificate chain, protocol version, cipher strength, and DNS
+        cross-validation — including broken and expired certs.
       </p>
       <ul class="features">
         <li><span class="feat-arrow">→</span> Full chain: expiry, algorithm, completeness</li>
@@ -782,10 +875,10 @@
         <span class="guide-card__cta">Read →</span>
       </a>
 
-      <a href="/guide/domain-security-audit" class="guide-card guide-card--all">
+      <a href="/guide/domain-security-audit" class="guide-card guide-card--lens">
         <span class="guide-card__tag">All tools</span>
-        <span class="guide-card__title">How to Audit Your Domain Security in 5 Minutes</span>
-        <span class="guide-card__desc">A step-by-step walkthrough of DNS, TLS, and IP health checks you can run right now to find issues before they become incidents.</span>
+        <span class="guide-card__title">Domain Security Audit: Automated with lens or step-by-step</span>
+        <span class="guide-card__desc">Start with lens for an A+–F health grade in one shot, or follow the step-by-step walkthrough across DNS, TLS, and IP.</span>
         <span class="guide-card__cta">Read →</span>
       </a>
 
@@ -798,6 +891,8 @@
 </main>
 
 <footer>
+  <a href="https://lens.netray.info">lens.netray.info</a>
+  <span class="sep">&middot;</span>
   <a href="https://ip.netray.info">ip.netray.info</a>
   <span class="sep">&middot;</span>
   <a href="https://dns.netray.info">dns.netray.info</a>

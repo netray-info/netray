@@ -3,30 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>How to Audit Your Domain Security in 5 Minutes | netray.info</title>
-  <meta name="description" content="A step-by-step domain security audit covering DNS health, TLS certificate validity, email authentication, and IP reputation — using only free tools.">
+  <title>Domain Security Audit: Automated with lens or step-by-step | netray.info</title>
+  <meta name="description" content="Start with lens for an A+–F domain health grade in one shot, or follow the step-by-step audit across DNS, TLS, email authentication, and IP reputation.">
   <link rel="canonical" href="https://netray.info/guide/domain-security-audit">
   <link rel="stylesheet" href="style.css">
 
   <!-- Open Graph -->
   <meta property="og:type" content="article">
-  <meta property="og:title" content="How to Audit Your Domain Security in 5 Minutes">
-  <meta property="og:description" content="A step-by-step domain security audit covering DNS health, TLS certificate validity, email authentication, and IP reputation — using only free tools.">
+  <meta property="og:title" content="Domain Security Audit: Automated with lens or step-by-step">
+  <meta property="og:description" content="Start with lens for an A+–F domain health grade in one shot, or follow the step-by-step audit across DNS, TLS, email authentication, and IP reputation.">
   <meta property="og:url" content="https://netray.info/guide/domain-security-audit">
   <meta property="og:site_name" content="netray.info">
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="How to Audit Your Domain Security in 5 Minutes">
-  <meta name="twitter:description" content="A step-by-step domain security audit covering DNS health, TLS certificate validity, email authentication, and IP reputation — using only free tools.">
+  <meta name="twitter:title" content="Domain Security Audit: Automated with lens or step-by-step">
+  <meta name="twitter:description" content="Start with lens for an A+–F domain health grade in one shot, or follow the step-by-step audit across DNS, TLS, email authentication, and IP reputation.">
 
   <!-- Structured Data -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "Article",
-    "headline": "How to Audit Your Domain Security in 5 Minutes",
-    "description": "A step-by-step domain security audit covering DNS health, TLS certificate validity, email authentication, and IP reputation — using only free tools.",
+    "headline": "Domain Security Audit: Automated with lens or step-by-step",
+    "description": "Start with lens for an A+–F domain health grade in one shot, or follow the step-by-step audit across DNS, TLS, email authentication, and IP reputation.",
     "url": "https://netray.info/guide/domain-security-audit",
     "publisher": {
       "@type": "Organization",
@@ -48,14 +48,31 @@
     <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
   </nav>
 </header>
 
 <main class="page-wrapper">
-  <h1 class="page-title">How to Audit Your Domain Security in 5 Minutes</h1>
-  <p class="page-subtitle">A practical checklist for DNS health, TLS configuration, email authentication, and IP reputation you can run right now.</p>
+  <h1 class="page-title">Domain Security Audit: Automated with lens or step-by-step</h1>
+  <p class="page-subtitle">Start with lens for a full A+–F health grade in under a minute, or follow the step-by-step walkthrough to understand each signal in depth.</p>
 
   <article>
+    <h2>The quick answer: use lens</h2>
+    <p>If you want a single verdict fast, lens is the starting point. It checks DNS, TLS, and IP reputation in parallel and produces a letter-graded health score — no setup, no scripting. Enter your domain at <a href="https://lens.netray.info">lens.netray.info</a> or run:</p>
+    <pre><code>curl -sN 'https://lens.netray.info/api/check?d=example.com' \
+  | grep '^data:' \
+  | awk -F'data: ' '/summary/{print $2;exit}' \
+  | jq '{grade: .grade, score: .score, sections: .sections}'</code></pre>
+    <p>The <code>summary</code> event returns an overall grade (A+ through F), a numeric score, and a per-section breakdown for DNS, TLS, and IP. If any section shows a low grade, use the individual tools below to dig into the details.</p>
+    <p>For CI pipelines, you can gate a deploy on the overall grade:</p>
+    <pre><code># Fail if grade is below B
+curl -sN 'https://lens.netray.info/api/check?d=example.com' \
+  | grep '^data:' \
+  | awk -F'data: ' '/summary/{print $2;exit}' \
+  | jq -e '.grade | test("^(A|B)")'</code></pre>
+    <p>The rest of this guide explains what lens is checking and how to investigate any findings in depth using the individual tools.</p>
+
     <h2>What a domain audit covers</h2>
     <p>A domain security audit examines four pillars: DNS integrity, TLS and certificate health, email authentication, and IP reputation. Each pillar has distinct failure modes, and weaknesses in one do not cancel out strengths in another — a domain with perfect TLS but no DMARC is still trivially spoofable in email.</p>
     <p><strong>DNS integrity</strong> covers nameserver configuration, DNSSEC signing, and CAA records. Failures here can redirect traffic, enable cache poisoning, or allow unauthorized certificate issuance. <strong>TLS health</strong> covers certificate validity, chain completeness, protocol version, and HSTS. An expired certificate or broken chain drops connections; weak protocol versions expose users to downgrade attacks. <strong>Email authentication</strong> (SPF, DKIM, DMARC) prevents impersonation and affects deliverability. <strong>IP reputation</strong> covers whether your hosting IPs are on blocklists and how they are classified — relevant for deliverability, API access, and trust signals.</p>
@@ -115,7 +132,13 @@
     </ol>
 
     <h2>Automating the audit</h2>
-    <p>All three tools expose JSON APIs. A basic automation loop using <code>curl</code>:</p>
+    <p>The simplest automation is the lens SSE endpoint — one request, all three signals, one grade:</p>
+    <pre><code># Get the overall grade and per-section scores
+curl -sN 'https://lens.netray.info/api/check?d=example.com' \
+  | grep '^data:' \
+  | awk -F'data: ' '/summary/{print $2;exit}' \
+  | jq '{grade: .grade, score: .score, sections: .sections}'</code></pre>
+    <p>For threshold alerting on individual fields, the three component APIs return structured data with explicit pass/warn/fail fields:</p>
     <pre><code># DNS check (returns JSON with lint results)
 curl -s "https://dns.netray.info/api/query?q=example.com+check" | jq .
 
@@ -125,23 +148,23 @@ curl -s "https://tls.netray.info/api/inspect?h=example.com" | jq .
 # IP enrichment for the domain's A record
 IP=$(dig +short example.com | head -1)
 curl -s "https://ip.netray.info/${IP}" | jq .</code></pre>
-    <p>Wrapping these in a CI job or cron script with alerting on specific fields (days-until-expiry, dmarc-policy, lint-errors) produces a continuous audit with minimal overhead. The DNS and TLS APIs return structured data with explicit pass/warn/fail fields, making threshold alerting straightforward.</p>
+    <p>Use lens for high-level pass/fail gating in CI; use the individual APIs when you need to alert on specific fields such as days-until-expiry, DMARC policy, or lint error counts.</p>
   </article>
 
   <section class="tool-entry">
-    <h2 class="tool-entry__heading">Run a DNS health check on your domain</h2>
-    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+    <h2 class="tool-entry__heading">Check your domain's full health with lens</h2>
+    <form class="tool-entry__form" action="https://lens.netray.info/" method="get">
       <input
         class="tool-entry__input"
         type="text"
-        name="q"
-        placeholder="example.com +check"
+        name="d"
+        placeholder="example.com"
         aria-label="Domain to check"
         required
       >
       <button class="tool-entry__submit" type="submit">Check</button>
     </form>
-    <p class="tool-entry__hint">Runs full DNS health check including email authentication, DNSSEC, and CAA records.</p>
+    <p class="tool-entry__hint">Checks DNS, TLS, and IP reputation in parallel. Returns an A+–F grade with per-section breakdown.</p>
   </section>
 
   <footer class="page-footer">
@@ -154,6 +177,7 @@ curl -s "https://ip.netray.info/${IP}" | jq .</code></pre>
     </ul>
     <p class="page-footer__suite">
       <a href="https://netray.info">netray.info</a> --
+      <a href="https://lens.netray.info">LENS</a> /
       <a href="https://ip.netray.info">IP</a> /
       <a href="https://dns.netray.info">DNS</a> /
       <a href="https://tls.netray.info">TLS</a>
