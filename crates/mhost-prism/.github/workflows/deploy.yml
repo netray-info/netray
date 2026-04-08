@@ -43,4 +43,4 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Hub-Signature-256: sha256=${SIG}" \
             -d "$PAYLOAD" \
-            "https://deploy.netray.info/hooks/deploy-mhost-prism"
+            "https://deploy.netray.info/hooks/deploy-prism"
