@@ -202,6 +202,17 @@ export default function App() {
               <p class="welcome-tagline">
                 TLS certificate status, DNS health, and IP reputation — checked together, streamed as they arrive.
               </p>
+              <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+                <For each={['example.com', 'github.com', 'cloudflare.com']}>
+                  {(domain) => (
+                    <button
+                      class="filter-toggle"
+                      type="button"
+                      onClick={() => handleSubmit(domain)}
+                    >{domain}</button>
+                  )}
+                </For>
+              </div>
             </div>
           </Show>
 
@@ -254,8 +265,9 @@ export default function App() {
             </>
           }
           links={[
-            { href: '/docs',                    label: 'API Docs', external: true },
-            { href: 'https://lukas.pustina.de', label: 'Author',   external: true },
+            { href: 'https://github.com/netray-info/lens', label: 'GitHub',   external: true },
+            { href: '/docs',                               label: 'API Docs', external: true },
+            { href: 'https://lukas.pustina.de',            label: 'Author',   external: true },
           ]}
           version={meta()?.version}
         />

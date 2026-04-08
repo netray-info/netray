@@ -94,7 +94,7 @@ export default function DomainInput(props: Props) {
         </Show>
       </div>
       <button
-        class="domain-input__btn"
+        class="btn-primary domain-input__btn"
         type="submit"
         disabled={props.loading || !value().trim()}
         aria-busy={props.loading}
