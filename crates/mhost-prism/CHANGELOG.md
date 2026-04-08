@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] - 2026-04-08
+
+### Added
+- Implement MTA-STS policy file fetch and validation (2d78774)
+
+### Fixed
+- Add aria-label to query clear button (d1c04b7)
+
+### Changed
+- Add lint script (tsc --noEmit) to frontend CI (5bac3f3)
+- Align workflows with netray.info workflow-rules spec (241f4f2)
+
 ## [0.7.0] - 2026-04-08
 
 ### Added

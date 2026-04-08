@@ -18,12 +18,12 @@ use tower::ServiceExt;
 // ---------------------------------------------------------------------------
 
 use prism::api::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
-use reqwest;
 use prism::circuit_breaker::CircuitBreakerRegistry;
 use prism::config::Config;
 use prism::reload::HotState;
 use prism::result_cache::ResultCache;
 use prism::security::IpExtractor;
+use reqwest;
 use tokio::sync::Semaphore;
 
 // ---------------------------------------------------------------------------

@@ -1218,8 +1218,7 @@ fn mx_matches_pattern(mx_host: &str, pattern: &str) -> bool {
     let pat = pattern.trim_end_matches('.').to_lowercase();
 
     if let Some(suffix) = pat.strip_prefix("*.") {
-        mx.ends_with(&format!(".{suffix}"))
-            && mx[..mx.len() - suffix.len() - 1].find('.').is_none()
+        mx.ends_with(&format!(".{suffix}")) && mx[..mx.len() - suffix.len() - 1].find('.').is_none()
     } else {
         mx == pat
     }
@@ -1289,26 +1288,24 @@ async fn check_mta_sts(
 
     let policy_url = format!("https://mta-sts.{domain}/.well-known/mta-sts.txt");
 
-    let response = match tokio::time::timeout(
-        Duration::from_secs(5),
-        http_client.get(&policy_url).send(),
-    )
-    .await
-    {
-        Err(_) => {
-            results.push(CheckResult::Warning(
-                "MTA-STS policy file fetch timed out".into(),
-            ));
-            return results;
-        }
-        Ok(Err(e)) => {
-            results.push(CheckResult::Warning(format!(
-                "MTA-STS policy file unreachable: {e}"
-            )));
-            return results;
-        }
-        Ok(Ok(resp)) => resp,
-    };
+    let response =
+        match tokio::time::timeout(Duration::from_secs(5), http_client.get(&policy_url).send())
+            .await
+        {
+            Err(_) => {
+                results.push(CheckResult::Warning(
+                    "MTA-STS policy file fetch timed out".into(),
+                ));
+                return results;
+            }
+            Ok(Err(e)) => {
+                results.push(CheckResult::Warning(format!(
+                    "MTA-STS policy file unreachable: {e}"
+                )));
+                return results;
+            }
+            Ok(Ok(resp)) => resp,
+        };
 
     if !response.status().is_success() {
         results.push(CheckResult::Failed(format!(
@@ -1360,17 +1357,17 @@ async fn check_mta_sts(
     let mx_hosts: Vec<String> = mx_lookups
         .mx()
         .into_iter()
-        .map(|mx| mx.exchange().to_ascii().trim_end_matches('.').to_lowercase())
+        .map(|mx| {
+            mx.exchange()
+                .to_ascii()
+                .trim_end_matches('.')
+                .to_lowercase()
+        })
         .collect();
 
     let uncovered: Vec<String> = mx_hosts
         .iter()
-        .filter(|mx| {
-            !policy
-                .mx_patterns
-                .iter()
-                .any(|p| mx_matches_pattern(mx, p))
-        })
+        .filter(|mx| !policy.mx_patterns.iter().any(|p| mx_matches_pattern(mx, p)))
         .cloned()
         .collect();
 
@@ -1618,7 +1615,10 @@ mod tests {
         let policy = parse_mta_sts_policy(text).unwrap();
         assert!(matches!(policy.mode, MtaStsMode::Enforce));
         assert_eq!(policy.max_age, 604800);
-        assert_eq!(policy.mx_patterns, vec!["mail.example.com", "*.example.com"]);
+        assert_eq!(
+            policy.mx_patterns,
+            vec!["mail.example.com", "*.example.com"]
+        );
     }
 
     #[test]
@@ -1670,7 +1670,8 @@ mod tests {
 
     #[test]
     fn test_parse_mta_sts_policy_ignores_extension_fields() {
-        let text = "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 604800\nfoo: bar\n";
+        let text =
+            "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 604800\nfoo: bar\n";
         assert!(parse_mta_sts_policy(text).is_ok());
     }
 
