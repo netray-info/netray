@@ -6,7 +6,8 @@ use std::net::SocketAddr;
 
 use tower_http::compression::CompressionLayer;
 use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 use axum::Router;
 use axum::routing::get;
@@ -35,6 +36,13 @@ async fn main() {
         dns_url = %config.backends.dns_url,
         tls_url = %config.backends.tls_url,
         ip_url  = %config.backends.ip_url,
+        per_ip_rate = config.rate_limit.per_ip_per_minute,
+        per_ip_burst = config.rate_limit.per_ip_burst,
+        global_rate = config.rate_limit.global_per_minute,
+        global_burst = config.rate_limit.global_burst,
+        trusted_proxy_count = config.server.trusted_proxies.len(),
+        cache_enabled = config.cache.enabled,
+        cache_ttl_seconds = config.cache.ttl_seconds,
         "starting lens"
     );
 
@@ -50,13 +58,30 @@ async fn main() {
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("lens", req, next)
         }))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &axum::http::Request<axum::body::Body>| {
+                    let request_id = request
+                        .headers()
+                        .get("x-request-id")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("");
+                    tracing::info_span!(
+                        "http_request",
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        request_id = %request_id,
+                        client_ip = tracing::field::Empty,
+                    )
+                })
+                .on_response(DefaultOnResponse::new().level(Level::DEBUG)),
+        )
         .layer(axum::middleware::from_fn(
             netray_common::middleware::request_id,
         ))
         .layer(axum::middleware::from_fn(security_headers_mw))
         .layer(cors_layer())
         .layer(CompressionLayer::new())
-        .layer(TraceLayer::new_for_http())
         .layer(RequestBodyLimitLayer::new(8 * 1024));
 
     // 5. Graceful shutdown channel.

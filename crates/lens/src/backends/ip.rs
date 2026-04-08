@@ -2,6 +2,7 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use serde::Deserialize;
+use tracing::Instrument;
 
 use crate::error::AppError;
 use crate::scoring::engine::{CheckResult, CheckVerdict};
@@ -76,6 +77,18 @@ pub async fn check_ip(
     let capped: Vec<IpAddr> = ips.iter().copied().take(MAX_IPS).collect();
     let base = ip_url.trim_end_matches('/');
 
+    let span = tracing::info_span!("backend_call", service = "ifconfig", url = %base, ip_count = capped.len());
+    check_ip_inner(client, base, &capped, timeout)
+        .instrument(span)
+        .await
+}
+
+async fn check_ip_inner(
+    client: &reqwest::Client,
+    base: &str,
+    capped: &[IpAddr],
+    timeout: Duration,
+) -> Result<IpBackendResult, AppError> {
     // Fire off concurrent requests for each IP.
     let futures: Vec<_> = capped
         .iter()
@@ -83,10 +96,14 @@ pub async fn check_ip(
             let url = format!("{base}/json?ip={ip}");
             let client = client.clone();
             async move {
-                tokio::time::timeout(timeout, client.get(&url).send())
+                let result = tokio::time::timeout(timeout, client.get(&url).send())
                     .await
                     .ok()
-                    .and_then(|r| r.ok())
+                    .and_then(|r| r.ok());
+                if result.is_none() {
+                    tracing::warn!(service = "ifconfig", url = %url, "enrichment call failed");
+                }
+                result
             }
         })
         .collect();
@@ -143,8 +160,9 @@ pub async fn check_ip(
     };
 
     let raw_headline = build_headline(&addresses);
-    let detail_url = build_detail_url(ip_url, &capped);
+    let detail_url = build_detail_url(base, capped);
 
+    tracing::debug!(service = "ifconfig", url = %base, enriched = addresses.len(), "backend call succeeded");
     Ok(IpBackendResult {
         checks: vec![reputation_check],
         addresses,

@@ -373,6 +373,9 @@ fn extract_client_ip_from_peer(
 }
 
 async fn run_check_handler(state: AppState, client_ip: IpAddr, domain_raw: String) -> Response {
+    // Record client_ip into the TraceLayer span.
+    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
+
     // 1. Validate domain.
     let domain = match validate_domain(&domain_raw) {
         Ok(d) => d,

@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use futures::StreamExt;
 use serde_json::Value;
+use tracing::Instrument;
 
 use crate::error::AppError;
 use crate::scoring::engine::{CheckResult, CheckVerdict};
@@ -31,26 +32,45 @@ pub async fn check_dns(
     timeout: Duration,
 ) -> Result<DnsBackendResult, AppError> {
     let url = format!("{}/api/check", dns_url.trim_end_matches('/'),);
+    let span = tracing::info_span!("backend_call", service = "prism", url = %url);
+    check_dns_inner(client, &url, domain, dns_url, timeout)
+        .instrument(span)
+        .await
+}
 
+async fn check_dns_inner(
+    client: &reqwest::Client,
+    url: &str,
+    domain: &str,
+    dns_url: &str,
+    timeout: Duration,
+) -> Result<DnsBackendResult, AppError> {
     let body = serde_json::json!({ "domain": domain });
 
     // Connect and get headers — SSE stream starts immediately.
     let resp = tokio::time::timeout(
         timeout,
         client
-            .post(&url)
+            .post(url)
             .header("Accept", "text/event-stream")
             .json(&body)
             .send(),
     )
     .await
-    .map_err(|_| AppError::Timeout)?
-    .map_err(|e| AppError::BackendError {
-        backend: "dns",
-        message: e.to_string(),
+    .map_err(|_| {
+        tracing::warn!(service = "prism", url = %url, error = "timeout", "backend call failed");
+        AppError::Timeout
+    })?
+    .map_err(|e| {
+        tracing::warn!(service = "prism", url = %url, error = %e, "backend call failed");
+        AppError::BackendError {
+            backend: "dns",
+            message: e.to_string(),
+        }
     })?;
 
     if !resp.status().is_success() {
+        tracing::warn!(service = "prism", url = %url, status = %resp.status(), "backend call failed");
         return Err(AppError::BackendError {
             backend: "dns",
             message: format!("prism returned HTTP {}", resp.status()),
@@ -60,12 +80,19 @@ pub async fn check_dns(
     // Collect SSE events until "done" or timeout.
     let events = tokio::time::timeout(timeout, collect_sse(resp))
         .await
-        .map_err(|_| AppError::Timeout)?
-        .map_err(|e| AppError::BackendError {
-            backend: "dns",
-            message: format!("failed to read prism stream: {e}"),
+        .map_err(|_| {
+            tracing::warn!(service = "prism", url = %url, error = "stream timeout", "backend call failed");
+            AppError::Timeout
+        })?
+        .map_err(|e| {
+            tracing::warn!(service = "prism", url = %url, error = %e, "backend call failed");
+            AppError::BackendError {
+                backend: "dns",
+                message: format!("failed to read prism stream: {e}"),
+            }
         })?;
 
+    tracing::debug!(service = "prism", url = %url, events = events.len(), "backend call succeeded");
     parse_events(events, domain, dns_url)
 }
 

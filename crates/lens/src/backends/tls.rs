@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use serde::Deserialize;
+use tracing::Instrument;
 
 use crate::error::AppError;
 use crate::scoring::engine::{CheckResult, CheckVerdict};
@@ -89,26 +90,50 @@ pub async fn check_tls(
         percent_encode(domain),
     );
 
-    let resp = tokio::time::timeout(timeout, client.get(&url).send())
+    let span = tracing::info_span!("backend_call", service = "tlsight", url = %url);
+    check_tls_inner(client, &url, domain, tls_url, timeout)
+        .instrument(span)
         .await
-        .map_err(|_| AppError::Timeout)?
-        .map_err(|e| AppError::BackendError {
-            backend: "tls",
-            message: e.to_string(),
+}
+
+async fn check_tls_inner(
+    client: &reqwest::Client,
+    url: &str,
+    domain: &str,
+    tls_url: &str,
+    timeout: Duration,
+) -> Result<TlsBackendResult, AppError> {
+    let resp = tokio::time::timeout(timeout, client.get(url).send())
+        .await
+        .map_err(|_| {
+            tracing::warn!(service = "tlsight", url = %url, error = "timeout", "backend call failed");
+            AppError::Timeout
+        })?
+        .map_err(|e| {
+            tracing::warn!(service = "tlsight", url = %url, error = %e, "backend call failed");
+            AppError::BackendError {
+                backend: "tls",
+                message: e.to_string(),
+            }
         })?;
 
     if !resp.status().is_success() {
+        tracing::warn!(service = "tlsight", url = %url, status = %resp.status(), "backend call failed");
         return Err(AppError::BackendError {
             backend: "tls",
             message: format!("tlsight returned HTTP {}", resp.status()),
         });
     }
 
-    let inspect: InspectResponse = resp.json().await.map_err(|e| AppError::BackendError {
-        backend: "tls",
-        message: format!("failed to decode tlsight response: {e}"),
+    let inspect: InspectResponse = resp.json().await.map_err(|e| {
+        tracing::warn!(service = "tlsight", url = %url, error = %e, "backend call failed");
+        AppError::BackendError {
+            backend: "tls",
+            message: format!("failed to decode tlsight response: {e}"),
+        }
     })?;
 
+    tracing::debug!(service = "tlsight", url = %url, "backend call succeeded");
     Ok(parse_inspect(inspect, domain, tls_url))
 }
 
