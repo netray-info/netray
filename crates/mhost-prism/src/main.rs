@@ -57,6 +57,12 @@ async fn main() {
         Arc::new(netray_common::enrichment::EnrichmentClient::new(url, timeout, "prism", Some("prism")))
     });
 
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent(concat!("prism/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .expect("failed to build HTTP client");
+
     let state = api::AppState {
         circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(
             &config.circuit_breaker,
@@ -66,6 +72,7 @@ async fn main() {
         hot_state: hot_state.clone(),
         ip_enrichment,
         query_semaphore: Arc::new(tokio::sync::Semaphore::new(api::QUERY_SEMAPHORE_PERMITS)),
+        http_client,
         config: Arc::new(config.clone()),
     };
 

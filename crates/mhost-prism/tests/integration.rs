@@ -18,6 +18,7 @@ use tower::ServiceExt;
 // ---------------------------------------------------------------------------
 
 use prism::api::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
+use reqwest;
 use prism::circuit_breaker::CircuitBreakerRegistry;
 use prism::config::Config;
 use prism::reload::HotState;
@@ -39,6 +40,7 @@ fn default_state() -> AppState {
         hot_state,
         ip_enrichment: None,
         query_semaphore: Arc::new(tokio::sync::Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+        http_client: reqwest::Client::new(),
         config: Arc::new(config),
     }
 }
@@ -223,6 +225,7 @@ async fn rate_limit_returns_429() {
         hot_state,
         ip_enrichment: None,
         query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+        http_client: reqwest::Client::new(),
         config: Arc::new(config),
     };
 

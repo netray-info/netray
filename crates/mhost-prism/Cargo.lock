@@ -1857,6 +1857,7 @@ dependencies = [
  "moka",
  "netray-common",
  "rand 0.10.0",
+ "reqwest",
  "rust-embed",
  "serde",
  "serde_json",

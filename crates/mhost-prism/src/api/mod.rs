@@ -80,6 +80,8 @@ pub struct AppState {
     pub ip_enrichment: Option<Arc<EnrichmentClient>>,
     /// Semaphore bounding concurrent in-flight DNS resolver tasks.
     pub query_semaphore: Arc<Semaphore>,
+    /// HTTP client for outbound fetches (e.g. MTA-STS policy files).
+    pub http_client: reqwest::Client,
 }
 
 // ---------------------------------------------------------------------------
@@ -256,6 +258,7 @@ mod tests {
             hot_state,
             ip_enrichment: None,
             query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+            http_client: reqwest::Client::new(),
             config: Arc::new(config),
         }
     }
@@ -564,6 +567,7 @@ mod tests {
             hot_state,
             ip_enrichment: None,
             query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+            http_client: reqwest::Client::new(),
             config: Arc::new(config),
         };
 

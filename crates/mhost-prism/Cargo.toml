@@ -51,6 +51,9 @@ moka = { version = "0.12", features = ["future"] }
 # Hot config reload
 arc-swap = "1"
 
+# HTTP client (MTA-STS policy file fetch)
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
 # Request IDs
 uuid = { version = "1", features = ["v7"] }
 

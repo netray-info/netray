@@ -211,6 +211,7 @@ pub async fn post_handler(
     let query_string = domain.clone();
     let enrichment_svc = state.ip_enrichment.clone();
     let query_semaphore = state.query_semaphore.clone();
+    let http_client = state.http_client.clone();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
@@ -454,11 +455,14 @@ pub async fn post_handler(
 
         // ------------------------------------------------------------------
         // Phase 1.75: Async NS checks (lame delegation + delegation consistency)
+        //             + MTA-STS policy file fetch
         // ------------------------------------------------------------------
         let query_timeout = Duration::from_secs(3);
-        let lame_results = check_ns_lame_delegation(&all_lookups, &domain, query_timeout).await;
-        let delegation_results =
-            check_ns_delegation_consistency(&all_lookups, &domain, query_timeout).await;
+        let (lame_results, delegation_results, mta_sts_results) = tokio::join!(
+            check_ns_lame_delegation(&all_lookups, &domain, query_timeout),
+            check_ns_delegation_consistency(&all_lookups, &domain, query_timeout),
+            check_mta_sts(&mta_sts_lookups, &domain, &all_lookups, &http_client),
+        );
         let dnssec_rollover_results = check_dnssec_rollover(&all_lookups);
 
         // ------------------------------------------------------------------
@@ -480,7 +484,6 @@ pub async fn post_handler(
             ("dmarc", check_dmarc_records(&dmarc_txts)),
         ];
         let bimi_results = check_bimi(&bimi_lookups);
-        let mta_sts_results = check_mta_sts(&mta_sts_lookups);
         let tlsrpt_results = check_tlsrpt(&tlsrpt_lookups, &mta_sts_lookups);
         lint_checks.push(("bimi", bimi_results));
         lint_checks.push(("mta_sts", mta_sts_results));
@@ -1120,11 +1123,114 @@ fn check_bimi(lookups: &Lookups) -> Vec<CheckResult> {
     results
 }
 
-/// MTA-STS record check: validate `_mta-sts.<domain>` TXT record.
-fn check_mta_sts(lookups: &Lookups) -> Vec<CheckResult> {
+// ---------------------------------------------------------------------------
+// MTA-STS helpers
+// ---------------------------------------------------------------------------
+
+#[derive(Debug)]
+enum MtaStsMode {
+    Enforce,
+    Testing,
+    Disabled,
+}
+
+#[derive(Debug)]
+struct MtaStsPolicy {
+    mode: MtaStsMode,
+    max_age: u32,
+    mx_patterns: Vec<String>,
+}
+
+/// Parse an MTA-STS policy file (RFC 8461 §3.2).
+/// Returns `Err(message)` on any structural/semantic error.
+fn parse_mta_sts_policy(text: &str) -> Result<MtaStsPolicy, String> {
+    let mut version_ok = false;
+    let mut mode: Option<MtaStsMode> = None;
+    let mut max_age: Option<u32> = None;
+    let mut mx_patterns: Vec<String> = Vec::new();
+
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim();
+
+        match key {
+            "version" => {
+                if value != "STSv1" {
+                    return Err(format!("Invalid MTA-STS policy version: {value}"));
+                }
+                version_ok = true;
+            }
+            "mode" => {
+                mode = Some(match value {
+                    "enforce" => MtaStsMode::Enforce,
+                    "testing" => MtaStsMode::Testing,
+                    "none" => MtaStsMode::Disabled,
+                    other => return Err(format!("Invalid MTA-STS mode: {other}")),
+                });
+            }
+            "max_age" => {
+                let n: u32 = value
+                    .parse()
+                    .map_err(|_| format!("Invalid MTA-STS max_age: {value}"))?;
+                if n == 0 || n > 31_557_600 {
+                    return Err(format!(
+                        "MTA-STS max_age out of range: {n} (must be 1-31557600)"
+                    ));
+                }
+                max_age = Some(n);
+            }
+            "mx" => {
+                if !value.is_empty() {
+                    mx_patterns.push(value.trim_end_matches('.').to_lowercase());
+                }
+            }
+            _ => {} // ignore extension fields per RFC 8461 §3.2
+        }
+    }
+
+    if !version_ok {
+        return Err("MTA-STS policy missing version field".into());
+    }
+    let mode = mode.ok_or_else(|| "MTA-STS policy missing mode field".to_string())?;
+    let max_age = max_age.ok_or_else(|| "MTA-STS policy missing max_age field".to_string())?;
+    if mx_patterns.is_empty() {
+        return Err("MTA-STS policy has no mx entries".into());
+    }
+
+    Ok(MtaStsPolicy {
+        mode,
+        max_age,
+        mx_patterns,
+    })
+}
+
+/// Returns true if `mx_host` matches the MTA-STS `pattern` (RFC 8461 §4.1).
+/// Wildcards (`*.example.com`) match exactly one label.
+fn mx_matches_pattern(mx_host: &str, pattern: &str) -> bool {
+    let mx = mx_host.trim_end_matches('.').to_lowercase();
+    let pat = pattern.trim_end_matches('.').to_lowercase();
+
+    if let Some(suffix) = pat.strip_prefix("*.") {
+        mx.ends_with(&format!(".{suffix}"))
+            && mx[..mx.len() - suffix.len() - 1].find('.').is_none()
+    } else {
+        mx == pat
+    }
+}
+
+/// Validate the MTA-STS DNS TXT record at `_mta-sts.<domain>`.
+/// Returns `Ok(())` if valid, `Err(results)` with error results on failure.
+fn validate_mta_sts_dns(lookups: &Lookups) -> Result<(), Vec<CheckResult>> {
     let txt_vec = lookups.txt();
     if txt_vec.is_empty() {
-        return vec![CheckResult::NotFound()];
+        return Err(vec![CheckResult::NotFound()]);
     }
 
     let unique = txt_vec.unique();
@@ -1135,41 +1241,147 @@ fn check_mta_sts(lookups: &Lookups) -> Vec<CheckResult> {
         .collect();
 
     if sts_txts.len() > 1 {
-        return vec![CheckResult::Failed(
+        return Err(vec![CheckResult::Failed(
             "Multiple MTA-STS records found; only one is permitted".into(),
-        )];
+        )]);
     }
 
     if sts_txts.is_empty() {
-        return vec![CheckResult::Failed(
+        return Err(vec![CheckResult::Failed(
             "Unrecognized MTA-STS version tag".into(),
-        )];
+        )]);
     }
 
     let record = &sts_txts[0];
     let tags = parse_txt_tags(record);
 
     let id_tag = tags.iter().find(|(name, _)| *name == "id");
-
     let Some((_, id_value)) = id_tag else {
-        return vec![CheckResult::Failed(
+        return Err(vec![CheckResult::Failed(
             "id= is required in MTA-STS record".into(),
-        )];
+        )]);
     };
 
     if id_value.is_empty()
         || id_value.len() > 32
         || !id_value.chars().all(|c| c.is_ascii_alphanumeric())
     {
-        return vec![CheckResult::Failed(
+        return Err(vec![CheckResult::Failed(
             "Invalid id= value: must be alphanumeric, max 32 chars".into(),
-        )];
+        )]);
     }
 
-    vec![
-        CheckResult::Ok("MTA-STS DNS record valid".into()),
-        CheckResult::Warning("Policy DNS record found; policy file fetch not implemented".into()),
-    ]
+    Ok(())
+}
+
+/// MTA-STS check: validate DNS record then fetch and validate the policy file.
+async fn check_mta_sts(
+    lookups: &Lookups,
+    domain: &str,
+    mx_lookups: &Lookups,
+    http_client: &reqwest::Client,
+) -> Vec<CheckResult> {
+    if let Err(results) = validate_mta_sts_dns(lookups) {
+        return results;
+    }
+
+    let mut results = vec![CheckResult::Ok("MTA-STS DNS record valid".into())];
+
+    let policy_url = format!("https://mta-sts.{domain}/.well-known/mta-sts.txt");
+
+    let response = match tokio::time::timeout(
+        Duration::from_secs(5),
+        http_client.get(&policy_url).send(),
+    )
+    .await
+    {
+        Err(_) => {
+            results.push(CheckResult::Warning(
+                "MTA-STS policy file fetch timed out".into(),
+            ));
+            return results;
+        }
+        Ok(Err(e)) => {
+            results.push(CheckResult::Warning(format!(
+                "MTA-STS policy file unreachable: {e}"
+            )));
+            return results;
+        }
+        Ok(Ok(resp)) => resp,
+    };
+
+    if !response.status().is_success() {
+        results.push(CheckResult::Failed(format!(
+            "MTA-STS policy file fetch failed: HTTP {}",
+            response.status().as_u16()
+        )));
+        return results;
+    }
+
+    let body = match response.text().await {
+        Ok(t) => t,
+        Err(e) => {
+            results.push(CheckResult::Warning(format!(
+                "MTA-STS policy file unreadable: {e}"
+            )));
+            return results;
+        }
+    };
+
+    let policy = match parse_mta_sts_policy(&body) {
+        Err(msg) => {
+            results.push(CheckResult::Failed(msg));
+            return results;
+        }
+        Ok(p) => p,
+    };
+
+    match policy.mode {
+        MtaStsMode::Disabled => {
+            results.push(CheckResult::Warning(
+                "MTA-STS mode is none; policy not enforced".into(),
+            ));
+        }
+        MtaStsMode::Testing => {
+            results.push(CheckResult::Warning(format!(
+                "MTA-STS mode is testing; policy not yet enforced (max_age: {}s)",
+                policy.max_age
+            )));
+        }
+        MtaStsMode::Enforce => {
+            results.push(CheckResult::Ok(format!(
+                "MTA-STS policy valid (mode: enforce, max_age: {}s)",
+                policy.max_age
+            )));
+        }
+    }
+
+    // Cross-check: every MX host in DNS must be covered by a policy mx pattern.
+    let mx_hosts: Vec<String> = mx_lookups
+        .mx()
+        .into_iter()
+        .map(|mx| mx.exchange().to_ascii().trim_end_matches('.').to_lowercase())
+        .collect();
+
+    let uncovered: Vec<String> = mx_hosts
+        .iter()
+        .filter(|mx| {
+            !policy
+                .mx_patterns
+                .iter()
+                .any(|p| mx_matches_pattern(mx, p))
+        })
+        .cloned()
+        .collect();
+
+    if !uncovered.is_empty() {
+        results.push(CheckResult::Warning(format!(
+            "MX host(s) not covered by MTA-STS policy: {}",
+            uncovered.join(", ")
+        )));
+    }
+
+    results
 }
 
 /// TLSRPT record check: validate `_smtp._tls.<domain>` TXT record.
@@ -1366,43 +1578,128 @@ mod tests {
         assert!(matches!(&results[0], CheckResult::NotFound()));
     }
 
-    // -- MTA-STS tests --
+    // -- MTA-STS DNS record tests --
 
     #[test]
-    fn test_check_mta_sts_valid() {
+    fn test_mta_sts_dns_valid() {
         let lookups = make_txt_lookups("_mta-sts.example.com", &["v=STSv1; id=20240101000000"]);
-        let results = check_mta_sts(&lookups);
-        assert_eq!(results.len(), 2);
-        assert!(
-            matches!(&results[0], CheckResult::Ok(msg) if msg.contains("MTA-STS DNS record valid"))
-        );
-        assert!(
-            matches!(&results[1], CheckResult::Warning(msg) if msg.contains("policy file fetch not implemented"))
-        );
+        assert!(validate_mta_sts_dns(&lookups).is_ok());
     }
 
     #[test]
-    fn test_check_mta_sts_missing_id() {
+    fn test_mta_sts_dns_missing_id() {
         let lookups = make_txt_lookups("_mta-sts.example.com", &["v=STSv1"]);
-        let results = check_mta_sts(&lookups);
-        assert_eq!(results.len(), 1);
-        assert!(matches!(&results[0], CheckResult::Failed(msg) if msg.contains("id=")));
+        let err = validate_mta_sts_dns(&lookups).unwrap_err();
+        assert_eq!(err.len(), 1);
+        assert!(matches!(&err[0], CheckResult::Failed(msg) if msg.contains("id=")));
     }
 
     #[test]
-    fn test_check_mta_sts_invalid_id() {
+    fn test_mta_sts_dns_invalid_id() {
         let lookups = make_txt_lookups("_mta-sts.example.com", &["v=STSv1; id=foo bar!"]);
-        let results = check_mta_sts(&lookups);
-        assert_eq!(results.len(), 1);
-        assert!(matches!(&results[0], CheckResult::Failed(msg) if msg.contains("Invalid id=")));
+        let err = validate_mta_sts_dns(&lookups).unwrap_err();
+        assert_eq!(err.len(), 1);
+        assert!(matches!(&err[0], CheckResult::Failed(msg) if msg.contains("Invalid id=")));
     }
 
     #[test]
-    fn test_check_mta_sts_not_found() {
+    fn test_mta_sts_dns_not_found() {
         let lookups = Lookups::empty();
-        let results = check_mta_sts(&lookups);
-        assert_eq!(results.len(), 1);
-        assert!(matches!(&results[0], CheckResult::NotFound()));
+        let err = validate_mta_sts_dns(&lookups).unwrap_err();
+        assert_eq!(err.len(), 1);
+        assert!(matches!(&err[0], CheckResult::NotFound()));
+    }
+
+    // -- MTA-STS policy parsing tests --
+
+    #[test]
+    fn test_parse_mta_sts_policy_enforce() {
+        let text = "version: STSv1\nmode: enforce\nmx: mail.example.com\nmx: *.example.com\nmax_age: 604800\n";
+        let policy = parse_mta_sts_policy(text).unwrap();
+        assert!(matches!(policy.mode, MtaStsMode::Enforce));
+        assert_eq!(policy.max_age, 604800);
+        assert_eq!(policy.mx_patterns, vec!["mail.example.com", "*.example.com"]);
+    }
+
+    #[test]
+    fn test_parse_mta_sts_policy_testing() {
+        let text = "version: STSv1\nmode: testing\nmx: mail.example.com\nmax_age: 86400\n";
+        let policy = parse_mta_sts_policy(text).unwrap();
+        assert!(matches!(policy.mode, MtaStsMode::Testing));
+    }
+
+    #[test]
+    fn test_parse_mta_sts_policy_none_mode() {
+        let text = "version: STSv1\nmode: none\nmx: mail.example.com\nmax_age: 86400\n";
+        let policy = parse_mta_sts_policy(text).unwrap();
+        assert!(matches!(policy.mode, MtaStsMode::Disabled));
+    }
+
+    #[test]
+    fn test_parse_mta_sts_policy_missing_version() {
+        let text = "mode: enforce\nmx: mail.example.com\nmax_age: 604800\n";
+        assert!(parse_mta_sts_policy(text).is_err());
+    }
+
+    #[test]
+    fn test_parse_mta_sts_policy_missing_mode() {
+        let text = "version: STSv1\nmx: mail.example.com\nmax_age: 604800\n";
+        assert!(parse_mta_sts_policy(text).is_err());
+    }
+
+    #[test]
+    fn test_parse_mta_sts_policy_missing_max_age() {
+        let text = "version: STSv1\nmode: enforce\nmx: mail.example.com\n";
+        assert!(parse_mta_sts_policy(text).is_err());
+    }
+
+    #[test]
+    fn test_parse_mta_sts_policy_no_mx() {
+        let text = "version: STSv1\nmode: enforce\nmax_age: 604800\n";
+        assert!(parse_mta_sts_policy(text).is_err());
+    }
+
+    #[test]
+    fn test_parse_mta_sts_policy_invalid_max_age() {
+        let text = "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 0\n";
+        assert!(parse_mta_sts_policy(text).is_err());
+
+        let text = "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 99999999\n";
+        assert!(parse_mta_sts_policy(text).is_err());
+    }
+
+    #[test]
+    fn test_parse_mta_sts_policy_ignores_extension_fields() {
+        let text = "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 604800\nfoo: bar\n";
+        assert!(parse_mta_sts_policy(text).is_ok());
+    }
+
+    // -- MX pattern matching tests --
+
+    #[test]
+    fn test_mx_matches_exact() {
+        assert!(mx_matches_pattern("mail.example.com", "mail.example.com"));
+        assert!(!mx_matches_pattern("other.example.com", "mail.example.com"));
+    }
+
+    #[test]
+    fn test_mx_matches_wildcard() {
+        assert!(mx_matches_pattern("mail.example.com", "*.example.com"));
+        assert!(mx_matches_pattern("smtp.example.com", "*.example.com"));
+        assert!(!mx_matches_pattern("a.mail.example.com", "*.example.com"));
+        assert!(!mx_matches_pattern("example.com", "*.example.com"));
+    }
+
+    #[test]
+    fn test_mx_matches_case_insensitive() {
+        assert!(mx_matches_pattern("Mail.Example.COM", "mail.example.com"));
+        assert!(mx_matches_pattern("mail.example.com", "Mail.Example.COM"));
+    }
+
+    #[test]
+    fn test_mx_matches_trailing_dot_normalized() {
+        assert!(mx_matches_pattern("mail.example.com.", "mail.example.com"));
+        assert!(mx_matches_pattern("mail.example.com", "mail.example.com."));
     }
 
     // -- TLSRPT tests --
