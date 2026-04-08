@@ -16,6 +16,7 @@ fn pass(name: &str) -> CheckResult {
     CheckResult {
         name: name.to_string(),
         verdict: CheckVerdict::Pass,
+        messages: vec![],
     }
 }
 
@@ -23,6 +24,7 @@ fn warn(name: &str) -> CheckResult {
     CheckResult {
         name: name.to_string(),
         verdict: CheckVerdict::Warn,
+        messages: vec![],
     }
 }
 
@@ -30,6 +32,7 @@ fn fail(name: &str) -> CheckResult {
     CheckResult {
         name: name.to_string(),
         verdict: CheckVerdict::Fail,
+        messages: vec![],
     }
 }
 
@@ -37,6 +40,7 @@ fn not_found(name: &str) -> CheckResult {
     CheckResult {
         name: name.to_string(),
         verdict: CheckVerdict::NotFound,
+        messages: vec![],
     }
 }
 

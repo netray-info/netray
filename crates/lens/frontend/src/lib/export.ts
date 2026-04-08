@@ -44,14 +44,14 @@ export function toMarkdown(
   function renderSection(
     label: string,
     status: string,
-    event: { checks: { name: string; verdict: string; message?: string }[] } | null,
+    event: { checks: { name: string; verdict: string; messages?: string[] }[] } | null,
   ) {
     if (!event) return;
     lines.push(`## ${label} — ${status}`);
     for (const check of event.checks) {
       const sym = verdictSymbol(check.verdict);
       const name = CHECK_LABELS[check.name] ?? check.name;
-      const msg = check.message ? ` · ${check.message}` : '';
+      const msg = check.messages?.length ? ` · ${check.messages.join('; ')}` : '';
       lines.push(`- ${sym} ${name}${msg}`);
     }
     lines.push('');
@@ -71,7 +71,7 @@ export function toMarkdown(
     for (const check of ip.checks) {
       const sym = verdictSymbol(check.verdict);
       const name = CHECK_LABELS[check.name] ?? check.name;
-      const msg = check.message ? ` · ${check.message}` : '';
+      const msg = check.messages?.length ? ` · ${check.messages.join('; ')}` : '';
       lines.push(`- ${sym} ${name}${msg}`);
     }
     lines.push('');

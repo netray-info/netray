@@ -1,6 +1,6 @@
 import { For, Show } from 'solid-js';
 import type { CheckItem, Verdict } from '../lib/types';
-import { CHECK_LABELS, CHECK_DESCRIPTIONS } from '../lib/checkMeta';
+import { CHECK_LABELS } from '../lib/checkMeta';
 
 function verdictIcon(v: Verdict): string {
   switch (v) {
@@ -41,7 +41,6 @@ function scoreNumerator(v: Verdict, weight: number): number {
 
 interface Props {
   checks: CheckItem[];
-  explain: boolean;
 }
 
 export default function CheckList(props: Props) {
@@ -57,31 +56,30 @@ export default function CheckList(props: Props) {
             >
               {verdictIcon(check.verdict)}
             </span>
-            <span class="check-item__name">
+            <div class="check-item__name">
               {CHECK_LABELS[check.name] ?? check.name}
-              <Show when={props.explain && CHECK_DESCRIPTIONS[check.name] !== undefined}>
-                <div class="explain-card">{CHECK_DESCRIPTIONS[check.name]}</div>
+              <Show when={check.guide_url}>
+                <a
+                  class="check-item__guide-link"
+                  href={check.guide_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Learn more"
+                  aria-label="Learn more"
+                >
+                  ?↗
+                </a>
               </Show>
               <Show when={check.messages && check.messages!.length > 0}>
                 <For each={check.messages}>
                   {(msg) => <div class="check-item__message">{msg}</div>}
                 </For>
               </Show>
-            </span>
+            </div>
             <Show when={check.weight !== undefined && check.verdict !== 'skip'}>
               <span class={scoreClass(check.verdict)}>
                 {scoreNumerator(check.verdict, check.weight!)}/{check.weight}
               </span>
-            </Show>
-            <Show when={check.guide_url}>
-              <a
-                class="check-item__guide-link"
-                href={check.guide_url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Learn why
-              </a>
             </Show>
           </li>
         )}

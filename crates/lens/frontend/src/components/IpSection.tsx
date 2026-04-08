@@ -19,7 +19,6 @@ interface Props {
   data: IpEvent | null;
   loading: boolean;
   error?: string;
-  explain: boolean;
   expanded?: boolean;
 }
 
@@ -105,7 +104,7 @@ export default function IpSection(props: Props) {
                     )}
                   </For>
                 </ul>
-                <CheckList checks={data().checks} explain={props.explain} />
+                <CheckList checks={data().checks} />
               </div>
             </Show>
           </div>

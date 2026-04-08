@@ -31,7 +31,6 @@ export default function App() {
 
   const [meta, setMeta] = createSignal<MetaResponse | null>(null);
   const [showHelp, setShowHelp] = createSignal(false);
-  const [explain, setExplain] = createSignal(false);
   const [checkState, setCheckState] = createSignal<CheckState>('idle');
   const [dns, setDns] = createSignal<DnsEvent | null>(null);
   const [tls, setTls] = createSignal<TlsEvent | null>(null);
@@ -59,7 +58,6 @@ export default function App() {
     const cleanupShortcuts = createKeyboardShortcuts({
       '/':      (e) => { e.preventDefault(); inputEl?.focus(); },
       '?':      (e) => { e.preventDefault(); setShowHelp(v => !v); },
-      'e':      (e) => { e.preventDefault(); setExplain(v => !v); },
       'r':      (e) => {
         const d = currentDomain();
         if (d && checkState() !== 'loading') { e.preventDefault(); handleSubmit(d); }
@@ -176,13 +174,6 @@ export default function App() {
           <Show when={hasResults() || isLoading()}>
             <div class="explain-bar">
               <button
-                class={`filter-toggle${explain() ? ' filter-toggle--active' : ''}`}
-                type="button"
-                aria-pressed={explain()}
-                onClick={() => setExplain(v => !v)}
-                title="Toggle explanations (e)"
-              >explain</button>
-              <button
                 class="filter-toggle"
                 type="button"
                 onClick={() => setAllExpanded(v => v === true ? false : true)}
@@ -232,21 +223,18 @@ export default function App() {
                 data={tls()}
                 loading={isLoading() && tls() === null}
                 error={error() ?? undefined}
-                explain={explain()}
                 expanded={allExpanded()}
               />
               <DnsSection
                 data={dns()}
                 loading={isLoading() && dns() === null}
                 error={error() ?? undefined}
-                explain={explain()}
                 expanded={allExpanded()}
               />
               <IpSection
                 data={ip()}
                 loading={isLoading() && ip() === null}
                 error={error() ?? undefined}
-                explain={explain()}
                 expanded={allExpanded()}
               />
             </div>
@@ -320,7 +308,6 @@ export default function App() {
               <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
               <div class="help-key"><kbd>Enter</kbd><span>Submit</span></div>
               <div class="help-key"><kbd>r</kbd><span>Re-run last check</span></div>
-              <div class="help-key"><kbd>e</kbd><span>Toggle explain mode</span></div>
               <div class="help-key"><kbd>?</kbd><span>Open this help</span></div>
             </div>
           </div>

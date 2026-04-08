@@ -9,7 +9,6 @@ interface Props {
   data: TlsEvent | null;
   loading: boolean;
   error?: string;
-  explain: boolean;
   expanded?: boolean;
 }
 
@@ -66,7 +65,7 @@ export default function TlsSection(props: Props) {
             </div>
             <Show when={open()}>
               <div class="section-card__body">
-                <CheckList checks={data().checks} explain={props.explain} />
+                <CheckList checks={data().checks} />
               </div>
             </Show>
           </div>
