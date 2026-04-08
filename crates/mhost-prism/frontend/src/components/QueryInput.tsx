@@ -476,6 +476,7 @@ export function QueryInput(props: QueryInputProps) {
           <button
             class="query-clear-btn"
             onClick={props.onReset}
+            aria-label="Clear"
             title="Clear"
             tabIndex={-1}
           >
