@@ -265,10 +265,11 @@ mod tests {
         rustls::pki_types::PrivateKeyDer<'static>,
     ) {
         use rcgen::CertifiedKey;
-        let CertifiedKey { cert, key_pair } =
+        let CertifiedKey { cert, signing_key } =
             rcgen::generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
         let cert_der = rustls::pki_types::CertificateDer::from(cert.der().to_vec());
-        let key_der = rustls::pki_types::PrivateKeyDer::try_from(key_pair.serialize_der()).unwrap();
+        let key_der =
+            rustls::pki_types::PrivateKeyDer::try_from(signing_key.serialize_der()).unwrap();
         (cert_der, key_der)
     }
 

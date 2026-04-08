@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1] - 2026-04-08
+
+### Changed
+- Bump webpki-roots 0.26→1, x509-parser 0.17→0.18, sha1/sha2 0.10→0.11, rcgen 0.13→0.14 (4954de0)
+- Bump reqwest 0.12→0.13, typescript 5→6, vite 7→8 (bfaf414, 923e246)
+- Fix rcgen 0.14 API: rename CertifiedKey.key_pair to signing_key in tests (4954de0)
+
 ## [0.8.0] - 2026-04-07
 
 ### Added
