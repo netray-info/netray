@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] - 2026-04-08
+
+### Changed
+- Bump rand 0.9→0.10, typescript 5→6, vite 7→8 (5fe374d, d990b17)
+
 ## [0.6.0] - 2026-04-07
 
 ### Added
