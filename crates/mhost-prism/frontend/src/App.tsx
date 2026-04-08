@@ -1231,86 +1231,86 @@ export default function App() {
             <p class="welcome-tagline">
               Multi-resolver DNS queries, health checks, and delegation traces — right in your browser.
             </p>
-            <div class="welcome-cards">
-              <div class="welcome-card">
-                <div class="welcome-card-title">Query</div>
-                <p class="welcome-card-desc">
+            <div class="mode-cards welcome-cards">
+              <div class="mode-card welcome-card">
+                <div class="mode-card__title welcome-card-title">Query</div>
+                <p class="mode-card__desc welcome-card-desc">
                   Fan out to multiple resolvers at once. See who answers differently, who's faster, and where results diverge.
                 </p>
                 <button
-                  class="welcome-example"
+                  class="mode-card__example welcome-example"
                   onClick={() => fillQuery('example.com A AAAA @cloudflare @google')}
                   title="Click to run"
                 >
                   example.com A AAAA @cloudflare @google
                 </button>
               </div>
-              <div class="welcome-card">
-                <div class="welcome-card-title">Check</div>
-                <p class="welcome-card-desc">
+              <div class="mode-card welcome-card">
+                <div class="mode-card__title welcome-card-title">Check</div>
+                <p class="mode-card__desc welcome-card-desc">
                   Full domain health audit in one shot — 15 record types plus DMARC lint. Surfaces missing SPF, broken DMARC, DNSSEC mismatches, and more.
                 </p>
                 <button
-                  class="welcome-example"
+                  class="mode-card__example welcome-example"
                   onClick={() => fillQuery('example.com +check')}
                   title="Click to run"
                 >
                   example.com +check
                 </button>
               </div>
-              <div class="welcome-card">
-                <div class="welcome-card-title">Trace</div>
-                <p class="welcome-card-desc">
+              <div class="mode-card welcome-card">
+                <div class="mode-card__title welcome-card-title">Trace</div>
+                <p class="mode-card__desc welcome-card-desc">
                   Walk the delegation chain from root servers to authoritative, hop by hop. Find broken delegations, stale glue, and split-brain DNS.
                 </p>
                 <button
-                  class="welcome-example"
+                  class="mode-card__example welcome-example"
                   onClick={() => fillQuery('example.com A +trace')}
                   title="Click to run"
                 >
                   example.com A +trace
                 </button>
               </div>
-              <div class="welcome-card">
-                <div class="welcome-card-title">DNSSEC</div>
-                <p class="welcome-card-desc">
+              <div class="mode-card welcome-card">
+                <div class="mode-card__title welcome-card-title">DNSSEC</div>
+                <p class="mode-card__desc welcome-card-desc">
                   Validate the DNSSEC chain of trust from root to authoritative. Checks DNSKEY, DS, and RRSIG records at each delegation level.
                 </p>
                 <button
-                  class="welcome-example"
+                  class="mode-card__example welcome-example"
                   onClick={() => fillQuery('dnssec-deployment.org +dnssec')}
                   title="Click to run"
                 >
                   dnssec-deployment.org +dnssec
                 </button>
                 <button
-                  class="welcome-example"
+                  class="mode-card__example welcome-example"
                   onClick={() => fillQuery('dnssec-failed.org +dnssec')}
                   title="Click to run"
                 >
                   dnssec-failed.org +dnssec
                 </button>
               </div>
-              <div class="welcome-card">
-                <div class="welcome-card-title">Compare</div>
-                <p class="welcome-card-desc">
+              <div class="mode-card welcome-card">
+                <div class="mode-card__title welcome-card-title">Compare</div>
+                <p class="mode-card__desc welcome-card-desc">
                   Query across all four transports — UDP, TCP, DoT, DoH — in parallel. Detect middlebox interference, protocol-specific filtering, or transport disagreements.
                 </p>
                 <button
-                  class="welcome-example"
+                  class="mode-card__example welcome-example"
                   onClick={() => fillQuery('example.com A +compare')}
                   title="Click to run"
                 >
                   example.com A +compare
                 </button>
               </div>
-              <div class="welcome-card">
-                <div class="welcome-card-title">Auth</div>
-                <p class="welcome-card-desc">
+              <div class="mode-card welcome-card">
+                <div class="mode-card__title welcome-card-title">Auth</div>
+                <p class="mode-card__desc welcome-card-desc">
                   Compare authoritative nameserver answers against recursive resolver answers. Reveal caching staleness, NXDOMAIN hijacking, or split-horizon inconsistencies.
                 </p>
                 <button
-                  class="welcome-example"
+                  class="mode-card__example welcome-example"
                   onClick={() => fillQuery('example.com A +auth')}
                   title="Click to run"
                 >
