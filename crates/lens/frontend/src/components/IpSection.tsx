@@ -61,17 +61,23 @@ export default function IpSection(props: Props) {
             >
               <VerdictDot verdict={data().status} />
               <span class="section-card__title">IP</span>
-              <SectionHeadline checks={data().checks} />
-              <Show when={data().guide_url}>
-                <a
-                  class="check-item__guide-link"
-                  href={data().guide_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  Learn why
-                </a>
+              <Show when={data().status === 'error'} fallback={
+                <>
+                  <SectionHeadline checks={data().checks} />
+                  <Show when={data().guide_url}>
+                    <a
+                      class="check-item__guide-link"
+                      href={data().guide_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Learn why
+                    </a>
+                  </Show>
+                </>
+              }>
+                <span class="section-card__error">{data().headline}</span>
               </Show>
               <a
                 class="section-card__link"

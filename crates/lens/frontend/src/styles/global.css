@@ -257,6 +257,13 @@ a:hover { text-decoration: underline; }
   padding: 0.875rem 1rem;
 }
 
+.section-card__error {
+  font-size: 0.8125rem;
+  color: var(--verdict-error);
+  flex: 1;
+  min-width: 0;
+}
+
 /* ================================================================
    Verdict badge / dot
    ================================================================ */

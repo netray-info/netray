@@ -51,7 +51,11 @@ export default function DnsSection(props: Props) {
             >
               <VerdictDot verdict={data().status} />
               <span class="section-card__title">DNS</span>
-              <SectionHeadline checks={data().checks} />
+              <Show when={data().status === 'error'} fallback={
+                <SectionHeadline checks={data().checks} />
+              }>
+                <span class="section-card__error">{data().headline}</span>
+              </Show>
               <a
                 class="section-card__link"
                 href={data().detail_url}
