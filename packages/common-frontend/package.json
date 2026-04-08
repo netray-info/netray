@@ -1,6 +1,6 @@
 {
   "name": "@netray-info/common-frontend",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "license": "MIT",
   "type": "module",
   "files": [
@@ -48,6 +48,10 @@
     "./components/SuiteNav": {
       "types": "./dist/types/components/SuiteNav.d.ts",
       "import": "./src/components/SuiteNav.tsx"
+    },
+    "./components/CrossLink": {
+      "types": "./dist/types/components/CrossLink.d.ts",
+      "import": "./src/components/CrossLink.tsx"
     },
     "./history": {
       "types": "./dist/types/history.d.ts",
