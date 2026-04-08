@@ -52,6 +52,10 @@ export default function App() {
       if (m?.site_name) document.title = m.site_name;
     });
 
+    const params = new URLSearchParams(window.location.search);
+    const initialDomain = params.get('d');
+    if (initialDomain) handleSubmit(initialDomain);
+
     const cleanupShortcuts = createKeyboardShortcuts({
       '/':      (e) => { e.preventDefault(); inputEl?.focus(); },
       '?':      (e) => { e.preventDefault(); setShowHelp(v => !v); },
@@ -136,13 +140,6 @@ export default function App() {
     ...(dns()?.checks ?? []),
     ...(ip()?.checks ?? []),
   ];
-
-  // Restore domain from URL on load
-  const params = new URLSearchParams(window.location.search);
-  const initialDomain = params.get('d');
-  if (initialDomain) {
-    handleSubmit(initialDomain);
-  }
 
   return (
     <>

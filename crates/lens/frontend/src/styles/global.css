@@ -172,7 +172,8 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
 }
 
-.domain-input__history-item:hover { background: var(--bg-tertiary); }
+.domain-input__history-item:hover,
+.domain-input__history-item--active { background: var(--bg-tertiary); }
 
 /* ================================================================
    Error banner

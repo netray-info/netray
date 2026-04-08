@@ -14,6 +14,7 @@ const LISTBOX_ID = 'domain-history-listbox';
 export default function DomainInput(props: Props) {
   const [value, setValue] = createSignal(props.value ?? '');
   const [historyOpen, setHistoryOpen] = createSignal(false);
+  const [historyIdx, setHistoryIdx] = createSignal(-1);
 
   // Sync controlled value from parent (e.g. restore from URL on mount)
   createEffect(() => {
@@ -37,8 +38,27 @@ export default function DomainInput(props: Props) {
   function handleClear() {
     setValue('');
     setHistoryOpen(false);
+    setHistoryIdx(-1);
     props.onClear?.();
     document.querySelector<HTMLInputElement>('.domain-input__field')?.focus();
+  }
+
+  function handleKeyDown(e: KeyboardEvent) {
+    const items = history();
+    if (!showHistory() || items.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHistoryIdx(i => Math.min(i + 1, items.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHistoryIdx(i => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter' && historyIdx() >= 0) {
+      e.preventDefault();
+      handleHistorySelect(items[historyIdx()].query);
+    } else if (e.key === 'Escape') {
+      setHistoryOpen(false);
+      setHistoryIdx(-1);
+    }
   }
 
   const history = () => getHistory().slice(0, 8);
@@ -52,14 +72,16 @@ export default function DomainInput(props: Props) {
           type="text"
           placeholder="example.com"
           value={value()}
-          onInput={(e) => setValue(e.currentTarget.value)}
+          onInput={(e) => { setValue(e.currentTarget.value); setHistoryIdx(-1); }}
           onFocus={() => { if (history().length > 0 && !value().trim()) setHistoryOpen(true); }}
-          onBlur={() => setTimeout(() => setHistoryOpen(false), 150)}
+          onBlur={() => setTimeout(() => { setHistoryOpen(false); setHistoryIdx(-1); }, 150)}
+          onKeyDown={handleKeyDown}
           disabled={props.loading}
           aria-label="Domain name to check"
           aria-autocomplete="list"
           aria-expanded={showHistory()}
           aria-controls={LISTBOX_ID}
+          aria-activedescendant={historyIdx() >= 0 ? `${LISTBOX_ID}-${historyIdx()}` : undefined}
           autocomplete="off"
           autocapitalize="none"
           spellcheck={false}
@@ -79,11 +101,13 @@ export default function DomainInput(props: Props) {
         <Show when={showHistory()}>
           <div class="domain-input__history" id={LISTBOX_ID} role="listbox" aria-label="Recent checks">
             <For each={history()}>
-              {(entry) => (
+              {(entry, i) => (
                 <button
-                  class="domain-input__history-item"
+                  id={`${LISTBOX_ID}-${i()}`}
+                  class={`domain-input__history-item${historyIdx() === i() ? ' domain-input__history-item--active' : ''}`}
                   type="button"
                   role="option"
+                  aria-selected={historyIdx() === i()}
                   onClick={() => handleHistorySelect(entry.query)}
                 >
                   {entry.query}
