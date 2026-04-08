@@ -231,16 +231,16 @@ export default function App() {
             <p class="welcome-tagline">
               Full certificate chain inspection, TLS configuration analysis, and DNS cross-validation — in one view. DANE/TLSA. Multi-IP. JSON API.
             </p>
-            <div class="welcome-cards">
+            <div class="mode-cards welcome-cards">
               <For each={EXAMPLES}>
                 {(ex) => (
-                  <div class="welcome-card">
-                    <div class="welcome-card-title">{ex.title}</div>
-                    <p class="welcome-card-desc">{ex.desc}</p>
+                  <div class="mode-card welcome-card">
+                    <div class="mode-card__title welcome-card-title">{ex.title}</div>
+                    <p class="mode-card__desc welcome-card-desc">{ex.desc}</p>
                     <For each={ex.queries}>
                       {(q) => (
                         <button
-                          class="welcome-example"
+                          class="mode-card__example welcome-example"
                           onClick={() => handleInspect(q)}
                           title="Click to run"
                         >

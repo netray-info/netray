@@ -202,39 +202,12 @@ a:hover { text-decoration: underline; }
 }
 
 .welcome-cards {
-  display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
 }
 
-.welcome-card {
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 20px;
-  transition: border-color var(--transition);
-}
-
 .welcome-card:hover {
   border-color: var(--text-muted);
-}
-
-.welcome-card-title {
-  font-family: var(--mono);
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 6px;
-}
-
-.welcome-card-desc {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  margin-bottom: 12px;
-  flex: 1;
 }
 
 .welcome-example {
@@ -1436,9 +1409,9 @@ a:hover { text-decoration: underline; }
   .header-actions { gap: 4px; }
   .host-input__presets { gap: 4px; }
   .host-input__preset { font-size: 0.6875rem; padding: 2px 6px; }
-  .welcome-card { padding: 14px; }
-  .welcome-card-title { font-size: 0.8125rem; }
-  .welcome-card-desc { font-size: 0.75rem; }
+  .mode-card { padding: 14px; }
+  .mode-card__title { font-size: 0.8125rem; }
+  .mode-card__desc { font-size: 0.75rem; }
   .ip-card__header { padding: 8px 10px; }
   .ip-card__ip { font-size: 0.8125rem; }
   .footer { flex-wrap: wrap; gap: 4px 8px; }
