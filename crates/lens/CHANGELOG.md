@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.2] - 2026-04-09
+
+### Fixed
+- Use build_error_response() to eliminate double-logging (6334051)
+- Add specific rejection logging per error variant (f5f3a37)
+- Log HTTP request completion at INFO level, not DEBUG (59c08f2)
+
 ## [0.2.1] - 2026-04-08
 
 ### Fixed
