@@ -103,15 +103,33 @@ async fn main() {
         .layer(security::cors_layer())
         .layer(CompressionLayer::new())
         .layer(
-            TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
-                tracing::info_span!(
-                    "request",
-                    method = %req.method(),
-                    uri = %req.uri(),
-                    request_id = tracing::field::Empty,
-                    client_ip = tracing::field::Empty,
-                )
-            }),
+            TraceLayer::new_for_http()
+                .make_span_with(|req: &axum::http::Request<_>| {
+                    let request_id = req
+                        .headers()
+                        .get("x-request-id")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("");
+                    tracing::info_span!(
+                        "http_request",
+                        method = %req.method(),
+                        uri = %req.uri(),
+                        request_id = %request_id,
+                        client_ip = tracing::field::Empty,
+                    )
+                })
+                .on_response(
+                    |response: &axum::http::Response<_>,
+                     latency: std::time::Duration,
+                     span: &tracing::Span| {
+                        tracing::info!(
+                            parent: span,
+                            status = response.status().as_u16(),
+                            ms = latency.as_millis(),
+                            "",
+                        );
+                    },
+                ),
         )
         .layer(RequestBodyLimitLayer::new(4 * 1024))
         .layer(tower::limit::ConcurrencyLimitLayer::new(
