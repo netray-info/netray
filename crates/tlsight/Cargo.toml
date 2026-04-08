@@ -10,8 +10,8 @@ description = "Web-based TLS certificate inspection and diagnostics service"
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 rustls-pemfile = "2"
 tokio-rustls = "0.26"
-webpki-roots = "0.26"
-x509-parser = { version = "0.17", features = ["verify"] }
+webpki-roots = "1"
+x509-parser = { version = "0.18", features = ["verify"] }
 x509-ocsp = "0.2"
 x509-cert = "0.2"
 spki = "0.7"
@@ -20,8 +20,8 @@ spki = "0.7"
 mhost = { version = "0.11", default-features = false }
 
 # Crypto
-sha2 = "0.10"
-sha1 = "0.10"
+sha2 = "0.11"
+sha1 = "0.11"
 der = "0.7"
 
 # Time
@@ -75,6 +75,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
-rcgen = "0.13"
+rcgen = "0.14"
 serde_json = "1"
 
