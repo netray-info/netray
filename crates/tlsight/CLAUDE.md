@@ -336,7 +336,9 @@ tlsight/
 
 ## CI/CD
 
-GitHub Actions: fmt → clippy → test → frontend → audit. Pushing to `prod` branch auto-builds and pushes Docker image to GHCR.
+Workflow rules: [`specs/workflow-rules.md`](../specs/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+
+Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
 
 **GitHub Packages auth**: Any CI step that runs `npm ci` for the frontend must set `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` as an env var on that step. The project `.npmrc` uses `${NODE_AUTH_TOKEN}` as a placeholder (not a hardcoded token) so the token must be injected at runtime. Missing this env var causes E401 from `https://npm.pkg.github.com`.
 
