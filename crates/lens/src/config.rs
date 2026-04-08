@@ -19,6 +19,8 @@ pub struct Config {
     pub rate_limit: RateLimitConfig,
     #[serde(default)]
     pub scoring: ScoringConfig,
+    #[serde(default)]
+    pub telemetry: netray_common::telemetry::TelemetryConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -131,7 +133,7 @@ fn default_bind() -> SocketAddr {
 }
 
 fn default_metrics_bind() -> SocketAddr {
-    ([127, 0, 0, 1], 8090).into()
+    ([127, 0, 0, 1], 9090).into()
 }
 
 fn default_backend_timeout_secs() -> u64 {
@@ -249,6 +251,7 @@ mod tests {
             cache: default_cache(),
             rate_limit: default_rate_limit(),
             scoring: ScoringConfig::default(),
+            telemetry: Default::default(),
         }
     }
 
@@ -267,9 +270,9 @@ mod tests {
     }
 
     #[test]
-    fn default_metrics_bind_is_127001_8090() {
+    fn default_metrics_bind_is_127001_9090() {
         let cfg = valid_config();
-        assert_eq!(cfg.server.metrics_bind.to_string(), "127.0.0.1:8090");
+        assert_eq!(cfg.server.metrics_bind.to_string(), "127.0.0.1:9090");
     }
 
     #[test]

@@ -765,6 +765,7 @@ pub mod tests {
                 enabled: true,
                 ttl_seconds: 300,
             },
+            telemetry: Default::default(),
             rate_limit: RateLimitConfig {
                 per_ip_per_minute: per_ip,
                 per_ip_burst: burst,

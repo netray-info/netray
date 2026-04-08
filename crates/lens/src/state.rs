@@ -94,6 +94,7 @@ mod tests {
                 ip_url: "http://localhost:8082".to_string(),
                 backend_timeout_secs: 20,
             },
+            telemetry: Default::default(),
             cache: CacheConfig {
                 enabled: false,
                 ttl_seconds: 300,
