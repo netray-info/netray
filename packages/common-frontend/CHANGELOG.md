@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-04-08
+
+### Changed
+- CI: remove npm run lint — script does not exist in package.json (f0c9151)
+- CI: align workflows with netray.info workflow-rules spec (502d93b)
+
 ## [0.3.1] - 2026-04-08
 
 ### Changed
