@@ -334,6 +334,12 @@ tlsight/
 - `solid-js` — Reactive UI (~7KB)
 - `vite` + `vite-plugin-solid` — Build tooling
 
+## Logging & Telemetry
+
+Rules: [`specs/logging-rules.md`](../specs/logging-rules.md) in the netray.info meta repo. Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
+
+Default filter: `info,tlsight=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `TLSIGHT_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "tlsight"`.
+
 ## CI/CD
 
 Workflow rules: [`specs/workflow-rules.md`](../specs/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
