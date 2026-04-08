@@ -167,6 +167,12 @@ Full spec: [`specs/frontend-rules.md`](../specs/frontend-rules.md) in the netray
 - Mock `fetch` via `vi.stubGlobal`; mock `localStorage` in `src/test-setup.ts`
 - Test files co-located: `lib/foo.test.ts` next to `lib/foo.ts`
 
+## Logging & Telemetry
+
+Rules: [`specs/logging-rules.md`](../specs/logging-rules.md) in the netray.info meta repo. Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
+
+Default filter: `info,lens=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `LENS_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "lens"`.
+
 ## CI/CD
 
 Workflow rules: [`specs/workflow-rules.md`](../specs/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
