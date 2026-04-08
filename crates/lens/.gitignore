@@ -4,3 +4,4 @@
 !lens.example.toml
 .env
 .DS_Store
+.claude/
