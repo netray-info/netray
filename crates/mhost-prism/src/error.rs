@@ -1,5 +1,6 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use netray_common::error::ApiError as _;
 
 pub use netray_common::error::{ErrorInfo, ErrorResponse};
 
@@ -103,6 +104,22 @@ impl netray_common::error::ApiError for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        match &self {
+            Self::RateLimited { .. } => {
+                tracing::warn!(error = %self, "rate limited");
+            }
+            Self::BlockedTargetIp { .. } => {
+                tracing::warn!(error = %self, "blocked target");
+            }
+            Self::ResolverError(_) => {
+                tracing::error!(error = %self, "resolver error");
+            }
+            _ if self.status_code().is_client_error() => {
+                tracing::debug!(error = %self, "client error");
+            }
+            _ => {}
+        }
+
         netray_common::error::into_error_response(&self)
     }
 }

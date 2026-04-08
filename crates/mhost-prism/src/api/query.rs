@@ -202,6 +202,7 @@ pub async fn get_handler(
     let parsed = parser::parse(&q).map_err(|e| ApiError::ParseError(e.to_string()))?;
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
+    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
     tracing::debug!(%client_ip, %peer_addr, "query GET");
 
     execute_query(parsed, state, client_ip, request_id.0, q, params.stream).await
@@ -244,6 +245,7 @@ pub async fn post_handler(
     let parsed = convert_post_body(body)?;
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
+    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
     tracing::debug!(%client_ip, %peer_addr, "query POST");
 
     execute_query(

@@ -94,6 +94,7 @@ pub async fn post_handler(
     let parsed = convert_post_body(body)?;
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
+    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
     tracing::debug!(%client_ip, %peer_addr, "authcompare POST");
 
     let policy = QueryPolicy::new(&state.config);

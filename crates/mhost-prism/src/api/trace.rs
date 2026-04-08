@@ -125,6 +125,7 @@ pub async fn post_handler(
     }
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
+    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
     tracing::debug!(%client_ip, %peer_addr, domain = %domain, record_type = %body.record_type, "trace POST");
 
     // Clamp timeout to config max; default to config max.

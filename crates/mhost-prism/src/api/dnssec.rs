@@ -102,6 +102,7 @@ pub async fn post_handler(
     let name = dns_dnssec::parse_name(&domain).map_err(ApiError::InvalidDomain)?;
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
+    tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
     tracing::debug!(%client_ip, %peer_addr, domain = %domain, "dnssec POST");
 
     // Clamp timeout to config max; default to trace query timeout.
