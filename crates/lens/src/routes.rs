@@ -58,10 +58,8 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
         "ns_lame" | "ns_delegation" => Some("https://netray.info/guide/lame-delegation"),
         "infrastructure" => Some("https://netray.info/guide/ip-enrichment"),
         // TLS — certificate chain
-        "chain_trusted" | "chain_complete" | "strong_signature"
-        | "key_strength" | "not_expired" | "hostname_match" => {
-            Some("https://netray.info/guide/certificate-chain")
-        }
+        "chain_trusted" | "chain_complete" | "strong_signature" | "key_strength"
+        | "not_expired" | "hostname_match" => Some("https://netray.info/guide/certificate-chain"),
         // TLS — certificate management (expiry, lifetime, SAN, AIA)
         "expiry_window" | "cert_lifetime" | "san_quality" | "aia_reachability" => {
             Some("https://netray.info/guide/certificate-management")
@@ -71,9 +69,7 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
             Some("https://netray.info/guide/tls-protocol")
         }
         // TLS — multi-IP consistency
-        "consistency" | "alpn_consistency" => {
-            Some("https://netray.info/guide/multi-ip-tls")
-        }
+        "consistency" | "alpn_consistency" => Some("https://netray.info/guide/multi-ip-tls"),
         // TLS — Encrypted Client Hello
         "ech_advertised" => Some("https://netray.info/guide/encrypted-client-hello"),
         "ct_logged" => Some("https://netray.info/guide/certificate-transparency"),
@@ -622,9 +618,18 @@ fn summary_event_from(
         "pass"
     };
 
-    let dns_grade = score.dns.as_ref().map(|s| lookup_grade(thresholds, s.percentage));
-    let tls_grade = score.tls.as_ref().map(|s| lookup_grade(thresholds, s.percentage));
-    let ip_grade = score.ip.as_ref().map(|s| lookup_grade(thresholds, s.percentage));
+    let dns_grade = score
+        .dns
+        .as_ref()
+        .map(|s| lookup_grade(thresholds, s.percentage));
+    let tls_grade = score
+        .tls
+        .as_ref()
+        .map(|s| lookup_grade(thresholds, s.percentage));
+    let ip_grade = score
+        .ip
+        .as_ref()
+        .map(|s| lookup_grade(thresholds, s.percentage));
 
     let payload = SummaryEvent {
         dns: dns_status,
@@ -666,7 +671,13 @@ fn build_sse_events(
         dns_event_from(&output.dns, &profile.dns),
         tls_event_from(&output.tls, &profile.tls),
         ip_event_from(&output.ip, &profile.ip),
-        summary_event_from(&output.dns, &output.tls, &output.ip, &output.score, &profile.thresholds),
+        summary_event_from(
+            &output.dns,
+            &output.tls,
+            &output.ip,
+            &output.score,
+            &profile.thresholds,
+        ),
         done_event(&domain, duration_ms, cached),
     ]
 }

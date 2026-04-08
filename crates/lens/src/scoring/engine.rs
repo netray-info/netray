@@ -198,7 +198,10 @@ fn check_hard_fails(
 /// Return the highest grade whose threshold value is <= percentage.
 /// Thresholds are iterated in descending value order.
 /// Falls back to "F" if no threshold matches (should not happen with a valid profile).
-pub fn lookup_grade(thresholds: &std::collections::BTreeMap<String, u32>, percentage: f64) -> String {
+pub fn lookup_grade(
+    thresholds: &std::collections::BTreeMap<String, u32>,
+    percentage: f64,
+) -> String {
     // Sort entries by value descending.
     let mut entries: Vec<(&String, &u32)> = thresholds.iter().collect();
     entries.sort_by(|a, b| b.1.cmp(a.1));
