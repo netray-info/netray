@@ -67,17 +67,25 @@ impl ApiError for AppError {
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
-        match self.status_code() {
-            StatusCode::BAD_GATEWAY => {
+        match &self {
+            Self::RateLimited { .. } => {
+                tracing::warn!(error = %self, "rate limited");
+            }
+            Self::DomainBlocked(_) => {
+                tracing::warn!(error = %self, "blocked domain");
+            }
+            Self::DomainInvalid(_) => {
+                tracing::debug!(error = %self, "invalid domain");
+            }
+            Self::BackendError { .. } => {
                 tracing::warn!(error = %self, "upstream backend error");
             }
-            StatusCode::GATEWAY_TIMEOUT => {
+            Self::Timeout => {
                 tracing::warn!(error = %self, "request timeout");
             }
-            StatusCode::INTERNAL_SERVER_ERROR => {
+            Self::Internal(_) => {
                 tracing::error!(error = %self, "internal error");
             }
-            _ => {}
         }
 
         netray_common::error::into_error_response(&self)
