@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-04-08
+
+### Added
+- Primary button uses shared `.btn-primary`; replace CrossLinks with shared CrossLink component; fix hardcoded DNS URL to use meta ecosystem URL (ed34020)
+- Landing mode cards adopt shared `.mode-card` classes from common-frontend (b24be1b)
+- ValidationSummary chips derive base shape from shared `.filter-toggle` (87df3cb)
+
+### Fixed
+- Pass `label` prop to CrossLink instead of children (cb28ea8)
+
 ## [0.8.1] - 2026-04-08
 
 ### Changed
