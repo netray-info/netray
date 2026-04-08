@@ -69,7 +69,7 @@ chrono = { version = "0.4", default-features = false, features = ["serde", "cloc
 percent-encoding = "2"
 
 # HTTP client (readiness probe to enrichment service)
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "webpki-roots"] }
 
 
 [dev-dependencies]
