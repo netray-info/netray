@@ -132,7 +132,7 @@ impl IntoResponse for AppError {
             _ => {}
         }
 
-        netray_common::error::into_error_response(&self)
+        netray_common::error::build_error_response(&self)
     }
 }
 
