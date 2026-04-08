@@ -314,15 +314,27 @@ a:hover { text-decoration: underline; }
 .check-item__message {
   display: block;
   margin-top: 4px;
-  padding-left: 8px;
-  border-left: 2px solid var(--border-color);
-  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-left: 3px solid var(--border-color);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-primary);
   font-size: 0.8125rem;
   line-height: 1.4;
 }
 
 .check-item__message + .check-item__message {
   margin-top: 2px;
+}
+
+.check-item[data-verdict="warn"] .check-item__message {
+  border-left-color: var(--verdict-warn);
+  background: color-mix(in srgb, var(--verdict-warn) 8%, transparent);
+}
+
+.check-item[data-verdict="fail"] .check-item__message,
+.check-item[data-verdict="error"] .check-item__message {
+  border-left-color: var(--verdict-fail);
+  background: color-mix(in srgb, var(--verdict-fail) 8%, transparent);
 }
 
 
@@ -511,6 +523,27 @@ a:hover { text-decoration: underline; }
   color: var(--text-secondary);
 }
 
+.summary-dot-grade {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.summary-dot-error {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--verdict-error);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.summary-incomplete {
+  font-size: 0.75rem;
+  color: var(--verdict-error);
+}
+
 .summary-hard-fail {
   padding: 0.5rem 0.875rem;
   background: rgba(239, 68, 68, 0.1);
@@ -563,7 +596,7 @@ a:hover { text-decoration: underline; }
 
 .explain-bar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   margin-top: -1.25rem;
   margin-bottom: 1.5rem;

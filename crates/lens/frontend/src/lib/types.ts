@@ -47,6 +47,9 @@ export interface SummaryEvent {
   score: number;
   hard_fail: boolean;
   hard_fail_checks: string[];
+  dns_grade?: string;
+  tls_grade?: string;
+  ip_grade?: string;
 }
 
 export interface DoneEvent {

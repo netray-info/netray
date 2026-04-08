@@ -39,22 +39,50 @@ pub struct CheckItem {
     pub messages: Vec<String>,
 }
 
-/// Return the guide URL for a check name if the verdict is fail or warn.
-/// Mapping defined in SDD §4.12.
-fn guide_url_for(name: &str, verdict: &str) -> Option<&'static str> {
-    if verdict != "fail" && verdict != "warn" {
-        return None;
-    }
+/// Return the guide URL for a check name.
+fn guide_url_for(name: &str) -> Option<&'static str> {
     match name {
-        "spf" | "dmarc" | "dkim" | "mta_sts" | "tlsrpt" => {
+        // DNS — email authentication
+        "spf" | "dmarc" | "dkim" | "tlsrpt" | "bimi" => {
             Some("https://netray.info/guide/email-auth")
         }
+        // DNS — DNSSEC
         "dnssec" | "dnskey_algorithm" | "dnssec_rollover" => {
+            Some("https://netray.info/guide/dnssec")
+        }
+        // DNS — record types & infrastructure
+        "cname_apex" | "https_svcb" | "mx" | "ns" | "ttl" => {
             Some("https://netray.info/guide/record-types")
         }
+        "caa" => Some("https://netray.info/guide/caa-records"),
+        "ns_lame" | "ns_delegation" => Some("https://netray.info/guide/lame-delegation"),
+        "infrastructure" => Some("https://netray.info/guide/ip-enrichment"),
+        // TLS — certificate chain
+        "chain_trusted" | "chain_complete" | "strong_signature"
+        | "key_strength" | "not_expired" | "hostname_match" => {
+            Some("https://netray.info/guide/certificate-chain")
+        }
+        // TLS — certificate management (expiry, lifetime, SAN, AIA)
+        "expiry_window" | "cert_lifetime" | "san_quality" | "aia_reachability" => {
+            Some("https://netray.info/guide/certificate-management")
+        }
+        // TLS — protocol & cipher suites
+        "tls_version" | "forward_secrecy" | "aead_cipher" => {
+            Some("https://netray.info/guide/tls-protocol")
+        }
+        // TLS — multi-IP consistency
+        "consistency" | "alpn_consistency" => {
+            Some("https://netray.info/guide/multi-ip-tls")
+        }
+        // TLS — Encrypted Client Hello
+        "ech_advertised" => Some("https://netray.info/guide/encrypted-client-hello"),
+        "ct_logged" => Some("https://netray.info/guide/certificate-transparency"),
+        "ocsp_stapled" => Some("https://netray.info/guide/certificate-chain"),
+        "hsts" | "https_redirect" => Some("https://netray.info/guide/hsts"),
         "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
-        "chain_trusted" | "chain_complete" | "cert_lifetime" | "strong_signature" | "hsts"
-        | "https_redirect" | "tls_version" => Some("https://netray.info/guide/certificate-chain"),
+        "mta_sts" => Some("https://netray.info/guide/mta-sts"),
+        // IP
+        "reputation" => Some("https://netray.info/guide/ip-enrichment"),
         _ => None,
     }
 }
@@ -106,6 +134,12 @@ pub struct SummaryEvent {
     pub score: f64,
     pub hard_fail: bool,
     pub hard_fail_checks: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dns_grade: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls_grade: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ip_grade: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -434,7 +468,7 @@ fn dns_event_from(
                 .map(|c| {
                     let verdict = verdict_str(&c.verdict);
                     CheckItem {
-                        guide_url: guide_url_for(&c.name, verdict),
+                        guide_url: guide_url_for(&c.name),
                         name: c.name.clone(),
                         verdict,
                         weight: weights.get(&c.name).copied(),
@@ -476,7 +510,7 @@ fn tls_event_from(
                 .map(|c| {
                     let verdict = verdict_str(&c.verdict);
                     CheckItem {
-                        guide_url: guide_url_for(&c.name, verdict),
+                        guide_url: guide_url_for(&c.name),
                         name: c.name.clone(),
                         verdict,
                         weight: weights.get(&c.name).copied(),
@@ -518,7 +552,7 @@ fn ip_event_from(
                 .map(|c| {
                     let verdict = verdict_str(&c.verdict);
                     CheckItem {
-                        guide_url: guide_url_for(&c.name, verdict),
+                        guide_url: guide_url_for(&c.name),
                         name: c.name.clone(),
                         verdict,
                         weight: weights.get(&c.name).copied(),
@@ -569,7 +603,10 @@ fn summary_event_from(
     tls_result: &Result<TlsBackendResult, SectionError>,
     ip_result: &Result<IpBackendResult, SectionError>,
     score: &OverallScore,
+    thresholds: &std::collections::BTreeMap<String, u32>,
 ) -> Event {
+    use crate::scoring::engine::lookup_grade;
+
     let dns_status = section_status_from_checks(dns_result, |r| &r.checks);
     let tls_status = section_status_from_checks(tls_result, |r| &r.checks);
     let ip_status = section_status_from_checks(ip_result, |r| &r.checks);
@@ -585,6 +622,10 @@ fn summary_event_from(
         "pass"
     };
 
+    let dns_grade = score.dns.as_ref().map(|s| lookup_grade(thresholds, s.percentage));
+    let tls_grade = score.tls.as_ref().map(|s| lookup_grade(thresholds, s.percentage));
+    let ip_grade = score.ip.as_ref().map(|s| lookup_grade(thresholds, s.percentage));
+
     let payload = SummaryEvent {
         dns: dns_status,
         tls: tls_status,
@@ -594,6 +635,9 @@ fn summary_event_from(
         score: (score.overall_percentage * 10.0).round() / 10.0,
         hard_fail: score.hard_fail_triggered,
         hard_fail_checks: score.hard_fail_checks.clone(),
+        dns_grade,
+        tls_grade,
+        ip_grade,
     };
     Event::default()
         .event("summary")
@@ -622,7 +666,7 @@ fn build_sse_events(
         dns_event_from(&output.dns, &profile.dns),
         tls_event_from(&output.tls, &profile.tls),
         ip_event_from(&output.ip, &profile.ip),
-        summary_event_from(&output.dns, &output.tls, &output.ip, &output.score),
+        summary_event_from(&output.dns, &output.tls, &output.ip, &output.score, &profile.thresholds),
         done_event(&domain, duration_ms, cached),
     ]
 }

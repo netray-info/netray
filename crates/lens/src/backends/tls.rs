@@ -70,7 +70,7 @@ struct HealthCheck {
     id: String,
     status: String,
     #[serde(default)]
-    message: Option<String>,
+    detail: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +132,7 @@ fn parse_inspect(inspect: InspectResponse, domain: &str, tls_url: &str) -> TlsBa
                 "skip" => CheckVerdict::Skip,
                 _ => CheckVerdict::Skip,
             };
-            let messages = tls_check_messages(&verdict, &hc.message);
+            let messages = tls_check_messages(&verdict, &hc.detail);
             checks.push(CheckResult {
                 name: hc.id.clone(),
                 verdict,
@@ -153,7 +153,7 @@ fn parse_inspect(inspect: InspectResponse, domain: &str, tls_url: &str) -> TlsBa
             "skip" => CheckVerdict::Skip,
             _ => CheckVerdict::Skip,
         };
-        let messages = tls_check_messages(&verdict, &hc.message);
+        let messages = tls_check_messages(&verdict, &hc.detail);
         checks.push(CheckResult {
             name: hc.id.clone(),
             verdict,
@@ -176,10 +176,10 @@ fn parse_inspect(inspect: InspectResponse, domain: &str, tls_url: &str) -> TlsBa
 }
 
 /// Return diagnostic messages for a TLS check — only for non-passing verdicts.
-fn tls_check_messages(verdict: &CheckVerdict, message: &Option<String>) -> Vec<String> {
+fn tls_check_messages(verdict: &CheckVerdict, detail: &Option<String>) -> Vec<String> {
     match verdict {
         CheckVerdict::Pass | CheckVerdict::Skip => vec![],
-        _ => message.iter().cloned().collect(),
+        _ => detail.iter().cloned().collect(),
     }
 }
 

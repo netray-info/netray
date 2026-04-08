@@ -32,6 +32,7 @@ interface Props {
 export default function Summary(props: Props) {
   const s = () => props.summary;
   const isError = () => s().grade === 'error';
+  const hasErroredSection = () => s().dns === 'error' || s().tls === 'error' || s().ip === 'error';
 
   return (
     <div class="summary-card" role="region" aria-label="Summary">
@@ -47,6 +48,9 @@ export default function Summary(props: Props) {
           <div class="summary-grade__meta">
             <span class="summary-score">{s().score}%</span>
             <span class="summary-overall">{overallLabel(s().overall)}</span>
+            <Show when={hasErroredSection()}>
+              <span class="summary-incomplete">incomplete — some checks failed to run</span>
+            </Show>
           </div>
         </div>
       }>
@@ -62,14 +66,35 @@ export default function Summary(props: Props) {
         <div class="summary-dot-item" role="listitem">
           <VerdictDot verdict={s().tls} />
           <span>TLS</span>
+          <Show when={s().tls === 'error'} fallback={
+            <Show when={s().tls_grade}>
+              <span class="summary-dot-grade" style={{ color: gradeStyle(s().tls_grade!) }}>{s().tls_grade}</span>
+            </Show>
+          }>
+            <span class="summary-dot-error">err</span>
+          </Show>
         </div>
         <div class="summary-dot-item" role="listitem">
           <VerdictDot verdict={s().dns} />
           <span>DNS</span>
+          <Show when={s().dns === 'error'} fallback={
+            <Show when={s().dns_grade}>
+              <span class="summary-dot-grade" style={{ color: gradeStyle(s().dns_grade!) }}>{s().dns_grade}</span>
+            </Show>
+          }>
+            <span class="summary-dot-error">err</span>
+          </Show>
         </div>
         <div class="summary-dot-item" role="listitem">
           <VerdictDot verdict={s().ip} />
           <span>IP</span>
+          <Show when={s().ip === 'error'} fallback={
+            <Show when={s().ip_grade}>
+              <span class="summary-dot-grade" style={{ color: gradeStyle(s().ip_grade!) }}>{s().ip_grade}</span>
+            </Show>
+          }>
+            <span class="summary-dot-error">err</span>
+          </Show>
         </div>
       </div>
 

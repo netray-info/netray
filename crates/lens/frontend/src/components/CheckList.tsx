@@ -48,7 +48,7 @@ export default function CheckList(props: Props) {
     <ul class="check-list" role="list">
       <For each={props.checks}>
         {(check) => (
-          <li class="check-item">
+          <li class="check-item" data-verdict={check.verdict}>
             <span
               class="verdict-icon"
               style={{ color: verdictColor(check.verdict) }}
