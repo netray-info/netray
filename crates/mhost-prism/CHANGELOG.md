@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0] - 2026-04-08
+
+### Added
+- Primary button uses shared `.btn-primary` from common-frontend; replace DnsCrossLinks with shared CrossLink component (ab52d50)
+- Landing mode cards adopt shared `.mode-card` classes from common-frontend (6db3ebd)
+
 ## [0.6.1] - 2026-04-08
 
 ### Changed
