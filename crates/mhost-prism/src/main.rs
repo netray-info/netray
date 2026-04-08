@@ -50,6 +50,27 @@ async fn main() {
     );
 
     tracing::info!(bind = %config.server.bind, "starting prism");
+    tracing::info!(
+        per_ip_per_minute = config.limits.per_ip_per_minute,
+        per_ip_burst = config.limits.per_ip_burst,
+        per_target_per_minute = config.limits.per_target_per_minute,
+        per_target_burst = config.limits.per_target_burst,
+        global_per_minute = config.limits.global_per_minute,
+        global_burst = config.limits.global_burst,
+        max_concurrent = config.limits.max_concurrent_connections,
+        "rate limits configured"
+    );
+    tracing::info!(
+        trusted_proxy_count = config.server.trusted_proxies.len(),
+        "trusted proxies configured"
+    );
+    tracing::info!(
+        window_secs = config.circuit_breaker.window_secs,
+        cooldown_secs = config.circuit_breaker.cooldown_secs,
+        failure_threshold = config.circuit_breaker.failure_threshold,
+        min_requests = config.circuit_breaker.min_requests,
+        "circuit breaker configured"
+    );
 
     // 3. Build shared application state.
     let hot_state = reload::HotState::new(&config);
