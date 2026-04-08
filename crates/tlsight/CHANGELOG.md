@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.0] - 2026-04-08
+
+### Fixed
+- Frontend: SolidJS pattern violations and CSS correctness (dee5f38)
+
+### Changed
+- CI: add frontend lint script with tsc --noEmit (de56602)
+- CI: align workflows with netray.info workflow-rules spec (4fbe08c)
+
 ## [0.9.0] - 2026-04-08
 
 ### Added
