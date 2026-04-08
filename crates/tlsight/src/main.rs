@@ -47,6 +47,7 @@ async fn main() {
         per_ip_burst = config.limits.per_ip_burst,
         per_target_per_minute = config.limits.per_target_per_minute,
         per_target_burst = config.limits.per_target_burst,
+        max_concurrent = config.limits.max_concurrent_connections,
         trusted_proxy_count = config.server.trusted_proxies.len(),
         check_ct = config.validation.check_ct,
         quality_enabled = config.quality.enabled,
