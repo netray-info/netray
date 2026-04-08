@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, createMemo, Show, For, onMount, onCleanup } from 'solid-js';
 import { getHistory } from '../lib/history';
 
 const PRESETS: { label: string; ports: string }[] = [
@@ -24,7 +24,7 @@ export default function HostInput(props: Props) {
   let savedInput = '';
   let wrapRef: HTMLDivElement | undefined;
 
-  const history = () => getHistory().map(e => e.query);
+  const history = createMemo(() => getHistory().map(e => e.query));
 
   const handleSubmit = (e: Event) => {
     e.preventDefault();
@@ -161,16 +161,18 @@ export default function HostInput(props: Props) {
       </Show>
 
       <div class="host-input__presets">
-        {PRESETS.map(p => (
-          <button
-            class="host-input__preset"
-            type="button"
-            onClick={() => applyPreset(p.ports)}
-            disabled={props.loading}
-          >
-            {p.label}
-          </button>
-        ))}
+        <For each={PRESETS}>
+          {(p) => (
+            <button
+              class="host-input__preset"
+              type="button"
+              onClick={() => applyPreset(p.ports)}
+              disabled={props.loading}
+            >
+              {p.label}
+            </button>
+          )}
+        </For>
       </div>
     </div>
   );

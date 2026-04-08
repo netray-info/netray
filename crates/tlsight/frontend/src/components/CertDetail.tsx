@@ -63,7 +63,7 @@ function CopyBtn(props: { value: string }) {
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <button class="copy-btn" onClick={copy} title="Copy">
+    <button class="copy-btn" onClick={copy} aria-label="Copy" title="Copy">
       {copied() ? '\u2713' : '\u29c9'}
     </button>
   );

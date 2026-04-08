@@ -254,7 +254,7 @@ a:hover { text-decoration: underline; }
 
 .error-banner {
   padding: 0.75rem 1rem;
-  background: rgba(204, 0, 0, 0.08);
+  background: color-mix(in srgb, var(--fail) 8%, transparent);
   border: 1px solid var(--fail);
   border-radius: var(--radius);
   color: var(--fail);
@@ -262,23 +262,15 @@ a:hover { text-decoration: underline; }
   margin-bottom: 1rem;
 }
 
-[data-theme="dark"] .error-banner {
-  background: rgba(255, 68, 68, 0.1);
-}
-
 .warnings { display: flex; flex-direction: column; gap: 0.5rem; }
 
 .warning-banner {
   padding: 0.5rem 0.75rem;
-  background: rgba(184, 110, 0, 0.08);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
   border: 1px solid var(--warn);
   border-radius: var(--radius);
   color: var(--warn);
   font-size: 0.875rem;
-}
-
-[data-theme="dark"] .warning-banner {
-  background: rgba(255, 170, 0, 0.1);
 }
 
 /* ================================================================

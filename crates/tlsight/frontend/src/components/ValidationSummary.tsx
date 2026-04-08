@@ -185,17 +185,18 @@ export default function ValidationSummary(props: Props) {
       </button>
 
       <div class="validation-summary__checks">
-        {Object.entries(props.summary.checks).map(([key, status]) => {
+        <For each={Object.entries(props.summary.checks).filter(([key, status]) => {
           const conditional = ['dane_valid', 'ct_logged', 'ocsp_stapled', 'consistency'];
-          if (conditional.includes(key) && status === 'skip') return null;
-          return (
+          return !(conditional.includes(key) && status === 'skip');
+        })}>
+          {([key, status]) => (
             <span class={`filter-toggle check check--${status}`} title={CHECK_EXPLANATIONS[key]}>
               <span aria-hidden="true">{STATUS_ICON[status]}</span>
               <span class="sr-only">{status}</span>
               {' '}{CHECK_LABELS[key] ?? key}
             </span>
-          );
-        })}
+          )}
+        </For>
       </div>
 
       <Explain when={!!props.explain}>This is the overall validation summary. Green = good, orange = warning, red = problem, grey = skipped.</Explain>

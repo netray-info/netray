@@ -1,4 +1,4 @@
-import { createSignal, createEffect, createResource, Show, For, onMount, onCleanup } from 'solid-js';
+import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
 import HostInput from './components/HostInput';
 import ExportButtons from './components/ExportButtons';
 import ValidationSummary from './components/ValidationSummary';
@@ -12,7 +12,7 @@ import SuiteNav from '@netray-info/common-frontend/components/SuiteNav';
 import { CrossLinks } from './components/CrossLinks';
 import { inspect, fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
-import type { InspectResponse, PortResult } from './lib/types';
+import type { InspectResponse, PortResult, MetaResponse } from './lib/types';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
 import Modal from '@netray-info/common-frontend/components/Modal';
@@ -48,7 +48,7 @@ export default function App() {
   const [allExpanded, setAllExpanded] = createSignal<boolean | undefined>(undefined);
   const [explain, setExplain] = createSignal(false);
 
-  const [meta] = createResource(fetchMeta);
+  const [meta, setMeta] = createSignal<MetaResponse | null>(null);
   const siteName = () => meta()?.site_name ?? 'tlsight';
   const dnsUrl = () => meta()?.ecosystem?.dns_base_url;
   const ipUrl = () => meta()?.ecosystem?.ip_base_url;
@@ -103,6 +103,8 @@ export default function App() {
   }
 
   onMount(() => {
+    fetchMeta().then(m => { if (m) setMeta(m); });
+
     document.addEventListener('keydown', handleEscape);
     document.addEventListener('mousedown', clearCardActive);
 
