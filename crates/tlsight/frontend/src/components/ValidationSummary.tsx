@@ -189,7 +189,7 @@ export default function ValidationSummary(props: Props) {
           const conditional = ['dane_valid', 'ct_logged', 'ocsp_stapled', 'consistency'];
           if (conditional.includes(key) && status === 'skip') return null;
           return (
-            <span class={`check check--${status}`} title={CHECK_EXPLANATIONS[key]}>
+            <span class={`filter-toggle check check--${status}`} title={CHECK_EXPLANATIONS[key]}>
               <span aria-hidden="true">{STATUS_ICON[status]}</span>
               <span class="sr-only">{status}</span>
               {' '}{CHECK_LABELS[key] ?? key}

@@ -384,11 +384,6 @@ a:hover { text-decoration: underline; }
 }
 
 .check {
-  padding: 2px 8px;
-  border-radius: var(--radius);
-  font-size: 0.8125rem;
-  font-family: var(--mono);
-  border: 1px solid var(--border-subtle);
   background: var(--bg-tertiary);
   transition: border-color var(--transition);
 }
@@ -1424,7 +1419,6 @@ a:hover { text-decoration: underline; }
   .cert-detail__table { display: block; overflow-x: auto; }
   .tls-params__table { display: block; overflow-x: auto; }
   .validation-summary__checks { gap: 4px; }
-  .check { font-size: 0.75rem; padding: 1px 6px; }
   .ip-card__header { flex-wrap: wrap; }
   .ip-card__meta { justify-content: flex-start; }
   .ip-card__leaf-summary { flex-wrap: wrap; white-space: normal; }
