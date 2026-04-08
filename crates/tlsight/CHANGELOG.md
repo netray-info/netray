@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.1] - 2026-04-08
+
+### Added
+- Standardize default log filter (7a38025)
+
+### Fixed
+- Add span enrichment, rejection logging, and startup inventory per logging-rules spec (121b909)
+
 ## [0.10.0] - 2026-04-08
 
 ### Fixed
