@@ -3,7 +3,7 @@ name: CI
 
 on:
   push:
-    branches: ["master"]
+    branches: [main]
   pull_request:
 
 env:
@@ -30,6 +30,16 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        run: npm ci && npm run build
+        working-directory: frontend
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: cargo clippy
         run: cargo clippy --locked -- -D warnings
 
@@ -40,6 +50,16 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        run: npm ci && npm run build
+        working-directory: frontend
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: cargo test
         run: cargo test --locked --no-fail-fast
 
@@ -53,18 +73,24 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: frontend build
+      - name: Build
         run: npm ci && npm run build
         working-directory: frontend
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: frontend test
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+      - name: Test
         run: npm test
         working-directory: frontend
 
   audit:
     name: Dependency Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: rustsec/audit-check@v2
@@ -79,4 +105,5 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: npm audit (frontend)
-        run: cd frontend && npm audit --audit-level=high --omit=dev
+        run: npm audit --audit-level=high --omit=dev
+        working-directory: frontend
