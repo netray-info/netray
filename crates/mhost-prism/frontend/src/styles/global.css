@@ -197,34 +197,6 @@ body {
 
 .query-button {
   flex-shrink: 0;
-  padding: 8px 20px;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--bg-primary);
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: background var(--transition), box-shadow var(--transition);
-  white-space: nowrap;
-}
-
-.query-button:hover {
-  background: #00e5ff;
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-[data-theme="light"] .query-button {
-  color: #ffffff;
-}
-
-[data-theme="light"] .query-button:hover {
-  background: #0088dd;
-}
-
-.query-button:active {
-  background: var(--accent-dim);
 }
 
 
@@ -3386,30 +3358,6 @@ body {
   text-align: center;
   margin: 0.25rem 0 0.75rem;
   opacity: 0.7;
-}
-
-/* ===================================================================
-   Cross-links (DNS → TLS)
-   =================================================================== */
-
-.cross-links {
-  margin: 0.75rem 0;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-}
-
-.cross-link {
-  color: var(--text-secondary);
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.cross-link:hover {
-  color: var(--accent);
 }
 
 /* ===================================================================

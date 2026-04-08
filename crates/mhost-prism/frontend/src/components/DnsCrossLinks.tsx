@@ -1,4 +1,5 @@
 import { Show } from 'solid-js';
+import CrossLink from '@netray-info/common-frontend/components/CrossLink';
 
 interface DnsCrossLinksProps {
   domain?: string;
@@ -12,14 +13,14 @@ export function DnsCrossLinks(props: DnsCrossLinksProps) {
     return raw.split(/\s+/)[0].replace(/\.+$/, '');
   };
 
-  const tlsUrl = () => props.tlsUrl
+  const href = () => props.tlsUrl
     ? `${props.tlsUrl}/?h=${encodeURIComponent(domain())}`
     : null;
 
   return (
-    <Show when={domain() && tlsUrl()}>
+    <Show when={domain() && href()}>
       <div class="cross-links">
-        <a href={tlsUrl()!} class="cross-link">Inspect TLS for {domain()} &rarr;</a>
+        <CrossLink href={href()!} label={`Inspect TLS for ${domain()}`} />
       </div>
     </Show>
   );

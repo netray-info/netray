@@ -510,7 +510,7 @@ export function QueryInput(props: QueryInputProps) {
         </button>
       </Show>
       <button
-        class="query-button"
+        class="btn-primary query-button"
         onClick={handleSubmitClick}
         disabled={props.disabled}
         aria-busy={props.disabled ? 'true' : 'false'}
