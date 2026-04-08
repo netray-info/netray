@@ -44,6 +44,7 @@ fn live_state() -> AppState {
             global_burst: 40,
         },
         scoring: ScoringConfig::default(),
+        telemetry: Default::default(),
     };
     AppState::new(config).expect("failed to build AppState for live tests")
 }
