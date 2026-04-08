@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.1] - 2026-04-08
+
+### Added
+- Standardize default log filter (956614b)
+
+### Fixed
+- Add rate limit, proxy, and circuit breaker config to startup inventory (830e30a)
+- Correct deploy webhook URL to deploy-prism (4768d00)
+
 ## [0.8.0] - 2026-04-08
 
 ### Added
