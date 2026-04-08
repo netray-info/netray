@@ -13,27 +13,45 @@ fn default_profile() -> ScoringProfile {
 }
 
 fn pass(name: &str) -> CheckResult {
-    CheckResult { name: name.to_string(), verdict: CheckVerdict::Pass }
+    CheckResult {
+        name: name.to_string(),
+        verdict: CheckVerdict::Pass,
+    }
 }
 
 fn warn(name: &str) -> CheckResult {
-    CheckResult { name: name.to_string(), verdict: CheckVerdict::Warn }
+    CheckResult {
+        name: name.to_string(),
+        verdict: CheckVerdict::Warn,
+    }
 }
 
 fn fail(name: &str) -> CheckResult {
-    CheckResult { name: name.to_string(), verdict: CheckVerdict::Fail }
+    CheckResult {
+        name: name.to_string(),
+        verdict: CheckVerdict::Fail,
+    }
 }
 
 fn not_found(name: &str) -> CheckResult {
-    CheckResult { name: name.to_string(), verdict: CheckVerdict::NotFound }
+    CheckResult {
+        name: name.to_string(),
+        verdict: CheckVerdict::NotFound,
+    }
 }
 
 fn no_error(checks: Vec<CheckResult>) -> SectionInput {
-    SectionInput { checks, errored: false }
+    SectionInput {
+        checks,
+        errored: false,
+    }
 }
 
 fn errored() -> SectionInput {
-    SectionInput { checks: vec![], errored: true }
+    SectionInput {
+        checks: vec![],
+        errored: true,
+    }
 }
 
 /// Build all-pass inputs from the profile's own check keys.
@@ -63,18 +81,42 @@ fn default_profile_parses_correctly() {
 
     // Grade thresholds include the expected grades
     let grades: Vec<&String> = profile.thresholds.keys().collect();
-    assert!(grades.iter().any(|g| g.as_str() == "A+"), "profile must define A+ threshold");
-    assert!(grades.iter().any(|g| g.as_str() == "A"), "profile must define A threshold");
-    assert!(grades.iter().any(|g| g.as_str() == "F"), "profile must define F threshold");
+    assert!(
+        grades.iter().any(|g| g.as_str() == "A+"),
+        "profile must define A+ threshold"
+    );
+    assert!(
+        grades.iter().any(|g| g.as_str() == "A"),
+        "profile must define A threshold"
+    );
+    assert!(
+        grades.iter().any(|g| g.as_str() == "F"),
+        "profile must define F threshold"
+    );
 
     // Hard fail lists are present
-    assert!(!profile.hard_fail.tls.is_empty(), "tls hard_fail must not be empty");
-    assert!(!profile.hard_fail.dns.is_empty(), "dns hard_fail must not be empty");
+    assert!(
+        !profile.hard_fail.tls.is_empty(),
+        "tls hard_fail must not be empty"
+    );
+    assert!(
+        !profile.hard_fail.dns.is_empty(),
+        "dns hard_fail must not be empty"
+    );
 
     // Each section has at least one weighted check
-    assert!(!profile.dns.is_empty(), "dns section must have weighted checks");
-    assert!(!profile.tls.is_empty(), "tls section must have weighted checks");
-    assert!(!profile.ip.is_empty(), "ip section must have weighted checks");
+    assert!(
+        !profile.dns.is_empty(),
+        "dns section must have weighted checks"
+    );
+    assert!(
+        !profile.tls.is_empty(),
+        "tls section must have weighted checks"
+    );
+    assert!(
+        !profile.ip.is_empty(),
+        "ip section must have weighted checks"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +151,10 @@ fn missing_spf_triggers_hard_fail_f() {
     let dns = no_error(vec![not_found("spf"), pass("dmarc")]);
     let result = compute_score(&profile, dns, tls, ip);
 
-    assert!(result.hard_fail_triggered, "missing SPF must trigger hard fail");
+    assert!(
+        result.hard_fail_triggered,
+        "missing SPF must trigger hard fail"
+    );
     assert_eq!(result.grade, "F", "missing SPF must produce grade F");
     assert!(
         result.hard_fail_checks.contains(&"spf".to_string()),
@@ -131,7 +176,10 @@ fn missing_dmarc_triggers_hard_fail_f() {
     let dns = no_error(vec![pass("spf"), not_found("dmarc")]);
     let result = compute_score(&profile, dns, tls, ip);
 
-    assert!(result.hard_fail_triggered, "missing DMARC must trigger hard fail");
+    assert!(
+        result.hard_fail_triggered,
+        "missing DMARC must trigger hard fail"
+    );
     assert_eq!(result.grade, "F", "missing DMARC must produce grade F");
     assert!(
         result.hard_fail_checks.contains(&"dmarc".to_string()),
@@ -158,7 +206,10 @@ fn expired_cert_triggers_hard_fail_f() {
     }
     let result = compute_score(&profile, dns, no_error(tls_checks), ip);
 
-    assert!(result.hard_fail_triggered, "expired cert must trigger hard fail");
+    assert!(
+        result.hard_fail_triggered,
+        "expired cert must trigger hard fail"
+    );
     assert_eq!(result.grade, "F", "expired cert must produce grade F");
     assert!(
         result.hard_fail_checks.contains(&"not_expired".to_string()),
@@ -185,10 +236,15 @@ fn untrusted_chain_triggers_hard_fail_f() {
     }
     let result = compute_score(&profile, dns, no_error(tls_checks), ip);
 
-    assert!(result.hard_fail_triggered, "untrusted chain must trigger hard fail");
+    assert!(
+        result.hard_fail_triggered,
+        "untrusted chain must trigger hard fail"
+    );
     assert_eq!(result.grade, "F", "untrusted chain must produce grade F");
     assert!(
-        result.hard_fail_checks.contains(&"chain_trusted".to_string()),
+        result
+            .hard_fail_checks
+            .contains(&"chain_trusted".to_string()),
         "chain_trusted must appear in hard_fail_checks, got {:?}",
         result.hard_fail_checks,
     );
@@ -234,7 +290,10 @@ fn all_dns_warn_with_all_tls_pass_grades_below_a() {
         result.grade,
         result.overall_percentage,
     );
-    assert!(!result.hard_fail_triggered, "warn verdicts must not trigger hard fail");
+    assert!(
+        !result.hard_fail_triggered,
+        "warn verdicts must not trigger hard fail"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -292,8 +351,8 @@ fn grade_boundary_96_9_is_a() {
 /// Since the profile's dns map won't contain "synthetic", all real dns checks are
 /// excluded from scoring (unweighted). We use a one-off profile for this.
 fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) -> String {
-    use std::collections::BTreeMap;
     use lens::scoring::profile::{HardFail, ProfileMeta, ScoringProfile, SectionWeights};
+    use std::collections::BTreeMap;
 
     // Build a minimal profile with a single dns check weighted 1000.
     // earned = round(target * 10) out of 1000 → precise to 0.1%.
@@ -316,11 +375,18 @@ fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) ->
     }
 
     let synthetic_profile = ScoringProfile {
-        meta: ProfileMeta { name: "synthetic".to_string(), version: 0 },
+        meta: ProfileMeta {
+            name: "synthetic".to_string(),
+            version: 0,
+        },
         dns: dns_weights,
         tls: std::collections::HashMap::new(),
         ip: std::collections::HashMap::new(),
-        section_weights: SectionWeights { dns: 1, tls: 1, ip: 1 },
+        section_weights: SectionWeights {
+            dns: 1,
+            tls: 1,
+            ip: 1,
+        },
         thresholds,
         hard_fail: HardFail::default(),
     };

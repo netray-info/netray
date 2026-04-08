@@ -30,10 +30,7 @@ pub async fn check_dns(
     domain: &str,
     timeout: Duration,
 ) -> Result<DnsBackendResult, AppError> {
-    let url = format!(
-        "{}/api/check",
-        dns_url.trim_end_matches('/'),
-    );
+    let url = format!("{}/api/check", dns_url.trim_end_matches('/'),);
 
     let body = serde_json::json!({ "domain": domain });
 
@@ -198,9 +195,7 @@ fn collect_ips_from_batch(
         return;
     }
 
-    let lookups = data
-        .pointer("/lookups/lookups")
-        .and_then(|v| v.as_array());
+    let lookups = data.pointer("/lookups/lookups").and_then(|v| v.as_array());
 
     let lookups = match lookups {
         Some(l) => l,

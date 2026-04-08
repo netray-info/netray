@@ -52,11 +52,7 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
     // have a chance to complete, but we never block indefinitely.
     let hard_deadline = Duration::from_secs(20);
 
-    let result = tokio::time::timeout(
-        hard_deadline,
-        run_backends(state, domain, timeout),
-    )
-    .await;
+    let result = tokio::time::timeout(hard_deadline, run_backends(state, domain, timeout)).await;
 
     match result {
         Ok(output) => output,
@@ -85,18 +81,8 @@ async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> Chec
 
     // Step 1: DNS and TLS in parallel.
     let (dns_result, tls_result) = tokio::join!(
-        crate::backends::dns::check_dns(
-            client,
-            &config.backends.dns_url,
-            domain,
-            timeout,
-        ),
-        crate::backends::tls::check_tls(
-            client,
-            &config.backends.tls_url,
-            domain,
-            timeout,
-        ),
+        crate::backends::dns::check_dns(client, &config.backends.dns_url, domain, timeout,),
+        crate::backends::tls::check_tls(client, &config.backends.tls_url, domain, timeout,),
     );
 
     // Step 2: Extract IPs from DNS result (empty vec if DNS errored).
@@ -106,13 +92,9 @@ async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> Chec
     };
 
     // Step 3: IP enrichment (needs resolved IPs from DNS).
-    let ip_result = crate::backends::ip::check_ip(
-        client,
-        &config.backends.ip_url,
-        &resolved_ips,
-        timeout,
-    )
-    .await;
+    let ip_result =
+        crate::backends::ip::check_ip(client, &config.backends.ip_url, &resolved_ips, timeout)
+            .await;
 
     // Step 4: Map AppError to SectionError.
     let dns = map_error(dns_result);
@@ -141,9 +123,7 @@ async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> Chec
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn map_error<T>(
-    result: Result<T, crate::error::AppError>,
-) -> Result<T, SectionError> {
+fn map_error<T>(result: Result<T, crate::error::AppError>) -> Result<T, SectionError> {
     result.map_err(|e| match e {
         crate::error::AppError::Timeout => SectionError::Timeout,
         other => SectionError::BackendError(other.to_string()),
@@ -194,8 +174,17 @@ impl HasChecks for IpBackendResult {
 fn build_score_from_errors(state: &AppState) -> OverallScore {
     compute_score(
         &state.scoring_profile,
-        SectionInput { checks: vec![], errored: true },
-        SectionInput { checks: vec![], errored: true },
-        SectionInput { checks: vec![], errored: true },
+        SectionInput {
+            checks: vec![],
+            errored: true,
+        },
+        SectionInput {
+            checks: vec![],
+            errored: true,
+        },
+        SectionInput {
+            checks: vec![],
+            errored: true,
+        },
     )
 }

@@ -42,9 +42,7 @@ impl AppState {
 
         let cache = if config.cache.enabled {
             let ttl = Duration::from_secs(config.cache.ttl_seconds);
-            let c: Cache<String, Arc<CachedResult>> = Cache::builder()
-                .time_to_live(ttl)
-                .build();
+            let c: Cache<String, Arc<CachedResult>> = Cache::builder().time_to_live(ttl).build();
             Some(Arc::new(c))
         } else {
             None
@@ -79,7 +77,9 @@ fn load_scoring_profile(path: Option<&str>) -> Result<ScoringProfile, Box<dyn st
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{BackendsConfig, CacheConfig, RateLimitConfig, ScoringConfig, ServerConfig};
+    use crate::config::{
+        BackendsConfig, CacheConfig, RateLimitConfig, ScoringConfig, ServerConfig,
+    };
 
     fn test_config() -> Config {
         Config {
@@ -112,7 +112,10 @@ mod tests {
     fn builds_state_from_config() {
         let config = test_config();
         let state = AppState::new(config).unwrap();
-        assert!(state.cache.is_none(), "cache should be disabled in test config");
+        assert!(
+            state.cache.is_none(),
+            "cache should be disabled in test config"
+        );
     }
 
     #[test]

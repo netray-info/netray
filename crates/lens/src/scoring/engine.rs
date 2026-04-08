@@ -219,23 +219,38 @@ mod tests {
     }
 
     fn pass(name: &str) -> CheckResult {
-        CheckResult { name: name.to_string(), verdict: CheckVerdict::Pass }
+        CheckResult {
+            name: name.to_string(),
+            verdict: CheckVerdict::Pass,
+        }
     }
 
     fn warn(name: &str) -> CheckResult {
-        CheckResult { name: name.to_string(), verdict: CheckVerdict::Warn }
+        CheckResult {
+            name: name.to_string(),
+            verdict: CheckVerdict::Warn,
+        }
     }
 
     fn fail(name: &str) -> CheckResult {
-        CheckResult { name: name.to_string(), verdict: CheckVerdict::Fail }
+        CheckResult {
+            name: name.to_string(),
+            verdict: CheckVerdict::Fail,
+        }
     }
 
     fn not_found(name: &str) -> CheckResult {
-        CheckResult { name: name.to_string(), verdict: CheckVerdict::NotFound }
+        CheckResult {
+            name: name.to_string(),
+            verdict: CheckVerdict::NotFound,
+        }
     }
 
     fn skip(name: &str) -> CheckResult {
-        CheckResult { name: name.to_string(), verdict: CheckVerdict::Skip }
+        CheckResult {
+            name: name.to_string(),
+            verdict: CheckVerdict::Skip,
+        }
     }
 
     fn simple_weights() -> HashMap<String, u32> {
@@ -246,11 +261,17 @@ mod tests {
     }
 
     fn no_error(checks: Vec<CheckResult>) -> SectionInput {
-        SectionInput { checks, errored: false }
+        SectionInput {
+            checks,
+            errored: false,
+        }
     }
 
     fn errored() -> SectionInput {
-        SectionInput { checks: vec![], errored: true }
+        SectionInput {
+            checks: vec![],
+            errored: true,
+        }
     }
 
     // --- score_section verdict tests ---
@@ -371,7 +392,11 @@ mod tests {
         let result = compute_score(&profile, dns_input, tls_input, ip_input);
         assert!(result.hard_fail_triggered);
         assert_eq!(result.grade, "F");
-        assert!(result.hard_fail_checks.contains(&"chain_trusted".to_string()));
+        assert!(
+            result
+                .hard_fail_checks
+                .contains(&"chain_trusted".to_string())
+        );
     }
 
     #[test]
@@ -473,12 +498,9 @@ mod tests {
         let profile = default_profile();
 
         // Build full pass inputs using the profile's own keys.
-        let dns_checks: Vec<CheckResult> =
-            profile.dns.keys().map(|k| pass(k)).collect();
-        let tls_checks: Vec<CheckResult> =
-            profile.tls.keys().map(|k| pass(k)).collect();
-        let ip_checks: Vec<CheckResult> =
-            profile.ip.keys().map(|k| pass(k)).collect();
+        let dns_checks: Vec<CheckResult> = profile.dns.keys().map(|k| pass(k)).collect();
+        let tls_checks: Vec<CheckResult> = profile.tls.keys().map(|k| pass(k)).collect();
+        let ip_checks: Vec<CheckResult> = profile.ip.keys().map(|k| pass(k)).collect();
 
         let result = compute_score(
             &profile,
@@ -496,18 +518,15 @@ mod tests {
     fn hard_fail_with_otherwise_perfect_scores_gives_f() {
         let profile = default_profile();
 
-        let mut tls_checks: Vec<CheckResult> =
-            profile.tls.keys().map(|k| pass(k)).collect();
+        let mut tls_checks: Vec<CheckResult> = profile.tls.keys().map(|k| pass(k)).collect();
         // Override chain_trusted to fail
         for c in &mut tls_checks {
             if c.name == "chain_trusted" {
                 c.verdict = CheckVerdict::Fail;
             }
         }
-        let dns_checks: Vec<CheckResult> =
-            profile.dns.keys().map(|k| pass(k)).collect();
-        let ip_checks: Vec<CheckResult> =
-            profile.ip.keys().map(|k| pass(k)).collect();
+        let dns_checks: Vec<CheckResult> = profile.dns.keys().map(|k| pass(k)).collect();
+        let ip_checks: Vec<CheckResult> = profile.ip.keys().map(|k| pass(k)).collect();
 
         let result = compute_score(
             &profile,
@@ -530,7 +549,11 @@ mod tests {
 
         let result = compute_score(&profile, dns_input, tls_input, ip_input);
         assert!(result.hard_fail_triggered);
-        assert!(result.hard_fail_checks.contains(&"chain_trusted".to_string()));
+        assert!(
+            result
+                .hard_fail_checks
+                .contains(&"chain_trusted".to_string())
+        );
         assert!(result.hard_fail_checks.contains(&"not_expired".to_string()));
     }
 }

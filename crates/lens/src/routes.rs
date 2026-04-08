@@ -51,10 +51,8 @@ fn guide_url_for(name: &str, verdict: &str) -> Option<&'static str> {
             Some("https://netray.info/guide/record-types")
         }
         "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
-        "chain_trusted" | "chain_complete" | "cert_lifetime" | "strong_signature"
-        | "hsts" | "https_redirect" | "tls_version" => {
-            Some("https://netray.info/guide/certificate-chain")
-        }
+        "chain_trusted" | "chain_complete" | "cert_lifetime" | "strong_signature" | "hsts"
+        | "https_redirect" | "tls_version" => Some("https://netray.info/guide/certificate-chain"),
         _ => None,
     }
 }
@@ -289,11 +287,21 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     }
 
     if down.is_empty() {
-        (StatusCode::OK, Json(ReadyResponse { status: "ok", down: vec![] })).into_response()
+        (
+            StatusCode::OK,
+            Json(ReadyResponse {
+                status: "ok",
+                down: vec![],
+            }),
+        )
+            .into_response()
     } else {
         (
             StatusCode::SERVICE_UNAVAILABLE,
-            Json(ReadyResponse { status: "degraded", down }),
+            Json(ReadyResponse {
+                status: "degraded",
+                down,
+            }),
         )
             .into_response()
     }
@@ -305,7 +313,8 @@ pub async fn check_get_handler(
     headers: axum::http::HeaderMap,
     Path(domain): Path<String>,
 ) -> Response {
-    let client_ip = extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
+    let client_ip =
+        extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
     run_check_handler(state, client_ip, domain).await
 }
 
@@ -315,7 +324,8 @@ pub async fn check_post_handler(
     headers: axum::http::HeaderMap,
     Json(body): Json<CheckPostBody>,
 ) -> Response {
-    let client_ip = extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
+    let client_ip =
+        extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
     run_check_handler(state, client_ip, body.domain).await
 }
 
@@ -410,7 +420,10 @@ fn section_status_from_checks<T>(
     }
 }
 
-fn dns_event_from(result: &Result<DnsBackendResult, SectionError>, weights: &HashMap<String, u32>) -> Event {
+fn dns_event_from(
+    result: &Result<DnsBackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> Event {
     let status = section_status_from_checks(result, |r| &r.checks);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
@@ -437,13 +450,21 @@ fn dns_event_from(result: &Result<DnsBackendResult, SectionError>, weights: &Has
             (msg.to_string(), vec![], String::new())
         }
     };
-    let payload = DnsEvent { status, headline, checks, detail_url };
+    let payload = DnsEvent {
+        status,
+        headline,
+        checks,
+        detail_url,
+    };
     Event::default()
         .event("dns")
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
-fn tls_event_from(result: &Result<TlsBackendResult, SectionError>, weights: &HashMap<String, u32>) -> Event {
+fn tls_event_from(
+    result: &Result<TlsBackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> Event {
     let status = section_status_from_checks(result, |r| &r.checks);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
@@ -470,13 +491,21 @@ fn tls_event_from(result: &Result<TlsBackendResult, SectionError>, weights: &Has
             (msg.to_string(), vec![], String::new())
         }
     };
-    let payload = TlsEvent { status, headline, checks, detail_url };
+    let payload = TlsEvent {
+        status,
+        headline,
+        checks,
+        detail_url,
+    };
     Event::default()
         .event("tls")
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
-fn ip_event_from(result: &Result<IpBackendResult, SectionError>, weights: &HashMap<String, u32>) -> Event {
+fn ip_event_from(
+    result: &Result<IpBackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> Event {
     let status = section_status_from_checks(result, |r| &r.checks);
     let (headline, checks, addresses, detail_url) = match result {
         Ok(r) => {
@@ -518,7 +547,14 @@ fn ip_event_from(result: &Result<IpBackendResult, SectionError>, weights: &HashM
     } else {
         None
     };
-    let payload = IpEvent { status, headline, checks, addresses, detail_url, guide_url };
+    let payload = IpEvent {
+        status,
+        headline,
+        checks,
+        addresses,
+        detail_url,
+        guide_url,
+    };
     Event::default()
         .event("ip")
         .data(serde_json::to_string(&payload).unwrap_or_default())
@@ -571,7 +607,12 @@ fn done_event(domain: &str, duration_ms: u64, cached: bool) -> Event {
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
-fn build_sse_events(domain: String, output: CheckOutput, cached: bool, profile: &crate::scoring::profile::ScoringProfile) -> Vec<Event> {
+fn build_sse_events(
+    domain: String,
+    output: CheckOutput,
+    cached: bool,
+    profile: &crate::scoring::profile::ScoringProfile,
+) -> Vec<Event> {
     let duration_ms = output.duration_ms;
     vec![
         dns_event_from(&output.dns, &profile.dns),
@@ -582,7 +623,11 @@ fn build_sse_events(domain: String, output: CheckOutput, cached: bool, profile: 
     ]
 }
 
-fn build_sse_events_from_cached(domain: &str, cached: &CachedResult, profile: &crate::scoring::profile::ScoringProfile) -> Vec<Event> {
+fn build_sse_events_from_cached(
+    domain: &str,
+    cached: &CachedResult,
+    profile: &crate::scoring::profile::ScoringProfile,
+) -> Vec<Event> {
     let dummy_output = CheckOutput {
         domain: domain.to_string(),
         dns: cached.dns.clone(),
@@ -598,14 +643,18 @@ fn make_sse_stream(events: Vec<Event>, cache_header: &'static str) -> Response {
     let s = stream::iter(events.into_iter().map(Ok::<_, Infallible>));
     let sse = Sse::new(s).keep_alive(KeepAlive::default());
     let mut response = sse.into_response();
-    response.headers_mut().insert(
-        "x-cache",
-        HeaderValue::from_static(cache_header),
-    );
+    response
+        .headers_mut()
+        .insert("x-cache", HeaderValue::from_static(cache_header));
     response
 }
 
-fn sse_response_from_cached(domain: String, cached: &CachedResult, is_cached: bool, profile: &crate::scoring::profile::ScoringProfile) -> Response {
+fn sse_response_from_cached(
+    domain: String,
+    cached: &CachedResult,
+    is_cached: bool,
+    profile: &crate::scoring::profile::ScoringProfile,
+) -> Response {
     let events = build_sse_events_from_cached(&domain, cached, profile);
     make_sse_stream(events, if is_cached { "HIT" } else { "MISS" })
 }
@@ -635,10 +684,10 @@ pub mod tests {
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
 
+    use crate::config::Config;
     use crate::config::{
         BackendsConfig, CacheConfig, RateLimitConfig, ScoringConfig, ServerConfig,
     };
-    use crate::config::Config;
 
     pub fn test_config_with_rate_limit(per_ip: u32, burst: u32) -> Config {
         Config {
@@ -787,8 +836,16 @@ pub mod tests {
         // The handler runs a real check that will fail (no backends), but it
         // should still return an SSE stream for a valid domain.
         assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
-        assert!(ct.contains("text/event-stream"), "expected SSE content-type, got: {ct}");
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(
+            ct.contains("text/event-stream"),
+            "expected SSE content-type, got: {ct}"
+        );
     }
 
     #[tokio::test]

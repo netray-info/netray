@@ -18,7 +18,9 @@ pub fn validate_domain(input: &str) -> Result<String, AppError> {
     let trimmed = input.trim();
 
     if trimmed.is_empty() {
-        return Err(AppError::DomainInvalid("domain must not be empty".to_string()));
+        return Err(AppError::DomainInvalid(
+            "domain must not be empty".to_string(),
+        ));
     }
 
     // Reject bare IP addresses.
@@ -98,7 +100,10 @@ mod tests {
 
     #[test]
     fn mixed_case_is_lowercased() {
-        assert_eq!(validate_domain("Sub.Example.COM").unwrap(), "sub.example.com");
+        assert_eq!(
+            validate_domain("Sub.Example.COM").unwrap(),
+            "sub.example.com"
+        );
     }
 
     #[test]

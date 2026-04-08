@@ -98,9 +98,7 @@ pub async fn check_ip(
 
     for (ip, maybe_resp) in capped.iter().zip(responses.into_iter()) {
         let entry = match maybe_resp {
-            Some(resp) if resp.status().is_success() => {
-                resp.json::<EnrichmentEntry>().await.ok()
-            }
+            Some(resp) if resp.status().is_success() => resp.json::<EnrichmentEntry>().await.ok(),
             _ => None,
         };
 
@@ -173,8 +171,8 @@ fn network_type_verdict(network_type: &str) -> CheckVerdict {
     match network_type {
         "tor" | "spamhaus" | "c2" => CheckVerdict::Fail,
         "vpn" => CheckVerdict::Warn,
-        "residential" | "cloud" | "datacenter" | "bot" | "education"
-        | "government" | "business" | "internal" => CheckVerdict::Pass,
+        "residential" | "cloud" | "datacenter" | "bot" | "education" | "government"
+        | "business" | "internal" => CheckVerdict::Pass,
         _ => CheckVerdict::Pass,
     }
 }

@@ -11,8 +11,8 @@ use tower_http::trace::TraceLayer;
 use axum::Router;
 use axum::routing::get;
 
-use netray_common::security_headers::{SecurityHeadersConfig, security_headers_layer};
 pub use netray_common::cors::cors_layer;
+use netray_common::security_headers::{SecurityHeadersConfig, security_headers_layer};
 
 #[tokio::main]
 async fn main() {
@@ -76,9 +76,7 @@ async fn main() {
         "metrics server starting — ensure this address is NOT publicly reachable"
     );
     tokio::spawn(async move {
-        if let Err(e) =
-            netray_common::server::serve_metrics(metrics_addr, metrics_shutdown).await
-        {
+        if let Err(e) = netray_common::server::serve_metrics(metrics_addr, metrics_shutdown).await {
             tracing::error!(error = %e, "metrics server failed");
         }
     });
@@ -96,7 +94,6 @@ async fn main() {
     .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
     .await
     .expect("server error");
-
 }
 
 async fn robots_txt() -> impl axum::response::IntoResponse {

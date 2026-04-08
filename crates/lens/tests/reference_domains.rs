@@ -7,7 +7,9 @@
 /// Run with:
 ///   LENS_LIVE_TESTS=1 cargo test --test reference_domains -- --ignored --nocapture
 use lens::check::run_check;
-use lens::config::{BackendsConfig, CacheConfig, Config, RateLimitConfig, ScoringConfig, ServerConfig};
+use lens::config::{
+    BackendsConfig, CacheConfig, Config, RateLimitConfig, ScoringConfig, ServerConfig,
+};
 use lens::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -59,8 +61,10 @@ async fn google_com_scores_well() {
     let state = live_state();
     let output = run_check(&state, "google.com").await;
 
-    println!("google.com grade={} score={:.1} duration={}ms",
-        output.score.grade, output.score.overall_percentage, output.duration_ms);
+    println!(
+        "google.com grade={} score={:.1} duration={}ms",
+        output.score.grade, output.score.overall_percentage, output.duration_ms
+    );
     if let Ok(ref dns) = output.dns {
         println!("  dns headline: {}", dns.raw_headline);
     }
@@ -82,8 +86,10 @@ async fn cloudflare_com_scores_well() {
     let state = live_state();
     let output = run_check(&state, "cloudflare.com").await;
 
-    println!("cloudflare.com grade={} score={:.1} duration={}ms",
-        output.score.grade, output.score.overall_percentage, output.duration_ms);
+    println!(
+        "cloudflare.com grade={} score={:.1} duration={}ms",
+        output.score.grade, output.score.overall_percentage, output.duration_ms
+    );
 
     assert!(
         matches!(output.score.grade.as_str(), "A" | "A+"),
@@ -102,8 +108,10 @@ async fn github_com_scores_well() {
     let state = live_state();
     let output = run_check(&state, "github.com").await;
 
-    println!("github.com grade={} score={:.1} duration={}ms",
-        output.score.grade, output.score.overall_percentage, output.duration_ms);
+    println!(
+        "github.com grade={} score={:.1} duration={}ms",
+        output.score.grade, output.score.overall_percentage, output.duration_ms
+    );
 
     assert!(
         matches!(output.score.grade.as_str(), "A" | "A+"),
@@ -122,8 +130,10 @@ async fn example_com_scores_below_a() {
     let state = live_state();
     let output = run_check(&state, "example.com").await;
 
-    println!("example.com grade={} score={:.1} duration={}ms",
-        output.score.grade, output.score.overall_percentage, output.duration_ms);
+    println!(
+        "example.com grade={} score={:.1} duration={}ms",
+        output.score.grade, output.score.overall_percentage, output.duration_ms
+    );
     if output.score.hard_fail_triggered {
         println!("  hard_fail_checks: {:?}", output.score.hard_fail_checks);
     }
@@ -146,8 +156,10 @@ async fn letsencrypt_org_scores_well() {
     let state = live_state();
     let output = run_check(&state, "letsencrypt.org").await;
 
-    println!("letsencrypt.org grade={} score={:.1} duration={}ms",
-        output.score.grade, output.score.overall_percentage, output.duration_ms);
+    println!(
+        "letsencrypt.org grade={} score={:.1} duration={}ms",
+        output.score.grade, output.score.overall_percentage, output.duration_ms
+    );
 
     assert!(
         matches!(output.score.grade.as_str(), "A" | "A+"),
@@ -170,8 +182,10 @@ async fn pustina_net_baseline() {
     let state = live_state();
     let output = run_check(&state, "pustina.net").await;
 
-    println!("pustina.net grade={} score={:.1} duration={}ms",
-        output.score.grade, output.score.overall_percentage, output.duration_ms);
+    println!(
+        "pustina.net grade={} score={:.1} duration={}ms",
+        output.score.grade, output.score.overall_percentage, output.duration_ms
+    );
     if let Ok(ref dns) = output.dns {
         println!("  dns headline: {}", dns.raw_headline);
     }
@@ -187,7 +201,10 @@ async fn pustina_net_baseline() {
     );
     // All three backends must not time out simultaneously (at least one should respond).
     let all_timed_out = output.dns.is_err() && output.tls.is_err() && output.ip.is_err();
-    assert!(!all_timed_out, "pustina.net: all backends timed out or errored");
+    assert!(
+        !all_timed_out,
+        "pustina.net: all backends timed out or errored"
+    );
 }
 
 #[tokio::test]
@@ -199,8 +216,10 @@ async fn pustina_de_baseline() {
     let state = live_state();
     let output = run_check(&state, "pustina.de").await;
 
-    println!("pustina.de grade={} score={:.1} duration={}ms",
-        output.score.grade, output.score.overall_percentage, output.duration_ms);
+    println!(
+        "pustina.de grade={} score={:.1} duration={}ms",
+        output.score.grade, output.score.overall_percentage, output.duration_ms
+    );
     if let Ok(ref dns) = output.dns {
         println!("  dns headline: {}", dns.raw_headline);
     }
@@ -213,7 +232,10 @@ async fn pustina_de_baseline() {
         "pustina.de check must return a non-empty grade",
     );
     let all_timed_out = output.dns.is_err() && output.tls.is_err() && output.ip.is_err();
-    assert!(!all_timed_out, "pustina.de: all backends timed out or errored");
+    assert!(
+        !all_timed_out,
+        "pustina.de: all backends timed out or errored"
+    );
 }
 
 #[tokio::test]
@@ -225,8 +247,10 @@ async fn netray_info_baseline() {
     let state = live_state();
     let output = run_check(&state, "netray.info").await;
 
-    println!("netray.info grade={} score={:.1} duration={}ms",
-        output.score.grade, output.score.overall_percentage, output.duration_ms);
+    println!(
+        "netray.info grade={} score={:.1} duration={}ms",
+        output.score.grade, output.score.overall_percentage, output.duration_ms
+    );
     if let Ok(ref dns) = output.dns {
         println!("  dns headline: {}", dns.raw_headline);
     }
@@ -239,5 +263,8 @@ async fn netray_info_baseline() {
         "netray.info check must return a non-empty grade",
     );
     let all_timed_out = output.dns.is_err() && output.tls.is_err() && output.ip.is_err();
-    assert!(!all_timed_out, "netray.info: all backends timed out or errored");
+    assert!(
+        !all_timed_out,
+        "netray.info: all backends timed out or errored"
+    );
 }

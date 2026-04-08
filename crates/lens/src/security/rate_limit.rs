@@ -8,10 +8,10 @@
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 
-use governor::{Quota, RateLimiter};
 use governor::clock::DefaultClock;
 use governor::state::InMemoryState;
 use governor::state::NotKeyed;
+use governor::{Quota, RateLimiter};
 use netray_common::rate_limit::{KeyedLimiter, check_direct_cost, check_keyed_cost};
 
 use crate::config::RateLimitConfig;

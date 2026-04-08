@@ -102,11 +102,10 @@ pub async fn check_tls(
         });
     }
 
-    let inspect: InspectResponse =
-        resp.json().await.map_err(|e| AppError::BackendError {
-            backend: "tls",
-            message: format!("failed to decode tlsight response: {e}"),
-        })?;
+    let inspect: InspectResponse = resp.json().await.map_err(|e| AppError::BackendError {
+        backend: "tls",
+        message: format!("failed to decode tlsight response: {e}"),
+    })?;
 
     Ok(parse_inspect(inspect, domain, tls_url))
 }
@@ -115,11 +114,7 @@ pub async fn check_tls(
 // Parsing
 // ---------------------------------------------------------------------------
 
-fn parse_inspect(
-    inspect: InspectResponse,
-    domain: &str,
-    tls_url: &str,
-) -> TlsBackendResult {
+fn parse_inspect(inspect: InspectResponse, domain: &str, tls_url: &str) -> TlsBackendResult {
     let mut checks: Vec<CheckResult> = Vec::new();
 
     let quality = inspect.quality.unwrap_or_default();
@@ -135,7 +130,10 @@ fn parse_inspect(
                 "skip" => CheckVerdict::Skip,
                 _ => CheckVerdict::Skip,
             };
-            checks.push(CheckResult { name: hc.id.clone(), verdict });
+            checks.push(CheckResult {
+                name: hc.id.clone(),
+                verdict,
+            });
         }
     }
 
@@ -151,7 +149,10 @@ fn parse_inspect(
             "skip" => CheckVerdict::Skip,
             _ => CheckVerdict::Skip,
         };
-        checks.push(CheckResult { name: hc.id.clone(), verdict });
+        checks.push(CheckResult {
+            name: hc.id.clone(),
+            verdict,
+        });
     }
 
     let raw_headline = build_headline(&inspect.ports);
@@ -161,14 +162,16 @@ fn parse_inspect(
         percent_encode(domain),
     );
 
-    TlsBackendResult { checks, raw_headline, detail_url }
+    TlsBackendResult {
+        checks,
+        raw_headline,
+        detail_url,
+    }
 }
 
 /// Build a human-readable headline from the first port's first IP result.
 fn build_headline(ports: &[PortResult]) -> String {
-    let first_ip = ports
-        .first()
-        .and_then(|p| p.ips.first());
+    let first_ip = ports.first().and_then(|p| p.ips.first());
 
     let version = first_ip
         .and_then(|ip| ip.tls.as_ref())

@@ -122,7 +122,10 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limited_is_429() {
-        let r = AppError::RateLimited { retry_after_secs: 10 }.into_response();
+        let r = AppError::RateLimited {
+            retry_after_secs: 10,
+        }
+        .into_response();
         assert_eq!(r.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
@@ -154,7 +157,10 @@ mod tests {
     async fn body_has_error_code_and_message_fields() {
         let body = body_json(AppError::DomainInvalid("bad.domain".into())).await;
         assert!(body["error"]["code"].is_string(), "missing code field");
-        assert!(body["error"]["message"].is_string(), "missing message field");
+        assert!(
+            body["error"]["message"].is_string(),
+            "missing message field"
+        );
         assert_eq!(
             body.as_object().unwrap().len(),
             1,
@@ -176,7 +182,10 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limited_error_code() {
-        let body = body_json(AppError::RateLimited { retry_after_secs: 30 }).await;
+        let body = body_json(AppError::RateLimited {
+            retry_after_secs: 30,
+        })
+        .await;
         assert_eq!(body["error"]["code"], "RATE_LIMITED");
     }
 
@@ -189,10 +198,7 @@ mod tests {
         .await;
         assert_eq!(body["error"]["code"], "BACKEND_ERROR");
         assert!(
-            body["error"]["message"]
-                .as_str()
-                .unwrap()
-                .contains("tls"),
+            body["error"]["message"].as_str().unwrap().contains("tls"),
             "message should contain the backend name"
         );
     }
@@ -213,8 +219,10 @@ mod tests {
 
     #[tokio::test]
     async fn rate_limited_includes_retry_after_header() {
-        let (status, headers, _body) =
-            into_parts(AppError::RateLimited { retry_after_secs: 42 }).await;
+        let (status, headers, _body) = into_parts(AppError::RateLimited {
+            retry_after_secs: 42,
+        })
+        .await;
         assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
         let retry_after = headers
             .get(axum::http::header::RETRY_AFTER)

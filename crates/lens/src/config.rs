@@ -205,10 +205,19 @@ impl Config {
         }
 
         // Reject zero values — would disable protections or cause division-by-zero.
-        reject_zero("backends.backend_timeout_secs", self.backends.backend_timeout_secs)?;
-        reject_zero("rate_limit.per_ip_per_minute", self.rate_limit.per_ip_per_minute)?;
+        reject_zero(
+            "backends.backend_timeout_secs",
+            self.backends.backend_timeout_secs,
+        )?;
+        reject_zero(
+            "rate_limit.per_ip_per_minute",
+            self.rate_limit.per_ip_per_minute,
+        )?;
         reject_zero("rate_limit.per_ip_burst", self.rate_limit.per_ip_burst)?;
-        reject_zero("rate_limit.global_per_minute", self.rate_limit.global_per_minute)?;
+        reject_zero(
+            "rate_limit.global_per_minute",
+            self.rate_limit.global_per_minute,
+        )?;
         reject_zero("rate_limit.global_burst", self.rate_limit.global_burst)?;
 
         Ok(())
@@ -292,7 +301,10 @@ mod tests {
         let mut cfg = valid_config();
         cfg.backends.backend_timeout_secs = HARD_CAP_BACKEND_TIMEOUT_SECS + 99;
         cfg.validate().unwrap();
-        assert_eq!(cfg.backends.backend_timeout_secs, HARD_CAP_BACKEND_TIMEOUT_SECS);
+        assert_eq!(
+            cfg.backends.backend_timeout_secs,
+            HARD_CAP_BACKEND_TIMEOUT_SECS
+        );
     }
 
     #[test]
@@ -300,7 +312,10 @@ mod tests {
         let mut cfg = valid_config();
         cfg.backends.backend_timeout_secs = HARD_CAP_BACKEND_TIMEOUT_SECS;
         cfg.validate().unwrap();
-        assert_eq!(cfg.backends.backend_timeout_secs, HARD_CAP_BACKEND_TIMEOUT_SECS);
+        assert_eq!(
+            cfg.backends.backend_timeout_secs,
+            HARD_CAP_BACKEND_TIMEOUT_SECS
+        );
     }
 
     // --- Zero-value rejection ---
