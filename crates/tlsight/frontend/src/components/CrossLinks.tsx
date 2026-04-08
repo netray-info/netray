@@ -17,9 +17,7 @@ export function CrossLinks(props: CrossLinksProps) {
   return (
     <Show when={props.hostname}>
       <div class="cross-links">
-        <CrossLink href={href()}>
-          Check DNS for {props.hostname} →
-        </CrossLink>
+        <CrossLink href={href()} label={`Check DNS for ${props.hostname}`} />
       </div>
     </Show>
   );
