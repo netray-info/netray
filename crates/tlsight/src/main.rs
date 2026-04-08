@@ -41,7 +41,17 @@ async fn main() {
         "info,tlsight=debug,hyper=warn,h2=warn",
     );
 
-    tracing::info!(bind = %config.server.bind, "starting tlsight");
+    tracing::info!(
+        bind = %config.server.bind,
+        per_ip_per_minute = config.limits.per_ip_per_minute,
+        per_ip_burst = config.limits.per_ip_burst,
+        per_target_per_minute = config.limits.per_target_per_minute,
+        per_target_burst = config.limits.per_target_burst,
+        trusted_proxy_count = config.server.trusted_proxies.len(),
+        check_ct = config.validation.check_ct,
+        quality_enabled = config.quality.enabled,
+        "starting tlsight"
+    );
 
     if config.limits.allow_blocked_targets {
         tracing::warn!(
@@ -92,7 +102,17 @@ async fn main() {
         .layer(axum::middleware::from_fn(security::security_headers))
         .layer(security::cors_layer())
         .layer(CompressionLayer::new())
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
+                tracing::info_span!(
+                    "request",
+                    method = %req.method(),
+                    uri = %req.uri(),
+                    request_id = tracing::field::Empty,
+                    client_ip = tracing::field::Empty,
+                )
+            }),
+        )
         .layer(RequestBodyLimitLayer::new(4 * 1024))
         .layer(tower::limit::ConcurrencyLimitLayer::new(
             config.limits.max_concurrent_connections,

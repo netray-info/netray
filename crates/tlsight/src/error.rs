@@ -117,6 +117,18 @@ impl IntoResponse for AppError {
             StatusCode::GATEWAY_TIMEOUT => {
                 tracing::warn!(error = %self, "request timeout");
             }
+            StatusCode::TOO_MANY_REQUESTS => {
+                tracing::warn!(error = %self, "rate limited");
+            }
+            StatusCode::FORBIDDEN => {
+                tracing::warn!(error = %self, "blocked target");
+            }
+            StatusCode::INTERNAL_SERVER_ERROR => {
+                tracing::error!(error = %self, "internal server error");
+            }
+            s if s.is_client_error() => {
+                tracing::debug!(error = %self, "client error");
+            }
             _ => {}
         }
 

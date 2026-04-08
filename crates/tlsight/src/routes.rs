@@ -373,7 +373,13 @@ async fn inspect_handler(
 ) -> Result<Response, AppError> {
     let client_ip = state.ip_extractor.extract(&headers, addr);
     let config = state.config.load();
-    let parsed = input::parse_input(&query.h, config.limits.max_ports)?;
+    let parsed = match input::parse_input(&query.h, config.limits.max_ports) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::debug!(input = %query.h, error = %e, "input validation failed");
+            return Err(e);
+        }
+    };
     do_inspect(state, client_ip, &headers, parsed, request_id.0).await
 }
 
@@ -403,6 +409,7 @@ async fn inspect_post_handler(
     if let Some(ref qs) = raw_query.0
         && qs.contains("h=")
     {
+        tracing::debug!(hostname = %body.hostname, "ambiguous input: POST with query string");
         return Err(AppError::AmbiguousInput(
             "POST body and ?h= query parameter cannot be used together".to_string(),
         ));
@@ -412,11 +419,13 @@ async fn inspect_post_handler(
 
     // Validate ports
     if body.ports.is_empty() {
+        tracing::debug!(hostname = %body.hostname, "input validation failed: empty ports");
         return Err(AppError::InvalidPort(
             "ports array must not be empty".to_string(),
         ));
     }
     if body.ports.len() > config.limits.max_ports {
+        tracing::debug!(hostname = %body.hostname, port_count = body.ports.len(), "input validation failed: too many ports");
         return Err(AppError::TooManyPorts {
             requested: body.ports.len(),
             max: config.limits.max_ports,
@@ -424,12 +433,19 @@ async fn inspect_post_handler(
     }
     for &p in &body.ports {
         if p == 0 {
+            tracing::debug!(hostname = %body.hostname, "input validation failed: port 0");
             return Err(AppError::InvalidPort("port must be 1-65535".to_string()));
         }
     }
 
     // Validate hostname through the same path as GET
-    let target_parsed = input::parse_input(&body.hostname, config.limits.max_ports)?;
+    let target_parsed = match input::parse_input(&body.hostname, config.limits.max_ports) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::debug!(input = %body.hostname, error = %e, "input validation failed");
+            return Err(e);
+        }
+    };
     let parsed = input::ParsedInput {
         target: target_parsed.target,
         ports: body.ports,
@@ -449,7 +465,9 @@ async fn do_inspect(
     let request_start = Instant::now();
     let config = state.config.load();
 
-    tracing::Span::current().record("request_id", &request_id);
+    let span = tracing::Span::current();
+    span.record("request_id", &request_id);
+    span.record("client_ip", tracing::field::display(&client_ip));
     metrics::counter!("tlsight_inspections_total").increment(1);
 
     let hostname_str = match &parsed.target {
@@ -499,6 +517,11 @@ async fn do_inspect(
         .collect();
 
     if allowed_ips.is_empty() {
+        tracing::warn!(
+            client_ip = %client_ip,
+            target = %hostname_str,
+            "blocked target: all resolved IPs in blocked ranges"
+        );
         return Err(AppError::BlockedTarget(format!(
             "all resolved IPs for {hostname_str} are in blocked ranges"
         )));
@@ -520,6 +543,11 @@ async fn do_inspect(
 
         if selected.is_empty() {
             // Even 1 IP doesn't fit — hard reject
+            tracing::warn!(
+                client_ip = %client_ip,
+                scope = "per_ip",
+                "rate limited"
+            );
             return Err(AppError::RateLimited {
                 retry_after_secs: 60,
                 scope: "per_ip",
@@ -527,9 +555,19 @@ async fn do_inspect(
         }
 
         let reduced_cost = parsed.ports.len() as u32 * selected.len() as u32;
-        state
+        if let Err(e) = state
             .rate_limiter
-            .check_cost(client_ip, &hostname_str, reduced_cost)?;
+            .check_cost(client_ip, &hostname_str, reduced_cost)
+        {
+            if let AppError::RateLimited { scope, .. } = &e {
+                tracing::warn!(
+                    client_ip = %client_ip,
+                    scope = *scope,
+                    "rate limited"
+                );
+            }
+            return Err(e);
+        }
 
         if !skipped.is_empty() {
             warnings.push(format!(
