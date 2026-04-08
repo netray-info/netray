@@ -194,7 +194,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
 - **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens. Compare endpoint cost = `record_types * servers * 4` (4 transports). Auth compare cost = `record_types * servers + 16` (recursive + NS discovery + auth queries).
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
-- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps are upper bounds that config cannot exceed. Notable options: `PRISM_TELEMETRY__LOG_FORMAT=json` switches to JSON log lines; `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs and CIDR ranges (e.g. `["10.0.0.1", "172.16.0.0/12"]`); invalid entries are skipped with a warning at startup.
+- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps are upper bounds that config cannot exceed. Notable options: `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs and CIDR ranges (e.g. `["10.0.0.1", "172.16.0.0/12"]`); invalid entries are skipped with a warning at startup.
 - **Routing flags**: `+check`, `+trace`, `+compare`, and `+auth` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
 - **Query flags**: `+norecurse` sets RD=0 (non-recursive query, stored as `recursive: false` on `ParsedQuery`). `+short` suppresses TTL display in output.
 
@@ -216,6 +216,12 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - `solid-js` — Reactive UI (~7KB)
 - `@codemirror/*` — Editor core, state, autocomplete, language
 - `vite` + `vite-plugin-solid` — Build tooling
+
+## Logging & Telemetry
+
+Rules: [`specs/logging-rules.md`](../specs/logging-rules.md) in the netray.info meta repo. Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
+
+Default filter: `info,prism=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `PRISM_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "prism"`.
 
 ## CI/CD
 
