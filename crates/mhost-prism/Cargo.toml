@@ -22,7 +22,7 @@ futures = "0.3"
 
 # DNS (used by the trace delegation walk)
 hickory-proto = { version = "0.25", features = ["dnssec-ring"] }
-rand = "0.9"
+rand = "0.10"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
