@@ -98,16 +98,16 @@ async fn collect_sse(resp: reqwest::Response) -> Result<Vec<Value>, String> {
 
                     if line.is_empty() {
                         // Blank line = dispatch current event.
-                        if !cur_data.is_empty() {
-                            if let Ok(data) = serde_json::from_str::<Value>(&cur_data) {
-                                let done = cur_type == "done";
-                                events.push(serde_json::json!({
-                                    "type": cur_type,
-                                    "data": data,
-                                }));
-                                if done {
-                                    return Ok(events);
-                                }
+                        if !cur_data.is_empty()
+                            && let Ok(data) = serde_json::from_str::<Value>(&cur_data)
+                        {
+                            let done = cur_type == "done";
+                            events.push(serde_json::json!({
+                                "type": cur_type,
+                                "data": data,
+                            }));
+                            if done {
+                                return Ok(events);
                             }
                         }
                         cur_type.clear();
@@ -148,19 +148,33 @@ fn parse_events(
                 }
             }
             "lint" => {
-                if let Some(data) = event.get("data") {
-                    if let Some(check) = parse_lint_event(data) {
-                        checks.push(check);
-                    }
+                if let Some(data) = event.get("data")
+                    && let Some(check) = parse_lint_event(data)
+                {
+                    checks.push(check);
                 }
             }
             _ => {}
         }
     }
 
+    // If DNSKEY algorithm check is NotFound (no DNSKEY records → DNSSEC not deployed),
+    // dnskey_algorithm and dnssec_rollover are N/A — skip them rather than penalising.
+    let dnssec_absent = checks
+        .iter()
+        .any(|c| c.name == "dnskey_algorithm" && c.verdict == CheckVerdict::NotFound);
+    if dnssec_absent {
+        for check in &mut checks {
+            if check.name == "dnskey_algorithm" || check.name == "dnssec_rollover" {
+                check.verdict = CheckVerdict::Skip;
+                check.messages.clear();
+            }
+        }
+    }
+
     let raw_headline = build_headline(&checks);
     let detail_url = format!(
-        "{}/?q={}+check",
+        "{}/?q={}+%2Bcheck",
         dns_url.trim_end_matches('/'),
         urlencoding::encode(domain),
     );
@@ -219,16 +233,19 @@ fn collect_ips_from_batch(
                 .and_then(|d| d.get(record_type))
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            if let Ok(ip) = ip_str.parse::<IpAddr>() {
-                if seen.insert(ip) {
-                    resolved_ips.push(ip);
-                }
+            if let Ok(ip) = ip_str.parse::<IpAddr>()
+                && seen.insert(ip)
+            {
+                resolved_ips.push(ip);
             }
         }
     }
 }
 
 /// Parse a lint event and return a single CheckResult representing the worst verdict.
+///
+/// All non-passing messages (warn, fail, not-found) are collected and attached to
+/// the result so the frontend can show the user why points were deducted.
 ///
 /// Lint event data shape:
 /// ```json
@@ -239,22 +256,31 @@ fn parse_lint_event(data: &Value) -> Option<CheckResult> {
     let results = data.get("results").and_then(|v| v.as_array())?;
 
     let mut worst = CheckVerdict::Pass;
+    let mut messages: Vec<String> = Vec::new();
 
     for result in results {
-        let (verdict, _msg) = classify_lint_result(result);
+        let (verdict, msg) = classify_lint_result(result);
         if verdict_rank(&verdict) > verdict_rank(&worst) {
-            worst = verdict;
+            worst = verdict.clone();
+        }
+        match verdict {
+            CheckVerdict::Warn | CheckVerdict::Fail | CheckVerdict::NotFound => {
+                messages.push(msg.unwrap_or_else(|| "Not found".to_string()));
+            }
+            _ => {}
         }
     }
 
-    // If no results, treat as not found.
+    // If no results at all, treat as not found.
     if results.is_empty() {
         worst = CheckVerdict::NotFound;
+        messages.push("Not found".to_string());
     }
 
     Some(CheckResult {
         name: category.to_string(),
         verdict: worst,
+        messages,
     })
 }
 

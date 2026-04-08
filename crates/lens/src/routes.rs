@@ -35,6 +35,8 @@ pub struct CheckItem {
     pub guide_url: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub weight: Option<u32>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub messages: Vec<String>,
 }
 
 /// Return the guide URL for a check name if the verdict is fail or warn.
@@ -354,12 +356,11 @@ async fn run_check_handler(state: AppState, client_ip: IpAddr, domain_raw: Strin
 
     // 3. Cache lookup.
     let key = cache_key(&domain);
-    if let Some(cache) = &state.cache {
-        if let Some(cached) = cache.get(&key).await {
-            if is_fresh(&cached, state.config.cache.ttl_seconds) {
-                return sse_response_from_cached(domain, &cached, true, &state.scoring_profile);
-            }
-        }
+    if let Some(cache) = &state.cache
+        && let Some(cached) = cache.get(&key).await
+        && is_fresh(&cached, state.config.cache.ttl_seconds)
+    {
+        return sse_response_from_cached(domain, &cached, true, &state.scoring_profile);
     }
 
     // 4. Run check.
@@ -395,7 +396,7 @@ fn verdict_str(verdict: &CheckVerdict) -> &'static str {
         CheckVerdict::Warn => "warn",
         CheckVerdict::Fail => "fail",
         CheckVerdict::NotFound => "fail",
-        CheckVerdict::Skip => "pass",
+        CheckVerdict::Skip => "skip",
     }
 }
 
@@ -437,6 +438,7 @@ fn dns_event_from(
                         name: c.name.clone(),
                         verdict,
                         weight: weights.get(&c.name).copied(),
+                        messages: c.messages.clone(),
                     }
                 })
                 .collect();
@@ -478,6 +480,7 @@ fn tls_event_from(
                         name: c.name.clone(),
                         verdict,
                         weight: weights.get(&c.name).copied(),
+                        messages: c.messages.clone(),
                     }
                 })
                 .collect();
@@ -519,6 +522,7 @@ fn ip_event_from(
                         name: c.name.clone(),
                         verdict,
                         weight: weights.get(&c.name).copied(),
+                        messages: c.messages.clone(),
                     }
                 })
                 .collect();
