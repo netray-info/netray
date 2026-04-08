@@ -1,6 +1,6 @@
 [server]
 bind = "0.0.0.0:8082"
-metrics_bind = "127.0.0.1:8090"
+metrics_bind = "127.0.0.1:9090"
 # trusted_proxies = ["10.0.0.0/8"]
 
 [backends]
@@ -21,3 +21,22 @@ global_burst = 20
 
 [scoring]
 # profile_path = "profiles/default.toml"   # override built-in default profile
+
+[telemetry]
+# Log output format.
+#   "text" -- human-readable, colour-coded (default; best for terminals)
+#   "json" -- structured JSON lines (best for log aggregators: Loki, Dozzle, etc.)
+# Also configurable via: LENS_TELEMETRY__LOG_FORMAT=json
+#log_format = "text"
+
+# Enable OpenTelemetry distributed tracing (OTLP/HTTP export).
+#enabled = false
+
+# OTLP HTTP endpoint to export spans to.
+#otlp_endpoint = "http://localhost:4318"
+
+# Service name reported in spans and logs.
+#service_name = "lens"
+
+# Trace sampling rate (0.0 = off, 1.0 = 100%).
+#sample_rate = 1.0

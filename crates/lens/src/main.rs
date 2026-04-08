@@ -24,13 +24,11 @@ async fn main() {
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
-    // 2. Init tracing.
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "lens=info,tower_http=info".parse().unwrap()),
-        )
-        .init();
+    // 2. Init tracing (with optional OpenTelemetry layer).
+    netray_common::telemetry::init_subscriber(
+        &config.telemetry,
+        "info,lens=debug,hyper=warn,h2=warn",
+    );
 
     tracing::info!(
         bind = %config.server.bind,
@@ -94,6 +92,9 @@ async fn main() {
     .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
     .await
     .expect("server error");
+
+    // Flush pending OTel spans on shutdown.
+    netray_common::telemetry::shutdown();
 }
 
 async fn robots_txt() -> impl axum::response::IntoResponse {
