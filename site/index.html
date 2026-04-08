@@ -15,8 +15,7 @@
   <meta name="twitter:description" content="Four open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, and TLS analysis." />
   <meta name="theme-color" content="#07090f" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#f6f8fb" media="(prefers-color-scheme: light)" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -129,7 +128,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
       line-height: 1.65;
       min-height: 100vh;
       transition: background .25s, color .25s;
@@ -143,7 +142,6 @@
       background-size: 28px 28px;
       pointer-events: none;
       z-index: 0;
-      transition: background-image .25s;
     }
 
     body::after {
@@ -209,7 +207,7 @@
       border-radius: 999px;
       padding: 5px 16px;
       font-size: 11.5px;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       color: var(--muted);
       letter-spacing: .04em;
       margin-bottom: 40px;
@@ -264,7 +262,7 @@
       gap: 7px;
       padding: 8px 18px;
       border-radius: 999px;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: 12.5px;
       font-weight: 500;
       text-decoration: none;
@@ -274,9 +272,9 @@
 
     .chip:hover { transform: translateY(-2px); }
 
-    .chip--ip  { color: var(--ip);  border-color: rgba(var(--ip-rgb, 217,119,6),.3);  background: var(--ip-glow); }
-    .chip--dns { color: var(--dns); border-color: rgba(var(--dns-rgb,124,58,237),.3); background: var(--dns-glow); }
-    .chip--tls { color: var(--tls); border-color: rgba(var(--tls-rgb, 8,145,178),.3); background: var(--tls-glow); }
+    .chip--ip  { color: var(--ip);  border-color: color-mix(in srgb, var(--ip)  30%, transparent); background: var(--ip-glow); }
+    .chip--dns { color: var(--dns); border-color: color-mix(in srgb, var(--dns) 30%, transparent); background: var(--dns-glow); }
+    .chip--tls { color: var(--tls); border-color: color-mix(in srgb, var(--tls) 30%, transparent); background: var(--tls-glow); }
 
     .chip--ip:hover  { box-shadow: 0 6px 20px var(--ip-glow); }
     .chip--dns:hover { box-shadow: 0 6px 20px var(--dns-glow); }
@@ -348,7 +346,7 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: 10.5px;
       font-weight: 500;
       letter-spacing: .02em;
@@ -365,7 +363,7 @@
     .card--lens .card-github { color: var(--lens); }
 
     .card-badge {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: 10.5px;
       font-weight: 500;
       letter-spacing: .08em;
@@ -385,7 +383,7 @@
     }
 
     .card-tag {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: 11px;
       font-weight: 500;
       margin-bottom: 5px;
@@ -420,7 +418,7 @@
     }
 
     .feat-arrow {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: .8rem;
       flex-shrink: 0;
     }
@@ -458,7 +456,7 @@
       border-top: 1px solid var(--border);
       padding: 28px 24px;
       text-align: center;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: 11px;
       color: var(--muted);
       letter-spacing: .04em;
@@ -489,7 +487,7 @@
       border: 1px solid var(--border);
       background: var(--surface2);
       color: var(--text);
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: .8rem;
       outline: none;
       transition: border-color .15s;
@@ -507,11 +505,12 @@
       border-radius: 7px;
       border: 1px solid;
       background: transparent;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: .78rem;
       font-weight: 500;
       cursor: pointer;
       white-space: nowrap;
+      text-decoration: none;
       transition: background .15s;
     }
 
@@ -595,7 +594,7 @@
     .guide-card--all:hover { border-color: var(--muted); box-shadow: 0 8px 28px var(--shadow); }
 
     .guide-card__tag {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: 10px;
       font-weight: 600;
       letter-spacing: .08em;
@@ -626,7 +625,7 @@
     }
 
     .guide-card__cta {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: .75rem;
       color: var(--muted);
       margin-top: 4px;
@@ -637,7 +636,7 @@
     }
 
     .learn-all a {
-      font-family: 'JetBrains Mono', monospace;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       font-size: .82rem;
       color: var(--muted);
       text-decoration: none;
@@ -650,7 +649,7 @@
     .learn-all a:hover { color: var(--text); border-color: var(--muted); }
 
     /* ── Lens chip ─────────────────────────────── */
-    .chip--lens { color: var(--lens); border-color: rgba(34,197,94,.3); background: var(--lens-glow); }
+    .chip--lens { color: var(--lens); border-color: color-mix(in srgb, var(--lens) 30%, transparent); background: var(--lens-glow); }
     .chip--lens:hover { box-shadow: 0 6px 20px var(--lens-glow); }
 
     /* ── Lens card ─────────────────────────────── */
@@ -772,9 +771,9 @@
         <li><span class="feat-arrow">→</span> JSON, YAML, TOML, CSV — plain text for scripts</li>
         <li><span class="feat-arrow">→</span> Batch lookups and field filtering for automation</li>
       </ul>
-      <form class="card-form" action="https://ip.netray.info/" method="get">
-        <button class="card-form-btn" type="submit">Show my IP →</button>
-      </form>
+      <div class="card-form">
+        <a class="card-form-btn" href="https://ip.netray.info/">Show my IP →</a>
+      </div>
       <a href="https://ip.netray.info" class="card-cta">Open tool ↗</a>
     </div>
 
@@ -798,7 +797,7 @@
         <li><span class="feat-arrow">→</span> Streaming results — no waiting for all resolvers</li>
       </ul>
       <form class="card-form" action="https://dns.netray.info/" method="get">
-        <input class="card-form-input" type="text" name="q" placeholder="example.com" autocomplete="off" spellcheck="false" />
+        <input class="card-form-input" type="text" name="q" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Domain to query" />
         <button class="card-form-btn" type="submit">Check DNS →</button>
       </form>
       <a href="https://dns.netray.info" class="card-cta">Open tool ↗</a>
@@ -824,7 +823,7 @@
         <li><span class="feat-arrow">→</span> Intentionally inspects broken &amp; expired certs</li>
       </ul>
       <form class="card-form" action="https://tls.netray.info/" method="get">
-        <input class="card-form-input" type="text" name="h" placeholder="example.com" autocomplete="off" spellcheck="false" />
+        <input class="card-form-input" type="text" name="h" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Host to inspect" />
         <button class="card-form-btn" type="submit">Inspect TLS →</button>
       </form>
       <a href="https://tls.netray.info" class="card-cta">Open tool ↗</a>
