@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.2] - 2026-04-09
+
+### Fixed
+- Use build_error_response() to eliminate double-logging (4554947)
+- Add max_concurrent to startup inventory log (9252fb6)
+- Log HTTP request completion at INFO level, read request_id from header (76eb907)
+
 ## [0.10.1] - 2026-04-08
 
 ### Added
