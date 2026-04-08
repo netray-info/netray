@@ -391,7 +391,7 @@ export default function App() {
                   }}
                 </Show>
 
-                <CrossLinks hostname={r.hostname} />
+                <CrossLinks hostname={r.hostname} dnsUrl={dnsUrl()} />
               </div>
             );
           }}

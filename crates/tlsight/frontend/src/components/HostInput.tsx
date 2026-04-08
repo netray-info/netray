@@ -138,7 +138,7 @@ export default function HostInput(props: Props) {
             >&times;</button>
           </Show>
         </div>
-        <button class="host-input__submit" type="submit" disabled={props.loading || !value().trim()}>
+        <button class="btn-primary host-input__submit" type="submit" disabled={props.loading || !value().trim()}>
           {props.loading ? 'Inspecting...' : 'Inspect'}
         </button>
       </form>

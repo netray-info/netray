@@ -1,20 +1,25 @@
 import { Show } from 'solid-js';
+import CrossLink from '@netray-info/common-frontend/components/CrossLink';
 
 interface CrossLinksProps {
   hostname?: string;
+  dnsUrl?: string | null;
 }
 
 export function CrossLinks(props: CrossLinksProps) {
-  const dnsUrl = () => props.hostname
-    ? `https://dns.netray.info/?q=${encodeURIComponent(props.hostname)}`
-    : 'https://dns.netray.info/';
+  const href = () => {
+    const base = props.dnsUrl ?? 'https://dns.netray.info/';
+    return props.hostname
+      ? `${base}?q=${encodeURIComponent(props.hostname)}`
+      : base;
+  };
 
   return (
     <Show when={props.hostname}>
       <div class="cross-links">
-        <a href={dnsUrl()} class="cross-link" target="_self">
+        <CrossLink href={href()}>
           Check DNS for {props.hostname} →
-        </a>
+        </CrossLink>
       </div>
     </Show>
   );
