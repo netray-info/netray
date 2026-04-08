@@ -1,27 +1,26 @@
-# ── Build stage ─────────────────────────────────────────────────────────────
-FROM rust:alpine AS builder
+FROM node:22-alpine AS frontend
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
+RUN --mount=type=secret,id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN npm ci
+COPY frontend/ .
+RUN npm run build
 
-RUN apk add --no-cache musl-dev nodejs npm
-
+FROM clux/muslrust:stable AS builder
 WORKDIR /build
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY src src/
+COPY profiles/ profiles/
+COPY --from=frontend /build/frontend/dist frontend/dist/
+RUN cargo build --release --bins && cp $(find /build -xdev -name lens) /
 
-# Build frontend first (embedded into binary via rust-embed)
-RUN cd frontend && npm ci && npm run build
-
-# Build Rust binary (release, static musl)
-ENV RUSTFLAGS="-C target-feature=+crt-static"
-RUN cargo build --release --target x86_64-unknown-linux-musl 2>/dev/null || \
-    cargo build --release
-
-# ── Runtime stage ───────────────────────────────────────────────────────────
-FROM alpine:3
-
-RUN addgroup -S lens && adduser -S lens -G lens
-WORKDIR /app
-COPY --from=builder /build/target/*/release/lens /app/lens
-COPY --from=builder /build/profiles/ /app/profiles/
-
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates wget \
+ && addgroup -S lens && adduser -S lens -G lens
+WORKDIR /lens
+COPY lens.example.toml lens.toml
+ENV LENS_SERVER__BIND=0.0.0.0:8082
+COPY --from=builder /lens .
+RUN chown -R lens:lens /lens
 USER lens
 EXPOSE 8082 8090
-ENTRYPOINT ["/app/lens"]
+CMD ["./lens", "lens.toml"]
