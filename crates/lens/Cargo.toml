@@ -1,6 +1,6 @@
 [package]
 name = "lens"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "Unified domain health check — netray.info"
@@ -36,7 +36,6 @@ thiserror = "2"
 
 # Logging / tracing
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Metrics
 metrics = "0.24"
