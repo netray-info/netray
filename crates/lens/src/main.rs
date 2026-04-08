@@ -6,8 +6,7 @@ use std::net::SocketAddr;
 
 use tower_http::compression::CompressionLayer;
 use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::trace::{DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tower_http::trace::TraceLayer;
 
 use axum::Router;
 use axum::routing::get;
@@ -74,7 +73,18 @@ async fn main() {
                         client_ip = tracing::field::Empty,
                     )
                 })
-                .on_response(DefaultOnResponse::new().level(Level::DEBUG)),
+                .on_response(
+                    |response: &axum::http::Response<_>,
+                     latency: std::time::Duration,
+                     span: &tracing::Span| {
+                        tracing::info!(
+                            parent: span,
+                            status = response.status().as_u16(),
+                            ms = latency.as_millis(),
+                            "",
+                        );
+                    },
+                ),
         )
         .layer(axum::middleware::from_fn(
             netray_common::middleware::request_id,
