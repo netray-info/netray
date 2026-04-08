@@ -12,9 +12,9 @@
     "@netray-info/common-frontend": "^0.3.0"
   },
   "devDependencies": {
-    "vite": "^7.3.1",
+    "vite": "^8.0.0",
     "vite-plugin-solid": "^2.11.0",
-    "typescript": "^5.7.0",
+    "typescript": "^6.0.0",
     "vitest": "^4.0.18",
     "@solidjs/testing-library": "^0.8.0"
   }

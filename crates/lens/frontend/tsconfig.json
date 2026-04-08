@@ -8,6 +8,8 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
+    "types": ["vite/client"],
+    "skipLibCheck": true,
     "paths": {}
   },
   "include": ["src"]
