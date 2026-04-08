@@ -135,6 +135,18 @@ example.com.  300  IN  CAA  0 iodef "mailto:security@example.com"</code></pre>
     <h3>HTTPS / SVCB (service binding)</h3>
     <p>Newer record types (RFC 9460) that allow a domain to advertise HTTPS capabilities, supported protocols (HTTP/2, HTTP/3), and alternative endpoints in a single DNS lookup. These records can eliminate the need for separate A/AAAA lookups and HTTP redirects from port 80 to 443.</p>
 
+    <h2>TTL consistency</h2>
+    <p>The Time-to-Live (TTL) value on a DNS record tells resolvers how long to cache the response. When different record types for the same domain have wildly different TTLs, it creates operational problems that are hard to diagnose.</p>
+    <p>Consider a domain with A records at TTL 300 (5 minutes) and MX records at TTL 86400 (1 day). If you migrate to a new server and update both records simultaneously, the A record propagates in minutes while the MX record takes up to a day. During that window, web traffic reaches the new server but email still routes to the old one. If the old server is decommissioned, email bounces for up to 24 hours.</p>
+    <p>Common TTL consistency issues:</p>
+    <ul>
+      <li><strong>Mixed TTLs on related records</strong> -- A and AAAA records for the same hostname should have the same TTL. If A is 300 and AAAA is 3600, a DNS change propagates at different speeds for IPv4 and IPv6 clients.</li>
+      <li><strong>High TTL on records that change</strong> -- MX, A, and CNAME records involved in migrations should have their TTLs lowered well before the change (at least one full TTL cycle before). A 86400 TTL means you need to lower it at least 24 hours before the actual migration.</li>
+      <li><strong>Very low TTLs without reason</strong> -- TTLs under 60 seconds increase DNS query volume significantly. This is appropriate during active migrations or for DNS-based failover, but should not be the permanent state. Low TTLs increase latency (more cache misses) and load on authoritative servers.</li>
+      <li><strong>Inconsistent TTLs in an RRset</strong> -- all records of the same type at the same name must have the same TTL (RFC 2181 Section 5.2). A records at the same name with TTLs of 300 and 3600 violate the standard and cause unpredictable resolver behavior.</li>
+    </ul>
+    <p>A reasonable default is 300-3600 seconds for records that may change (A, AAAA, MX, CNAME) and 86400 for stable records (NS, SOA, DNSKEY). The key is consistency within related record groups and intentional lowering before planned changes.</p>
+
     <h2>Common mistakes</h2>
     <ul>
       <li><strong>CNAME at the apex</strong>: You cannot put a CNAME at the zone root because it conflicts with the required SOA and NS records. Use an A/AAAA record, or if your DNS provider supports it, a provider-specific alias record (ALIAS, ANAME).</li>

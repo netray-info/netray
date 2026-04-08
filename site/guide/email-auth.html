@@ -104,6 +104,36 @@
     </ul>
     <p>The netray.info DNS inspector's <code>+check</code> mode runs all of these lookups at once and applies lint rules to catch common misconfigurations.</p>
 
+    <h2>BIMI: brand indicators in email</h2>
+    <p>Brand Indicators for Message Identification (BIMI) allows organizations to display their logo next to authenticated emails in supporting email clients (Gmail, Apple Mail, Yahoo Mail, and others). BIMI builds on top of DMARC: only messages that pass DMARC authentication with a policy of <code>p=quarantine</code> or <code>p=reject</code> are eligible to display the logo.</p>
+    <p>BIMI is published as a TXT record at <code>default._bimi.&lt;domain&gt;</code>:</p>
+    <pre><code>default._bimi.example.com.  IN  TXT  "v=BIMI1; l=https://example.com/logo.svg; a=https://example.com/vmc.pem"</code></pre>
+    <p>The two parameters:</p>
+    <ul>
+      <li><strong><code>l=</code></strong> (location) -- a URL pointing to the brand's logo in SVG Tiny PS format (a restricted SVG profile). The logo must be square, served over HTTPS, and publicly accessible. Regular SVG files must be converted to SVG Tiny PS to comply with the specification.</li>
+      <li><strong><code>a=</code></strong> (authority) -- an optional URL pointing to a Verified Mark Certificate (VMC), issued by a CA (DigiCert or Entrust) that certifies trademark ownership of the logo. Gmail requires a VMC for logo display; other providers may show the logo without one.</li>
+    </ul>
+    <p>BIMI is not a security mechanism -- it is a brand visibility feature that rewards domains with strong email authentication. The prerequisites (DMARC at enforcement, DKIM signing, SPF alignment) are the actual security measures. BIMI provides a visible incentive for organizations to deploy them.</p>
+
+    <h2>SMTP TLS Reporting (TLSRPT)</h2>
+    <p>SMTP TLS Reporting (RFC 8460) provides visibility into TLS failures during email delivery. When a sending mail server fails to establish a TLS connection to your MX servers -- whether due to an expired certificate, a misconfigured cipher suite, or a MTA-STS policy violation -- the sender generates a report and delivers it to the address specified in your TLSRPT record.</p>
+    <p>TLSRPT is published as a TXT record at <code>_smtp._tls.&lt;domain&gt;</code>:</p>
+    <pre><code>_smtp._tls.example.com.  IN  TXT  "v=TLSRPTv1; rua=mailto:tlsrpt@example.com"</code></pre>
+    <p>The <code>rua</code> tag specifies where aggregate reports are sent. Reports are JSON documents (often gzip-compressed) that include:</p>
+    <ul>
+      <li>The sending organization and the reporting period</li>
+      <li>The MTA-STS or DANE policy that was applied</li>
+      <li>Success and failure counts for TLS connections</li>
+      <li>Failure details: certificate errors, handshake failures, policy mismatches</li>
+    </ul>
+    <p>TLSRPT is the companion to MTA-STS and DANE. MTA-STS tells senders to require TLS; TLSRPT tells you when that requirement causes delivery failures. Without TLSRPT, you have no way to know if your MTA-STS policy is rejecting legitimate mail due to a misconfiguration on either side.</p>
+    <p>Key considerations:</p>
+    <ul>
+      <li><strong>Deploy TLSRPT before enforcing MTA-STS</strong> -- start with MTA-STS in <code>testing</code> mode and monitor TLSRPT reports. Switch to <code>enforce</code> only when reports confirm no legitimate senders are failing.</li>
+      <li><strong>Use a dedicated mailbox</strong> -- TLSRPT reports are machine-readable JSON, not human-readable email. Route them to a dedicated address and use a parsing tool or service to analyze them.</li>
+      <li><strong>HTTPS reporting</strong> -- TLSRPT also supports <code>rua=https://...</code> for HTTP POST delivery of reports, which is easier to integrate with monitoring systems than email delivery.</li>
+    </ul>
+
     <h2>Common mistakes</h2>
     <ul>
       <li><strong>Multiple SPF records</strong>: A domain must have exactly one SPF TXT record. Two records cause a permerror. Merge them into one.</li>
