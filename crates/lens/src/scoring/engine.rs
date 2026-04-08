@@ -16,6 +16,9 @@ pub enum CheckVerdict {
 pub struct CheckResult {
     pub name: String,
     pub verdict: CheckVerdict,
+    /// Diagnostic messages explaining a non-passing verdict (warn/fail/not-found).
+    /// Empty for pass and skip.
+    pub messages: Vec<String>,
 }
 
 /// Per-section input to the scoring engine.
@@ -222,6 +225,7 @@ mod tests {
         CheckResult {
             name: name.to_string(),
             verdict: CheckVerdict::Pass,
+            messages: vec![],
         }
     }
 
@@ -229,6 +233,7 @@ mod tests {
         CheckResult {
             name: name.to_string(),
             verdict: CheckVerdict::Warn,
+            messages: vec![],
         }
     }
 
@@ -236,6 +241,7 @@ mod tests {
         CheckResult {
             name: name.to_string(),
             verdict: CheckVerdict::Fail,
+            messages: vec![],
         }
     }
 
@@ -243,6 +249,7 @@ mod tests {
         CheckResult {
             name: name.to_string(),
             verdict: CheckVerdict::NotFound,
+            messages: vec![],
         }
     }
 
@@ -250,6 +257,7 @@ mod tests {
         CheckResult {
             name: name.to_string(),
             verdict: CheckVerdict::Skip,
+            messages: vec![],
         }
     }
 

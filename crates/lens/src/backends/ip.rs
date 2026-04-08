@@ -95,6 +95,7 @@ pub async fn check_ip(
 
     let mut addresses: Vec<IpInfo> = Vec::new();
     let mut worst_verdict = CheckVerdict::Pass;
+    let mut reputation_messages: Vec<String> = Vec::new();
 
     for (ip, maybe_resp) in capped.iter().zip(responses.into_iter()) {
         let entry = match maybe_resp {
@@ -107,7 +108,10 @@ pub async fn check_ip(
                 let network_type = e.network.network_type.clone();
                 let verdict = network_type_verdict(&network_type);
                 if verdict_rank(&verdict) > verdict_rank(&worst_verdict) {
-                    worst_verdict = verdict;
+                    worst_verdict = verdict.clone();
+                }
+                if matches!(verdict, CheckVerdict::Fail | CheckVerdict::Warn) {
+                    reputation_messages.push(format!("{ip}: {network_type}"));
                 }
 
                 let geo = build_geo(&e.location);
@@ -135,6 +139,7 @@ pub async fn check_ip(
     let reputation_check = CheckResult {
         name: "reputation".to_string(),
         verdict: worst_verdict,
+        messages: reputation_messages,
     };
 
     let raw_headline = build_headline(&addresses);

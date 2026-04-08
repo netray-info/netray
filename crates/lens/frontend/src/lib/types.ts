@@ -3,7 +3,7 @@ export type Verdict = 'pass' | 'warn' | 'fail' | 'error' | 'skip';
 export interface CheckItem {
   name: string;
   verdict: Verdict;
-  message?: string;
+  messages?: string[];
   guide_url?: string;
   weight?: number;
 }

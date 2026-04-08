@@ -62,10 +62,12 @@ export default function CheckList(props: Props) {
               <Show when={props.explain && CHECK_DESCRIPTIONS[check.name] !== undefined}>
                 <div class="explain-card">{CHECK_DESCRIPTIONS[check.name]}</div>
               </Show>
+              <Show when={check.messages && check.messages!.length > 0}>
+                <For each={check.messages}>
+                  {(msg) => <div class="check-item__message">{msg}</div>}
+                </For>
+              </Show>
             </span>
-            <Show when={check.message}>
-              <span class="check-item__message">{check.message}</span>
-            </Show>
             <Show when={check.weight !== undefined && check.verdict !== 'skip'}>
               <span class={scoreClass(check.verdict)}>
                 {scoreNumerator(check.verdict, check.weight!)}/{check.weight}
