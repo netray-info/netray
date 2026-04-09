@@ -318,6 +318,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+  background: var(--bg-secondary);
 }
 
 .section-card + .section-card {
@@ -395,7 +396,7 @@
 }
 
 .section-card__body {
-  padding: 0 1rem 0.75rem;
+  padding: 0 1rem 0.75rem calc(1rem + 16px);
 }
 
 /* ---- Check row ---- */
