@@ -184,4 +184,7 @@ pub struct EnrichmentInfo {
     /// Threat flag: "C2", "DROP", or "TOR" if the IP is flagged.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threat: Option<String>,
+    /// ASN network role (e.g. "Midsize Transit", "Access Provider").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
 }

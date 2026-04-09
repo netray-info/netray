@@ -257,6 +257,7 @@ async fn do_inspect(
                 org: info.org,
                 ip_type: info.ip_type,
                 threat,
+                role: None, // TODO: wire up once netray-common >= 0.5.5 (network_role field)
             }
         }).unwrap_or_default()
     } else {

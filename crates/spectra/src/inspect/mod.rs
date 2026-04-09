@@ -114,11 +114,12 @@ pub struct EnrichmentData {
     pub org: Option<String>,
     pub ip_type: Option<String>,
     pub threat: Option<String>,
+    pub role: Option<String>,
 }
 
 impl Default for EnrichmentData {
     fn default() -> Self {
-        Self { org: None, ip_type: None, threat: None }
+        Self { org: None, ip_type: None, threat: None, role: None }
     }
 }
 
@@ -227,6 +228,7 @@ pub fn assemble_response(
             detail_url,
             ip_type: enrichment.ip_type,
             threat: enrichment.threat,
+            role: enrichment.role,
         },
         redirect_limit_reached,
     };

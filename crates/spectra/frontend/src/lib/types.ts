@@ -122,6 +122,7 @@ export interface EnrichmentInfo {
   detail_url: string;
   ip_type?: string;
   threat?: string;
+  role?: string;
 }
 
 export interface InspectResponse {

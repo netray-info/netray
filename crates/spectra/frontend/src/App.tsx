@@ -193,47 +193,59 @@ export default function App() {
                 <>
                   {/* Overview bar */}
                   <div class="overview">
-                    <div class="overview__item">
-                      <span class="overview__label">Verdict</span>
-                      <span class={verdictClass(data.quality.verdict)}>
-                        {data.quality.verdict}
-                      </span>
-                    </div>
-                    <div class="overview__item">
-                      <span class="overview__label">Status</span>
-                      <span class="overview__value">{data.status}</span>
-                    </div>
-                    <div class="overview__item">
-                      <span class="overview__label">HTTP</span>
-                      <span class="overview__value">{data.http_version}</span>
-                    </div>
-                    <div class="overview__item">
-                      <span class="overview__label">Duration</span>
-                      <span class="overview__value">{data.duration_ms}ms</span>
-                    </div>
-                    <div class="overview__item">
-                      <span class="overview__label">IP</span>
-                      <a href={data.enrichment.detail_url} class="overview__value" target="_blank" rel="noopener">
-                        {data.enrichment.ip}
-                      </a>
-                      <Show when={data.enrichment.threat}>
-                        <span class="badge badge--fail">{data.enrichment.threat}</span>
-                      </Show>
-                    </div>
-                    <Show when={data.enrichment.ip_type}>
+                    {/* Row 1: response facts */}
+                    <div class="overview__row">
                       <div class="overview__item">
-                        <span class="overview__label">Category</span>
-                        <span class="overview__value">
-                          {data.enrichment.ip_type!.charAt(0).toUpperCase() + data.enrichment.ip_type!.slice(1)}
+                        <span class="overview__label">Verdict</span>
+                        <span class={verdictClass(data.quality.verdict)}>
+                          {data.quality.verdict}
                         </span>
                       </div>
-                    </Show>
-                    <Show when={data.enrichment.org}>
                       <div class="overview__item">
-                        <span class="overview__label">Org</span>
-                        <span class="overview__value">{data.enrichment.org}</span>
+                        <span class="overview__label">Status</span>
+                        <span class="overview__value">{data.status}</span>
                       </div>
-                    </Show>
+                      <div class="overview__item">
+                        <span class="overview__label">HTTP</span>
+                        <span class="overview__value">{data.http_version}</span>
+                      </div>
+                      <div class="overview__item">
+                        <span class="overview__label">Duration</span>
+                        <span class="overview__value">{data.duration_ms}ms</span>
+                      </div>
+                    </div>
+                    {/* Row 2: IP + enrichment */}
+                    <div class="overview__row overview__row--enrichment">
+                      <div class="overview__item">
+                        <span class="overview__label">IP</span>
+                        <a href={data.enrichment.detail_url} class="overview__value" target="_blank" rel="noopener">
+                          {data.enrichment.ip}
+                        </a>
+                        <Show when={data.enrichment.threat}>
+                          <span class="badge badge--fail">{data.enrichment.threat}</span>
+                        </Show>
+                      </div>
+                        <Show when={data.enrichment.org}>
+                          <div class="overview__item">
+                            <span class="overview__label">Org</span>
+                            <span class="overview__value">{data.enrichment.org}</span>
+                          </div>
+                        </Show>
+                        <Show when={data.enrichment.ip_type}>
+                          <div class="overview__item">
+                            <span class="overview__label">Category</span>
+                            <span class="overview__value">
+                              {data.enrichment.ip_type!.charAt(0).toUpperCase() + data.enrichment.ip_type!.slice(1)}
+                            </span>
+                          </div>
+                        </Show>
+                        <Show when={data.enrichment.role}>
+                          <div class="overview__item">
+                            <span class="overview__label">Role</span>
+                            <span class="overview__value">{data.enrichment.role}</span>
+                          </div>
+                        </Show>
+                      </div>
                   </div>
 
                   {/* Expand / collapse toggle */}
