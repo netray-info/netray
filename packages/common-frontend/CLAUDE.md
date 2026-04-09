@@ -2,14 +2,16 @@
 
 ## Rules
 
-- Do NOT add a `Co-Authored-By` line for Claude in commit messages.
-- Don't add heavy dependencies for minor convenience — check if existing deps already cover the need.
-- Don't mix formatting-only changes with functional changes in the same commit.
-- Don't modify unrelated modules "while you're in there" — keep changes scoped.
-- Don't add speculative flags, config options, or abstractions without a current caller.
-- Don't bypass failing checks (`--no-verify`, `#[allow(...)]`) without explaining why.
-- Don't include PII, real email addresses, or real domains (other than example.com) in test data, docs, or commits.
-- If uncertain about an implementation detail, leave a concrete `TODO("reason")` rather than a hidden guess.
+- No Co-Authored-By for Claude in commits
+- Scoped changes only: no formatting mixed with functional changes, no unrelated modifications
+- No heavy deps for minor convenience; no speculative flags/config/abstractions without a caller
+- Don't bypass failing checks (`--no-verify`, `#[allow(...)]`) without explaining why
+- No PII, real emails, or real domains (use example.com) in test data, docs, commits
+- `TODO("reason")` over hidden guesses; conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
+
+## Frontend Rules
+
+Full spec: [`specs/rules/frontend-rules.md`](../specs/rules/frontend-rules.md) in the netray.info meta repo. Apply when modifying components, CSS tokens, or the theme system.
 
 ## Project Overview
 
