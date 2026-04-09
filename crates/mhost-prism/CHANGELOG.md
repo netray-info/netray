@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.4] - 2026-04-09
+
+### Fixed
+- Remove NODE_AUTH_TOKEN from .npmrc, use global auth (48649f8)
+- Add SuiteNav compaction override (ef84d82)
+
+### Changed
+- Remove SuiteNav compaction override, now in common-frontend (a04d6b6)
+- Move SuiteNav inside .app, remove stream-hint callout (ad9a8cb)
+- Bump common-frontend to ^0.5.0 (73380d7)
+- Bump common-frontend to ^0.4.0 (124017b)
+
 ## [0.8.3] - 2026-04-09
 
 ### Fixed
