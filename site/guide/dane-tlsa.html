@@ -46,6 +46,10 @@
     <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
   </nav>
 </header>
@@ -113,8 +117,10 @@ openssl x509 -in cert.pem -noout -pubkey \
     <h2>DANE for SMTP</h2>
     <p>DANE's most widespread deployment is in email. When an MTA (Mail Transfer Agent) sends mail to a domain, it looks up the MX records, then checks for TLSA records on the MX hostnames. If valid TLSA records exist and DNSSEC validates, the sending MTA can authenticate the receiving server's certificate without any prior configuration.</p>
     <p>For SMTP, the TLSA record is placed at the MX hostname, not the email domain:</p>
-    <pre><code>_25._tcp.mail.example.com.  300  IN  TLSA  3 1 1 a0b1c2d3e4f5...</code></pre>
+    <pre><code>_25._tcp.mail.example.com. IN TLSA 3 1 1 abc123...def456</code></pre>
     <p>Major email providers including Gmail, Outlook, and Comcast support DANE verification for outbound SMTP. Publishing TLSA records for your mail servers protects your inbound mail from interception.</p>
+    <p>A critical requirement for DANE verification is that the DNS response carrying the TLSA record must have the <strong>DNSSEC AD (Authenticated Data) flag</strong> set. Without the AD flag, the validating MTA cannot confirm the TLSA record is genuine, and DANE verification fails. This means the entire chain -- from the root zone through your domain's zone to the TLSA record itself -- must be DNSSEC-signed and valid.</p>
+    <p>DANE and MTA-STS can coexist on the same domain. They serve complementary roles: DANE provides mandatory enforcement backed by DNSSEC without any negotiation or TOFU (Trust on First Use), while MTA-STS uses HTTPS-based policy discovery with an initial trust-on-first-use fetch. If both are deployed, a sending MTA that supports DANE will prefer it over MTA-STS because DANE provides a stronger authentication guarantee. Deploying both ensures coverage for senders that support only one of the two mechanisms.</p>
 
     <h2>Prerequisites</h2>
     <p>DANE requires <strong>DNSSEC</strong>. Without DNSSEC, TLSA records provide no security because an attacker who can tamper with DNS responses can simply remove or replace the TLSA record. Before deploying DANE:</p>
@@ -170,11 +176,20 @@ openssl x509 -in cert.pem -noout -pubkey \
     <p class="tool-entry__hint">Query TLSA records directly to verify your DNS publication.</p>
   </section>
 
+  <section class="tool-entry">
+    <h2>Check your domain's DANE and DNSSEC with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input type="text" name="domain" placeholder="example.com" required>
+      <button type="submit">Check Email Security</button>
+    </form>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">
       <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
       <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/tls-rpt">SMTP TLS Reporting (TLSRPT)</a></li>
       <li><a href="/guide/email-auth">Email Authentication Guide</a></li>
       <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
     </ul>
@@ -182,7 +197,10 @@ openssl x509 -in cert.pem -noout -pubkey \
       <a href="https://netray.info">netray.info</a> --
       <a href="https://ip.netray.info">IP</a> /
       <a href="https://dns.netray.info">DNS</a> /
-      <a href="https://tls.netray.info">TLS</a>
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
     </p>
   </footer>
 </main>

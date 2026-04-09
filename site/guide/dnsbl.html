@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DNS Blocklists (DNSBL): How They Work | netray.info</title>
+  <meta name="description" content="How DNS-based blocklists work, which major blocklists matter, how to check IP reputation manually, and how to delist. Includes practical dig examples and beacon integration.">
+  <link rel="canonical" href="https://netray.info/guide/dnsbl">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="DNS Blocklists (DNSBL): How They Work">
+  <meta property="og:description" content="How DNS-based blocklists work, which major blocklists matter, how to check IP reputation manually, and how to delist.">
+  <meta property="og:url" content="https://netray.info/guide/dnsbl">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="DNS Blocklists (DNSBL): How They Work">
+  <meta name="twitter:description" content="How DNS-based blocklists work, which major blocklists matter, how to check IP reputation manually, and how to delist.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "DNS Blocklists (DNSBL): How They Work",
+    "description": "How DNS-based blocklists work, which major blocklists matter, how to check IP reputation manually, and how to delist. Includes practical dig examples and beacon integration.",
+    "url": "https://netray.info/guide/dnsbl",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/dnsbl"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "DNS Blocklists (DNSBL): How They Work" }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">DNS Blocklists (DNSBL): How They Work</h1>
+  <p class="page-subtitle">Understand how DNS-based blocklists identify spam sources, how to check your IP reputation, and how to get delisted.</p>
+
+  <article>
+    <h2>How DNSBL reverse-IP lookups work</h2>
+    <p>A DNS-based blocklist (DNSBL, also called RBL or DNSRBL) is a database of IP addresses published via DNS. Mail servers query the blocklist in real time during the SMTP transaction to decide whether to accept, reject, or flag a message based on the sending IP's reputation.</p>
+    <p>The lookup mechanism uses a reversed IP address appended to the blocklist's zone. To check whether IP <code>198.51.100.42</code> is listed on a blocklist at <code>bl.example.com</code>:</p>
+    <ol>
+      <li>Reverse the IP octets: <code>198.51.100.42</code> becomes <code>42.100.51.198</code>.</li>
+      <li>Append the blocklist zone: <code>42.100.51.198.bl.example.com</code>.</li>
+      <li>Query for an A record at that name.</li>
+      <li>If the query returns a result (typically <code>127.0.0.x</code>), the IP is listed. If it returns <code>NXDOMAIN</code>, the IP is not listed.</li>
+    </ol>
+    <p>The specific <code>127.0.0.x</code> return code indicates the listing category. For example, Spamhaus uses <code>127.0.0.2</code> for SBL (direct spam sources), <code>127.0.0.4</code> for XBL (exploited hosts), and <code>127.0.0.10</code> for PBL (policy block list -- dynamic/residential IPs that should not be sending mail directly).</p>
+    <p>Many blocklists also publish a TXT record at the same name, containing a human-readable reason for the listing and a URL for more information.</p>
+
+    <h3>IPv6 DNSBL lookups</h3>
+    <p>IPv6 addresses follow the same reverse pattern but use nibble format. The address <code>2001:db8::1</code> is expanded to its full 32-nibble form and reversed, with each nibble separated by dots:</p>
+    <pre><code>1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2.bl.example.com</code></pre>
+    <p>Not all blocklists support IPv6 lookups yet, but coverage is increasing as IPv6 adoption grows.</p>
+
+    <h2>Major blocklists</h2>
+
+    <h3>Spamhaus ZEN</h3>
+    <p>Spamhaus is the most widely used blocklist provider. Their ZEN zone (<code>zen.spamhaus.org</code>) combines four lists into a single lookup:</p>
+    <ul>
+      <li><strong>SBL</strong> (Spamhaus Block List) -- known spam sources, verified spam operations, and snowshoe spam ranges.</li>
+      <li><strong>XBL</strong> (Exploits Block List) -- IPs of compromised machines: open proxies, botnets, malware-infected hosts. Sourced from CBL (Composite Blocking List) data.</li>
+      <li><strong>PBL</strong> (Policy Block List) -- IP ranges that should not be sending mail directly. Includes residential ISP ranges and dynamic-IP blocks. Being listed on PBL is not an accusation of spam -- it means the IP is not a legitimate mail server.</li>
+      <li><strong>CSS</strong> (Spamhaus CSS) -- IPs involved in low-reputation activities but not confirmed as spam sources.</li>
+    </ul>
+    <p>Spamhaus requires a Data Query Service (DQS) key for high-volume use. Free queries are rate-limited and intended for testing only.</p>
+
+    <h3>Barracuda (b.barracudacentral.org)</h3>
+    <p>Barracuda maintains a blocklist based on spam trap data and customer-reported spam. It is widely used by organizations running Barracuda email security appliances, but also queried by other mail servers. Listings are typically based on direct spam activity from the IP. Barracuda offers a self-service lookup and removal request tool.</p>
+
+    <h3>SpamCop (bl.spamcop.net)</h3>
+    <p>SpamCop is a user-driven blocklist. Users submit spam reports, and SpamCop traces the message back to the sending IP. Listings are automatic based on report volume and decay over time if reports stop. SpamCop listings typically expire within 24-48 hours if the spam stops. This makes it a responsive but sometimes aggressive list -- legitimate senders with temporarily compromised accounts may get listed briefly.</p>
+
+    <h3>Other notable lists</h3>
+    <ul>
+      <li><strong>SORBS</strong> (<code>dnsbl.sorbs.net</code>) -- multiple zones for different categories (spam, open relays, dynamic IPs). Widely used but has been criticized for slow delisting.</li>
+      <li><strong>UCEPROTECT</strong> -- three levels from individual IPs (Level 1) to entire ASNs (Level 3). Level 2 and 3 listings are controversial because they block entire networks based on aggregate behavior.</li>
+      <li><strong>Spamhaus DBL</strong> (<code>dbl.spamhaus.org</code>) -- a domain blocklist rather than IP blocklist. Checks the domain in the message body and headers against known spam domains.</li>
+    </ul>
+
+    <h2>Checking IP reputation manually</h2>
+    <p>You can check any IP against a DNSBL using <code>dig</code>. Reverse the IP octets and query the blocklist zone:</p>
+    <pre><code># Check 198.51.100.42 against Spamhaus ZEN
+dig +short 42.100.51.198.zen.spamhaus.org A
+# No output = not listed
+# 127.0.0.2 = SBL listing
+# 127.0.0.4 = XBL listing
+# 127.0.0.10 = PBL listing
+
+# Get the reason for listing (if listed)
+dig +short 42.100.51.198.zen.spamhaus.org TXT</code></pre>
+
+    <p>To check against multiple blocklists at once, you can script it:</p>
+    <pre><code>#!/bin/sh
+IP="198.51.100.42"
+REVERSED=$(echo "$IP" | awk -F. '{print $4"."$3"."$2"."$1}')
+
+for BL in zen.spamhaus.org b.barracudacentral.org bl.spamcop.net dnsbl.sorbs.net; do
+  RESULT=$(dig +short "$REVERSED.$BL" A)
+  if [ -n "$RESULT" ]; then
+    echo "LISTED on $BL: $RESULT"
+  else
+    echo "CLEAN on $BL"
+  fi
+done</code></pre>
+
+    <h3>Check your MX server IPs</h3>
+    <p>To check the reputation of your own mail servers, first find their IPs:</p>
+    <pre><code># Find MX records
+dig +short MX example.com
+# 10 mail.example.com.
+# 20 mail2.example.com.
+
+# Resolve MX to IP
+dig +short A mail.example.com
+# 203.0.113.10
+
+# Check that IP against blocklists
+dig +short 10.113.0.203.zen.spamhaus.org A</code></pre>
+
+    <h2>Delisting process and timeline</h2>
+    <p>Getting listed on a blocklist is usually automatic; getting delisted requires action. The process varies by blocklist:</p>
+
+    <h3>Before requesting delisting</h3>
+    <ol>
+      <li><strong>Fix the underlying problem</strong> -- if your IP was listed because of spam, compromised accounts, or an open relay, fix that first. Requesting delisting without fixing the cause will result in immediate re-listing.</li>
+      <li><strong>Check all your MX IPs</strong> -- you may have multiple mail servers, and some may be listed while others are not.</li>
+      <li><strong>Verify authentication</strong> -- ensure SPF, DKIM, and DMARC are correctly configured. Blocklists consider the overall hygiene of your mail setup.</li>
+    </ol>
+
+    <h3>Delisting by provider</h3>
+    <ul>
+      <li><strong>Spamhaus SBL/XBL</strong> -- use the Spamhaus Blocklist Removal Center. SBL removals require demonstrating that the spam source has been remediated. XBL removals require showing the compromised host has been cleaned. Timeline: 24 hours to several days depending on severity and history.</li>
+      <li><strong>Spamhaus PBL</strong> -- PBL listings are policy-based (dynamic IPs). If you run a legitimate mail server on a PBL-listed IP, you can request removal through the PBL portal. Your ISP may also need to update their PBL delegation.</li>
+      <li><strong>Barracuda</strong> -- self-service removal at their lookup tool. Typically processed within 12-24 hours. Repeat listings extend the cooling-off period.</li>
+      <li><strong>SpamCop</strong> -- listings expire automatically within 24-48 hours after reports stop. There is no manual removal process. If you are persistently listed, the issue is ongoing spam reports.</li>
+      <li><strong>SORBS</strong> -- offers self-service delisting for some zones. Historically slow; expect days to weeks for some categories.</li>
+    </ul>
+
+    <h3>Preventing re-listing</h3>
+    <ul>
+      <li>Monitor your IP reputation regularly -- do not wait for delivery failures to discover a listing.</li>
+      <li>Implement rate limiting on outbound mail to contain compromised-account damage.</li>
+      <li>Use dedicated IPs for transactional mail vs. marketing mail so a marketing issue does not affect transactional delivery.</li>
+      <li>Set up FCrDNS (Forward-Confirmed Reverse DNS) for all mail server IPs -- the PTR record should resolve back to the IP. Missing or mismatched rDNS is a red flag for many blocklists and spam filters.</li>
+    </ul>
+
+    <h2>Using beacon for automated multi-blocklist checks</h2>
+    <p>The netray.info beacon tool automates DNSBL checking as part of a comprehensive email security audit. When you check a domain with beacon, it:</p>
+    <ol>
+      <li>Resolves your MX records to find all mail server hostnames.</li>
+      <li>Resolves each MX hostname to its IP addresses (both A and AAAA).</li>
+      <li>Checks each IP against multiple major blocklists in parallel.</li>
+      <li>Reports which IPs are listed, on which blocklists, and the listing category.</li>
+    </ol>
+    <p>This is significantly faster than manual <code>dig</code> queries, especially when you have multiple MX servers with multiple IPs across several blocklists.</p>
+    <p>Beacon also checks FCrDNS (Forward-Confirmed Reverse DNS) for each MX IP, which is a common factor in blocklist evaluation and spam filtering decisions.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your domain's email security with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="domain"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check Email Security</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+      <li><a href="/guide/email-deliverability">Diagnosing Email Deliverability Problems</a></li>
+      <li><a href="/guide/dkim">DKIM Deep Dive: Keys, Selectors, and Rotation</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

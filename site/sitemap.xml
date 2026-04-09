@@ -28,6 +28,16 @@
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
+  <url>
+    <loc>https://http.netray.info/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://email.netray.info/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
 
   <!-- Guide index -->
   <url>
@@ -37,6 +47,26 @@
   </url>
 
   <!-- Guide pages: Email Security -->
+  <url>
+    <loc>https://netray.info/guide/dkim</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/guide/bimi</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/guide/tls-rpt</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/guide/dnsbl</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
   <url>
     <loc>https://netray.info/guide/email-auth</loc>
     <changefreq>monthly</changefreq>
@@ -92,6 +122,33 @@
   </url>
   <url>
     <loc>https://netray.info/guide/certificate-management</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Guide pages: HTTP Security -->
+  <url>
+    <loc>https://netray.info/guide/csp</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/guide/cors</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/guide/cookie-security</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/guide/security-headers</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/guide/http-redirects</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -175,6 +232,16 @@
   </url>
   <url>
     <loc>https://netray.info/api/tls</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/api/http</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://netray.info/api/email</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

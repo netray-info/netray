@@ -49,6 +49,10 @@
     <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
   </nav>
 </header>
@@ -74,8 +78,8 @@ curl -sN 'https://lens.netray.info/api/check?d=example.com' \
     <p>The rest of this guide explains what lens is checking and how to investigate any findings in depth using the individual tools.</p>
 
     <h2>What a domain audit covers</h2>
-    <p>A domain security audit examines four pillars: DNS integrity, TLS and certificate health, email authentication, and IP reputation. Each pillar has distinct failure modes, and weaknesses in one do not cancel out strengths in another — a domain with perfect TLS but no DMARC is still trivially spoofable in email.</p>
-    <p><strong>DNS integrity</strong> covers nameserver configuration, DNSSEC signing, and CAA records. Failures here can redirect traffic, enable cache poisoning, or allow unauthorized certificate issuance. <strong>TLS health</strong> covers certificate validity, chain completeness, protocol version, and HSTS. An expired certificate or broken chain drops connections; weak protocol versions expose users to downgrade attacks. <strong>Email authentication</strong> (SPF, DKIM, DMARC) prevents impersonation and affects deliverability. <strong>IP reputation</strong> covers whether your hosting IPs are on blocklists and how they are classified — relevant for deliverability, API access, and trust signals.</p>
+    <p>A domain security audit examines five pillars: DNS integrity, TLS and certificate health, HTTP header security, email authentication, and IP reputation. Each pillar has distinct failure modes, and weaknesses in one do not cancel out strengths in another — a domain with perfect TLS but no DMARC is still trivially spoofable in email.</p>
+    <p><strong>DNS integrity</strong> covers nameserver configuration, DNSSEC signing, and CAA records. Failures here can redirect traffic, enable cache poisoning, or allow unauthorized certificate issuance. <strong>TLS health</strong> covers certificate validity, chain completeness, protocol version, and HSTS. An expired certificate or broken chain drops connections; weak protocol versions expose users to downgrade attacks. <strong>HTTP header security</strong> covers Content-Security-Policy, HSTS, X-Content-Type-Options, and other response headers that harden the browser's handling of your site — missing or misconfigured headers leave users vulnerable to XSS, clickjacking, and MIME-type confusion. <strong>Email authentication</strong> (SPF, DKIM, DMARC, MTA-STS, DANE) prevents impersonation, protects mail transport integrity, and affects deliverability. <strong>IP reputation</strong> covers whether your hosting IPs are on blocklists and how they are classified — relevant for deliverability, API access, and trust signals.</p>
     <p>The audit described here uses only free tools and can be completed in under five minutes for a typical domain. The goal is to identify the most impactful gaps quickly, not to produce an exhaustive penetration test report.</p>
 
     <h2>Step 1: DNS health</h2>
@@ -132,7 +136,7 @@ curl -sN 'https://lens.netray.info/api/check?d=example.com' \
     </ol>
 
     <h2>Automating the audit</h2>
-    <p>The simplest automation is the lens SSE endpoint — one request, all three signals, one grade:</p>
+    <p>The simplest automation is the lens SSE endpoint — one request, all five signals, one grade:</p>
     <pre><code># Get the overall grade and per-section scores
 curl -sN 'https://lens.netray.info/api/check?d=example.com' \
   | grep '^data:' \
@@ -167,9 +171,26 @@ curl -s "https://ip.netray.info/${IP}" | jq .</code></pre>
     <p class="tool-entry__hint">Checks DNS, TLS, and IP reputation in parallel. Returns an A+–F grade with per-section breakdown.</p>
   </section>
 
+  <section class="tool-entry">
+    <h2>Check your site's HTTP headers with spectra</h2>
+    <form class="tool-entry__form" action="https://http.netray.info/" method="get">
+      <input type="url" name="url" placeholder="https://example.com" required>
+      <button type="submit">Inspect Headers</button>
+    </form>
+  </section>
+
+  <section class="tool-entry">
+    <h2>Check your domain's email authentication with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input type="text" name="domain" placeholder="example.com" required>
+      <button type="submit">Check Email Security</button>
+    </form>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">
+      <li><a href="/guide/security-headers">Security Headers Reference</a></li>
       <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
       <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
       <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
@@ -177,10 +198,12 @@ curl -s "https://ip.netray.info/${IP}" | jq .</code></pre>
     </ul>
     <p class="page-footer__suite">
       <a href="https://netray.info">netray.info</a> --
-      <a href="https://lens.netray.info">LENS</a> /
       <a href="https://ip.netray.info">IP</a> /
       <a href="https://dns.netray.info">DNS</a> /
-      <a href="https://tls.netray.info">TLS</a>
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
     </p>
   </footer>
 </main>

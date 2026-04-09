@@ -37,6 +37,10 @@
     <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
   </nav>
 </header>
@@ -51,6 +55,10 @@
       <li><a href="email-auth">Email Authentication: SPF, DKIM, and DMARC</a> — How the three email authentication protocols work together, why they matter, and how to debug delivery failures.</li>
       <li><a href="email-deliverability">How to Diagnose Email Deliverability Problems</a> — A systematic approach to finding why your email lands in spam or gets rejected.</li>
       <li><a href="mta-sts">MTA-STS: Enforcing Encrypted Email Transport</a> — How MTA-STS prevents downgrade attacks on SMTP and how to publish and verify the policy.</li>
+      <li><a href="dkim">DKIM Deep Dive: Keys, Selectors, and Rotation</a> — RSA vs Ed25519 key types, selector naming conventions, key rotation strategy, and testing with dig.</li>
+      <li><a href="bimi">BIMI: Brand Indicators for Message Identification</a> — How BIMI displays your brand logo in email clients, VMC requirements, and SVG Tiny PS constraints.</li>
+      <li><a href="tls-rpt">TLS-RPT: SMTP TLS Reporting</a> — RFC 8460 overview, DNS record format, setting up reporting endpoints, and interpreting JSON reports.</li>
+      <li><a href="dnsbl">DNS Blocklists (DNSBL): How They Work</a> — How reverse-IP lookups work, major blocklists, checking reputation manually, and the delisting process.</li>
     </ul>
   </section>
 
@@ -65,6 +73,17 @@
       <li><a href="tls-protocol">TLS Protocol and Cipher Suite Guide</a> — TLS version negotiation, forward secrecy, and AEAD cipher suites explained.</li>
       <li><a href="encrypted-client-hello">Encrypted Client Hello (ECH)</a> — How ECH hides the hostname from network observers and how to enable it via HTTPS DNS records.</li>
       <li><a href="certificate-management">Certificate Management: Expiry, Lifetime, SAN, AIA</a> — Monitoring certificate expiry windows, understanding lifetime limits, validating SAN lists, and checking AIA reachability.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>HTTP Security</h2>
+    <ul>
+      <li><a href="security-headers">Security Headers Overview</a> — X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and the baseline header set every site needs.</li>
+      <li><a href="csp">Content Security Policy (CSP): A Complete Guide</a> — Directives reference, common mistakes with unsafe-inline and unsafe-eval, report-uri vs report-to, and CSP levels.</li>
+      <li><a href="cors">Cross-Origin Resource Sharing (CORS) Explained</a> — Same-origin policy, preflight flow, credentialed requests, wildcard pitfalls, and common misconfigurations.</li>
+      <li><a href="cookie-security">Cookie Security: Flags, Prefixes, and Best Practices</a> — Secure, HttpOnly, SameSite attributes, __Host- and __Secure- prefixes, and session hardening.</li>
+      <li><a href="http-redirects">HTTP Redirects and HTTPS Upgrade</a> — 301 vs 302 vs 307 vs 308 semantics, redirect chain costs, and HSTS interaction.</li>
     </ul>
   </section>
 
@@ -102,7 +121,10 @@
       <a href="https://netray.info">netray.info</a> --
       <a href="https://ip.netray.info">IP</a> /
       <a href="https://dns.netray.info">DNS</a> /
-      <a href="https://tls.netray.info">TLS</a>
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
     </p>
   </footer>
 </main>

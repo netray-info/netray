@@ -49,6 +49,10 @@
     <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
   </nav>
 </header>
@@ -161,11 +165,21 @@
     <p class="tool-entry__hint">Runs SPF, DKIM, DMARC, MTA-STS, TLSRPT, and BIMI checks on your domain.</p>
   </section>
 
+  <section class="tool-entry">
+    <h2>Check your domain's email authentication with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input type="text" name="domain" placeholder="example.com" required>
+      <button type="submit">Check Email Security</button>
+    </form>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">
       <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
       <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/dkim">DKIM: DomainKeys Identified Mail</a></li>
+      <li><a href="/guide/bimi">BIMI: Brand Indicators for Message Identification</a></li>
       <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
       <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
     </ul>
@@ -173,7 +187,10 @@
       <a href="https://netray.info">netray.info</a> --
       <a href="https://ip.netray.info">IP</a> /
       <a href="https://dns.netray.info">DNS</a> /
-      <a href="https://tls.netray.info">TLS</a>
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
     </p>
   </footer>
 </main>

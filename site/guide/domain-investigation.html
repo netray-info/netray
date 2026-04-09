@@ -49,6 +49,10 @@
     <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
   </nav>
 </header>
@@ -126,6 +130,22 @@
     <p class="tool-entry__hint">Inspects TLS certificate chain, SANs, issuer, and multi-IP consistency — useful for domain investigation.</p>
   </section>
 
+  <section class="tool-entry">
+    <h2>Check your site's HTTP headers with spectra</h2>
+    <form class="tool-entry__form" action="https://http.netray.info/" method="get">
+      <input type="url" name="url" placeholder="https://example.com" required>
+      <button type="submit">Inspect Headers</button>
+    </form>
+  </section>
+
+  <section class="tool-entry">
+    <h2>Check your domain's email authentication with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input type="text" name="domain" placeholder="example.com" required>
+      <button type="submit">Check Email Security</button>
+    </form>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">
@@ -138,7 +158,10 @@
       <a href="https://netray.info">netray.info</a> --
       <a href="https://ip.netray.info">IP</a> /
       <a href="https://dns.netray.info">DNS</a> /
-      <a href="https://tls.netray.info">TLS</a>
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
     </p>
   </footer>
 </main>
