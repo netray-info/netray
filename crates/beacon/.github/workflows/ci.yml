@@ -78,6 +78,9 @@ jobs:
       - name: Lint
         run: npm run lint
         working-directory: frontend
+      - name: Test
+        run: npx vitest run --passWithNoTests --environment node
+        working-directory: frontend
 
   audit:
     name: Dependency Audit

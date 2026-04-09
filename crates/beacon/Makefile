@@ -1,11 +1,10 @@
-# prism — Top-level Makefile
-# https://github.com/lukaspustina/mhost-prism
+# beacon — Top-level Makefile
 
 SHELL       := /bin/bash
 .DEFAULT_GOAL := all
 
 # ── Project metadata ─────────────────────────────────────────────
-APP         := prism
+APP         := beacon
 VERSION     := $(shell grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/' 2>/dev/null || echo "unknown")
 GIT_SHA     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DOCKER_TAG  := $(APP):$(VERSION)
@@ -48,7 +47,7 @@ build: frontend ## Build release binary (depends on frontend)
 	$(CARGO) build --release $(CARGO_FLAGS)
 
 run: build ## Build and run release binary
-	./target/release/$(APP)
+	./target/release/$(APP) $(APP).toml
 
 # ══════════════════════════════════════════════════════════════════
 #  Rust
@@ -107,8 +106,8 @@ pre-push: fmt-check clippy test frontend ## Run all checks before pushing (fmt-c
 #  Development
 # ══════════════════════════════════════════════════════════════════
 
-dev: ## Run dev server with prism.dev.toml
-	$(CARGO) run $(CARGO_FLAGS) -- prism.dev.toml
+dev: ## Run dev server with beacon.dev.toml
+	$(CARGO) run $(CARGO_FLAGS) -- $(APP).dev.toml
 
 clean: ## Remove target/, frontend/dist/, node_modules/
 	$(CARGO) clean
@@ -121,5 +120,5 @@ clean: ## Remove target/, frontend/dist/, node_modules/
 docker: ## Build Docker image
 	docker build -t ghcr.io/lukaspustina/$(APP):latest .
 
-docker-run: ## Run Docker image locally (port 8080)
-	docker run --rm -p 8080:8080 -p 9090:9090 ghcr.io/lukaspustina/$(APP):latest
+docker-run: ## Run Docker image locally (port 3000)
+	docker run --rm -p 3000:3000 -p 9090:9090 ghcr.io/lukaspustina/$(APP):latest

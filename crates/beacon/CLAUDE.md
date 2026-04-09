@@ -43,7 +43,7 @@ cd frontend && npm run build         # production build into dist/
 
 ## Specs
 
-- SDD: [`specs/sdd/beacon.md`](../specs/sdd/beacon.md)
+- SDD: [`specs/done/sdd/beacon.md`](../specs/done/sdd/beacon.md)
 - Apply [frontend-rules](../specs/rules/frontend-rules.md) when modifying `frontend/`
 - Apply [logging-rules](../specs/rules/logging-rules.md) when modifying tracing/telemetry
 - Apply [architecture-rules](../specs/rules/architecture-rules.md) for health probes and middleware

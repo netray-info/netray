@@ -122,7 +122,7 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
         (
             axum::http::StatusCode::OK,
             [(axum::http::header::CACHE_CONTROL, "no-cache")],
-            Json(ReadyResponse { status: "ok" }),
+            Json(ReadyResponse { status: "ready" }),
         )
     } else {
         (

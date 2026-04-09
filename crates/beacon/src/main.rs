@@ -72,10 +72,11 @@ async fn main() -> anyhow::Result<()> {
                         .and_then(|v| v.to_str().ok())
                         .unwrap_or("-");
                     tracing::info_span!(
-                        "request",
+                        "http_request",
                         method = %request.method(),
                         uri = %request.uri(),
                         request_id = %request_id,
+                        client_ip = tracing::field::Empty,
                     )
                 })
                 .on_response(
