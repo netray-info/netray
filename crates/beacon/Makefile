@@ -1,0 +1,125 @@
+# prism — Top-level Makefile
+# https://github.com/lukaspustina/mhost-prism
+
+SHELL       := /bin/bash
+.DEFAULT_GOAL := all
+
+# ── Project metadata ─────────────────────────────────────────────
+APP         := prism
+VERSION     := $(shell grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/' 2>/dev/null || echo "unknown")
+GIT_SHA     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+DOCKER_TAG  := $(APP):$(VERSION)
+
+# ── Tools ────────────────────────────────────────────────────────
+CARGO       := cargo
+NPM         := npm
+
+# ── Directories ──────────────────────────────────────────────────
+FRONTEND_DIR := frontend
+DIST_DIR     := $(FRONTEND_DIR)/dist
+
+# ── Flags (override from CLI: make CARGO_FLAGS=--release build) ──
+CARGO_FLAGS  ?=
+NPM_CI_FLAGS ?=
+
+# ── Phony targets ────────────────────────────────────────────────
+.PHONY: all build check test lint ci pre-push clean dev run \
+        frontend frontend-install frontend-dev frontend-test \
+        test-rust test-frontend \
+        fmt fmt-check clippy \
+        docker docker-run \
+        help
+
+# ══════════════════════════════════════════════════════════════════
+#  Help
+# ══════════════════════════════════════════════════════════════════
+
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | \
+		awk -F ':.*## ' '{printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' | sort
+
+# ══════════════════════════════════════════════════════════════════
+#  Production
+# ══════════════════════════════════════════════════════════════════
+
+all: frontend build ## Build frontend + release binary
+
+build: frontend ## Build release binary (depends on frontend)
+	$(CARGO) build --release $(CARGO_FLAGS)
+
+run: build ## Build and run release binary
+	./target/release/$(APP)
+
+# ══════════════════════════════════════════════════════════════════
+#  Rust
+# ══════════════════════════════════════════════════════════════════
+
+check: ## Fast compile check (cargo check)
+	$(CARGO) check $(CARGO_FLAGS)
+
+test-rust: ## Run Rust tests
+	$(CARGO) test $(CARGO_FLAGS)
+
+clippy: ## Run clippy with -D warnings
+	$(CARGO) clippy $(CARGO_FLAGS) -- -D warnings
+
+fmt: ## Format Rust code
+	$(CARGO) fmt
+
+fmt-check: ## Check Rust formatting
+	$(CARGO) fmt -- --check
+
+# ══════════════════════════════════════════════════════════════════
+#  Frontend
+# ══════════════════════════════════════════════════════════════════
+
+frontend-install: ## Install frontend dependencies (npm ci)
+	cd $(FRONTEND_DIR) && $(NPM) ci $(NPM_CI_FLAGS)
+
+frontend: frontend-install ## Build frontend (npm ci + build)
+	cd $(FRONTEND_DIR) && $(NPM) run build
+
+frontend-dev: ## Start Vite dev server
+	cd $(FRONTEND_DIR) && $(NPM) run dev
+
+frontend-test: frontend-install ## Run frontend tests (vitest)
+	cd $(FRONTEND_DIR) && npx vitest run --passWithNoTests --environment node
+
+# ══════════════════════════════════════════════════════════════════
+#  Combined
+# ══════════════════════════════════════════════════════════════════
+
+test: test-rust test-frontend ## Run all tests (Rust + frontend)
+
+test-frontend: frontend-test ## Alias for frontend-test
+
+lint: clippy fmt-check ## Run all lints (clippy + fmt-check)
+
+ci: lint test frontend ## Full CI pipeline (lint + test + frontend build)
+
+# NOTE: NODE_AUTH_TOKEN must be exported in your shell before running pre-push or frontend targets.
+#   export NODE_AUTH_TOKEN=<your GitHub PAT with read:packages scope>
+pre-push: fmt-check clippy test frontend ## Run all checks before pushing (fmt-check, clippy, test, frontend)
+	@echo ""
+	@echo "All checks passed. Safe to push."
+
+# ══════════════════════════════════════════════════════════════════
+#  Development
+# ══════════════════════════════════════════════════════════════════
+
+dev: ## Run dev server with prism.dev.toml
+	$(CARGO) run $(CARGO_FLAGS) -- prism.dev.toml
+
+clean: ## Remove target/, frontend/dist/, node_modules/
+	$(CARGO) clean
+	rm -rf $(DIST_DIR) $(FRONTEND_DIR)/node_modules
+
+# ══════════════════════════════════════════════════════════════════
+#  Docker
+# ══════════════════════════════════════════════════════════════════
+
+docker: ## Build Docker image
+	docker build -t ghcr.io/lukaspustina/$(APP):latest .
+
+docker-run: ## Run Docker image locally (port 8080)
+	docker run --rm -p 8080:8080 -p 9090:9090 ghcr.io/lukaspustina/$(APP):latest

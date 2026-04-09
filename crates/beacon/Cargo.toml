@@ -1,0 +1,68 @@
+[package]
+name = "mail-inspector"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Email security inspector for netray.info — DNS-only mail posture analysis"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["json", "macros"] }
+tower = { version = "0.5", features = ["limit"] }
+tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
+governor = "0.10"
+netray-common = { version = "0.5.4", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment"] }
+
+# HTTP client (MTA-STS policy, BIMI logo)
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "webpki-roots", "http2"] }
+
+# DNS
+mhost = { version = "0.11", default-features = false }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+tokio-stream = "0.1"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Configuration
+config = "0.15"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging / tracing
+tracing = "0.1"
+
+# Metrics
+metrics = "0.24"
+metrics-exporter-prometheus = "0.18"
+
+# Embedded frontend
+rust-embed = "8"
+mime_guess = "2"
+
+# OpenAPI
+utoipa = { version = "5", features = ["axum_extras"] }
+
+# IP networks (SPF CIDR sets)
+ipnet = "2"
+
+# DKIM key parsing
+x509-parser = "0.17"
+base64 = "0.22"
+
+# Percent-decoding for path params
+percent-encoding = "2"
+
+# HashMap for SSE summary
+indexmap = { version = "2", features = ["serde"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+serde_json = "1"
