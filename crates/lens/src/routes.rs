@@ -13,13 +13,11 @@ use axum::{Json, Router};
 use futures::stream;
 use serde::{Deserialize, Serialize};
 
-use crate::backends::dns::DnsBackendResult;
-use crate::backends::ip::IpBackendResult;
-use crate::backends::tls::TlsBackendResult;
+use crate::backends::{BackendExtra, BackendResult};
 use crate::cache::{CachedResult, cache_key, is_fresh};
 use crate::check::{CheckOutput, SectionError, run_check};
 use crate::input::validate_domain;
-use crate::scoring::engine::{CheckVerdict, OverallScore};
+use crate::scoring::engine::{CheckResult, CheckVerdict, OverallScore};
 use crate::security::{check_rate_limit, extract_client_ip};
 use crate::state::AppState;
 
@@ -122,20 +120,13 @@ pub struct IpEvent {
 
 #[derive(Serialize)]
 pub struct SummaryEvent {
-    pub dns: &'static str,
-    pub tls: &'static str,
-    pub ip: &'static str,
+    pub sections: HashMap<String, &'static str>,
+    pub section_grades: HashMap<String, String>,
     pub overall: &'static str,
     pub grade: String,
     pub score: f64,
     pub hard_fail: bool,
     pub hard_fail_checks: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dns_grade: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tls_grade: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ip_grade: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -163,23 +154,9 @@ pub struct ProfileData {
     pub name: String,
     pub version: u32,
     pub checks: HashMap<String, u32>,
-    pub section_weights: ProfileSectionWeights,
+    pub section_weights: HashMap<String, u32>,
     pub thresholds: BTreeMap<String, u32>,
-    pub hard_fail: ProfileHardFail,
-}
-
-#[derive(Serialize)]
-pub struct ProfileSectionWeights {
-    pub dns: u32,
-    pub tls: u32,
-    pub ip: u32,
-}
-
-#[derive(Serialize)]
-pub struct ProfileHardFail {
-    pub dns: Vec<String>,
-    pub tls: Vec<String>,
-    pub ip: Vec<String>,
+    pub hard_fail: HashMap<String, Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -262,24 +239,20 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
     });
     let profile = &state.scoring_profile;
     let mut all_checks = HashMap::new();
-    all_checks.extend(profile.dns.iter().map(|(k, v)| (k.clone(), *v)));
-    all_checks.extend(profile.tls.iter().map(|(k, v)| (k.clone(), *v)));
-    all_checks.extend(profile.ip.iter().map(|(k, v)| (k.clone(), *v)));
+    let mut section_weights = HashMap::new();
+    let mut hard_fail = HashMap::new();
+    for (name, section) in &profile.sections {
+        all_checks.extend(section.checks.iter().map(|(k, v)| (k.clone(), *v)));
+        section_weights.insert(name.clone(), section.weight);
+        hard_fail.insert(name.clone(), section.hard_fail.clone());
+    }
     let profile_data = ProfileData {
         name: profile.meta.name.clone(),
         version: profile.meta.version,
         checks: all_checks,
-        section_weights: ProfileSectionWeights {
-            dns: profile.section_weights.dns,
-            tls: profile.section_weights.tls,
-            ip: profile.section_weights.ip,
-        },
+        section_weights,
         thresholds: profile.thresholds.clone(),
-        hard_fail: ProfileHardFail {
-            dns: profile.hard_fail.dns.clone(),
-            tls: profile.hard_fail.tls.clone(),
-            ip: profile.hard_fail.ip.clone(),
-        },
+        hard_fail,
     };
     Json(MetaResponse {
         site_name: "lens — Domain Health Check".to_string(),
@@ -411,10 +384,8 @@ async fn run_check_handler(state: AppState, client_ip: IpAddr, domain_raw: Strin
     // 5. Store in cache.
     if let Some(cache) = &state.cache {
         let entry = Arc::new(CachedResult {
-            dns: output.dns.clone(),
-            tls: output.tls.clone(),
-            ip: output.ip.clone(),
-            score: clone_score(&output.score),
+            sections: output.sections.clone(),
+            score: output.score.clone(),
             duration_ms,
             cached_at: SystemTime::now(),
         });
@@ -440,16 +411,12 @@ fn verdict_str(verdict: &CheckVerdict) -> &'static str {
     }
 }
 
-fn section_status_from_checks<T>(
-    result: &Result<T, SectionError>,
-    checks_fn: impl Fn(&T) -> &[crate::scoring::engine::CheckResult],
-) -> &'static str {
+fn section_status_from_checks(result: &Result<BackendResult, SectionError>) -> &'static str {
     match result {
         Err(_) => "error",
         Ok(r) => {
-            let checks = checks_fn(r);
             let mut has_warn = false;
-            for c in checks {
+            for c in &r.checks {
                 match c.verdict {
                     CheckVerdict::Fail | CheckVerdict::NotFound => return "fail",
                     CheckVerdict::Warn => has_warn = true,
@@ -461,36 +428,52 @@ fn section_status_from_checks<T>(
     }
 }
 
+fn build_check_items(
+    checks: &[CheckResult],
+    weights: &HashMap<String, u32>,
+) -> Vec<CheckItem> {
+    checks
+        .iter()
+        .map(|c| {
+            let verdict = verdict_str(&c.verdict);
+            CheckItem {
+                guide_url: guide_url_for(&c.name),
+                name: c.name.clone(),
+                verdict,
+                weight: weights.get(&c.name).copied(),
+                messages: c.messages.clone(),
+            }
+        })
+        .collect()
+}
+
+fn error_headline(e: &SectionError) -> String {
+    match e {
+        SectionError::Timeout => "timeout".to_string(),
+        SectionError::NoDnsResults => "no DNS results".to_string(),
+        SectionError::BackendError(_) => "backend error".to_string(),
+    }
+}
+
 fn dns_event_from(
-    result: &Result<DnsBackendResult, SectionError>,
+    result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> Event {
-    let status = section_status_from_checks(result, |r| &r.checks);
+    let status = section_status_from_checks(result);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
-            let items = r
-                .checks
-                .iter()
-                .map(|c| {
-                    let verdict = verdict_str(&c.verdict);
-                    CheckItem {
-                        guide_url: guide_url_for(&c.name),
-                        name: c.name.clone(),
-                        verdict,
-                        weight: weights.get(&c.name).copied(),
-                        messages: c.messages.clone(),
-                    }
-                })
-                .collect();
-            (r.raw_headline.clone(), items, r.detail_url.clone())
-        }
-        Err(e) => {
-            let msg = match e {
-                SectionError::Timeout => "timeout",
-                SectionError::BackendError(_) => "backend error",
+            let items = build_check_items(&r.checks, weights);
+            let (raw_headline, url) = match &r.extra {
+                BackendExtra::Dns {
+                    raw_headline,
+                    detail_url,
+                    ..
+                } => (raw_headline.clone(), detail_url.clone()),
+                _ => (String::new(), String::new()),
             };
-            (msg.to_string(), vec![], String::new())
+            (raw_headline, items, url)
         }
+        Err(e) => (error_headline(e), vec![], String::new()),
     };
     let payload = DnsEvent {
         status,
@@ -504,35 +487,23 @@ fn dns_event_from(
 }
 
 fn tls_event_from(
-    result: &Result<TlsBackendResult, SectionError>,
+    result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> Event {
-    let status = section_status_from_checks(result, |r| &r.checks);
+    let status = section_status_from_checks(result);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
-            let items = r
-                .checks
-                .iter()
-                .map(|c| {
-                    let verdict = verdict_str(&c.verdict);
-                    CheckItem {
-                        guide_url: guide_url_for(&c.name),
-                        name: c.name.clone(),
-                        verdict,
-                        weight: weights.get(&c.name).copied(),
-                        messages: c.messages.clone(),
-                    }
-                })
-                .collect();
-            (r.raw_headline.clone(), items, r.detail_url.clone())
-        }
-        Err(e) => {
-            let msg = match e {
-                SectionError::Timeout => "timeout",
-                SectionError::BackendError(_) => "backend error",
+            let items = build_check_items(&r.checks, weights);
+            let (raw_headline, url) = match &r.extra {
+                BackendExtra::Tls {
+                    raw_headline,
+                    detail_url,
+                } => (raw_headline.clone(), detail_url.clone()),
+                _ => (String::new(), String::new()),
             };
-            (msg.to_string(), vec![], String::new())
+            (raw_headline, items, url)
         }
+        Err(e) => (error_headline(e), vec![], String::new()),
     };
     let payload = TlsEvent {
         status,
@@ -546,45 +517,35 @@ fn tls_event_from(
 }
 
 fn ip_event_from(
-    result: &Result<IpBackendResult, SectionError>,
+    result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> Event {
-    let status = section_status_from_checks(result, |r| &r.checks);
+    let status = section_status_from_checks(result);
     let (headline, checks, addresses, detail_url) = match result {
         Ok(r) => {
-            let items = r
-                .checks
-                .iter()
-                .map(|c| {
-                    let verdict = verdict_str(&c.verdict);
-                    CheckItem {
-                        guide_url: guide_url_for(&c.name),
-                        name: c.name.clone(),
-                        verdict,
-                        weight: weights.get(&c.name).copied(),
-                        messages: c.messages.clone(),
-                    }
-                })
-                .collect();
-            let addrs = r
-                .addresses
-                .iter()
-                .map(|a| IpAddressInfo {
-                    ip: a.ip.to_string(),
-                    org: a.org.clone(),
-                    geo: a.geo.clone(),
-                    network_type: a.network_type.clone(),
-                })
-                .collect();
-            (r.raw_headline.clone(), items, addrs, r.detail_url.clone())
-        }
-        Err(e) => {
-            let msg = match e {
-                SectionError::Timeout => "timeout",
-                SectionError::BackendError(_) => "backend error",
+            let items = build_check_items(&r.checks, weights);
+            let (raw_headline, addrs, url) = match &r.extra {
+                BackendExtra::Ip {
+                    addresses,
+                    raw_headline,
+                    detail_url,
+                } => {
+                    let addr_info: Vec<IpAddressInfo> = addresses
+                        .iter()
+                        .map(|a| IpAddressInfo {
+                            ip: a.ip.to_string(),
+                            org: a.org.clone(),
+                            geo: a.geo.clone(),
+                            network_type: a.network_type.clone(),
+                        })
+                        .collect();
+                    (raw_headline.clone(), addr_info, detail_url.clone())
+                }
+                _ => (String::new(), vec![], String::new()),
             };
-            (msg.to_string(), vec![], vec![], String::new())
+            (raw_headline, items, addrs, url)
         }
+        Err(e) => (error_headline(e), vec![], vec![], String::new()),
     };
     let guide_url = if status == "fail" || status == "warn" {
         Some("https://netray.info/guide/ip-enrichment")
@@ -605,54 +566,42 @@ fn ip_event_from(
 }
 
 fn summary_event_from(
-    dns_result: &Result<DnsBackendResult, SectionError>,
-    tls_result: &Result<TlsBackendResult, SectionError>,
-    ip_result: &Result<IpBackendResult, SectionError>,
+    sections: &HashMap<String, Result<BackendResult, SectionError>>,
     score: &OverallScore,
     thresholds: &std::collections::BTreeMap<String, u32>,
 ) -> Event {
     use crate::scoring::engine::lookup_grade;
 
-    let dns_status = section_status_from_checks(dns_result, |r| &r.checks);
-    let tls_status = section_status_from_checks(tls_result, |r| &r.checks);
-    let ip_status = section_status_from_checks(ip_result, |r| &r.checks);
+    // Build section status and grade maps.
+    let mut section_statuses: HashMap<String, &'static str> = HashMap::new();
+    let mut section_grades: HashMap<String, String> = HashMap::new();
 
-    // Overall status: if any section is error → "error", else roll up worst
-    let overall = if dns_status == "error" || tls_status == "error" || ip_status == "error" {
+    for (name, result) in sections {
+        section_statuses.insert(name.clone(), section_status_from_checks(result));
+        if let Some(s) = score.sections.get(name) {
+            section_grades.insert(name.clone(), lookup_grade(thresholds, s.percentage));
+        }
+    }
+
+    // Overall status: if any section is error → "error", else roll up worst.
+    let overall = if section_statuses.values().any(|s| *s == "error") {
         "error"
-    } else if dns_status == "fail" || tls_status == "fail" || ip_status == "fail" {
+    } else if section_statuses.values().any(|s| *s == "fail") {
         "fail"
-    } else if dns_status == "warn" || tls_status == "warn" || ip_status == "warn" {
+    } else if section_statuses.values().any(|s| *s == "warn") {
         "warn"
     } else {
         "pass"
     };
 
-    let dns_grade = score
-        .dns
-        .as_ref()
-        .map(|s| lookup_grade(thresholds, s.percentage));
-    let tls_grade = score
-        .tls
-        .as_ref()
-        .map(|s| lookup_grade(thresholds, s.percentage));
-    let ip_grade = score
-        .ip
-        .as_ref()
-        .map(|s| lookup_grade(thresholds, s.percentage));
-
     let payload = SummaryEvent {
-        dns: dns_status,
-        tls: tls_status,
-        ip: ip_status,
+        sections: section_statuses,
+        section_grades,
         overall,
         grade: score.grade.clone(),
         score: (score.overall_percentage * 10.0).round() / 10.0,
         hard_fail: score.hard_fail_triggered,
         hard_fail_checks: score.hard_fail_checks.clone(),
-        dns_grade,
-        tls_grade,
-        ip_grade,
     };
     Event::default()
         .event("summary")
@@ -677,17 +626,29 @@ fn build_sse_events(
     profile: &crate::scoring::profile::ScoringProfile,
 ) -> Vec<Event> {
     let duration_ms = output.duration_ms;
+    let empty_checks = HashMap::new();
+    let empty_err: Result<BackendResult, SectionError> =
+        Err(SectionError::BackendError("absent".to_string()));
+    let dns_checks = profile
+        .sections
+        .get("dns")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
+    let tls_checks = profile
+        .sections
+        .get("tls")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
+    let ip_checks = profile
+        .sections
+        .get("ip")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
     vec![
-        dns_event_from(&output.dns, &profile.dns),
-        tls_event_from(&output.tls, &profile.tls),
-        ip_event_from(&output.ip, &profile.ip),
-        summary_event_from(
-            &output.dns,
-            &output.tls,
-            &output.ip,
-            &output.score,
-            &profile.thresholds,
-        ),
+        dns_event_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
+        tls_event_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
+        ip_event_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
+        summary_event_from(&output.sections, &output.score, &profile.thresholds),
         done_event(&domain, duration_ms, cached),
     ]
 }
@@ -699,10 +660,8 @@ fn build_sse_events_from_cached(
 ) -> Vec<Event> {
     let dummy_output = CheckOutput {
         domain: domain.to_string(),
-        dns: cached.dns.clone(),
-        tls: cached.tls.clone(),
-        ip: cached.ip.clone(),
-        score: clone_score(&cached.score),
+        sections: cached.sections.clone(),
+        score: cached.score.clone(),
         duration_ms: cached.duration_ms,
     };
     build_sse_events(domain.to_string(), dummy_output, true, profile)
@@ -730,18 +689,6 @@ fn sse_response_from_cached(
 
 /// Clone an OverallScore (which doesn't derive Clone due to non-Clone fields — all fields
 /// are primitives or String/Vec, so this is straightforward).
-fn clone_score(s: &OverallScore) -> OverallScore {
-    OverallScore {
-        dns: s.dns.clone(),
-        tls: s.tls.clone(),
-        ip: s.ip.clone(),
-        overall_percentage: s.overall_percentage,
-        grade: s.grade.clone(),
-        hard_fail_triggered: s.hard_fail_triggered,
-        hard_fail_checks: s.hard_fail_checks.clone(),
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -972,5 +919,18 @@ pub mod tests {
         assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
         assert_eq!(json["site_name"], "lens — Domain Health Check");
         assert!(json["ecosystem"].is_object());
+
+        // Profile section_weights and hard_fail are string-keyed maps
+        let profile = &json["profile"];
+        assert!(profile.is_object(), "profile must be an object");
+        let sw = &profile["section_weights"];
+        assert!(sw.is_object(), "section_weights must be an object");
+        assert!(sw.get("dns").is_some(), "section_weights must contain dns");
+        assert!(sw.get("tls").is_some(), "section_weights must contain tls");
+        assert!(sw.get("ip").is_some(), "section_weights must contain ip");
+        let hf = &profile["hard_fail"];
+        assert!(hf.is_object(), "hard_fail must be an object");
+        assert!(hf["dns"].is_array(), "hard_fail.dns must be an array");
+        assert!(hf["tls"].is_array(), "hard_fail.tls must be an array");
     }
 }

@@ -172,61 +172,66 @@ If all three backends fail and every section is excluded, no numeric score can b
 
 The scoring profile (weights, thresholds, hard-fail rules) is defined in a TOML file. The default profile is embedded in the binary. You can override it by setting `scoring.profile_path` in `lens.toml`.
 
-Example profile structure:
+Example profile structure (v2 format):
 
 ```toml
-[thresholds]
-a_plus = 97
-a      = 90
-b      = 75
-c      = 60
-d      = 40
+[meta]
+name = "default"
+version = 2
 
-[sections]
-tls = 45
-dns = 35
-ip  = 20
+[sections.tls]
+weight = 45
+hard_fail = ["chain_trusted", "not_expired"]
 
-[hard_fails]
-rules = [
-  "tls.chain_trusted",
-  "tls.not_expired",
-  "dns.spf_present",
-  "dns.dmarc_present",
-]
-
-[checks.tls]
+[sections.tls.checks]
 chain_trusted   = 10
 not_expired     = 10
 hostname_match  = 10
 chain_complete  = 5
-strong_sig      = 5
+strong_signature = 5
 key_strength    = 5
-expiry_window   = 3
+expiry_window   = 5
 tls_version     = 5
 forward_secrecy = 5
-aead_cipher     = 3
-ocsp_stapled    = 2
-ct_logged       = 1
+aead_cipher     = 5
+ocsp_stapled    = 3
+ct_logged       = 3
+# ... more checks
 
-[checks.dns]
-spf_present     = 10
-dmarc_present   = 10
-dmarc_policy    = 5
-spf_valid       = 5
-dkim_present    = 5
-mx_present      = 3
-dnssec_valid    = 3
-bimi_present    = 1
-mta_sts_present = 2
-tlsrpt_present  = 1
+[sections.dns]
+weight = 35
+hard_fail = ["spf", "dmarc"]
 
-[checks.ip]
-not_tor         = 10
-not_botnet_c2   = 10
-not_vpn         = 5
-not_datacenter  = 3
+[sections.dns.checks]
+spf   = 10
+dmarc = 10
+dnssec = 5
+caa   = 5
+mx    = 5
+# ... more checks
+
+[sections.ip]
+weight = 20
+hard_fail = []
+
+[sections.ip.checks]
+reputation = 5
+
+[thresholds]
+"A+" = 97
+"A"  = 90
+"B"  = 75
+"C"  = 60
+"D"  = 40
+"F"  = 0
 ```
+
+Each `[sections.<name>]` block defines:
+- `weight` — percentage weight of this section in the overall score (all weights must sum to 100)
+- `hard_fail` — check names that trigger an automatic F grade if they fail
+- `checks` — individual check names and their point weights
+
+Adding a new scoring section requires only a new `[sections.<name>]` block in the profile and a corresponding backend implementation.
 
 ---
 

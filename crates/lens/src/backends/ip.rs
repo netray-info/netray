@@ -4,6 +4,8 @@ use std::time::Duration;
 use serde::Deserialize;
 use tracing::Instrument;
 
+use crate::backends::{Backend, BackendContext, BackendExtra, BackendResult};
+use crate::check::SectionError;
 use crate::error::AppError;
 use crate::scoring::engine::{CheckResult, CheckVerdict};
 
@@ -19,7 +21,7 @@ pub struct IpBackendResult {
     pub detail_url: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IpInfo {
     pub ip: IpAddr,
     pub org: Option<String>,
@@ -50,6 +52,53 @@ struct NetworkInfo {
 struct LocationInfo {
     city: Option<String>,
     country: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Backend trait implementation
+// ---------------------------------------------------------------------------
+
+pub struct IpBackend {
+    pub ip_url: String,
+}
+
+impl Backend for IpBackend {
+    fn section(&self) -> &'static str {
+        "ip"
+    }
+
+    fn run(
+        &self,
+        client: &reqwest::Client,
+        _domain: &str,
+        context: &BackendContext,
+        timeout: Duration,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
+    > {
+        if context.resolved_ips.is_empty() {
+            return Box::pin(async { Err(SectionError::NoDnsResults) });
+        }
+        let client = client.clone();
+        let ips = context.resolved_ips.clone();
+        let ip_url = self.ip_url.clone();
+        Box::pin(async move {
+            let result = check_ip(&client, &ip_url, &ips, timeout)
+                .await
+                .map_err(|e| match e {
+                    AppError::Timeout => SectionError::Timeout,
+                    other => SectionError::BackendError(other.to_string()),
+                })?;
+            Ok(BackendResult {
+                checks: result.checks,
+                extra: BackendExtra::Ip {
+                    addresses: result.addresses,
+                    raw_headline: result.raw_headline,
+                    detail_url: result.detail_url,
+                },
+            })
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +287,29 @@ fn build_headline(addresses: &[IpInfo]) -> String {
         (false, true) => orgs.join(", "),
         (true, false) => geos.join(" + "),
         (true, true) => format!("{} address(es)", addresses.len()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn ip_backend_returns_no_dns_results_when_empty() {
+        let backend = IpBackend {
+            ip_url: "https://ip.example.com".to_string(),
+        };
+        let client = reqwest::Client::new();
+        let context = BackendContext {
+            resolved_ips: vec![],
+        };
+        let result = backend
+            .run(&client, "example.com", &context, Duration::from_secs(5))
+            .await;
+        assert!(
+            matches!(result, Err(SectionError::NoDnsResults)),
+            "expected NoDnsResults, got: {result:?}"
+        );
     }
 }
 

@@ -32,7 +32,10 @@ interface Props {
 export default function Summary(props: Props) {
   const s = () => props.summary;
   const isError = () => s().grade === 'error';
-  const hasErroredSection = () => s().dns === 'error' || s().tls === 'error' || s().ip === 'error';
+  const sectionVerdict = (name: string): Verdict => s().sections[name] ?? 'error';
+  const sectionGrade = (name: string): string | undefined => s().section_grades[name];
+  const hasErroredSection = () =>
+    sectionVerdict('dns') === 'error' || sectionVerdict('tls') === 'error' || sectionVerdict('ip') === 'error';
 
   return (
     <div class="summary-card" role="region" aria-label="Summary">
@@ -64,33 +67,33 @@ export default function Summary(props: Props) {
 
       <div class="summary-dots" role="list" aria-label="Section statuses">
         <div class="summary-dot-item" role="listitem">
-          <VerdictDot verdict={s().tls} />
+          <VerdictDot verdict={sectionVerdict('tls')} />
           <span>TLS</span>
-          <Show when={s().tls === 'error'} fallback={
-            <Show when={s().tls_grade}>
-              <span class="summary-dot-grade" style={{ color: gradeStyle(s().tls_grade!) }}>{s().tls_grade}</span>
+          <Show when={sectionVerdict('tls') === 'error'} fallback={
+            <Show when={sectionGrade('tls')}>
+              <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade('tls')!) }}>{sectionGrade('tls')}</span>
             </Show>
           }>
             <span class="summary-dot-error">err</span>
           </Show>
         </div>
         <div class="summary-dot-item" role="listitem">
-          <VerdictDot verdict={s().dns} />
+          <VerdictDot verdict={sectionVerdict('dns')} />
           <span>DNS</span>
-          <Show when={s().dns === 'error'} fallback={
-            <Show when={s().dns_grade}>
-              <span class="summary-dot-grade" style={{ color: gradeStyle(s().dns_grade!) }}>{s().dns_grade}</span>
+          <Show when={sectionVerdict('dns') === 'error'} fallback={
+            <Show when={sectionGrade('dns')}>
+              <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade('dns')!) }}>{sectionGrade('dns')}</span>
             </Show>
           }>
             <span class="summary-dot-error">err</span>
           </Show>
         </div>
         <div class="summary-dot-item" role="listitem">
-          <VerdictDot verdict={s().ip} />
+          <VerdictDot verdict={sectionVerdict('ip')} />
           <span>IP</span>
-          <Show when={s().ip === 'error'} fallback={
-            <Show when={s().ip_grade}>
-              <span class="summary-dot-grade" style={{ color: gradeStyle(s().ip_grade!) }}>{s().ip_grade}</span>
+          <Show when={sectionVerdict('ip') === 'error'} fallback={
+            <Show when={sectionGrade('ip')}>
+              <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade('ip')!) }}>{sectionGrade('ip')}</span>
             </Show>
           }>
             <span class="summary-dot-error">err</span>

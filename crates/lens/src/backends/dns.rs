@@ -6,6 +6,8 @@ use futures::StreamExt;
 use serde_json::Value;
 use tracing::Instrument;
 
+use crate::backends::{Backend, BackendContext, BackendExtra, BackendResult};
+use crate::check::SectionError;
 use crate::error::AppError;
 use crate::scoring::engine::{CheckResult, CheckVerdict};
 
@@ -19,6 +21,50 @@ pub struct DnsBackendResult {
     pub resolved_ips: Vec<IpAddr>,
     pub raw_headline: String,
     pub detail_url: String,
+}
+
+// ---------------------------------------------------------------------------
+// Backend trait implementation
+// ---------------------------------------------------------------------------
+
+pub struct DnsBackend {
+    pub dns_url: String,
+}
+
+impl Backend for DnsBackend {
+    fn section(&self) -> &'static str {
+        "dns"
+    }
+
+    fn run(
+        &self,
+        client: &reqwest::Client,
+        domain: &str,
+        _context: &BackendContext,
+        timeout: Duration,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
+    > {
+        let client = client.clone();
+        let domain = domain.to_string();
+        let dns_url = self.dns_url.clone();
+        Box::pin(async move {
+            let result = check_dns(&client, &dns_url, &domain, timeout)
+                .await
+                .map_err(|e| match e {
+                    AppError::Timeout => SectionError::Timeout,
+                    other => SectionError::BackendError(other.to_string()),
+                })?;
+            Ok(BackendResult {
+                checks: result.checks,
+                extra: BackendExtra::Dns {
+                    resolved_ips: result.resolved_ips,
+                    raw_headline: result.raw_headline,
+                    detail_url: result.detail_url,
+                },
+            })
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------

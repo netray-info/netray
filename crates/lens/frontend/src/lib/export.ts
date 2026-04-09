@@ -58,15 +58,15 @@ export function toMarkdown(
   }
 
   if (summary) {
-    renderSection('TLS', summary.tls, tls);
-    renderSection('DNS', summary.dns, dns);
+    renderSection('TLS', summary.sections['tls'] ?? '', tls);
+    renderSection('DNS', summary.sections['dns'] ?? '', dns);
   } else {
     renderSection('TLS', tls?.status ?? '', tls);
     renderSection('DNS', dns?.status ?? '', dns);
   }
 
   if (ip) {
-    const ipStatus = summary ? summary.ip : ip.status;
+    const ipStatus = summary ? (summary.sections['ip'] ?? ip.status) : ip.status;
     lines.push(`## IP — ${ipStatus}`);
     for (const check of ip.checks) {
       const sym = verdictSymbol(check.verdict);

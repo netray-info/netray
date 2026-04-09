@@ -36,12 +36,10 @@ pub struct SectionScore {
     pub percentage: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OverallScore {
-    /// None if the section errored (backend unreachable).
-    pub dns: Option<SectionScore>,
-    pub tls: Option<SectionScore>,
-    pub ip: Option<SectionScore>,
+    /// Per-section scores. Missing key = section errored or absent from profile.
+    pub sections: HashMap<String, SectionScore>,
     pub overall_percentage: f64,
     pub grade: String,
     pub hard_fail_triggered: bool,
@@ -105,7 +103,7 @@ pub fn score_section(
     })
 }
 
-/// Compute the overall score across all three sections.
+/// Compute the overall score across all sections.
 ///
 /// Overall percentage = weighted average of available (non-errored) section scores.
 /// Grade is determined by comparing overall_percentage against thresholds (desc order).
@@ -113,37 +111,26 @@ pub fn score_section(
 /// the grade is forced to "F" regardless of score.
 pub fn compute_score(
     profile: &ScoringProfile,
-    dns: SectionInput,
-    tls: SectionInput,
-    ip: SectionInput,
+    inputs: &HashMap<String, SectionInput>,
 ) -> OverallScore {
-    let dns_score = score_section(&profile.dns, &dns);
-    let tls_score = score_section(&profile.tls, &tls);
-    let ip_score = score_section(&profile.ip, &ip);
-
-    // Weighted average over available sections only.
+    let mut sections: HashMap<String, SectionScore> = HashMap::new();
     let mut weighted_sum: f64 = 0.0;
     let mut total_weight: u32 = 0;
 
-    if let Some(ref s) = dns_score {
-        weighted_sum += s.percentage * profile.section_weights.dns as f64;
-        total_weight += profile.section_weights.dns;
-    }
-    if let Some(ref s) = tls_score {
-        weighted_sum += s.percentage * profile.section_weights.tls as f64;
-        total_weight += profile.section_weights.tls;
-    }
-    if let Some(ref s) = ip_score {
-        weighted_sum += s.percentage * profile.section_weights.ip as f64;
-        total_weight += profile.section_weights.ip;
+    for (name, section) in &profile.sections {
+        if let Some(input) = inputs.get(name)
+            && let Some(score) = score_section(&section.checks, input)
+        {
+            weighted_sum += score.percentage * section.weight as f64;
+            total_weight += section.weight;
+            sections.insert(name.clone(), score);
+        }
     }
 
     // If all sections errored or had no weighted checks, we have no signal.
     if total_weight == 0 {
         return OverallScore {
-            dns: dns_score,
-            tls: tls_score,
-            ip: ip_score,
+            sections,
             overall_percentage: 0.0,
             grade: "error".to_string(),
             hard_fail_triggered: false,
@@ -156,9 +143,11 @@ pub fn compute_score(
     // Check hard fails before assigning grade.
     let mut hard_fail_checks: Vec<String> = Vec::new();
 
-    check_hard_fails(&profile.hard_fail.dns, &dns.checks, &mut hard_fail_checks);
-    check_hard_fails(&profile.hard_fail.tls, &tls.checks, &mut hard_fail_checks);
-    check_hard_fails(&profile.hard_fail.ip, &ip.checks, &mut hard_fail_checks);
+    for (name, section) in &profile.sections {
+        if let Some(input) = inputs.get(name) {
+            check_hard_fails(&section.hard_fail, &input.checks, &mut hard_fail_checks);
+        }
+    }
 
     let hard_fail_triggered = !hard_fail_checks.is_empty();
 
@@ -169,9 +158,7 @@ pub fn compute_score(
     };
 
     OverallScore {
-        dns: dns_score,
-        tls: tls_score,
-        ip: ip_score,
+        sections,
         overall_percentage,
         grade,
         hard_fail_triggered,
@@ -283,6 +270,14 @@ mod tests {
             checks: vec![],
             errored: true,
         }
+    }
+
+    fn inputs(dns: SectionInput, tls: SectionInput, ip: SectionInput) -> HashMap<String, SectionInput> {
+        HashMap::from([
+            ("dns".to_string(), dns),
+            ("tls".to_string(), tls),
+            ("ip".to_string(), ip),
+        ])
     }
 
     // --- score_section verdict tests ---
@@ -400,7 +395,7 @@ mod tests {
         let dns_input = no_error(vec![pass("spf"), pass("dmarc")]);
         let ip_input = no_error(vec![pass("reputation")]);
 
-        let result = compute_score(&profile, dns_input, tls_input, ip_input);
+        let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
         assert!(result.hard_fail_triggered);
         assert_eq!(result.grade, "F");
         assert!(
@@ -418,7 +413,7 @@ mod tests {
         let tls_input = no_error(vec![pass("chain_trusted"), pass("not_expired")]);
         let ip_input = no_error(vec![pass("reputation")]);
 
-        let result = compute_score(&profile, dns_input, tls_input, ip_input);
+        let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
         assert!(result.hard_fail_triggered);
         assert_eq!(result.grade, "F");
         assert!(result.hard_fail_checks.contains(&"spf".to_string()));
@@ -431,7 +426,7 @@ mod tests {
         let tls_input = no_error(vec![pass("chain_trusted"), pass("not_expired")]);
         let ip_input = no_error(vec![pass("reputation")]);
 
-        let result = compute_score(&profile, dns_input, tls_input, ip_input);
+        let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
         assert!(!result.hard_fail_triggered);
         assert!(result.hard_fail_checks.is_empty());
     }
@@ -444,7 +439,7 @@ mod tests {
         let dns_input = no_error(vec![pass("spf"), pass("dmarc")]);
         let ip_input = no_error(vec![]);
 
-        let result = compute_score(&profile, dns_input, tls_input, ip_input);
+        let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
         assert!(!result.hard_fail_triggered);
     }
 
@@ -458,10 +453,10 @@ mod tests {
         let tls_input = errored();
         let ip_input = no_error(vec![pass("reputation")]);
 
-        let result = compute_score(&profile, dns_input, tls_input, ip_input);
-        assert!(result.tls.is_none());
-        assert!(result.dns.is_some());
-        assert!(result.ip.is_some());
+        let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
+        assert!(!result.sections.contains_key("tls"));
+        assert!(result.sections.contains_key("dns"));
+        assert!(result.sections.contains_key("ip"));
         // overall_percentage > 0 (dns and ip contributed)
         assert!(result.overall_percentage > 0.0);
     }
@@ -469,7 +464,7 @@ mod tests {
     #[test]
     fn all_sections_errored_gives_zero_percent() {
         let profile = default_profile();
-        let result = compute_score(&profile, errored(), errored(), errored());
+        let result = compute_score(&profile, &inputs(errored(), errored(), errored()));
         assert_eq!(result.overall_percentage, 0.0);
     }
 
@@ -509,16 +504,14 @@ mod tests {
         let profile = default_profile();
 
         // Build full pass inputs using the profile's own keys.
-        let dns_checks: Vec<CheckResult> = profile.dns.keys().map(|k| pass(k)).collect();
-        let tls_checks: Vec<CheckResult> = profile.tls.keys().map(|k| pass(k)).collect();
-        let ip_checks: Vec<CheckResult> = profile.ip.keys().map(|k| pass(k)).collect();
+        let dns_checks: Vec<CheckResult> =
+            profile.sections["dns"].checks.keys().map(|k| pass(k)).collect();
+        let tls_checks: Vec<CheckResult> =
+            profile.sections["tls"].checks.keys().map(|k| pass(k)).collect();
+        let ip_checks: Vec<CheckResult> =
+            profile.sections["ip"].checks.keys().map(|k| pass(k)).collect();
 
-        let result = compute_score(
-            &profile,
-            no_error(dns_checks),
-            no_error(tls_checks),
-            no_error(ip_checks),
-        );
+        let result = compute_score(&profile, &inputs(no_error(dns_checks), no_error(tls_checks), no_error(ip_checks)));
 
         assert!(!result.hard_fail_triggered);
         assert_eq!(result.grade, "A+");
@@ -529,22 +522,20 @@ mod tests {
     fn hard_fail_with_otherwise_perfect_scores_gives_f() {
         let profile = default_profile();
 
-        let mut tls_checks: Vec<CheckResult> = profile.tls.keys().map(|k| pass(k)).collect();
+        let mut tls_checks: Vec<CheckResult> =
+            profile.sections["tls"].checks.keys().map(|k| pass(k)).collect();
         // Override chain_trusted to fail
         for c in &mut tls_checks {
             if c.name == "chain_trusted" {
                 c.verdict = CheckVerdict::Fail;
             }
         }
-        let dns_checks: Vec<CheckResult> = profile.dns.keys().map(|k| pass(k)).collect();
-        let ip_checks: Vec<CheckResult> = profile.ip.keys().map(|k| pass(k)).collect();
+        let dns_checks: Vec<CheckResult> =
+            profile.sections["dns"].checks.keys().map(|k| pass(k)).collect();
+        let ip_checks: Vec<CheckResult> =
+            profile.sections["ip"].checks.keys().map(|k| pass(k)).collect();
 
-        let result = compute_score(
-            &profile,
-            no_error(dns_checks),
-            no_error(tls_checks),
-            no_error(ip_checks),
-        );
+        let result = compute_score(&profile, &inputs(no_error(dns_checks), no_error(tls_checks), no_error(ip_checks)));
 
         assert!(result.hard_fail_triggered);
         assert_eq!(result.grade, "F");
@@ -558,7 +549,7 @@ mod tests {
         let dns_input = no_error(vec![pass("spf"), pass("dmarc")]);
         let ip_input = no_error(vec![]);
 
-        let result = compute_score(&profile, dns_input, tls_input, ip_input);
+        let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
         assert!(result.hard_fail_triggered);
         assert!(
             result

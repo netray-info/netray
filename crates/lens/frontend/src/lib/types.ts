@@ -39,17 +39,13 @@ export interface IpEvent {
 }
 
 export interface SummaryEvent {
-  dns: Verdict;
-  tls: Verdict;
-  ip: Verdict;
+  sections: Record<string, Verdict>;
+  section_grades: Record<string, string>;
   overall: Verdict;
   grade: string;
   score: number;
   hard_fail: boolean;
   hard_fail_checks: string[];
-  dns_grade?: string;
-  tls_grade?: string;
-  ip_grade?: string;
 }
 
 export interface DoneEvent {
@@ -71,9 +67,9 @@ export interface ProfileData {
   name: string;
   version: number;
   checks: Record<string, number>;
-  section_weights: { dns: number; tls: number; ip: number };
+  section_weights: Record<string, number>;
   thresholds: Record<string, number>;
-  hard_fail: { dns: string[]; tls: string[]; ip: string[] };
+  hard_fail: Record<string, string[]>;
 }
 
 export interface MetaResponse {

@@ -66,8 +66,8 @@ async fn google_com_scores_well() {
         "google.com grade={} score={:.1} duration={}ms",
         output.score.grade, output.score.overall_percentage, output.duration_ms
     );
-    if let Ok(ref dns) = output.dns {
-        println!("  dns headline: {}", dns.raw_headline);
+    if let Some(Ok(dns)) = output.sections.get("dns") {
+        println!("  dns checks: {} checks", dns.checks.len());
     }
 
     assert!(
@@ -187,8 +187,8 @@ async fn pustina_net_baseline() {
         "pustina.net grade={} score={:.1} duration={}ms",
         output.score.grade, output.score.overall_percentage, output.duration_ms
     );
-    if let Ok(ref dns) = output.dns {
-        println!("  dns headline: {}", dns.raw_headline);
+    if let Some(Ok(dns)) = output.sections.get("dns") {
+        println!("  dns checks: {} checks", dns.checks.len());
     }
     if output.score.hard_fail_triggered {
         println!("  hard_fail_checks: {:?}", output.score.hard_fail_checks);
@@ -201,7 +201,7 @@ async fn pustina_net_baseline() {
         "pustina.net check must return a non-empty grade",
     );
     // All three backends must not time out simultaneously (at least one should respond).
-    let all_timed_out = output.dns.is_err() && output.tls.is_err() && output.ip.is_err();
+    let all_timed_out = output.sections.values().all(|r| r.is_err());
     assert!(
         !all_timed_out,
         "pustina.net: all backends timed out or errored"
@@ -221,8 +221,8 @@ async fn pustina_de_baseline() {
         "pustina.de grade={} score={:.1} duration={}ms",
         output.score.grade, output.score.overall_percentage, output.duration_ms
     );
-    if let Ok(ref dns) = output.dns {
-        println!("  dns headline: {}", dns.raw_headline);
+    if let Some(Ok(dns)) = output.sections.get("dns") {
+        println!("  dns checks: {} checks", dns.checks.len());
     }
     if output.score.hard_fail_triggered {
         println!("  hard_fail_checks: {:?}", output.score.hard_fail_checks);
@@ -232,7 +232,7 @@ async fn pustina_de_baseline() {
         !output.score.grade.is_empty(),
         "pustina.de check must return a non-empty grade",
     );
-    let all_timed_out = output.dns.is_err() && output.tls.is_err() && output.ip.is_err();
+    let all_timed_out = output.sections.values().all(|r| r.is_err());
     assert!(
         !all_timed_out,
         "pustina.de: all backends timed out or errored"
@@ -252,8 +252,8 @@ async fn netray_info_baseline() {
         "netray.info grade={} score={:.1} duration={}ms",
         output.score.grade, output.score.overall_percentage, output.duration_ms
     );
-    if let Ok(ref dns) = output.dns {
-        println!("  dns headline: {}", dns.raw_headline);
+    if let Some(Ok(dns)) = output.sections.get("dns") {
+        println!("  dns checks: {} checks", dns.checks.len());
     }
     if output.score.hard_fail_triggered {
         println!("  hard_fail_checks: {:?}", output.score.hard_fail_checks);
@@ -263,7 +263,7 @@ async fn netray_info_baseline() {
         !output.score.grade.is_empty(),
         "netray.info check must return a non-empty grade",
     );
-    let all_timed_out = output.dns.is_err() && output.tls.is_err() && output.ip.is_err();
+    let all_timed_out = output.sections.values().all(|r| r.is_err());
     assert!(
         !all_timed_out,
         "netray.info: all backends timed out or errored"

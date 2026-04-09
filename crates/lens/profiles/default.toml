@@ -1,8 +1,12 @@
 [meta]
 name = "default"
-version = 1
+version = 2
 
-[dns]
+[sections.dns]
+weight = 35
+hard_fail = ["spf", "dmarc"]
+
+[sections.dns.checks]
 spf = 10
 dmarc = 10
 dnssec = 5
@@ -20,7 +24,11 @@ ttl = 2
 dnskey_algorithm = 3
 dnssec_rollover = 2
 
-[tls]
+[sections.tls]
+weight = 45
+hard_fail = ["chain_trusted", "not_expired"]
+
+[sections.tls.checks]
 chain_trusted = 10
 not_expired = 10
 hostname_match = 10
@@ -44,13 +52,12 @@ ech_advertised = 2
 hsts = 5
 https_redirect = 5
 
-[ip]
-reputation = 5
+[sections.ip]
+weight = 20
+hard_fail = []
 
-[section_weights]
-dns = 35
-tls = 45
-ip = 20
+[sections.ip.checks]
+reputation = 5
 
 [thresholds]
 "A+" = 97
@@ -59,8 +66,3 @@ ip = 20
 "C"  = 60
 "D"  = 40
 "F"  = 0
-
-[hard_fail]
-tls = ["chain_trusted", "not_expired"]
-dns = ["spf", "dmarc"]
-ip = []

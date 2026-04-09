@@ -1,10 +1,9 @@
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
-use crate::backends::dns::DnsBackendResult;
-use crate::backends::ip::IpBackendResult;
-use crate::backends::tls::TlsBackendResult;
-use crate::scoring::engine::{CheckResult, OverallScore, SectionInput, compute_score};
+use crate::backends::{BackendContext, BackendExtra, BackendResult};
+use crate::scoring::engine::{OverallScore, SectionInput, compute_score};
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -20,17 +19,26 @@ pub struct CheckInput {
 pub enum SectionError {
     BackendError(String),
     Timeout,
+    NoDnsResults,
 }
 
 /// Output of a full domain health check.
 pub struct CheckOutput {
     pub domain: String,
-    pub dns: Result<DnsBackendResult, SectionError>,
-    pub tls: Result<TlsBackendResult, SectionError>,
-    pub ip: Result<IpBackendResult, SectionError>,
+    pub sections: HashMap<String, Result<BackendResult, SectionError>>,
     pub score: OverallScore,
     pub duration_ms: u64,
 }
+
+// ---------------------------------------------------------------------------
+// Wave scheduling
+// ---------------------------------------------------------------------------
+
+/// Wave 1: run concurrently. No cross-section data dependencies.
+const WAVE1_SECTIONS: &[&str] = &["dns", "tls"];
+
+/// Wave 2: run after wave 1. IP backend needs resolved IPs from DNS.
+const WAVE2_SECTIONS: &[&str] = &["ip"];
 
 // ---------------------------------------------------------------------------
 // Orchestration
@@ -39,8 +47,8 @@ pub struct CheckOutput {
 /// Run a full domain health check against the configured backends.
 ///
 /// Flow:
-/// 1. DNS and TLS run concurrently with `tokio::join!`.
-/// 2. Resolved IPs from DNS are passed to the IP backend.
+/// 1. DNS and TLS run concurrently (wave 1) with `tokio::join!`.
+/// 2. Resolved IPs from DNS are passed to the IP backend (wave 2).
 /// 3. A 20-second hard deadline wraps everything.
 /// 4. Each section independently captures errors — one failure never aborts the others.
 /// 5. Score is computed from whatever results are available.
@@ -48,8 +56,6 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
     let start = Instant::now();
     let config = &state.config;
     let timeout = Duration::from_secs(config.backends.backend_timeout_secs);
-    // Hard overall deadline: slightly above the per-backend timeout so backends
-    // have a chance to complete, but we never block indefinitely.
     let hard_deadline = Duration::from_secs(20);
 
     let result = tokio::time::timeout(hard_deadline, run_backends(state, domain, timeout)).await;
@@ -59,11 +65,16 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
         Err(_elapsed) => {
             // Hard deadline fired — return Timeout for all sections.
             let score = build_score_from_errors(state);
+            let mut sections = HashMap::new();
+            for backend in state.backends.iter() {
+                sections.insert(
+                    backend.section().to_string(),
+                    Err(SectionError::Timeout),
+                );
+            }
             CheckOutput {
                 domain: domain.to_string(),
-                dns: Err(SectionError::Timeout),
-                tls: Err(SectionError::Timeout),
-                ip: Err(SectionError::Timeout),
+                sections,
                 score,
                 duration_ms: start.elapsed().as_millis() as u64,
             }
@@ -72,48 +83,85 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
 }
 
 /// Inner async function that runs the actual backend calls.
-///
-/// Separated from `run_check` so the hard timeout can wrap it cleanly.
 async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> CheckOutput {
     let start = Instant::now();
-    let config = &state.config;
     let client = &state.http_client;
+    let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
 
-    // Step 1: DNS and TLS in parallel.
-    let (dns_result, tls_result) = tokio::join!(
-        crate::backends::dns::check_dns(client, &config.backends.dns_url, domain, timeout,),
-        crate::backends::tls::check_tls(client, &config.backends.tls_url, domain, timeout,),
-    );
-
-    // Step 2: Extract IPs from DNS result (empty vec if DNS errored).
-    let resolved_ips: Vec<IpAddr> = match &dns_result {
-        Ok(dns) => dns.resolved_ips.clone(),
-        Err(_) => vec![],
+    // Wave 1: run concurrently.
+    let wave1_context = BackendContext {
+        resolved_ips: vec![],
     };
+    let wave1_futures: Vec<_> = state
+        .backends
+        .iter()
+        .filter(|b| WAVE1_SECTIONS.contains(&b.section()))
+        .map(|b| {
+            let section = b.section().to_string();
+            let ctx = wave1_context.clone();
+            let client = client.clone();
+            let domain = domain.to_string();
+            async move {
+                let result =
+                    tokio::time::timeout(timeout, b.run(&client, &domain, &ctx, timeout)).await;
+                let result = match result {
+                    Ok(r) => r,
+                    Err(_) => Err(SectionError::Timeout),
+                };
+                (section, result)
+            }
+        })
+        .collect();
 
-    // Step 3: IP enrichment (needs resolved IPs from DNS).
-    let ip_result =
-        crate::backends::ip::check_ip(client, &config.backends.ip_url, &resolved_ips, timeout)
-            .await;
+    let wave1_results = futures::future::join_all(wave1_futures).await;
 
-    // Step 4: Map AppError to SectionError.
-    let dns = map_error(dns_result);
-    let tls = map_error(tls_result);
-    let ip = map_error(ip_result);
+    for (section, result) in wave1_results {
+        sections.insert(section, result);
+    }
 
-    // Step 5: Build scoring inputs.
-    let dns_input = section_input_from_result(&dns);
-    let tls_input = section_input_from_result(&tls);
-    let ip_input = section_input_from_result(&ip);
+    // Extract resolved IPs from DNS result.
+    let resolved_ips: Vec<IpAddr> = sections
+        .get("dns")
+        .and_then(|r| r.as_ref().ok())
+        .and_then(|br| match &br.extra {
+            BackendExtra::Dns { resolved_ips, .. } => Some(resolved_ips.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
 
-    // Step 6: Compute score.
-    let score = compute_score(&state.scoring_profile, dns_input, tls_input, ip_input);
+    // Wave 2: run after wave 1.
+    let wave2_context = BackendContext { resolved_ips };
+    for backend in state.backends.iter() {
+        if WAVE2_SECTIONS.contains(&backend.section()) {
+            let result =
+                tokio::time::timeout(timeout, backend.run(client, domain, &wave2_context, timeout))
+                    .await;
+            let result = match result {
+                Ok(r) => r,
+                Err(_) => Err(SectionError::Timeout),
+            };
+            sections.insert(backend.section().to_string(), result);
+        }
+    }
+
+    // Build scoring inputs.
+    let mut inputs: HashMap<String, SectionInput> = HashMap::new();
+    for (name, result) in &sections {
+        inputs.insert(name.clone(), section_input_from_result(result));
+    }
+
+    // Warn about profile sections with no registered backend.
+    for name in state.scoring_profile.sections.keys() {
+        if !sections.contains_key(name) {
+            tracing::warn!(section = %name, "profile section has no registered backend — skipped");
+        }
+    }
+
+    let score = compute_score(&state.scoring_profile, &inputs);
 
     CheckOutput {
         domain: domain.to_string(),
-        dns,
-        tls,
-        ip,
+        sections,
         score,
         duration_ms: start.elapsed().as_millis() as u64,
     }
@@ -123,21 +171,11 @@ async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> Chec
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn map_error<T>(result: Result<T, crate::error::AppError>) -> Result<T, SectionError> {
-    result.map_err(|e| match e {
-        crate::error::AppError::Timeout => SectionError::Timeout,
-        other => SectionError::BackendError(other.to_string()),
-    })
-}
-
 /// Build a SectionInput for the scoring engine from a backend result.
-///
-/// - If the result is Ok, use the checks from the backend result.
-/// - If the result is Err, mark the section as errored (excluded from scoring).
-fn section_input_from_result<T: HasChecks>(result: &Result<T, SectionError>) -> SectionInput {
+fn section_input_from_result(result: &Result<BackendResult, SectionError>) -> SectionInput {
     match result {
         Ok(r) => SectionInput {
-            checks: r.checks().to_vec(),
+            checks: r.checks.clone(),
             errored: false,
         },
         Err(_) => SectionInput {
@@ -147,44 +185,17 @@ fn section_input_from_result<T: HasChecks>(result: &Result<T, SectionError>) -> 
     }
 }
 
-/// Trait to uniformly extract checks from the three different backend result types.
-trait HasChecks {
-    fn checks(&self) -> &[CheckResult];
-}
-
-impl HasChecks for DnsBackendResult {
-    fn checks(&self) -> &[CheckResult] {
-        &self.checks
-    }
-}
-
-impl HasChecks for TlsBackendResult {
-    fn checks(&self) -> &[CheckResult] {
-        &self.checks
-    }
-}
-
-impl HasChecks for IpBackendResult {
-    fn checks(&self) -> &[CheckResult] {
-        &self.checks
-    }
-}
-
 /// Build a score from all-errored sections (used when the hard deadline fires).
 fn build_score_from_errors(state: &AppState) -> OverallScore {
-    compute_score(
-        &state.scoring_profile,
-        SectionInput {
-            checks: vec![],
-            errored: true,
-        },
-        SectionInput {
-            checks: vec![],
-            errored: true,
-        },
-        SectionInput {
-            checks: vec![],
-            errored: true,
-        },
-    )
+    let mut inputs: HashMap<String, SectionInput> = HashMap::new();
+    for name in state.scoring_profile.sections.keys() {
+        inputs.insert(
+            name.clone(),
+            SectionInput {
+                checks: vec![],
+                errored: true,
+            },
+        );
+    }
+    compute_score(&state.scoring_profile, &inputs)
 }

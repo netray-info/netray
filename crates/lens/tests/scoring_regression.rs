@@ -1,6 +1,7 @@
 /// Pure unit regression tests for the scoring engine.
 ///
 /// No network access. Tests use the embedded default profile.
+use std::collections::HashMap;
 use lens::scoring::engine::{CheckResult, CheckVerdict, SectionInput, compute_score};
 use lens::scoring::profile::ScoringProfile;
 
@@ -58,11 +59,37 @@ fn errored() -> SectionInput {
     }
 }
 
+fn inputs(dns: SectionInput, tls: SectionInput, ip: SectionInput) -> HashMap<String, SectionInput> {
+    HashMap::from([
+        ("dns".to_string(), dns),
+        ("tls".to_string(), tls),
+        ("ip".to_string(), ip),
+    ])
+}
+
 /// Build all-pass inputs from the profile's own check keys.
 fn all_pass(profile: &ScoringProfile) -> (SectionInput, SectionInput, SectionInput) {
-    let dns = no_error(profile.dns.keys().map(|k| pass(k)).collect());
-    let tls = no_error(profile.tls.keys().map(|k| pass(k)).collect());
-    let ip = no_error(profile.ip.keys().map(|k| pass(k)).collect());
+    let dns = no_error(
+        profile.sections["dns"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect(),
+    );
+    let tls = no_error(
+        profile.sections["tls"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect(),
+    );
+    let ip = no_error(
+        profile.sections["ip"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect(),
+    );
     (dns, tls, ip)
 }
 
@@ -76,12 +103,12 @@ fn default_profile_parses_correctly() {
 
     // Basic structural checks
     assert_eq!(profile.meta.name, "default");
-    assert_eq!(profile.meta.version, 1);
+    assert_eq!(profile.meta.version, 2);
 
     // Section weights are non-zero
-    assert!(profile.section_weights.dns > 0);
-    assert!(profile.section_weights.tls > 0);
-    assert!(profile.section_weights.ip > 0);
+    assert!(profile.sections["dns"].weight > 0);
+    assert!(profile.sections["tls"].weight > 0);
+    assert!(profile.sections["ip"].weight > 0);
 
     // Grade thresholds include the expected grades
     let grades: Vec<&String> = profile.thresholds.keys().collect();
@@ -100,25 +127,25 @@ fn default_profile_parses_correctly() {
 
     // Hard fail lists are present
     assert!(
-        !profile.hard_fail.tls.is_empty(),
+        !profile.sections["tls"].hard_fail.is_empty(),
         "tls hard_fail must not be empty"
     );
     assert!(
-        !profile.hard_fail.dns.is_empty(),
+        !profile.sections["dns"].hard_fail.is_empty(),
         "dns hard_fail must not be empty"
     );
 
     // Each section has at least one weighted check
     assert!(
-        !profile.dns.is_empty(),
+        !profile.sections["dns"].checks.is_empty(),
         "dns section must have weighted checks"
     );
     assert!(
-        !profile.tls.is_empty(),
+        !profile.sections["tls"].checks.is_empty(),
         "tls section must have weighted checks"
     );
     assert!(
-        !profile.ip.is_empty(),
+        !profile.sections["ip"].checks.is_empty(),
         "ip section must have weighted checks"
     );
 }
@@ -131,7 +158,7 @@ fn default_profile_parses_correctly() {
 fn perfect_domain_all_pass_scores_a_plus() {
     let profile = default_profile();
     let (dns, tls, ip) = all_pass(&profile);
-    let result = compute_score(&profile, dns, tls, ip);
+    let result = compute_score(&profile, &inputs(dns, tls, ip));
 
     assert!(!result.hard_fail_triggered);
     assert_eq!(result.grade, "A+", "all-pass should produce A+");
@@ -153,7 +180,7 @@ fn missing_spf_triggers_hard_fail_f() {
 
     // SPF not found — simulates domain with no SPF record
     let dns = no_error(vec![not_found("spf"), pass("dmarc")]);
-    let result = compute_score(&profile, dns, tls, ip);
+    let result = compute_score(&profile, &inputs(dns, tls, ip));
 
     assert!(
         result.hard_fail_triggered,
@@ -178,7 +205,7 @@ fn missing_dmarc_triggers_hard_fail_f() {
 
     // DMARC not found — simulates domain with no DMARC policy
     let dns = no_error(vec![pass("spf"), not_found("dmarc")]);
-    let result = compute_score(&profile, dns, tls, ip);
+    let result = compute_score(&profile, &inputs(dns, tls, ip));
 
     assert!(
         result.hard_fail_triggered,
@@ -202,13 +229,17 @@ fn expired_cert_triggers_hard_fail_f() {
     let (dns, _, ip) = all_pass(&profile);
 
     // not_expired fails — simulates an expired certificate
-    let mut tls_checks: Vec<CheckResult> = profile.tls.keys().map(|k| pass(k)).collect();
+    let mut tls_checks: Vec<CheckResult> = profile.sections["tls"]
+        .checks
+        .keys()
+        .map(|k| pass(k))
+        .collect();
     for c in &mut tls_checks {
         if c.name == "not_expired" {
             c.verdict = CheckVerdict::Fail;
         }
     }
-    let result = compute_score(&profile, dns, no_error(tls_checks), ip);
+    let result = compute_score(&profile, &inputs(dns, no_error(tls_checks), ip));
 
     assert!(
         result.hard_fail_triggered,
@@ -232,13 +263,17 @@ fn untrusted_chain_triggers_hard_fail_f() {
     let (dns, _, ip) = all_pass(&profile);
 
     // chain_trusted fails — simulates a self-signed or otherwise untrusted cert
-    let mut tls_checks: Vec<CheckResult> = profile.tls.keys().map(|k| pass(k)).collect();
+    let mut tls_checks: Vec<CheckResult> = profile.sections["tls"]
+        .checks
+        .keys()
+        .map(|k| pass(k))
+        .collect();
     for c in &mut tls_checks {
         if c.name == "chain_trusted" {
             c.verdict = CheckVerdict::Fail;
         }
     }
-    let result = compute_score(&profile, dns, no_error(tls_checks), ip);
+    let result = compute_score(&profile, &inputs(dns, no_error(tls_checks), ip));
 
     assert!(
         result.hard_fail_triggered,
@@ -263,18 +298,25 @@ fn all_dns_warn_with_all_tls_pass_grades_below_a() {
     let profile = default_profile();
 
     // All DNS checks at Warn (half credit each)
-    let dns_checks: Vec<CheckResult> = profile.dns.keys().map(|k| warn(k)).collect();
+    let dns_checks: Vec<CheckResult> = profile.sections["dns"]
+        .checks
+        .keys()
+        .map(|k| warn(k))
+        .collect();
     // All TLS checks pass
-    let tls_checks: Vec<CheckResult> = profile.tls.keys().map(|k| pass(k)).collect();
+    let tls_checks: Vec<CheckResult> = profile.sections["tls"]
+        .checks
+        .keys()
+        .map(|k| pass(k))
+        .collect();
     // All IP checks pass
-    let ip_checks: Vec<CheckResult> = profile.ip.keys().map(|k| pass(k)).collect();
+    let ip_checks: Vec<CheckResult> = profile.sections["ip"]
+        .checks
+        .keys()
+        .map(|k| pass(k))
+        .collect();
 
-    let result = compute_score(
-        &profile,
-        no_error(dns_checks),
-        no_error(tls_checks),
-        no_error(ip_checks),
-    );
+    let result = compute_score(&profile, &inputs(no_error(dns_checks), no_error(tls_checks), no_error(ip_checks)));
 
     // DNS section should be 50% (all warn = half credit).
     // TLS and IP sections should be 100%.
@@ -307,34 +349,6 @@ fn all_dns_warn_with_all_tls_pass_grades_below_a() {
 #[test]
 fn grade_boundary_97_is_a_plus() {
     let profile = default_profile();
-
-    // Construct a score that yields exactly 97.0% using errored sections so we
-    // can inject a precise overall_percentage without fighting rounding.
-    // We use a minimal single-section scenario:
-    //   dns-only, all others errored, dns section must produce 97% by weight.
-    //
-    // But easier: use a custom profile-agnostic approach by overriding via the
-    // lookup_grade function directly.  Since it's private, we go through
-    // compute_score with crafted inputs that produce ~97%.
-    //
-    // With dns=35, tls=45, ip=20 and only DNS active (others errored):
-    //   overall = dns_percentage * 35 / 35 = dns_percentage
-    // So we need dns_percentage = 97.0.
-    //
-    // dns has e.g. spf=10, dmarc=10 as the main weights. Total dns possible
-    // depends on which checks we include. Use a minimal crafted set:
-    //   pass 97 points, fail 3 points out of 100.
-    // But dns check weights don't sum to 100. Instead, use all-pass minus one
-    // small check set to warn to get close.
-    //
-    // Simplest: use errored tls/ip, craft dns to produce exactly 97%.
-    // dns weights from profile: sum them all, then fail the right amount.
-    let _total_dns_weight: u32 = profile.dns.values().sum();
-    // We need earned/total = 0.97 → earned = total * 0.97.
-    // Use all pass except fail checks totalling (total * 0.03) weight.
-    // target_fail_weight = ceil(total * 0.03) to stay at or above 97%.
-    // Actually, let's find the exact threshold: score 97 → A+.
-    // Rather than crafting exact weights, assert via thresholds directly.
     let grade = lookup_grade_via_profile(&profile, 97.0);
     assert_eq!(grade, "A+", "score 97.0 must yield A+");
 }
@@ -351,12 +365,9 @@ fn grade_boundary_96_9_is_a() {
 ///
 /// Uses dns-only (tls + ip errored). A single fake check named "synthetic" with weight 1000
 /// gives us precise fractional control: pass 970/1000 = 97.0%, etc.
-///
-/// Since the profile's dns map won't contain "synthetic", all real dns checks are
-/// excluded from scoring (unweighted). We use a one-off profile for this.
 fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) -> String {
-    use lens::scoring::profile::{HardFail, ProfileMeta, ScoringProfile, SectionWeights};
-    use std::collections::BTreeMap;
+    use lens::scoring::profile::{ProfileMeta, ScoringProfile, SectionProfile};
+    use std::collections::{BTreeMap, HashMap};
 
     // Build a minimal profile with a single dns check weighted 1000.
     // earned = round(target * 10) out of 1000 → precise to 0.1%.
@@ -366,10 +377,10 @@ fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) ->
     // Two checks: one pass (earned weight), one fail (remainder).
     let fail_weight = possible - earned;
 
-    let mut dns_weights = std::collections::HashMap::new();
-    dns_weights.insert("synthetic_pass".to_string(), earned);
+    let mut dns_checks = HashMap::new();
+    dns_checks.insert("synthetic_pass".to_string(), earned);
     if fail_weight > 0 {
-        dns_weights.insert("synthetic_fail".to_string(), fail_weight);
+        dns_checks.insert("synthetic_fail".to_string(), fail_weight);
     }
 
     let mut thresholds = BTreeMap::new();
@@ -378,34 +389,31 @@ fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) ->
         thresholds.insert(grade.clone(), *val);
     }
 
+    let mut sections = HashMap::new();
+    sections.insert(
+        "dns".to_string(),
+        SectionProfile {
+            weight: 1,
+            hard_fail: vec![],
+            checks: dns_checks,
+        },
+    );
+
     let synthetic_profile = ScoringProfile {
         meta: ProfileMeta {
             name: "synthetic".to_string(),
-            version: 0,
+            version: 2,
         },
-        dns: dns_weights,
-        tls: std::collections::HashMap::new(),
-        ip: std::collections::HashMap::new(),
-        section_weights: SectionWeights {
-            dns: 1,
-            tls: 1,
-            ip: 1,
-        },
+        sections,
         thresholds,
-        hard_fail: HardFail::default(),
     };
 
-    let mut dns_checks = vec![pass("synthetic_pass")];
+    let mut dns_input_checks = vec![pass("synthetic_pass")];
     if fail_weight > 0 {
-        dns_checks.push(fail("synthetic_fail"));
+        dns_input_checks.push(fail("synthetic_fail"));
     }
 
-    let result = compute_score(
-        &synthetic_profile,
-        no_error(dns_checks),
-        errored(),
-        errored(),
-    );
+    let result = compute_score(&synthetic_profile, &inputs(no_error(dns_input_checks), errored(), errored()));
 
     result.grade
 }

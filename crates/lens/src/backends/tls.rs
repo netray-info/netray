@@ -3,6 +3,8 @@ use std::time::Duration;
 use serde::Deserialize;
 use tracing::Instrument;
 
+use crate::backends::{Backend, BackendContext, BackendExtra, BackendResult};
+use crate::check::SectionError;
 use crate::error::AppError;
 use crate::scoring::engine::{CheckResult, CheckVerdict};
 
@@ -72,6 +74,49 @@ struct HealthCheck {
     status: String,
     #[serde(default)]
     detail: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Backend trait implementation
+// ---------------------------------------------------------------------------
+
+pub struct TlsBackend {
+    pub tls_url: String,
+}
+
+impl Backend for TlsBackend {
+    fn section(&self) -> &'static str {
+        "tls"
+    }
+
+    fn run(
+        &self,
+        client: &reqwest::Client,
+        domain: &str,
+        _context: &BackendContext,
+        timeout: Duration,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
+    > {
+        let client = client.clone();
+        let domain = domain.to_string();
+        let tls_url = self.tls_url.clone();
+        Box::pin(async move {
+            let result = check_tls(&client, &tls_url, &domain, timeout)
+                .await
+                .map_err(|e| match e {
+                    AppError::Timeout => SectionError::Timeout,
+                    other => SectionError::BackendError(other.to_string()),
+                })?;
+            Ok(BackendResult {
+                checks: result.checks,
+                extra: BackendExtra::Tls {
+                    raw_headline: result.raw_headline,
+                    detail_url: result.detail_url,
+                },
+            })
+        })
+    }
 }
 
 // ---------------------------------------------------------------------------

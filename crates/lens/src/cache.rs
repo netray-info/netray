@@ -1,16 +1,13 @@
+use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
-use crate::backends::dns::DnsBackendResult;
-use crate::backends::ip::IpBackendResult;
-use crate::backends::tls::TlsBackendResult;
+use crate::backends::BackendResult;
 use crate::check::SectionError;
 use crate::scoring::engine::OverallScore;
 
 /// Cached check result stored in the moka cache.
 pub struct CachedResult {
-    pub dns: Result<DnsBackendResult, SectionError>,
-    pub tls: Result<TlsBackendResult, SectionError>,
-    pub ip: Result<IpBackendResult, SectionError>,
+    pub sections: HashMap<String, Result<BackendResult, SectionError>>,
     pub score: OverallScore,
     pub duration_ms: u64,
     pub cached_at: SystemTime,

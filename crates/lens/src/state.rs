@@ -3,6 +3,10 @@ use std::time::Duration;
 
 use moka::future::Cache;
 
+use crate::backends::Backend;
+use crate::backends::dns::DnsBackend;
+use crate::backends::ip::IpBackend;
+use crate::backends::tls::TlsBackend;
 use crate::cache::CachedResult;
 use crate::config::Config;
 use crate::scoring::ScoringProfile;
@@ -17,17 +21,12 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub cache: Option<Arc<Cache<String, Arc<CachedResult>>>>,
     pub scoring_profile: Arc<ScoringProfile>,
+    /// Ordered: WAVE1_SECTIONS order, then WAVE2_SECTIONS order.
+    pub backends: Arc<Vec<Box<dyn Backend + Send + Sync>>>,
 }
 
 impl AppState {
     /// Build `AppState` from a validated `Config`.
-    ///
-    /// - Constructs a `reqwest::Client` with rustls, a timeout from config, and a
-    ///   `User-Agent` of `lens/<version>`.
-    /// - Constructs per-IP and global GCRA rate limiters.
-    /// - Optionally constructs a `moka` async cache when `config.cache.enabled`.
-    /// - Loads the scoring profile from `config.scoring.profile_path` if set, or
-    ///   falls back to the embedded `profiles/default.toml`.
     pub fn new(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
         let timeout = Duration::from_secs(config.backends.backend_timeout_secs);
 
@@ -52,6 +51,18 @@ impl AppState {
             config.scoring.profile_path.as_deref(),
         )?);
 
+        let backends: Vec<Box<dyn Backend + Send + Sync>> = vec![
+            Box::new(DnsBackend {
+                dns_url: config.backends.dns_url.clone(),
+            }),
+            Box::new(TlsBackend {
+                tls_url: config.backends.tls_url.clone(),
+            }),
+            Box::new(IpBackend {
+                ip_url: config.backends.ip_url.clone(),
+            }),
+        ];
+
         Ok(Self {
             config: Arc::new(config),
             per_ip_limiter,
@@ -59,6 +70,7 @@ impl AppState {
             http_client,
             cache,
             scoring_profile,
+            backends: Arc::new(backends),
         })
     }
 }
@@ -68,7 +80,8 @@ fn load_scoring_profile(path: Option<&str>) -> Result<ScoringProfile, Box<dyn st
     match path {
         Some(p) => {
             let contents = std::fs::read_to_string(p)?;
-            Ok(ScoringProfile::from_toml(&contents)?)
+            let profile = ScoringProfile::from_toml(&contents)?;
+            Ok(profile)
         }
         None => Ok(ScoringProfile::embedded_default()),
     }
@@ -143,5 +156,15 @@ mod tests {
             "embedded default profile must parse: {:?}",
             profile.err()
         );
+    }
+
+    #[test]
+    fn backends_registered_correctly() {
+        let config = test_config();
+        let state = AppState::new(config).unwrap();
+        assert_eq!(state.backends.len(), 3);
+        assert_eq!(state.backends[0].section(), "dns");
+        assert_eq!(state.backends[1].section(), "tls");
+        assert_eq!(state.backends[2].section(), "ip");
     }
 }
