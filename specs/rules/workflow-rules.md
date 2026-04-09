@@ -8,7 +8,7 @@ Apply these rules when creating or modifying any workflow file.
 ## §1 Workflow Files per Project Type
 
 ### Binary service (Rust + SolidJS frontend, produces Docker image)
-`ifconfig-rs`, `mhost-prism`, `tlsight`, `lens`
+`ifconfig-rs`, `mhost-prism`, `tlsight`, `spectra`, `lens`
 
 | File | Purpose |
 |------|---------|

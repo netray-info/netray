@@ -4,7 +4,7 @@ Canonical rules for logging, tracing, and telemetry configuration across all
 backend services. Apply these rules when creating or modifying telemetry setup
 in any tool, or when configuring production deployments.
 
-Services in scope: `ifconfig-rs`, `mhost-prism`, `tlsight`, `lens`.
+Services in scope: `ifconfig-rs`, `mhost-prism`, `tlsight`, `spectra`, `lens`.
 
 ---
 
