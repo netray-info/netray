@@ -1,4 +1,4 @@
-import { Show, For } from 'solid-js';
+import { Show } from 'solid-js';
 import type { FingerprintReport } from '../lib/types';
 
 interface Props {
@@ -8,14 +8,7 @@ interface Props {
 
 export default function FingerprintView(props: Props) {
   return (
-    <div class="section">
-      <div class="section__title">
-        Server Fingerprint
-        <span class={`badge badge--${props.fingerprint.info_leakage.status}`} style={{ 'margin-left': '0.5rem' }}>
-          {props.fingerprint.info_leakage.status}
-        </span>
-      </div>
-
+    <>
       <Show when={props.fingerprint.server}>
         <p style={{ 'font-size': '0.875rem' }}>
           Server: <span class="mono">{props.fingerprint.server}</span>
@@ -33,6 +26,6 @@ export default function FingerprintView(props: Props) {
           Deprecated headers: {props.deprecatedHeaders.join(', ')}
         </p>
       </Show>
-    </div>
+    </>
   );
 }

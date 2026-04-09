@@ -1,4 +1,4 @@
-import { Show, For } from 'solid-js';
+import { Show } from 'solid-js';
 import type { CachingReport, CdnReport } from '../lib/types';
 
 interface Props {
@@ -10,9 +10,7 @@ export default function CachingView(props: Props) {
   const d = () => props.caching.directives;
 
   return (
-    <div class="section">
-      <div class="section__title">Caching</div>
-
+    <>
       <Show when={props.caching.cache_control}>
         <p class="mono" style={{ 'font-size': '0.8125rem', 'margin-bottom': '0.5rem' }}>
           Cache-Control: {props.caching.cache_control}
@@ -44,7 +42,7 @@ export default function CachingView(props: Props) {
 
       <Show when={props.cdn.detected}>
         <div style={{ 'margin-top': '0.75rem' }}>
-          <div class="section__title">CDN</div>
+          <div style={{ 'font-size': '0.875rem', 'font-weight': '600', 'text-transform': 'uppercase', 'letter-spacing': '0.05em', 'color': 'var(--text-muted)', 'margin-bottom': '0.75rem' }}>CDN</div>
           <p style={{ 'font-size': '0.875rem' }}>
             Detected: <strong>{props.cdn.detected}</strong>
             <Show when={props.cdn.cache_status}>
@@ -58,6 +56,6 @@ export default function CachingView(props: Props) {
           </Show>
         </div>
       </Show>
-    </div>
+    </>
   );
 }

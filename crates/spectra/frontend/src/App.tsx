@@ -1,4 +1,4 @@
-import { createSignal, Show, For, onMount } from 'solid-js';
+import { createSignal, createEffect, Show, For, onMount } from 'solid-js';
 import UrlInput from './components/UrlInput';
 import HeadersView from './components/HeadersView';
 import RedirectChain from './components/RedirectChain';
@@ -72,9 +72,52 @@ export default function App() {
     handleInspect(initialUrl);
   }
 
+  const STATUS_ORDER: Record<CheckStatus, number> = { pass: 0, skip: 1, warn: 2, fail: 3 };
+
+  function worstStatus(statuses: CheckStatus[]): CheckStatus {
+    let worst: CheckStatus = 'pass';
+    for (const s of statuses) {
+      if (STATUS_ORDER[s] > STATUS_ORDER[worst]) worst = s;
+    }
+    return worst;
+  }
+
+  function securityWorst(sec: InspectResponse['security']): CheckStatus {
+    return worstStatus([
+      sec.hsts.status, sec.csp.status, sec.x_frame_options.status,
+      sec.x_content_type_options.status, sec.referrer_policy.status,
+      sec.permissions_policy.status, sec.coop.status, sec.coep.status, sec.corp.status,
+    ]);
+  }
+
   function verdictClass(status: CheckStatus): string {
     return `badge badge--${status}`;
   }
+
+  // Expand / collapse all
+  const [allExpanded, setAllExpanded] = createSignal(false);
+  const [openQuality, setOpenQuality] = createSignal(false);
+  const [openRedirects, setOpenRedirects] = createSignal(false);
+  const [openSecurity, setOpenSecurity] = createSignal(false);
+  const [openCsp, setOpenCsp] = createSignal(false);
+  const [openCors, setOpenCors] = createSignal(false);
+  const [openCookies, setOpenCookies] = createSignal(false);
+  const [openCaching, setOpenCaching] = createSignal(false);
+  const [openFingerprint, setOpenFingerprint] = createSignal(false);
+  const [openHeaders, setOpenHeaders] = createSignal(false);
+
+  createEffect(() => {
+    const expanded = allExpanded();
+    setOpenQuality(expanded);
+    setOpenRedirects(expanded);
+    setOpenSecurity(expanded);
+    setOpenCsp(expanded);
+    setOpenCors(expanded);
+    setOpenCookies(expanded);
+    setOpenCaching(expanded);
+    setOpenFingerprint(expanded);
+    setOpenHeaders(expanded);
+  });
 
   return (
       <div class="app">
@@ -114,6 +157,10 @@ export default function App() {
           <Show when={result()}>
             {(r) => {
               const data = r();
+              const hasRedirects = data.redirects.length > 0 || !!data.http_upgrade;
+              const hasCsp = Object.keys(data.security.csp.directives).length > 0 || data.security.csp.issues.length > 0;
+              const hasCookies = data.cookies.length > 0;
+
               return (
                 <>
                   {/* Overview bar */}
@@ -164,52 +211,204 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Quality checks */}
-                  <div class="section">
-                    <div class="section__title">Quality Assessment</div>
-                    <ul class="check-list">
-                      <For each={data.quality.checks}>
-                        {(check) => (
-                          <li class="check-list__item">
-                            <span class={`badge badge--${check.status}`}>{check.status}</span>
-                            <span class="check-list__name">{check.name}</span>
-                            <span class="check-list__message">{check.message ?? ''}</span>
-                          </li>
-                        )}
-                      </For>
-                    </ul>
+                  {/* Expand / collapse toggle */}
+                  <div class="section-controls">
+                    <button
+                      class="filter-toggle"
+                      onClick={() => setAllExpanded(!allExpanded())}
+                    >
+                      {allExpanded() ? 'Collapse all' : 'Expand all'}
+                    </button>
+                  </div>
+
+                  {/* Quality Assessment */}
+                  <div class="section-card">
+                    <button class="section-card__header" onClick={() => setOpenQuality(!openQuality())} aria-expanded={openQuality()}>
+                      <span class={`section-card__status section-card__status--${data.quality.verdict}`} />
+                      <span class="section-card__title">Quality Assessment</span>
+                      <span class="section-card__badges">
+                        <span class={verdictClass(data.quality.verdict)}>{data.quality.verdict}</span>
+                      </span>
+                      <span class="section-card__spacer" />
+                      <span class={`section-card__chevron${openQuality() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                    </button>
+                    <Show when={openQuality()}>
+                      <div class="section-card__body">
+                        <ul class="check-list">
+                          <For each={data.quality.checks}>
+                            {(check) => (
+                              <li class={`check-list__item${check.status === 'fail' ? ' check-row--fail' : check.status === 'warn' ? ' check-row--warn' : ''}`}>
+                                <span class={`badge badge--${check.status}`}>{check.status}</span>
+                                <span class="check-list__name">{check.name}</span>
+                                <span class="check-list__message">{check.message ?? ''}</span>
+                              </li>
+                            )}
+                          </For>
+                        </ul>
+                      </div>
+                    </Show>
                   </div>
 
                   {/* Redirects */}
-                  <RedirectChain
-                    redirects={data.redirects}
-                    finalUrl={data.final_url}
-                    httpUpgrade={data.http_upgrade}
-                  />
+                  <Show when={hasRedirects}>
+                    <div class="section-card">
+                      <button class="section-card__header" onClick={() => setOpenRedirects(!openRedirects())} aria-expanded={openRedirects()}>
+                        <span class="section-card__status section-card__status--skip" />
+                        <span class="section-card__title">Redirects</span>
+                        <span class="section-card__badges">
+                          <span class="badge badge--skip">{data.redirects.length} hop{data.redirects.length !== 1 ? 's' : ''}</span>
+                        </span>
+                        <span class="section-card__spacer" />
+                        <span class={`section-card__chevron${openRedirects() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                      </button>
+                      <Show when={openRedirects()}>
+                        <div class="section-card__body">
+                          <RedirectChain
+                            redirects={data.redirects}
+                            finalUrl={data.final_url}
+                            httpUpgrade={data.http_upgrade}
+                          />
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
 
-                  {/* Security headers */}
-                  <SecurityAudit security={data.security} />
+                  {/* Security Headers */}
+                  <div class="section-card">
+                    <button class="section-card__header" onClick={() => setOpenSecurity(!openSecurity())} aria-expanded={openSecurity()}>
+                      <span class={`section-card__status section-card__status--${securityWorst(data.security)}`} />
+                      <span class="section-card__title">Security Headers</span>
+                      <span class="section-card__badges">
+                        <span class={verdictClass(securityWorst(data.security))}>{securityWorst(data.security)}</span>
+                      </span>
+                      <span class="section-card__spacer" />
+                      <span class={`section-card__chevron${openSecurity() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                    </button>
+                    <Show when={openSecurity()}>
+                      <div class="section-card__body">
+                        <SecurityAudit security={data.security} />
+                      </div>
+                    </Show>
+                  </div>
 
-                  {/* CSP detail */}
-                  <CspAnalysis csp={data.security.csp} />
+                  {/* CSP */}
+                  <Show when={hasCsp}>
+                    <div class="section-card">
+                      <button class="section-card__header" onClick={() => setOpenCsp(!openCsp())} aria-expanded={openCsp()}>
+                        <span class={`section-card__status section-card__status--${data.security.csp.status}`} />
+                        <span class="section-card__title">
+                          Content Security Policy
+                          {data.security.csp.report_only ? ' (Report-Only)' : ''}
+                        </span>
+                        <span class="section-card__badges">
+                          <span class={verdictClass(data.security.csp.status)}>{data.security.csp.status}</span>
+                          <Show when={data.security.csp.issues.length > 0}>
+                            <span class="badge badge--warn">{data.security.csp.issues.length} issue{data.security.csp.issues.length !== 1 ? 's' : ''}</span>
+                          </Show>
+                        </span>
+                        <span class="section-card__spacer" />
+                        <span class={`section-card__chevron${openCsp() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                      </button>
+                      <Show when={openCsp()}>
+                        <div class="section-card__body">
+                          <CspAnalysis csp={data.security.csp} />
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
 
                   {/* CORS */}
-                  <CorsReport cors={data.cors} />
+                  <div class="section-card">
+                    <button class="section-card__header" onClick={() => setOpenCors(!openCors())} aria-expanded={openCors()}>
+                      <span class={`section-card__status section-card__status--${data.cors.status}`} />
+                      <span class="section-card__title">CORS</span>
+                      <span class="section-card__badges">
+                        <span class={verdictClass(data.cors.status)}>{data.cors.status}</span>
+                      </span>
+                      <span class="section-card__spacer" />
+                      <span class={`section-card__chevron${openCors() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                    </button>
+                    <Show when={openCors()}>
+                      <div class="section-card__body">
+                        <CorsReport cors={data.cors} />
+                      </div>
+                    </Show>
+                  </div>
 
                   {/* Cookies */}
-                  <CookieInspector cookies={data.cookies} />
+                  <Show when={hasCookies}>
+                    <div class="section-card">
+                      <button class="section-card__header" onClick={() => setOpenCookies(!openCookies())} aria-expanded={openCookies()}>
+                        <span class="section-card__status section-card__status--skip" />
+                        <span class="section-card__title">Cookies</span>
+                        <span class="section-card__badges">
+                          <span class="badge badge--skip">{data.cookies.length}</span>
+                        </span>
+                        <span class="section-card__spacer" />
+                        <span class={`section-card__chevron${openCookies() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                      </button>
+                      <Show when={openCookies()}>
+                        <div class="section-card__body">
+                          <CookieInspector cookies={data.cookies} />
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
 
                   {/* Caching + CDN */}
-                  <CachingView caching={data.caching} cdn={data.cdn} />
+                  <div class="section-card">
+                    <button class="section-card__header" onClick={() => setOpenCaching(!openCaching())} aria-expanded={openCaching()}>
+                      <span class="section-card__status section-card__status--skip" />
+                      <span class="section-card__title">Caching</span>
+                      <span class="section-card__badges" />
+                      <span class="section-card__spacer" />
+                      <span class={`section-card__chevron${openCaching() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                    </button>
+                    <Show when={openCaching()}>
+                      <div class="section-card__body">
+                        <CachingView caching={data.caching} cdn={data.cdn} />
+                      </div>
+                    </Show>
+                  </div>
 
                   {/* Fingerprint + deprecated */}
-                  <FingerprintView
-                    fingerprint={data.fingerprint}
-                    deprecatedHeaders={data.deprecated_headers}
-                  />
+                  <div class="section-card">
+                    <button class="section-card__header" onClick={() => setOpenFingerprint(!openFingerprint())} aria-expanded={openFingerprint()}>
+                      <span class={`section-card__status section-card__status--${data.fingerprint.info_leakage.status}`} />
+                      <span class="section-card__title">Server Fingerprint</span>
+                      <span class="section-card__badges">
+                        <span class={verdictClass(data.fingerprint.info_leakage.status)}>{data.fingerprint.info_leakage.status}</span>
+                      </span>
+                      <span class="section-card__spacer" />
+                      <span class={`section-card__chevron${openFingerprint() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                    </button>
+                    <Show when={openFingerprint()}>
+                      <div class="section-card__body">
+                        <FingerprintView
+                          fingerprint={data.fingerprint}
+                          deprecatedHeaders={data.deprecated_headers}
+                        />
+                      </div>
+                    </Show>
+                  </div>
 
-                  {/* All headers */}
-                  <HeadersView headers={data.headers} />
+                  {/* Response Headers */}
+                  <div class="section-card">
+                    <button class="section-card__header" onClick={() => setOpenHeaders(!openHeaders())} aria-expanded={openHeaders()}>
+                      <span class="section-card__status section-card__status--skip" />
+                      <span class="section-card__title">Response Headers</span>
+                      <span class="section-card__badges">
+                        <span class="badge badge--skip">{Object.keys(data.headers).length}</span>
+                      </span>
+                      <span class="section-card__spacer" />
+                      <span class={`section-card__chevron${openHeaders() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                    </button>
+                    <Show when={openHeaders()}>
+                      <div class="section-card__body">
+                        <HeadersView headers={data.headers} />
+                      </div>
+                    </Show>
+                  </div>
                 </>
               );
             }}

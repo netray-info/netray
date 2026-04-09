@@ -6,13 +6,7 @@ interface Props {
 
 export default function CorsReport(props: Props) {
   return (
-    <div class="section">
-      <div class="section__title">
-        CORS
-        <span class={`badge badge--${props.cors.status}`} style={{ 'margin-left': '0.5rem' }}>
-          {props.cors.status}
-        </span>
-      </div>
+    <>
       <p style={{ 'font-size': '0.875rem', 'margin-bottom': '0.5rem' }}>
         {props.cors.message}
       </p>
@@ -21,6 +15,6 @@ export default function CorsReport(props: Props) {
         <li>Reflects origin: {props.cors.reflects_origin ? 'Yes' : 'No'}</li>
         <li>Allows credentials: {props.cors.allows_credentials ? 'Yes' : 'No'}</li>
       </ul>
-    </div>
+    </>
   );
 }

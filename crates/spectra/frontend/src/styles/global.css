@@ -99,23 +99,12 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
-   Result sections
+   Section controls (expand/collapse all)
    ================================================================ */
 
-.section {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.section__title {
-  font-size: 0.875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
+.section-controls {
+  display: flex;
+  justify-content: flex-end;
   margin-bottom: 0.75rem;
 }
 
@@ -190,6 +179,12 @@ a:hover { text-decoration: underline; }
 .check-list__name { font-weight: 500; min-width: 12rem; }
 
 .check-list__message { color: var(--text-muted); flex: 1; }
+
+.check-row--fail { background: rgba(239, 68, 68, 0.08); }
+.check-row--warn { background: rgba(245, 158, 11, 0.08); }
+
+[data-theme="light"] .check-row--fail { background: rgba(204, 0, 0, 0.06); }
+[data-theme="light"] .check-row--warn { background: rgba(184, 110, 0, 0.06); }
 
 /* ================================================================
    Redirect chain
