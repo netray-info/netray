@@ -2,26 +2,22 @@
 
 ## Rules
 
-- Do NOT add a `Co-Authored-By` line for Claude in commit messages.
+- No Co-Authored-By for Claude in commits
+- Scoped changes only: no formatting mixed with functional changes, no unrelated modifications
+- No heavy deps for minor convenience; no speculative flags/config/abstractions without a caller
+- Don't bypass failing checks (`--no-verify`, `#[allow(...)]`) without explaining why
+- No PII, real emails, or real domains (use example.com) in test data, docs, commits
+- `TODO("reason")` over hidden guesses; conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
 - **SCORING SYNC RULE**: Any change to the scoring algorithm (`src/scoring/`),
   profile schema, weight tiers, grade thresholds, or hard-fail rules MUST be
   reflected in `README.md` (the Scoring section) in the same commit. The README
-  is the transparency contract — users must understand why a domain received a
-  grade without reading source code.
-- Don't add heavy dependencies for minor convenience.
-- Don't mix formatting-only changes with functional changes in the same commit.
-- Don't modify unrelated modules while you're in there.
-- Don't add speculative flags, config options, or abstractions without a current caller.
-- Don't bypass failing checks (`--no-verify`, `#[allow(...)]`) without explaining why.
-- Don't include PII, real email addresses, or real domains (other than example.com) in test data, docs, or commits.
-- If uncertain about an implementation detail, leave a concrete `TODO("reason")` rather than a hidden guess.
+  is the transparency contract.
 
 ## Engineering Principles
 
-- **KISS**: Simplest solution that works.
-- **YAGNI**: Don't build for hypothetical future requirements.
-- **Fail Fast**: Validate at boundaries, return errors early.
-- **Secure by Default**: lens makes outbound HTTP calls to user-specified domains — target policy validation is load-bearing.
+KISS · YAGNI · DRY (rule of three) · SRP · Fail Fast · Reversibility · Performance
+
+- **Secure by Default**: lens makes outbound HTTP calls to user-specified domains -- target policy validation is load-bearing.
 - **Partial failure is expected**: one backend down must never block the others.
 
 ## Project Overview
