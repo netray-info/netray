@@ -149,6 +149,7 @@ export default function App() {
           <h1 class="logo">lens</h1>
           <span class="tagline">Domain health at a glance</span>
           <div class="header-actions">
+            <ThemeToggle theme={themeResult} class="header-btn" />
             <button
               class="header-btn"
               type="button"
@@ -158,7 +159,6 @@ export default function App() {
             >
               ?
             </button>
-            <ThemeToggle theme={themeResult} class="header-btn" />
           </div>
         </header>
 
