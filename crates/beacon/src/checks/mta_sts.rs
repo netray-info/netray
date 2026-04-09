@@ -94,7 +94,7 @@ pub async fn check_mta_sts(
         }
     };
 
-    metrics::histogram!("mail_inspector_https_fetch_duration_seconds", "target" => "mta_sts")
+    metrics::histogram!("beacon_https_fetch_duration_seconds", "target" => "mta_sts")
         .record(fetch_start.elapsed().as_secs_f64());
 
     // Check for redirects (3xx)

@@ -27,7 +27,7 @@ impl AppState {
             Arc::new(EnrichmentClient::new(
                 &e.ip_url,
                 Duration::from_millis(e.timeout_ms),
-                "mail-inspector",
+                "beacon",
                 None,
             ))
         });
@@ -36,7 +36,7 @@ impl AppState {
             .timeout(Duration::from_millis(config.http.timeout_ms))
             .redirect(reqwest::redirect::Policy::none())
             .user_agent(format!(
-                "mail-inspector/{} (netray.info)",
+                "beacon/{} (netray.info)",
                 env!("CARGO_PKG_VERSION")
             ))
             .build()
@@ -46,7 +46,7 @@ impl AppState {
             .timeout(Duration::from_millis(config.http.timeout_ms))
             .redirect(reqwest::redirect::Policy::limited(5))
             .user_agent(format!(
-                "mail-inspector/{} (netray.info)",
+                "beacon/{} (netray.info)",
                 env!("CARGO_PKG_VERSION")
             ))
             .build()

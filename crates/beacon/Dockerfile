@@ -10,16 +10,16 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src src/
 COPY --from=frontend /build/frontend/dist frontend/dist/
-RUN cargo build --release --bins && cp $(find /build -xdev -name mail-inspector) /
+RUN cargo build --release --bins && cp $(find /build -xdev -name beacon) /
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates wget \
- && addgroup -S mailcheck && adduser -S mailcheck -G mailcheck
-WORKDIR /mail-inspector
-COPY mail-inspector.toml mail-inspector.toml
-ENV MAIL__SERVER__BIND=0.0.0.0:3000
-COPY --from=builder /mail-inspector .
-RUN chown -R mailcheck:mailcheck /mail-inspector
-USER mailcheck
+ && addgroup -S beacon && adduser -S beacon -G beacon
+WORKDIR /beacon
+COPY beacon.toml beacon.toml
+ENV BEACON__SERVER__BIND=0.0.0.0:3000
+COPY --from=builder /beacon .
+RUN chown -R beacon:beacon /beacon
+USER beacon
 EXPOSE 3000 9090
-CMD ["./mail-inspector", "mail-inspector.toml"]
+CMD ["./beacon", "beacon.toml"]

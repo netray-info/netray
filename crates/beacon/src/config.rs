@@ -91,7 +91,7 @@ impl Config {
         }
 
         builder = builder.add_source(
-            config::Environment::with_prefix("MAIL")
+            config::Environment::with_prefix("BEACON")
                 .separator("__")
                 .try_parsing(true),
         );
@@ -207,7 +207,7 @@ fn default_log_format() -> String {
 }
 
 fn default_service_name() -> String {
-    "mail-inspector".to_string()
+    "beacon".to_string()
 }
 
 fn default_sample_rate() -> f64 {

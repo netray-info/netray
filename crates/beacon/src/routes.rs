@@ -46,7 +46,7 @@ pub struct InspectRequest {
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "mail-inspector", description = "Email security inspector — DNS-only mail posture analysis"),
+    info(title = "beacon", description = "Email security inspector — DNS-only mail posture analysis"),
     paths(
         health_handler,
         ready_handler,
@@ -145,7 +145,7 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
 async fn meta_handler() -> Json<MetaResponse> {
     Json(MetaResponse {
         version: env!("CARGO_PKG_VERSION"),
-        service: "mail-inspector",
+        service: "beacon",
     })
 }
 
@@ -178,11 +178,11 @@ async fn inspect_post_handler(
     // Rate limiting
     let client_ip = state.ip_extractor.extract(&headers, peer);
     if let Err(e) = state.rate_limiter.check(client_ip) {
-        metrics::counter!("mail_inspector_rate_limit_rejections_total").increment(1);
+        metrics::counter!("beacon_rate_limit_rejections_total").increment(1);
         return Err(e);
     }
 
-    metrics::counter!("mail_inspector_requests_total", "endpoint" => "inspect", "method" => "post").increment(1);
+    metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "post").increment(1);
 
     let events = checks::run_all_checks(
         domain,
@@ -194,7 +194,7 @@ async fn inspect_post_handler(
     )
     .await;
 
-    metrics::counter!("mail_inspector_sse_events_total").increment(events.len() as u64);
+    metrics::counter!("beacon_sse_events_total").increment(events.len() as u64);
 
     let sse_stream = stream::iter(events.into_iter().map(|event| {
         let sse_event: axum::response::sse::Event = event.into();
@@ -231,11 +231,11 @@ async fn inspect_get_handler(
     // Rate limiting
     let client_ip = state.ip_extractor.extract(&headers, peer);
     if let Err(e) = state.rate_limiter.check(client_ip) {
-        metrics::counter!("mail_inspector_rate_limit_rejections_total").increment(1);
+        metrics::counter!("beacon_rate_limit_rejections_total").increment(1);
         return Err(e);
     }
 
-    metrics::counter!("mail_inspector_requests_total", "endpoint" => "inspect", "method" => "get").increment(1);
+    metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "get").increment(1);
 
     let events = checks::run_all_checks(
         domain,
@@ -247,7 +247,7 @@ async fn inspect_get_handler(
     )
     .await;
 
-    metrics::counter!("mail_inspector_sse_events_total").increment(events.len() as u64);
+    metrics::counter!("beacon_sse_events_total").increment(events.len() as u64);
 
     let sse_stream = stream::iter(events.into_iter().map(|event| {
         let sse_event: axum::response::sse::Event = event.into();
@@ -317,7 +317,7 @@ mod tests {
         let (status, body) = do_get(&app, "/api/meta").await;
         assert_eq!(status, StatusCode::OK);
         assert!(body["version"].is_string());
-        assert_eq!(body["service"], "mail-inspector");
+        assert_eq!(body["service"], "beacon");
     }
 
     #[tokio::test]
@@ -326,6 +326,6 @@ mod tests {
         let (status, body) = do_get(&app, "/api-docs/openapi.json").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["openapi"], "3.1.0");
-        assert_eq!(body["info"]["title"], "mail-inspector");
+        assert_eq!(body["info"]["title"], "beacon");
     }
 }

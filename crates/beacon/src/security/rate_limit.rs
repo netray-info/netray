@@ -24,7 +24,7 @@ impl RateLimitState {
 
     pub fn check(&self, client_ip: IpAddr) -> Result<(), MailError> {
         let cost = NonZeroU32::new(1).expect("1 is non-zero");
-        check_keyed_cost(&self.per_ip, &client_ip, cost, "per_ip", "mail-inspector").map_err(
+        check_keyed_cost(&self.per_ip, &client_ip, cost, "per_ip", "beacon").map_err(
             |r| MailError::RateLimited {
                 retry_after_secs: r.retry_after_secs,
                 scope: r.scope,

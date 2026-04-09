@@ -87,7 +87,7 @@ pub async fn check_bimi(
                     });
                 }
             }
-            metrics::histogram!("mail_inspector_https_fetch_duration_seconds", "target" => "bimi_logo")
+            metrics::histogram!("beacon_https_fetch_duration_seconds", "target" => "bimi_logo")
                 .record(fetch_start.elapsed().as_secs_f64());
         }
         _ => {

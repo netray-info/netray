@@ -1,8 +1,8 @@
-# CLAUDE.md -- mail-inspector
+# CLAUDE.md -- beacon
 
 ## What this is
 
-DNS-only email security inspector (`email.netray.info`). Fifth pillar in the netray suite: IP -> DNS -> TLS -> HTTP -> Email.
+DNS-only email security inspector (`email.netray.info`), codename **beacon**. Fifth pillar in the netray suite: IP -> DNS -> TLS -> HTTP -> Email.
 
 Given a domain, checks 12 email security categories (MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, DNSBL, cross-validation) and produces an aggregate grade A-F via SSE streaming.
 
@@ -28,7 +28,7 @@ Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows suite patterns.
 
 ## Config
 
-TOML file `mail-inspector.toml` + env overrides with `MAIL_` prefix (`__` for nesting).
+TOML file `beacon.toml` + env overrides with `BEACON_` prefix (`__` for nesting).
 
 ## Development
 
@@ -43,7 +43,7 @@ cd frontend && npm run build         # production build into dist/
 
 ## Specs
 
-- SDD: [`specs/sdd/mail-inspector.md`](../specs/sdd/mail-inspector.md)
+- SDD: [`specs/sdd/beacon.md`](../specs/sdd/beacon.md)
 - Apply [frontend-rules](../specs/rules/frontend-rules.md) when modifying `frontend/`
 - Apply [logging-rules](../specs/rules/logging-rules.md) when modifying tracing/telemetry
 - Apply [architecture-rules](../specs/rules/architecture-rules.md) for health probes and middleware

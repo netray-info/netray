@@ -20,7 +20,7 @@ import type {
 } from './lib/types';
 import { CATEGORY_LABELS, CATEGORY_ORDER } from './lib/types';
 
-const HISTORY_KEY = 'mail_history';
+const HISTORY_KEY = 'beacon_history';
 const MAX_HISTORY = 20;
 
 const GRADE_COLORS: Record<Grade, string> = {
@@ -34,7 +34,7 @@ const GRADE_COLORS: Record<Grade, string> = {
 const EXAMPLE_DOMAINS = ['example.com', 'gmail.com', 'protonmail.com'];
 
 export default function App() {
-  const theme = createTheme('mail_theme', 'system');
+  const theme = createTheme('beacon_theme', 'system');
   const [meta, setMeta] = createSignal<MetaResponse | null>(null);
 
   // Input state
@@ -370,7 +370,7 @@ export default function App() {
       <SiteFooter
         aboutText={
           <>
-            <em>mail-inspector</em> performs DNS-only email security posture analysis. Built in{' '}
+            <em>beacon</em> performs DNS-only email security posture analysis. Built in{' '}
             <a href="https://www.rust-lang.org">Rust</a> with{' '}
             <a href="https://github.com/tokio-rs/axum">Axum</a> and{' '}
             <a href="https://www.solidjs.com">SolidJS</a>.

@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     // Load config
     let config_path = std::env::args()
         .nth(1)
-        .or_else(|| std::env::var("MAIL_CONFIG").ok());
+        .or_else(|| std::env::var("BEACON_CONFIG").ok());
 
     let config = config::Config::load(config_path.as_deref())
         .expect("failed to load config");
@@ -37,13 +37,13 @@ async fn main() -> anyhow::Result<()> {
     let telemetry_config = netray_common::telemetry::TelemetryConfig::from(&config.telemetry);
     netray_common::telemetry::init_subscriber(
         &telemetry_config,
-        "info,mail_inspector=debug,hyper=warn,h2=warn",
+        "info,beacon=debug,hyper=warn,h2=warn",
     );
 
     tracing::info!(
         bind = %config.server.bind,
         metrics_bind = %config.server.metrics_bind,
-        "starting mail-inspector"
+        "starting beacon"
     );
 
     // Build state
@@ -56,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/robots.txt", get(robots_txt))
         .fallback(netray_common::server::static_handler::<Assets>())
         .layer(axum::middleware::from_fn(|req, next| {
-            netray_common::middleware::http_metrics("mail-inspector", req, next)
+            netray_common::middleware::http_metrics("beacon", req, next)
         }))
         .layer(axum::middleware::from_fn(
             netray_common::middleware::request_id,

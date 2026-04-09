@@ -26,5 +26,5 @@ max_user_selectors = 5
 
 [telemetry]
 log_format = "json"
-service_name = "mail-inspector"
+service_name = "beacon"
 sample_rate = 1.0

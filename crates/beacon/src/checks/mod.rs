@@ -162,7 +162,7 @@ async fn run_checks_inner(
     };
 
     let dns_elapsed = dns_start.elapsed().as_secs_f64();
-    metrics::histogram!("mail_inspector_dns_query_duration_seconds", "record_type" => "all")
+    metrics::histogram!("beacon_dns_query_duration_seconds", "record_type" => "all")
         .record(dns_elapsed);
 
     // Cross-validation
