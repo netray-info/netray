@@ -1,5 +1,6 @@
-import { createSignal, createEffect, Show, For, onMount } from 'solid-js';
+import { createSignal, createEffect, Show, For, onMount, onCleanup } from 'solid-js';
 import UrlInput from './components/UrlInput';
+import ExportButtons from './components/ExportButtons';
 import HeadersView from './components/HeadersView';
 import RedirectChain from './components/RedirectChain';
 import SecurityAudit from './components/SecurityAudit';
@@ -14,6 +15,7 @@ import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
 import Modal from '@netray-info/common-frontend/components/Modal';
 import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
 import { createTheme } from '@netray-info/common-frontend/theme';
+import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
 import { inspect, fetchMeta } from './lib/api';
 import type { MetaResponse } from './lib/api';
 import { addToHistory } from './lib/history';
@@ -43,7 +45,10 @@ export default function App() {
   const [loading, setLoading] = createSignal(false);
   const [meta, setMeta] = createSignal<MetaResponse | null>(null);
   const [showHelp, setShowHelp] = createSignal(false);
+  const [lastQuery, setLastQuery] = createSignal('');
   const theme = createTheme('spectra_theme', 'system');
+
+  let inputEl: HTMLInputElement | undefined;
 
   // Read URL param for initial query
   const params = new URLSearchParams(window.location.search);
@@ -56,12 +61,35 @@ export default function App() {
         if (m?.site_name) document.title = m.site_name;
       })
       .catch(() => {});
+
+    // Ctrl+L / Cmd+L — not filtered by createKeyboardShortcuts
+    const ctrlLHandler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+        e.preventDefault();
+        inputEl?.focus();
+      }
+    };
+    document.addEventListener('keydown', ctrlLHandler);
+
+    const cleanupShortcuts = createKeyboardShortcuts({
+      '?': (e) => { e.preventDefault(); setShowHelp(v => !v); },
+      '/': (e) => { e.preventDefault(); inputEl?.focus(); },
+      'e': (e) => { e.preventDefault(); setShowExplanations(v => !v); },
+      'r': (e) => { const q = lastQuery(); if (q && !loading()) { e.preventDefault(); handleInspect(q); } },
+      'Escape': (e) => { e.preventDefault(); inputEl?.blur(); setShowHelp(false); },
+    });
+
+    onCleanup(() => {
+      cleanupShortcuts();
+      document.removeEventListener('keydown', ctrlLHandler);
+    });
   });
 
   async function handleInspect(url: string) {
     setError(null);
     setResult(null);
     setLoading(true);
+    setLastQuery(url);
 
     try {
       const data = await inspect(url);
@@ -77,6 +105,13 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleClear() {
+    setResult(null);
+    setError(null);
+    setLastQuery('');
+    window.history.replaceState({}, '', window.location.pathname);
   }
 
   // Auto-inspect if URL param present
@@ -166,8 +201,10 @@ export default function App() {
 
         <UrlInput
           onSubmit={handleInspect}
+          onClear={handleClear}
           loading={loading()}
-          initialValue={initialUrl}
+          value={lastQuery() || initialUrl}
+          inputRef={el => (inputEl = el)}
         />
 
         <Show when={error()}>
@@ -248,21 +285,28 @@ export default function App() {
                       </div>
                   </div>
 
-                  {/* Expand / collapse toggle */}
+                  {/* Controls bar */}
                   <div class="section-controls">
-                    <button
-                      class="filter-toggle"
-                      onClick={() => setAllExpanded(!allExpanded())}
-                    >
-                      {allExpanded() ? 'Collapse all' : 'Expand all'}
-                    </button>
-                    <button
-                      class="filter-toggle"
-                      onClick={() => setShowExplanations(!showExplanations())}
-                      aria-pressed={showExplanations()}
-                    >
-                      {showExplanations() ? 'Hide explanations' : 'Explain'}
-                    </button>
+                    <div class="section-controls__left">
+                      <button
+                        class="filter-toggle"
+                        classList={{ 'filter-toggle--active': showExplanations() }}
+                        onClick={() => setShowExplanations(!showExplanations())}
+                        aria-pressed={showExplanations()}
+                        title="Toggle explanations (e)"
+                      >
+                        explain
+                      </button>
+                    </div>
+                    <div class="section-controls__right">
+                      <ExportButtons result={data} />
+                      <button
+                        class="filter-toggle"
+                        onClick={() => setAllExpanded(!allExpanded())}
+                      >
+                        {allExpanded() ? 'Collapse all' : 'Expand all'}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Quality Assessment */}
@@ -545,9 +589,11 @@ export default function App() {
           <div class="help-section__title">Keyboard shortcuts</div>
           <div class="help-keys">
             <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
-            <div class="help-key"><kbd>Enter</kbd><span>Submit URL</span></div>
-            <div class="help-key"><kbd>Escape</kbd><span>Close help</span></div>
+            <div class="help-key"><kbd>r</kbd><span>Re-run last inspection</span></div>
+            <div class="help-key"><kbd>e</kbd><span>Toggle explanations</span></div>
             <div class="help-key"><kbd>?</kbd><span>Toggle help</span></div>
+            <div class="help-key"><kbd>Esc</kbd><span>Blur input / close help</span></div>
+            <div class="help-key"><kbd>Ctrl L</kbd><span>Focus input</span></div>
           </div>
         </div>
       </Modal>
