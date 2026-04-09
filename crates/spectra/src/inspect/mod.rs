@@ -197,11 +197,7 @@ pub fn assemble_response(
     };
 
     let ip_str = resolved_addr.ip().to_string();
-    let detail_url = format!(
-        "{}/{}",
-        enrichment_base_url.trim_end_matches('/'),
-        ip_str
-    );
+    let detail_url = format!("{}/{}", enrichment_base_url.trim_end_matches('/'), ip_str);
 
     let mut resp = InspectResponse {
         url: original_url.to_string(),

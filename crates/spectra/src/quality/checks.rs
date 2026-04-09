@@ -171,9 +171,8 @@ pub fn run_checks(resp: &InspectResponse) -> Vec<QualityCheck> {
 mod tests {
     use super::*;
     use crate::inspect::assembler::{
-        CachingReport, CacheControlDirectives, CdnReport, CorsReport, CspReport,
-        EnrichmentInfo, FingerprintReport, HeaderCheck, HstsCheck, InfoLeakage,
-        ReportingReport, SecurityReport,
+        CacheControlDirectives, CachingReport, CdnReport, CorsReport, CspReport, EnrichmentInfo,
+        FingerprintReport, HeaderCheck, HstsCheck, InfoLeakage, ReportingReport, SecurityReport,
     };
     use crate::quality::types::QualityReport;
     use indexmap::IndexMap;
@@ -204,13 +203,41 @@ mod tests {
                     directives: IndexMap::new(),
                     issues: vec![],
                 },
-                x_frame_options: HeaderCheck { status: CheckStatus::Pass, value: Some("DENY".into()), message: None },
-                permissions_policy: HeaderCheck { status: CheckStatus::Pass, value: None, message: None },
-                x_content_type_options: HeaderCheck { status: CheckStatus::Pass, value: Some("nosniff".into()), message: None },
-                referrer_policy: HeaderCheck { status: CheckStatus::Pass, value: None, message: None },
-                coop: HeaderCheck { status: CheckStatus::Pass, value: None, message: None },
-                coep: HeaderCheck { status: CheckStatus::Pass, value: None, message: None },
-                corp: HeaderCheck { status: CheckStatus::Pass, value: None, message: None },
+                x_frame_options: HeaderCheck {
+                    status: CheckStatus::Pass,
+                    value: Some("DENY".into()),
+                    message: None,
+                },
+                permissions_policy: HeaderCheck {
+                    status: CheckStatus::Pass,
+                    value: None,
+                    message: None,
+                },
+                x_content_type_options: HeaderCheck {
+                    status: CheckStatus::Pass,
+                    value: Some("nosniff".into()),
+                    message: None,
+                },
+                referrer_policy: HeaderCheck {
+                    status: CheckStatus::Pass,
+                    value: None,
+                    message: None,
+                },
+                coop: HeaderCheck {
+                    status: CheckStatus::Pass,
+                    value: None,
+                    message: None,
+                },
+                coep: HeaderCheck {
+                    status: CheckStatus::Pass,
+                    value: None,
+                    message: None,
+                },
+                corp: HeaderCheck {
+                    status: CheckStatus::Pass,
+                    value: None,
+                    message: None,
+                },
             },
             cors: CorsReport {
                 allows_any_origin: false,
@@ -237,13 +264,24 @@ mod tests {
                 vary: vec![],
                 age: None,
             },
-            cdn: CdnReport { detected: None, cache_status: None, indicators: vec![] },
+            cdn: CdnReport {
+                detected: None,
+                cache_status: None,
+                indicators: vec![],
+            },
             fingerprint: FingerprintReport {
                 server: None,
-                info_leakage: InfoLeakage { status: CheckStatus::Pass, exposed_headers: vec![] },
+                info_leakage: InfoLeakage {
+                    status: CheckStatus::Pass,
+                    exposed_headers: vec![],
+                },
             },
             deprecated_headers: vec![],
-            reporting: ReportingReport { report_to: false, nel: false, csp_reporting: false },
+            reporting: ReportingReport {
+                report_to: false,
+                nel: false,
+                csp_reporting: false,
+            },
             quality: QualityReport::from_checks(vec![]),
             enrichment: EnrichmentInfo {
                 ip: "192.0.2.1".into(),
@@ -278,7 +316,10 @@ mod tests {
         let mut resp = minimal_response();
         resp.deprecated_headers = vec!["x-powered-by".into()];
         let checks = run_checks(&resp);
-        let check = checks.iter().find(|c| c.name == "deprecated_headers").unwrap();
+        let check = checks
+            .iter()
+            .find(|c| c.name == "deprecated_headers")
+            .unwrap();
         assert_eq!(check.status, CheckStatus::Warn);
     }
 
@@ -296,10 +337,18 @@ mod tests {
         let resp = minimal_response();
         let checks = run_checks(&resp);
 
-        assert!(checks.len() >= 10, "expected at least 10 checks, got {}", checks.len());
+        assert!(
+            checks.len() >= 10,
+            "expected at least 10 checks, got {}",
+            checks.len()
+        );
 
         for check in &checks {
-            assert!(!check.label.is_empty(), "check '{}' has empty label", check.name);
+            assert!(
+                !check.label.is_empty(),
+                "check '{}' has empty label",
+                check.name
+            );
             assert!(
                 check.explanation.is_some(),
                 "check '{}' has no explanation",

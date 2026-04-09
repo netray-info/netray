@@ -80,7 +80,10 @@ pub struct InspectQuery {
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "spectra", description = "HTTP header inspection and security audit"),
+    info(
+        title = "spectra",
+        description = "HTTP header inspection and security audit"
+    ),
     paths(
         health_handler,
         ready_handler,
@@ -409,12 +412,7 @@ mod tests {
     async fn get(app: &Router, uri: &str) -> (StatusCode, serde_json::Value) {
         let response = app
             .clone()
-            .oneshot(
-                HttpRequest::builder()
-                    .uri(uri)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(HttpRequest::builder().uri(uri).body(Body::empty()).unwrap())
             .await
             .unwrap();
         let status = response.status();

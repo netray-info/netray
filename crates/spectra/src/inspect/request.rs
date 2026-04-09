@@ -5,8 +5,8 @@ use std::time::Duration;
 use reqwest::redirect::Policy;
 use url::Url;
 
-use super::assembler::RedirectHop;
 use super::TaskResult;
+use super::assembler::RedirectHop;
 
 /// Execute a single HTTP request chain, capturing redirects and HTTP versions.
 pub async fn execute_request(
@@ -137,11 +137,8 @@ mod tests {
             if let Ok((mut stream, _)) = listener.accept().await {
                 // Drain the request
                 let mut buf = [0u8; 1024];
-                let _ = tokio::time::timeout(
-                    Duration::from_millis(200),
-                    stream.read(&mut buf),
-                )
-                .await;
+                let _ =
+                    tokio::time::timeout(Duration::from_millis(200), stream.read(&mut buf)).await;
                 let response = "HTTP/1.1 301 Moved Permanently\r\nLocation: https://example.com/\r\nContent-Length: 0\r\n\r\n";
                 let _ = stream.write_all(response.as_bytes()).await;
             }

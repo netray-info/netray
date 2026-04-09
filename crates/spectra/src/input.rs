@@ -21,17 +21,15 @@ pub fn parse_url(raw: &str) -> Result<Url, AppError> {
         raw.to_string()
     };
 
-    let url =
-        Url::parse(&input).map_err(|e| AppError::InvalidUrl(format!("Could not parse URL: {e}")))?;
+    let url = Url::parse(&input)
+        .map_err(|e| AppError::InvalidUrl(format!("Could not parse URL: {e}")))?;
 
     match url.scheme() {
         "http" => Err(AppError::InvalidUrl(
             "Submit the URL with https:// scheme; port-80 probing is automatic.".to_string(),
         )),
         "https" => Ok(url),
-        other => Err(AppError::InvalidUrl(format!(
-            "Unsupported scheme: {other}"
-        ))),
+        other => Err(AppError::InvalidUrl(format!("Unsupported scheme: {other}"))),
     }
 }
 
