@@ -45,7 +45,7 @@ export default function ValidationChips(props: Props) {
           font-family: var(--mono);
           font-size: 0.8rem;
           padding: 0.2rem 0.5rem;
-          border-radius: 4px;
+          border-radius: 9999px;
           border: 1px solid currentColor;
         }
 
