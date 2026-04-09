@@ -40,15 +40,19 @@ fn parse_single_cookie(raw: &str) -> CookieEntry {
             httponly = true;
         } else if let Some(val) = lower.strip_prefix("samesite=") {
             samesite = Some(val.trim().to_string());
-        } else if let Some(val) = part.strip_prefix("Path=").or_else(|| part.strip_prefix("path="))
+        } else if let Some(val) = part
+            .strip_prefix("Path=")
+            .or_else(|| part.strip_prefix("path="))
         {
             path = Some(val.trim().to_string());
-        } else if let Some(val) =
-            part.strip_prefix("Domain=").or_else(|| part.strip_prefix("domain="))
+        } else if let Some(val) = part
+            .strip_prefix("Domain=")
+            .or_else(|| part.strip_prefix("domain="))
         {
             domain = Some(val.trim().to_string());
-        } else if let Some(val) =
-            part.strip_prefix("Expires=").or_else(|| part.strip_prefix("expires="))
+        } else if let Some(val) = part
+            .strip_prefix("Expires=")
+            .or_else(|| part.strip_prefix("expires="))
         {
             expires = parse_cookie_date(val.trim());
         }

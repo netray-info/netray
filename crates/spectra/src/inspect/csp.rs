@@ -98,7 +98,9 @@ fn score_directives(directives: &IndexMap<String, Vec<String>>) -> Vec<String> {
         }
         // Wildcard with single-label TLD
         for v in values {
-            if let Some(rest) = v.strip_prefix("*.") && !rest.contains('.') {
+            if let Some(rest) = v.strip_prefix("*.")
+                && !rest.contains('.')
+            {
                 issues.push(format!(
                     "[warn] script-src wildcard {v} is overly broad (single-label TLD)"
                 ));
@@ -107,7 +109,9 @@ fn score_directives(directives: &IndexMap<String, Vec<String>>) -> Vec<String> {
     }
 
     // style-src checks
-    if let Some(values) = directives.get("style-src") && values.iter().any(|v| v == "'unsafe-inline'") {
+    if let Some(values) = directives.get("style-src")
+        && values.iter().any(|v| v == "'unsafe-inline'")
+    {
         issues.push("[warn] style-src contains 'unsafe-inline'".to_string());
     }
 
@@ -138,9 +142,7 @@ fn score_directives(directives: &IndexMap<String, Vec<String>>) -> Vec<String> {
             issues.push("[warn] Missing base-uri directive".to_string());
         }
         Some(values) => {
-            let is_restrictive = values
-                .iter()
-                .any(|v| v == "'self'" || v == "'none'");
+            let is_restrictive = values.iter().any(|v| v == "'self'" || v == "'none'");
             if !is_restrictive {
                 issues.push("[warn] base-uri is permissive".to_string());
             }
@@ -196,20 +198,14 @@ mod tests {
         let h = headers_with_csp("default-src 'self'; script-src 'unsafe-inline'");
         let report = analyze_csp(&h);
         assert_eq!(report.status, CheckStatus::Warn);
-        assert!(report
-            .issues
-            .iter()
-            .any(|i| i.contains("unsafe-inline")));
+        assert!(report.issues.iter().any(|i| i.contains("unsafe-inline")));
     }
 
     #[test]
     fn unsafe_eval_in_script_src_is_warn() {
         let h = headers_with_csp("default-src 'self'; script-src 'unsafe-eval'");
         let report = analyze_csp(&h);
-        assert!(report
-            .issues
-            .iter()
-            .any(|i| i.contains("unsafe-eval")));
+        assert!(report.issues.iter().any(|i| i.contains("unsafe-eval")));
     }
 
     #[test]
@@ -225,20 +221,14 @@ mod tests {
         let report = analyze_csp(&h);
         // Missing default-src causes fail-level issue, but since we have other issues too
         // let's just check the issue is present
-        assert!(report
-            .issues
-            .iter()
-            .any(|i| i.contains("default-src")));
+        assert!(report.issues.iter().any(|i| i.contains("default-src")));
     }
 
     #[test]
     fn wildcard_single_label_tld_is_warn() {
         let h = headers_with_csp("default-src 'self'; script-src *.com");
         let report = analyze_csp(&h);
-        assert!(report
-            .issues
-            .iter()
-            .any(|i| i.contains("overly broad")));
+        assert!(report.issues.iter().any(|i| i.contains("overly broad")));
     }
 
     #[test]
@@ -247,10 +237,7 @@ mod tests {
             "default-src 'self'; script-src *.cdn.example.com; object-src 'none'; base-uri 'self'",
         );
         let report = analyze_csp(&h);
-        assert!(!report
-            .issues
-            .iter()
-            .any(|i| i.contains("overly broad")));
+        assert!(!report.issues.iter().any(|i| i.contains("overly broad")));
     }
 
     #[test]
@@ -262,13 +249,9 @@ mod tests {
 
     #[test]
     fn object_src_not_none_is_warn() {
-        let h =
-            headers_with_csp("default-src 'self'; object-src 'self'; base-uri 'self'");
+        let h = headers_with_csp("default-src 'self'; object-src 'self'; base-uri 'self'");
         let report = analyze_csp(&h);
-        assert!(report
-            .issues
-            .iter()
-            .any(|i| i.contains("object-src")));
+        assert!(report.issues.iter().any(|i| i.contains("object-src")));
     }
 
     #[test]

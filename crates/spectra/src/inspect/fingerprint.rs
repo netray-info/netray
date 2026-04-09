@@ -83,7 +83,12 @@ mod tests {
         let report = analyze_fingerprint(&h);
         assert_eq!(report.server.as_deref(), Some("nginx/1.25"));
         assert_eq!(report.info_leakage.status, CheckStatus::Warn);
-        assert!(report.info_leakage.exposed_headers.contains(&"Server".to_string()));
+        assert!(
+            report
+                .info_leakage
+                .exposed_headers
+                .contains(&"Server".to_string())
+        );
     }
 
     #[test]
@@ -91,10 +96,12 @@ mod tests {
         let h = headers_with(&[("x-powered-by", "PHP/8.1")]);
         let report = analyze_fingerprint(&h);
         assert_eq!(report.info_leakage.status, CheckStatus::Warn);
-        assert!(report
-            .info_leakage
-            .exposed_headers
-            .contains(&"x-powered-by".to_string()));
+        assert!(
+            report
+                .info_leakage
+                .exposed_headers
+                .contains(&"x-powered-by".to_string())
+        );
     }
 
     #[test]

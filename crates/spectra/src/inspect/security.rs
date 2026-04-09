@@ -14,29 +14,22 @@ pub fn analyze_security_headers(headers: &HeaderMap) -> SecurityReport {
             if v_upper == "DENY" || v_upper == "SAMEORIGIN" {
                 (CheckStatus::Pass, None)
             } else {
-                (
-                    CheckStatus::Warn,
-                    Some(format!("Unrecognized value: {v}")),
-                )
+                (CheckStatus::Warn, Some(format!("Unrecognized value: {v}")))
             }
         }),
         permissions_policy: analyze_header_presence(headers, "permissions-policy", |_| {
             (CheckStatus::Pass, None)
         }),
-        x_content_type_options: analyze_header_presence(
-            headers,
-            "x-content-type-options",
-            |v| {
-                if v.eq_ignore_ascii_case("nosniff") {
-                    (CheckStatus::Pass, None)
-                } else {
-                    (
-                        CheckStatus::Warn,
-                        Some(format!("Expected 'nosniff', got '{v}'")),
-                    )
-                }
-            },
-        ),
+        x_content_type_options: analyze_header_presence(headers, "x-content-type-options", |v| {
+            if v.eq_ignore_ascii_case("nosniff") {
+                (CheckStatus::Pass, None)
+            } else {
+                (
+                    CheckStatus::Warn,
+                    Some(format!("Expected 'nosniff', got '{v}'")),
+                )
+            }
+        }),
         referrer_policy: analyze_header_presence(headers, "referrer-policy", |v| {
             let safe_values = [
                 "no-referrer",
@@ -46,7 +39,9 @@ pub fn analyze_security_headers(headers: &HeaderMap) -> SecurityReport {
             ];
             if safe_values.iter().any(|s| v.eq_ignore_ascii_case(s)) {
                 (CheckStatus::Pass, None)
-            } else if v.eq_ignore_ascii_case("unsafe-url") || v.eq_ignore_ascii_case("no-referrer-when-downgrade") {
+            } else if v.eq_ignore_ascii_case("unsafe-url")
+                || v.eq_ignore_ascii_case("no-referrer-when-downgrade")
+            {
                 (CheckStatus::Warn, Some(format!("Permissive policy: {v}")))
             } else {
                 (CheckStatus::Pass, None)
@@ -163,7 +158,10 @@ mod tests {
 
     #[test]
     fn hsts_pass_with_year() {
-        let h = headers_with(&[("strict-transport-security", "max-age=31536000; includeSubDomains")]);
+        let h = headers_with(&[(
+            "strict-transport-security",
+            "max-age=31536000; includeSubDomains",
+        )]);
         let result = analyze_hsts(&h);
         assert_eq!(result.status, CheckStatus::Pass);
         assert_eq!(result.max_age, Some(31536000));

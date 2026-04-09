@@ -6,7 +6,9 @@ pub fn dump_headers(headers: &HeaderMap) -> IndexMap<String, String> {
     let mut map = IndexMap::new();
     for (name, value) in headers.iter() {
         let key = name.as_str().to_lowercase();
-        if !map.contains_key(&key) && let Ok(v) = value.to_str() {
+        if !map.contains_key(&key)
+            && let Ok(v) = value.to_str()
+        {
             map.insert(key, v.to_string());
         }
     }
