@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.4] - 2026-04-09
+
+### Added
+- Check row tinting and deep links in section headers (aaddb56)
+
+### Fixed
+- Remove NODE_AUTH_TOKEN from .npmrc, use global auth (56b7230)
+- Add SuiteNav compaction override (c663c18)
+
+### Changed
+- Remove SuiteNav compaction override, now in common-frontend (5db70bd)
+- Move SuiteNav inside .app (51a1edf)
+- Bump common-frontend to ^0.5.0 (66484f3)
+- Bump common-frontend to ^0.4.0 (de02257)
+
 ## [0.10.3] - 2026-04-09
 
 ### Changed
