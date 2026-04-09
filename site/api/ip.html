@@ -287,6 +287,19 @@ curl -s 'https://ip.netray.info/all/json?ip=203.0.113.1&fields=ip,country,asn' |
 <pre><code># Check your remaining quota
 curl -sI https://ip.netray.info/ip | grep -i x-ratelimit</code></pre>
 
+      <h2>Health Probes</h2>
+
+      <h3><code>GET /health</code></h3>
+      <p>Liveness probe. Always returns <code>200</code> with <code>{"status":"ok"}</code>. Exempt from rate limiting.</p>
+
+<pre><code>curl https://ip.netray.info/health</code></pre>
+
+      <h3><code>GET /ready</code></h3>
+      <p>Readiness probe. Returns <code>200</code> when GeoIP databases and UA parser are loaded, <code>503</code> otherwise.
+        A <code>200</code> response may include a <code>warnings</code> array listing optional data sources that failed to load.</p>
+
+<pre><code>curl https://ip.netray.info/ready</code></pre>
+
       <h2>Errors</h2>
 
 <pre><code>{
