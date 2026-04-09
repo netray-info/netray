@@ -25,6 +25,18 @@ const EXAMPLES = [
   'cloudflare.com',
 ];
 
+const STATUS_ICON: Record<CheckStatus, string> = {
+  pass: '\u2713',
+  warn: '\u26A0',
+  fail: '\u2717',
+  skip: '\u2014',
+};
+
+const SECURITY_CHECK_NAMES = new Set([
+  'hsts', 'csp', 'x_frame_options', 'x_content_type_options',
+  'referrer_policy', 'permissions_policy',
+]);
+
 export default function App() {
   const [result, setResult] = createSignal<InspectResponse | null>(null);
   const [error, setError] = createSignal<string | null>(null);
@@ -92,6 +104,22 @@ export default function App() {
 
   function verdictClass(status: CheckStatus): string {
     return `badge badge--${status}`;
+  }
+
+  // Explain toggle
+  const [showExplanations, setShowExplanations] = createSignal(false);
+
+  function countChips(checks: Array<{ status: CheckStatus }>) {
+    const counts: Partial<Record<CheckStatus, number>> = {};
+    for (const c of checks) counts[c.status] = (counts[c.status] ?? 0) + 1;
+    return counts;
+  }
+
+  function securityStatuses(sec: InspectResponse['security']): Array<{ status: CheckStatus }> {
+    return [
+      sec.hsts, sec.csp, sec.x_frame_options, sec.x_content_type_options,
+      sec.referrer_policy, sec.permissions_policy, sec.coop, sec.coep, sec.corp,
+    ];
   }
 
   // Expand / collapse all
@@ -219,6 +247,13 @@ export default function App() {
                     >
                       {allExpanded() ? 'Collapse all' : 'Expand all'}
                     </button>
+                    <button
+                      class="filter-toggle"
+                      onClick={() => setShowExplanations(!showExplanations())}
+                      aria-pressed={showExplanations()}
+                    >
+                      {showExplanations() ? 'Hide explanations' : 'Explain'}
+                    </button>
                   </div>
 
                   {/* Quality Assessment */}
@@ -227,23 +262,63 @@ export default function App() {
                       <span class={`section-card__status section-card__status--${data.quality.verdict}`} />
                       <span class="section-card__title">Quality Assessment</span>
                       <span class="section-card__badges">
-                        <span class={verdictClass(data.quality.verdict)}>{data.quality.verdict}</span>
+                        {(() => {
+                          const counts = countChips(data.quality.checks);
+                          return (
+                            <>
+                              <Show when={(counts.pass ?? 0) > 0}><span class="badge badge--pass">{counts.pass} passed</span></Show>
+                              <Show when={(counts.skip ?? 0) > 0}><span class="badge badge--skip">{counts.skip} skipped</span></Show>
+                              <Show when={(counts.warn ?? 0) > 0}><span class="badge badge--warn">{counts.warn} warnings</span></Show>
+                              <Show when={(counts.fail ?? 0) > 0}><span class="badge badge--fail">{counts.fail} failed</span></Show>
+                            </>
+                          );
+                        })()}
                       </span>
                       <span class="section-card__spacer" />
                       <span class={`section-card__chevron${openQuality() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
                     </button>
+
+                    {/* Always-visible chip row — outside collapse gate */}
+                    <div class="check-chips">
+                      {(() => {
+                        const chipChecks = data.quality.checks.filter(c => c.status !== 'skip');
+                        return (
+                          <For each={chipChecks}>
+                            {(check) => (
+                              <span
+                                class={`filter-toggle check--${check.status}`}
+                                title={showExplanations() && check.explanation ? check.explanation : undefined}
+                              >
+                                <span aria-hidden="true">{STATUS_ICON[check.status]}</span>
+                                {' '}{check.label}
+                              </span>
+                            )}
+                          </For>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Expandable detail — non-security checks only */}
                     <Show when={openQuality()}>
                       <div class="section-card__body">
                         <ul class="check-list">
-                          <For each={data.quality.checks}>
-                            {(check) => (
-                              <li class={`check-list__item${check.status === 'fail' ? ' check-row--fail' : check.status === 'warn' ? ' check-row--warn' : ''}`}>
-                                <span class={`badge badge--${check.status}`}>{check.status}</span>
-                                <span class="check-list__name">{check.name}</span>
-                                <span class="check-list__message">{check.message ?? ''}</span>
-                              </li>
-                            )}
-                          </For>
+                          {(() => {
+                            const detailChecks = data.quality.checks.filter(c => !SECURITY_CHECK_NAMES.has(c.name));
+                            return (
+                              <For each={detailChecks}>
+                                {(check) => (
+                                  <li class={`check-list__item${check.status === 'fail' ? ' check-row--fail' : check.status === 'warn' ? ' check-row--warn' : ''}${showExplanations() ? ' check-list__item--explainable' : ''}`}>
+                                    <span class={`badge badge--${check.status}`}>{check.status}</span>
+                                    <span class="check-list__name">{check.label}</span>
+                                    <span class="check-list__message">{check.message ?? ''}</span>
+                                    <Show when={showExplanations() && check.explanation}>
+                                      <span class="check-explain">{check.explanation}</span>
+                                    </Show>
+                                  </li>
+                                )}
+                              </For>
+                            );
+                          })()}
                         </ul>
                       </div>
                     </Show>
@@ -279,14 +354,28 @@ export default function App() {
                       <span class={`section-card__status section-card__status--${securityWorst(data.security)}`} />
                       <span class="section-card__title">Security Headers</span>
                       <span class="section-card__badges">
-                        <span class={verdictClass(securityWorst(data.security))}>{securityWorst(data.security)}</span>
+                        {(() => {
+                          const counts = countChips(securityStatuses(data.security));
+                          return (
+                            <>
+                              <Show when={(counts.pass ?? 0) > 0}><span class="badge badge--pass">{counts.pass} passed</span></Show>
+                              <Show when={(counts.skip ?? 0) > 0}><span class="badge badge--skip">{counts.skip} skipped</span></Show>
+                              <Show when={(counts.warn ?? 0) > 0}><span class="badge badge--warn">{counts.warn} warnings</span></Show>
+                              <Show when={(counts.fail ?? 0) > 0}><span class="badge badge--fail">{counts.fail} failed</span></Show>
+                            </>
+                          );
+                        })()}
                       </span>
                       <span class="section-card__spacer" />
                       <span class={`section-card__chevron${openSecurity() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
                     </button>
                     <Show when={openSecurity()}>
                       <div class="section-card__body">
-                        <SecurityAudit security={data.security} />
+                        <SecurityAudit
+                          security={data.security}
+                          qualityChecks={data.quality.checks}
+                          showExplanations={showExplanations}
+                        />
                       </div>
                     </Show>
                   </div>

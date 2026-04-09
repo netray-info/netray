@@ -132,6 +132,22 @@ a:hover { text-decoration: underline; }
 [data-theme="light"] .badge--skip { background: rgba(74, 85, 104, 0.1); }
 
 /* ================================================================
+   Quality check chips
+   ================================================================ */
+
+.check-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.check--pass { color: var(--pass); border-color: var(--pass); }
+.check--warn { color: var(--warn); border-color: var(--warn); }
+.check--fail { color: var(--fail); border-color: var(--fail); }
+.check--skip { color: var(--skip); }
+
+/* ================================================================
    Headers table
    ================================================================ */
 
@@ -178,6 +194,21 @@ a:hover { text-decoration: underline; }
 .check-list__name { font-weight: 500; min-width: 12rem; }
 
 .check-list__message { color: var(--text-muted); flex: 1; }
+
+.check-list__item--explainable {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.check-explain {
+  flex-basis: 100%;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0 0.25rem 0.5rem;
+  border-left: 2px solid var(--border);
+  margin-top: 0.25rem;
+  line-height: 1.5;
+}
 
 .check-row--fail { background: rgba(239, 68, 68, 0.08); }
 .check-row--warn { background: rgba(245, 158, 11, 0.08); }
