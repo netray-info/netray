@@ -9,7 +9,7 @@ interface HistoryEntry {
 }
 
 export function getHistory(): HistoryEntry[] {
-  return storageGet<HistoryEntry[]>(STORAGE_KEY) ?? [];
+  return storageGet<HistoryEntry[]>(STORAGE_KEY, []);
 }
 
 export function addToHistory(query: string): void {

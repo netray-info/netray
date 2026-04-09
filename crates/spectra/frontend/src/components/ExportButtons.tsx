@@ -17,7 +17,6 @@ export default function ExportButtons(props: Props) {
 
   const copyMarkdown = async () => {
     const r = props.result;
-    const host = (() => { try { return new URL(r.final_url).hostname; } catch { return r.url; } })();
     const lines: string[] = [
       `# HTTP Inspection: ${r.url}`,
       '',
