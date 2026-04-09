@@ -2,18 +2,6 @@
 @import '@netray-info/common-frontend/styles/reset.css';
 @import '@netray-info/common-frontend/styles/layout.css';
 @import '@netray-info/common-frontend/styles/components.css';
-
-/* SuiteNav compaction (until common-frontend update) */
-.suite-nav {
-  padding: 0.15rem 1rem;
-  row-gap: 0.15rem;
-  margin-bottom: 0.75rem;
-}
-.suite-nav__brand,
-.suite-nav__link {
-  min-height: 26px;
-}
-
 /* ================================================================
    tlsight — project-specific overrides
    ================================================================ */
