@@ -336,6 +336,12 @@ export default function App() {
               </div>
             </Show>
 
+            <Show when={loading()}>
+              <div class="loading-indicator" role="status" aria-live="polite">
+                {completedCount()} of 12 checks complete
+              </div>
+            </Show>
+
             <div class="category-list">
               <For each={CATEGORY_ORDER}>
                 {(cat) => {
@@ -345,8 +351,12 @@ export default function App() {
                       when={result()}
                       fallback={
                         <Show when={loading()}>
-                          <div class="card--pending">
-                            <span class="section-card__title">{CATEGORY_LABELS[cat]}</span>
+                          <div class="section-card" aria-busy="true" aria-label={`Loading ${CATEGORY_LABELS[cat]}...`}>
+                            <div class="section-card__header">
+                              <span class="skeleton skeleton-line" style={{ width: '3rem', height: '1.25rem', 'flex-shrink': '0', margin: 0 }} />
+                              <span class="section-card__title">{CATEGORY_LABELS[cat]}</span>
+                              <span class="skeleton skeleton-line" style={{ width: '40%', height: '0.875rem', 'margin-left': 'auto', 'margin-top': 0, 'margin-bottom': 0 }} />
+                            </div>
                           </div>
                         </Show>
                       }
@@ -363,12 +373,6 @@ export default function App() {
                 }}
               </For>
             </div>
-
-            <Show when={loading()}>
-              <div class="loading-indicator" role="status" aria-live="polite">
-                {completedCount()} of 12 checks complete
-              </div>
-            </Show>
 
             <Show when={isDone()}>
               <div class="cross-links">
