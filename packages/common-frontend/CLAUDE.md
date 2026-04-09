@@ -20,7 +20,7 @@
 
 ## CI/CD
 
-Workflow rules: [`specs/workflow-rules.md`](../specs/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
 
 Workflows: `ci.yml` (PR gate: lint, test, audit), `publish.yml` (tag-push: test → publish to GitHub Packages).
 
