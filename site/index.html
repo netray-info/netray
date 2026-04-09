@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>netray.info — Network Intelligence Tools</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="description" content="Four open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, and TLS analysis.">
+  <meta name="description" content="Six open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, TLS analysis, HTTP header inspection, and email security.">
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://netray.info/" />
   <meta property="og:title" content="netray.info — Network Intelligence Tools" />
-  <meta property="og:description" content="Four open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, and TLS analysis. Self-hostable, Rust-based, no account needed." />
+  <meta property="og:description" content="Six open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, TLS analysis, HTTP header inspection, and email security. Self-hostable, Rust-based, no account needed." />
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="netray.info — Network Intelligence Tools" />
-  <meta name="twitter:description" content="Four open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, and TLS analysis." />
+  <meta name="twitter:description" content="Six open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, TLS analysis, HTTP header inspection, and email security." />
   <meta name="theme-color" content="#07090f" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#f6f8fb" media="(prefers-color-scheme: light)" />
 
@@ -43,6 +43,10 @@
       --tls-glow: rgba(14,116,144,.09);
       --lens:     #16a34a;
       --lens-glow: rgba(22,163,74,.09);
+      --http:     #b91c1c;
+      --http-glow: rgba(185,28,28,.09);
+      --email:    #0369a1;
+      --email-glow: rgba(3,105,161,.09);
     }
 
     /* ── Dark theme ────────────────────────────── */
@@ -70,6 +74,10 @@
         --tls-glow: rgba(6,182,212,.12);
         --lens:     #22c55e;
         --lens-glow: rgba(34,197,94,.12);
+        --http:     #f87171;
+        --http-glow: rgba(248,113,113,.12);
+        --email:    #38bdf8;
+        --email-glow: rgba(56,189,248,.12);
       }
     }
 
@@ -96,6 +104,10 @@
       --tls-glow: rgba(6,182,212,.12);
       --lens:     #22c55e;
       --lens-glow: rgba(34,197,94,.12);
+      --http:     #f87171;
+      --http-glow: rgba(248,113,113,.12);
+      --email:    #38bdf8;
+      --email-glow: rgba(56,189,248,.12);
     }
 
     [data-theme="light"] {
@@ -121,6 +133,10 @@
       --tls-glow: rgba(14,116,144,.09);
       --lens:     #16a34a;
       --lens-glow: rgba(22,163,74,.09);
+      --http:     #b91c1c;
+      --http-glow: rgba(185,28,28,.09);
+      --email:    #0369a1;
+      --email-glow: rgba(3,105,161,.09);
     }
 
     html { scroll-behavior: smooth; }
@@ -272,13 +288,17 @@
 
     .chip:hover { transform: translateY(-2px); }
 
-    .chip--ip  { color: var(--ip);  border-color: color-mix(in srgb, var(--ip)  30%, transparent); background: var(--ip-glow); }
-    .chip--dns { color: var(--dns); border-color: color-mix(in srgb, var(--dns) 30%, transparent); background: var(--dns-glow); }
-    .chip--tls { color: var(--tls); border-color: color-mix(in srgb, var(--tls) 30%, transparent); background: var(--tls-glow); }
+    .chip--ip    { color: var(--ip);    border-color: color-mix(in srgb, var(--ip)    30%, transparent); background: var(--ip-glow); }
+    .chip--dns   { color: var(--dns);   border-color: color-mix(in srgb, var(--dns)   30%, transparent); background: var(--dns-glow); }
+    .chip--tls   { color: var(--tls);   border-color: color-mix(in srgb, var(--tls)   30%, transparent); background: var(--tls-glow); }
+    .chip--http  { color: var(--http);  border-color: color-mix(in srgb, var(--http)  30%, transparent); background: var(--http-glow); }
+    .chip--email { color: var(--email); border-color: color-mix(in srgb, var(--email) 30%, transparent); background: var(--email-glow); }
 
-    .chip--ip:hover  { box-shadow: 0 6px 20px var(--ip-glow); }
-    .chip--dns:hover { box-shadow: 0 6px 20px var(--dns-glow); }
-    .chip--tls:hover { box-shadow: 0 6px 20px var(--tls-glow); }
+    .chip--ip:hover    { box-shadow: 0 6px 20px var(--ip-glow); }
+    .chip--dns:hover   { box-shadow: 0 6px 20px var(--dns-glow); }
+    .chip--tls:hover   { box-shadow: 0 6px 20px var(--tls-glow); }
+    .chip--http:hover  { box-shadow: 0 6px 20px var(--http-glow); }
+    .chip--email:hover { box-shadow: 0 6px 20px var(--email-glow); }
 
     .chip-dot {
       width: 6px; height: 6px;
@@ -293,9 +313,19 @@
       margin: 0 auto;
       padding: 40px 24px 100px;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      grid-template-columns: repeat(6, 1fr);
       gap: 20px;
       animation: fadeUp .55s .12s ease both;
+    }
+    .tools .card { grid-column: span 2; }
+    .tools .card:nth-last-child(2),
+    .tools .card:nth-last-child(1) { grid-column: span 3; }
+
+    @media (max-width: 948px) {
+      .tools { grid-template-columns: repeat(2, 1fr); }
+      .tools .card,
+      .tools .card:nth-last-child(2),
+      .tools .card:nth-last-child(1) { grid-column: span 1; }
     }
 
     .card {
@@ -319,15 +349,19 @@
       border-radius: 18px 18px 0 0;
     }
 
-    .card--ip::before  { background: linear-gradient(90deg, var(--ip), transparent); }
-    .card--dns::before { background: linear-gradient(90deg, var(--dns), transparent); }
-    .card--tls::before { background: linear-gradient(90deg, var(--tls), transparent); }
+    .card--ip::before    { background: linear-gradient(90deg, var(--ip), transparent); }
+    .card--dns::before   { background: linear-gradient(90deg, var(--dns), transparent); }
+    .card--tls::before   { background: linear-gradient(90deg, var(--tls), transparent); }
+    .card--http::before  { background: linear-gradient(90deg, var(--http), transparent); }
+    .card--email::before { background: linear-gradient(90deg, var(--email), transparent); }
 
     .card:hover { transform: translateY(-5px); }
 
-    .card--ip:hover  { border-color: var(--ip);  box-shadow: 0 20px 50px var(--ip-glow); }
-    .card--dns:hover { border-color: var(--dns); box-shadow: 0 20px 50px var(--dns-glow); }
-    .card--tls:hover { border-color: var(--tls); box-shadow: 0 20px 50px var(--tls-glow); }
+    .card--ip:hover    { border-color: var(--ip);    box-shadow: 0 20px 50px var(--ip-glow); }
+    .card--dns:hover   { border-color: var(--dns);   box-shadow: 0 20px 50px var(--dns-glow); }
+    .card--tls:hover   { border-color: var(--tls);   box-shadow: 0 20px 50px var(--tls-glow); }
+    .card--http:hover  { border-color: var(--http);  box-shadow: 0 20px 50px var(--http-glow); }
+    .card--email:hover { border-color: var(--email); box-shadow: 0 20px 50px var(--email-glow); }
 
     .card-head {
       display: flex;
@@ -338,9 +372,11 @@
 
     .card-icon { line-height: 1; display: flex; align-items: center; }
     .card-icon svg { display: block; }
-    .card--ip   .card-icon { color: var(--ip); }
-    .card--dns  .card-icon { color: var(--dns); }
-    .card--tls  .card-icon { color: var(--tls); }
+    .card--ip    .card-icon { color: var(--ip); }
+    .card--dns   .card-icon { color: var(--dns); }
+    .card--tls   .card-icon { color: var(--tls); }
+    .card--http  .card-icon { color: var(--http); }
+    .card--email .card-icon { color: var(--email); }
 
     .card-github {
       display: inline-flex;
@@ -357,10 +393,12 @@
     }
     .card-github:hover { opacity: 1; }
     .card-github svg { display: block; flex-shrink: 0; }
-    .card--ip   .card-github { color: var(--ip); }
-    .card--dns  .card-github { color: var(--dns); }
-    .card--tls  .card-github { color: var(--tls); }
-    .card--lens .card-github { color: var(--lens); }
+    .card--ip    .card-github { color: var(--ip); }
+    .card--dns   .card-github { color: var(--dns); }
+    .card--tls   .card-github { color: var(--tls); }
+    .card--http  .card-github { color: var(--http); }
+    .card--email .card-github { color: var(--email); }
+    .card--lens  .card-github { color: var(--lens); }
 
     .card-badge {
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -371,9 +409,11 @@
       border-radius: 999px;
     }
 
-    .card--ip  .card-badge { background: var(--ip-glow);  color: var(--ip);  border: 1px solid var(--ip); }
-    .card--dns .card-badge { background: var(--dns-glow); color: var(--dns); border: 1px solid var(--dns); }
-    .card--tls .card-badge { background: var(--tls-glow); color: var(--tls); border: 1px solid var(--tls); }
+    .card--ip    .card-badge { background: var(--ip-glow);    color: var(--ip);    border: 1px solid var(--ip); }
+    .card--dns   .card-badge { background: var(--dns-glow);   color: var(--dns);   border: 1px solid var(--dns); }
+    .card--tls   .card-badge { background: var(--tls-glow);   color: var(--tls);   border: 1px solid var(--tls); }
+    .card--http  .card-badge { color: var(--http);  border-color: color-mix(in srgb, var(--http) 30%, transparent); }
+    .card--email .card-badge { color: var(--email); border-color: color-mix(in srgb, var(--email) 30%, transparent); }
 
     .card h2 {
       font-size: 1.45rem;
@@ -389,9 +429,11 @@
       margin-bottom: 5px;
     }
 
-    .card--ip  .card-tag { color: var(--ip); }
-    .card--dns .card-tag { color: var(--dns); }
-    .card--tls .card-tag { color: var(--tls); }
+    .card--ip    .card-tag { color: var(--ip); }
+    .card--dns   .card-tag { color: var(--dns); }
+    .card--tls   .card-tag { color: var(--tls); }
+    .card--http  .card-tag { color: var(--http); }
+    .card--email .card-tag { color: var(--email); }
 
     .card-desc {
       font-size: .88rem;
@@ -423,9 +465,11 @@
       flex-shrink: 0;
     }
 
-    .card--ip  .feat-arrow { color: var(--ip); }
-    .card--dns .feat-arrow { color: var(--dns); }
-    .card--tls .feat-arrow { color: var(--tls); }
+    .card--ip    .feat-arrow { color: var(--ip); }
+    .card--dns   .feat-arrow { color: var(--dns); }
+    .card--tls   .feat-arrow { color: var(--tls); }
+    .card--http  .feat-arrow { color: var(--http); }
+    .card--email .feat-arrow { color: var(--email); }
 
     .card-cta {
       display: inline-flex;
@@ -441,13 +485,17 @@
       transition: background .15s;
     }
 
-    .card--ip  .card-cta { color: var(--ip);  border-color: var(--ip); }
-    .card--dns .card-cta { color: var(--dns); border-color: var(--dns); }
-    .card--tls .card-cta { color: var(--tls); border-color: var(--tls); }
+    .card--ip    .card-cta { color: var(--ip);    border-color: var(--ip); }
+    .card--dns   .card-cta { color: var(--dns);   border-color: var(--dns); }
+    .card--tls   .card-cta { color: var(--tls);   border-color: var(--tls); }
+    .card--http  .card-cta { color: var(--http);  border-color: var(--http); }
+    .card--email .card-cta { color: var(--email); border-color: var(--email); }
 
-    .card--ip:hover  .card-cta { background: var(--ip-glow); }
-    .card--dns:hover .card-cta { background: var(--dns-glow); }
-    .card--tls:hover .card-cta { background: var(--tls-glow); }
+    .card--ip:hover    .card-cta { background: var(--ip-glow); }
+    .card--dns:hover   .card-cta { background: var(--dns-glow); }
+    .card--tls:hover   .card-cta { background: var(--tls-glow); }
+    .card--http:hover  .card-cta { border-color: var(--http);  background: var(--http-glow); }
+    .card--email:hover .card-cta { border-color: var(--email); background: var(--email-glow); }
 
     /* ── Footer ────────────────────────────────── */
     footer {
@@ -496,9 +544,11 @@
 
     .card-form-input::placeholder { color: var(--muted); }
 
-    .card--ip  .card-form-input:focus { border-color: var(--ip); }
-    .card--dns .card-form-input:focus { border-color: var(--dns); }
-    .card--tls .card-form-input:focus { border-color: var(--tls); }
+    .card--ip    .card-form-input:focus { border-color: var(--ip); }
+    .card--dns   .card-form-input:focus { border-color: var(--dns); }
+    .card--tls   .card-form-input:focus { border-color: var(--tls); }
+    .card--http  .card-form-input:focus { border-color: var(--http);  box-shadow: 0 0 0 3px var(--http-glow); }
+    .card--email .card-form-input:focus { border-color: var(--email); box-shadow: 0 0 0 3px var(--email-glow); }
 
     .card-form-btn {
       padding: 8px 14px;
@@ -514,13 +564,17 @@
       transition: background .15s;
     }
 
-    .card--ip  .card-form-btn { color: var(--ip);  border-color: var(--ip);  }
-    .card--dns .card-form-btn { color: var(--dns); border-color: var(--dns); }
-    .card--tls .card-form-btn { color: var(--tls); border-color: var(--tls); }
+    .card--ip    .card-form-btn { color: var(--ip);    border-color: var(--ip); }
+    .card--dns   .card-form-btn { color: var(--dns);   border-color: var(--dns); }
+    .card--tls   .card-form-btn { color: var(--tls);   border-color: var(--tls); }
+    .card--http  .card-form-btn { color: var(--http);  border-color: var(--http); }
+    .card--email .card-form-btn { color: var(--email); border-color: var(--email); }
 
-    .card--ip  .card-form-btn:hover { background: var(--ip-glow); }
-    .card--dns .card-form-btn:hover { background: var(--dns-glow); }
-    .card--tls .card-form-btn:hover { background: var(--tls-glow); }
+    .card--ip    .card-form-btn:hover { background: var(--ip-glow); }
+    .card--dns   .card-form-btn:hover { background: var(--dns-glow); }
+    .card--tls   .card-form-btn:hover { background: var(--tls-glow); }
+    .card--http  .card-form-btn:hover { background: var(--http-glow); }
+    .card--email .card-form-btn:hover { background: var(--email-glow); }
 
     /* ── Suite narrative ───────────────────────── */
     .suite-narrative {
@@ -588,10 +642,12 @@
       transform: translateY(-3px);
     }
 
-    .guide-card--ip:hover  { border-color: var(--ip);  box-shadow: 0 8px 28px var(--ip-glow); }
-    .guide-card--dns:hover { border-color: var(--dns); box-shadow: 0 8px 28px var(--dns-glow); }
-    .guide-card--tls:hover { border-color: var(--tls); box-shadow: 0 8px 28px var(--tls-glow); }
-    .guide-card--all:hover { border-color: var(--muted); box-shadow: 0 8px 28px var(--shadow); }
+    .guide-card--ip:hover    { border-color: var(--ip);    box-shadow: 0 8px 28px var(--ip-glow); }
+    .guide-card--dns:hover   { border-color: var(--dns);   box-shadow: 0 8px 28px var(--dns-glow); }
+    .guide-card--tls:hover   { border-color: var(--tls);   box-shadow: 0 8px 28px var(--tls-glow); }
+    .guide-card--http:hover  { border-color: var(--http);  box-shadow: 0 8px 28px var(--http-glow); }
+    .guide-card--email:hover { border-color: var(--email); box-shadow: 0 8px 28px var(--email-glow); }
+    .guide-card--all:hover   { border-color: var(--muted); box-shadow: 0 8px 28px var(--shadow); }
 
     .guide-card__tag {
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -605,10 +661,12 @@
       border: 1px solid;
     }
 
-    .guide-card--ip  .guide-card__tag { color: var(--ip);  border-color: var(--ip);  background: var(--ip-glow); }
-    .guide-card--dns .guide-card__tag { color: var(--dns); border-color: var(--dns); background: var(--dns-glow); }
-    .guide-card--tls .guide-card__tag { color: var(--tls); border-color: var(--tls); background: var(--tls-glow); }
-    .guide-card--all .guide-card__tag { color: var(--muted); border-color: var(--border); background: var(--faint); }
+    .guide-card--ip    .guide-card__tag { color: var(--ip);    border-color: var(--ip);    background: var(--ip-glow); }
+    .guide-card--dns   .guide-card__tag { color: var(--dns);   border-color: var(--dns);   background: var(--dns-glow); }
+    .guide-card--tls   .guide-card__tag { color: var(--tls);   border-color: var(--tls);   background: var(--tls-glow); }
+    .guide-card--http  .guide-card__tag { color: var(--http);  border-color: var(--http);  background: var(--http-glow); }
+    .guide-card--email .guide-card__tag { color: var(--email); border-color: var(--email); background: var(--email-glow); }
+    .guide-card--all   .guide-card__tag { color: var(--muted); border-color: var(--border); background: var(--faint); }
 
     .guide-card__title {
       font-size: .95rem;
@@ -647,6 +705,13 @@
     }
 
     .learn-all a:hover { color: var(--text); border-color: var(--muted); }
+
+    .guide-card--http  { border-top-color: var(--http); }
+    .guide-card--email { border-top-color: var(--email); }
+    .guide-card--http:hover  { box-shadow: 0 6px 20px var(--http-glow); }
+    .guide-card--email:hover { box-shadow: 0 6px 20px var(--email-glow); }
+    .guide-card--http  .guide-card__tag { color: var(--http); }
+    .guide-card--email .guide-card__tag { color: var(--email); }
 
     /* ── Lens chip ─────────────────────────────── */
     .chip--lens { color: var(--lens); border-color: color-mix(in srgb, var(--lens) 30%, transparent); background: var(--lens-glow); }
@@ -699,15 +764,15 @@
     <h1>Network intelligence,<br>laid bare.</h1>
 
     <p class="subtitle">
-      Stop switching between SSL Labs, dig, and ifconfig.co.
+      Stop switching between SSL Labs, dig, ifconfig.co, and security header scanners.
       Everything you need to understand a domain — in one place.
     </p>
 
     <p class="suite-narrative">
       Built for DevOps, SRE, and security engineers who need IP context, DNS
-      health, and TLS details in the same workflow. Start with lens for a
-      single A+–F health grade, or go deep with the individual tools.
-      Self-hostable, open-source, no account needed.
+      health, TLS details, HTTP security headers, and email security posture
+      in the same workflow. Start with lens for a single A+–F health grade,
+      or go deep with the individual tools. Self-hostable, open-source, no account needed.
     </p>
 
     <div class="tool-chips">
@@ -723,6 +788,12 @@
       <a href="https://tls.netray.info" class="chip chip--tls">
         <span class="chip-dot"></span>tls.netray.info
       </a>
+      <a href="https://http.netray.info" class="chip chip--http">
+        <span class="chip-dot"></span>http.netray.info
+      </a>
+      <a href="https://email.netray.info" class="chip chip--email">
+        <span class="chip-dot"></span>email.netray.info
+      </a>
     </div>
   </section>
 
@@ -735,9 +806,9 @@
       <h2>lens</h2>
       <div class="card-tag">// unified domain health check</div>
       <a href="https://github.com/netray-info/lens" class="card-github" target="_blank" rel="noopener noreferrer" aria-label="lens on GitHub"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>lens</a>
-      <p class="card-desc">One domain. Three signals. One grade — streamed in real time as each check completes. Use the individual tools below to dig deeper into any finding.</p>
+      <p class="card-desc">One domain. Five signals — IP, DNS, TLS, HTTP, and Email — one grade, streamed in real time as each check completes. Use the individual tools below to dig deeper into any finding.</p>
       <ul class="features">
-        <li><span class="feat-arrow">→</span> DNS, TLS, and IP checked in parallel</li>
+        <li><span class="feat-arrow">→</span> IP, DNS, TLS, HTTP, and Email checked in parallel</li>
         <li><span class="feat-arrow">→</span> A+–F grade with per-section breakdown</li>
         <li><span class="feat-arrow">→</span> Results arrive in real time — no waiting for the slowest check</li>
         <li><span class="feat-arrow">→</span> CI-friendly API — gate deploys on a health grade</li>
@@ -829,6 +900,58 @@
       <a href="https://tls.netray.info" class="card-cta">Open tool ↗</a>
     </div>
 
+    <div class="card card--http">
+      <div class="card-head">
+        <span class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.5"/><path d="M3.5 12h17M12 2.5c-2 3-3 6-3 9.5s1 6.5 3 9.5c2-3 3-6 3-9.5s-1-6.5-3-9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M16 6.5l2-2m0 0l-1.5 0m1.5 0l0 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/></svg></span>
+        <span class="card-badge">http.netray.info</span>
+      </div>
+      <h2>HTTP Inspector</h2>
+      <div class="card-tag">// HTTP Header Inspector</div>
+      <a href="https://github.com/netray-info/spectra" class="card-github" target="_blank" rel="noopener noreferrer" aria-label="spectra on GitHub"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>spectra</a>
+      <p class="card-desc">
+        Inspect CSP, HSTS, CORS, cookies, and security headers for any URL.
+        Three concurrent probes — HTTPS chain, HTTP port-80 upgrade, and CORS
+        with an evil origin — give you the full picture in one request.
+      </p>
+      <ul class="features">
+        <li><span class="feat-arrow">→</span> Content Security Policy analysis and scoring</li>
+        <li><span class="feat-arrow">→</span> HSTS validation including preload eligibility</li>
+        <li><span class="feat-arrow">→</span> CORS probing with simulated cross-origin requests</li>
+        <li><span class="feat-arrow">→</span> Cookie attribute audit and security header scoring</li>
+      </ul>
+      <form class="card-form" action="https://http.netray.info/" method="get">
+        <input class="card-form-input" type="url" name="url" placeholder="https://example.com" autocomplete="off" spellcheck="false" aria-label="URL to inspect" />
+        <button class="card-form-btn" type="submit">Inspect Headers →</button>
+      </form>
+      <a href="https://http.netray.info" class="card-cta">Open tool ↗</a>
+    </div>
+
+    <div class="card card--email">
+      <div class="card-head">
+        <span class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M3 7l9 6 9-6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.5 13.5l2-2m0 0l-1.5 0m1.5 0l0 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/></svg></span>
+        <span class="card-badge">email.netray.info</span>
+      </div>
+      <h2>Email Inspector</h2>
+      <div class="card-tag">// Email Security Inspector</div>
+      <a href="https://github.com/netray-info/beacon" class="card-github" target="_blank" rel="noopener noreferrer" aria-label="beacon on GitHub"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>beacon</a>
+      <p class="card-desc">
+        DNS-only email security posture analysis. Checks SPF, DKIM, DMARC,
+        MTA-STS, DANE, BIMI, DNSSEC, and more — with an aggregate A–F grade
+        streamed as each check completes.
+      </p>
+      <ul class="features">
+        <li><span class="feat-arrow">→</span> SPF flattening and DKIM key validation</li>
+        <li><span class="feat-arrow">→</span> DMARC policy analysis with alignment checks</li>
+        <li><span class="feat-arrow">→</span> MTA-STS, DANE/TLSA, and DNSBL reputation</li>
+        <li><span class="feat-arrow">→</span> Aggregate A–F grade with per-category breakdown</li>
+      </ul>
+      <form class="card-form" action="https://email.netray.info/" method="get">
+        <input class="card-form-input" type="text" name="domain" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Domain to check" />
+        <button class="card-form-btn" type="submit">Check Email →</button>
+      </form>
+      <a href="https://email.netray.info" class="card-cta">Open tool ↗</a>
+    </div>
+
   </section>
 
   <section class="learn" aria-label="Guides">
@@ -881,6 +1004,20 @@
         <span class="guide-card__cta">Read →</span>
       </a>
 
+      <a href="/guide/security-headers" class="guide-card guide-card--http">
+        <span class="guide-card__tag">HTTP Security</span>
+        <span class="guide-card__title">Security Headers Overview</span>
+        <span class="guide-card__desc">CSP, HSTS, X-Frame-Options, Permissions-Policy — the baseline set every site needs.</span>
+        <span class="guide-card__cta">Read the guide →</span>
+      </a>
+
+      <a href="/guide/dkim" class="guide-card guide-card--email">
+        <span class="guide-card__tag">Email Security</span>
+        <span class="guide-card__title">DKIM Deep Dive</span>
+        <span class="guide-card__desc">RSA vs Ed25519 key types, selector rotation, and testing with dig.</span>
+        <span class="guide-card__cta">Read the guide →</span>
+      </a>
+
     </div>
 
     <div class="learn-all">
@@ -897,6 +1034,10 @@
   <a href="https://dns.netray.info">dns.netray.info</a>
   <span class="sep">&middot;</span>
   <a href="https://tls.netray.info">tls.netray.info</a>
+  <span class="sep">&middot;</span>
+  <a href="https://http.netray.info">http.netray.info</a>
+  <span class="sep">&middot;</span>
+  <a href="https://email.netray.info">email.netray.info</a>
   <span class="sep">&middot;</span>
   <a href="/guide/">Guides</a>
   <span class="sep">&middot;</span>
