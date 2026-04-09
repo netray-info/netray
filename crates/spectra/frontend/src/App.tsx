@@ -453,11 +453,21 @@ export default function App() {
       </Modal>
 
       <SiteFooter
-        aboutText={<><em>spectra</em> is an HTTP header inspection service. Part of the <a href="https://netray.info"><strong>netray.info</strong></a> suite.</>}
+        aboutText={
+          <>
+            <em>spectra</em> inspects HTTP response headers, security posture, cookies, caching,
+            CORS policy, and CSP configuration for any URL. Built in{' '}
+            <a href="https://www.rust-lang.org" target="_blank" rel="noopener noreferrer">Rust</a> with{' '}
+            <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a> and{' '}
+            <a href="https://www.solidjs.com" target="_blank" rel="noopener noreferrer">SolidJS</a>.
+            Open to use — rate limiting applies. Part of the{' '}
+            <a href="https://netray.info"><strong>netray.info</strong></a> suite.
+          </>
+        }
         links={[
-          { label: 'GitHub', href: 'https://github.com/netray-info/spectra' },
-          { label: 'API Docs', href: '/docs' },
-          { label: 'Author', href: 'https://lukas.pustina.net' },
+          { href: 'https://github.com/netray-info/spectra', label: 'GitHub', external: true },
+          { href: '/docs', label: 'API Docs' },
+          { href: 'https://lukas.pustina.de', label: 'Author', external: true },
         ]}
         version={meta()?.version}
       />
