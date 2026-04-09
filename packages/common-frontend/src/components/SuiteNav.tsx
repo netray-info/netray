@@ -26,23 +26,24 @@ export default function SuiteNav(props: SuiteNavProps) {
           background: var(--bg-secondary);
           border: 1px solid var(--border-subtle);
           border-radius: var(--radius);
-          padding: 0.25rem 1rem;
+          padding: 0.375rem 1rem;
           display: flex;
           align-items: center;
           gap: 0;
           font-family: var(--mono);
           font-size: 0.75rem;
           flex-wrap: wrap;
-          row-gap: 0.25rem;
+          row-gap: 0.2rem;
+          margin-bottom: 0.75rem;
         }
 
         .suite-nav__brand {
           color: var(--text-secondary);
           text-decoration: none;
-          padding: 0.15rem 0.5rem 0.15rem 0;
+          padding: 0.2rem 0.5rem 0.2rem 0;
           letter-spacing: -0.01em;
           white-space: nowrap;
-          min-height: 32px;
+          min-height: 30px;
           display: inline-flex;
           align-items: center;
         }
@@ -65,7 +66,7 @@ export default function SuiteNav(props: SuiteNavProps) {
           border-radius: 4px;
           white-space: nowrap;
           transition: color 0.15s ease;
-          min-height: 32px;
+          min-height: 30px;
           display: inline-flex;
           align-items: center;
         }
