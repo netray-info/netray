@@ -89,7 +89,7 @@ async fn main() {
     );
 
     let app = Router::new()
-        .merge(routes::health_router())
+        .merge(routes::health_router(state.clone()))
         .merge(routes::api_router(state))
         // robots.txt — explicit route so crawlers get text/plain, not the SPA fallback
         .route("/robots.txt", axum::routing::get(robots_txt))

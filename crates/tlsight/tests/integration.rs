@@ -33,7 +33,7 @@ fn default_state(config: &Config) -> AppState {
 }
 
 fn test_router(state: AppState) -> axum::Router {
-    health_router()
+    health_router(state.clone())
         .merge(api_router(state))
         .layer(axum::middleware::from_fn(
             netray_common::middleware::request_id,
@@ -68,7 +68,7 @@ async fn body_string(body: axum::body::Body) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// 1. GET /api/health → 200 {"status":"ok"}
+// 1. GET /health → 200 {"status":"ok"}
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
@@ -76,7 +76,7 @@ async fn health_returns_200() {
     ensure_crypto_provider();
     let config = default_config();
     let router = test_router(default_state(&config));
-    let resp = router.oneshot(get("/api/health")).await.unwrap();
+    let resp = router.oneshot(get("/health")).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body = body_string(resp.into_body()).await;
     let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
@@ -84,7 +84,7 @@ async fn health_returns_200() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. GET /api/ready → 200 or 503 with JSON body containing "status" field.
+// 2. GET /ready → 200 or 503 with JSON body containing "status" field.
 //
 // Default config has check_caa=true and check_dane=true; since dns_resolver
 // is not initialized in AppState::new(), ready_handler returns 503.
@@ -95,7 +95,7 @@ async fn ready_returns_200_or_503_with_status_field() {
     ensure_crypto_provider();
     let config = default_config();
     let router = test_router(default_state(&config));
-    let resp = router.oneshot(get("/api/ready")).await.unwrap();
+    let resp = router.oneshot(get("/ready")).await.unwrap();
     let status = resp.status();
     assert!(
         status == StatusCode::OK || status == StatusCode::SERVICE_UNAVAILABLE,

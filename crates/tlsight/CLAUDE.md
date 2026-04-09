@@ -253,6 +253,10 @@ tlsight/
 - `solid-js` — Reactive UI (~7KB)
 - `vite` + `vite-plugin-solid` — Build tooling
 
+## Architecture Rules
+
+Rules: [`specs/rules/architecture-rules.md`](../specs/rules/architecture-rules.md) in the netray.info meta repo. Apply when modifying health probes or readiness checks.
+
 ## Logging & Telemetry
 
 Rules: [`specs/rules/logging-rules.md`](../specs/rules/logging-rules.md) in the netray.info meta repo. Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.

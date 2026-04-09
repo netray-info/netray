@@ -231,13 +231,15 @@ pub struct ApiDoc;
 // Routers
 // ---------------------------------------------------------------------------
 
-pub fn health_router() -> Router {
-    Router::new().route("/api/health", get(health_handler))
+pub fn health_router(state: AppState) -> Router {
+    Router::new()
+        .route("/health", get(health_handler))
+        .route("/ready", get(ready_handler))
+        .with_state(state)
 }
 
 pub fn api_router(state: AppState) -> Router {
     Router::new()
-        .route("/api/ready", get(ready_handler))
         .route(
             "/api/inspect",
             get(inspect_handler).post(inspect_post_handler),
@@ -254,7 +256,7 @@ pub fn api_router(state: AppState) -> Router {
 
 #[utoipa::path(
     get,
-    path = "/api/health",
+    path = "/health",
     responses(
         (status = 200, description = "Service is alive", body = HealthResponse),
     )
@@ -265,7 +267,7 @@ async fn health_handler() -> Json<HealthResponse> {
 
 #[utoipa::path(
     get,
-    path = "/api/ready",
+    path = "/ready",
     responses(
         (status = 200, description = "Service is ready; warnings array lists any degraded conditions", body = ReadyResponse),
     )
@@ -1251,7 +1253,7 @@ mod tests {
 
     fn test_router() -> Router {
         let state = test_state();
-        health_router().merge(api_router(state))
+        health_router(state.clone()).merge(api_router(state))
     }
 
     async fn get(app: &Router, uri: &str) -> (StatusCode, serde_json::Value) {
@@ -1271,7 +1273,7 @@ mod tests {
     #[tokio::test]
     async fn health_returns_ok() {
         let app = test_router();
-        let (status, body) = get(&app, "/api/health").await;
+        let (status, body) = get(&app, "/health").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], "ok");
     }
@@ -1283,8 +1285,8 @@ mod tests {
         config.validation.check_caa = false;
         config.validation.check_dane = false;
         let state = AppState::new(&config);
-        let app = health_router().merge(api_router(state));
-        let (status, body) = get(&app, "/api/ready").await;
+        let app = health_router(state.clone()).merge(api_router(state));
+        let (status, body) = get(&app, "/ready").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], "ok");
     }

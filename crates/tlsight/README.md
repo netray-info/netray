@@ -67,8 +67,8 @@ Additional endpoints:
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/health` | Liveness probe |
-| `GET /api/ready` | Readiness probe |
+| `GET /health` | Liveness probe |
+| `GET /ready` | Readiness probe |
 | `GET /api/meta` | Server capabilities and configured limits |
 | `GET /api-docs/openapi.json` | OpenAPI 3.1 spec |
 | `GET /docs` | Interactive API documentation |
