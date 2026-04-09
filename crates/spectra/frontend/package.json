@@ -1,0 +1,21 @@
+{
+  "name": "spectra-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@netray-info/common-frontend": "^0.3.2",
+    "solid-js": "^1.9.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.0",
+    "vite": "^8.0.0",
+    "vite-plugin-solid": "^2.11.10"
+  }
+}
