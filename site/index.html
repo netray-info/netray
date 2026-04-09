@@ -267,6 +267,12 @@
     /* ── Tool chips ────────────────────────────── */
     .tool-chips {
       display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .tool-chips__row {
+      display: flex;
       flex-wrap: wrap;
       justify-content: center;
       gap: 10px;
@@ -776,24 +782,30 @@
     </p>
 
     <div class="tool-chips">
-      <a href="https://lens.netray.info" class="chip chip--lens">
-        <span class="chip-dot"></span>lens.netray.info
-      </a>
-      <a href="https://ip.netray.info"  class="chip chip--ip">
-        <span class="chip-dot"></span>ip.netray.info
-      </a>
-      <a href="https://dns.netray.info" class="chip chip--dns">
-        <span class="chip-dot"></span>dns.netray.info
-      </a>
-      <a href="https://tls.netray.info" class="chip chip--tls">
-        <span class="chip-dot"></span>tls.netray.info
-      </a>
-      <a href="https://http.netray.info" class="chip chip--http">
-        <span class="chip-dot"></span>http.netray.info
-      </a>
-      <a href="https://email.netray.info" class="chip chip--email">
-        <span class="chip-dot"></span>email.netray.info
-      </a>
+      <div class="tool-chips__row">
+        <a href="https://lens.netray.info" class="chip chip--lens">
+          <span class="chip-dot"></span>lens.netray.info
+        </a>
+      </div>
+      <div class="tool-chips__row">
+        <a href="https://ip.netray.info"  class="chip chip--ip">
+          <span class="chip-dot"></span>ip.netray.info
+        </a>
+        <a href="https://dns.netray.info" class="chip chip--dns">
+          <span class="chip-dot"></span>dns.netray.info
+        </a>
+        <a href="https://tls.netray.info" class="chip chip--tls">
+          <span class="chip-dot"></span>tls.netray.info
+        </a>
+      </div>
+      <div class="tool-chips__row">
+        <a href="https://http.netray.info" class="chip chip--http">
+          <span class="chip-dot"></span>http.netray.info
+        </a>
+        <a href="https://email.netray.info" class="chip chip--email">
+          <span class="chip-dot"></span>email.netray.info
+        </a>
+      </div>
     </div>
   </section>
 
