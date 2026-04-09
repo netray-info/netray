@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-09
+
+### Added
+- Add HTTP and EMAIL links to SuiteNav (3d68c75)
+
+### Fixed
+- Add section-card background and align body with header (3222c82)
+- Tune SuiteNav height to match input row and add bottom spacing (9a8675a)
+
 ## [0.4.0] - 2026-04-09
 
 ### Added
