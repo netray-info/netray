@@ -194,6 +194,12 @@ export default function App() {
                   {/* Overview bar */}
                   <div class="overview">
                     <div class="overview__item">
+                      <span class="overview__label">Verdict</span>
+                      <span class={verdictClass(data.quality.verdict)}>
+                        {data.quality.verdict}
+                      </span>
+                    </div>
+                    <div class="overview__item">
                       <span class="overview__label">Status</span>
                       <span class="overview__value">{data.status}</span>
                     </div>
@@ -201,12 +207,6 @@ export default function App() {
                       <span class="overview__label">HTTP</span>
                       <span class="overview__value">{data.http_version}</span>
                     </div>
-                    <Show when={data.compression}>
-                      <div class="overview__item">
-                        <span class="overview__label">Encoding</span>
-                        <span class="overview__value">{data.compression}</span>
-                      </div>
-                    </Show>
                     <div class="overview__item">
                       <span class="overview__label">Duration</span>
                       <span class="overview__value">{data.duration_ms}ms</span>
@@ -216,27 +216,24 @@ export default function App() {
                       <a href={data.enrichment.detail_url} class="overview__value" target="_blank" rel="noopener">
                         {data.enrichment.ip}
                       </a>
+                      <Show when={data.enrichment.threat}>
+                        <span class="badge badge--fail">{data.enrichment.threat}</span>
+                      </Show>
                     </div>
+                    <Show when={data.enrichment.ip_type}>
+                      <div class="overview__item">
+                        <span class="overview__label">Category</span>
+                        <span class="overview__value">
+                          {data.enrichment.ip_type!.charAt(0).toUpperCase() + data.enrichment.ip_type!.slice(1)}
+                        </span>
+                      </div>
+                    </Show>
                     <Show when={data.enrichment.org}>
                       <div class="overview__item">
                         <span class="overview__label">Org</span>
                         <span class="overview__value">{data.enrichment.org}</span>
                       </div>
                     </Show>
-                    <Show when={data.alt_svc}>
-                      <div class="overview__item">
-                        <span class="overview__label">Alt-Svc</span>
-                        <span class="overview__value mono" style={{ 'font-size': '0.75rem' }}>
-                          {data.alt_svc}
-                        </span>
-                      </div>
-                    </Show>
-                    <div class="overview__item">
-                      <span class="overview__label">Verdict</span>
-                      <span class={verdictClass(data.quality.verdict)}>
-                        {data.quality.verdict}
-                      </span>
-                    </div>
                   </div>
 
                   {/* Expand / collapse toggle */}
@@ -266,10 +263,10 @@ export default function App() {
                           const counts = countChips(data.quality.checks);
                           return (
                             <>
-                              <Show when={(counts.pass ?? 0) > 0}><span class="badge badge--pass">{counts.pass} passed</span></Show>
-                              <Show when={(counts.skip ?? 0) > 0}><span class="badge badge--skip">{counts.skip} skipped</span></Show>
-                              <Show when={(counts.warn ?? 0) > 0}><span class="badge badge--warn">{counts.warn} warnings</span></Show>
                               <Show when={(counts.fail ?? 0) > 0}><span class="badge badge--fail">{counts.fail} failed</span></Show>
+                              <Show when={(counts.warn ?? 0) > 0}><span class="badge badge--warn">{counts.warn} warnings</span></Show>
+                              <Show when={(counts.skip ?? 0) > 0}><span class="badge badge--skip">{counts.skip} skipped</span></Show>
+                              <Show when={(counts.pass ?? 0) > 0}><span class="badge badge--pass">{counts.pass} passed</span></Show>
                             </>
                           );
                         })()}
@@ -281,7 +278,9 @@ export default function App() {
                     {/* Always-visible chip row — outside collapse gate */}
                     <div class="check-chips">
                       {(() => {
-                        const chipChecks = data.quality.checks.filter(c => c.status !== 'skip');
+                        const chipChecks = data.quality.checks
+                          .filter(c => c.status !== 'skip')
+                          .sort((a, b) => STATUS_ORDER[b.status] - STATUS_ORDER[a.status]);
                         return (
                           <For each={chipChecks}>
                             {(check) => (
