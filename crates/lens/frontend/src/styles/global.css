@@ -3,6 +3,17 @@
 @import '@netray-info/common-frontend/styles/layout.css';
 @import '@netray-info/common-frontend/styles/components.css';
 
+/* SuiteNav compaction (until common-frontend update) */
+.suite-nav {
+  padding: 0.15rem 1rem;
+  row-gap: 0.15rem;
+  margin-bottom: 0.75rem;
+}
+.suite-nav__brand,
+.suite-nav__link {
+  min-height: 26px;
+}
+
 /* ================================================================
    lens — project-specific tokens
    ================================================================ */
@@ -333,15 +344,22 @@ a:hover { text-decoration: underline; }
   margin-top: 2px;
 }
 
+.check-item[data-verdict="warn"] {
+  background: color-mix(in srgb, var(--verdict-warn) 8%, transparent);
+}
+
 .check-item[data-verdict="warn"] .check-item__message {
   border-left-color: var(--verdict-warn);
-  background: color-mix(in srgb, var(--verdict-warn) 8%, transparent);
+}
+
+.check-item[data-verdict="fail"],
+.check-item[data-verdict="error"] {
+  background: color-mix(in srgb, var(--verdict-fail) 8%, transparent);
 }
 
 .check-item[data-verdict="fail"] .check-item__message,
 .check-item[data-verdict="error"] .check-item__message {
   border-left-color: var(--verdict-fail);
-  background: color-mix(in srgb, var(--verdict-fail) 8%, transparent);
 }
 
 
