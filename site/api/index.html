@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>API Overview - netray.info</title>
-  <meta name="description" content="Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, and TLS certificate analysis via curl.">
+  <meta name="description" content="Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, TLS certificate analysis, HTTP header inspection, and email security via curl.">
   <link rel="canonical" href="https://netray.info/api">
   <meta property="og:title" content="API Overview - netray.info">
-  <meta property="og:description" content="Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, and TLS certificate analysis via curl.">
+  <meta property="og:description" content="Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, TLS certificate analysis, HTTP header inspection, and email security via curl.">
   <meta property="og:type" content="article">
   <meta property="og:url" content="https://netray.info/api">
   <meta property="og:site_name" content="netray.info">
@@ -19,7 +19,7 @@
     "@context": "https://schema.org",
     "@type": "Article",
     "headline": "netray.info API Overview",
-    "description": "Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, and TLS certificate analysis via curl.",
+    "description": "Quick-start guide to the netray.info API suite: IP enrichment, DNS inspection, TLS certificate analysis, HTTP header inspection, and email security via curl.",
     "url": "https://netray.info/api/",
     "publisher": {
       "@type": "Organization",
@@ -48,7 +48,7 @@
 
 <main class="page-wrapper">
   <h1 class="page-title">netray.info API</h1>
-  <p class="page-subtitle">Three tools, three base URLs, one JSON error format. All endpoints are public, rate-limited, and require no authentication.</p>
+  <p class="page-subtitle">Five tools, five base URLs, one JSON error format. All endpoints are public, rate-limited, and require no authentication.</p>
 
   <article>
 
@@ -72,6 +72,21 @@
             <td><code>https://tls.netray.info</code></td>
             <td><a href="tls.html">TLS API docs</a></td>
           </tr>
+          <tr>
+            <td>HTTP Inspector</td>
+            <td><code>https://http.netray.info</code></td>
+            <td><a href="http.html">HTTP API docs</a></td>
+          </tr>
+          <tr>
+            <td>Email Inspector</td>
+            <td><code>https://email.netray.info</code></td>
+            <td><a href="email.html">Email API docs</a></td>
+          </tr>
+          <tr>
+            <td>Lens</td>
+            <td><code>https://lens.netray.info</code></td>
+            <td>(see <a href="https://lens.netray.info">lens.netray.info</a> &mdash; no separate API docs)</td>
+          </tr>
         </tbody>
       </table>
 
@@ -88,6 +103,12 @@
 
       <p>Inspect a TLS certificate:</p>
 <pre><code>curl -s 'https://tls.netray.info/api/inspect?host=example.com' | jq .</code></pre>
+
+      <p>Inspect HTTP security headers:</p>
+<pre><code>curl -s 'https://http.netray.info/api/inspect?url=https%3A%2F%2Fexample.com' | jq .</code></pre>
+
+      <p>Check email security posture (SSE stream):</p>
+<pre><code>curl -N https://email.netray.info/inspect/example.com</code></pre>
 
       <h2>Common Headers</h2>
 
@@ -135,6 +156,16 @@
             <td>Per-IP + per-target GCRA</td>
             <td>Cost = ports x inspected IPs</td>
           </tr>
+          <tr>
+            <td>HTTP</td>
+            <td>Per-IP GCRA</td>
+            <td>Up to 3 outbound probes per request</td>
+          </tr>
+          <tr>
+            <td>Email</td>
+            <td>Per-IP GCRA</td>
+            <td>12 check categories per request</td>
+          </tr>
         </tbody>
       </table>
 
@@ -145,7 +176,7 @@
 
       <h2>Error Format</h2>
 
-      <p>All three tools use the same error envelope:</p>
+      <p>All five tools use the same error envelope:</p>
 
 <pre><code>{
   "error": {
@@ -200,6 +231,8 @@
         <li><a href="https://ip.netray.info/docs">IP API -- interactive reference</a></li>
         <li><a href="https://dns.netray.info/docs">DNS API -- interactive reference</a></li>
         <li><a href="https://tls.netray.info/docs">TLS API -- interactive reference</a></li>
+        <li><a href="https://http.netray.info/docs">HTTP API -- interactive reference</a></li>
+        <li><a href="https://email.netray.info/docs">Email API -- interactive reference</a></li>
       </ul>
   </article>
 
@@ -209,12 +242,17 @@
       <li><a href="ip.html">IP API</a></li>
       <li><a href="dns.html">DNS API</a></li>
       <li><a href="tls.html">TLS API</a></li>
+      <li><a href="http.html">HTTP API</a></li>
+      <li><a href="email.html">Email API</a></li>
     </ul>
     <p class="page-footer__suite">
       <a href="https://netray.info">netray.info</a> --
       <a href="https://ip.netray.info">IP</a> /
       <a href="https://dns.netray.info">DNS</a> /
-      <a href="https://tls.netray.info">TLS</a>
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
     </p>
   </footer>
 </main>
