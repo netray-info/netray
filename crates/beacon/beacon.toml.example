@@ -4,6 +4,10 @@ metrics_bind = "127.0.0.1:9090"
 trusted_proxies = []
 
 [dns]
+# Resolvers: predefined names ("cloudflare", "google", "quad9", "system") or
+# explicit IPv4 addresses ("1.1.1.1", "8.8.8.8") or "ip:port" ("1.1.1.1:53").
+# Predefined names are expanded to IPv4-only UDP configs automatically.
+# Multiple entries are queried round-robin.
 resolvers = ["cloudflare"]
 timeout_ms = 5000
 

@@ -1,10 +1,11 @@
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use std::str::FromStr;
 
 use mhost::RecordType;
 use mhost::resolver::{Resolver, ResolverGroup, ResolverGroupBuilder, MultiQuery};
+use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
 
 use crate::config::DnsConfig;
@@ -19,18 +20,37 @@ impl DnsResolver {
         let mut builder = ResolverGroupBuilder::new()
             .timeout(Duration::from_millis(cfg.timeout_ms));
 
-        for name in &cfg.resolvers {
-            if name == "system" {
+        for entry in &cfg.resolvers {
+            if entry == "system" {
                 builder = builder.system();
-            } else if let Ok(provider) = PredefinedProvider::from_str(name) {
-                builder = builder.predefined(provider);
+            } else if let Ok(ip) = entry.parse::<IpAddr>() {
+                // Explicit IP — default port 53, UDP
+                builder = builder.nameserver(NameServerConfig::udp(SocketAddr::new(ip, 53)));
+            } else if let Ok(sock) = entry.parse::<SocketAddr>() {
+                // Explicit IP:port
+                builder = builder.nameserver(NameServerConfig::udp(sock));
+            } else if let Ok(provider) = PredefinedProvider::from_str(entry) {
+                // Predefined provider: add IPv4-only configs (IPv6 times out on
+                // machines where IPv6 is unavailable, causing 10 s stalls per query)
+                for ns_config in provider.configs() {
+                    if ns_config.ip_addr().is_ipv4() {
+                        builder = builder.nameserver(ns_config);
+                    }
+                }
             } else {
-                tracing::warn!(resolver = %name, "unknown resolver name, skipping");
+                tracing::warn!(resolver = %entry, "unknown resolver entry, skipping");
             }
         }
 
         let group: ResolverGroup = builder.build().await?;
         let resolvers = group.resolvers().to_vec();
+
+        tracing::info!(
+            count = resolvers.len(),
+            names = %resolvers.iter().map(|r| r.name()).collect::<Vec<_>>().join(", "),
+            "DNS resolvers initialized"
+        );
+
         Ok(Self {
             resolvers,
             index: AtomicUsize::new(0),
