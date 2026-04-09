@@ -52,14 +52,36 @@ impl DnsResolver {
         let resolver = self.pick();
         let (a_result, aaaa_result) = tokio::join!(
             async {
-                let query = MultiQuery::single(hostname, RecordType::A).ok()?;
-                let lookups = resolver.lookup(query).await.ok()?;
-                Some(lookups.ips())
+                let query = match MultiQuery::single(hostname, RecordType::A) {
+                    Ok(q) => q,
+                    Err(e) => {
+                        tracing::warn!(query_name = %hostname, record_type = "A", error = %e, "DNS lookup failed");
+                        return None;
+                    }
+                };
+                match resolver.lookup(query).await {
+                    Ok(lookups) => Some(lookups.ips()),
+                    Err(e) => {
+                        tracing::warn!(query_name = %hostname, record_type = "A", error = %e, "DNS lookup failed");
+                        None
+                    }
+                }
             },
             async {
-                let query = MultiQuery::single(hostname, RecordType::AAAA).ok()?;
-                let lookups = resolver.lookup(query).await.ok()?;
-                Some(lookups.ips())
+                let query = match MultiQuery::single(hostname, RecordType::AAAA) {
+                    Ok(q) => q,
+                    Err(e) => {
+                        tracing::warn!(query_name = %hostname, record_type = "AAAA", error = %e, "DNS lookup failed");
+                        return None;
+                    }
+                };
+                match resolver.lookup(query).await {
+                    Ok(lookups) => Some(lookups.ips()),
+                    Err(e) => {
+                        tracing::warn!(query_name = %hostname, record_type = "AAAA", error = %e, "DNS lookup failed");
+                        None
+                    }
+                }
             },
         );
 

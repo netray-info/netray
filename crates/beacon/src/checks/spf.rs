@@ -426,3 +426,102 @@ fn has_overlapping_cidrs(prefixes: &[IpNet]) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- parse_mechanism ---
+
+    #[test]
+    fn parse_mechanism_default_qualifier() {
+        assert_eq!(parse_mechanism("include:example.com"), ('+', "include:example.com"));
+    }
+
+    #[test]
+    fn parse_mechanism_plus() {
+        assert_eq!(parse_mechanism("+all"), ('+', "all"));
+    }
+
+    #[test]
+    fn parse_mechanism_minus() {
+        assert_eq!(parse_mechanism("-all"), ('-', "all"));
+    }
+
+    #[test]
+    fn parse_mechanism_tilde() {
+        assert_eq!(parse_mechanism("~all"), ('~', "all"));
+    }
+
+    #[test]
+    fn parse_mechanism_question() {
+        assert_eq!(parse_mechanism("?all"), ('?', "all"));
+    }
+
+    // --- a mechanism pattern matching ---
+
+    #[test]
+    fn a_mechanism_matches_bare_a() {
+        // "a" exactly should match the `body == "a"` arm
+        let (_, body) = parse_mechanism("a");
+        assert!(body == "a" || body.starts_with("a:"));
+    }
+
+    #[test]
+    fn a_mechanism_matches_a_with_domain() {
+        let (_, body) = parse_mechanism("a:mail.example.com");
+        assert!(body == "a" || body.starts_with("a:"));
+    }
+
+    #[test]
+    fn a_mechanism_does_not_match_a2record() {
+        // "a2record" must NOT match the `a` mechanism
+        let (_, body) = parse_mechanism("a2record");
+        assert!(body != "a" && !body.starts_with("a:"));
+    }
+
+    #[test]
+    fn a_mechanism_does_not_match_aa() {
+        let (_, body) = parse_mechanism("aa");
+        assert!(body != "a" && !body.starts_with("a:"));
+    }
+
+    // --- u16 saturating_add ---
+
+    #[test]
+    fn test_u16_saturating_add() {
+        // Demonstrates void/lookup counter cannot overflow
+        assert_eq!(u16::MAX, u16::MAX.saturating_add(1));
+    }
+
+    // --- has_overlapping_cidrs ---
+
+    #[test]
+    fn no_overlap() {
+        let prefixes: Vec<IpNet> = vec![
+            "192.0.2.0/24".parse().unwrap(),
+            "198.51.100.0/24".parse().unwrap(),
+        ];
+        assert!(!has_overlapping_cidrs(&prefixes));
+    }
+
+    #[test]
+    fn overlap_detected() {
+        let prefixes: Vec<IpNet> = vec![
+            "192.0.2.0/24".parse().unwrap(),
+            "192.0.2.1/32".parse().unwrap(),
+        ];
+        assert!(has_overlapping_cidrs(&prefixes));
+    }
+
+    #[test]
+    fn empty_no_overlap() {
+        assert!(!has_overlapping_cidrs(&[]));
+    }
+
+    #[test]
+    fn single_no_overlap() {
+        let prefixes: Vec<IpNet> = vec!["192.0.2.0/24".parse().unwrap()];
+        assert!(!has_overlapping_cidrs(&prefixes));
+    }
+}

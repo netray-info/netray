@@ -1,4 +1,4 @@
-export type Verdict = 'pass' | 'info' | 'warn' | 'fail';
+export type Verdict = 'skip' | 'pass' | 'info' | 'warn' | 'fail';
 export type Grade = 'A' | 'B' | 'C' | 'D' | 'F';
 export type Category =
   | 'mx' | 'spf' | 'dkim' | 'dmarc' | 'mta_sts' | 'tls_rpt'
@@ -56,8 +56,9 @@ export const CATEGORY_ORDER: Category[] = [
 ];
 
 export const VERDICT_ORDER: Record<Verdict, number> = {
-  pass: 0,
-  info: 1,
-  warn: 2,
-  fail: 3,
+  skip: 0,
+  pass: 1,
+  info: 2,
+  warn: 3,
+  fail: 4,
 };

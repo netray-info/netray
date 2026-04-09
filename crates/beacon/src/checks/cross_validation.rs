@@ -384,4 +384,34 @@ mod tests {
         assert!(mta_sts_glob_match("mail.example.com", "mail.example.com"));
         assert!(!mta_sts_glob_match("mail.example.com", "other.example.com"));
     }
+
+    #[test]
+    fn mta_sts_mx_coverage_missing() {
+        let mut r = base_results();
+        r.mx_hosts = vec!["mx.example.com".to_string()];
+        r.mta_sts_info = Some(MtaStsInfo {
+            dns_id: "v1".to_string(),
+            policy_id: Some("v1".to_string()),
+            mode: Some("enforce".to_string()),
+            mx_patterns: vec!["other.example.com".to_string()],
+        });
+        let result = cross_validate(&r);
+        let names: Vec<&str> = result.sub_checks.iter().map(|s| s.name.as_str()).collect();
+        assert!(names.contains(&"mta_sts_mx_coverage"));
+        assert_eq!(
+            result.sub_checks.iter().find(|s| s.name == "mta_sts_mx_coverage").unwrap().verdict,
+            Verdict::Warn
+        );
+    }
+
+    #[test]
+    fn test_dmarc_sp_gap_detected() {
+        let mut r = base_results();
+        r.dmarc_policy = Some("reject".to_string());
+        r.dmarc_sp = Some("none".to_string());
+        let result = cross_validate(&r);
+        let sc = result.sub_checks.iter().find(|s| s.name == "dmarc_sp_gap").unwrap();
+        assert_eq!(sc.verdict, Verdict::Warn);
+        assert!(sc.detail.contains("subdomains"));
+    }
 }

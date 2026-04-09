@@ -144,4 +144,51 @@ mod tests {
         let domain = format!("{}.{}.{}.{}.com", label, label, label, label);
         assert!(parse_domain(&domain).is_err());
     }
+
+    // --- validate_dkim_selector ---
+
+    #[test]
+    fn valid_selector() {
+        assert!(validate_dkim_selector("google").is_ok());
+    }
+
+    #[test]
+    fn valid_selector_with_hyphen() {
+        assert!(validate_dkim_selector("sel-1").is_ok());
+    }
+
+    #[test]
+    fn valid_max_length() {
+        let s = "a".repeat(63);
+        assert!(validate_dkim_selector(&s).is_ok());
+    }
+
+    #[test]
+    fn rejects_empty_selector() {
+        let err = validate_dkim_selector("").unwrap_err();
+        assert!(err.to_string().contains("empty"), "expected 'empty' in: {err}");
+    }
+
+    #[test]
+    fn rejects_selector_with_dot() {
+        let err = validate_dkim_selector("evil.com._domainkey.victim").unwrap_err();
+        assert!(err.to_string().contains("dot"), "expected 'dot' in: {err}");
+    }
+
+    #[test]
+    fn rejects_selector_too_long() {
+        let s = "a".repeat(64);
+        let err = validate_dkim_selector(&s).unwrap_err();
+        assert!(err.to_string().contains("long") || err.to_string().contains("63"), "expected length error in: {err}");
+    }
+
+    #[test]
+    fn rejects_selector_non_ascii() {
+        // underscore is not alphanumeric or hyphen
+        let err = validate_dkim_selector("sel_1").unwrap_err();
+        assert!(
+            err.to_string().contains("alphanumeric") || err.to_string().contains("invalid"),
+            "expected character error in: {err}"
+        );
+    }
 }

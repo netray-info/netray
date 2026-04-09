@@ -165,7 +165,7 @@ export default function App() {
   const isIdle = () => !hasResults() && !loading() && !error();
 
   function verdictCounts(): Record<Verdict, number> {
-    const counts: Record<Verdict, number> = { pass: 0, info: 0, warn: 0, fail: 0 };
+    const counts: Record<Verdict, number> = { skip: 0, pass: 0, info: 0, warn: 0, fail: 0 };
     for (const r of categories().values()) {
       counts[r.verdict]++;
     }

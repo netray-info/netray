@@ -386,6 +386,11 @@
   padding: 0.1rem 0.4rem;
 }
 
+.badge--skip {
+  background: var(--bg-tertiary, rgba(128, 128, 128, 0.1));
+  color: var(--text-secondary);
+}
+
 .badge--pass {
   background: color-mix(in srgb, var(--color-pass) 15%, transparent);
   color: var(--color-pass);

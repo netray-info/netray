@@ -73,4 +73,28 @@ mod tests {
         let v = vec![Verdict::Info, Verdict::Info, Verdict::Info];
         assert_eq!(compute_grade(&v), Grade::A);
     }
+
+    #[test]
+    fn grade_skip_excluded() {
+        // All 12 Skips → Skip excluded, 0 fails, 0 warns → Grade::A
+        let v = vec![Verdict::Skip; 12];
+        assert_eq!(compute_grade(&v), Grade::A);
+    }
+
+    #[test]
+    fn grade_skip_with_fails() {
+        // 1 Fail + 11 Skip → Skip excluded, 1 fail → Grade::D
+        let mut v = vec![Verdict::Skip; 11];
+        v.push(Verdict::Fail);
+        assert_eq!(compute_grade(&v), Grade::D);
+    }
+
+    #[test]
+    fn grade_skip_with_warns() {
+        // 2 Warn + 10 Skip → Skip excluded, 0 fails, 2 warns → Grade::B
+        let mut v = vec![Verdict::Skip; 10];
+        v.push(Verdict::Warn);
+        v.push(Verdict::Warn);
+        assert_eq!(compute_grade(&v), Grade::B);
+    }
 }
