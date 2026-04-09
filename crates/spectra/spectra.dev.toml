@@ -1,0 +1,29 @@
+# Local development config — do not commit
+
+[server]
+bind = "127.0.0.1:3000"
+metrics_bind = "127.0.0.1:9090"
+
+[inspect]
+request_timeout_secs = 10
+total_timeout_secs = 30
+max_redirects = 10
+body_read_limit_bytes = 1024
+user_agent = "netray-spectra"
+
+[limits]
+per_ip_per_minute = 10
+per_ip_burst = 5
+per_target_per_minute = 30
+per_target_burst = 10
+max_concurrent_connections = 256
+
+[enrichment]
+ip_url = "https://ip.netray.info"
+timeout_ms = 500
+
+[telemetry]
+log_format = "text"
+enabled = false
+service_name = "spectra"
+sample_rate = 1.0
