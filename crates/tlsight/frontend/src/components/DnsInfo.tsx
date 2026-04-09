@@ -16,7 +16,7 @@ function parseCaaRecord(raw: string): string {
   return `${tag}: ${value}`;
 }
 
-export function CaaView(props: { caa: DnsContext['caa']; explain?: boolean; expanded?: boolean }) {
+export function CaaView(props: { caa: DnsContext['caa']; explain?: boolean; expanded?: boolean; dnsUrl?: string; hostname?: string }) {
   const [expanded, setExpanded] = createSignal(false);
   createEffect(() => { if (props.expanded !== undefined) setExpanded(props.expanded); });
 
@@ -36,6 +36,16 @@ export function CaaView(props: { caa: DnsContext['caa']; explain?: boolean; expa
                 <span class="dns-section__count">{caa().records.length}</span>
               </Show>
             </span>
+            <Show when={props.dnsUrl && props.hostname}>
+              <a
+                class="eco-link"
+                href={`${props.dnsUrl}/?q=${encodeURIComponent(props.hostname!)}+CAA&ref=tlsight`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open in DNS inspector"
+                onClick={(e: MouseEvent) => e.stopPropagation()}
+              >DNS &#x2197;</a>
+            </Show>
             <span class="ip-card__chevron" classList={{ 'ip-card__chevron--open': expanded() }}>
               &#x25B8;
             </span>
@@ -58,7 +68,7 @@ export function CaaView(props: { caa: DnsContext['caa']; explain?: boolean; expa
   );
 }
 
-export function TlsaView(props: { tlsa: TlsaInfo; explain?: boolean }) {
+export function TlsaView(props: { tlsa: TlsaInfo; explain?: boolean; dnsUrl?: string; hostname?: string; port?: number }) {
   const [expanded, setExpanded] = createSignal(false);
 
   return (
@@ -73,6 +83,16 @@ export function TlsaView(props: { tlsa: TlsaInfo; explain?: boolean }) {
             <span class="dns-section__count">{props.tlsa.records.length}</span>
           </Show>
         </span>
+        <Show when={props.dnsUrl && props.hostname}>
+          <a
+            class="eco-link"
+            href={`${props.dnsUrl}/?q=${encodeURIComponent(`_${props.port ?? 443}._tcp.${props.hostname!}`)}+TLSA&ref=tlsight`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open in DNS inspector"
+            onClick={(e: MouseEvent) => e.stopPropagation()}
+          >DNS &#x2197;</a>
+        </Show>
         <span class="ip-card__chevron" classList={{ 'ip-card__chevron--open': expanded() }}>
           &#x25B8;
         </span>

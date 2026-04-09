@@ -104,17 +104,22 @@ export default function IpCard(props: Props) {
           )}
         </Show>
 
+        <Show when={props.ipUrl}>
+          <a
+            class="eco-link"
+            href={`${props.ipUrl}/?ip=${encodeURIComponent(props.result.ip)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open in IP inspector"
+            onClick={(e: MouseEvent) => e.stopPropagation()}
+          >IP &#x2197;</a>
+        </Show>
         <Show when={hasBody()}>
           <span class="ip-card__chevron" classList={{ 'ip-card__chevron--open': expanded() }}>
             &#x25B8;
           </span>
         </Show>
       </button>
-      <Show when={props.ipUrl}>
-        <div class="ip-eco">
-          <a class="eco-link" href={`${props.ipUrl}/?ip=${encodeURIComponent(props.result.ip)}`} target="_blank" rel="noopener noreferrer">IP info ↗</a>
-        </div>
-      </Show>
       <Explain when={!!props.explain}>Each card shows the TLS inspection result for one IP address. The left border color indicates overall status: green = good, orange = warning, red = problem.</Explain>
 
       <Show when={!props.result.error && leaf()}>

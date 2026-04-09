@@ -1055,12 +1055,6 @@ a:hover { text-decoration: underline; }
   margin-left: 2px;
 }
 
-.ip-eco {
-  display: flex;
-  justify-content: flex-end;
-  padding: 2px 12px 4px;
-}
-
 /* ================================================================
    Modal
    ================================================================ */
@@ -1483,6 +1477,20 @@ a:hover { text-decoration: underline; }
 .quality-check--warn .quality-check__icon { color: var(--warn); }
 .quality-check--fail .quality-check__icon { color: var(--fail); }
 .quality-check--skip .quality-check__icon { color: var(--skip); }
+
+/* §18 check row tinting */
+.quality-check--fail {
+  background: color-mix(in srgb, var(--fail) 8%, transparent);
+  border-radius: var(--radius);
+  padding-left: 4px;
+  padding-right: 4px;
+}
+.quality-check--warn {
+  background: color-mix(in srgb, var(--warn) 6%, transparent);
+  border-radius: var(--radius);
+  padding-left: 4px;
+  padding-right: 4px;
+}
 
 .quality-check__label {
   font-weight: 500;

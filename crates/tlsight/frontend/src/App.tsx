@@ -345,10 +345,10 @@ export default function App() {
                               {(c) => <ConsistencyView consistency={c()} explain={explain()} />}
                             </Show>
                             <Show when={r.dns?.caa}>
-                              {(caa) => <CaaView caa={caa()} explain={explain()} expanded={allExpanded()} />}
+                              {(caa) => <CaaView caa={caa()} explain={explain()} expanded={allExpanded()} dnsUrl={dnsUrl()} hostname={r.hostname} />}
                             </Show>
                             <Show when={p.tlsa}>
-                              {(tlsa) => <TlsaView tlsa={tlsa()} explain={explain()} />}
+                              {(tlsa) => <TlsaView tlsa={tlsa()} explain={explain()} dnsUrl={dnsUrl()} hostname={r.hostname} port={p.port} />}
                             </Show>
                           </div>
                         </Show>
