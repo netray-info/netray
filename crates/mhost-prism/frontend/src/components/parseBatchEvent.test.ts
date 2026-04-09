@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBatchEvent } from './ResultsTable';
+import { parseBatchEvent } from './parseBatchEvent';
 
 describe('parseBatchEvent', () => {
   it('flattens the nested lookups structure', () => {
