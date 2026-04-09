@@ -2,20 +2,24 @@ export interface SuiteNavEcosystem {
   ip_base_url?: string;
   dns_base_url?: string;
   tls_base_url?: string;
+  http_base_url?: string;
+  email_base_url?: string;
   lens_base_url?: string;
 }
 
 interface SuiteNavProps {
-  current: 'ip' | 'dns' | 'tls' | 'lens';
+  current: 'ip' | 'dns' | 'tls' | 'http' | 'email' | 'lens';
   meta?: SuiteNavEcosystem;
 }
 
 export default function SuiteNav(props: SuiteNavProps) {
   const links = () => [
-    { id: 'ip',   label: 'IP',   href: props.meta?.ip_base_url   ?? 'https://ip.netray.info' },
-    { id: 'dns',  label: 'DNS',  href: props.meta?.dns_base_url  ?? 'https://dns.netray.info' },
-    { id: 'tls',  label: 'TLS',  href: props.meta?.tls_base_url  ?? 'https://tls.netray.info' },
-    { id: 'lens', label: 'LENS', href: props.meta?.lens_base_url ?? 'https://lens.netray.info' },
+    { id: 'ip',    label: 'IP',    href: props.meta?.ip_base_url    ?? 'https://ip.netray.info' },
+    { id: 'dns',   label: 'DNS',   href: props.meta?.dns_base_url   ?? 'https://dns.netray.info' },
+    { id: 'tls',   label: 'TLS',   href: props.meta?.tls_base_url   ?? 'https://tls.netray.info' },
+    { id: 'http',  label: 'HTTP',  href: props.meta?.http_base_url  ?? 'https://http.netray.info' },
+    { id: 'email', label: 'EMAIL', href: props.meta?.email_base_url ?? 'https://email.netray.info' },
+    { id: 'lens',  label: 'LENS',  href: props.meta?.lens_base_url  ?? 'https://lens.netray.info' },
   ] as const;
 
   return (
