@@ -121,7 +121,7 @@ export default function App() {
 
   return (
       <div class="app">
-      <SuiteNav current={'http' as any} meta={meta()?.ecosystem as SuiteNavEcosystem} />
+      <SuiteNav current="http" meta={meta()?.ecosystem as SuiteNavEcosystem} />
       <a class="skip-link" href="#results">Skip to results</a>
 
       <main class="container">
