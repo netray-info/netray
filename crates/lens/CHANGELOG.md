@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.3] - 2026-04-09
+
+### Changed
+- Move health and ready probes to root-level paths (31c51a5)
+- Condense CLAUDE.md rules and principles to avoid global duplication (06e6a6f)
+- Deduplicate frontend-rules and update spec paths in CLAUDE.md (514e7bf)
+
 ## [0.2.2] - 2026-04-09
 
 ### Fixed
