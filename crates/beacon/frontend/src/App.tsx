@@ -176,14 +176,13 @@ export default function App() {
     <>
       <SuiteNav current="email" meta={meta()?.ecosystem as SuiteNavEcosystem} />
 
+      <div class="app">
       <header class="header">
-        <div class="header__row">
-          <h1 class="header__title">
-            email<span class="header__dot">.</span>netray<span class="header__dot">.</span>info
-          </h1>
-          <ThemeToggle theme={theme} />
+        <h1 class="logo">beacon</h1>
+        <span class="tagline">Email security inspector</span>
+        <div class="header-actions">
+          <ThemeToggle theme={theme} class="header-btn" />
         </div>
-        <p class="header__subtitle">Email security inspector</p>
       </header>
 
       <main class="main">
@@ -409,6 +408,7 @@ export default function App() {
         ]}
         version={meta()?.version}
       />
+      </div>
     </>
   );
 }

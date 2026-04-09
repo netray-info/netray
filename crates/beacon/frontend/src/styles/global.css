@@ -7,41 +7,17 @@
   --color-fail: #ef4444;
 }
 
-/* Header */
-.header {
-  text-align: center;
-  padding: 2rem 1rem 1rem;
-}
-
-.header__row {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-}
-
-.header__title {
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.header__dot {
-  color: var(--accent);
-}
-
-.header__subtitle {
-  margin-top: 0.25rem;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-}
-
-/* Main */
-.main {
-  max-width: 52rem;
+/* App shell */
+.app {
+  max-width: 960px;
   margin: 0 auto;
-  padding: 0 1rem 2rem;
+  padding: 1.5rem 1rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
+
+.main { flex: 1; }
 
 /* Inspect form */
 .inspect-form {
