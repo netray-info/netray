@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-09
+
+### Added
+- Verdict badge CSS components (`.verdict-badge--pass/fail/warn/skip`, filled variants)
+- Section card CSS components (`.section-card` with header, status dot, chevron, body)
+- Check row CSS components (`.check-row` with fail/warn background tinting)
+- `--pass`, `--fail`, `--warn`, `--skip` semantic color tokens in both themes
+
+### Changed
+- SuiteNav: compact styling (rounded border, smaller font/padding, 32px min-height on desktop, 44px preserved on mobile)
+
 ## [0.3.3] - 2026-04-08
 
 ### Changed
