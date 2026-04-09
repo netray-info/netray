@@ -60,17 +60,6 @@ export default function SecurityAudit(props: Props) {
           <span class="check-explain">{explanationFor('hsts')}</span>
         </Show>
       </li>
-      <li class={rowClass(s().csp.status, props.showExplanations())}>
-        <StatusBadge status={s().csp.status} />
-        <span class="check-list__name">CSP</span>
-        <span class="check-list__message">
-          {s().csp.enforced ? 'Enforced' : s().csp.report_only ? 'Report-only' : 'Missing'}
-          {s().csp.issues.length > 0 ? ` — ${s().csp.issues.length} issue(s)` : ''}
-        </span>
-        <Show when={props.showExplanations() && explanationFor('csp')}>
-          <span class="check-explain">{explanationFor('csp')}</span>
-        </Show>
-      </li>
       <HeaderRow name="X-Frame-Options" check={s().x_frame_options} explanation={explanationFor('x_frame_options')} showExplanations={props.showExplanations} />
       <HeaderRow name="X-Content-Type-Options" check={s().x_content_type_options} explanation={explanationFor('x_content_type_options')} showExplanations={props.showExplanations} />
       <HeaderRow name="Referrer-Policy" check={s().referrer_policy} explanation={explanationFor('referrer_policy')} showExplanations={props.showExplanations} />
