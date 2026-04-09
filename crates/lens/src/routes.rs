@@ -229,8 +229,11 @@ pub struct Assets;
 // Router builders
 // ---------------------------------------------------------------------------
 
-pub fn health_router() -> Router {
-    Router::new().route("/api/health", get(health_handler))
+pub fn health_router(state: AppState) -> Router {
+    Router::new()
+        .route("/health", get(health_handler))
+        .route("/ready", get(ready_handler))
+        .with_state(state)
 }
 
 pub fn api_router(state: AppState) -> Router {
@@ -238,7 +241,6 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api/meta", get(meta_handler))
         .route("/api/check/{domain}", get(check_get_handler))
         .route("/api/check", post(check_post_handler))
-        .route("/api/ready", get(ready_handler))
         .with_state(state)
 }
 
@@ -292,30 +294,35 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let config = &state.config;
     let mut down: Vec<String> = Vec::new();
 
-    // Check each backend with a short ping (HEAD / GET to /).
-    for (name, url) in [
+    // Probe all backends concurrently (3 s timeout each).
+    let backends = [
         ("dns", config.backends.dns_url.as_str()),
         ("tls", config.backends.tls_url.as_str()),
         ("ip", config.backends.ip_url.as_str()),
-    ] {
-        if url.is_empty() {
-            down.push(name.to_string());
-            continue;
+    ];
+    let checks = backends.map(|(name, url)| {
+        let client = client.clone();
+        async move {
+            if url.is_empty() {
+                return Some(name.to_string());
+            }
+            let health_url = format!("{}/health", url.trim_end_matches('/'));
+            let ok = tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                client.get(&health_url).send(),
+            )
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .map(|r| r.status().is_success())
+            .unwrap_or(false);
+            if !ok { Some(name.to_string()) } else { None }
         }
-        let health_url = format!("{}/api/health", url.trim_end_matches('/'));
-        let ok = tokio::time::timeout(
-            std::time::Duration::from_secs(3),
-            client.get(&health_url).send(),
-        )
-        .await
-        .ok()
-        .and_then(|r| r.ok())
-        .map(|r| r.status().is_success())
-        .unwrap_or(false);
-
-        if !ok {
-            down.push(name.to_string());
-        }
+    });
+    let [r0, r1, r2] = checks;
+    let (r0, r1, r2) = tokio::join!(r0, r1, r2);
+    for name in [r0, r1, r2].into_iter().flatten() {
+        down.push(name);
     }
 
     if down.is_empty() {
@@ -787,10 +794,10 @@ pub mod tests {
     fn test_app_no_connect_info() -> axum::Router {
         let state = make_test_state();
         Router::new()
-            .route("/api/health", get(health_handler))
+            .route("/health", get(health_handler))
             .route("/api/check/{domain}", get(check_get_no_connect_handler))
             .route("/api/check", post(check_post_no_connect_handler))
-            .route("/api/ready", get(ready_handler))
+            .route("/ready", get(ready_handler))
             .with_state(state)
     }
 
@@ -818,7 +825,7 @@ pub mod tests {
     async fn health_returns_200_ok() {
         let app = test_app_no_connect_info();
         let req = Request::builder()
-            .uri("/api/health")
+            .uri("/health")
             .body(Body::empty())
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();

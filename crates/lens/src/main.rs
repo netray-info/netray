@@ -50,7 +50,7 @@ async fn main() {
 
     // 4. Build router.
     let app = Router::new()
-        .merge(routes::health_router())
+        .merge(routes::health_router(state.clone()))
         .merge(routes::api_router(state))
         .route("/robots.txt", get(robots_txt))
         .fallback(netray_common::server::static_handler::<routes::Assets>())

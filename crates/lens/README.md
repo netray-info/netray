@@ -78,8 +78,8 @@ If the request is rejected before streaming (invalid domain, rate limited), a st
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/health` | Liveness probe |
-| `GET /api/ready` | Readiness probe |
+| `GET /health` | Liveness probe |
+| `GET /ready` | Readiness probe |
 | `GET /api/meta` | Server capabilities and configured backends |
 | `GET /api-docs/openapi.json` | OpenAPI 3.1 spec |
 | `GET /docs` | Interactive API documentation |
