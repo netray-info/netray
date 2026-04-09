@@ -12,10 +12,10 @@ build:  ## Build release binary
 	cargo build --release
 
 run: all  ## Build + run release binary
-	./target/release/spectra spectra.toml
+	./target/release/spectra spectra.dev.toml
 
 dev:  ## Run development server (debug build)
-	cargo run -- spectra.toml
+	cargo run -- spectra.dev.toml
 
 check:  ## Fast compile check
 	cargo check
