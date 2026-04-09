@@ -44,28 +44,21 @@ a:hover { text-decoration: underline; }
   padding: 0 1rem;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.5rem 0;
-}
-
-.header__left { display: flex; align-items: center; gap: 0.75rem; }
-
-.header__title {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
 .header__tagline {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
 
-.header__actions { display: flex; align-items: center; gap: 0.5rem; }
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: var(--bg-primary);
+  color: var(--accent);
+}
+.skip-link:focus { left: 0; }
 
 /* ================================================================
    URL Input
@@ -351,14 +344,3 @@ a:hover { text-decoration: underline; }
   padding: 2rem;
   color: var(--text-muted);
 }
-
-.loading__spinner {
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }

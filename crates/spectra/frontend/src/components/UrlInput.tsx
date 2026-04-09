@@ -21,6 +21,7 @@ export default function UrlInput(props: Props) {
         class="url-input__field"
         type="text"
         placeholder="https://example.com"
+        aria-label="URL to inspect"
         value={value()}
         onInput={(e) => setValue(e.currentTarget.value)}
         autofocus

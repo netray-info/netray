@@ -93,8 +93,8 @@ pub struct ApiDoc;
 
 pub fn health_router(state: AppState) -> Router {
     Router::new()
-        .route("/api/health", get(health_handler))
-        .route("/api/ready", get(ready_handler))
+        .route("/health", get(health_handler))
+        .route("/ready", get(ready_handler))
         .with_state(state)
 }
 
@@ -116,24 +116,32 @@ pub fn api_router(state: AppState) -> Router {
 
 #[utoipa::path(
     get,
-    path = "/api/health",
+    path = "/health",
+    tag = "Probes",
     responses(
         (status = 200, description = "Service is alive", body = HealthResponse),
     )
 )]
-async fn health_handler() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok" })
+async fn health_handler() -> impl IntoResponse {
+    (
+        [(axum::http::header::CACHE_CONTROL, "no-cache")],
+        Json(HealthResponse { status: "ok" }),
+    )
 }
 
 #[utoipa::path(
     get,
-    path = "/api/ready",
+    path = "/ready",
+    tag = "Probes",
     responses(
         (status = 200, description = "Service is ready", body = ReadyResponse),
     )
 )]
-async fn ready_handler() -> Json<ReadyResponse> {
-    Json(ReadyResponse { status: "ok" })
+async fn ready_handler() -> impl IntoResponse {
+    (
+        [(axum::http::header::CACHE_CONTROL, "no-cache")],
+        Json(ReadyResponse { status: "ready" }),
+    )
 }
 
 #[utoipa::path(
@@ -165,6 +173,7 @@ async fn config_handler() -> Json<ConfigResponse> {
 async fn inspect_post_handler(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
     Json(body): Json<InspectRequest>,
 ) -> Result<Json<InspectResponse>, AppError> {
     let raw_url = body
@@ -173,7 +182,7 @@ async fn inspect_post_handler(
         .filter(|s| !s.is_empty())
         .ok_or_else(|| AppError::InvalidUrl("url field is required".to_string()))?;
 
-    do_inspect(&state, peer, raw_url).await
+    do_inspect(&state, peer, &headers, raw_url).await
 }
 
 #[utoipa::path(
@@ -194,6 +203,7 @@ async fn inspect_post_handler(
 async fn inspect_get_handler(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
     Query(query): Query<InspectQuery>,
 ) -> Result<Json<InspectResponse>, AppError> {
     let raw_url = query
@@ -206,12 +216,13 @@ async fn inspect_get_handler(
         .decode_utf8_lossy()
         .to_string();
 
-    do_inspect(&state, peer, &decoded).await
+    do_inspect(&state, peer, &headers, &decoded).await
 }
 
 async fn do_inspect(
     state: &AppState,
     peer: SocketAddr,
+    req_headers: &axum::http::HeaderMap,
     raw_url: &str,
 ) -> Result<Json<InspectResponse>, AppError> {
     let start = Instant::now();
@@ -223,10 +234,7 @@ async fn do_inspect(
     let resolved_addr = crate::input::validate_target(&url).await?;
 
     // 3. Rate limiting
-    let client_ip = state.ip_extractor.extract(
-        &axum::http::HeaderMap::new(), // TODO: pass actual request headers
-        peer,
-    );
+    let client_ip = state.ip_extractor.extract(req_headers, peer);
     let hostname = url.host_str().unwrap_or_default();
     state.rate_limiter.check(client_ip, hostname)?;
 
@@ -314,7 +322,7 @@ mod tests {
     #[tokio::test]
     async fn health_returns_ok() {
         let app = test_router();
-        let (status, body) = get(&app, "/api/health").await;
+        let (status, body) = get(&app, "/health").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["status"], "ok");
     }
@@ -322,9 +330,9 @@ mod tests {
     #[tokio::test]
     async fn ready_returns_ok() {
         let app = test_router();
-        let (status, body) = get(&app, "/api/ready").await;
+        let (status, body) = get(&app, "/ready").await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["status"], "ok");
+        assert_eq!(body["status"], "ready");
     }
 
     #[tokio::test]

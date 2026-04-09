@@ -23,14 +23,24 @@ TOML file `spectra.toml` + env overrides with `SPECTRA_` prefix (`__` for nestin
 
 ## Key conventions
 
-- Health endpoints: `GET /api/health`, `GET /api/ready`
+- Health endpoints: `GET /health`, `GET /ready` (root level per architecture-rules)
 - API: `GET/POST /api/inspect`, `GET /api/config`, `GET /docs` (Scalar UI)
-- Error format: `{"error": {"code": "...", "message": "..."}}`
 - Rate limiting: per-IP (10/min, burst 5) + per-target (30/min, burst 10)
+
+## Development
+
+```sh
+cargo build                          # build backend
+cargo test                           # run all tests
+cargo clippy -- -D warnings          # lint
+cd frontend && npm install           # install frontend deps (needs NODE_AUTH_TOKEN)
+cd frontend && npm run dev           # Vite dev server on :5175
+cd frontend && npm run build         # production build into dist/
+```
 
 ## Specs
 
-- SDD: [`specs/sdd/http-inspector.md`](../specs/sdd/http-inspector.md)
+- SDD: [`specs/done/sdd/http-inspector.md`](../specs/done/sdd/http-inspector.md)
 - Apply [frontend-rules](../specs/rules/frontend-rules.md) when modifying `frontend/`
 - Apply [logging-rules](../specs/rules/logging-rules.md) when modifying tracing/telemetry
 - Apply [architecture-rules](../specs/rules/architecture-rules.md) for health probes and middleware
