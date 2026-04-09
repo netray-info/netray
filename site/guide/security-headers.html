@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security Headers Overview | netray.info</title>
+  <meta name="description" content="A guide to essential HTTP security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and practical server configuration examples.">
+  <link rel="canonical" href="https://netray.info/guide/security-headers">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Security Headers Overview">
+  <meta property="og:description" content="A guide to essential HTTP security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and practical server configuration examples.">
+  <meta property="og:url" content="https://netray.info/guide/security-headers">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Security Headers Overview">
+  <meta name="twitter:description" content="Essential HTTP security headers explained with practical nginx, Apache, and Traefik configuration examples.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Security Headers Overview",
+    "description": "A guide to essential HTTP security headers: X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and practical server configuration examples.",
+    "url": "https://netray.info/guide/security-headers",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/security-headers"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "Security Headers Overview" }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Security Headers Overview</h1>
+  <p class="page-subtitle">Essential HTTP response headers that protect your site against clickjacking, MIME sniffing, information leakage, and unwanted browser features.</p>
+
+  <article>
+    <h2>X-Frame-Options</h2>
+    <p><code>X-Frame-Options</code> controls whether a browser allows your page to be embedded in an <code>&lt;iframe&gt;</code>, <code>&lt;frame&gt;</code>, <code>&lt;embed&gt;</code>, or <code>&lt;object&gt;</code>. This prevents clickjacking attacks where an attacker overlays your page with transparent UI elements to trick users into clicking hidden buttons.</p>
+    <p>Two values are supported:</p>
+    <ul>
+      <li><strong><code>DENY</code></strong>: The page cannot be framed by any origin, including the same origin. Use this for pages that should never appear in an iframe.</li>
+      <li><strong><code>SAMEORIGIN</code></strong>: The page can only be framed by pages on the same origin. Use this if you embed your own pages in iframes (e.g., admin dashboards with iframe-based panels).</li>
+    </ul>
+    <pre><code>X-Frame-Options: DENY</code></pre>
+    <p><strong>Deprecation note:</strong> <code>X-Frame-Options</code> is superseded by CSP's <code>frame-ancestors</code> directive, which is more flexible (supports multiple origins, wildcards, and scheme restrictions). However, <code>X-Frame-Options</code> should still be set for compatibility with older browsers that do not support CSP Level 2. When both are present, <code>frame-ancestors</code> takes precedence in supporting browsers.</p>
+    <pre><code># CSP equivalent of X-Frame-Options: DENY
+Content-Security-Policy: frame-ancestors 'none'
+
+# CSP equivalent of X-Frame-Options: SAMEORIGIN
+Content-Security-Policy: frame-ancestors 'self'
+
+# CSP can also allow specific origins (X-Frame-Options cannot)
+Content-Security-Policy: frame-ancestors 'self' https://trusted.example.com</code></pre>
+
+    <h2>X-Content-Type-Options</h2>
+    <p>The only valid value is <code>nosniff</code>:</p>
+    <pre><code>X-Content-Type-Options: nosniff</code></pre>
+    <p>This header prevents browsers from MIME-sniffing a response away from the declared <code>Content-Type</code>. Without it, a browser might interpret a file served as <code>text/plain</code> as HTML or JavaScript if the content looks like code -- enabling XSS attacks through file uploads or user-generated content.</p>
+    <p>For script and style resources, <code>nosniff</code> causes the browser to block the resource entirely if the MIME type does not match (<code>text/javascript</code> for scripts, <code>text/css</code> for stylesheets). This prevents an attacker from serving a malicious script disguised with an innocent Content-Type.</p>
+    <p>Set this header on every response. There is no downside and no reason to omit it.</p>
+
+    <h2>Referrer-Policy</h2>
+    <p>Controls how much referrer information is included in the <code>Referer</code> header when navigating away from your page. The referrer can leak sensitive URLs (query parameters with tokens, internal paths) to third-party sites.</p>
+    <p>Common values, from most restrictive to least:</p>
+    <ul>
+      <li><strong><code>no-referrer</code></strong>: Never send the Referer header. Maximum privacy but breaks some analytics and CSRF protections that rely on referrer checking.</li>
+      <li><strong><code>same-origin</code></strong>: Send the full URL for same-origin requests; no referrer for cross-origin. Good for internal navigation tracking.</li>
+      <li><strong><code>strict-origin-when-cross-origin</code></strong>: Send the full URL for same-origin, only the origin (scheme+host+port) for cross-origin HTTPS-to-HTTPS requests, and nothing for HTTPS-to-HTTP downgrades. This is the <strong>recommended default</strong>.</li>
+      <li><strong><code>strict-origin</code></strong>: Always send only the origin (not the full path), and nothing for HTTPS-to-HTTP downgrades.</li>
+      <li><strong><code>no-referrer-when-downgrade</code></strong>: Send the full URL for same-protocol requests, nothing for HTTPS-to-HTTP. This was the old browser default.</li>
+    </ul>
+    <pre><code>Referrer-Policy: strict-origin-when-cross-origin</code></pre>
+    <p>Modern browsers (Chrome 85+, Firefox 87+) already default to <code>strict-origin-when-cross-origin</code>, but setting it explicitly ensures consistent behavior across all browsers and clearly documents your intent.</p>
+
+    <h2>Permissions-Policy</h2>
+    <p>Formerly known as Feature-Policy, <code>Permissions-Policy</code> controls which browser features and APIs are available to your page and any embedded iframes. This reduces your attack surface by disabling APIs you do not use.</p>
+    <pre><code>Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()</code></pre>
+    <p>Each directive names a feature and specifies an allowlist of origins. An empty allowlist <code>()</code> disables the feature entirely. Common features to restrict:</p>
+    <ul>
+      <li><strong><code>camera</code></strong>: Webcam access. Disable unless your site uses video chat or photo capture.</li>
+      <li><strong><code>microphone</code></strong>: Audio input. Disable unless your site records audio.</li>
+      <li><strong><code>geolocation</code></strong>: GPS/location API. Disable unless your site needs physical location.</li>
+      <li><strong><code>payment</code></strong>: Payment Request API. Disable unless you use browser-native payment flows.</li>
+      <li><strong><code>interest-cohort</code></strong>: Disables FLoC (now deprecated in favor of Topics). Setting <code>interest-cohort=()</code> was a common privacy signal.</li>
+      <li><strong><code>display-capture</code></strong>: Screen sharing. Disable unless your site uses screen capture.</li>
+    </ul>
+    <p>You can also grant features to specific origins:</p>
+    <pre><code># Allow camera only for your own origin and a trusted video provider
+Permissions-Policy: camera=(self "https://video.example.com"), microphone=()</code></pre>
+
+    <h2>Recommended baseline header set</h2>
+    <p>Every production web server should send at minimum these security headers on every response:</p>
+    <pre><code>Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+Content-Security-Policy: default-src 'self'; frame-ancestors 'none'; object-src 'none'</code></pre>
+    <p>This baseline provides HTTPS enforcement, click-jacking prevention, MIME sniffing protection, referrer privacy, feature restriction, and a basic CSP. Adjust the CSP directives based on your application's actual resource needs.</p>
+
+    <h2>Server configuration examples</h2>
+    <h3>Nginx</h3>
+    <pre><code># /etc/nginx/snippets/security-headers.conf
+# Include this in your server or location blocks
+
+add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
+add_header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'" always;
+
+server {
+    listen 443 ssl http2;
+    server_name example.com;
+
+    include snippets/security-headers.conf;
+
+    # ... rest of server config
+}</code></pre>
+    <p>The <code>always</code> keyword ensures headers are sent on error responses too (4xx, 5xx), not just successful ones.</p>
+
+    <h3>Apache</h3>
+    <pre><code># httpd.conf or .htaccess (requires mod_headers)
+Header always set Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "DENY"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+Header always set Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"</code></pre>
+
+    <h3>Traefik</h3>
+    <pre><code># traefik dynamic configuration
+http:
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        frameDeny: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        permissionsPolicy: "camera=(), microphone=(), geolocation=(), payment=()"
+        contentSecurityPolicy: "default-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"</code></pre>
+    <p>Apply the middleware to your routers:</p>
+    <pre><code># Docker label example
+- "traefik.http.routers.myapp.middlewares=security-headers@file"</code></pre>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your site's HTTP headers with spectra</h2>
+    <form class="tool-entry__form" action="https://http.netray.info/" method="get">
+      <input type="url" name="url" placeholder="https://example.com" required>
+      <button type="submit">Inspect Headers</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/hsts">HSTS Preloading</a></li>
+      <li><a href="/guide/csp">Content Security Policy (CSP)</a></li>
+      <li><a href="/guide/cors">Cross-Origin Resource Sharing (CORS)</a></li>
+      <li><a href="/guide/http-redirects">HTTP Redirects and HTTPS Upgrade</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

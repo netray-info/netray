@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BIMI: Brand Indicators for Message Identification | netray.info</title>
+  <meta name="description" content="How to set up BIMI to display your brand logo in email clients. Covers DNS records, SVG Tiny PS requirements, VMC certificates, and validation with beacon.">
+  <link rel="canonical" href="https://netray.info/guide/bimi">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="BIMI: Brand Indicators for Message Identification">
+  <meta property="og:description" content="How to set up BIMI to display your brand logo in email clients. Covers DNS records, SVG Tiny PS requirements, and VMC certificates.">
+  <meta property="og:url" content="https://netray.info/guide/bimi">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="BIMI: Brand Indicators for Message Identification">
+  <meta name="twitter:description" content="How to set up BIMI to display your brand logo in email clients. Covers DNS records, SVG Tiny PS requirements, and VMC certificates.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "BIMI: Brand Indicators for Message Identification",
+    "description": "How to set up BIMI to display your brand logo in email clients. Covers DNS records, SVG Tiny PS requirements, VMC certificates, and validation with beacon.",
+    "url": "https://netray.info/guide/bimi",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/bimi"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "BIMI: Brand Indicators for Message Identification" }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">BIMI: Brand Indicators for Message Identification</h1>
+  <p class="page-subtitle">Display your brand logo in supporting email clients by deploying BIMI alongside strong email authentication.</p>
+
+  <article>
+    <h2>What BIMI does</h2>
+    <p>Brand Indicators for Message Identification (BIMI) is a DNS-based standard that allows organizations to display a brand-controlled logo next to authenticated email messages in participating email clients. When a recipient opens a message that passes DMARC authentication, the email client fetches the sender's BIMI record, retrieves the logo, and displays it in the inbox alongside the message.</p>
+    <p>BIMI is supported by Gmail, Apple Mail, Yahoo Mail, Fastmail, and a growing number of other clients. It is not a security mechanism in itself -- it is a brand visibility incentive that rewards domains with properly deployed email authentication. The prerequisites for BIMI are the actual security measures:</p>
+    <ul>
+      <li><strong>DMARC at enforcement</strong> -- your domain must publish a DMARC record with a policy of <code>p=quarantine</code> or <code>p=reject</code>. A <code>p=none</code> policy is not sufficient for BIMI.</li>
+      <li><strong>DKIM signing</strong> -- messages must pass DKIM verification with alignment to the <code>From:</code> domain.</li>
+      <li><strong>SPF alignment</strong> -- while not strictly required by BIMI itself, aligned SPF strengthens overall DMARC pass rates.</li>
+    </ul>
+    <p>The practical effect: deploying BIMI forces you to have solid email authentication in place first. The logo is the reward for getting SPF, DKIM, and DMARC right.</p>
+
+    <h2>VMC requirement and exemptions</h2>
+    <p>A Verified Mark Certificate (VMC) is a digital certificate issued by a Certificate Authority (currently DigiCert and Entrust) that attests that the logo associated with the BIMI record is a registered trademark owned by the domain holder. The VMC links the domain, the logo, and the trademark registration together.</p>
+    <p>VMC requirements vary by email client:</p>
+    <ul>
+      <li><strong>Gmail</strong> -- requires a VMC. Without one, Gmail will not display the BIMI logo, regardless of how correct the rest of the setup is. The trademark must be registered with an intellectual property office recognized by the VMC issuer.</li>
+      <li><strong>Apple Mail</strong> -- requires a VMC as of iOS 16 and macOS Ventura.</li>
+      <li><strong>Yahoo Mail / Fastmail</strong> -- do not currently require a VMC. They will display logos from BIMI records that contain only the <code>l=</code> tag (logo URL) without an <code>a=</code> tag (authority/VMC).</li>
+    </ul>
+    <p>VMCs are not cheap -- expect annual costs in the range of $1,000-$1,500 USD. For organizations where brand visibility in Gmail is critical, the cost is justified. Smaller organizations may choose to deploy BIMI without a VMC to gain visibility in Yahoo/Fastmail while waiting for costs to decrease.</p>
+    <p>The VMC is published as a PEM file served over HTTPS. The <code>a=</code> tag in the BIMI DNS record points to this URL.</p>
+
+    <h2>SVG Tiny PS specification requirements</h2>
+    <p>BIMI logos must conform to the <strong>SVG Tiny PS</strong> (Portable/Secure) profile, a restricted subset of SVG designed for safe rendering in email clients. A standard SVG file will almost certainly fail BIMI validation. The key requirements:</p>
+    <ul>
+      <li><strong>Square aspect ratio</strong> -- the <code>viewBox</code> must be square (e.g., <code>0 0 100 100</code>). Non-square logos are rejected.</li>
+      <li><strong>No scripts or animations</strong> -- no <code>&lt;script&gt;</code> elements, no <code>&lt;animate&gt;</code>, no <code>&lt;set&gt;</code>, no event handlers. The logo must be entirely static.</li>
+      <li><strong>No external references</strong> -- no <code>&lt;image&gt;</code> elements linking to external URLs, no <code>xlink:href</code> references to remote resources, no CSS <code>@import</code> or <code>url()</code> pointing outside the document.</li>
+      <li><strong>No embedded raster images</strong> -- base64-encoded PNG/JPEG inside the SVG is not allowed. The logo must be pure vector.</li>
+      <li><strong>Title element required</strong> -- the SVG must contain a <code>&lt;title&gt;</code> element with the brand name.</li>
+      <li><strong>Supported elements</strong> -- only a subset of SVG elements are allowed: <code>&lt;svg&gt;</code>, <code>&lt;g&gt;</code>, <code>&lt;path&gt;</code>, <code>&lt;circle&gt;</code>, <code>&lt;ellipse&gt;</code>, <code>&lt;rect&gt;</code>, <code>&lt;line&gt;</code>, <code>&lt;polygon&gt;</code>, <code>&lt;polyline&gt;</code>, <code>&lt;text&gt;</code>, <code>&lt;defs&gt;</code>, <code>&lt;linearGradient&gt;</code>, <code>&lt;radialGradient&gt;</code>, <code>&lt;stop&gt;</code>, <code>&lt;solidColor&gt;</code>, <code>&lt;clipPath&gt;</code>, and <code>&lt;title&gt;</code>.</li>
+      <li><strong>Background recommended</strong> -- the logo should have an opaque background. Transparent backgrounds render poorly in some clients, especially dark mode.</li>
+    </ul>
+    <p>A minimal SVG Tiny PS file looks like this:</p>
+    <pre><code>&lt;svg xmlns="http://www.w3.org/2000/svg"
+     version="1.2" baseProfile="tiny-ps"
+     viewBox="0 0 100 100"&gt;
+  &lt;title&gt;Example Corp&lt;/title&gt;
+  &lt;rect width="100" height="100" fill="#0066cc"/&gt;
+  &lt;circle cx="50" cy="50" r="30" fill="#ffffff"/&gt;
+&lt;/svg&gt;</code></pre>
+    <p>Use the BIMI Group's SVG validator at <code>https://bimigroup.org/bimi-generator/</code> to check your logo before publishing. Many common SVG editors (Illustrator, Inkscape, Figma) export SVG that requires manual cleanup to meet SVG Tiny PS requirements.</p>
+
+    <h2>DNS record format</h2>
+    <p>BIMI is published as a TXT record at <code>default._bimi.&lt;domain&gt;</code>. The record has two tags:</p>
+    <pre><code>default._bimi.example.com. IN TXT "v=BIMI1; l=https://example.com/brand/logo.svg; a=https://example.com/brand/vmc.pem"</code></pre>
+    <ul>
+      <li><code>v=BIMI1</code> -- version identifier (required).</li>
+      <li><code>l=</code> -- URL of the SVG Tiny PS logo file, served over HTTPS (required). The URL must be publicly accessible with no authentication or redirects.</li>
+      <li><code>a=</code> -- URL of the VMC PEM file, served over HTTPS (optional, but required for Gmail and Apple Mail). Omit or leave empty if you do not have a VMC.</li>
+    </ul>
+    <p>The <code>default</code> selector is used for the organizational domain. BIMI also supports per-selector records (e.g., <code>brand2._bimi.example.com</code>) for organizations that send from multiple brands, but <code>default</code> covers the common case.</p>
+
+    <h3>BIMI without a VMC</h3>
+    <pre><code>default._bimi.example.com. IN TXT "v=BIMI1; l=https://example.com/brand/logo.svg; a="</code></pre>
+    <p>Setting <code>a=</code> to empty explicitly signals that no VMC is provided. This is functionally equivalent to omitting the <code>a=</code> tag entirely, but some validators prefer the explicit form.</p>
+
+    <h2>Practical examples</h2>
+
+    <h3>Creating a BIMI TXT record</h3>
+    <p>Assuming your logo is hosted at <code>https://example.com/assets/logo.svg</code> and your VMC at <code>https://example.com/assets/vmc.pem</code>:</p>
+    <pre><code># DNS zone file entry
+default._bimi.example.com. 3600 IN TXT "v=BIMI1; l=https://example.com/assets/logo.svg; a=https://example.com/assets/vmc.pem"</code></pre>
+    <p>Verify the record is published correctly:</p>
+    <pre><code>dig +short TXT default._bimi.example.com
+# Expected: "v=BIMI1; l=https://example.com/assets/logo.svg; a=https://example.com/assets/vmc.pem"</code></pre>
+
+    <h3>Validating SVG logo requirements</h3>
+    <p>Check your SVG file against BIMI requirements manually:</p>
+    <pre><code># Check that the viewBox is square
+grep -o 'viewBox="[^"]*"' logo.svg
+# Should output something like: viewBox="0 0 100 100"
+
+# Check for forbidden elements
+grep -iE '&lt;script|&lt;animate|&lt;set |&lt;image|xlink:href' logo.svg
+# Should return no matches
+
+# Verify the title element exists
+grep '&lt;title&gt;' logo.svg
+# Should return your brand name in a title element
+
+# Check baseProfile
+grep 'baseProfile="tiny-ps"' logo.svg
+# Should match</code></pre>
+
+    <h3>Checking BIMI with beacon</h3>
+    <p>The netray.info beacon tool checks your BIMI record as part of a comprehensive email security audit. It verifies:</p>
+    <ul>
+      <li>The DNS TXT record exists and has valid syntax</li>
+      <li>The logo URL is reachable and serves an SVG file</li>
+      <li>DMARC policy is at enforcement level (prerequisite for BIMI)</li>
+      <li>The VMC URL is reachable (if provided)</li>
+    </ul>
+
+    <h3>Checklist before going live</h3>
+    <ol>
+      <li>DMARC policy is <code>p=quarantine</code> or <code>p=reject</code></li>
+      <li>DKIM is signing all outbound mail with alignment to the From: domain</li>
+      <li>SVG logo passes SVG Tiny PS validation</li>
+      <li>Logo is hosted on HTTPS, publicly accessible, no redirects</li>
+      <li>VMC is obtained and hosted (if targeting Gmail/Apple Mail)</li>
+      <li>DNS TXT record published at <code>default._bimi.&lt;domain&gt;</code></li>
+      <li>Record verified via <code>dig</code> or beacon</li>
+    </ol>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your domain's email security with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="domain"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check Email Security</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/dkim">DKIM Deep Dive: Keys, Selectors, and Rotation</a></li>
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+      <li><a href="/guide/mta-sts">MTA-STS: Enforcing Encrypted Email Transport</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

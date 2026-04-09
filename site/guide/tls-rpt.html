@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TLS-RPT: SMTP TLS Reporting | netray.info</title>
+  <meta name="description" content="How to deploy TLS-RPT (RFC 8460) to receive reports about SMTP TLS failures. Covers DNS record format, report structure, and integration with MTA-STS and DANE.">
+  <link rel="canonical" href="https://netray.info/guide/tls-rpt">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="TLS-RPT: SMTP TLS Reporting">
+  <meta property="og:description" content="How to deploy TLS-RPT to receive reports about SMTP TLS failures. Covers DNS record format, report structure, and integration with MTA-STS and DANE.">
+  <meta property="og:url" content="https://netray.info/guide/tls-rpt">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="TLS-RPT: SMTP TLS Reporting">
+  <meta name="twitter:description" content="How to deploy TLS-RPT to receive reports about SMTP TLS failures. Covers DNS record format, report structure, and integration with MTA-STS and DANE.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "TLS-RPT: SMTP TLS Reporting",
+    "description": "How to deploy TLS-RPT (RFC 8460) to receive reports about SMTP TLS failures. Covers DNS record format, report structure, and integration with MTA-STS and DANE.",
+    "url": "https://netray.info/guide/tls-rpt",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/tls-rpt"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "TLS-RPT: SMTP TLS Reporting" }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">TLS-RPT: SMTP TLS Reporting</h1>
+  <p class="page-subtitle">Gain visibility into TLS connection failures during email delivery with RFC 8460 reporting.</p>
+
+  <article>
+    <h2>RFC 8460 overview</h2>
+    <p>SMTP TLS Reporting (TLS-RPT), defined in <a href="https://datatracker.ietf.org/doc/html/rfc8460">RFC 8460</a>, is a mechanism for receiving mail servers to request reports about TLS negotiation failures from sending mail servers. When a sender attempts to deliver mail to your MX servers and encounters a TLS problem -- an expired certificate, a cipher mismatch, or a policy violation -- the sender generates a structured report and delivers it to the address you specify in DNS.</p>
+    <p>TLS-RPT is the observability layer for two related standards:</p>
+    <ul>
+      <li><strong>MTA-STS</strong> (RFC 8461) -- tells senders to require TLS when delivering to your domain, with a policy that specifies which MX hostnames are valid.</li>
+      <li><strong>DANE</strong> (RFC 7672) -- uses DNSSEC-signed TLSA records to pin the certificate that your MX servers should present.</li>
+    </ul>
+    <p>Without TLS-RPT, you have no way to know when these policies cause delivery failures. A misconfigured MTA-STS policy or an expired TLSA record can silently reject legitimate mail. TLS-RPT closes this feedback loop.</p>
+
+    <h2>What TLS-RPT reports contain</h2>
+    <p>Reports are JSON documents (typically gzip-compressed when sent via email) that cover a 24-hour reporting period. Each report contains:</p>
+    <ul>
+      <li><strong>Organization and contact</strong> -- the sending organization's name and contact information.</li>
+      <li><strong>Reporting period</strong> -- start and end timestamps (UTC) for the aggregation window.</li>
+      <li><strong>Policy applied</strong> -- which policy the sender evaluated: MTA-STS, DANE, or both. Includes the policy mode (testing, enforce) and the specific policy details.</li>
+      <li><strong>Success count</strong> -- number of TLS connections that succeeded under the policy.</li>
+      <li><strong>Failure count</strong> -- number of TLS connections that failed, broken down by failure type.</li>
+      <li><strong>Failure details</strong> -- for each failure type, the result type code, the sending MTA IP, the receiving MX hostname, and an optional additional-info field with diagnostic data.</li>
+    </ul>
+    <p>Common failure result types include:</p>
+    <ul>
+      <li><code>certificate-expired</code> -- the MX server's TLS certificate has expired.</li>
+      <li><code>certificate-not-trusted</code> -- the certificate is not signed by a trusted CA.</li>
+      <li><code>certificate-host-mismatch</code> -- the certificate's SAN/CN does not match the MX hostname.</li>
+      <li><code>starttls-not-supported</code> -- the MX server does not advertise STARTTLS.</li>
+      <li><code>validation-failure</code> -- generic TLS validation failure.</li>
+      <li><code>sts-policy-fetch-error</code> -- the sender could not retrieve the MTA-STS policy file.</li>
+      <li><code>sts-policy-invalid</code> -- the MTA-STS policy file was malformed.</li>
+      <li><code>sts-webpki-invalid</code> -- the HTTPS certificate for the MTA-STS policy host was invalid.</li>
+      <li><code>tlsa-invalid</code> -- the DANE TLSA record was malformed or did not match the certificate.</li>
+      <li><code>dnssec-invalid</code> -- DNSSEC validation failed for the TLSA lookup.</li>
+    </ul>
+
+    <h2>DNS TXT record format</h2>
+    <p>TLS-RPT is published as a TXT record at <code>_smtp._tls.&lt;domain&gt;</code>:</p>
+    <pre><code>_smtp._tls.example.com. IN TXT "v=TLSRPTv1; rua=mailto:tlsrpt@example.com"</code></pre>
+    <p>The record has two components:</p>
+    <ul>
+      <li><code>v=TLSRPTv1</code> -- version identifier (required). Must be the first tag.</li>
+      <li><code>rua=</code> -- reporting URI for aggregate reports (required). Supports two schemes:
+        <ul>
+          <li><code>mailto:</code> -- reports are sent as email attachments (gzip-compressed JSON) to the specified address.</li>
+          <li><code>https:</code> -- reports are POSTed as JSON to the specified URL, which must respond with a 2xx status code.</li>
+        </ul>
+      </li>
+    </ul>
+    <p>You can specify multiple reporting URIs by separating them with commas:</p>
+    <pre><code>_smtp._tls.example.com. IN TXT "v=TLSRPTv1; rua=mailto:tlsrpt@example.com,https://reporting.example.com/tlsrpt"</code></pre>
+
+    <h2>Setting up a reporting endpoint</h2>
+    <p>There are two approaches to receiving TLS-RPT reports:</p>
+
+    <h3>Email-based reporting</h3>
+    <p>The simplest approach: create a dedicated mailbox (e.g., <code>tlsrpt@example.com</code>) and point <code>rua=mailto:tlsrpt@example.com</code> at it. Reports arrive as email attachments containing gzip-compressed JSON files.</p>
+    <p>Considerations:</p>
+    <ul>
+      <li>Use a dedicated mailbox, not a human-readable inbox. Reports are machine-readable JSON, not human-friendly summaries.</li>
+      <li>The mailbox should accept large attachments -- reports from high-volume senders can be substantial.</li>
+      <li>You will need a parser or reporting service to extract and aggregate the data from the JSON files.</li>
+    </ul>
+
+    <h3>HTTPS-based reporting</h3>
+    <p>More suitable for automated processing: deploy an HTTPS endpoint that accepts POST requests with JSON bodies. The endpoint URL goes into the <code>rua=</code> tag:</p>
+    <pre><code>rua=https://reporting.example.com/v1/tlsrpt</code></pre>
+    <p>Your endpoint must:</p>
+    <ul>
+      <li>Accept <code>POST</code> requests with <code>Content-Type: application/tlsrpt+gzip</code> or <code>application/tlsrpt+json</code>.</li>
+      <li>Return a <code>2xx</code> status code on success. Senders may retry on transient failures but will eventually stop if the endpoint is persistently unreachable.</li>
+      <li>Serve a valid TLS certificate (the irony of a TLS reporting endpoint failing TLS is not lost on anyone).</li>
+    </ul>
+
+    <h2>Interpreting JSON report fields</h2>
+    <p>A TLS-RPT JSON report follows this structure:</p>
+    <pre><code>{
+  "organization-name": "Example Sender Inc.",
+  "date-range": {
+    "start-datetime": "2026-04-08T00:00:00Z",
+    "end-datetime": "2026-04-08T23:59:59Z"
+  },
+  "contact-info": "tlsrpt@sender.example.com",
+  "report-id": "2026-04-08T00:00:00Z_example.com",
+  "policies": [
+    {
+      "policy": {
+        "policy-type": "sts",
+        "policy-string": [
+          "version: STSv1",
+          "mode: enforce",
+          "mx: mail.example.com",
+          "max_age: 604800"
+        ],
+        "policy-domain": "example.com"
+      },
+      "summary": {
+        "total-successful-session-count": 4523,
+        "total-failure-session-count": 12
+      },
+      "failure-details": [
+        {
+          "result-type": "certificate-expired",
+          "sending-mta-ip": "198.51.100.42",
+          "receiving-mx-hostname": "mail.example.com",
+          "receiving-ip": "203.0.113.10",
+          "failed-session-count": 8,
+          "additional-information": "Certificate expired 2026-04-07T12:00:00Z"
+        },
+        {
+          "result-type": "sts-webpki-invalid",
+          "sending-mta-ip": "198.51.100.43",
+          "receiving-mx-hostname": "mail.example.com",
+          "failed-session-count": 4,
+          "additional-information": "Unable to fetch MTA-STS policy: TLS handshake failed"
+        }
+      ]
+    }
+  ]
+}</code></pre>
+    <p>Key fields to monitor:</p>
+    <ul>
+      <li><strong><code>total-failure-session-count</code></strong> -- if this is non-zero, some legitimate mail may be failing. Investigate the failure details.</li>
+      <li><strong><code>result-type</code></strong> -- identifies the category of failure. Certificate-related failures often indicate an expired or misconfigured cert on your MX server.</li>
+      <li><strong><code>receiving-mx-hostname</code></strong> -- tells you which of your MX servers had the problem.</li>
+      <li><strong><code>sending-mta-ip</code></strong> -- helps you identify which senders are affected. Reverse-DNS this IP to identify the organization.</li>
+      <li><strong><code>policy-type</code></strong> -- whether the failure was under MTA-STS (<code>sts</code>) or DANE (<code>tlsa</code>) policy evaluation.</li>
+    </ul>
+
+    <h2>Practical examples</h2>
+
+    <h3>Publishing a TLS-RPT DNS record</h3>
+    <pre><code># DNS zone file entry
+_smtp._tls.example.com. 3600 IN TXT "v=TLSRPTv1; rua=mailto:tlsrpt@example.com"
+
+# Verify it's published
+dig +short TXT _smtp._tls.example.com
+# Expected: "v=TLSRPTv1; rua=mailto:tlsrpt@example.com"</code></pre>
+
+    <h3>Decompressing an email-delivered report</h3>
+    <p>Reports arrive as gzip-compressed JSON attachments. To read one:</p>
+    <pre><code># Extract and pretty-print a report
+gunzip -c report.json.gz | python3 -m json.tool</code></pre>
+
+    <h3>Monitoring workflow</h3>
+    <p>A recommended deployment sequence:</p>
+    <ol>
+      <li><strong>Deploy TLS-RPT first</strong> -- publish the <code>_smtp._tls</code> record before enforcing MTA-STS or DANE. This gives you visibility before policies start rejecting mail.</li>
+      <li><strong>Deploy MTA-STS in testing mode</strong> -- set <code>mode: testing</code> in the MTA-STS policy. Senders will evaluate the policy and report failures via TLS-RPT, but will not reject mail.</li>
+      <li><strong>Monitor reports for 2-4 weeks</strong> -- look for <code>certificate-expired</code>, <code>certificate-host-mismatch</code>, or <code>sts-policy-fetch-error</code> results. Fix any issues.</li>
+      <li><strong>Switch to enforce mode</strong> -- once reports confirm clean delivery, change the MTA-STS policy to <code>mode: enforce</code>. Continue monitoring TLS-RPT for regressions.</li>
+    </ol>
+
+    <h3>Common pitfalls</h3>
+    <ul>
+      <li><strong>Reporting address in a different domain</strong> -- if <code>rua=mailto:reports@other-domain.com</code>, the other domain must publish a TLS-RPT authorization record or senders may refuse to send reports there.</li>
+      <li><strong>Ignoring testing-mode reports</strong> -- MTA-STS testing mode still generates TLS-RPT reports. The whole point of testing mode is to catch issues before enforcement. Read the reports.</li>
+      <li><strong>Forgetting to renew MX certificates</strong> -- TLS-RPT will tell you when certificates expire, but only after senders start failing. Set up certificate monitoring independently.</li>
+    </ul>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your domain's email security with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="domain"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check Email Security</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/mta-sts">MTA-STS: Enforcing Encrypted Email Transport</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

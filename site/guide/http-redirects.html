@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTTP Redirects and HTTPS Upgrade | netray.info</title>
+  <meta name="description" content="HTTP redirect status codes (301, 302, 307, 308), redirect chain performance and SEO impact, HSTS interaction, and practical server configuration examples.">
+  <link rel="canonical" href="https://netray.info/guide/http-redirects">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="HTTP Redirects and HTTPS Upgrade">
+  <meta property="og:description" content="HTTP redirect status codes (301, 302, 307, 308), redirect chain performance and SEO impact, HSTS interaction, and practical server configuration examples.">
+  <meta property="og:url" content="https://netray.info/guide/http-redirects">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="HTTP Redirects and HTTPS Upgrade">
+  <meta name="twitter:description" content="301 vs 302 vs 307 vs 308 redirects, redirect chain costs, HSTS interaction, and server configuration examples.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "HTTP Redirects and HTTPS Upgrade",
+    "description": "HTTP redirect status codes (301, 302, 307, 308), redirect chain performance and SEO impact, HSTS interaction, and practical server configuration examples.",
+    "url": "https://netray.info/guide/http-redirects",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/http-redirects"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "HTTP Redirects and HTTPS Upgrade" }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">HTTP Redirects and HTTPS Upgrade</h1>
+  <p class="page-subtitle">How redirect status codes work, why redirect chains hurt performance and SEO, and how to configure clean HTTP-to-HTTPS upgrades.</p>
+
+  <article>
+    <h2>Redirect status codes</h2>
+    <p>HTTP defines four redirect status codes in common use. The key differences are permanence and method preservation.</p>
+
+    <h3>301 Moved Permanently</h3>
+    <p>The resource has permanently moved to a new URL. Browsers and search engines cache this redirect aggressively. Subsequent requests go directly to the new URL without hitting the old one.</p>
+    <pre><code>HTTP/1.1 301 Moved Permanently
+Location: https://example.com/new-page</code></pre>
+    <p><strong>Method handling:</strong> Per the original HTTP/1.0 spec, clients may change the method from POST to GET when following a 301. In practice, most browsers do exactly this. If you need to preserve the POST method, use 308 instead.</p>
+    <p><strong>Use case:</strong> Permanent URL changes, domain migrations, HTTP-to-HTTPS upgrades (the standard choice).</p>
+
+    <h3>302 Found</h3>
+    <p>The resource is temporarily at a different URL. The client should continue using the original URL for future requests. Search engines do not transfer link equity to the new URL.</p>
+    <pre><code>HTTP/1.1 302 Found
+Location: https://example.com/temporary-location</code></pre>
+    <p><strong>Method handling:</strong> Like 301, browsers historically change POST to GET. The 302 status was widely misused to mean "temporary redirect with method change," which led to the creation of 307 to clarify the semantics.</p>
+    <p><strong>Use case:</strong> Temporary redirects (maintenance pages, A/B testing, login redirects). Do not use 302 for permanent moves -- search engines will keep indexing the old URL.</p>
+
+    <h3>307 Temporary Redirect</h3>
+    <p>Identical to 302, but the client <strong>must not</strong> change the HTTP method. A POST request redirected with 307 remains a POST.</p>
+    <pre><code>HTTP/1.1 307 Temporary Redirect
+Location: https://example.com/api/v2/endpoint</code></pre>
+    <p><strong>Use case:</strong> API version redirects, temporary endpoint moves where you need to preserve the request method and body.</p>
+
+    <h3>308 Permanent Redirect</h3>
+    <p>Identical to 301, but the client <strong>must not</strong> change the HTTP method. A POST redirected with 308 remains a POST. The redirect is permanent and cacheable.</p>
+    <pre><code>HTTP/1.1 308 Permanent Redirect
+Location: https://example.com/api/v2/endpoint</code></pre>
+    <p><strong>Use case:</strong> Permanent API endpoint moves where method preservation matters. For HTML pages where visitors use GET, 301 and 308 behave identically.</p>
+
+    <h3>Summary table</h3>
+    <pre><code>Code  Permanent?  Method preserved?  Use for
+----  ----------  -----------------  -------
+301   Yes         No (POST-&gt;GET)     URL changes, HTTP-&gt;HTTPS, domain moves
+302   No          No (POST-&gt;GET)     Temporary redirects (login, maintenance)
+307   No          Yes                Temporary API redirects
+308   Yes         Yes                Permanent API redirects</code></pre>
+
+    <h2>Redirect chains and their cost</h2>
+    <p>A redirect chain occurs when one redirect leads to another. For example:</p>
+    <pre><code>http://example.com
+  -&gt; 301 https://example.com       (HTTP-&gt;HTTPS upgrade)
+  -&gt; 301 https://www.example.com   (naked-&gt;www redirect)
+  -&gt; 301 https://www.example.com/  (add trailing slash)
+
+3 redirects before reaching the final page</code></pre>
+
+    <h3>Performance impact</h3>
+    <p>Each redirect adds a full HTTP round trip: DNS lookup, TCP connection, TLS handshake (if HTTPS), request, and response. On a mobile connection with 100ms latency, three redirects add 300-600ms before the browser can even start loading the page. This directly increases Time to First Byte (TTFB) and Largest Contentful Paint (LCP).</p>
+
+    <h3>SEO impact</h3>
+    <p>Search engines follow redirect chains but with diminishing patience. Google has stated that redirect chains do pass PageRank, but:</p>
+    <ul>
+      <li>Crawl budget is consumed by each hop. On large sites, deep redirect chains mean fewer pages get crawled.</li>
+      <li>Mixing 301 and 302 in a chain confuses the signal. A 302 in the middle of a permanent redirect chain may prevent search engines from consolidating link equity.</li>
+      <li>Google's crawler has a limit (typically 5 hops) before it stops following redirects.</li>
+    </ul>
+    <p><strong>Best practice:</strong> Every redirect should go directly to the final destination in a single hop. Audit your redirect configuration to eliminate intermediate stops.</p>
+
+    <h3>Optimal redirect pattern</h3>
+    <pre><code># Bad: chain of redirects
+http://example.com -&gt; https://example.com -&gt; https://www.example.com
+
+# Good: single redirect to final destination
+http://example.com -&gt; https://www.example.com   (one hop)
+https://example.com -&gt; https://www.example.com   (one hop)</code></pre>
+
+    <h2>HSTS interaction</h2>
+    <p>HSTS (Strict-Transport-Security) eliminates the HTTP-to-HTTPS redirect for returning visitors. Once a browser has cached the HSTS policy, it internally rewrites <code>http://</code> to <code>https://</code> before sending any request -- no redirect needed.</p>
+    <p>For first-time visitors or clients that do not support HSTS, the HTTP-to-HTTPS redirect is still necessary. The two mechanisms complement each other:</p>
+    <ul>
+      <li><strong>HTTP redirect</strong>: Handles first-time visitors and non-browser clients (curl, bots, APIs).</li>
+      <li><strong>HSTS</strong>: Eliminates the redirect for returning browser visitors and prevents SSL stripping attacks.</li>
+      <li><strong>HSTS preload</strong>: Eliminates the redirect even for first-time visitors by baking the policy into the browser.</li>
+    </ul>
+    <p>With HSTS preloaded, the HTTP-to-HTTPS redirect becomes a fallback for non-browser clients only. But it must still be in place -- HSTS is a browser feature, not a protocol feature.</p>
+    <p>See the <a href="/guide/hsts">HSTS Preloading guide</a> for deployment details.</p>
+
+    <h2>Server configuration examples</h2>
+    <h3>Nginx: HTTP-to-HTTPS redirect</h3>
+    <pre><code># Redirect all HTTP to HTTPS with a single 301
+# Handles both naked and www, pointing to the canonical URL
+server {
+    listen 80;
+    server_name example.com www.example.com;
+    return 301 https://www.example.com$request_uri;
+}
+
+# Redirect naked HTTPS to www
+server {
+    listen 443 ssl http2;
+    server_name example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+
+    return 301 https://www.example.com$request_uri;
+}
+
+# Main server block
+server {
+    listen 443 ssl http2;
+    server_name www.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+
+    # ... application config
+}</code></pre>
+    <p>Note that the HTTP server block redirects directly to <code>https://www.example.com</code>, not to <code>https://example.com</code>. This avoids a two-hop chain (http -> https naked -> https www).</p>
+
+    <h3>Apache: HTTP-to-HTTPS redirect</h3>
+    <pre><code># In the port-80 VirtualHost
+&lt;VirtualHost *:80&gt;
+    ServerName example.com
+    ServerAlias www.example.com
+
+    # Single-hop redirect to canonical HTTPS URL
+    RewriteEngine On
+    RewriteRule ^(.*)$ https://www.example.com$1 [R=301,L]
+&lt;/VirtualHost&gt;
+
+# Naked HTTPS to www
+&lt;VirtualHost *:443&gt;
+    ServerName example.com
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/example.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/example.com/privkey.pem
+
+    RewriteEngine On
+    RewriteRule ^(.*)$ https://www.example.com$1 [R=301,L]
+&lt;/VirtualHost&gt;</code></pre>
+
+    <h3>Traefik: HTTP-to-HTTPS redirect</h3>
+    <pre><code># traefik static configuration
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true    # 301, not 302
+  websecure:
+    address: ":443"</code></pre>
+    <p>Traefik's entrypoint-level redirect handles the HTTP-to-HTTPS upgrade globally for all routers. For per-router redirects (e.g., naked to www), use a middleware:</p>
+    <pre><code># traefik dynamic configuration
+http:
+  middlewares:
+    naked-to-www:
+      redirectRegex:
+        regex: "^https://example\\.com/(.*)"
+        replacement: "https://www.example.com/${1}"
+        permanent: true</code></pre>
+
+    <h2>Testing redirects</h2>
+    <p>Use curl to follow and display the full redirect chain:</p>
+    <pre><code># Show all redirects in the chain
+curl -v -L -o /dev/null http://example.com 2>&amp;1 | grep -E "^(&lt; HTTP|&lt; Location)"
+
+# Follow redirects and show each step
+curl -sI -L http://example.com</code></pre>
+    <p>Check for: single-hop redirects (no chains), correct status codes (301 for permanent), HSTS header on the final HTTPS response, and no mixed content warnings.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your site's HTTP headers with spectra</h2>
+    <form class="tool-entry__form" action="https://http.netray.info/" method="get">
+      <input type="url" name="url" placeholder="https://example.com" required>
+      <button type="submit">Inspect Headers</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/hsts">HSTS Preloading</a></li>
+      <li><a href="/guide/security-headers">Security Headers Overview</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

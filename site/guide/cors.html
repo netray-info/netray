@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cross-Origin Resource Sharing (CORS) Explained | netray.info</title>
+  <meta name="description" content="How CORS works, preflight requests, credentialed requests, wildcard pitfalls, and common misconfigurations with practical debugging examples.">
+  <link rel="canonical" href="https://netray.info/guide/cors">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Cross-Origin Resource Sharing (CORS) Explained">
+  <meta property="og:description" content="How CORS works, preflight requests, credentialed requests, wildcard pitfalls, and common misconfigurations with practical debugging examples.">
+  <meta property="og:url" content="https://netray.info/guide/cors">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Cross-Origin Resource Sharing (CORS) Explained">
+  <meta name="twitter:description" content="Understand CORS preflight, credentialed requests, wildcard rules, and how to debug cross-origin errors.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Cross-Origin Resource Sharing (CORS) Explained",
+    "description": "How CORS works, preflight requests, credentialed requests, wildcard pitfalls, and common misconfigurations with practical debugging examples.",
+    "url": "https://netray.info/guide/cors",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/cors"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "Cross-Origin Resource Sharing (CORS) Explained" }
+    ]
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Cross-Origin Resource Sharing (CORS) Explained</h1>
+  <p class="page-subtitle">How the browser's same-origin policy works, when CORS applies, and how to configure it correctly for APIs and web applications.</p>
+
+  <article>
+    <h2>The same-origin policy</h2>
+    <p>Browsers enforce the <strong>same-origin policy</strong>: JavaScript on one origin (scheme + host + port) cannot read responses from a different origin. This prevents a malicious page from reading your banking data by making fetch requests to your bank's API using your cookies.</p>
+    <p>Two URLs have the same origin only if their scheme, hostname, and port all match exactly. <code>https://example.com</code> and <code>https://api.example.com</code> are different origins. So are <code>https://example.com</code> and <code>http://example.com</code>.</p>
+    <p>The same-origin policy blocks <em>reading</em> cross-origin responses, not sending requests. The browser still sends the request -- it just refuses to let JavaScript access the response. This distinction matters for understanding CORS.</p>
+
+    <h2>Why CORS exists</h2>
+    <p>Legitimate cross-origin requests are common: a frontend at <code>https://app.example.com</code> calling an API at <code>https://api.example.com</code>, loading fonts from a CDN, or embedding third-party widgets. CORS (Cross-Origin Resource Sharing) is the mechanism by which a server explicitly opts in to allowing specific cross-origin requests.</p>
+    <p>CORS works through HTTP headers. The server tells the browser: "I allow requests from these origins, with these methods and headers." The browser enforces this -- CORS is not a server-side firewall; it is a browser-enforced contract.</p>
+
+    <h2>Simple requests vs preflight</h2>
+    <p>Not all cross-origin requests trigger a preflight. A request is "simple" if it uses GET, HEAD, or POST with only <a href="https://fetch.spec.whatwg.org/#cors-safelisted-request-header">CORS-safelisted headers</a> and a content type of <code>application/x-www-form-urlencoded</code>, <code>multipart/form-data</code>, or <code>text/plain</code>. Simple requests are sent directly, and the browser checks the response headers afterward.</p>
+    <p>Everything else triggers a <strong>preflight</strong>: the browser sends an OPTIONS request first to ask the server whether the actual request is allowed.</p>
+
+    <h3>Preflight flow</h3>
+    <p>The browser sends an OPTIONS request with these headers:</p>
+    <pre><code>OPTIONS /api/data HTTP/1.1
+Host: api.example.com
+Origin: https://app.example.com
+Access-Control-Request-Method: PUT
+Access-Control-Request-Headers: Content-Type, Authorization</code></pre>
+    <p>The server responds with what it allows:</p>
+    <pre><code>HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://app.example.com
+Access-Control-Allow-Methods: GET, POST, PUT, DELETE
+Access-Control-Allow-Headers: Content-Type, Authorization
+Access-Control-Max-Age: 86400</code></pre>
+    <p>If the preflight response allows the request, the browser proceeds with the actual request. <code>Access-Control-Max-Age</code> caches the preflight result so subsequent requests skip the OPTIONS step for the specified duration (in seconds).</p>
+
+    <h2>Credentialed requests</h2>
+    <p>By default, cross-origin requests do not include cookies, HTTP authentication, or TLS client certificates. To include credentials, the client must set <code>credentials: 'include'</code> in the fetch call, and the server must respond with:</p>
+    <pre><code>Access-Control-Allow-Credentials: true</code></pre>
+    <p>When credentials are included, <code>Access-Control-Allow-Origin</code> <strong>must not</strong> be <code>*</code>. The server must echo the specific requesting origin. This is a hard rule enforced by browsers -- a wildcard with credentials is silently rejected.</p>
+    <pre><code># Correct: echo the specific origin when credentials are needed
+Access-Control-Allow-Origin: https://app.example.com
+Access-Control-Allow-Credentials: true
+
+# Wrong: wildcard + credentials -- browser rejects
+Access-Control-Allow-Origin: *
+Access-Control-Allow-Credentials: true</code></pre>
+
+    <h2>Wildcard pitfalls</h2>
+    <p><code>Access-Control-Allow-Origin: *</code> permits any origin to read the response. This is appropriate for truly public APIs (public data feeds, CDN-hosted libraries), but it has limitations:</p>
+    <ul>
+      <li>Cannot be used with credentialed requests (see above).</li>
+      <li>Cannot be used with <code>Access-Control-Allow-Headers: *</code> or <code>Access-Control-Allow-Methods: *</code> in credentialed contexts.</li>
+      <li>Does not match subdomains or specific origins -- it is literally "any origin."</li>
+    </ul>
+    <p>If you need to allow multiple specific origins but not all, you must dynamically check the <code>Origin</code> header against an allowlist and echo it back in the response. A static wildcard is all-or-nothing.</p>
+
+    <h2>Common misconfigurations</h2>
+    <h3>Reflected Origin</h3>
+    <p>Some servers blindly reflect the <code>Origin</code> header value in <code>Access-Control-Allow-Origin</code> without checking an allowlist. This is equivalent to <code>*</code> but worse -- it also works with credentialed requests, effectively granting any website full authenticated access to the API.</p>
+    <pre><code># Dangerous: reflecting Origin without validation
+Access-Control-Allow-Origin: ${request.headers.origin}
+Access-Control-Allow-Credentials: true</code></pre>
+    <p>Always validate the Origin against a strict allowlist before reflecting it.</p>
+
+    <h3>Allowing the null origin</h3>
+    <p>The <code>null</code> origin appears in requests from sandboxed iframes, local file:// pages, and certain redirects. Allowing <code>Access-Control-Allow-Origin: null</code> is dangerous because attackers can craft requests with a null origin using sandboxed iframes.</p>
+
+    <h3>Missing Vary: Origin</h3>
+    <p>If your server dynamically selects the <code>Access-Control-Allow-Origin</code> value based on the request's Origin header, you must include <code>Vary: Origin</code> in the response. Without it, CDNs and browser caches may serve a cached response with the wrong origin, causing CORS failures for other requestors.</p>
+
+    <h2>Practical examples</h2>
+    <h3>Nginx CORS configuration for an API</h3>
+    <pre><code># /etc/nginx/snippets/cors.conf
+map $http_origin $cors_origin {
+    default "";
+    "https://app.example.com"  "https://app.example.com";
+    "https://staging.example.com" "https://staging.example.com";
+}
+
+server {
+    location /api/ {
+        if ($cors_origin = "") {
+            # Origin not in allowlist -- no CORS headers
+        }
+
+        add_header Access-Control-Allow-Origin $cors_origin always;
+        add_header Access-Control-Allow-Credentials true always;
+        add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+        add_header Access-Control-Max-Age 86400 always;
+        add_header Vary Origin always;
+
+        if ($request_method = OPTIONS) {
+            return 204;
+        }
+    }
+}</code></pre>
+
+    <h3>Debugging CORS with curl</h3>
+    <p>Simulate a preflight request to see what the server returns:</p>
+    <pre><code># Simulate a preflight for a PUT request with Authorization header
+curl -v -X OPTIONS https://api.example.com/data \
+  -H "Origin: https://app.example.com" \
+  -H "Access-Control-Request-Method: PUT" \
+  -H "Access-Control-Request-Headers: Authorization, Content-Type"
+
+# Check a simple GET request's CORS headers
+curl -v https://api.example.com/data \
+  -H "Origin: https://app.example.com"</code></pre>
+    <p>Look for <code>Access-Control-Allow-Origin</code> in the response. If it is missing or does not match the requesting origin, the browser will block the response. Also check that the allowed methods and headers cover what your client needs.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your site's HTTP headers with spectra</h2>
+    <form class="tool-entry__form" action="https://http.netray.info/" method="get">
+      <input type="url" name="url" placeholder="https://example.com" required>
+      <button type="submit">Inspect Headers</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/csp">Content Security Policy (CSP)</a></li>
+      <li><a href="/guide/security-headers">Security Headers Overview</a></li>
+      <li><a href="/guide/cookie-security">Cookie Security</a></li>
+      <li><a href="/guide/hsts">HSTS Preloading</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>
