@@ -95,7 +95,7 @@ pub struct AppState {
         description = "Web-based DNS debugging API powered by mhost.\n\n\
             Queries multiple DNS servers in parallel and streams results as Server-Sent Events.\n\n\
             ## Rate Limiting\n\
-            All endpoints (except `/api/health`) are rate-limited per source IP.\n\
+            All endpoints (except `/health` and `/ready`) are rate-limited per source IP.\n\
             When the limit is exceeded (HTTP 429), the `Retry-After` header indicates\n\
             how many seconds to wait before retrying.\n\n\
             ## Query cost model\n\
@@ -188,14 +188,13 @@ async fn docs_redirect() -> Response {
 
 /// Build the API router with all endpoints.
 ///
-/// Health is mounted separately so it can bypass rate limiting.
+/// Probes are mounted separately via `health_router()` to bypass rate limiting.
 pub fn api_router(state: AppState) -> Router {
     Router::new()
         .route(
             "/api/query",
             get(query::get_handler).post(query::post_handler),
         )
-        .route("/api/ready", get(meta::ready))
         .route("/api/servers", get(meta::servers))
         .route("/api/record-types", get(meta::record_types))
         .route("/api/config", get(meta::client_config))
@@ -212,10 +211,12 @@ pub fn api_router(state: AppState) -> Router {
         .with_state(state)
 }
 
-/// Health endpoint router. Kept separate so it can be mounted outside
-/// rate-limiting layers.
-pub fn health_router() -> Router {
-    Router::new().route("/api/health", get(meta::health))
+/// Probe endpoints. Kept separate so they bypass rate-limiting layers.
+pub fn health_router(state: AppState) -> Router {
+    Router::new()
+        .route("/health", get(meta::health))
+        .route("/ready", get(meta::ready))
+        .with_state(state)
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +269,7 @@ mod tests {
     /// Includes the `request_id_middleware` so the `Extension(request_id)`
     /// extractor in SSE handlers is satisfied.
     fn test_router(state: AppState) -> axum::Router {
-        health_router()
+        health_router(state.clone())
             .merge(api_router(state))
             .layer(axum::middleware::from_fn(crate::request_id_middleware))
     }
@@ -307,26 +308,26 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // GET /api/health
+    // GET /health
     // -----------------------------------------------------------------------
 
     #[tokio::test]
     async fn health_returns_200_with_ok_status() {
         let router = test_router(default_state());
-        let resp = router.oneshot(get("/api/health")).await.unwrap();
+        let resp = router.oneshot(get("/health")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body = body_string(resp.into_body()).await;
         assert!(body.contains("\"ok\""), "body: {body}");
     }
 
     // -----------------------------------------------------------------------
-    // GET /api/ready
+    // GET /ready
     // -----------------------------------------------------------------------
 
     #[tokio::test]
     async fn ready_returns_200_with_ok_status() {
         let router = test_router(default_state());
-        let resp = router.oneshot(get("/api/ready")).await.unwrap();
+        let resp = router.oneshot(get("/ready")).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         let body = body_string(resp.into_body()).await;
         assert!(body.contains("\"ok\""), "body: {body}");
@@ -571,8 +572,7 @@ mod tests {
             config: Arc::new(config),
         };
 
-        // /api/ready has no rate limiting applied in this router but does go
-        // through the same middleware. Use /api/servers (GET, no DNS) as the
+        // /ready is now in health_router() (rate-limit exempt). Use /api/servers (GET, no DNS) as the
         // probe — but rate limiting is applied per handler in execute_query,
         // not as middleware. So we need an endpoint that invokes rate limiting.
         //

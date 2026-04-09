@@ -170,8 +170,8 @@ Interactive docs at `GET /docs` (Scalar UI). OpenAPI spec at `GET /api-docs/open
 
 | Utility endpoint | Description |
 |-----------------|-------------|
-| `GET /api/health` | Liveness probe (always 200 while running) |
-| `GET /api/ready` | Readiness probe (503 when a circuit breaker is open) |
+| `GET /health` | Liveness probe (always 200 while running) |
+| `GET /ready` | Readiness probe (503 when a circuit breaker is open) |
 | `GET /api/servers` | Predefined resolvers and IPs |
 | `GET /api/record-types` | Queryable record types |
 | `GET /api/results/{key}` | Retrieve a cached result by permalink key |

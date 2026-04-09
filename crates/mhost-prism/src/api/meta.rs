@@ -11,7 +11,7 @@ use serde::Serialize;
 use crate::api::AppState;
 
 // ---------------------------------------------------------------------------
-// GET /api/health
+// GET /health
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -22,7 +22,7 @@ pub struct HealthResponse {
 
 /// Health check. Returns `{"status":"ok"}` when the service is running.
 #[utoipa::path(
-    get, path = "/api/health",
+    get, path = "/health",
     tag = "Probes",
     responses(
         (status = 200, description = "Service is healthy", body = HealthResponse),
@@ -33,7 +33,7 @@ pub async fn health() -> Json<HealthResponse> {
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/ready
+// GET /ready
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -50,7 +50,7 @@ pub struct ReadyResponse {
 /// - Open circuit breakers
 /// - Enrichment service reachability (HEAD request, 2 s timeout)
 #[utoipa::path(
-    get, path = "/api/ready",
+    get, path = "/ready",
     tag = "Probes",
     responses(
         (status = 200, description = "Service is ready (warnings array may be non-empty if degraded)", body = ReadyResponse),

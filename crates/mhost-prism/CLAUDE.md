@@ -146,7 +146,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
       dnssec.rs               # POST /api/dnssec → SSE stream (DNSSEC chain-of-trust)
       parse.rs                # POST /api/parse → completion hints
       results.rs              # Shared result serialisation helpers (lookups → JSON)
-      meta.rs                 # GET /api/health (liveness), GET /api/ready (readiness),
+      meta.rs                 # GET /health (liveness), GET /ready (readiness),
                               #   GET /api/servers, GET /api/record-types, GET /api/config
                               #   GET /docs → Scalar API reference UI
                               #   GET /api-docs/openapi.json → OpenAPI spec
@@ -208,6 +208,10 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - `solid-js` — Reactive UI (~7KB)
 - `@codemirror/*` — Editor core, state, autocomplete, language
 - `vite` + `vite-plugin-solid` — Build tooling
+
+## Architecture Rules
+
+Rules: [`specs/rules/architecture-rules.md`](../specs/rules/architecture-rules.md) in the netray.info meta repo. Apply when modifying health probes or readiness checks.
 
 ## Logging & Telemetry
 

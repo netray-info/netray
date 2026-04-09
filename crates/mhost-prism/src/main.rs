@@ -111,7 +111,7 @@ async fn main() {
     // and compression are innermost around the actual handlers.
     let security_headers_fn = security::security_headers_layer();
     let app = Router::new()
-        .merge(api::health_router())
+        .merge(api::health_router(state.clone()))
         .merge(api::api_router(state))
         // robots.txt — explicit route so crawlers get text/plain, not the SPA fallback
         .route("/robots.txt", axum::routing::get(robots_txt))
