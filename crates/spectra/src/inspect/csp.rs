@@ -19,7 +19,7 @@ pub fn analyze_csp(headers: &HeaderMap) -> CspReport {
         (None, Some(v)) => (v, false, true),
         (None, None) => {
             return CspReport {
-                status: CheckStatus::Fail,
+                status: CheckStatus::Warn,
                 enforced: false,
                 report_only: false,
                 directives: IndexMap::new(),
@@ -161,10 +161,10 @@ mod tests {
     }
 
     #[test]
-    fn no_csp_is_fail() {
+    fn no_csp_is_warn() {
         let h = HeaderMap::new();
         let report = analyze_csp(&h);
-        assert_eq!(report.status, CheckStatus::Fail);
+        assert_eq!(report.status, CheckStatus::Warn);
         assert!(!report.issues.is_empty());
     }
 
