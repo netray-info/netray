@@ -25,7 +25,7 @@ export default function App() {
   const [result, setResult] = createSignal<InspectResponse | null>(null);
   const [error, setError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
-  const themeResult = createTheme('spectra_theme', 'system');
+  const theme = createTheme('spectra_theme', 'system');
 
   // Read URL param for initial query
   const params = new URLSearchParams(window.location.search);
@@ -62,7 +62,7 @@ export default function App() {
 
   return (
     <div>
-      <SuiteNav />
+      <SuiteNav current={'http' as any} />
 
       <div class="container">
         <div class="header">
@@ -73,7 +73,7 @@ export default function App() {
             </div>
           </div>
           <div class="header__actions">
-            <ThemeToggle />
+            <ThemeToggle theme={theme} />
           </div>
         </div>
 
