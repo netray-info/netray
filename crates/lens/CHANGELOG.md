@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.4] - 2026-04-09
+
+### Fixed
+- Enrich footer with tech stack description (8bdc46c)
+- Full-row check tinting and SuiteNav compaction (deca9aa)
+- Align verdict chip border-radius to pill shape (15081d1)
+- Remove NODE_AUTH_TOKEN from .npmrc, use global auth (80caf8c)
+- Swap header-actions order to match frontend-rules (06f6501)
+
+### Changed
+- Remove SuiteNav compaction override, now in common-frontend (b5163ba)
+- Bump common-frontend to ^0.5.0 (999eda9)
+- Bump common-frontend to ^0.4.0 (a742290)
+
 ## [0.2.3] - 2026-04-09
 
 ### Changed
