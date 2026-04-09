@@ -256,6 +256,42 @@ mod tests {
     }
 
     #[test]
+    fn insecure_cookie_produces_warn() {
+        use crate::inspect::assembler::CookieEntry;
+        let mut resp = minimal_response();
+        resp.cookies = vec![CookieEntry {
+            name: "session".into(),
+            secure: false,
+            httponly: true,
+            samesite: None,
+            path: None,
+            domain: None,
+            expires: None,
+        }];
+        let checks = run_checks(&resp);
+        let check = checks.iter().find(|c| c.name == "cookie_secure").unwrap();
+        assert_eq!(check.status, CheckStatus::Warn);
+    }
+
+    #[test]
+    fn deprecated_header_produces_warn() {
+        let mut resp = minimal_response();
+        resp.deprecated_headers = vec!["x-powered-by".into()];
+        let checks = run_checks(&resp);
+        let check = checks.iter().find(|c| c.name == "deprecated_headers").unwrap();
+        assert_eq!(check.status, CheckStatus::Warn);
+    }
+
+    #[test]
+    fn redirect_limit_produces_warn() {
+        let mut resp = minimal_response();
+        resp.redirect_limit_reached = Some(10);
+        let checks = run_checks(&resp);
+        let check = checks.iter().find(|c| c.name == "redirect_limit").unwrap();
+        assert_eq!(check.status, CheckStatus::Warn);
+    }
+
+    #[test]
     fn all_checks_have_label_and_explanation() {
         let resp = minimal_response();
         let checks = run_checks(&resp);

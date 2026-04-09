@@ -12,12 +12,12 @@ export default function CachingView(props: Props) {
   return (
     <>
       <Show when={props.caching.cache_control}>
-        <p class="mono" style={{ 'font-size': '0.8125rem', 'margin-bottom': '0.5rem' }}>
+        <p class="mono cache-value">
           Cache-Control: {props.caching.cache_control}
         </p>
       </Show>
 
-      <ul style={{ 'list-style': 'none', padding: '0', margin: '0 0 0.75rem 0', 'font-size': '0.875rem' }}>
+      <ul class="cache-directive-list">
         <Show when={d().max_age != null}>
           <li>max-age: {d().max_age}s</li>
         </Show>
@@ -29,7 +29,7 @@ export default function CachingView(props: Props) {
         <Show when={d().immutable}><li>immutable</li></Show>
       </ul>
 
-      <ul style={{ 'list-style': 'none', padding: '0', margin: '0', 'font-size': '0.875rem' }}>
+      <ul class="cache-vary-list">
         <li>ETag: {props.caching.etag ? 'Yes' : 'No'}</li>
         <li>Last-Modified: {props.caching.last_modified ? 'Yes' : 'No'}</li>
         <Show when={props.caching.vary.length > 0}>
@@ -41,16 +41,16 @@ export default function CachingView(props: Props) {
       </ul>
 
       <Show when={props.cdn.detected}>
-        <div style={{ 'margin-top': '0.75rem' }}>
-          <div style={{ 'font-size': '0.875rem', 'font-weight': '600', 'text-transform': 'uppercase', 'letter-spacing': '0.05em', 'color': 'var(--text-muted)', 'margin-bottom': '0.75rem' }}>CDN</div>
-          <p style={{ 'font-size': '0.875rem' }}>
+        <div class="cache-cdn-section">
+          <div class="section-label">CDN</div>
+          <p class="cache-cdn-desc">
             Detected: <strong>{props.cdn.detected}</strong>
             <Show when={props.cdn.cache_status}>
               {' '}&mdash; Cache status: {props.cdn.cache_status}
             </Show>
           </p>
           <Show when={props.cdn.indicators.length > 0}>
-            <p class="mono" style={{ 'font-size': '0.8125rem', color: 'var(--text-muted)' }}>
+            <p class="mono cache-indicators">
               Indicators: {props.cdn.indicators.join(', ')}
             </p>
           </Show>

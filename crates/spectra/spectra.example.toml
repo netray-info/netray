@@ -1,13 +1,13 @@
 [server]
 bind = "127.0.0.1:3000"
 metrics_bind = "127.0.0.1:9090"
-# trusted_proxies = ["10.0.0.0/8"]
+# trusted_proxies = ["10.0.0.0/8"]  # CIDR list of trusted reverse proxies (e.g. ["10.0.0.0/8"]). Required when running behind a load balancer. Omit if directly exposed.
 
 [inspect]
 request_timeout_secs = 10
 total_timeout_secs = 30
 max_redirects = 10
-body_read_limit_bytes = 1024
+body_read_limit_bytes = 1024  # Reserved for future body sniffing. Has no effect in the current version.
 user_agent = "netray-spectra"
 
 [limits]
@@ -18,7 +18,7 @@ per_target_burst = 10
 max_concurrent_connections = 256
 
 [enrichment]
-ip_url = "https://ip.example.com"
+ip_url = "https://ip.example.com"  # URL of the ifconfig-rs enrichment service. Omit or leave blank to disable IP enrichment.
 timeout_ms = 500
 
 [telemetry]
@@ -27,3 +27,12 @@ enabled = false
 # otlp_endpoint = "http://localhost:4318"
 service_name = "spectra"
 sample_rate = 1.0
+
+# [meta]
+# Base URLs for suite cross-navigation links served to the frontend.
+# All keys are optional. Omit the section entirely to disable ecosystem links.
+# ip_base_url = "https://ip.netray.info"
+# dns_base_url = "https://dns.netray.info"
+# tls_base_url = "https://tls.netray.info"
+# http_base_url = "https://http.netray.info"
+# lens_base_url = "https://lens.netray.info"

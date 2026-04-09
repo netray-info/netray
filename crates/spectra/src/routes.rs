@@ -10,7 +10,11 @@ use utoipa::{OpenApi, ToSchema};
 
 use crate::error::{AppError, ErrorResponse};
 use crate::inspect;
-use crate::inspect::assembler::*;
+use crate::inspect::assembler::{
+    CacheControlDirectives, CachingReport, CdnReport, CookieEntry, CorsReport, CspReport,
+    EnrichmentInfo, FingerprintReport, HeaderCheck, HstsCheck, HttpUpgrade, InfoLeakage,
+    InspectResponse, RedirectHop, ReportingReport, SecurityReport,
+};
 #[allow(unused_imports)] // Used in #[openapi] attribute
 use crate::quality::types::{CheckStatus, QualityCheck, QualityReport};
 use crate::state::AppState;
@@ -32,6 +36,28 @@ pub struct ReadyResponse {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ConfigResponse {
     pub version: &'static str,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MetaResponse {
+    pub version: &'static str,
+    pub site_name: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ecosystem: Option<EcosystemLinks>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct EcosystemLinks {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ip_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dns_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tls_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lens_base_url: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +85,7 @@ pub struct InspectQuery {
         health_handler,
         ready_handler,
         config_handler,
+        meta_handler,
         inspect_post_handler,
         inspect_get_handler,
     ),
@@ -66,7 +93,13 @@ pub struct InspectQuery {
         HealthResponse,
         ReadyResponse,
         ConfigResponse,
+        MetaResponse,
+        EcosystemLinks,
         InspectRequest,
+        InspectResponse,
+        SecurityReport,
+        CspReport,
+        CookieEntry,
         RedirectHop,
         HttpUpgrade,
         HstsCheck,
@@ -105,6 +138,7 @@ pub fn api_router(state: AppState) -> Router {
             get(inspect_get_handler).post(inspect_post_handler),
         )
         .route("/api/config", get(config_handler))
+        .route("/api/meta", get(meta_handler))
         .route("/api-docs/openapi.json", get(openapi_handler))
         .route("/docs", get(docs_handler))
         .with_state(state)
@@ -158,11 +192,45 @@ async fn config_handler() -> Json<ConfigResponse> {
 }
 
 #[utoipa::path(
+    get,
+    path = "/api/meta",
+    responses(
+        (status = 200, description = "Service metadata and ecosystem links", body = MetaResponse),
+    )
+)]
+async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
+    let meta = &state.config.meta;
+    let has_any = meta.ip_base_url.is_some()
+        || meta.dns_base_url.is_some()
+        || meta.tls_base_url.is_some()
+        || meta.http_base_url.is_some()
+        || meta.lens_base_url.is_some();
+
+    let ecosystem = if has_any {
+        Some(EcosystemLinks {
+            ip_base_url: meta.ip_base_url.clone(),
+            dns_base_url: meta.dns_base_url.clone(),
+            tls_base_url: meta.tls_base_url.clone(),
+            http_base_url: meta.http_base_url.clone(),
+            lens_base_url: meta.lens_base_url.clone(),
+        })
+    } else {
+        None
+    };
+
+    Json(MetaResponse {
+        version: env!("CARGO_PKG_VERSION"),
+        site_name: "spectra",
+        ecosystem,
+    })
+}
+
+#[utoipa::path(
     post,
     path = "/api/inspect",
     request_body = InspectRequest,
     responses(
-        (status = 200, description = "Inspection result"),
+        (status = 200, description = "Inspection result", body = InspectResponse),
         (status = 400, description = "Invalid URL", body = ErrorResponse),
         (status = 403, description = "Target blocked", body = ErrorResponse),
         (status = 422, description = "Invalid target", body = ErrorResponse),
@@ -192,7 +260,7 @@ async fn inspect_post_handler(
         ("url" = String, Query, description = "URL to inspect"),
     ),
     responses(
-        (status = 200, description = "Inspection result"),
+        (status = 200, description = "Inspection result", body = InspectResponse),
         (status = 400, description = "Invalid URL", body = ErrorResponse),
         (status = 403, description = "Target blocked", body = ErrorResponse),
         (status = 422, description = "Invalid target", body = ErrorResponse),
@@ -225,41 +293,63 @@ async fn do_inspect(
     req_headers: &axum::http::HeaderMap,
     raw_url: &str,
 ) -> Result<Json<InspectResponse>, AppError> {
+    let result = do_inspect_inner(state, peer, req_headers, raw_url).await;
+    let outcome = match &result {
+        Ok(_) => "success",
+        Err(AppError::RateLimited { .. }) => "rate_limited",
+        Err(AppError::BlockedTarget(_)) => "blocked",
+        Err(AppError::Timeout(_)) => "timeout",
+        Err(_) => "error",
+    };
+    metrics::counter!("inspect_requests_total", "outcome" => outcome).increment(1);
+    result
+}
+
+async fn do_inspect_inner(
+    state: &AppState,
+    peer: SocketAddr,
+    req_headers: &axum::http::HeaderMap,
+    raw_url: &str,
+) -> Result<Json<InspectResponse>, AppError> {
     let start = Instant::now();
 
     // 1. Parse and normalize URL
     let url = crate::input::parse_url(raw_url)?;
 
-    // 2. Resolve and validate target (SSRF check)
-    let resolved_addr = crate::input::validate_target(&url).await?;
-
-    // 3. Rate limiting
+    // 2. Rate limiting (before DNS to avoid unnecessary resolution for throttled clients)
     let client_ip = state.ip_extractor.extract(req_headers, peer);
+    tracing::Span::current().record("client_ip", tracing::field::display(client_ip));
     let hostname = url.host_str().unwrap_or_default();
     state.rate_limiter.check(client_ip, hostname)?;
+
+    // 3. Resolve and validate target (SSRF check)
+    let resolved_addr = crate::input::validate_target(&url).await?;
 
     // 4. Execute inspection
     let result = inspect::inspect(&url, resolved_addr, &state.config.inspect).await?;
 
     // 5. IP enrichment (non-blocking, failure is OK)
     let enrichment = if let Some(ref client) = state.enrichment_client {
-        client.lookup(resolved_addr.ip(), None).await.map(|info| {
-            let threat = if info.is_c2 {
-                Some("C2".to_string())
-            } else if info.is_spamhaus {
-                Some("DROP".to_string())
-            } else if info.is_tor {
-                Some("TOR".to_string())
-            } else {
-                None
-            };
-            inspect::EnrichmentData {
-                org: info.org,
-                ip_type: info.ip_type,
-                threat,
-                role: None, // TODO: wire up once netray-common >= 0.5.5 (network_role field)
+        match client.lookup(resolved_addr.ip(), None).await {
+            Some(info) => {
+                let threat = if info.is_c2 {
+                    Some("C2".to_string())
+                } else if info.is_spamhaus {
+                    Some("DROP".to_string())
+                } else if info.is_tor {
+                    Some("TOR".to_string())
+                } else {
+                    None
+                };
+                inspect::EnrichmentData {
+                    org: info.org,
+                    ip_type: info.ip_type,
+                    threat,
+                    role: None, // TODO: wire up once netray-common >= 0.5.5 (network_role field)
+                }
             }
-        }).unwrap_or_default()
+            None => inspect::EnrichmentData::default(),
+        }
     } else {
         inspect::EnrichmentData::default()
     };
@@ -357,6 +447,15 @@ mod tests {
         let (status, body) = get(&app, "/api/config").await;
         assert_eq!(status, StatusCode::OK);
         assert!(body["version"].is_string());
+    }
+
+    #[tokio::test]
+    async fn meta_returns_version_and_site_name() {
+        let app = test_router();
+        let (status, body) = get(&app, "/api/meta").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body["version"].is_string());
+        assert_eq!(body["site_name"], "spectra");
     }
 
     #[tokio::test]

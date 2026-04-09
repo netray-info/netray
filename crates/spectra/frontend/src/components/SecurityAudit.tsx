@@ -64,9 +64,9 @@ export default function SecurityAudit(props: Props) {
       <HeaderRow name="X-Content-Type-Options" check={s().x_content_type_options} explanation={explanationFor('x_content_type_options')} showExplanations={props.showExplanations} />
       <HeaderRow name="Referrer-Policy" check={s().referrer_policy} explanation={explanationFor('referrer_policy')} showExplanations={props.showExplanations} />
       <HeaderRow name="Permissions-Policy" check={s().permissions_policy} explanation={explanationFor('permissions_policy')} showExplanations={props.showExplanations} />
-      <HeaderRow name="COOP" check={s().coop} explanation={undefined} showExplanations={props.showExplanations} />
-      <HeaderRow name="COEP" check={s().coep} explanation={undefined} showExplanations={props.showExplanations} />
-      <HeaderRow name="CORP" check={s().corp} explanation={undefined} showExplanations={props.showExplanations} />
+      <HeaderRow name="COOP" check={s().coop} explanation={explanationFor('coop') ?? "Cross-Origin Opener Policy isolates the browsing context from cross-origin documents, preventing cross-origin attacks via window references."} showExplanations={props.showExplanations} />
+      <HeaderRow name="COEP" check={s().coep} explanation={explanationFor('coep') ?? "Cross-Origin Embedder Policy prevents documents from loading cross-origin resources unless they grant explicit permission, enabling isolation features."} showExplanations={props.showExplanations} />
+      <HeaderRow name="CORP" check={s().corp} explanation={explanationFor('corp') ?? "Cross-Origin Resource Policy prevents other origins from reading this resource's content, protecting against speculative execution attacks."} showExplanations={props.showExplanations} />
     </ul>
   );
 }

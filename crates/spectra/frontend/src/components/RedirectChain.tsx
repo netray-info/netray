@@ -33,9 +33,9 @@ export default function RedirectChain(props: Props) {
       </Show>
 
       <Show when={props.httpUpgrade}>
-        <div style={{ 'margin-top': '1rem' }}>
-          <div style={{ 'font-size': '0.875rem', 'font-weight': '600', 'text-transform': 'uppercase', 'letter-spacing': '0.05em', 'color': 'var(--text-muted)', 'margin-bottom': '0.75rem' }}>HTTP Upgrade (port 80)</div>
-          <p style={{ 'font-size': '0.875rem', 'margin-bottom': '0.5rem' }}>
+        <div class="redirect-upgrade-section">
+          <div class="section-label">HTTP Upgrade (port 80)</div>
+          <p class="redirect-upgrade-message">
             {props.httpUpgrade!.message}
           </p>
           <Show when={props.httpUpgrade!.redirects.length > 0}>

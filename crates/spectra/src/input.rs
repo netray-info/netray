@@ -111,6 +111,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn validate_blocks_ipv6_loopback() {
+        let url = Url::parse("https://[::1]").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
+
+    #[tokio::test]
+    async fn validate_blocks_ipv6_unique_local() {
+        let url = Url::parse("https://[fc00::1]").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
+
+    #[tokio::test]
+    async fn validate_blocks_ipv6_link_local() {
+        // fe80::1 without zone ID
+        let url = Url::parse("https://[fe80::1]").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
+
+    #[tokio::test]
     async fn validate_blocks_loopback() {
         let url = Url::parse("https://127.0.0.1").unwrap();
         let err = validate_target(&url).await.unwrap_err();

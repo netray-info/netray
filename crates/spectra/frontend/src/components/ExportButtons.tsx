@@ -11,7 +11,7 @@ export default function ExportButtons(props: Props) {
 
   const downloadJson = () => {
     const r = props.result;
-    const host = new URL(r.final_url).hostname;
+    const host = (() => { try { return new URL(r.final_url).hostname; } catch { return r.url; } })();
     downloadFile(JSON.stringify(r, null, 2), `spectra-${host}.json`, 'application/json');
   };
 
@@ -73,6 +73,21 @@ export default function ExportButtons(props: Props) {
           c.samesite ? `SameSite=${c.samesite}` : 'no SameSite',
         ].join(', ');
         lines.push(`- \`${c.name}\`: ${flags}`);
+      }
+    }
+
+    lines.push('', '## CORS', '');
+    lines.push(`- Allows any origin: ${r.cors.allows_any_origin ? 'yes' : 'no'}`);
+    lines.push(`- Reflects origin: ${r.cors.reflects_origin ? 'yes' : 'no'}`);
+    lines.push(`- Allows credentials: ${r.cors.allows_credentials ? 'yes' : 'no'}`);
+    lines.push(`- Status: ${r.cors.status}`);
+    lines.push(`- ${r.cors.message}`);
+
+    if (r.redirects.length > 0) {
+      lines.push('', '## Redirects', '');
+      for (const hop of r.redirects) {
+        const loc = hop.location ? ` → ${hop.location}` : '';
+        lines.push(`- [${hop.status}] ${hop.url}${loc}`);
       }
     }
 

@@ -16,6 +16,8 @@ pub struct Config {
     pub enrichment: EnrichmentConfig,
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub meta: MetaConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,6 +65,20 @@ pub struct EnrichmentConfig {
     pub ip_url: Option<String>,
     #[serde(default = "default_enrichment_timeout_ms")]
     pub timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct MetaConfig {
+    #[serde(default)]
+    pub ip_base_url: Option<String>,
+    #[serde(default)]
+    pub dns_base_url: Option<String>,
+    #[serde(default)]
+    pub tls_base_url: Option<String>,
+    #[serde(default)]
+    pub http_base_url: Option<String>,
+    #[serde(default)]
+    pub lens_base_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

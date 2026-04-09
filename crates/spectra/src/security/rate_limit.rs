@@ -90,6 +90,20 @@ mod tests {
     }
 
     #[test]
+    fn per_target_exhausted_blocks_different_ip() {
+        let state = RateLimitState::new(&test_config()); // per_target_burst = 10
+        // Use 10 different source IPs (each within their own per-IP budget) to exhaust
+        // the per-target burst for a single hostname.
+        for i in 0u8..10 {
+            let ip: IpAddr = format!("198.51.100.{}", 10 + i).parse().unwrap();
+            let _ = state.check(ip, "target.example.com");
+        }
+        // A fresh IP — per-IP budget is untouched, but per-target is exhausted
+        let new_ip: IpAddr = "198.51.101.1".parse().unwrap();
+        assert!(state.check(new_ip, "target.example.com").is_err());
+    }
+
+    #[test]
     fn different_ips_independent() {
         let state = RateLimitState::new(&test_config());
         let ip1: IpAddr = "198.51.100.1".parse().unwrap();

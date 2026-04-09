@@ -7,10 +7,10 @@ interface Props {
 export default function CorsReport(props: Props) {
   return (
     <>
-      <p style={{ 'font-size': '0.875rem', 'margin-bottom': '0.5rem' }}>
+      <p class="cors-message">
         {props.cors.message}
       </p>
-      <ul style={{ 'list-style': 'none', padding: '0', margin: '0', 'font-size': '0.8125rem' }}>
+      <ul class="cors-flags-list">
         <li>Allows any origin: {props.cors.allows_any_origin ? 'Yes' : 'No'}</li>
         <li>Reflects origin: {props.cors.reflects_origin ? 'Yes' : 'No'}</li>
         <li>Allows credentials: {props.cors.allows_credentials ? 'Yes' : 'No'}</li>

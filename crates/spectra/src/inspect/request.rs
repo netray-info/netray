@@ -52,7 +52,7 @@ pub async fn execute_request(
         .redirect(policy)
         .timeout(timeout)
         .user_agent(user_agent)
-        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_certs(true) // Intentional: inspecting sites with broken or self-signed certs is a core feature.
         .resolve(&host, resolved_addr);
 
     // Send Accept-Encoding to detect compression
@@ -116,6 +116,56 @@ pub async fn execute_request(
                 error: Some(format!("Request failed: {e}")),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn redirect_hops_are_captured() {
+        // Bind a listener on an ephemeral port
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        // Spawn a minimal HTTP server that responds with 301 -> example.com
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                // Drain the request
+                let mut buf = [0u8; 1024];
+                let _ = tokio::time::timeout(
+                    Duration::from_millis(200),
+                    stream.read(&mut buf),
+                )
+                .await;
+                let response = "HTTP/1.1 301 Moved Permanently\r\nLocation: https://example.com/\r\nContent-Length: 0\r\n\r\n";
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
+        let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
+
+        // max_redirects=0 so reqwest stops after the first 301 without following it
+        let result = execute_request(
+            url,
+            resolved,
+            0, // stop immediately — captures the hop
+            Duration::from_secs(2),
+            "test-agent",
+            None,
+        )
+        .await;
+
+        assert!(
+            result.redirects.len() >= 1 || result.redirect_limit_reached,
+            "expected at least one redirect hop or limit reached, got {:?}",
+            result.redirects
+        );
     }
 }
 

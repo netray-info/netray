@@ -5,7 +5,6 @@ pub mod cors;
 pub mod csp;
 pub mod fingerprint;
 pub mod headers;
-pub mod redirects;
 pub mod request;
 pub mod security;
 
@@ -100,27 +99,33 @@ pub async fn inspect(
     .await;
 
     match result {
-        Ok((https, upgrade, cors)) => Ok(InspectResult {
-            https,
-            http_upgrade: upgrade,
-            cors,
-        }),
+        Ok((https, upgrade, cors)) => {
+            if let Some(ref e) = https.error {
+                tracing::warn!(error = %e, "https probe failed");
+            }
+            if let Some(ref e) = upgrade.as_ref().and_then(|r| r.error.as_ref()) {
+                tracing::warn!(error = %e, "http_upgrade probe failed");
+            }
+            if let Some(ref e) = cors.error {
+                tracing::warn!(error = %e, "cors probe failed");
+            }
+            Ok(InspectResult {
+                https,
+                http_upgrade: upgrade,
+                cors,
+            })
+        }
         Err(_) => Err(crate::error::AppError::Timeout(config.total_timeout_secs)),
     }
 }
 
 /// Enrichment fields extracted from the ifconfig-rs lookup, passed to [`assemble_response`].
+#[derive(Default)]
 pub struct EnrichmentData {
     pub org: Option<String>,
     pub ip_type: Option<String>,
     pub threat: Option<String>,
     pub role: Option<String>,
-}
-
-impl Default for EnrichmentData {
-    fn default() -> Self {
-        Self { org: None, ip_type: None, threat: None, role: None }
-    }
 }
 
 /// Assemble the full InspectResponse from the raw task results.

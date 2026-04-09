@@ -48,7 +48,6 @@ export default function UrlInput(props: Props) {
             type="button"
             onClick={handleClear}
             title="Clear"
-            tabIndex={-1}
           >&times;</button>
         </Show>
       </div>

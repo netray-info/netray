@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 
 use crate::quality::types::{CheckStatus, QualityReport};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InspectResponse {
     pub url: String,
     pub final_url: String,
@@ -18,6 +18,7 @@ pub struct InspectResponse {
     pub redirects: Vec<RedirectHop>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub http_upgrade: Option<HttpUpgrade>,
+    #[schema(value_type = Object, additional_properties)]
     pub headers: IndexMap<String, String>,
     pub security: SecurityReport,
     pub cors: CorsReport,
@@ -55,7 +56,7 @@ pub struct HttpUpgrade {
     pub redirects: Vec<RedirectHop>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SecurityReport {
     pub hsts: HstsCheck,
     pub csp: CspReport,
@@ -77,11 +78,12 @@ pub struct HstsCheck {
     pub preload: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CspReport {
     pub status: CheckStatus,
     pub enforced: bool,
     pub report_only: bool,
+    #[schema(value_type = Object, additional_properties)]
     pub directives: IndexMap<String, Vec<String>>,
     pub issues: Vec<String>,
 }
@@ -104,7 +106,7 @@ pub struct CorsReport {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CookieEntry {
     pub name: String,
     pub secure: bool,
@@ -116,6 +118,7 @@ pub struct CookieEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
     pub expires: Option<DateTime<Utc>>,
 }
 
