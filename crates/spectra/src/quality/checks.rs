@@ -249,6 +249,7 @@ mod tests {
                 ip: "192.0.2.1".into(),
                 org: None,
                 detail_url: "https://ip.netray.info/192.0.2.1".into(),
+                ..Default::default()
             },
             redirect_limit_reached: None,
         }

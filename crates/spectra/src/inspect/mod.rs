@@ -109,12 +109,25 @@ pub async fn inspect(
     }
 }
 
+/// Enrichment fields extracted from the ifconfig-rs lookup, passed to [`assemble_response`].
+pub struct EnrichmentData {
+    pub org: Option<String>,
+    pub ip_type: Option<String>,
+    pub threat: Option<String>,
+}
+
+impl Default for EnrichmentData {
+    fn default() -> Self {
+        Self { org: None, ip_type: None, threat: None }
+    }
+}
+
 /// Assemble the full InspectResponse from the raw task results.
 pub fn assemble_response(
     original_url: &Url,
     resolved_addr: SocketAddr,
     result: InspectResult,
-    enrichment_org: Option<String>,
+    enrichment: EnrichmentData,
     enrichment_base_url: &str,
     duration_ms: u64,
 ) -> InspectResponse {
@@ -210,8 +223,10 @@ pub fn assemble_response(
         },
         enrichment: EnrichmentInfo {
             ip: ip_str,
-            org: enrichment_org,
+            org: enrichment.org,
             detail_url,
+            ip_type: enrichment.ip_type,
+            threat: enrichment.threat,
         },
         redirect_limit_reached,
     };

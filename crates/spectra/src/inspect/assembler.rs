@@ -172,10 +172,16 @@ pub struct ReportingReport {
     pub csp_reporting: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 pub struct EnrichmentInfo {
     pub ip: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub org: Option<String>,
     pub detail_url: String,
+    /// IP classification: "cloud", "datacenter", "residential", "vpn", "cdn", "isp", etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ip_type: Option<String>,
+    /// Threat flag: "C2", "DROP", or "TOR" if the IP is flagged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threat: Option<String>,
 }

@@ -242,10 +242,25 @@ async fn do_inspect(
     let result = inspect::inspect(&url, resolved_addr, &state.config.inspect).await?;
 
     // 5. IP enrichment (non-blocking, failure is OK)
-    let enrichment_org = if let Some(ref client) = state.enrichment_client {
-        client.lookup(resolved_addr.ip(), None).await.and_then(|info| info.org)
+    let enrichment = if let Some(ref client) = state.enrichment_client {
+        client.lookup(resolved_addr.ip(), None).await.map(|info| {
+            let threat = if info.is_c2 {
+                Some("C2".to_string())
+            } else if info.is_spamhaus {
+                Some("DROP".to_string())
+            } else if info.is_tor {
+                Some("TOR".to_string())
+            } else {
+                None
+            };
+            inspect::EnrichmentData {
+                org: info.org,
+                ip_type: info.ip_type,
+                threat,
+            }
+        }).unwrap_or_default()
     } else {
-        None
+        inspect::EnrichmentData::default()
     };
 
     let enrichment_base_url = state
@@ -262,7 +277,7 @@ async fn do_inspect(
         &url,
         resolved_addr,
         result,
-        enrichment_org,
+        enrichment,
         enrichment_base_url,
         duration_ms,
     );
