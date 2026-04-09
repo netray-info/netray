@@ -96,7 +96,7 @@ export default function App() {
 
   function securityWorst(sec: InspectResponse['security']): CheckStatus {
     return worstStatus([
-      sec.hsts.status, sec.csp.status, sec.x_frame_options.status,
+      sec.hsts.status, sec.x_frame_options.status,
       sec.x_content_type_options.status, sec.referrer_policy.status,
       sec.permissions_policy.status, sec.coop.status, sec.coep.status, sec.corp.status,
     ]);
@@ -117,7 +117,7 @@ export default function App() {
 
   function securityStatuses(sec: InspectResponse['security']): Array<{ status: CheckStatus }> {
     return [
-      sec.hsts, sec.csp, sec.x_frame_options, sec.x_content_type_options,
+      sec.hsts, sec.x_frame_options, sec.x_content_type_options,
       sec.referrer_policy, sec.permissions_policy, sec.coop, sec.coep, sec.corp,
     ];
   }
