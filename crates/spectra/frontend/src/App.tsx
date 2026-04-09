@@ -131,7 +131,7 @@ export default function App() {
             <p class="header__tagline">HTTP headers, decoded</p>
           </div>
           <div class="header-actions">
-            <ThemeToggle theme={theme} />
+            <ThemeToggle theme={theme} class="header-btn" />
             <button class="header-btn" onClick={() => setShowHelp(true)} aria-label="Open help" title="Help (?)">?</button>
           </div>
         </div>
