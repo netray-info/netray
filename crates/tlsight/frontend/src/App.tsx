@@ -187,9 +187,8 @@ export default function App() {
   }
 
   return (
-    <>
-      <SuiteNav current="tls" meta={meta()?.ecosystem} />
       <div class="app">
+      <SuiteNav current="tls" meta={meta()?.ecosystem} />
       <a href="#main-content" class="skip-link">Skip to results</a>
 
       <header class="header">
@@ -457,6 +456,5 @@ export default function App() {
         version={meta()?.version}
       />
     </div>
-    </>
   );
 }
