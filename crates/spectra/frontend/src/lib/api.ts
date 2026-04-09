@@ -2,6 +2,7 @@ import type { InspectResponse } from './types';
 
 export interface MetaResponse {
   site_name?: string;
+  version?: string;
   ecosystem?: {
     ip_base_url?: string;
     dns_base_url?: string;

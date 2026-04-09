@@ -38,10 +38,17 @@ a:hover { text-decoration: underline; }
    Layout
    ================================================================ */
 
-.container {
+.app {
   max-width: 960px;
   margin: 0 auto;
-  padding: 0 1rem;
+  padding: 1.5rem 1rem;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  flex: 1;
 }
 
 .header__tagline {

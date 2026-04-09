@@ -11,6 +11,7 @@ import FingerprintView from './components/FingerprintView';
 import SuiteNav from '@netray-info/common-frontend/components/SuiteNav';
 import type { SuiteNavEcosystem } from '@netray-info/common-frontend/components/SuiteNav';
 import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
+import Modal from '@netray-info/common-frontend/components/Modal';
 import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import { inspect, fetchMeta } from './lib/api';
@@ -29,6 +30,7 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [meta, setMeta] = createSignal<MetaResponse | null>(null);
+  const [showHelp, setShowHelp] = createSignal(false);
   const theme = createTheme('spectra_theme', 'system');
 
   // Read URL param for initial query
@@ -75,9 +77,9 @@ export default function App() {
   }
 
   return (
-    <div>
-      <a class="skip-link" href="#results">Skip to results</a>
+      <div class="app">
       <SuiteNav current={'http' as any} meta={meta()?.ecosystem as SuiteNavEcosystem} />
+      <a class="skip-link" href="#results">Skip to results</a>
 
       <main class="container">
         <div class="header">
@@ -87,6 +89,7 @@ export default function App() {
           </div>
           <div class="header-actions">
             <ThemeToggle theme={theme} />
+            <button class="header-btn" onClick={() => setShowHelp(true)} aria-label="Open help" title="Help (?)">?</button>
           </div>
         </div>
 
@@ -233,7 +236,32 @@ export default function App() {
         </Show>
       </main>
 
-      <SiteFooter />
-    </div>
+      <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
+        <div class="help-section">
+          <div class="help-section__title">What is spectra?</div>
+          <p class="help-desc">Enter a URL to inspect its HTTP response headers, security posture, cookies, caching, CORS policy, and CSP configuration.</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section__title">Keyboard shortcuts</div>
+          <div class="help-keys">
+            <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
+            <div class="help-key"><kbd>Enter</kbd><span>Submit URL</span></div>
+            <div class="help-key"><kbd>Escape</kbd><span>Close help</span></div>
+            <div class="help-key"><kbd>?</kbd><span>Toggle help</span></div>
+          </div>
+        </div>
+      </Modal>
+
+      <SiteFooter
+        aboutText={<><em>spectra</em> is an HTTP header inspection service. Part of the <a href="https://netray.info"><strong>netray.info</strong></a> suite.</>}
+        links={[
+          { label: 'GitHub', href: 'https://github.com/netray-info/spectra' },
+          { label: 'API Docs', href: '/docs' },
+          { label: 'Author', href: 'https://lukas.pustina.net' },
+        ]}
+        version={meta()?.version}
+      />
+      </div>
   );
 }
