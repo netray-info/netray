@@ -19,6 +19,7 @@ pub struct IpEnrichment {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {
+    Skip,
     Pass,
     Info,
     Warn,
@@ -32,6 +33,18 @@ pub enum Grade {
     C,
     B,
     A,
+}
+
+impl Grade {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Grade::A => "A",
+            Grade::B => "B",
+            Grade::C => "C",
+            Grade::D => "D",
+            Grade::F => "F",
+        }
+    }
 }
 
 #[derive(
@@ -127,7 +140,6 @@ impl From<SseEvent> for axum::response::sse::Event {
 }
 
 /// Collected results from all category checks, used by cross-validation.
-#[allow(dead_code)]
 pub struct AllResults {
     pub mx: CheckResult,
     pub mx_hosts: Vec<String>,
@@ -162,7 +174,6 @@ pub struct SpfFlat {
     pub authorized_prefixes: Vec<ipnet::IpNet>,
 }
 
-#[allow(dead_code)]
 pub struct MtaStsInfo {
     pub dns_id: String,
     pub policy_id: Option<String>,

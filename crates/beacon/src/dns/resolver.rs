@@ -1,16 +1,17 @@
 use std::net::IpAddr;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
+use std::str::FromStr;
 
 use mhost::RecordType;
-use mhost::resolver::{ResolverGroup, ResolverGroupBuilder, UniQuery};
+use mhost::resolver::{Resolver, ResolverGroup, ResolverGroupBuilder, MultiQuery};
 use mhost::nameserver::predefined::PredefinedProvider;
 
 use crate::config::DnsConfig;
 
 pub struct DnsResolver {
-    resolvers: Arc<ResolverGroup>,
+    resolvers: Vec<Resolver>,
+    index: AtomicUsize,
 }
 
 impl DnsResolver {
@@ -28,9 +29,11 @@ impl DnsResolver {
             }
         }
 
-        let resolvers = builder.build().await?;
+        let group: ResolverGroup = builder.build().await?;
+        let resolvers = group.resolvers().to_vec();
         Ok(Self {
-            resolvers: Arc::new(resolvers),
+            resolvers,
+            index: AtomicUsize::new(0),
         })
     }
 
@@ -38,18 +41,24 @@ impl DnsResolver {
         !self.resolvers.is_empty()
     }
 
+    fn pick(&self) -> &Resolver {
+        let idx = self.index.fetch_add(1, Ordering::Relaxed) % self.resolvers.len();
+        &self.resolvers[idx]
+    }
+
     /// Resolve A + AAAA records for a hostname.
     pub async fn lookup_ips(&self, hostname: &str) -> Vec<IpAddr> {
         let hostname = hostname.trim_end_matches('.');
+        let resolver = self.pick();
         let (a_result, aaaa_result) = tokio::join!(
             async {
-                let query = UniQuery::new(hostname, RecordType::A).ok()?;
-                let lookups = self.resolvers.lookup(query).await.ok()?;
+                let query = MultiQuery::single(hostname, RecordType::A).ok()?;
+                let lookups = resolver.lookup(query).await.ok()?;
                 Some(lookups.ips())
             },
             async {
-                let query = UniQuery::new(hostname, RecordType::AAAA).ok()?;
-                let lookups = self.resolvers.lookup(query).await.ok()?;
+                let query = MultiQuery::single(hostname, RecordType::AAAA).ok()?;
+                let lookups = resolver.lookup(query).await.ok()?;
                 Some(lookups.ips())
             },
         );
@@ -70,13 +79,19 @@ impl DnsResolver {
     /// Resolve MX records. Returns (preference, exchange) tuples.
     pub async fn lookup_mx(&self, domain: &str) -> Vec<(u16, String)> {
         let domain = domain.trim_end_matches('.');
-        let query = match UniQuery::new(domain, RecordType::MX) {
+        let query = match MultiQuery::single(domain, RecordType::MX) {
             Ok(q) => q,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %domain, record_type = "MX", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
-        let lookups = match self.resolvers.lookup(query).await {
+        let lookups = match self.pick().lookup(query).await {
             Ok(l) => l,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %domain, record_type = "MX", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
 
         let mut results: Vec<(u16, String)> = lookups
@@ -94,13 +109,19 @@ impl DnsResolver {
     /// Resolve TXT records for a name.
     pub async fn lookup_txt(&self, name: &str) -> Vec<String> {
         let name = name.trim_end_matches('.');
-        let query = match UniQuery::new(name, RecordType::TXT) {
+        let query = match MultiQuery::single(name, RecordType::TXT) {
             Ok(q) => q,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %name, record_type = "TXT", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
-        let lookups = match self.resolvers.lookup(query).await {
+        let lookups = match self.pick().lookup(query).await {
             Ok(l) => l,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %name, record_type = "TXT", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
 
         let mut results: Vec<String> = lookups.txt().iter().map(|t| t.as_string()).collect();
@@ -131,13 +152,19 @@ impl DnsResolver {
             }
         };
 
-        let query = match UniQuery::new(&arpa, RecordType::PTR) {
+        let query = match MultiQuery::single(arpa.as_str(), RecordType::PTR) {
             Ok(q) => q,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %arpa, record_type = "PTR", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
-        let lookups = match self.resolvers.lookup(query).await {
+        let lookups = match self.pick().lookup(query).await {
             Ok(l) => l,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %arpa, record_type = "PTR", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
 
         let mut results: Vec<String> = lookups.ptr().iter().map(|n| n.to_string()).collect();
@@ -148,13 +175,19 @@ impl DnsResolver {
 
     /// Resolve TLSA records at a given name (e.g., `_25._tcp.mx.example.com`).
     pub async fn lookup_tlsa(&self, name: &str) -> Vec<TlsaRecord> {
-        let query = match UniQuery::new(name, RecordType::TLSA) {
+        let query = match MultiQuery::single(name, RecordType::TLSA) {
             Ok(q) => q,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %name, record_type = "TLSA", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
-        let lookups = match self.resolvers.lookup(query).await {
+        let lookups = match self.pick().lookup(query).await {
             Ok(l) => l,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %name, record_type = "TLSA", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
 
         lookups
@@ -170,27 +203,39 @@ impl DnsResolver {
 
     /// Check CNAME for a given name.
     pub async fn lookup_cname(&self, name: &str) -> Vec<String> {
-        let query = match UniQuery::new(name, RecordType::CNAME) {
+        let query = match MultiQuery::single(name, RecordType::CNAME) {
             Ok(q) => q,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %name, record_type = "CNAME", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
-        let lookups = match self.resolvers.lookup(query).await {
+        let lookups = match self.pick().lookup(query).await {
             Ok(l) => l,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::warn!(query_name = %name, record_type = "CNAME", error = %e, "DNS lookup failed");
+                return Vec::new();
+            }
         };
 
         lookups.cname().iter().map(|n| n.to_string()).collect()
     }
 
-    /// Query a name and check if we get any result (used for DNSBL).
+    /// Query a name and check if we get any result (used for DNSBL / SPF exists:).
     pub async fn lookup_exists(&self, name: &str) -> bool {
-        let query = match UniQuery::new(name, RecordType::A) {
+        let query = match MultiQuery::single(name, RecordType::A) {
             Ok(q) => q,
-            Err(_) => return false,
+            Err(e) => {
+                tracing::warn!(query_name = %name, record_type = "A", error = %e, "DNS lookup failed");
+                return false;
+            }
         };
-        match self.resolvers.lookup(query).await {
+        match self.pick().lookup(query).await {
             Ok(l) => !l.a().is_empty(),
-            Err(_) => false,
+            Err(e) => {
+                tracing::warn!(query_name = %name, record_type = "A", error = %e, "DNS lookup failed");
+                false
+            }
         }
     }
 
@@ -198,13 +243,19 @@ impl DnsResolver {
     /// Since mhost doesn't expose the AD bit, we check if RRSIG records
     /// are returned for the domain's SOA record as a proxy.
     pub async fn check_dnssec_signed(&self, domain: &str) -> bool {
-        let query = match UniQuery::new(domain, RecordType::RRSIG) {
+        let query = match MultiQuery::single(domain, RecordType::RRSIG) {
             Ok(q) => q,
-            Err(_) => return false,
+            Err(e) => {
+                tracing::warn!(query_name = %domain, record_type = "RRSIG", error = %e, "DNS lookup failed");
+                return false;
+            }
         };
-        match self.resolvers.lookup(query).await {
+        match self.pick().lookup(query).await {
             Ok(l) => !l.rrsig().is_empty(),
-            Err(_) => false,
+            Err(e) => {
+                tracing::warn!(query_name = %domain, record_type = "RRSIG", error = %e, "DNS lookup failed");
+                false
+            }
         }
     }
 }

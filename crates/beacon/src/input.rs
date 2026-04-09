@@ -1,5 +1,30 @@
 use crate::error::MailError;
 
+/// Validate a DKIM selector: ASCII alphanumeric + hyphen only, 1-63 chars, no dots.
+pub fn validate_dkim_selector(s: &str) -> Result<(), MailError> {
+    if s.is_empty() {
+        return Err(MailError::InvalidSelector {
+            reason: "selector must not be empty".to_string(),
+        });
+    }
+    if s.len() > 63 {
+        return Err(MailError::InvalidSelector {
+            reason: "selector exceeds 63 characters".to_string(),
+        });
+    }
+    if s.contains('.') {
+        return Err(MailError::InvalidSelector {
+            reason: "selector must not contain dots".to_string(),
+        });
+    }
+    if !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err(MailError::InvalidSelector {
+            reason: "selector contains invalid characters (only ASCII alphanumeric and hyphens allowed)".to_string(),
+        });
+    }
+    Ok(())
+}
+
 /// Parse and validate a domain name input.
 ///
 /// Trims whitespace, lowercases, strips trailing dot, validates labels.

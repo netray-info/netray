@@ -15,6 +15,7 @@ pub use types::{
 /// | 1     | any   | D     |
 /// | 2+    | any   | F     |
 pub fn compute_grade(verdicts: &[Verdict]) -> Grade {
+    // Skip verdicts are excluded from grade calculation
     let fails = verdicts.iter().filter(|v| **v == Verdict::Fail).count();
     let warns = verdicts.iter().filter(|v| **v == Verdict::Warn).count();
 

@@ -1,6 +1,8 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Duration;
 
+use futures::future::join_all;
+
 use crate::config::DnsblConfig;
 use crate::dns::DnsResolver;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
@@ -22,78 +24,100 @@ pub async fn check_dnsbl(
     config: &DnsblConfig,
     resolver: &DnsResolver,
 ) -> CheckResult {
-    let mut sub_checks = Vec::new();
     let timeout = Duration::from_millis(config.timeout_ms);
 
     if mx_ips.is_empty() {
-        sub_checks.push(SubCheck {
+        let sub_checks = vec![SubCheck {
             name: "no_ips".to_string(),
             verdict: Verdict::Info,
             detail: "no MX IPs to check".to_string(),
-        });
+        }];
         return CheckResult::new(Category::Dnsbl, sub_checks, "No MX IPs".to_string());
     }
 
+    // Build all (zone, query_name) pairs to look up in parallel
+    let mut queries: Vec<(String, String)> = Vec::new();
+
     for zone in &config.zones {
         if DOMAIN_ZONES.contains(&zone.as_str()) {
-            // Domain-based lookup
             let query_name = format!("{}.{}", domain, zone);
+            queries.push((zone.clone(), query_name));
+        } else {
+            for ip in mx_ips {
+                let is_ipv4_only = IPV4_ONLY_ZONES.contains(&zone.as_str());
+                if is_ipv4_only && ip.is_ipv6() {
+                    continue;
+                }
+                let reversed = match ip {
+                    IpAddr::V4(v4) => reverse_ipv4(*v4),
+                    IpAddr::V6(v6) => reverse_ipv6(*v6),
+                };
+                let query_name = format!("{}.{}", reversed, zone);
+                queries.push((zone.clone(), query_name));
+            }
+        }
+    }
+
+    // Execute all queries in parallel
+    let futures = queries.iter().map(|(zone, query_name)| {
+        let zone = zone.clone();
+        let query_name = query_name.clone();
+        async move {
             match tokio::time::timeout(timeout, resolver.lookup_exists(&query_name)).await {
-                Ok(true) => {
-                    let zone_slug = zone.replace('.', "_");
+                Ok(true) => Some((zone, query_name, true)),
+                Ok(false) => None,
+                Err(_) => {
+                    tracing::debug!(zone = %zone, query_name = %query_name, "DNSBL query timed out");
+                    Some((zone, query_name, false)) // timed out, treat as timeout marker
+                }
+            }
+        }
+    });
+
+    let results: Vec<_> = join_all(futures).await;
+
+    let mut sub_checks = Vec::new();
+
+    // Track which zones timed out vs listed
+    let mut timed_out_zones: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for result_opt in results {
+        if let Some((zone, query_name, listed)) = result_opt {
+            if listed {
+                // Check if this was actually a listing or a timeout marker
+                // We need to distinguish: re-examine by checking if original lookup returned true
+                // The structure above: Ok(true) -> Some((zone, _, true)), Err(_) -> Some((zone, _, false))
+                // So `listed == true` means it was actually listed
+                let zone_slug = zone.replace('.', "_");
+                // Determine if it's a domain-based or IP-based listing
+                if DOMAIN_ZONES.contains(&zone.as_str()) {
                     sub_checks.push(SubCheck {
                         name: format!("listed_{}", zone_slug),
                         verdict: Verdict::Fail,
                         detail: format!("domain {} listed in {}", domain, zone),
                     });
-                }
-                Ok(false) => {} // Not listed
-                Err(_) => {
-                    tracing::debug!(zone = %zone, "DNSBL zone timed out");
-                    sub_checks.push(SubCheck {
-                        name: "zone_unreachable".to_string(),
-                        verdict: Verdict::Info,
-                        detail: format!("zone {} unreachable", zone),
-                    });
-                }
-            }
-            continue;
-        }
-
-        // IP-based lookup
-        for ip in mx_ips {
-            let is_ipv4_only = IPV4_ONLY_ZONES.contains(&zone.as_str());
-            if is_ipv4_only && ip.is_ipv6() {
-                continue;
-            }
-
-            let reversed = match ip {
-                IpAddr::V4(v4) => reverse_ipv4(*v4),
-                IpAddr::V6(v6) => reverse_ipv6(*v6),
-            };
-
-            let query_name = format!("{}.{}", reversed, zone);
-
-            match tokio::time::timeout(timeout, resolver.lookup_exists(&query_name)).await {
-                Ok(true) => {
-                    let zone_slug = zone.replace('.', "_");
+                } else {
+                    // Extract original IP from query name
                     sub_checks.push(SubCheck {
                         name: format!("listed_{}", zone_slug),
                         verdict: Verdict::Fail,
-                        detail: format!("IP {} listed in {}", ip, zone),
+                        detail: format!("{} listed in {}", query_name.trim_end_matches(&format!(".{}", zone)), zone),
                     });
                 }
-                Ok(false) => {} // Not listed
-                Err(_) => {
-                    tracing::debug!(zone = %zone, ip = %ip, "DNSBL query timed out");
-                    sub_checks.push(SubCheck {
-                        name: "zone_unreachable".to_string(),
-                        verdict: Verdict::Info,
-                        detail: format!("zone {} unreachable for {}", zone, ip),
-                    });
-                }
+            } else {
+                // Timed out
+                timed_out_zones.insert(zone);
             }
         }
+    }
+
+    // Add one info sub-check per timed out zone
+    for zone in timed_out_zones {
+        sub_checks.push(SubCheck {
+            name: "zone_unreachable".to_string(),
+            verdict: Verdict::Info,
+            detail: format!("zone {} unreachable", zone),
+        });
     }
 
     if sub_checks.is_empty() {

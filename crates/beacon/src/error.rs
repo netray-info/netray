@@ -4,7 +4,6 @@ use axum::response::{IntoResponse, Response};
 pub use netray_common::error::ErrorResponse;
 
 #[derive(Debug, thiserror::Error)]
-#[allow(dead_code)]
 pub enum MailError {
     #[error("invalid domain: {0}")]
     InvalidDomain(String),
@@ -21,6 +20,9 @@ pub enum MailError {
     #[error("too many DKIM selectors (max {max})")]
     TooManySelectors { max: usize },
 
+    #[error("invalid DKIM selector: {reason}")]
+    InvalidSelector { reason: String },
+
     #[error("internal error: {0}")]
     Internal(String),
 
@@ -35,6 +37,7 @@ impl netray_common::error::ApiError for MailError {
             Self::BlockedTarget => StatusCode::BAD_REQUEST,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             Self::TooManySelectors { .. } => StatusCode::BAD_REQUEST,
+            Self::InvalidSelector { .. } => StatusCode::BAD_REQUEST,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::DnsError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -46,6 +49,7 @@ impl netray_common::error::ApiError for MailError {
             Self::BlockedTarget => "INVALID_TARGET",
             Self::RateLimited { .. } => "RATE_LIMITED",
             Self::TooManySelectors { .. } => "INVALID_DOMAIN",
+            Self::InvalidSelector { .. } => "INVALID_SELECTOR",
             Self::Internal(_) => "INTERNAL_ERROR",
             Self::DnsError(_) => "INTERNAL_ERROR",
         }

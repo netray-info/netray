@@ -49,8 +49,8 @@ pub async fn check_spf(
     let spf = spf_records[0];
     let mechanisms: Vec<&str> = spf.split_whitespace().skip(1).collect(); // skip "v=spf1"
 
-    let mut lookup_count: u8 = 0;
-    let mut void_count: u8 = 0;
+    let mut lookup_count: u16 = 0;
+    let mut void_count: u16 = 0;
     let mut visited = HashSet::new();
     visited.insert(domain.to_string());
     let mut authorized_prefixes = Vec::new();
@@ -100,7 +100,7 @@ pub async fn check_spf(
             }
             _ if body.starts_with("include:") => {
                 if let Some(include_domain) = body.strip_prefix("include:") {
-                    lookup_count += 1;
+                    lookup_count = lookup_count.saturating_add(1);
                     if !visited.contains(include_domain) {
                         expand_spf(
                             include_domain,
@@ -127,7 +127,7 @@ pub async fn check_spf(
             }
             _ if body.starts_with("redirect=") => {
                 if let Some(redirect_domain) = body.strip_prefix("redirect=") {
-                    lookup_count += 1;
+                    lookup_count = lookup_count.saturating_add(1);
                     if !visited.contains(redirect_domain) {
                         expand_spf(
                             redirect_domain,
@@ -143,8 +143,8 @@ pub async fn check_spf(
                     }
                 }
             }
-            _ if body.starts_with("a:") || body.starts_with("a") => {
-                lookup_count += 1;
+            _ if body == "a" || body.starts_with("a:") => {
+                lookup_count = lookup_count.saturating_add(1);
                 let target = if body.starts_with("a:") {
                     body.strip_prefix("a:").unwrap_or(domain)
                 } else {
@@ -162,7 +162,7 @@ pub async fn check_spf(
                 }
             }
             _ if body.starts_with("mx:") || body == "mx" => {
-                lookup_count += 1;
+                lookup_count = lookup_count.saturating_add(1);
                 let target = if body.starts_with("mx:") {
                     body.strip_prefix("mx:").unwrap_or(domain)
                 } else {
@@ -187,11 +187,11 @@ pub async fn check_spf(
                 has_ptr = true;
             }
             _ if body.starts_with("exists:") => {
-                lookup_count += 1;
+                lookup_count = lookup_count.saturating_add(1);
                 if let Some(exists_domain) = body.strip_prefix("exists:") {
-                    let txt = resolver.lookup_txt(exists_domain).await;
-                    if txt.is_empty() {
-                        void_count += 1;
+                    let found = resolver.lookup_exists(exists_domain).await;
+                    if !found {
+                        void_count = void_count.saturating_add(1);
                     }
                 }
             }
@@ -265,11 +265,11 @@ fn expand_spf<'a>(
     resolver: &'a DnsResolver,
     visited: &'a mut HashSet<String>,
     depth: u8,
-    lookup_count: &'a mut u8,
-    void_count: &'a mut u8,
+    lookup_count: &'a mut u16,
+    void_count: &'a mut u16,
     authorized_prefixes: &'a mut Vec<IpNet>,
     sub_checks: &'a mut Vec<SubCheck>,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + 'a>> {
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
     Box::pin(async move {
     if depth > 10 {
         sub_checks.push(SubCheck {
@@ -290,7 +290,7 @@ fn expand_spf<'a>(
         .collect();
 
     if spf_records.is_empty() {
-        *void_count += 1;
+        *void_count = void_count.saturating_add(1);
         return;
     }
 
@@ -315,7 +315,7 @@ fn expand_spf<'a>(
             }
         } else if body.starts_with("include:") {
             if let Some(include_domain) = body.strip_prefix("include:") {
-                *lookup_count += 1;
+                *lookup_count = lookup_count.saturating_add(1);
                 if visited.contains(include_domain) {
                     sub_checks.push(SubCheck {
                         name: "spf_loop".to_string(),
@@ -338,7 +338,7 @@ fn expand_spf<'a>(
             }
         } else if body.starts_with("redirect=") {
             if let Some(redirect_domain) = body.strip_prefix("redirect=") {
-                *lookup_count += 1;
+                *lookup_count = lookup_count.saturating_add(1);
                 if !visited.contains(redirect_domain) {
                     expand_spf(
                         redirect_domain,
@@ -353,8 +353,8 @@ fn expand_spf<'a>(
                     .await;
                 }
             }
-        } else if body.starts_with("a:") || body == "a" {
-            *lookup_count += 1;
+        } else if body == "a" || body.starts_with("a:") {
+            *lookup_count = lookup_count.saturating_add(1);
             let target = if body.starts_with("a:") {
                 body.strip_prefix("a:").unwrap_or(domain)
             } else {
@@ -371,7 +371,7 @@ fn expand_spf<'a>(
                 }
             }
         } else if body.starts_with("mx:") || body == "mx" {
-            *lookup_count += 1;
+            *lookup_count = lookup_count.saturating_add(1);
             let target = if body.starts_with("mx:") {
                 body.strip_prefix("mx:").unwrap_or(domain)
             } else {
@@ -392,11 +392,11 @@ fn expand_spf<'a>(
                 }
             }
         } else if body.starts_with("exists:") {
-            *lookup_count += 1;
+            *lookup_count = lookup_count.saturating_add(1);
             if let Some(exists_domain) = body.strip_prefix("exists:") {
-                let txt = resolver.lookup_txt(exists_domain).await;
-                if txt.is_empty() {
-                    *void_count += 1;
+                let found = resolver.lookup_exists(exists_domain).await;
+                if !found {
+                    *void_count = void_count.saturating_add(1);
                 }
             }
         }

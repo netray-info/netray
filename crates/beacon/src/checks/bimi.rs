@@ -1,3 +1,4 @@
+use crate::checks::util;
 use crate::dns::DnsResolver;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
@@ -34,7 +35,7 @@ pub async fn check_bimi(
     }
 
     let record = bimi_records[0];
-    let tags = parse_bimi_tags(record);
+    let tags = util::parse_tags(record);
 
     let logo_url = tags.get("l").cloned();
     let vmc_url = tags.get("a").cloned();
@@ -66,11 +67,32 @@ pub async fn check_bimi(
             let fetch_start = std::time::Instant::now();
             match http_client_follow.head(url).send().await {
                 Ok(resp) if resp.status().is_success() => {
-                    sub_checks.push(SubCheck {
-                        name: "logo_reachable".to_string(),
-                        verdict: Verdict::Pass,
-                        detail: format!("logo reachable at {}", url),
-                    });
+                    // Post-redirect SSRF check
+                    if let Some(final_host) = resp.url().host_str().map(|s| s.to_string()) {
+                        let final_ips = resolver.lookup_ips(&final_host).await;
+                        let redirect_blocked = final_ips
+                            .iter()
+                            .any(|ip| !netray_common::target_policy::is_allowed_target(*ip));
+                        if redirect_blocked {
+                            sub_checks.push(SubCheck {
+                                name: "logo_redirect_ssrf_blocked".to_string(),
+                                verdict: Verdict::Fail,
+                                detail: "BIMI logo URL redirects to private address".to_string(),
+                            });
+                        } else {
+                            sub_checks.push(SubCheck {
+                                name: "logo_reachable".to_string(),
+                                verdict: Verdict::Pass,
+                                detail: format!("logo reachable at {}", url),
+                            });
+                        }
+                    } else {
+                        sub_checks.push(SubCheck {
+                            name: "logo_reachable".to_string(),
+                            verdict: Verdict::Pass,
+                            detail: format!("logo reachable at {}", url),
+                        });
+                    }
                 }
                 Ok(resp) => {
                     sub_checks.push(SubCheck {
@@ -127,15 +149,4 @@ fn extract_host(url: &str) -> Option<String> {
         return None;
     }
     Some(host.to_string())
-}
-
-fn parse_bimi_tags(record: &str) -> std::collections::HashMap<String, String> {
-    let mut tags = std::collections::HashMap::new();
-    for part in record.split(';') {
-        let part = part.trim();
-        if let Some((key, value)) = part.split_once('=') {
-            tags.insert(key.trim().to_lowercase(), value.trim().to_string());
-        }
-    }
-    tags
 }

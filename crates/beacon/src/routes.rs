@@ -1,11 +1,15 @@
+use std::convert::Infallible;
 use std::net::SocketAddr;
 
-use axum::extract::{ConnectInfo, Path, State};
+use axum::extract::{ConnectInfo, Path, Query, State};
+use axum::response::sse::KeepAlive;
 use axum::response::{Html, IntoResponse, Sse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use futures::stream;
 use serde::{Deserialize, Serialize};
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+use tracing::Instrument;
 use utoipa::{OpenApi, ToSchema};
 
 use crate::checks;
@@ -38,6 +42,12 @@ pub struct InspectRequest {
     pub domain: String,
     #[serde(default)]
     pub dkim_selectors: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InspectQuery {
+    #[serde(default)]
+    pub selector: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +97,52 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api-docs/openapi.json", get(openapi_handler))
         .route("/docs", get(docs_handler))
         .with_state(state)
+}
+
+// ---------------------------------------------------------------------------
+// Shared inspect logic
+// ---------------------------------------------------------------------------
+
+#[tracing::instrument(
+    skip(state),
+    fields(client_ip = tracing::field::Empty, domain = tracing::field::Empty)
+)]
+async fn do_inspect(
+    domain: String,
+    selectors: Vec<String>,
+    client_ip: std::net::IpAddr,
+    state: AppState,
+) -> Result<Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>, MailError> {
+    tracing::Span::current().record("domain", &domain.as_str());
+    tracing::Span::current().record("client_ip", client_ip.to_string().as_str());
+
+    let (tx, rx) = tokio::sync::mpsc::channel::<crate::quality::SseEvent>(32);
+
+    let span = tracing::Span::current();
+    tokio::spawn(
+        checks::run_all_checks(
+            domain,
+            selectors,
+            state.config.clone(),
+            state.dns_resolver.clone(),
+            state.http_client.clone(),
+            state.http_client_follow.clone(),
+            state.enrichment_client.clone(),
+            tx,
+        )
+        .instrument(span),
+    );
+
+    let stream = ReceiverStream::new(rx).map(|event| {
+        let sse_event: axum::response::sse::Event = event.into();
+        Ok::<_, Infallible>(sse_event)
+    });
+
+    Ok(Sse::new(stream).keep_alive(
+        KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text("keepalive"),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +221,7 @@ async fn inspect_post_handler(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: axum::http::HeaderMap,
     Json(body): Json<InspectRequest>,
-) -> Result<Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>>, MailError>
+) -> Result<Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>, MailError>
 {
     let domain = crate::input::parse_domain(&body.domain)?;
 
@@ -175,7 +231,10 @@ async fn inspect_post_handler(
         });
     }
 
-    // Rate limiting
+    for s in &body.dkim_selectors {
+        crate::input::validate_dkim_selector(s)?;
+    }
+
     let client_ip = state.ip_extractor.extract(&headers, peer);
     if let Err(e) = state.rate_limiter.check(client_ip) {
         metrics::counter!("beacon_rate_limit_rejections_total").increment(1);
@@ -184,24 +243,7 @@ async fn inspect_post_handler(
 
     metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "post").increment(1);
 
-    let events = checks::run_all_checks(
-        domain,
-        body.dkim_selectors,
-        state.config.clone(),
-        state.http_client.clone(),
-        state.http_client_follow.clone(),
-        state.enrichment_client.clone(),
-    )
-    .await;
-
-    metrics::counter!("beacon_sse_events_total").increment(events.len() as u64);
-
-    let sse_stream = stream::iter(events.into_iter().map(|event| {
-        let sse_event: axum::response::sse::Event = event.into();
-        Ok::<_, std::convert::Infallible>(sse_event)
-    }));
-
-    Ok(Sse::new(sse_stream))
+    do_inspect(domain, body.dkim_selectors, client_ip, state).await
 }
 
 #[utoipa::path(
@@ -221,14 +263,24 @@ async fn inspect_get_handler(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: axum::http::HeaderMap,
     Path(raw_domain): Path<String>,
-) -> Result<Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>>, MailError>
+    Query(query): Query<InspectQuery>,
+) -> Result<Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>, MailError>
 {
     let decoded = percent_encoding::percent_decode_str(&raw_domain)
         .decode_utf8_lossy()
         .to_string();
     let domain = crate::input::parse_domain(&decoded)?;
 
-    // Rate limiting
+    if query.selector.len() > state.config.dkim.max_user_selectors {
+        return Err(MailError::TooManySelectors {
+            max: state.config.dkim.max_user_selectors,
+        });
+    }
+
+    for s in &query.selector {
+        crate::input::validate_dkim_selector(s)?;
+    }
+
     let client_ip = state.ip_extractor.extract(&headers, peer);
     if let Err(e) = state.rate_limiter.check(client_ip) {
         metrics::counter!("beacon_rate_limit_rejections_total").increment(1);
@@ -237,24 +289,7 @@ async fn inspect_get_handler(
 
     metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "get").increment(1);
 
-    let events = checks::run_all_checks(
-        domain,
-        Vec::new(),
-        state.config.clone(),
-        state.http_client.clone(),
-        state.http_client_follow.clone(),
-        state.enrichment_client.clone(),
-    )
-    .await;
-
-    metrics::counter!("beacon_sse_events_total").increment(events.len() as u64);
-
-    let sse_stream = stream::iter(events.into_iter().map(|event| {
-        let sse_event: axum::response::sse::Event = event.into();
-        Ok::<_, std::convert::Infallible>(sse_event)
-    }));
-
-    Ok(Sse::new(sse_stream))
+    do_inspect(domain, query.selector, client_ip, state).await
 }
 
 async fn openapi_handler() -> impl IntoResponse {

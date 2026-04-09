@@ -1,5 +1,7 @@
 use std::sync::OnceLock;
 
+use futures::future::join_all;
+
 use crate::dns::DnsResolver;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
@@ -74,36 +76,47 @@ pub async fn check_dkim(
         candidates.push(("default".to_string(), SelectorSource::Default));
     }
 
+    // Parallelize all selector lookups
+    let lookup_futures = candidates.iter().map(|(selector, source)| {
+        let name = format!("{}._domainkey.{}", selector, domain);
+        async move {
+            // Follow CNAME chains up to 5 hops
+            let mut current_name = name.clone();
+            let mut hops = 0;
+            loop {
+                let cnames = resolver.lookup_cname(&current_name).await;
+                if cnames.is_empty() {
+                    break;
+                }
+                hops += 1;
+                if hops > 5 {
+                    break;
+                }
+                current_name = cnames[0].trim_end_matches('.').to_string();
+            }
+            let txt_records = if hops > 5 {
+                Vec::new()
+            } else {
+                resolver.lookup_txt(&current_name).await
+            };
+            (selector, source, hops, txt_records)
+        }
+    });
+
+    let results = join_all(lookup_futures).await;
+
     let mut found_any = false;
 
-    for (selector, source) in &candidates {
-        let name = format!("{}._domainkey.{}", selector, domain);
-
-        // Follow CNAME chains up to 5 hops
-        let mut current_name = name.clone();
-        let mut hops = 0;
-        loop {
-            let cnames = resolver.lookup_cname(&current_name).await;
-            if cnames.is_empty() {
-                break;
-            }
-            hops += 1;
-            if hops > 5 {
-                sub_checks.push(SubCheck {
-                    name: "cname_loop".to_string(),
-                    verdict: Verdict::Fail,
-                    detail: "CNAME chain too deep (>5)".to_string(),
-                });
-                break;
-            }
-            current_name = cnames[0].trim_end_matches('.').to_string();
-        }
-
+    for (selector, source, hops, txt_records) in results {
         if hops > 5 {
+            sub_checks.push(SubCheck {
+                name: "cname_loop".to_string(),
+                verdict: Verdict::Fail,
+                detail: "CNAME chain too deep (>5)".to_string(),
+            });
             continue;
         }
 
-        let txt_records = resolver.lookup_txt(&current_name).await;
         if txt_records.is_empty() {
             // NXDOMAIN handling
             if matches!(source, SelectorSource::User) {

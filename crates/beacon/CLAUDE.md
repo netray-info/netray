@@ -10,21 +10,23 @@ Given a domain, checks 12 email security categories (MX, SPF, DKIM, DMARC, MTA-S
 
 Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows suite patterns.
 
-- `src/dns/resolver.rs` -- DnsResolver wrapping mhost ResolverGroup (per-request, !Send)
-- `src/checks/` -- 11 category check modules + cross_validation + orchestrator (mod.rs)
-- `src/checks/mod.rs` -- `run_all_checks` uses `spawn_blocking` + current-thread runtime + `LocalSet` to isolate mhost's !Send futures from axum's Send requirement
-- `src/quality/` -- Verdict/Grade types, grade computation (0F/0W->A, 0F/1-2W->B, 0F/3+W->C, 1F->D, 2+F->F)
-- `src/input.rs` -- Domain validation (label rules, length limits)
-- `src/routes.rs` -- API handlers, health/ready endpoints
+- `src/dns/resolver.rs` -- DnsResolver backed by `Vec<Resolver>` + `AtomicUsize` for round-robin (Send + Sync); built once at startup
+- `src/checks/` -- 11 category check modules + cross_validation + orchestrator (mod.rs) + util (parse_tags)
+- `src/checks/mod.rs` -- `run_all_checks` streams SSE via mpsc channel; three-phase execution with `JoinSet`
+- `src/quality/` -- Verdict/Grade types, grade computation (0F/0W->A, 0F/1-2W->B, 0F/3+W->C, 1F->D, 2+F->F; Skip excluded)
+- `src/input.rs` -- Domain validation (label rules, length limits) + DKIM selector validation
+- `src/routes.rs` -- API handlers (`do_inspect` shared logic), health/ready endpoints
 - `src/security/` -- IP extraction, rate limiting, security headers (delegates to netray-common)
 
 ### Key design decisions
 
-- **!Send workaround**: mhost's `ResolverGroup::lookup()` returns !Send futures (internal `Rc<ThreadRng>`). Solved by creating a fresh DnsResolver per request inside `tokio::task::spawn_blocking` with a `tokio::runtime::Builder::new_current_thread()` runtime + `LocalSet`. This isolates all DNS work on a dedicated thread where !Send is fine.
+- **DNS resolver**: Shared `DnsResolver` built at startup. `ResolverGroup::resolvers()` returns `&[Resolver]`; stored as `Vec<Resolver>` with round-robin via `AtomicUsize`. Each request calls `self.pick().lookup(MultiQuery::single(...))` which returns a `Send` future — no `spawn_blocking`, no `LocalSet`.
+- **Three-phase SSE streaming**: Phase 0 (MX, SPF, DMARC, TLS-RPT, DNSSEC, BIMI) runs in parallel via `JoinSet`, emitting each result immediately to the SSE channel. Phase 1 (DKIM, MTA-STS, DANE, FCrDNS, DNSBL) runs in parallel after all Phase 0 tasks complete. Phase 2 (cross-validation, grade) runs sequentially and emits the Summary event.
+- **30-second timeout**: `tokio::time::timeout` wraps `run_inspection_inner`; on expiry a partial Summary with `Verdict::Skip` is emitted.
 - **DKIM selectors**: Static provider map (Google, Outlook, Amazon SES, Proofpoint, Mimecast) + user-supplied. No brute-force enumeration.
 - **DNSSEC**: Uses RRSIG record presence as proxy (mhost doesn't expose AD bit).
-- **MTA-STS**: No-redirect HTTP client per RFC 8461 section 3.3.
-- **SPF expansion**: Recursive with depth cap (10), loop detection via visited set, void lookup counting.
+- **MTA-STS**: No-redirect HTTP client per RFC 8461 section 3.3. Policy body capped at 64KB.
+- **SPF expansion**: Recursive with depth cap (10), loop detection via visited set, void lookup counting (u16 + saturating_add).
 
 ## Config
 

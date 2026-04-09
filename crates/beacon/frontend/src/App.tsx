@@ -50,6 +50,7 @@ export default function App() {
   const [summary, setSummary] = createSignal<SummaryEvent | null>(null);
   const [expandAll, setExpandAll] = createSignal(false);
   const [openSections, setOpenSections] = createSignal<Set<Category>>(new Set());
+  const [completedCount, setCompletedCount] = createSignal(0);
 
   let abortRef: AbortController | null = null;
 
@@ -97,6 +98,7 @@ export default function App() {
     setError(null);
     setCategories(new Map());
     setSummary(null);
+    setCompletedCount(0);
     setLoading(true);
 
     // Update URL
@@ -114,6 +116,7 @@ export default function App() {
             next.set(event.category, event);
             return next;
           });
+          setCompletedCount((c) => c + 1);
         } else if (event.type === 'summary') {
           setSummary(event);
         }
@@ -157,7 +160,8 @@ export default function App() {
     });
   }
 
-  const hasResults = () => categories().size > 0 || summary() !== null;
+  const hasResults = () => categories().size > 0 || summary() !== null || loading();
+  const isDone = () => summary() !== null && !loading();
   const isIdle = () => !hasResults() && !loading() && !error();
 
   function verdictCounts(): Record<Verdict, number> {
@@ -197,6 +201,8 @@ export default function App() {
                 role="combobox"
                 aria-label="Domain to inspect"
                 aria-expanded={showHistory() && getHistory().length > 0}
+                aria-autocomplete="list"
+                aria-controls="history-listbox"
                 autocomplete="off"
                 spellcheck={false}
               />
@@ -211,7 +217,14 @@ export default function App() {
                 </button>
               </Show>
               <Show when={showHistory() && getHistory().length > 0}>
-                <ul class="history-dropdown" role="listbox">
+                <ul
+                  class="history-dropdown"
+                  id="history-listbox"
+                  role="listbox"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setShowHistory(false);
+                  }}
+                >
                   <For each={getHistory()}>
                     {(item) => (
                       <li
@@ -251,6 +264,7 @@ export default function App() {
               type="text"
               class="selector-input"
               placeholder="Add selector"
+              aria-label="DKIM selectors (comma-separated)"
               value={selectorInput()}
               onInput={(e) => setSelectorInput(e.currentTarget.value)}
               onKeyDown={(e) => {
@@ -307,7 +321,7 @@ export default function App() {
               )}
             </Show>
 
-            <Show when={categories().size > 0}>
+            <Show when={categories().size > 0 && !loading()}>
               <div class="verdict-strip">
                 {(['pass', 'warn', 'fail', 'info'] as Verdict[]).map((v) => (
                   <span class={`verdict-strip__chip badge badge--${v}`}>
@@ -327,7 +341,16 @@ export default function App() {
                 {(cat) => {
                   const result = () => categories().get(cat);
                   return (
-                    <Show when={result()}>
+                    <Show
+                      when={result()}
+                      fallback={
+                        <Show when={loading()}>
+                          <div class="card--pending">
+                            <span class="section-card__title">{CATEGORY_LABELS[cat]}</span>
+                          </div>
+                        </Show>
+                      }
+                    >
                       {(r) => (
                         <CategorySection
                           result={r()}
@@ -343,11 +366,11 @@ export default function App() {
 
             <Show when={loading()}>
               <div class="loading-indicator" role="status" aria-live="polite">
-                Checking remaining categories...
+                {completedCount()} of 12 checks complete
               </div>
             </Show>
 
-            <Show when={!loading() && summary()}>
+            <Show when={isDone()}>
               <div class="cross-links">
                 <CrossLink
                   href={`${meta()?.ecosystem?.dns_base_url ?? 'https://dns.netray.info'}/?q=${encodeURIComponent(domain())}`}

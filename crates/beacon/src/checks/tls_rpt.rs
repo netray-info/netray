@@ -1,3 +1,4 @@
+use crate::checks::util;
 use crate::dns::DnsResolver;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
@@ -33,7 +34,7 @@ pub async fn check_tls_rpt(
     }
 
     let record = tls_rpt_records[0];
-    let tags = parse_tls_rpt_tags(record);
+    let tags = util::parse_tags(record);
 
     // Syntax check: must have v=TLSRPTv1 as first tag and contain at least rua
     if !tags.contains_key("rua") && tags.len() <= 1 {
@@ -89,13 +90,3 @@ pub async fn check_tls_rpt(
     (result, true)
 }
 
-fn parse_tls_rpt_tags(record: &str) -> std::collections::HashMap<String, String> {
-    let mut tags = std::collections::HashMap::new();
-    for part in record.split(';') {
-        let part = part.trim();
-        if let Some((key, value)) = part.split_once('=') {
-            tags.insert(key.trim().to_lowercase(), value.trim().to_string());
-        }
-    }
-    tags
-}

@@ -1,3 +1,4 @@
+use crate::checks::util;
 use crate::dns::DnsResolver;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
@@ -43,7 +44,7 @@ pub async fn check_dmarc(
     }
 
     let record = dmarc_records[0];
-    let tags = parse_dmarc_tags(record);
+    let tags = util::parse_tags(record);
 
     let policy = tags.get("p").cloned();
     let sub_policy = tags.get("sp").cloned();
@@ -86,17 +87,6 @@ pub async fn check_dmarc(
                 detail: "missing or invalid p= tag".to_string(),
             });
         }
-    }
-
-    // Subdomain policy gap
-    if policy.as_deref() == Some("reject")
-        && sub_policy.as_deref() == Some("none")
-    {
-        sub_checks.push(SubCheck {
-            name: "sp_gap".to_string(),
-            verdict: Verdict::Warn,
-            detail: "subdomains unprotected".to_string(),
-        });
     }
 
     // Percentage checks
@@ -204,17 +194,6 @@ pub async fn check_dmarc(
     let result = CheckResult::new(Category::Dmarc, sub_checks, detail);
 
     (result, policy, sub_policy, rua_external_auth_ok)
-}
-
-fn parse_dmarc_tags(record: &str) -> std::collections::HashMap<String, String> {
-    let mut tags = std::collections::HashMap::new();
-    for part in record.split(';') {
-        let part = part.trim();
-        if let Some((key, value)) = part.split_once('=') {
-            tags.insert(key.trim().to_lowercase(), value.trim().to_string());
-        }
-    }
-    tags
 }
 
 /// Extract domains from rua/ruf URIs like "mailto:reports@example.com,mailto:dmarc@third.example.com"

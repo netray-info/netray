@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::net::IpAddr;
 
+use futures::future::join_all;
+
 use crate::dns::DnsResolver;
 use crate::quality::{Category, CheckResult, IpEnrichment, SubCheck, Verdict};
 
@@ -137,19 +139,26 @@ pub async fn check_mx(
     }
 
     // Enrichment (best-effort) — data included in MX event for frontend badges
-    let mut enrichment_data = Vec::new();
-    if let Some(client) = enrichment {
-        for ip in &all_ips {
-            if let Some(info) = client.lookup(*ip, None).await {
-                enrichment_data.push(IpEnrichment {
-                    ip: ip.to_string(),
-                    asn: info.asn,
-                    org: info.org.clone(),
-                    ip_type: info.ip_type.clone(),
-                });
+    let enrichment_data = if let Some(client) = enrichment {
+        let enrich_futures = all_ips.iter().map(|ip| {
+            let ip = *ip;
+            async move {
+                if let Some(info) = client.lookup(ip, None).await {
+                    Some(IpEnrichment {
+                        ip: ip.to_string(),
+                        asn: info.asn,
+                        org: info.org.clone(),
+                        ip_type: info.ip_type.clone(),
+                    })
+                } else {
+                    None
+                }
             }
-        }
-    }
+        });
+        join_all(enrich_futures).await.into_iter().flatten().collect()
+    } else {
+        Vec::new()
+    };
 
     let detail = format!(
         "{} MX record(s), {} IP(s)",

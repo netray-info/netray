@@ -1,3 +1,4 @@
+use crate::checks::util;
 use crate::dns::DnsResolver;
 use crate::quality::{Category, CheckResult, MtaStsInfo, SubCheck, Verdict};
 
@@ -5,7 +6,7 @@ use crate::quality::{Category, CheckResult, MtaStsInfo, SubCheck, Verdict};
 /// Returns (CheckResult, Option<MtaStsInfo>).
 pub async fn check_mta_sts(
     domain: &str,
-    mx_hosts: &[String],
+    _mx_hosts: &[String],
     resolver: &DnsResolver,
     http_client: &reqwest::Client,
 ) -> (CheckResult, Option<MtaStsInfo>) {
@@ -36,7 +37,7 @@ pub async fn check_mta_sts(
     }
 
     let dns_record = sts_records[0];
-    let dns_tags = parse_sts_tags(dns_record);
+    let dns_tags = util::parse_tags(dns_record);
     let dns_id = dns_tags.get("id").cloned().unwrap_or_default();
 
     // Step 2: Fetch HTTPS policy
@@ -153,7 +154,7 @@ pub async fn check_mta_sts(
         });
     }
 
-    let body = match response.text().await {
+    let raw_bytes = match response.bytes().await {
         Ok(b) => b,
         Err(e) => {
             sub_checks.push(SubCheck {
@@ -175,6 +176,46 @@ pub async fn check_mta_sts(
             return (result, Some(info));
         }
     };
+
+    let truncated = raw_bytes.len() > 65_536;
+    let body_bytes = &raw_bytes[..raw_bytes.len().min(65_536)];
+    let body = match std::str::from_utf8(body_bytes) {
+        Ok(s) => s.to_string(),
+        Err(_) => {
+            if truncated {
+                sub_checks.push(SubCheck {
+                    name: "body_truncated".to_string(),
+                    verdict: Verdict::Warn,
+                    detail: "policy body exceeds 64KB, truncated".to_string(),
+                });
+            }
+            sub_checks.push(SubCheck {
+                name: "https_fetch_failed".to_string(),
+                verdict: Verdict::Fail,
+                detail: "policy body is not valid UTF-8".to_string(),
+            });
+            let info = MtaStsInfo {
+                dns_id,
+                policy_id: None,
+                mode: None,
+                mx_patterns: Vec::new(),
+            };
+            let result = CheckResult::new(
+                Category::MtaSts,
+                sub_checks,
+                "MTA-STS body read failed".to_string(),
+            );
+            return (result, Some(info));
+        }
+    };
+
+    if truncated {
+        sub_checks.push(SubCheck {
+            name: "body_truncated".to_string(),
+            verdict: Verdict::Warn,
+            detail: "policy body exceeds 64KB, truncated".to_string(),
+        });
+    }
 
     // Parse policy — MTA-STS policy files do NOT contain an `id` field per RFC 8461.
     // The `id` is only in the DNS TXT record. However, some implementations include
@@ -257,39 +298,10 @@ pub async fn check_mta_sts(
         });
     }
 
-    // MX coverage check
-    for mx_host in mx_hosts {
-        let mx_lower = mx_host.to_lowercase();
-        let covered = mx_patterns.iter().any(|pattern| {
-            let pattern = pattern.to_lowercase();
-            if let Some(suffix) = pattern.strip_prefix("*.") {
-                mx_lower.ends_with(&format!(".{}", suffix)) || mx_lower == suffix
-            } else {
-                mx_lower == pattern
-            }
-        });
-        if !covered {
-            sub_checks.push(SubCheck {
-                name: "mx_not_covered".to_string(),
-                verdict: Verdict::Warn,
-                detail: format!("MX {} not covered by MTA-STS policy", mx_host),
-            });
-        }
-    }
+    // MX coverage check is now performed in cross_validation.rs
 
     let detail = format!("MTA-STS id={}", dns_id);
     let result = CheckResult::new(Category::MtaSts, sub_checks, detail);
 
     (result, Some(info))
-}
-
-fn parse_sts_tags(record: &str) -> std::collections::HashMap<String, String> {
-    let mut tags = std::collections::HashMap::new();
-    for part in record.split(';') {
-        let part = part.trim();
-        if let Some((key, value)) = part.split_once('=') {
-            tags.insert(key.trim().to_lowercase(), value.trim().to_string());
-        }
-    }
-    tags
 }
