@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.3] - 2026-04-09
+
+### Fixed
+- Extract parseBatchEvent to separate module to fix vitest CI (6778f1b)
+
+### Changed
+- Move health and ready probes to root-level paths (33c0541)
+- Condense CLAUDE.md rules and principles to avoid global duplication (f2984a7)
+- Deduplicate frontend-rules and update spec paths in CLAUDE.md (9fced6f)
+
 ## [0.8.2] - 2026-04-09
 
 ### Fixed
