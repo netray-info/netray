@@ -13,9 +13,12 @@ pub enum CheckStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QualityCheck {
     pub name: String,
+    pub label: String,
     pub status: CheckStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub explanation: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -45,13 +48,17 @@ mod tests {
         let checks = vec![
             QualityCheck {
                 name: "a".into(),
+                label: "a".into(),
                 status: CheckStatus::Pass,
                 message: None,
+                explanation: None,
             },
             QualityCheck {
                 name: "b".into(),
+                label: "b".into(),
                 status: CheckStatus::Warn,
                 message: None,
+                explanation: None,
             },
         ];
         let report = QualityReport::from_checks(checks);
@@ -69,13 +76,17 @@ mod tests {
         let checks = vec![
             QualityCheck {
                 name: "a".into(),
+                label: "a".into(),
                 status: CheckStatus::Warn,
                 message: None,
+                explanation: None,
             },
             QualityCheck {
                 name: "b".into(),
+                label: "b".into(),
                 status: CheckStatus::Fail,
                 message: None,
+                explanation: None,
             },
         ];
         let report = QualityReport::from_checks(checks);

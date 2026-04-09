@@ -2,8 +2,10 @@ export type CheckStatus = 'pass' | 'skip' | 'warn' | 'fail';
 
 export interface QualityCheck {
   name: string;
+  label: string;
   status: CheckStatus;
   message?: string;
+  explanation?: string;
 }
 
 export interface QualityReport {
