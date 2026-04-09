@@ -3319,18 +3319,6 @@ body {
   white-space: nowrap;
 }
 
-/* ===================================================================
-   Stream hint
-   =================================================================== */
-
-.stream-hint {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  text-align: center;
-  margin: 0.25rem 0 0.75rem;
-  opacity: 0.7;
-}
 
 /* ===================================================================
    Stream timeout message

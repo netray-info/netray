@@ -1193,8 +1193,8 @@ export default function App() {
 
   return (
     <>
-      <SuiteNav current="dns" />
       <div class="app">
+      <SuiteNav current="dns" />
       <a href="#main-content" class="skip-link">Skip to results</a>
       <header class="header">
         <h1 class="logo">{siteName()}</h1>
@@ -1223,7 +1223,6 @@ export default function App() {
           shareLabel={status() === 'done' && cacheKey() ? (shareMessage() ?? 'Share') : undefined}
           onShare={copyShareLink}
         />
-        <p class="stream-hint">Results stream as they arrive — no waiting for all resolvers</p>
 
         {/* Empty state — shown on landing before any query */}
         <Show when={!hasContent()}>
