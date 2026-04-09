@@ -24,13 +24,14 @@ export default function SuiteNav(props: SuiteNavProps) {
         .suite-nav {
           width: 100%;
           background: var(--bg-secondary);
-          border-bottom: 1px solid var(--border-subtle);
-          padding: 0.5rem 1.5rem;
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius);
+          padding: 0.25rem 1rem;
           display: flex;
           align-items: center;
           gap: 0;
           font-family: var(--mono);
-          font-size: 0.8rem;
+          font-size: 0.75rem;
           flex-wrap: wrap;
           row-gap: 0.25rem;
         }
@@ -38,10 +39,10 @@ export default function SuiteNav(props: SuiteNavProps) {
         .suite-nav__brand {
           color: var(--text-secondary);
           text-decoration: none;
-          padding: 0.2rem 0.5rem 0.2rem 0;
+          padding: 0.15rem 0.5rem 0.15rem 0;
           letter-spacing: -0.01em;
           white-space: nowrap;
-          min-height: 44px;
+          min-height: 32px;
           display: inline-flex;
           align-items: center;
         }
@@ -60,11 +61,11 @@ export default function SuiteNav(props: SuiteNavProps) {
         .suite-nav__link {
           color: var(--text-secondary);
           text-decoration: none;
-          padding: 0.2rem 0.4rem;
+          padding: 0.15rem 0.4rem;
           border-radius: 4px;
           white-space: nowrap;
           transition: color 0.15s ease;
-          min-height: 44px;
+          min-height: 32px;
           display: inline-flex;
           align-items: center;
         }
@@ -88,8 +89,12 @@ export default function SuiteNav(props: SuiteNavProps) {
 
         @media (max-width: 400px) {
           .suite-nav {
-            padding: 0.4rem 1rem;
-            font-size: 0.75rem;
+            padding: 0.2rem 0.75rem;
+            font-size: 0.7rem;
+          }
+          .suite-nav__brand,
+          .suite-nav__link {
+            min-height: 44px;
           }
         }
       `}</style>
