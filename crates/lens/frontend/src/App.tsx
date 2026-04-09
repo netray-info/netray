@@ -245,8 +245,12 @@ export default function App() {
           aboutText={
             <>
               <em>lens</em> checks TLS certificate validity, DNS health, and IP reputation for any
-              domain — results stream in as each check completes. Part of the{' '}
-              <a href="https://netray.info">netray.info</a> suite.
+              domain — results stream in as each check completes. Built in{' '}
+              <a href="https://www.rust-lang.org" target="_blank" rel="noopener noreferrer">Rust</a> with{' '}
+              <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a> and{' '}
+              <a href="https://www.solidjs.com" target="_blank" rel="noopener noreferrer">SolidJS</a>.
+              Open to use — rate limiting applies. Part of the{' '}
+              <a href="https://netray.info"><strong>netray.info</strong></a> suite.
             </>
           }
           links={[
