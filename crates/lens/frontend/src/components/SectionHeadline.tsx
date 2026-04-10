@@ -24,12 +24,14 @@ function verdictColor(v: string): string {
 
 function headlineChecks(checks: CheckItem[] | undefined): CheckItem[] {
   if (!checks || checks.length === 0) return [];
+  const nonSkip = checks.filter(c => c.verdict !== 'skip');
+  if (nonSkip.length <= 1) return [];
   const byWeight = (a: CheckItem, b: CheckItem) => (b.weight ?? 0) - (a.weight ?? 0);
   const failing = checks.filter(c => c.verdict === 'fail' || c.verdict === 'error').sort(byWeight);
   const warning = checks.filter(c => c.verdict === 'warn').sort(byWeight);
   const notable = [...failing, ...warning].slice(0, 5);
   if (notable.length > 0) return notable;
-  return [...checks].filter(c => c.verdict !== 'skip').sort(byWeight).slice(0, 4);
+  return nonSkip.sort(byWeight).slice(0, 4);
 }
 
 interface Props {
