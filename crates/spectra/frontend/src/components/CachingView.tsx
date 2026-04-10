@@ -1,9 +1,30 @@
 import { Show } from 'solid-js';
-import type { CachingReport, CdnReport } from '../lib/types';
+import type { Accessor } from 'solid-js';
+import type { CachingReport, CdnReport, QualityCheck } from '../lib/types';
 
 interface Props {
   caching: CachingReport;
   cdn: CdnReport;
+  check?: QualityCheck;
+  showExplanations: Accessor<boolean>;
+}
+
+function formatLastModified(raw: string): string {
+  const d = new Date(raw);
+  if (isNaN(d.getTime())) return raw;
+  return d.toLocaleString(undefined, {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+  });
+}
+
+function formatEtag(raw: string): string {
+  // HTTP ETag format: "value" (strong) or W/"value" (weak)
+  // Strip surrounding quotes; keep W/ prefix as "weak: "
+  if (raw.startsWith('W/')) {
+    return 'weak: ' + raw.slice(2).replace(/^"|"$/g, '');
+  }
+  return raw.replace(/^"|"$/g, '');
 }
 
 export default function CachingView(props: Props) {
@@ -11,6 +32,10 @@ export default function CachingView(props: Props) {
 
   return (
     <>
+      <Show when={props.check?.message}>
+        <p class="cache-check-message">{props.check!.message}</p>
+      </Show>
+
       <Show when={props.caching.cache_control}>
         <p class="mono cache-value">
           Cache-Control: {props.caching.cache_control}
@@ -30,8 +55,18 @@ export default function CachingView(props: Props) {
       </ul>
 
       <ul class="cache-vary-list">
-        <li>ETag: {props.caching.etag ? 'Yes' : 'No'}</li>
-        <li>Last-Modified: {props.caching.last_modified ? 'Yes' : 'No'}</li>
+        <li>
+          ETag:{' '}
+          {props.caching.etag
+            ? <span class="mono cache-validator--value">{formatEtag(props.caching.etag)}</span>
+            : <span class="cache-validator--absent">not set</span>}
+        </li>
+        <li>
+          Last-Modified:{' '}
+          {props.caching.last_modified
+            ? <span class="cache-validator--value">{formatLastModified(props.caching.last_modified)}</span>
+            : <span class="cache-validator--absent">not set</span>}
+        </li>
         <Show when={props.caching.vary.length > 0}>
           <li>Vary: {props.caching.vary.join(', ')}</li>
         </Show>
@@ -55,6 +90,10 @@ export default function CachingView(props: Props) {
             </p>
           </Show>
         </div>
+      </Show>
+
+      <Show when={props.showExplanations() && props.check?.explanation}>
+        <p class="check-explain">{props.check!.explanation}</p>
       </Show>
     </>
   );

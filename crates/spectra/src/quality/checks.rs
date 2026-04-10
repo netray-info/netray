@@ -164,6 +164,36 @@ pub fn run_checks(resp: &InspectResponse) -> Vec<QualityCheck> {
         });
     }
 
+    // Caching
+    let caching_status = if resp.caching.directives.no_store {
+        CheckStatus::Skip
+    } else if resp.caching.cache_control.is_none() {
+        CheckStatus::Warn
+    } else if resp.caching.directives.max_age == Some(0)
+        && !resp.caching.directives.no_cache
+        && !resp.caching.directives.must_revalidate
+    {
+        CheckStatus::Warn
+    } else {
+        CheckStatus::Pass
+    };
+    checks.push(QualityCheck {
+        name: "caching".into(),
+        label: "Caching".into(),
+        status: caching_status.clone(),
+        message: match caching_status {
+            CheckStatus::Skip => Some("no-store: caching explicitly disabled".into()),
+            CheckStatus::Warn if resp.caching.cache_control.is_none() => {
+                Some("No Cache-Control header".into())
+            }
+            CheckStatus::Warn => {
+                Some("max-age=0 without no-cache or must-revalidate".into())
+            }
+            _ => None,
+        },
+        explanation: Some("Cache-Control headers let browsers and CDNs cache responses efficiently. Missing or misconfigured headers waste bandwidth and slow repeat visits.".into()),
+    });
+
     checks
 }
 
@@ -259,8 +289,8 @@ mod tests {
                     must_revalidate: false,
                     immutable: false,
                 },
-                etag: false,
-                last_modified: false,
+                etag: None,
+                last_modified: None,
                 vary: vec![],
                 age: None,
             },
@@ -338,8 +368,8 @@ mod tests {
         let checks = run_checks(&resp);
 
         assert!(
-            checks.len() >= 10,
-            "expected at least 10 checks, got {}",
+            checks.len() >= 11,
+            "expected at least 11 checks, got {}",
             checks.len()
         );
 

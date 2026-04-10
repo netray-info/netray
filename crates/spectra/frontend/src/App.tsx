@@ -22,6 +22,7 @@ import { addToHistory } from './lib/history';
 import type { InspectResponse, CheckStatus } from './lib/types';
 
 const EXAMPLES = [
+  'netray.info',
   'example.com',
   'github.com',
   'cloudflare.com',
@@ -188,16 +189,14 @@ export default function App() {
       <a class="skip-link" href="#results">Skip to results</a>
 
       <main class="container">
-        <div class="header">
-          <div>
-            <h1 class="logo">spectra</h1>
-            <p class="header__tagline">HTTP headers, decoded</p>
-          </div>
+        <header class="header">
+          <h1 class="logo">spectra</h1>
+          <span class="tagline">HTTP headers, decoded</span>
           <div class="header-actions">
             <ThemeToggle theme={theme} class="header-btn" />
             <button class="header-btn" onClick={() => setShowHelp(true)} aria-label="Open help" title="Help (?)">?</button>
           </div>
-        </div>
+        </header>
 
         <UrlInput
           onSubmit={handleInspect}
@@ -255,34 +254,39 @@ export default function App() {
                     <div class="overview__row overview__row--enrichment">
                       <div class="overview__item">
                         <span class="overview__label">IP</span>
-                        <a href={data.enrichment.detail_url} class="overview__value" target="_blank" rel="noopener">
-                          {data.enrichment.ip}
-                        </a>
+                        <span class="overview__value">{data.enrichment.ip}</span>
                         <Show when={data.enrichment.threat}>
                           <span class="badge badge--fail">{data.enrichment.threat}</span>
                         </Show>
                       </div>
-                        <Show when={data.enrichment.org}>
-                          <div class="overview__item">
-                            <span class="overview__label">Org</span>
-                            <span class="overview__value">{data.enrichment.org}</span>
-                          </div>
-                        </Show>
-                        <Show when={data.enrichment.ip_type}>
-                          <div class="overview__item">
-                            <span class="overview__label">Category</span>
-                            <span class="overview__value">
-                              {data.enrichment.ip_type!.charAt(0).toUpperCase() + data.enrichment.ip_type!.slice(1)}
-                            </span>
-                          </div>
-                        </Show>
-                        <Show when={data.enrichment.role}>
-                          <div class="overview__item">
-                            <span class="overview__label">Role</span>
-                            <span class="overview__value">{data.enrichment.role}</span>
-                          </div>
-                        </Show>
-                      </div>
+                      <Show when={data.enrichment.org}>
+                        <div class="overview__item">
+                          <span class="overview__label">Org</span>
+                          <span class="overview__value">{data.enrichment.org}</span>
+                        </div>
+                      </Show>
+                      <Show when={data.enrichment.ip_type}>
+                        <div class="overview__item">
+                          <span class="overview__label">Category</span>
+                          <span class="overview__value">
+                            {data.enrichment.ip_type!.charAt(0).toUpperCase() + data.enrichment.ip_type!.slice(1)}
+                          </span>
+                        </div>
+                      </Show>
+                      <Show when={data.enrichment.role}>
+                        <div class="overview__item">
+                          <span class="overview__label">Role</span>
+                          <span class="overview__value">{data.enrichment.role}</span>
+                        </div>
+                      </Show>
+                      <a
+                        href={data.enrichment.detail_url}
+                        class="overview__ip-link"
+                        target="_blank"
+                        rel="noopener"
+                        title="View IP details"
+                      >IP ↗</a>
+                    </div>
                   </div>
 
                   {/* Controls bar */}
@@ -474,7 +478,11 @@ export default function App() {
                     </button>
                     <Show when={openCors()}>
                       <div class="section-card__body" id="section-cors-body">
-                        <CorsReport cors={data.cors} />
+                        <CorsReport
+                          cors={data.cors}
+                          explanation={data.quality.checks.find(c => c.name === 'cors')?.explanation}
+                          showExplanations={showExplanations}
+                        />
                       </div>
                     </Show>
                   </div>
@@ -502,15 +510,30 @@ export default function App() {
                   {/* Caching + CDN */}
                   <div class="section-card">
                     <button class="section-card__header" onClick={() => setOpenCaching(!openCaching())} aria-expanded={openCaching()} aria-controls="section-caching-body">
-                      <span class="section-card__status section-card__status--skip" />
+                      {(() => {
+                        const check = data.quality.checks.find(c => c.name === 'caching');
+                        const st = check?.status ?? 'skip';
+                        return <span class={`section-card__status section-card__status--${st}`} />;
+                      })()}
                       <span class="section-card__title">Caching</span>
-                      <span class="section-card__badges" />
+                      <span class="section-card__badges">
+                        {(() => {
+                          const check = data.quality.checks.find(c => c.name === 'caching');
+                          if (!check) return null;
+                          return <span class={verdictClass(check.status)}>{check.status}</span>;
+                        })()}
+                      </span>
                       <span class="section-card__spacer" />
                       <span class={`section-card__chevron${openCaching() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
                     </button>
                     <Show when={openCaching()}>
                       <div class="section-card__body" id="section-caching-body">
-                        <CachingView caching={data.caching} cdn={data.cdn} />
+                        <CachingView
+                          caching={data.caching}
+                          cdn={data.cdn}
+                          check={data.quality.checks.find(c => c.name === 'caching')}
+                          showExplanations={showExplanations}
+                        />
                       </div>
                     </Show>
                   </div>

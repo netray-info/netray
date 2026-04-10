@@ -38,8 +38,14 @@ pub fn analyze_caching(headers: &HeaderMap) -> CachingReport {
 
     let directives = parse_cache_control(cache_control.as_deref().unwrap_or(""));
 
-    let etag = headers.contains_key("etag");
-    let last_modified = headers.contains_key("last-modified");
+    let etag = headers
+        .get("etag")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let last_modified = headers
+        .get("last-modified")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
 
     let vary = headers
         .get("vary")
@@ -160,8 +166,11 @@ mod tests {
             ("last-modified", "Mon, 01 Jan 2024 00:00:00 GMT"),
         ]);
         let report = analyze_caching(&h);
-        assert!(report.etag);
-        assert!(report.last_modified);
+        assert_eq!(report.etag.as_deref(), Some("\"abc123\""));
+        assert_eq!(
+            report.last_modified.as_deref(),
+            Some("Mon, 01 Jan 2024 00:00:00 GMT")
+        );
     }
 
     #[test]

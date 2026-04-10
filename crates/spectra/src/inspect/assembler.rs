@@ -127,8 +127,10 @@ pub struct CachingReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<String>,
     pub directives: CacheControlDirectives,
-    pub etag: bool,
-    pub last_modified: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub etag: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_modified: Option<String>,
     pub vary: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub age: Option<u64>,

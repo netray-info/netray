@@ -90,8 +90,8 @@ export interface CachingReport {
     must_revalidate: boolean;
     immutable: boolean;
   };
-  etag: boolean;
-  last_modified: boolean;
+  etag?: string | null;
+  last_modified?: string | null;
   vary: string[];
   age?: number;
 }
