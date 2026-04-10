@@ -223,11 +223,11 @@ export default function App() {
               <p class="welcome-tagline">
                 TLS certificate status, DNS health, and IP reputation — checked together, streamed as they arrive.
               </p>
-              <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
+              <div class="example-chips">
                 <For each={['netray.info', 'example.com', 'github.com']}>
                   {(domain) => (
                     <button
-                      class="filter-toggle"
+                      class="example-chip"
                       type="button"
                       onClick={() => handleSubmit(domain)}
                     >{domain}</button>
