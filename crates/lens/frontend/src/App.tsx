@@ -214,16 +214,6 @@ export default function App() {
             inputRef={(el) => { inputEl = el; }}
           />
 
-          <Show when={hasResults() || isLoading()}>
-            <div class="explain-bar">
-              <button
-                class="filter-toggle"
-                type="button"
-                onClick={() => setAllExpanded(v => v === true ? false : true)}
-              >{allExpanded() === true ? 'collapse all' : 'expand all'}</button>
-            </div>
-          </Show>
-
           <Show when={error()}>
             <div class="error-banner" role="alert">{error()}</div>
           </Show>
@@ -248,18 +238,26 @@ export default function App() {
           </Show>
 
           <Show when={summary()}>
-            {(s) => <Summary summary={s()} done={done()} />}
+            {(s) => (
+              <Summary
+                summary={s()}
+                done={done()}
+                addresses={ip()?.addresses}
+                ipDetailUrl={ip()?.detail_url}
+                onCopyMd={done() ? handleCopyMd : undefined}
+                onDownloadJson={done() ? handleDownloadJson : undefined}
+              />
+            )}
           </Show>
 
           <Show when={hasResults() || isLoading()}>
             <div class="chips-row">
               <ValidationChips checks={allChecks()} />
-              <Show when={summary() && done()}>
-                <div class="export-actions">
-                  <button class="export-btn" type="button" onClick={handleCopyMd}>copy MD</button>
-                  <button class="export-btn" type="button" onClick={handleDownloadJson}>JSON</button>
-                </div>
-              </Show>
+              <button
+                class="filter-toggle"
+                type="button"
+                onClick={() => setAllExpanded(v => v === true ? false : true)}
+              >{allExpanded() === true ? 'collapse all' : 'expand all'}</button>
             </div>
             <div class="section-grid" role="status" aria-live="polite" aria-label="Check results">
               <Show when={http() !== null || (isLoading() && meta()?.ecosystem?.http_base_url !== undefined)}>

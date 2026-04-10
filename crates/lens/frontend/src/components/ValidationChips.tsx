@@ -4,14 +4,14 @@ interface Props {
   checks: Array<{ verdict: string }>;
 }
 
-const CHIP_META: Record<string, { symbol: string; label: string }> = {
-  pass: { symbol: '✓', label: 'pass' },
-  warn: { symbol: '!', label: 'warn' },
-  fail: { symbol: '✗', label: 'fail' },
-  skip: { symbol: '–', label: 'skip' },
+const CHIP_META: Record<string, { label: string }> = {
+  pass: { label: 'passed' },
+  warn: { label: 'warnings' },
+  fail: { label: 'failed' },
+  skip: { label: 'skipped' },
 };
 
-const CHIP_ORDER = ['pass', 'warn', 'fail', 'skip'];
+const CHIP_ORDER = ['fail', 'warn', 'pass', 'skip'];
 
 export default function ValidationChips(props: Props) {
   const counts = () => {
@@ -31,45 +31,11 @@ export default function ValidationChips(props: Props) {
 
   return (
     <Show when={chips().length > 0}>
-      <style>{`
-        .validation-chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.5rem;
-        }
-
-        .chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.25rem;
-          font-family: var(--mono);
-          font-size: 0.8rem;
-          padding: 0.2rem 0.5rem;
-          border-radius: 9999px;
-          border: 1px solid currentColor;
-        }
-
-        .chip--pass {
-          color: var(--verdict-pass);
-        }
-
-        .chip--warn {
-          color: var(--verdict-warn);
-        }
-
-        .chip--fail {
-          color: var(--verdict-fail);
-        }
-
-        .chip--skip {
-          color: var(--verdict-skip);
-        }
-      `}</style>
       <div class="validation-chips" role="status" aria-label="Validation summary">
         <For each={chips()}>
           {(chip) => (
             <span class={`chip chip--${chip.verdict}`}>
-              {chip.symbol} {chip.count} {chip.label}
+              {chip.count} {chip.label}
             </span>
           )}
         </For>
