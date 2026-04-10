@@ -158,31 +158,34 @@ a:hover { text-decoration: underline; }
   gap: 4px;
 }
 
+.section-controls__right { margin-left: auto; }
+
 /* ================================================================
    Export buttons
    ================================================================ */
 
 .export-buttons {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 0;
+  margin-left: auto;
 }
 
 .export-buttons__btn {
-  padding: 4px 10px;
   background: none;
-  border: 1px solid var(--border);
+  border: none;
   color: var(--text-muted);
-  border-radius: var(--radius);
   cursor: pointer;
   font-size: 0.75rem;
   font-family: var(--mono);
-  transition: color var(--transition), border-color var(--transition);
+  padding: 0 0.5rem;
+  line-height: 1;
+  transition: color var(--transition);
 }
-
-.export-buttons__btn:hover {
-  color: var(--text-primary);
-  border-color: var(--text-secondary);
+.export-buttons__btn + .export-buttons__btn {
+  border-left: 1px solid var(--border);
 }
+.export-buttons__btn:hover { color: var(--accent); }
 
 /* ================================================================
    Status badges

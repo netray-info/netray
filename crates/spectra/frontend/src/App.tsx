@@ -291,6 +291,7 @@ export default function App() {
                         <span class="overview__label">Duration</span>
                         <span class={durationClass(data.duration_ms)} title={data.duration_ms < 500 ? 'Fast' : data.duration_ms < 2000 ? 'Acceptable' : 'Slow'}>{data.duration_ms}ms</span>
                       </div>
+                      <ExportButtons result={data} />
                     </div>
                     {/* Row 2: IP + enrichment */}
                     <div class="overview__row overview__row--enrichment">
@@ -331,7 +332,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Controls bar */}
                   <div class="section-controls">
                     <div class="section-controls__left">
                       <button
@@ -345,7 +345,6 @@ export default function App() {
                       </button>
                     </div>
                     <div class="section-controls__right">
-                      <ExportButtons result={data} />
                       <button
                         class="filter-toggle"
                         onClick={() => setAllExpanded(!allExpanded())}
