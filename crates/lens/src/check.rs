@@ -67,10 +67,7 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
             let score = build_score_from_errors(state);
             let mut sections = HashMap::new();
             for backend in state.backends.iter() {
-                sections.insert(
-                    backend.section().to_string(),
-                    Err(SectionError::Timeout),
-                );
+                sections.insert(backend.section().to_string(), Err(SectionError::Timeout));
             }
             CheckOutput {
                 domain: domain.to_string(),
@@ -133,9 +130,11 @@ async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> Chec
     let wave2_context = BackendContext { resolved_ips };
     for backend in state.backends.iter() {
         if WAVE2_SECTIONS.contains(&backend.section()) {
-            let result =
-                tokio::time::timeout(timeout, backend.run(client, domain, &wave2_context, timeout))
-                    .await;
+            let result = tokio::time::timeout(
+                timeout,
+                backend.run(client, domain, &wave2_context, timeout),
+            )
+            .await;
             let result = match result {
                 Ok(r) => r,
                 Err(_) => Err(SectionError::Timeout),

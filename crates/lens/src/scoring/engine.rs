@@ -272,7 +272,11 @@ mod tests {
         }
     }
 
-    fn inputs(dns: SectionInput, tls: SectionInput, ip: SectionInput) -> HashMap<String, SectionInput> {
+    fn inputs(
+        dns: SectionInput,
+        tls: SectionInput,
+        ip: SectionInput,
+    ) -> HashMap<String, SectionInput> {
         HashMap::from([
             ("dns".to_string(), dns),
             ("tls".to_string(), tls),
@@ -504,14 +508,30 @@ mod tests {
         let profile = default_profile();
 
         // Build full pass inputs using the profile's own keys.
-        let dns_checks: Vec<CheckResult> =
-            profile.sections["dns"].checks.keys().map(|k| pass(k)).collect();
-        let tls_checks: Vec<CheckResult> =
-            profile.sections["tls"].checks.keys().map(|k| pass(k)).collect();
-        let ip_checks: Vec<CheckResult> =
-            profile.sections["ip"].checks.keys().map(|k| pass(k)).collect();
+        let dns_checks: Vec<CheckResult> = profile.sections["dns"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect();
+        let tls_checks: Vec<CheckResult> = profile.sections["tls"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect();
+        let ip_checks: Vec<CheckResult> = profile.sections["ip"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect();
 
-        let result = compute_score(&profile, &inputs(no_error(dns_checks), no_error(tls_checks), no_error(ip_checks)));
+        let result = compute_score(
+            &profile,
+            &inputs(
+                no_error(dns_checks),
+                no_error(tls_checks),
+                no_error(ip_checks),
+            ),
+        );
 
         assert!(!result.hard_fail_triggered);
         assert_eq!(result.grade, "A+");
@@ -522,20 +542,36 @@ mod tests {
     fn hard_fail_with_otherwise_perfect_scores_gives_f() {
         let profile = default_profile();
 
-        let mut tls_checks: Vec<CheckResult> =
-            profile.sections["tls"].checks.keys().map(|k| pass(k)).collect();
+        let mut tls_checks: Vec<CheckResult> = profile.sections["tls"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect();
         // Override chain_trusted to fail
         for c in &mut tls_checks {
             if c.name == "chain_trusted" {
                 c.verdict = CheckVerdict::Fail;
             }
         }
-        let dns_checks: Vec<CheckResult> =
-            profile.sections["dns"].checks.keys().map(|k| pass(k)).collect();
-        let ip_checks: Vec<CheckResult> =
-            profile.sections["ip"].checks.keys().map(|k| pass(k)).collect();
+        let dns_checks: Vec<CheckResult> = profile.sections["dns"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect();
+        let ip_checks: Vec<CheckResult> = profile.sections["ip"]
+            .checks
+            .keys()
+            .map(|k| pass(k))
+            .collect();
 
-        let result = compute_score(&profile, &inputs(no_error(dns_checks), no_error(tls_checks), no_error(ip_checks)));
+        let result = compute_score(
+            &profile,
+            &inputs(
+                no_error(dns_checks),
+                no_error(tls_checks),
+                no_error(ip_checks),
+            ),
+        );
 
         assert!(result.hard_fail_triggered);
         assert_eq!(result.grade, "F");

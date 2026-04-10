@@ -31,7 +31,10 @@ pub struct ScoringProfile {
 pub enum ScoringProfileError {
     Toml(toml::de::Error),
     /// hard_fail entry "check_name" in section "section_name" is not in checks map.
-    UnknownHardFail { section: String, check: String },
+    UnknownHardFail {
+        section: String,
+        check: String,
+    },
 }
 
 impl fmt::Display for ScoringProfileError {

@@ -177,13 +177,13 @@ async fn check_http_inner(
 // Parsing
 // ---------------------------------------------------------------------------
 
-fn parse_inspect(
-    resp: HttpInspectResponse,
-    http_url: &str,
-    encoded_domain: &str,
-) -> BackendResult {
-    let checks_map: HashMap<&str, HttpCheckStatus> =
-        resp.quality.checks.iter().map(|c| (c.name.as_str(), c.status)).collect();
+fn parse_inspect(resp: HttpInspectResponse, http_url: &str, encoded_domain: &str) -> BackendResult {
+    let checks_map: HashMap<&str, HttpCheckStatus> = resp
+        .quality
+        .checks
+        .iter()
+        .map(|c| (c.name.as_str(), c.status))
+        .collect();
 
     // https_redirect: synthesised from http_upgrade field.
     let https_redirect_status = match &resp.http_upgrade {
@@ -205,18 +205,32 @@ fn parse_inspect(
     // Aggregated: security_headers.
     let security_headers_status = aggregate_worst(&[
         *checks_map.get("csp").unwrap_or(&HttpCheckStatus::Skip),
-        *checks_map.get("x_frame_options").unwrap_or(&HttpCheckStatus::Skip),
-        *checks_map.get("x_content_type_options").unwrap_or(&HttpCheckStatus::Skip),
-        *checks_map.get("referrer_policy").unwrap_or(&HttpCheckStatus::Skip),
-        *checks_map.get("permissions_policy").unwrap_or(&HttpCheckStatus::Skip),
+        *checks_map
+            .get("x_frame_options")
+            .unwrap_or(&HttpCheckStatus::Skip),
+        *checks_map
+            .get("x_content_type_options")
+            .unwrap_or(&HttpCheckStatus::Skip),
+        *checks_map
+            .get("referrer_policy")
+            .unwrap_or(&HttpCheckStatus::Skip),
+        *checks_map
+            .get("permissions_policy")
+            .unwrap_or(&HttpCheckStatus::Skip),
     ]);
 
     // Aggregated: hygiene.
     let hygiene_status = aggregate_worst(&[
-        *checks_map.get("deprecated_headers").unwrap_or(&HttpCheckStatus::Skip),
-        *checks_map.get("info_leakage").unwrap_or(&HttpCheckStatus::Skip),
+        *checks_map
+            .get("deprecated_headers")
+            .unwrap_or(&HttpCheckStatus::Skip),
+        *checks_map
+            .get("info_leakage")
+            .unwrap_or(&HttpCheckStatus::Skip),
         *checks_map.get("caching").unwrap_or(&HttpCheckStatus::Skip),
-        *checks_map.get("redirect_limit").unwrap_or(&HttpCheckStatus::Skip),
+        *checks_map
+            .get("redirect_limit")
+            .unwrap_or(&HttpCheckStatus::Skip),
     ]);
 
     let checks = vec![
@@ -346,7 +360,11 @@ mod tests {
     use super::*;
 
     fn make_check(name: &str, status: HttpCheckStatus) -> QualityCheck {
-        QualityCheck { name: name.to_string(), status, message: None }
+        QualityCheck {
+            name: name.to_string(),
+            status,
+            message: None,
+        }
     }
 
     // AC-1: URL construction
@@ -356,17 +374,21 @@ mod tests {
         assert_eq!(encoded, "example.com");
         let url = format!(
             "{}/api/inspect?url=https%3A%2F%2F{}",
-            "http://spectra:3000",
-            encoded,
+            "http://spectra:3000", encoded,
         );
-        assert_eq!(url, "http://spectra:3000/api/inspect?url=https%3A%2F%2Fexample.com");
+        assert_eq!(
+            url,
+            "http://spectra:3000/api/inspect?url=https%3A%2F%2Fexample.com"
+        );
     }
 
     // AC-2: six checks always present
     #[test]
     fn six_checks_always_present() {
         let resp = HttpInspectResponse {
-            http_upgrade: Some(HttpUpgrade { redirects_to_https: true }),
+            http_upgrade: Some(HttpUpgrade {
+                redirects_to_https: true,
+            }),
             quality: QualityReport {
                 checks: vec![
                     make_check("hsts", HttpCheckStatus::Pass),
@@ -397,31 +419,50 @@ mod tests {
     // AC-3: https_redirect synthesis
     #[test]
     fn https_redirect_null_is_skip() {
-        let resp = HttpInspectResponse { http_upgrade: None, quality: QualityReport::default() };
+        let resp = HttpInspectResponse {
+            http_upgrade: None,
+            quality: QualityReport::default(),
+        };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
-        let c = result.checks.iter().find(|c| c.name == "https_redirect").unwrap();
+        let c = result
+            .checks
+            .iter()
+            .find(|c| c.name == "https_redirect")
+            .unwrap();
         assert_eq!(c.verdict, CheckVerdict::Skip);
     }
 
     #[test]
     fn https_redirect_false_is_fail() {
         let resp = HttpInspectResponse {
-            http_upgrade: Some(HttpUpgrade { redirects_to_https: false }),
+            http_upgrade: Some(HttpUpgrade {
+                redirects_to_https: false,
+            }),
             quality: QualityReport::default(),
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
-        let c = result.checks.iter().find(|c| c.name == "https_redirect").unwrap();
+        let c = result
+            .checks
+            .iter()
+            .find(|c| c.name == "https_redirect")
+            .unwrap();
         assert_eq!(c.verdict, CheckVerdict::Fail);
     }
 
     #[test]
     fn https_redirect_true_is_pass() {
         let resp = HttpInspectResponse {
-            http_upgrade: Some(HttpUpgrade { redirects_to_https: true }),
+            http_upgrade: Some(HttpUpgrade {
+                redirects_to_https: true,
+            }),
             quality: QualityReport::default(),
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
-        let c = result.checks.iter().find(|c| c.name == "https_redirect").unwrap();
+        let c = result
+            .checks
+            .iter()
+            .find(|c| c.name == "https_redirect")
+            .unwrap();
         assert_eq!(c.verdict, CheckVerdict::Pass);
     }
 
@@ -441,7 +482,11 @@ mod tests {
             },
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
-        let c = result.checks.iter().find(|c| c.name == "security_headers").unwrap();
+        let c = result
+            .checks
+            .iter()
+            .find(|c| c.name == "security_headers")
+            .unwrap();
         assert_eq!(c.verdict, CheckVerdict::Fail);
     }
 
@@ -480,7 +525,9 @@ mod tests {
     #[test]
     fn raw_headline_format() {
         let resp = HttpInspectResponse {
-            http_upgrade: Some(HttpUpgrade { redirects_to_https: true }),
+            http_upgrade: Some(HttpUpgrade {
+                redirects_to_https: true,
+            }),
             quality: QualityReport {
                 checks: vec![
                     make_check("hsts", HttpCheckStatus::Pass),
@@ -504,6 +551,9 @@ mod tests {
         let BackendExtra::Http { detail_url, .. } = &result.extra else {
             panic!("expected Http extra");
         };
-        assert_eq!(detail_url, "http://spectra:3000/?url=https%3A%2F%2Fexample.com");
+        assert_eq!(
+            detail_url,
+            "http://spectra:3000/?url=https%3A%2F%2Fexample.com"
+        );
     }
 }

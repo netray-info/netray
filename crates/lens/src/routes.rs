@@ -4,11 +4,11 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use futures::stream;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
@@ -394,7 +394,11 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
         })
         .collect();
 
-    for name in futures::future::join_all(futures).await.into_iter().flatten() {
+    for name in futures::future::join_all(futures)
+        .await
+        .into_iter()
+        .flatten()
+    {
         down.push(name);
     }
 
@@ -486,10 +490,10 @@ fn is_sync_mode(headers: &axum::http::HeaderMap, stream_param: Option<bool>) -> 
     if stream_param == Some(false) {
         return true;
     }
-    if let Some(accept) = headers.get(axum::http::header::ACCEPT) {
-        if let Ok(val) = accept.to_str() {
-            return val.contains("application/json") && !val.contains("text/event-stream");
-        }
+    if let Some(accept) = headers.get(axum::http::header::ACCEPT)
+        && let Ok(val) = accept.to_str()
+    {
+        return val.contains("application/json") && !val.contains("text/event-stream");
     }
     false
 }
@@ -583,10 +587,7 @@ fn section_status_from_checks(result: &Result<BackendResult, SectionError>) -> &
     }
 }
 
-fn build_check_items(
-    checks: &[CheckResult],
-    weights: &HashMap<String, u32>,
-) -> Vec<CheckItem> {
+fn build_check_items(checks: &[CheckResult], weights: &HashMap<String, u32>) -> Vec<CheckItem> {
     checks
         .iter()
         .map(|c| {
@@ -630,7 +631,12 @@ fn dns_payload_from(
         }
         Err(e) => (error_headline(e), vec![], String::new()),
     };
-    DnsEvent { status, headline, checks, detail_url }
+    DnsEvent {
+        status,
+        headline,
+        checks,
+        detail_url,
+    }
 }
 
 fn tls_payload_from(
@@ -652,7 +658,12 @@ fn tls_payload_from(
         }
         Err(e) => (error_headline(e), vec![], String::new()),
     };
-    TlsEvent { status, headline, checks, detail_url }
+    TlsEvent {
+        status,
+        headline,
+        checks,
+        detail_url,
+    }
 }
 
 fn http_payload_from(
@@ -674,7 +685,12 @@ fn http_payload_from(
         }
         Err(e) => (error_headline(e), vec![], String::new()),
     };
-    HttpEvent { status, headline, checks, detail_url }
+    HttpEvent {
+        status,
+        headline,
+        checks,
+        detail_url,
+    }
 }
 
 fn ip_payload_from(
@@ -713,7 +729,14 @@ fn ip_payload_from(
     } else {
         None
     };
-    IpEvent { status, headline, checks, addresses, detail_url, guide_url }
+    IpEvent {
+        status,
+        headline,
+        checks,
+        addresses,
+        detail_url,
+        guide_url,
+    }
 }
 
 fn summary_payload_from(
@@ -868,8 +891,15 @@ fn build_sse_events(
     if let Some(http_result) = output.sections.get("http") {
         events.push(http_event_from(http_result, http_checks));
     }
-    events.push(ip_event_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks));
-    events.push(summary_event_from(&output.sections, &output.score, &profile.thresholds));
+    events.push(ip_event_from(
+        output.sections.get("ip").unwrap_or(&empty_err),
+        ip_checks,
+    ));
+    events.push(summary_event_from(
+        &output.sections,
+        &output.score,
+        &profile.thresholds,
+    ));
     events.push(done_event(&domain, duration_ms, cached));
     events
 }
@@ -945,7 +975,10 @@ fn build_sync_response(
     let response = SyncCheckResponse {
         dns: dns_payload_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
         tls: tls_payload_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
-        http: output.sections.get("http").map(|r| http_payload_from(r, http_checks)),
+        http: output
+            .sections
+            .get("http")
+            .map(|r| http_payload_from(r, http_checks)),
         ip: ip_payload_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
         summary: summary_payload_from(&output.sections, &output.score, &profile.thresholds),
         done: done_payload(&domain, duration_ms, cached),
@@ -1254,10 +1287,22 @@ pub mod tests {
         // Rate limit fields
         let rl = &json["rate_limit"];
         assert!(rl.is_object(), "rate_limit must be an object");
-        assert!(rl["per_ip_per_minute"].is_number(), "per_ip_per_minute must be a number");
-        assert!(rl["per_ip_burst"].is_number(), "per_ip_burst must be a number");
-        assert!(rl["global_per_minute"].is_number(), "global_per_minute must be a number");
-        assert!(rl["global_burst"].is_number(), "global_burst must be a number");
+        assert!(
+            rl["per_ip_per_minute"].is_number(),
+            "per_ip_per_minute must be a number"
+        );
+        assert!(
+            rl["per_ip_burst"].is_number(),
+            "per_ip_burst must be a number"
+        );
+        assert!(
+            rl["global_per_minute"].is_number(),
+            "global_per_minute must be a number"
+        );
+        assert!(
+            rl["global_burst"].is_number(),
+            "global_burst must be a number"
+        );
     }
 
     // --- AC-1: sync mode via Accept: application/json header
@@ -1272,8 +1317,16 @@ pub mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
-        assert!(ct.contains("application/json"), "expected JSON content-type, got: {ct}");
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(
+            ct.contains("application/json"),
+            "expected JSON content-type, got: {ct}"
+        );
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert!(json["dns"].is_object(), "dns key missing");
@@ -1294,8 +1347,16 @@ pub mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
-        assert!(ct.contains("application/json"), "expected JSON content-type, got: {ct}");
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(
+            ct.contains("application/json"),
+            "expected JSON content-type, got: {ct}"
+        );
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert!(json["dns"].is_object(), "dns key missing");
@@ -1318,8 +1379,16 @@ pub mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
-        assert!(ct.contains("application/json"), "expected JSON content-type, got: {ct}");
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(
+            ct.contains("application/json"),
+            "expected JSON content-type, got: {ct}"
+        );
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert!(json["dns"].is_object(), "dns key missing");
@@ -1415,7 +1484,12 @@ pub mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
         assert!(ct.contains("application/json"));
         let bytes = to_bytes(resp.into_body(), 4096).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
@@ -1468,17 +1542,31 @@ pub mod tests {
 
         // First request — cache miss.
         let resp1 = app.clone().oneshot(make_req()).await.unwrap();
-        let cache1 = resp1.headers().get("x-cache").map(|v| v.to_str().unwrap().to_string());
+        let cache1 = resp1
+            .headers()
+            .get("x-cache")
+            .map(|v| v.to_str().unwrap().to_string());
         let _ = to_bytes(resp1.into_body(), usize::MAX).await.unwrap();
 
         // Second request — should be a HIT; response is still JSON.
         let resp2 = app.oneshot(make_req()).await.unwrap();
-        let cache2 = resp2.headers().get("x-cache").map(|v| v.to_str().unwrap().to_string());
-        let ct = resp2.headers().get("content-type").unwrap().to_str().unwrap();
+        let cache2 = resp2
+            .headers()
+            .get("x-cache")
+            .map(|v| v.to_str().unwrap().to_string());
+        let ct = resp2
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
 
         assert_eq!(cache1.as_deref(), Some("MISS"));
         assert_eq!(cache2.as_deref(), Some("HIT"));
-        assert!(ct.contains("application/json"), "cache hit in sync mode must return JSON");
+        assert!(
+            ct.contains("application/json"),
+            "cache hit in sync mode must return JSON"
+        );
     }
 
     // --- AC-11: /api-docs/openapi.json lists all five endpoints
@@ -1503,13 +1591,21 @@ pub mod tests {
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
         assert!(ct.contains("application/json"));
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         let paths = &json["paths"];
         assert!(paths.is_object(), "spec must have a paths object");
-        assert!(paths.get("/api/check/{domain}").is_some(), "/api/check/{{domain}} missing");
+        assert!(
+            paths.get("/api/check/{domain}").is_some(),
+            "/api/check/{{domain}} missing"
+        );
         assert!(paths.get("/api/check").is_some(), "/api/check missing");
         assert!(paths.get("/api/meta").is_some(), "/api/meta missing");
         assert!(paths.get("/health").is_some(), "/health missing");
@@ -1555,13 +1651,15 @@ pub mod tests {
 
         let app = Router::new().merge(Scalar::with_url("/docs", openapi));
 
-        let req = Request::builder()
-            .uri("/docs")
-            .body(Body::empty())
-            .unwrap();
+        let req = Request::builder().uri("/docs").body(Body::empty()).unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap();
         assert!(ct.contains("text/html"), "expected HTML, got: {ct}");
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let body = std::str::from_utf8(&bytes).unwrap();

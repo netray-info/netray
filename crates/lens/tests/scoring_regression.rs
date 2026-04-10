@@ -1,9 +1,9 @@
+use lens::scoring::engine::{CheckResult, CheckVerdict, SectionInput, compute_score};
+use lens::scoring::profile::ScoringProfile;
 /// Pure unit regression tests for the scoring engine.
 ///
 /// No network access. Tests use the embedded default profile.
 use std::collections::HashMap;
-use lens::scoring::engine::{CheckResult, CheckVerdict, SectionInput, compute_score};
-use lens::scoring::profile::ScoringProfile;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -162,7 +162,10 @@ fn profile_section_weights_sum_to_100() {
     assert_eq!(sum, 100, "section weights must sum to 100, got {}", sum);
     assert_eq!(profile.sections["dns"].weight, 30, "dns weight must be 30");
     assert_eq!(profile.sections["tls"].weight, 40, "tls weight must be 40");
-    assert_eq!(profile.sections["http"].weight, 20, "http weight must be 20");
+    assert_eq!(
+        profile.sections["http"].weight, 20,
+        "http weight must be 20"
+    );
     assert_eq!(profile.sections["ip"].weight, 10, "ip weight must be 10");
 }
 
@@ -356,7 +359,14 @@ fn all_dns_warn_with_all_tls_pass_grades_below_a() {
         .map(|k| pass(k))
         .collect();
 
-    let result = compute_score(&profile, &inputs(no_error(dns_checks), no_error(tls_checks), no_error(ip_checks)));
+    let result = compute_score(
+        &profile,
+        &inputs(
+            no_error(dns_checks),
+            no_error(tls_checks),
+            no_error(ip_checks),
+        ),
+    );
 
     // DNS section should be 50% (all warn = half credit).
     // TLS and IP sections should be 100%.
@@ -453,7 +463,10 @@ fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) ->
         dns_input_checks.push(fail("synthetic_fail"));
     }
 
-    let result = compute_score(&synthetic_profile, &inputs(no_error(dns_input_checks), errored(), errored()));
+    let result = compute_score(
+        &synthetic_profile,
+        &inputs(no_error(dns_input_checks), errored(), errored()),
+    );
 
     result.grade
 }
