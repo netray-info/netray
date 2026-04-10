@@ -200,6 +200,8 @@
       display: flex;
       align-items: center;
       gap: 5px;
+      min-height: 44px;
+      min-width: 44px;
     }
 
     .theme-btn:hover { color: var(--text); background: var(--surface2); }
@@ -222,7 +224,7 @@
       border: 1px solid var(--border);
       border-radius: 999px;
       padding: 5px 16px;
-      font-size: 11.5px;
+      font-size: 12px;
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
       color: var(--muted);
       letter-spacing: .04em;
@@ -290,6 +292,7 @@
       text-decoration: none;
       border: 1px solid;
       transition: transform .15s, box-shadow .15s, background .15s;
+      min-height: 44px;
     }
 
     .chip:hover { transform: translateY(-2px); }
@@ -332,6 +335,10 @@
       .tools .card,
       .tools .card:nth-last-child(2),
       .tools .card:nth-last-child(1) { grid-column: span 1; }
+    }
+
+    @media (max-width: 600px) {
+      .tools { grid-template-columns: 1fr; }
     }
 
     .card {
@@ -389,13 +396,14 @@
       align-items: center;
       gap: 5px;
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 10.5px;
+      font-size: 12px;
       font-weight: 500;
       letter-spacing: .02em;
       text-decoration: none;
       opacity: .5;
       transition: opacity .15s;
       margin-bottom: 16px;
+      min-height: 44px;
     }
     .card-github:hover { opacity: 1; }
     .card-github svg { display: block; flex-shrink: 0; }
@@ -408,7 +416,7 @@
 
     .card-badge {
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 10.5px;
+      font-size: 12px;
       font-weight: 500;
       letter-spacing: .08em;
       padding: 4px 11px;
@@ -430,7 +438,7 @@
 
     .card-tag {
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 500;
       margin-bottom: 5px;
     }
@@ -489,6 +497,7 @@
       border: 1px solid;
       align-self: flex-start;
       transition: background .15s;
+      min-height: 44px;
     }
 
     .card--ip    .card-cta { color: var(--ip);    border-color: var(--ip); }
@@ -511,12 +520,12 @@
       padding: 28px 24px;
       text-align: center;
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 11px;
+      font-size: 12px;
       color: var(--muted);
       letter-spacing: .04em;
     }
 
-    footer a { color: var(--muted); text-decoration: none; transition: color .15s; }
+    footer a { color: var(--muted); text-decoration: none; transition: color .15s; display: inline-block; padding: 8px 0; }
     footer a:hover { color: var(--text); }
     footer .sep { margin: 0 10px; }
 
@@ -546,6 +555,7 @@
       outline: none;
       transition: border-color .15s;
       min-width: 0;
+      min-height: 44px;
     }
 
     .card-form-input::placeholder { color: var(--muted); }
@@ -568,6 +578,7 @@
       white-space: nowrap;
       text-decoration: none;
       transition: background .15s;
+      min-height: 44px;
     }
 
     .card--ip    .card-form-btn { color: var(--ip);    border-color: var(--ip); }
@@ -596,6 +607,16 @@
       .hero  { padding: 72px 20px 52px; }
       .tools { padding: 48px 16px 80px; }
       .theme-toggle { top: 12px; right: 12px; }
+    }
+
+    @media (max-width: 948px) {
+      .card-form {
+        flex-direction: column;
+      }
+      .card-form-input,
+      .card-form-btn {
+        width: 100%;
+      }
     }
 
     /* ── Learn / Guides section ────────────────────── */
@@ -657,7 +678,7 @@
 
     .guide-card__tag {
       font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 600;
       letter-spacing: .08em;
       text-transform: uppercase;
@@ -708,6 +729,9 @@
       padding: 8px 20px;
       border-radius: 999px;
       transition: color .15s, border-color .15s;
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
     }
 
     .learn-all a:hover { color: var(--text); border-color: var(--muted); }
