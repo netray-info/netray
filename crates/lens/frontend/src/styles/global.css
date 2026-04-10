@@ -496,11 +496,13 @@ a:hover { text-decoration: underline; }
 
 .summary-grade {
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 1rem;
 }
 
 .summary-grade__letter {
+  display: flex;
+  align-items: center;
   font-family: var(--mono);
   font-size: 3.5rem;
   font-weight: 700;
@@ -572,10 +574,9 @@ a:hover { text-decoration: underline; }
 
 .summary-dot-grade {
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  line-height: 1;
 }
 
 .summary-dot-error {
@@ -666,6 +667,8 @@ a:hover { text-decoration: underline; }
 
 .summary-server__label {
   color: var(--text-muted);
+  min-width: 2.5rem;
+  flex-shrink: 0;
 }
 
 .summary-server__ip {
