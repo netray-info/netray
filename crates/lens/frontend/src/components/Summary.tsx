@@ -55,43 +55,44 @@ export default function Summary(props: Props) {
     sectionVerdict('dns') === 'error' || sectionVerdict('tls') === 'error' || sectionVerdict('ip') === 'error';
   const hasAddresses = () => (props.addresses?.length ?? 0) > 0 || !!props.httpServerIp;
 
-  const dotsAndActions = () => (
-    <>
-      <div class="summary-dots" role="list" aria-label="Section statuses">
-        <For each={['http', 'tls', 'dns', 'ip']}>
-          {(section) => (
-            <Show when={s().sections[section] !== undefined}>
-              <div class="summary-dot-item" role="listitem">
-                <VerdictDot verdict={sectionVerdict(section)} grade={sectionGrade(section)} />
-                <span>{section.toUpperCase()}</span>
-                <Show when={sectionVerdict(section) === 'error'} fallback={
-                  <Show when={sectionGrade(section)}>
-                    <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade(section)!) }}>
-                      {sectionGrade(section)}
-                    </span>
-                  </Show>
-                }>
-                  <span class="summary-dot-error">err</span>
+  const dots = () => (
+    <div class="summary-dots" role="list" aria-label="Section statuses">
+      <For each={['http', 'tls', 'dns', 'ip']}>
+        {(section) => (
+          <Show when={s().sections[section] !== undefined}>
+            <div class="summary-dot-item" role="listitem">
+              <VerdictDot verdict={sectionVerdict(section)} grade={sectionGrade(section)} />
+              <span>{section.toUpperCase()}</span>
+              <Show when={sectionVerdict(section) === 'error'} fallback={
+                <Show when={sectionGrade(section)}>
+                  <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade(section)!) }}>
+                    {sectionGrade(section)}
+                  </span>
                 </Show>
-              </div>
-            </Show>
-          )}
-        </For>
+              }>
+                <span class="summary-dot-error">err</span>
+              </Show>
+            </div>
+          </Show>
+        )}
+      </For>
+    </div>
+  );
+
+  const actions = () => (
+    <Show when={props.onCopyMd || props.onDownloadJson}>
+      <div class="summary-actions">
+        <Show when={props.onCopyMd}>
+          <button class="summary-action-btn" type="button" onClick={props.onCopyMd}>copy MD</button>
+        </Show>
+        <Show when={props.onCopyMd && props.onDownloadJson}>
+          <span class="summary-action-sep">|</span>
+        </Show>
+        <Show when={props.onDownloadJson}>
+          <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
+        </Show>
       </div>
-      <Show when={props.onCopyMd || props.onDownloadJson}>
-        <div class="summary-actions">
-          <Show when={props.onCopyMd}>
-            <button class="summary-action-btn" type="button" onClick={props.onCopyMd}>copy MD</button>
-          </Show>
-          <Show when={props.onCopyMd && props.onDownloadJson}>
-            <span class="summary-action-sep">|</span>
-          </Show>
-          <Show when={props.onDownloadJson}>
-            <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
-          </Show>
-        </div>
-      </Show>
-    </>
+    </Show>
   );
 
   return (
@@ -108,8 +109,11 @@ export default function Summary(props: Props) {
             </span>
             <div class="summary-grade__meta">
               <div class="summary-meta-row">
-                <span class="summary-score">{s().score}%</span>
-                {dotsAndActions()}
+                <div class="summary-meta-left">
+                  <span class="summary-score">{s().score}%</span>
+                  {dots()}
+                </div>
+                {actions()}
               </div>
               <div class="summary-labels">
                 <span class="summary-overall">{overallLabel(s().overall, s().grade)}</span>
