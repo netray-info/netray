@@ -18,18 +18,18 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(cargoVersion()),
   },
   server: {
-    port: 5175,
+    port: 5176,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: 'http://127.0.0.1:8083',
         changeOrigin: true,
       },
       '/api-docs': {
-        target: 'http://127.0.0.1:3000',
+        target: 'http://127.0.0.1:8083',
         changeOrigin: true,
       },
       '/docs': {
-        target: 'http://127.0.0.1:3000',
+        target: 'http://127.0.0.1:8083',
         changeOrigin: true,
       },
     },

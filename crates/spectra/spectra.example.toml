@@ -1,6 +1,6 @@
 [server]
-bind = "127.0.0.1:3000"
-metrics_bind = "127.0.0.1:9090"
+bind = "127.0.0.1:8083"
+metrics_bind = "127.0.0.1:9093"
 # trusted_proxies = ["10.0.0.0/8"]  # CIDR list of trusted reverse proxies (e.g. ["10.0.0.0/8"]). Required when running behind a load balancer. Omit if directly exposed.
 
 [inspect]
