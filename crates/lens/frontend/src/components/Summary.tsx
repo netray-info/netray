@@ -24,6 +24,12 @@ function overallLabel(v: Verdict): string {
   }
 }
 
+function durationClass(ms: number): string {
+  if (ms < 1000) return 'summary-duration summary-duration--fast';
+  if (ms < 3000) return 'summary-duration summary-duration--ok';
+  return 'summary-duration summary-duration--slow';
+}
+
 interface Props {
   summary: SummaryEvent;
   done: DoneEvent | null;
@@ -44,9 +50,47 @@ export default function Summary(props: Props) {
     sectionVerdict('dns') === 'error' || sectionVerdict('tls') === 'error' || sectionVerdict('ip') === 'error';
   const hasAddresses = () => (props.addresses?.length ?? 0) > 0 || !!props.httpServerIp;
 
+  const dotsAndActions = () => (
+    <>
+      <div class="summary-dots" role="list" aria-label="Section statuses">
+        <For each={['http', 'tls', 'dns', 'ip']}>
+          {(section) => (
+            <Show when={s().sections[section] !== undefined}>
+              <div class="summary-dot-item" role="listitem">
+                <VerdictDot verdict={sectionVerdict(section)} />
+                <span>{section.toUpperCase()}</span>
+                <Show when={sectionVerdict(section) === 'error'} fallback={
+                  <Show when={sectionGrade(section)}>
+                    <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade(section)!) }}>
+                      {sectionGrade(section)}
+                    </span>
+                  </Show>
+                }>
+                  <span class="summary-dot-error">err</span>
+                </Show>
+              </div>
+            </Show>
+          )}
+        </For>
+      </div>
+      <Show when={props.done}>
+        <div class="summary-actions">
+          <Show when={props.onCopyMd}>
+            <button class="summary-action-btn" type="button" onClick={props.onCopyMd}>copy MD</button>
+          </Show>
+          <Show when={props.onCopyMd && props.onDownloadJson}>
+            <span class="summary-action-sep">|</span>
+          </Show>
+          <Show when={props.onDownloadJson}>
+            <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
+          </Show>
+        </div>
+      </Show>
+    </>
+  );
+
   return (
     <div class="summary-card" role="region" aria-label="Summary">
-      {/* ── Top row: grade + meta + actions ── */}
       <div class="summary-top">
         <Show when={isError()} fallback={
           <div class="summary-grade">
@@ -58,11 +102,16 @@ export default function Summary(props: Props) {
               {s().grade}
             </span>
             <div class="summary-grade__meta">
-              <span class="summary-score">{s().score}%</span>
-              <span class="summary-overall">{overallLabel(s().overall)}</span>
-              <Show when={hasErroredSection()}>
-                <span class="summary-incomplete">incomplete — some checks failed to run</span>
-              </Show>
+              <div class="summary-meta-row">
+                <span class="summary-score">{s().score}%</span>
+                {dotsAndActions()}
+              </div>
+              <div class="summary-labels">
+                <span class="summary-overall">{overallLabel(s().overall)}</span>
+                <Show when={hasErroredSection()}>
+                  <span class="summary-incomplete">incomplete — some checks failed to run</span>
+                </Show>
+              </div>
             </div>
           </div>
         }>
@@ -71,42 +120,6 @@ export default function Summary(props: Props) {
             <div class="summary-grade__meta">
               <span class="summary-overall">Grade unavailable — all backends failed</span>
             </div>
-          </div>
-        </Show>
-
-        <div class="summary-dots" role="list" aria-label="Section statuses">
-          <For each={['http', 'tls', 'dns', 'ip']}>
-            {(section) => (
-              <Show when={s().sections[section] !== undefined}>
-                <div class="summary-dot-item" role="listitem">
-                  <VerdictDot verdict={sectionVerdict(section)} />
-                  <span>{section.toUpperCase()}</span>
-                  <Show when={sectionVerdict(section) === 'error'} fallback={
-                    <Show when={sectionGrade(section)}>
-                      <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade(section)!) }}>
-                        {sectionGrade(section)}
-                      </span>
-                    </Show>
-                  }>
-                    <span class="summary-dot-error">err</span>
-                  </Show>
-                </div>
-              </Show>
-            )}
-          </For>
-        </div>
-
-        <Show when={props.done}>
-          <div class="summary-actions">
-            <Show when={props.onCopyMd}>
-              <button class="summary-action-btn" type="button" onClick={props.onCopyMd}>copy MD</button>
-            </Show>
-            <Show when={props.onCopyMd && props.onDownloadJson}>
-              <span class="summary-action-sep">|</span>
-            </Show>
-            <Show when={props.onDownloadJson}>
-              <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
-            </Show>
           </div>
         </Show>
       </div>
@@ -164,7 +177,7 @@ export default function Summary(props: Props) {
       <Show when={props.done}>
         {(done) => (
           <div class="summary-meta">
-            <span>{done().duration_ms}ms</span>
+            <span class={durationClass(done().duration_ms)}>{done().duration_ms}ms</span>
             <Show when={done().cached}>
               <span class="cached-badge">cached</span>
             </Show>
