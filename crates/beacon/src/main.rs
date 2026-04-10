@@ -82,11 +82,12 @@ async fn main() -> anyhow::Result<()> {
                 .on_response(
                     |response: &axum::http::Response<_>,
                      latency: std::time::Duration,
-                     _span: &Span| {
+                     span: &Span| {
                         tracing::info!(
-                            status = %response.status(),
-                            latency_ms = latency.as_millis(),
-                            "response"
+                            parent: span,
+                            status = response.status().as_u16(),
+                            ms = latency.as_millis(),
+                            ""
                         );
                     },
                 ),
