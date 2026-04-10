@@ -1,35 +1,102 @@
-# tlsight
+<div align="center">
 
-**TLS certificate inspection and diagnostics — in one view.**
+# **tlsight** — TLS, illuminated
 
-tlsight is a web-based tool that performs a full TLS handshake against a hostname, extracts and validates the certificate chain, cross-checks DNS records, and surfaces everything in a structured, readable interface. No dependencies, no plugins — just a URL and a result.
+**Full certificate chain · Multi-IP consistency · DANE · CAA · OCSP · CT — in one request.**
 
-Live at [tls.netray.info](https://tls.netray.info) · Part of the [netray.info](https://netray.info) toolchain alongside [dns.netray.info](https://dns.netray.info) and [ip.netray.info](https://ip.netray.info).
+[![Live](https://img.shields.io/badge/live-tls.netray.info-0ea5e9?style=flat-square)](https://tls.netray.info)
+[![API Docs](https://img.shields.io/badge/API-OpenAPI%203.1-6366f1?style=flat-square)](https://tls.netray.info/docs)
+[![Version](https://img.shields.io/badge/version-0.10.4-22c55e?style=flat-square)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-94a3b8?style=flat-square)](LICENSE)
+
+<br>
+
+*Your browser hides broken certificates. This tool shows them all.*
+
+<br>
+
+![tlsight results for netray.info](docs/screenshots/results-netray-dark.png)
+
+<br>
+
+</div>
 
 ---
 
 ## What it does
 
-Given a hostname (with optional ports), tlsight:
+Type a hostname. tlsight resolves all its IPs, connects to each one, performs a full TLS handshake, and extracts everything worth knowing — in under two seconds.
 
-- **Resolves all IPs** — A and AAAA records, with DNSSEC awareness
-- **Connects to each IP** — concurrent TLS handshakes, one per IP per port
-- **STARTTLS** — auto-negotiates STARTTLS upgrade on SMTP ports 25 and 587 before the TLS handshake
-- **Extracts the full certificate chain** — leaf, intermediates, root; subject, SANs, key type, expiry, fingerprint
-- **Certificate policy classification** — EV / OV / DV detection via Certificate Policies extension and subject O field
-- **AIA URL extraction** — OCSP responder URL and CA Issuers URL from each certificate's Authority Information Access extension
-- **Certificate lifetime checks** — warns at 398 days, fails at 825 days (CA/B Forum limits)
-- **Validates chain trust** — against the Mozilla root bundle (plus optional custom CA directory)
-- **Checks OCSP stapling** — parses the stapled response if present, shows staple age and validity window
-- **Extracts Certificate Transparency SCTs** — from the TLS extension
-- **Cross-checks DNS** — CAA records (is the issuing CA authorized?) and TLSA/DANE records
-- **ECH detection** — queries the HTTPS DNS record for an Encrypted Client Hello advertisement
-- **Compares across IPs** — detects cert mismatches, TLS version, cipher suite, and ALPN inconsistencies between servers
-- **Key exchange group** — named curve (X25519, P-256, P-384, …) shown in TLS parameters
-- **Runs health checks** — per-port checks (certificate, protocol, configuration) plus hostname-scoped checks (HSTS, HTTPS redirect)
-- **Checks HSTS and HTTPS redirect** — makes a live HEAD request to verify security headers
+- **Certificate chain** — leaf, intermediates, root; subject, SANs, key type, signature algorithm, expiry, fingerprints
+- **TLS parameters** — version, cipher suite, key exchange group, ALPN, handshake time
+- **OCSP stapling** — staple parsed if present; age and validity window shown
+- **Certificate Transparency** — SCTs extracted from the TLS handshake extension
+- **CAA compliance** — is the issuing CA actually authorized by your DNS CAA records? (155-entry compiled lookup table, no heuristics)
+- **DANE/TLSA** — DNS-based certificate pinning, independent of the CA system
+- **ECH detection** — queries HTTPS DNS record for Encrypted Client Hello advertisement
+- **Multi-IP consistency** — detects cert mismatches, TLS version, cipher, and ALPN divergence across load-balanced servers
+- **HSTS and HTTPS redirect** — live HEAD request to port 80 to verify security headers
+- **STARTTLS** — auto-negotiated on SMTP ports 25 and 587 before the TLS handshake
+- **22 graded health checks** — per-certificate, per-protocol, per-configuration, hostname-scoped
 
-All of this happens in a single request, typically in under two seconds.
+All of this from a single API call. No plugins. No browser extension. No configuration.
+
+---
+
+## Screenshots
+
+*Inspecting [netray.info](https://tls.netray.info/?h=netray.info) — full chain, all checks, multi-IP.*
+
+<table>
+<tr>
+<td width="50%">
+
+**Dark theme**
+
+![Results dark](docs/screenshots/results-netray-dark.png)
+
+</td>
+<td width="50%">
+
+**Light theme**
+
+![Results light](docs/screenshots/results-netray-light.png)
+
+</td>
+</tr>
+<tr>
+<td colspan="2">
+
+**Expanded — full certificate chain and all checks**
+
+![Expanded full page](docs/screenshots/results-netray-expanded-dark.png)
+
+</td>
+</tr>
+</table>
+
+---
+
+## Try it
+
+**Browser** — [tls.netray.info](https://tls.netray.info)
+
+```sh
+# Full inspection — JSON
+curl -s 'https://tls.netray.info/api/inspect?h=netray.info' | jq .
+
+# Shareable URL
+open 'https://tls.netray.info/?h=netray.info'
+
+# Non-standard port
+curl -s 'https://tls.netray.info/api/inspect?h=netray.info:8443'
+
+# STARTTLS — SMTP
+curl -s 'https://tls.netray.info/api/inspect?h=mail.example.com:25'
+
+# Multiple ports side by side
+curl -s 'https://tls.netray.info/api/inspect?h=example.com:443,465,993'
+```
 
 ---
 
@@ -39,204 +106,184 @@ All of this happens in a single request, typically in under two seconds.
 hostname[:port[,port...]]
 ```
 
-| Example | What it does |
+| Example | What it inspects |
 |---|---|
-| `example.com` | Inspect port 443 |
-| `example.com:8443` | Inspect a non-standard TLS port |
-| `example.com:443,465,993` | Inspect HTTPS, SMTPS, and IMAPS side by side |
-| `mail.example.com:25` | STARTTLS/SMTP — auto-negotiated before handshake |
-| `192.0.2.1` | Inspect an IP directly (skips hostname validation checks) |
+| `example.com` | Port 443 |
+| `example.com:8443` | Non-standard TLS port |
+| `example.com:443,465,993` | HTTPS, SMTPS, and IMAPS side by side |
+| `mail.example.com:25` | STARTTLS/SMTP — upgrade auto-negotiated |
+| `mail.example.com:587` | STARTTLS/submission |
 
-Maximum 7 ports per request. Ports must be in the range 1–65535. Internal IPs (RFC 1918, loopback, link-local, CGNAT, multicast) are blocked.
+Maximum 7 ports per request. Internal IPs (RFC 1918, loopback, link-local, CGNAT) are blocked.
 
 ---
 
 ## API
 
+### Inspect endpoint
+
 ```
-GET /api/inspect?h=hostname[:port[,port...]]
+GET /api/inspect?h=<hostname>
 ```
 
-Returns a structured JSON document with the full inspection result. See the [API docs](/docs) or [OpenAPI spec](/api-docs/openapi.json) for the full schema.
+Returns a synchronous JSON response — TLS handshakes complete in milliseconds, no streaming needed.
 
 ```sh
-curl 'https://tls.netray.info/api/inspect?h=example.com'
+curl -s 'https://tls.netray.info/api/inspect?h=example.com' | jq '{
+  grade: .validation.verdict,
+  expires_in: .ips[0].ports["443"].chain[0].days_remaining,
+  tls_version: .ips[0].ports["443"].tls.version,
+  cipher: .ips[0].ports["443"].tls.cipher_suite
+}'
 ```
 
-Additional endpoints:
+### Response shape (abbreviated)
+
+```json
+{
+  "host": "example.com",
+  "duration_ms": 412,
+  "ips": [{
+    "ip": "93.184.216.34",
+    "enrichment": { "org": "Edgecast Inc.", "geo": "Los Angeles, US", "network_type": "hosting" },
+    "ports": {
+      "443": {
+        "tls": { "version": "TLSv1.3", "cipher_suite": "TLS_AES_256_GCM_SHA384",
+                 "key_exchange_group": "X25519", "handshake_ms": 98 },
+        "chain": [{
+          "subject": "CN=*.example.com",
+          "issuer": "CN=DigiCert TLS RSA SHA256 2020 CA1",
+          "not_after": "2025-11-15T12:00:00Z",
+          "days_remaining": 142,
+          "key_type": "RSA", "key_bits": 2048,
+          "sans": ["*.example.com", "example.com"],
+          "ct_scts": 2,
+          "ocsp": { "stapled": true, "status": "good", "updated_ago_secs": 7200 }
+        }],
+        "checks": [
+          { "name": "chain_trusted", "verdict": "pass" },
+          { "name": "not_expired", "verdict": "pass" },
+          { "name": "tls_version", "verdict": "pass" },
+          { "name": "ocsp_stapled", "verdict": "pass" },
+          ...
+        ]
+      }
+    }
+  }],
+  "dns": {
+    "caa": [{ "tag": "issue", "value": "digicert.com" }],
+    "caa_compliant": true,
+    "tlsa": [],
+    "ech_advertised": false
+  },
+  "validation": { "verdict": "pass", "warnings": [], "skipped_ips": [] },
+  "consistency": { "cert": true, "tls_version": true, "cipher_suite": true }
+}
+```
+
+### Health checks
+
+22 checks across four categories:
+
+**Certificate** — `chain_trusted`, `not_expired`, `hostname_match`, `chain_complete`, `strong_signature`, `key_strength`, `expiry_window`, `cert_lifetime`
+
+**Protocol** — `tls_version`, `forward_secrecy`, `aead_cipher`, `ocsp_stapled`, `ct_logged`
+
+**Configuration** — `caa_compliant`, `dane_valid`, `ech_advertised`, `consistency`, `alpn_consistency`
+
+**Hostname-scoped** — `hsts`, `https_redirect`
+
+Each check returns `pass`, `warn`, `fail`, or `skip`. The `validation.verdict` is the worst result across all checks.
+
+### CI / Pipeline integration
+
+Gate deploys on TLS health:
+
+```sh
+# Fail if certificate expires in under 30 days
+curl -s 'https://tls.netray.info/api/inspect?h=example.com' \
+  | jq -e '.ips[0].ports["443"].chain[0].days_remaining > 30'
+
+# Fail if any check is not passing
+curl -s 'https://tls.netray.info/api/inspect?h=example.com' \
+  | jq -e '.validation.verdict == "pass"'
+
+# Full verdict summary
+curl -s 'https://tls.netray.info/api/inspect?h=example.com' \
+  | jq '{verdict: .validation.verdict, expires_days: .ips[0].ports["443"].chain[0].days_remaining}'
+```
+
+### Other endpoints
 
 | Endpoint | Description |
 |---|---|
 | `GET /health` | Liveness probe |
 | `GET /ready` | Readiness probe |
-| `GET /api/meta` | Server capabilities and configured limits |
 | `GET /api-docs/openapi.json` | OpenAPI 3.1 spec |
-| `GET /docs` | Interactive API documentation |
-
-### CI / Pipeline Integration
-
-Use in GitHub Actions or any CI system to validate TLS health:
-
-```yaml
-# Check TLS health passes
-- run: |
-    curl -sf 'https://tls.netray.info/api/inspect?h=$DOMAIN' \
-      | jq -e '.quality.verdict == "Pass"'
-
-# Check certificate expiry (fail if < 30 days)
-- run: |
-    curl -sf 'https://tls.netray.info/api/inspect?h=$DOMAIN' \
-      | jq -e '[.quality.checks[] | select(.name == "expiry_window" and .status == "pass")] | length > 0'
-```
+| `GET /docs` | Interactive API docs (Scalar UI) |
 
 ---
 
-## Building
+## Deployment
 
-Prerequisites: Rust toolchain, Node.js (for the frontend).
+### From source
 
 ```sh
-# Full production build (frontend + Rust binary)
+git clone https://github.com/lukaspustina/tlsight
+cd tlsight
 make
-
-# Run the built binary
-make run
-
-# Development (two terminals)
-make frontend-dev   # Vite dev server on :5174, proxies /api/* to :8081
-make dev            # cargo run with tlsight.dev.toml
-
-# Tests
-make test           # Rust + frontend
-make ci             # Full CI: lint + test + frontend build
-
-# CA/CAA data (contributors only — commit the result)
-make data           # re-fetch SSLMate + CCADB CA lists and regenerate data/caa_domains.tsv
+./target/release/tlsight tlsight.example.toml
+# http://localhost:8081
 ```
 
-The release binary embeds the compiled frontend. No separate static file hosting required.
-
-### CA data
-
-`data/caa_domains.tsv` maps CAA `issue` domain values (e.g. `pki.goog`) to CA display names and is committed to the repository. `build.rs` embeds it as a sorted lookup table at compile time. Run `make data` to refresh it when CAs are added or renamed, then commit the updated TSV.
-
----
-
-## Configuration
+### Configuration
 
 Copy `tlsight.example.toml` and adjust:
 
 ```toml
 [server]
-bind = "0.0.0.0:8080"
+bind = "0.0.0.0:8081"
 metrics_bind = "127.0.0.1:9090"
+# trusted_proxies = ["10.0.0.0/8"]
+# custom_ca_dir = "/etc/tlsight/ca"   # PEM/CRT files for private CAs
 
-[limits]
+[backends]
+ip_url = "https://ip.netray.info"   # optional IP enrichment
+
+[rate_limit]
 per_ip_per_minute = 30
-per_ip_burst = 10
-max_ports = 5
+per_ip_burst = 5
+
+[inspection]
 max_ips_per_hostname = 10
+max_concurrent_handshakes = 4
 handshake_timeout_secs = 5
 request_timeout_secs = 15
-
-[dns]
-resolver = "cloudflare"   # "cloudflare" | "google" | "system"
-
-[validation]
-expiry_warning_days = 30
-check_dane = true
-check_caa = true
-check_ct = false
-# custom_ca_dir = "/etc/tlsight/ca.d/"   # load private CAs from *.pem files
-
-[ecosystem]
-dns_base_url = "https://dns.netray.info"   # cross-links to DNS tool
-ip_base_url  = "https://ip.netray.info"    # cross-links to IP tool
-# ip_api_url = "https://ip.netray.info"    # enables IP enrichment (geo, ASN, rDNS badges)
-
-[quality]
-# enabled = true                    # health checks always-on (default: true)
-# http_check_timeout_secs = 5       # timeout for HSTS/redirect checks (hard cap: 5s)
-# skip_http_checks = false          # set true if outbound HTTP is blocked
 ```
 
-Configuration is loaded from a TOML file (default: `tlsight.toml`, override with `TLSIGHT_CONFIG`). Environment variables take precedence over the file, using the `TLSIGHT_` prefix with `__` as the section separator — e.g. `TLSIGHT_SERVER__BIND=0.0.0.0:8080`.
+Override any value with `TLSIGHT_` env vars (`__` for nested sections): `TLSIGHT_SERVER__BIND=0.0.0.0:8081`.
 
-Hardcoded safety caps (handshake timeout 5s, request timeout 15s, max 7 ports, max 10 IPs) cannot be exceeded by configuration.
+**Custom CA support** — drop `.pem` or `.crt` files into `custom_ca_dir` to trust private CAs without a rebuild. Useful for internal PKI (Step-CA, Vault PKI, etc.).
 
-### Custom CA directory
+### Build targets
 
-For inspecting internal infrastructure with private CAs:
-
-```toml
-[validation]
-custom_ca_dir = "/etc/tlsight/ca.d/"
+```sh
+make          # frontend + release binary
+make dev      # cargo run with tlsight.dev.toml (port 8081)
+make test     # all tests
+make ci       # full gate: fmt, clippy, test, frontend, audit
+make data     # refresh CAA issuer lookup table (data/caa_domains.tsv)
 ```
-
-All `*.pem` files in the directory are loaded at startup and added to the trust store alongside the Mozilla root bundle. The directory is re-scanned on `SIGHUP` — no restart required. The count of loaded custom CAs is exposed via the `/api/meta` endpoint (`custom_ca_count` field).
-
----
-
-## Health checks
-
-Each port inspection runs a set of health checks, producing a Pass / Warn / Fail / Skip verdict per check:
-
-**Certificate**
-- Chain trusted — verifies against Mozilla root bundle (+ custom CAs)
-- Not expired — any cert in the chain expired or not-yet-valid
-- Hostname match — leaf SAN covers the queried hostname
-- Chain complete — correct chain order; leaf → intermediates → root
-- Strong signature — no SHA-1 or MD5 in the chain
-- Key strength — RSA ≥ 2048 bits, ECDSA ≥ P-256
-- Expiry window — Warn ≤ 30 days, Fail ≤ 7 days
-- Certificate lifetime — Warn > 398 days, Fail > 825 days (CA/B Forum limits)
-
-**Protocol**
-- TLS version — Warn on TLS 1.2, Fail on earlier
-- Forward secrecy — ECDHE / DHE key exchange required
-- AEAD cipher — GCM, ChaCha20-Poly1305, or CCM required
-- OCSP stapled — Warn if absent
-- CT logged — 2+ SCTs recommended (skipped when CT checking is disabled)
-
-**Configuration**
-- DANE valid — TLSA record match (skipped without DNSSEC)
-- CAA compliant — issuing CA authorized by CAA records (matched via a compiled-in table of ~155 CA→domain mappings sourced from SSLMate and CCADB; unknown CAA domains → Fail)
-- IP consistency — all IPs serve matching cert, TLS version, cipher, and ALPN
-- ALPN consistency — ALPN protocol identical across all IPs
-- ECH advertised — Warn if absent on port 443
-
-**Hostname-scoped (once per inspection)**
-- HSTS — `Strict-Transport-Security` header present with ≥ 180-day max-age
-- HTTPS redirect — plain HTTP redirects to HTTPS
-
----
-
-## Frontend features
-
-- **Certificate validity timeline bar** — color-coded progress bar per cert (green > 30 days, amber 1–30 days, red expired)
-- **OCSP staple freshness badge** — shows staple age and validity window alongside the staple status
-- **Copy-to-clipboard** — individual certificate field values (subject, serial, fingerprints, …) have copy buttons
-- **Cert change detection** — a banner is shown when the leaf certificate fingerprint differs from the last visit (stored in `localStorage`)
-- **Port tab verdict badges** — colored dot per port tab (green / amber / red) derived from the port's health check roll-up
-
----
-
-## Security
-
-tlsight makes outbound TCP+TLS connections to user-specified targets. The security model is defense-in-depth:
-
-1. **Input validation** — hostname syntax, port range, character whitelist
-2. **Target policy** — DNS-resolved IPs are checked against a blocklist (RFC 1918, loopback, link-local, CGNAT, multicast) before connecting. DNS rebinding is mitigated by resolving once and checking the result.
-3. **Rate limiting** — GCRA per source IP and per target hostname. Multi-IP fan-out uses cap-and-warn instead of rejecting.
-4. **Transport** — Connections are TLS-only (using rustls, pure Rust). No application data is sent after the handshake. The `AcceptAnyCert` verifier is used exclusively for inspection connections, never for internal HTTPS.
 
 ---
 
 ## Tech stack
 
-**Backend**: Rust · axum · rustls · x509-parser · mhost · tower-governor
+**Backend** — Rust · Axum 0.8 · rustls (pure-Rust TLS) · x509-parser · mhost (DNS) · tokio · utoipa (OpenAPI 3.1) · rust-embed
 
-**Frontend**: SolidJS · Vite · TypeScript (strict)
+**Frontend** — SolidJS 1.9 · Vite · TypeScript (strict)
+
+**Part of** — [netray.info](https://netray.info) suite: [IP](https://ip.netray.info) · [DNS](https://dns.netray.info) · [HTTP](https://http.netray.info) · [Email](https://email.netray.info) · [Lens](https://lens.netray.info)
 
 ---
 
