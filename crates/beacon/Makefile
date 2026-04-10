@@ -120,5 +120,5 @@ clean: ## Remove target/, frontend/dist/, node_modules/
 docker: ## Build Docker image
 	docker build -t ghcr.io/lukaspustina/$(APP):latest .
 
-docker-run: ## Run Docker image locally (port 3000)
-	docker run --rm -p 3000:3000 -p 9090:9090 ghcr.io/lukaspustina/$(APP):latest
+docker-run: ## Run Docker image locally (port 8084)
+	docker run --rm -p 8084:8084 -p 9094:9094 ghcr.io/lukaspustina/$(APP):latest

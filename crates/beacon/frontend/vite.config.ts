@@ -18,14 +18,14 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(cargoVersion()),
   },
   server: {
-    port: 5176,
+    port: 5177,
     proxy: {
-      '/inspect': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-      '/api': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-      '/api-docs': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-      '/docs': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-      '/health': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-      '/ready': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+      '/inspect': { target: 'http://127.0.0.1:8084', changeOrigin: true },
+      '/api': { target: 'http://127.0.0.1:8084', changeOrigin: true },
+      '/api-docs': { target: 'http://127.0.0.1:8084', changeOrigin: true },
+      '/docs': { target: 'http://127.0.0.1:8084', changeOrigin: true },
+      '/health': { target: 'http://127.0.0.1:8084', changeOrigin: true },
+      '/ready': { target: 'http://127.0.0.1:8084', changeOrigin: true },
     },
   },
   build: {
