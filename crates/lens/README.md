@@ -33,20 +33,22 @@ All three checks run in parallel. Results stream in as each backend responds —
 
 ## Screenshots
 
+*Checking [netray.info](https://lens.netray.info/?d=netray.info) — A+ across all three signals.*
+
 <table>
 <tr>
 <td width="50%">
 
-**Dark theme — results**
+**Dark theme**
 
-![Results dark theme](docs/screenshots/results-dark.png)
+![Results — dark theme](docs/screenshots/results-netray-dark.png)
 
 </td>
 <td width="50%">
 
-**Light theme — results**
+**Light theme**
 
-![Results light theme](docs/screenshots/results-light.png)
+![Results — light theme](docs/screenshots/results-netray-light.png)
 
 </td>
 </tr>
@@ -55,7 +57,7 @@ All three checks run in parallel. Results stream in as each backend responds —
 
 **Expanded — full check list**
 
-![Expanded checks](docs/screenshots/results-cloudflare-expanded.png)
+![All checks expanded](docs/screenshots/results-netray-expanded-dark.png)
 
 </td>
 <td width="50%">
