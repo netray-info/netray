@@ -80,7 +80,7 @@ a:hover { text-decoration: underline; }
 
 .url-input__field {
   flex: 1;
-  padding: 0.625rem 2rem 0.625rem 0.875rem;
+  padding: 0.625rem 3.75rem 0.625rem 0.875rem;
   font-family: var(--mono);
   font-size: 0.9rem;
   background: var(--bg-secondary);
@@ -99,18 +99,29 @@ a:hover { text-decoration: underline; }
   color: var(--text-muted);
 }
 
-.url-input__clear {
+.url-input__actions {
   position: absolute;
   right: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.url-input__clear,
+.url-input__copy-link {
   background: none;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.8125rem;
   line-height: 1;
-  padding: 0 0.25rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: 3px;
+  transition: color var(--transition), background var(--transition);
 }
-.url-input__clear:hover { color: var(--text-primary); }
+.url-input__clear { font-size: 1rem; }
+.url-input__clear:hover,
+.url-input__copy-link:hover { color: var(--text-primary); background: var(--bg-secondary); }
 
 /* ================================================================
    Section controls (expand/collapse all)
@@ -260,6 +271,13 @@ a:hover { text-decoration: underline; }
   line-height: 1.5;
 }
 
+.check-explain__guide-link {
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.check-explain__guide-link:hover { text-decoration: underline; }
+
 .check-row--fail { background: rgba(239, 68, 68, 0.08); }
 .check-row--warn { background: rgba(245, 158, 11, 0.08); }
 
@@ -403,8 +421,21 @@ a:hover { text-decoration: underline; }
   gap: 0.375rem;
 }
 
-.overview__label { color: var(--text-muted); font-family: var(--mono); }
+.overview__label { color: var(--text-muted); font-family: var(--mono); cursor: default; }
 .overview__value { font-weight: 600; font-family: var(--mono); }
+.overview__row-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  align-self: center;
+  padding-right: 0.25rem;
+  white-space: nowrap;
+}
+.overview__value--fast { color: var(--pass); }
+.overview__value--ok   { color: var(--warn); }
+.overview__value--slow { color: var(--fail); }
 
 .overview__ip-link {
   margin-left: auto;
@@ -415,6 +446,17 @@ a:hover { text-decoration: underline; }
   transition: color var(--transition);
 }
 .overview__ip-link:hover { color: var(--accent); text-decoration: none; }
+
+/* Inline finding summary shown in collapsed section headers */
+.section-card__summary {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40ch;
+}
 
 /* ================================================================
    CSP directives

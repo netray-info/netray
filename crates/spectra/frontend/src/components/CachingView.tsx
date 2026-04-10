@@ -36,25 +36,21 @@ export default function CachingView(props: Props) {
         <p class="cache-check-message">{props.check!.message}</p>
       </Show>
 
-      <Show when={props.caching.cache_control}>
-        <p class="mono cache-value">
-          Cache-Control: {props.caching.cache_control}
-        </p>
-      </Show>
-
-      <ul class="cache-directive-list">
-        <Show when={d().max_age != null}>
-          <li>max-age: {d().max_age}s</li>
-        </Show>
-        <Show when={d().no_store}><li>no-store</li></Show>
-        <Show when={d().no_cache}><li>no-cache</li></Show>
-        <Show when={d().public}><li>public</li></Show>
-        <Show when={d().private}><li>private</li></Show>
-        <Show when={d().must_revalidate}><li>must-revalidate</li></Show>
-        <Show when={d().immutable}><li>immutable</li></Show>
-      </ul>
-
       <ul class="cache-vary-list">
+        <li>
+          Cache-Control:{' '}
+          <span class="cache-directive-list">
+            {[
+              d().max_age != null ? `max-age: ${d().max_age}s` : null,
+              d().no_store ? 'no-store' : null,
+              d().no_cache ? 'no-cache' : null,
+              d().public ? 'public' : null,
+              d().private ? 'private' : null,
+              d().must_revalidate ? 'must-revalidate' : null,
+              d().immutable ? 'immutable' : null,
+            ].filter(Boolean).join(', ') || <span class="cache-validator--absent">not set</span>}
+          </span>
+        </li>
         <li>
           ETag:{' '}
           {props.caching.etag

@@ -20,7 +20,10 @@ export default function CorsReport(props: Props) {
         <li>Allows credentials: {props.cors.allows_credentials ? 'Yes' : 'No'}</li>
       </ul>
       <Show when={props.showExplanations() && props.explanation}>
-        <p class="check-explain cors-explain">{props.explanation}</p>
+        <p class="check-explain cors-explain">
+          {props.explanation}
+          {' '}<a href="/guide/cors.html" target="_blank" rel="noopener noreferrer" class="check-explain__guide-link">Learn more ↗</a>
+        </p>
       </Show>
     </>
   );

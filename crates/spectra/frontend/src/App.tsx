@@ -177,6 +177,12 @@ export default function App() {
     return `badge badge--${status}`;
   }
 
+  function durationClass(ms: number): string {
+    if (ms < 500) return 'overview__value overview__value--fast';
+    if (ms < 2000) return 'overview__value overview__value--ok';
+    return 'overview__value overview__value--slow';
+  }
+
   // Explain toggle
   const [showExplanations, setShowExplanations] = createSignal(false);
 
@@ -239,6 +245,7 @@ export default function App() {
           loading={loading()}
           value={lastQuery() || initialUrl}
           inputRef={el => (inputEl = el)}
+          showCopyLink={!!result()}
         />
 
         <Show when={error()}>
@@ -282,11 +289,12 @@ export default function App() {
                       </div>
                       <div class="overview__item">
                         <span class="overview__label">Duration</span>
-                        <span class="overview__value">{data.duration_ms}ms</span>
+                        <span class={durationClass(data.duration_ms)} title={data.duration_ms < 500 ? 'Fast' : data.duration_ms < 2000 ? 'Acceptable' : 'Slow'}>{data.duration_ms}ms</span>
                       </div>
                     </div>
                     {/* Row 2: IP + enrichment */}
                     <div class="overview__row overview__row--enrichment">
+                      <span class="overview__row-label">Server</span>
                       <div class="overview__item">
                         <span class="overview__label">IP</span>
                         <span class="overview__value">{data.enrichment.ip}</span>
@@ -296,13 +304,13 @@ export default function App() {
                       </div>
                       <Show when={data.enrichment.org}>
                         <div class="overview__item">
-                          <span class="overview__label">Org</span>
+                          <span class="overview__label" title="Server hosting provider">Org</span>
                           <span class="overview__value">{data.enrichment.org}</span>
                         </div>
                       </Show>
                       <Show when={data.enrichment.ip_type}>
                         <div class="overview__item">
-                          <span class="overview__label">Category</span>
+                          <span class="overview__label" title="IP address classification">Category</span>
                           <span class="overview__value">
                             {data.enrichment.ip_type!.charAt(0).toUpperCase() + data.enrichment.ip_type!.slice(1)}
                           </span>
@@ -489,6 +497,12 @@ export default function App() {
                             <span class="badge badge--warn">{data.security.csp.issues.length} issue{data.security.csp.issues.length !== 1 ? 's' : ''}</span>
                           </Show>
                         </span>
+                        <Show when={!openCsp() && data.security.csp.issues.length > 0}>
+                          <span class="section-card__summary">
+                            {data.security.csp.issues.slice(0, 2).join(' · ')}
+                            {data.security.csp.issues.length > 2 ? ` · +${data.security.csp.issues.length - 2} more` : ''}
+                          </span>
+                        </Show>
                         <span class="section-card__spacer" />
                         <span class={`section-card__chevron${openCsp() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
                       </button>
@@ -523,24 +537,26 @@ export default function App() {
                   </div>
 
                   {/* Cookies */}
-                  <Show when={hasCookies}>
-                    <div class="section-card" data-card>
-                      <button class="section-card__header" onClick={() => setOpenCookies(!openCookies())} aria-expanded={openCookies()} aria-controls="section-cookies-body">
-                        <span class="section-card__status section-card__status--skip" />
-                        <span class="section-card__title">Cookies</span>
-                        <span class="section-card__badges">
+                  <div class="section-card" data-card>
+                    <button class="section-card__header" onClick={() => setOpenCookies(!openCookies())} aria-expanded={openCookies()} aria-controls="section-cookies-body">
+                      <span class="section-card__status section-card__status--skip" />
+                      <span class="section-card__title">Cookies</span>
+                      <span class="section-card__badges">
+                        <Show when={hasCookies} fallback={<span class="badge badge--skip">none</span>}>
                           <span class="badge badge--skip">{data.cookies.length}</span>
-                        </span>
-                        <span class="section-card__spacer" />
-                        <span class={`section-card__chevron${openCookies() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
-                      </button>
-                      <Show when={openCookies()}>
-                        <div class="section-card__body" id="section-cookies-body">
+                        </Show>
+                      </span>
+                      <span class="section-card__spacer" />
+                      <span class={`section-card__chevron${openCookies() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
+                    </button>
+                    <Show when={openCookies()}>
+                      <div class="section-card__body" id="section-cookies-body">
+                        <Show when={hasCookies} fallback={<p style="color: var(--text-muted); margin: 0; font-size: 0.875rem;">No Set-Cookie headers — no cookies set by this URL.</p>}>
                           <CookieInspector cookies={data.cookies} />
-                        </div>
-                      </Show>
-                    </div>
-                  </Show>
+                        </Show>
+                      </div>
+                    </Show>
+                  </div>
 
                   {/* Caching + CDN */}
                   <div class="section-card" data-card>
@@ -558,6 +574,13 @@ export default function App() {
                           return <span class={verdictClass(check.status)}>{check.status}</span>;
                         })()}
                       </span>
+                      {(() => {
+                        const check = data.quality.checks.find(c => c.name === 'caching');
+                        if (!openCaching() && check?.message && (check.status === 'warn' || check.status === 'fail')) {
+                          return <span class="section-card__summary">{check.message}</span>;
+                        }
+                        return null;
+                      })()}
                       <span class="section-card__spacer" />
                       <span class={`section-card__chevron${openCaching() ? ' section-card__chevron--open' : ''}`}>&#9660;</span>
                     </button>
