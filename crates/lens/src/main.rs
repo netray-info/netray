@@ -36,6 +36,7 @@ async fn main() {
         dns_url = %config.backends.dns_url,
         tls_url = %config.backends.tls_url,
         ip_url  = %config.backends.ip_url,
+        http_url = config.backends.http_url.as_deref().unwrap_or("disabled"),
         per_ip_rate = config.rate_limit.per_ip_per_minute,
         per_ip_burst = config.rate_limit.per_ip_burst,
         global_rate = config.rate_limit.global_per_minute,
