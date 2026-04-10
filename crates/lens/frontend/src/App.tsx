@@ -55,6 +55,37 @@ export default function App() {
     const initialDomain = params.get('d');
     if (initialDomain) handleSubmit(initialDomain);
 
+    function clearCardActive() {
+      document.querySelector('[data-card-active]')?.removeAttribute('data-card-active');
+    }
+
+    function navigateCards(e: KeyboardEvent) {
+      const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-card]'));
+      if (cards.length === 0) return;
+      e.preventDefault();
+      const cur = document.querySelector<HTMLElement>('[data-card-active]');
+      let idx = cur ? cards.indexOf(cur) : -1;
+      if (idx === -1) {
+        idx = e.key === 'j' ? 0 : cards.length - 1;
+      } else {
+        cur!.removeAttribute('data-card-active');
+        idx += e.key === 'j' ? 1 : -1;
+      }
+      idx = Math.max(0, Math.min(idx, cards.length - 1));
+      cards[idx].setAttribute('data-card-active', '');
+      cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function expandActiveCard(e: KeyboardEvent) {
+      const active = document.querySelector<HTMLElement>('[data-card-active]');
+      if (active) {
+        e.preventDefault();
+        active.querySelector<HTMLElement>('.section-card__header')?.click();
+      }
+    }
+
+    document.addEventListener('mousedown', clearCardActive);
+
     const cleanupShortcuts = createKeyboardShortcuts({
       '/':      (e) => { e.preventDefault(); inputEl?.focus(); },
       '?':      (e) => { e.preventDefault(); setShowHelp(v => !v); },
@@ -62,10 +93,16 @@ export default function App() {
         const d = currentDomain();
         if (d && checkState() !== 'loading') { e.preventDefault(); handleSubmit(d); }
       },
+      'j':      navigateCards,
+      'k':      navigateCards,
+      'Enter':  expandActiveCard,
       'Escape': () => setShowHelp(false),
     });
 
-    onCleanup(cleanupShortcuts);
+    onCleanup(() => {
+      cleanupShortcuts();
+      document.removeEventListener('mousedown', clearCardActive);
+    });
   });
 
   function clearState() {
@@ -147,7 +184,7 @@ export default function App() {
 
         <header class="header">
           <h1 class="logo">lens</h1>
-          <span class="tagline">Domain health at a glance</span>
+          <span class="tagline">domains, in focus</span>
           <div class="header-actions">
             <ThemeToggle theme={themeResult} class="header-btn" />
             <button
@@ -191,7 +228,7 @@ export default function App() {
                 TLS certificate status, DNS health, and IP reputation — checked together, streamed as they arrive.
               </p>
               <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;">
-                <For each={['example.com', 'github.com', 'cloudflare.com']}>
+                <For each={['netray.info', 'example.com', 'github.com']}>
                   {(domain) => (
                     <button
                       class="filter-toggle"
@@ -219,24 +256,30 @@ export default function App() {
               </Show>
             </div>
             <div class="section-grid" role="status" aria-live="polite" aria-label="Check results">
-              <TlsSection
-                data={tls()}
-                loading={isLoading() && tls() === null}
-                error={error() ?? undefined}
-                expanded={allExpanded()}
-              />
-              <DnsSection
-                data={dns()}
-                loading={isLoading() && dns() === null}
-                error={error() ?? undefined}
-                expanded={allExpanded()}
-              />
-              <IpSection
-                data={ip()}
-                loading={isLoading() && ip() === null}
-                error={error() ?? undefined}
-                expanded={allExpanded()}
-              />
+              <div data-card>
+                <TlsSection
+                  data={tls()}
+                  loading={isLoading() && tls() === null}
+                  error={error() ?? undefined}
+                  expanded={allExpanded()}
+                />
+              </div>
+              <div data-card>
+                <DnsSection
+                  data={dns()}
+                  loading={isLoading() && dns() === null}
+                  error={error() ?? undefined}
+                  expanded={allExpanded()}
+                />
+              </div>
+              <div data-card>
+                <IpSection
+                  data={ip()}
+                  loading={isLoading() && ip() === null}
+                  error={error() ?? undefined}
+                  expanded={allExpanded()}
+                />
+              </div>
             </div>
           </Show>
         </main>
@@ -267,17 +310,18 @@ export default function App() {
 
         <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
           <div class="help-section">
-            <div class="help-section__title">Input</div>
-            <code class="help-syntax">example.com</code>
+            <div class="help-section__title">About</div>
             <p class="help-desc">
-              Enter any domain name to check its TLS certificate validity, DNS health, and IP reputation simultaneously.
+              lens checks TLS certificate validity, DNS health, and IP reputation for any domain —
+              all three run in parallel and stream in as they complete.{' '}
+              <a href="https://netray.info/guide/" target="_blank" rel="noopener noreferrer">Reference guides ↗</a>
             </p>
           </div>
+
           <div class="help-section">
             <div class="help-section__title">Scoring</div>
             <p class="help-desc">
-              Each check contributes a weighted score. The overall grade is a weighted average
-              across TLS (45%), DNS (35%), and IP (20%).
+              Weighted average across TLS (45%), DNS (35%), and IP (20%).
             </p>
             <Show when={meta()?.profile}>
               {(profile) => (
@@ -306,14 +350,23 @@ export default function App() {
               )}
             </Show>
           </div>
+
           <div class="help-section">
             <div class="help-section__title">Keyboard shortcuts</div>
-            <div class="help-keys">
-              <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
-              <div class="help-key"><kbd>Enter</kbd><span>Submit</span></div>
-              <div class="help-key"><kbd>r</kbd><span>Re-run last check</span></div>
-              <div class="help-key"><kbd>?</kbd><span>Open this help</span></div>
-            </div>
+            <table class="shortcuts-table">
+              <thead>
+                <tr><th>Key</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="shortcut-key">/</td><td>Focus input</td></tr>
+                <tr><td class="shortcut-key">Enter</td><td>Submit domain (when input focused)</td></tr>
+                <tr><td class="shortcut-key">r</td><td>Re-run last check</td></tr>
+                <tr><td class="shortcut-key">j / k</td><td>Navigate result sections</td></tr>
+                <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active section</td></tr>
+                <tr><td class="shortcut-key">Escape</td><td>Close help</td></tr>
+                <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
+              </tbody>
+            </table>
           </div>
         </Modal>
       </div>

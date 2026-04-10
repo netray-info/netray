@@ -677,6 +677,49 @@ a:hover { text-decoration: underline; }
   color: var(--text-secondary);
 }
 
+/* Shortcuts table */
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shortcuts-table th {
+  padding: 4px 4px 8px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.shortcuts-table td {
+  padding: 6px 4px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.shortcuts-table tr:last-child td {
+  border-bottom: none;
+}
+
+.shortcut-key {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+  width: 80px;
+}
+
+[data-card-active] {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: var(--radius, 4px);
+}
+
 /* ================================================================
    Help hard-fail list
    ================================================================ */
