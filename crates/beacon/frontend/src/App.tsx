@@ -4,10 +4,10 @@ import type { SuiteNavEcosystem } from '@netray-info/common-frontend/components/
 import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
 import Modal from '@netray-info/common-frontend/components/Modal';
 import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
-import CrossLink from '@netray-info/common-frontend/components/CrossLink';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
 import { storageGet, storageSet } from '@netray-info/common-frontend/storage';
+import { copyToClipboard, downloadFile } from '@netray-info/common-frontend/utils';
 import { fetchMeta, streamInspect } from './lib/api';
 import type { MetaResponse } from './lib/api';
 import type {
@@ -194,7 +194,6 @@ export default function App() {
   }
 
   const hasResults = () => categories().size > 0 || loading();
-  const isDone = () => summary() !== null && !loading();
   const isIdle = () => !hasResults() && !loading() && !error();
 
   return (
@@ -268,6 +267,7 @@ export default function App() {
                   </ul>
                 </Show>
               </div>
+              <ShareButton />
               <button type="submit" class="btn-primary" disabled={loading() || !domain().trim()}>
                 {loading() ? 'Inspecting…' : 'Inspect'}
               </button>
@@ -340,6 +340,8 @@ export default function App() {
                   summary={summary()!}
                   mxResult={categories().get('mx')}
                   ipBaseUrl={meta()?.ecosystem?.ip_base_url}
+                  domain={domain()}
+                  categories={categories()}
                 />
               </Show>
 
@@ -405,22 +407,6 @@ export default function App() {
               </For>
             </div>
 
-            <Show when={isDone()}>
-              <div class="cross-links">
-                <CrossLink
-                  href={`${meta()?.ecosystem?.dns_base_url ?? 'https://dns.netray.info'}/?q=${encodeURIComponent(domain())}`}
-                  label="DNS Inspector"
-                />
-                <CrossLink
-                  href={`${meta()?.ecosystem?.tls_base_url ?? 'https://tls.netray.info'}/?domain=${encodeURIComponent(domain())}`}
-                  label="TLS Inspector"
-                />
-                <CrossLink
-                  href={`${meta()?.ecosystem?.http_base_url ?? 'https://http.netray.info'}/?url=${encodeURIComponent(`https://${domain()}`)}`}
-                  label="HTTP Inspector"
-                />
-              </div>
-            </Show>
           </Show>
         </main>
 
@@ -487,10 +473,18 @@ export default function App() {
   );
 }
 
+function durationClass(ms: number): string {
+  if (ms < 500) return 'overview__value overview__value--fast';
+  if (ms < 2000) return 'overview__value overview__value--ok';
+  return 'overview__value overview__value--slow';
+}
+
 function OverviewCard(props: {
   summary: SummaryEvent;
   mxResult?: CheckResult;
   ipBaseUrl?: string;
+  domain: string;
+  categories: Map<import('./lib/types').Category, CheckResult>;
 }) {
   const overallVerdict = (): Verdict => {
     const vs = Object.values(props.summary.verdicts) as Verdict[];
@@ -541,6 +535,13 @@ function OverviewCard(props: {
             <span class="overview__label">passed</span>
           </div>
         </Show>
+        <Show when={props.summary.duration_ms !== undefined}>
+          <div class="overview__item">
+            <span class="overview__label">Duration</span>
+            <span class={durationClass(props.summary.duration_ms!)}>{props.summary.duration_ms}ms</span>
+          </div>
+        </Show>
+        <ExportButtons domain={props.domain} summary={props.summary} categories={props.categories} />
       </div>
 
       <Show when={firstEnrichment()}>
@@ -664,6 +665,89 @@ function CategorySection(props: {
           </Show>
         </div>
       </Show>
+    </div>
+  );
+}
+
+function ShareButton() {
+  const [status, setStatus] = createSignal<'idle' | 'copied'>('idle');
+
+  const handleClick = async () => {
+    await copyToClipboard(window.location.href);
+    setStatus('copied');
+    setTimeout(() => setStatus('idle'), 2000);
+  };
+
+  return (
+    <button
+      type="button"
+      class="share-btn"
+      aria-label="Copy shareable link"
+      title={status() === 'copied' ? 'Copied!' : 'Copy shareable link'}
+      onClick={handleClick}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+    </button>
+  );
+}
+
+function ExportButtons(props: {
+  domain: string;
+  summary: SummaryEvent;
+  categories: Map<Category, CheckResult>;
+}) {
+  const [copyStatus, setCopyStatus] = createSignal<'idle' | 'success' | 'error'>('idle');
+
+  const downloadJson = () => {
+    const data = {
+      domain: props.domain,
+      duration_ms: props.summary.duration_ms,
+      verdicts: props.summary.verdicts,
+      categories: Object.fromEntries(
+        Array.from(props.categories.entries()).map(([k, v]) => [k, v]),
+      ),
+    };
+    downloadFile(JSON.stringify(data, null, 2), `beacon-${props.domain}.json`, 'application/json');
+  };
+
+  const copyMarkdown = async () => {
+    const lines: string[] = [
+      `# Email Security: ${props.domain}`,
+      '',
+      `**Verdict**: ${Object.values(props.summary.verdicts).reduce((w, v) =>
+        VERDICT_ORDER[v as Verdict] > VERDICT_ORDER[w as Verdict] ? v : w,
+      )}`,
+    ];
+    if (props.summary.duration_ms !== undefined) {
+      lines.push(`**Duration**: ${props.summary.duration_ms}ms`);
+    }
+    lines.push('', '## Results', '');
+    for (const [cat, result] of props.categories) {
+      lines.push(`### ${CATEGORY_LABELS[cat]} — ${result.verdict}`);
+      if (result.detail) lines.push(result.detail, '');
+      for (const sc of result.sub_checks) {
+        lines.push(`- **${sc.verdict.toUpperCase()}** ${subCheckLabel(sc.name)}${sc.detail ? ` — ${sc.detail}` : ''}`);
+      }
+      lines.push('');
+    }
+    lines.push(`_Inspected via [beacon](https://email.netray.info)_`);
+
+    const ok = await copyToClipboard(lines.join('\n'));
+    setCopyStatus(ok ? 'success' : 'error');
+    setTimeout(() => setCopyStatus('idle'), 2000);
+  };
+
+  return (
+    <div class="export-buttons">
+      <button class="export-buttons__btn" onClick={copyMarkdown} aria-label="Copy as Markdown">
+        {copyStatus() === 'success' ? 'copied!' : copyStatus() === 'error' ? 'failed' : 'copy MD'}
+      </button>
+      <button class="export-buttons__btn" onClick={downloadJson} aria-label="Download as JSON">
+        JSON
+      </button>
     </div>
   );
 }

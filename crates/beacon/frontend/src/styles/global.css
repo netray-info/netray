@@ -201,6 +201,33 @@ a:hover { text-decoration: underline; }
 
 .selector-input:focus { border-color: var(--accent); }
 
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  flex-shrink: 0;
+  padding: 0 8px;
+  color: var(--accent);
+  background: rgba(0, 120, 212, 0.08);
+  border: 1px solid rgba(0, 120, 212, 0.25);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.share-btn:hover {
+  background: rgba(0, 120, 212, 0.18);
+  border-color: rgba(0, 120, 212, 0.4);
+}
+[data-theme="light"] .share-btn {
+  background: rgba(0, 119, 204, 0.08);
+  border-color: rgba(0, 119, 204, 0.25);
+}
+[data-theme="light"] .share-btn:hover {
+  background: rgba(0, 119, 204, 0.15);
+  border-color: rgba(0, 119, 204, 0.4);
+}
+
 .btn-secondary {
   padding: 0.375rem 0.75rem;
   font-size: 0.875rem;
@@ -462,6 +489,35 @@ a:hover { text-decoration: underline; }
 .overview__value--warn { color: var(--warn); }
 .overview__value--info { color: var(--info); }
 .overview__value--pass { color: var(--pass); }
+
+/* Duration color coding */
+.overview__value--fast { color: var(--pass); }
+.overview__value--ok   { color: var(--warn); }
+.overview__value--slow { color: var(--fail); }
+
+/* Export buttons */
+.export-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: auto;
+}
+
+.export-buttons__btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  padding: 0 0.5rem;
+  line-height: 1;
+  transition: color var(--transition);
+}
+.export-buttons__btn + .export-buttons__btn {
+  border-left: 1px solid var(--border);
+}
+.export-buttons__btn:hover { color: var(--accent); }
 
 .overview__ip-link {
   margin-left: auto;
