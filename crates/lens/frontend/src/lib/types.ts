@@ -32,6 +32,7 @@ export interface HttpEvent {
   response_duration_ms?: number;
   server_ip?: string;
   server_org?: string;
+  server_network_type?: string;
 }
 
 export interface IpAddress {

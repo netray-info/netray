@@ -246,6 +246,7 @@ export default function App() {
                 ipDetailUrl={ip()?.detail_url}
                 httpServerIp={http()?.server_ip}
                 httpServerOrg={http()?.server_org}
+                httpServerNetworkType={http()?.server_network_type}
                 checks={allChecks()}
                 onCopyMd={done() ? handleCopyMd : undefined}
                 onDownloadJson={done() ? handleDownloadJson : undefined}

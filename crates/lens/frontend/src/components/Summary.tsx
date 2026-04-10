@@ -43,6 +43,7 @@ interface Props {
   ipDetailUrl?: string;
   httpServerIp?: string;
   httpServerOrg?: string;
+  httpServerNetworkType?: string;
   checks?: Array<{ verdict: string }>;
   onCopyMd?: () => void;
   onDownloadJson?: () => void;
@@ -116,10 +117,12 @@ export default function Summary(props: Props) {
                 {actions()}
               </div>
               <div class="summary-labels">
-                <span class="summary-overall">{overallLabel(s().overall, s().grade)}</span>
-                <Show when={hasErroredSection()}>
-                  <span class="summary-incomplete">incomplete — some checks failed to run</span>
-                </Show>
+                <span class="summary-overall">
+                  {overallLabel(s().overall, s().grade)}
+                  <Show when={hasErroredSection()}>
+                    <span class="summary-incomplete">: incomplete — some checks failed to run</span>
+                  </Show>
+                </span>
                 <Show when={props.done}>
                   {(done) => (
                     <span class={durationClass(done().duration_ms)}>
@@ -168,6 +171,9 @@ export default function Summary(props: Props) {
                 <Show when={props.httpServerOrg}>
                   <span class="summary-server__hosted">Hosted by</span>
                   <span class="summary-server__org">{props.httpServerOrg}</span>
+                </Show>
+                <Show when={props.httpServerNetworkType && props.httpServerNetworkType !== 'unknown'}>
+                  <span class="summary-server__type">({props.httpServerNetworkType})</span>
                 </Show>
               </div>
             </Show>

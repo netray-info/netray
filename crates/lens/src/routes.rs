@@ -132,6 +132,8 @@ pub struct HttpEvent {
     pub server_ip: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server_org: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_network_type: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -690,10 +692,11 @@ fn http_payload_from(
         response_duration_ms,
         server_ip,
         server_org,
+        server_network_type,
     ) = match result {
         Ok(r) => {
             let items = build_check_items(&r.checks, weights);
-            let (raw_headline, url, sc, hv, rdms, sip, sorg) = match &r.extra {
+            let (raw_headline, url, sc, hv, rdms, sip, sorg, snt) = match &r.extra {
                 BackendExtra::Http {
                     raw_headline,
                     detail_url,
@@ -702,6 +705,7 @@ fn http_payload_from(
                     response_duration_ms,
                     server_ip,
                     server_org,
+                    server_network_type,
                 } => (
                     raw_headline.clone(),
                     detail_url.clone(),
@@ -710,15 +714,17 @@ fn http_payload_from(
                     *response_duration_ms,
                     server_ip.clone(),
                     server_org.clone(),
+                    server_network_type.clone(),
                 ),
-                _ => (String::new(), String::new(), None, None, None, None, None),
+                _ => (String::new(), String::new(), None, None, None, None, None, None),
             };
-            (raw_headline, items, url, sc, hv, rdms, sip, sorg)
+            (raw_headline, items, url, sc, hv, rdms, sip, sorg, snt)
         }
         Err(e) => (
             error_headline(e),
             vec![],
             String::new(),
+            None,
             None,
             None,
             None,
@@ -736,6 +742,7 @@ fn http_payload_from(
         response_duration_ms,
         server_ip,
         server_org,
+        server_network_type,
     }
 }
 

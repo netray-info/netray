@@ -29,6 +29,7 @@ pub enum BackendExtra {
         response_duration_ms: Option<u64>,
         server_ip: Option<String>,
         server_org: Option<String>,
+        server_network_type: Option<String>,
     },
     Ip {
         addresses: Vec<ip::IpInfo>,

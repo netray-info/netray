@@ -68,6 +68,8 @@ struct Enrichment {
     ip: Option<String>,
     #[serde(default)]
     org: Option<String>,
+    #[serde(default)]
+    ip_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -332,6 +334,7 @@ fn parse_inspect(resp: HttpInspectResponse, http_url: &str, encoded_domain: &str
             response_duration_ms: resp.duration_ms,
             server_ip: resp.enrichment.as_ref().and_then(|e| e.ip.clone()),
             server_org: resp.enrichment.as_ref().and_then(|e| e.org.clone()),
+            server_network_type: resp.enrichment.as_ref().and_then(|e| e.ip_type.clone()),
         },
     }
 }
