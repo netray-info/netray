@@ -19,7 +19,11 @@ import type {
   SummaryEvent,
   Verdict,
 } from './lib/types';
-import { CATEGORY_LABELS, CATEGORY_ORDER, VERDICT_ORDER, subCheckLabel, subCheckExplanation } from './lib/types';
+import {
+  CATEGORY_LABELS, CATEGORY_ORDER, VERDICT_ORDER,
+  GROUP_ORDER, GROUP_LABELS, GROUP_CATEGORIES,
+  subCheckLabel, subCheckExplanation,
+} from './lib/types';
 
 const HISTORY_KEY = 'beacon_history';
 const MAX_HISTORY = 20;
@@ -377,39 +381,46 @@ export default function App() {
             </Show>
 
             <div class="category-list">
-              <For each={CATEGORY_ORDER}>
-                {(cat) => {
-                  const result = () => categories().get(cat);
-                  return (
-                    <Show
-                      when={result()}
-                      fallback={
-                        <Show when={loading()}>
-                          <div
-                            class="section-card card--pending"
-                            aria-busy="true"
-                            aria-label={`Loading ${CATEGORY_LABELS[cat]}…`}
+              <For each={GROUP_ORDER}>
+                {(group) => (
+                  <>
+                    <GroupHeading group={group} categories={categories()} />
+                    <For each={GROUP_CATEGORIES[group]}>
+                      {(cat) => {
+                        const result = () => categories().get(cat);
+                        return (
+                          <Show
+                            when={result()}
+                            fallback={
+                              <Show when={loading()}>
+                                <div
+                                  class="section-card card--pending"
+                                  aria-busy="true"
+                                  aria-label={`Loading ${CATEGORY_LABELS[cat]}…`}
+                                >
+                                  <div class="section-card__header">
+                                    <span class="section-card__status section-card__status--skip" />
+                                    <span class="section-card__title">{CATEGORY_LABELS[cat]}</span>
+                                    <span class="section-card__spacer" />
+                                  </div>
+                                </div>
+                              </Show>
+                            }
                           >
-                            <div class="section-card__header">
-                              <span class="section-card__status section-card__status--skip" />
-                              <span class="section-card__title">{CATEGORY_LABELS[cat]}</span>
-                              <span class="section-card__spacer" />
-                            </div>
-                          </div>
-                        </Show>
-                      }
-                    >
-                      {(r) => (
-                        <CategorySection
-                          result={r()}
-                          open={openSections().has(cat)}
-                          onToggle={() => toggleSection(cat)}
-                          showExplanations={showExplanations()}
-                        />
-                      )}
-                    </Show>
-                  );
-                }}
+                            {(r) => (
+                              <CategorySection
+                                result={r()}
+                                open={openSections().has(cat)}
+                                onToggle={() => toggleSection(cat)}
+                                showExplanations={showExplanations()}
+                              />
+                            )}
+                          </Show>
+                        );
+                      }}
+                    </For>
+                  </>
+                )}
               </For>
             </div>
 
@@ -475,6 +486,33 @@ export default function App() {
             </table>
           </div>
         </Modal>
+    </div>
+  );
+}
+
+function GroupHeading(props: {
+  group: import('./lib/types').Group;
+  categories: Map<Category, CheckResult>;
+}) {
+  const groupCats = () => GROUP_CATEGORIES[props.group];
+  const completedResults = () =>
+    groupCats().map((c) => props.categories.get(c)).filter(Boolean) as CheckResult[];
+  const worstVerdict = (): Verdict | undefined => {
+    const results = completedResults();
+    if (results.length === 0) return undefined;
+    return results.reduce<Verdict>(
+      (worst, r) => (VERDICT_ORDER[r.verdict] > VERDICT_ORDER[worst] ? r.verdict : worst),
+      'skip',
+    );
+  };
+
+  return (
+    <div class="group-heading">
+      <span class="group-heading__title">{GROUP_LABELS[props.group]}</span>
+      <Show when={worstVerdict()}>
+        {(v) => <span class={`badge badge--${v()} badge--small`}>{v()}</span>}
+      </Show>
+      <span class="group-heading__divider" />
     </div>
   );
 }
@@ -722,14 +760,18 @@ function ExportButtons(props: {
     if (props.summary.duration_ms !== undefined) {
       lines.push(`**Duration**: ${props.summary.duration_ms}ms`);
     }
-    lines.push('', '## Results', '');
-    for (const [cat, result] of props.categories) {
-      lines.push(`### ${CATEGORY_LABELS[cat]} — ${result.verdict}`);
-      if (result.detail) lines.push(result.detail, '');
-      for (const sc of result.sub_checks) {
-        lines.push(`- **${sc.verdict.toUpperCase()}** ${subCheckLabel(sc.name)}${sc.detail ? ` — ${sc.detail}` : ''}`);
+    for (const group of GROUP_ORDER) {
+      lines.push(`## ${GROUP_LABELS[group]}`, '');
+      for (const cat of GROUP_CATEGORIES[group]) {
+        const result = props.categories.get(cat);
+        if (!result) continue;
+        lines.push(`### ${CATEGORY_LABELS[cat]} — ${result.verdict}`);
+        if (result.detail) lines.push(result.detail, '');
+        for (const sc of result.sub_checks) {
+          lines.push(`- **${sc.verdict.toUpperCase()}** ${subCheckLabel(sc.name)}${sc.detail ? ` — ${sc.detail}` : ''}`);
+        }
+        lines.push('');
       }
-      lines.push('');
     }
     lines.push(`_Inspected via [beacon](https://email.netray.info)_`);
 

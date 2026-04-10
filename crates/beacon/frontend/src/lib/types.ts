@@ -52,9 +52,35 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 export const CATEGORY_ORDER: Category[] = [
-  'mx', 'spf', 'dkim', 'dmarc', 'mta_sts', 'tls_rpt',
-  'dane', 'dnssec', 'bimi', 'fcrdns', 'dnsbl', 'cross_validation',
+  // Infrastructure
+  'mx', 'fcrdns', 'dnsbl',
+  // Authentication
+  'spf', 'dkim', 'dmarc',
+  // Transport Security
+  'mta_sts', 'tls_rpt', 'dane', 'dnssec',
+  // Brand & Policy
+  'bimi', 'cross_validation',
 ];
+
+export type Group = 'infrastructure' | 'authentication' | 'transport_security' | 'brand_policy';
+
+export const GROUP_ORDER: Group[] = [
+  'infrastructure', 'authentication', 'transport_security', 'brand_policy',
+];
+
+export const GROUP_LABELS: Record<Group, string> = {
+  infrastructure: 'Infrastructure',
+  authentication: 'Authentication',
+  transport_security: 'Transport Security',
+  brand_policy: 'Brand & Policy',
+};
+
+export const GROUP_CATEGORIES: Record<Group, Category[]> = {
+  infrastructure: ['mx', 'fcrdns', 'dnsbl'],
+  authentication: ['spf', 'dkim', 'dmarc'],
+  transport_security: ['mta_sts', 'tls_rpt', 'dane', 'dnssec'],
+  brand_policy: ['bimi', 'cross_validation'],
+};
 
 export const VERDICT_ORDER: Record<Verdict, number> = {
   skip: 0,
