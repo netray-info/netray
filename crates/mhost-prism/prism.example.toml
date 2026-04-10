@@ -16,10 +16,10 @@
 [server]
 
 # Address and port for the API / frontend server.
-#bind = "127.0.0.1:8080"
+#bind = "127.0.0.1:8081"
 
 # Address and port for the Prometheus metrics endpoint.
-#metrics_bind = "127.0.0.1:9090"
+#metrics_bind = "127.0.0.1:9091"
 
 # Trusted reverse proxies (individual IPs or CIDR ranges).
 # When a request arrives from a trusted proxy, the real client IP is extracted
