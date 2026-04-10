@@ -196,10 +196,9 @@ export default function App() {
   const isIdle = () => !hasResults() && !loading() && !error();
 
   return (
-    <>
+    <div class="app">
       <SuiteNav current="email" meta={meta()?.ecosystem as SuiteNavEcosystem} />
-
-      <div class="app">
+      <a class="skip-link" href="#main">Skip to content</a>
         <header class="header">
           <h1 class="logo">beacon</h1>
           <span class="tagline">email security, analyzed</span>
@@ -215,7 +214,7 @@ export default function App() {
           </div>
         </header>
 
-        <main class="main">
+        <main class="main" id="main">
           <form class="inspect-form" onSubmit={handleSubmit}>
             <div class="domain-input-row">
               <div class="domain-input-wrapper">
@@ -473,8 +472,7 @@ export default function App() {
             </table>
           </div>
         </Modal>
-      </div>
-    </>
+    </div>
   );
 }
 

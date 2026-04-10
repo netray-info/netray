@@ -46,6 +46,17 @@ a:hover { text-decoration: underline; }
 
 .main { flex: 1; }
 
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  background: var(--bg-primary);
+  color: var(--accent);
+}
+.skip-link:focus { left: 0; }
+
 /* ================================================================
    Inspect form
    ================================================================ */
