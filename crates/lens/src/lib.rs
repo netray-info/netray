@@ -1,3 +1,4 @@
+pub mod api_doc;
 pub mod backends;
 pub mod cache;
 pub mod check;

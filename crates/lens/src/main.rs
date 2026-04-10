@@ -10,6 +10,7 @@ use tower_http::trace::TraceLayer;
 
 use axum::Router;
 use axum::routing::get;
+use utoipa_scalar::{Scalar, Servable};
 
 pub use netray_common::cors::cors_layer;
 use netray_common::security_headers::{SecurityHeadersConfig, security_headers_layer};
@@ -48,10 +49,15 @@ async fn main() {
     // 3. Build app state.
     let state = state::AppState::new(config.clone()).expect("failed to build app state");
 
-    // 4. Build router.
+    // 4. Build routers and collect OpenAPI spec fragments.
+    let (health_router, health_openapi) = routes::health_router().split_for_parts();
+    let (api_router, api_openapi) = routes::api_router().split_for_parts();
+    let openapi = lens::api_doc::build_openapi(health_openapi, api_openapi);
+
+    // 5. Build the main app with all middleware.
     let app = Router::new()
-        .merge(routes::health_router(state.clone()))
-        .merge(routes::api_router(state))
+        .merge(health_router.with_state(state.clone()))
+        .merge(api_router.with_state(state))
         .route("/robots.txt", get(robots_txt))
         .fallback(netray_common::server::static_handler::<routes::Assets>())
         .layer(axum::middleware::from_fn(|req, next| {
@@ -92,16 +98,26 @@ async fn main() {
         .layer(axum::middleware::from_fn(security_headers_mw))
         .layer(cors_layer())
         .layer(CompressionLayer::new())
-        .layer(RequestBodyLimitLayer::new(8 * 1024));
+        .layer(RequestBodyLimitLayer::new(8 * 1024))
+        // OpenAPI docs routes are added after the middleware stack so they are not
+        // covered by the tower middleware layers applied above.
+        .route(
+            "/api-docs/openapi.json",
+            get({
+                let spec = openapi.clone();
+                move || async move { axum::Json(spec) }
+            }),
+        )
+        .merge(Scalar::with_url("/docs", openapi));
 
-    // 5. Graceful shutdown channel.
+    // 6. Graceful shutdown channel.
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
         netray_common::server::shutdown_signal().await;
         let _ = shutdown_tx.send(true);
     });
 
-    // 6. Metrics server.
+    // 7. Metrics server.
     let metrics_addr = config.server.metrics_bind;
     let metrics_shutdown = shutdown_rx.clone();
     tracing::info!(
@@ -114,7 +130,7 @@ async fn main() {
         }
     });
 
-    // 7. Bind and serve.
+    // 8. Bind and serve.
     let listener = tokio::net::TcpListener::bind(config.server.bind)
         .await
         .expect("failed to bind server address");

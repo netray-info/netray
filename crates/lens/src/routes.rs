@@ -4,14 +4,15 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::Json;
 use futures::stream;
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
+use utoipa_axum::router::OpenApiRouter;
 
 use crate::backends::{BackendExtra, BackendResult};
 use crate::cache::{CachedResult, cache_key, is_fresh};
@@ -25,11 +26,13 @@ use crate::state::AppState;
 // SSE event payload types
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CheckItem {
     pub name: String,
+    #[schema(value_type = String)]
     pub verdict: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
     pub guide_url: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub weight: Option<u32>,
@@ -81,7 +84,7 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct IpAddressInfo {
     pub ip: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -91,45 +94,52 @@ pub struct IpAddressInfo {
     pub network_type: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct DnsEvent {
+    #[schema(value_type = String)]
     pub status: &'static str,
     pub headline: String,
     pub checks: Vec<CheckItem>,
     pub detail_url: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct TlsEvent {
+    #[schema(value_type = String)]
     pub status: &'static str,
     pub headline: String,
     pub checks: Vec<CheckItem>,
     pub detail_url: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct IpEvent {
+    #[schema(value_type = String)]
     pub status: &'static str,
     pub headline: String,
     pub checks: Vec<CheckItem>,
     pub addresses: Vec<IpAddressInfo>,
     pub detail_url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
     pub guide_url: Option<&'static str>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SummaryEvent {
-    pub sections: HashMap<String, &'static str>,
+    /// Section status map, keyed by section name.
+    pub sections: HashMap<String, String>,
     pub section_grades: HashMap<String, String>,
-    pub overall: &'static str,
+    pub overall: String,
     pub grade: String,
     pub score: f64,
     pub hard_fail: bool,
     pub hard_fail_checks: Vec<String>,
+    /// Comma-joined list of hard-fail check names; null when `hard_fail` is false.
+    pub hard_fail_reason: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct DoneEvent {
     pub domain: String,
     pub duration_ms: u64,
@@ -137,19 +147,51 @@ pub struct DoneEvent {
 }
 
 // ---------------------------------------------------------------------------
-// POST body
+// Sync response type
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+/// Complete domain health check result for synchronous (non-SSE) mode.
+#[derive(Serialize, ToSchema)]
+pub struct SyncCheckResponse {
+    pub dns: DnsEvent,
+    pub tls: TlsEvent,
+    pub ip: IpEvent,
+    pub summary: SummaryEvent,
+    pub done: DoneEvent,
+}
+
+// ---------------------------------------------------------------------------
+// POST body and query params
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize, ToSchema)]
 pub struct CheckPostBody {
     pub domain: String,
+    /// When `false`, triggers synchronous (non-SSE) response mode.
+    #[serde(default)]
+    pub stream: Option<bool>,
+}
+
+/// Query parameters for `GET /api/check/{domain}`.
+#[derive(Deserialize, IntoParams)]
+pub struct CheckGetQuery {
+    /// When `false`, triggers synchronous (non-SSE) response mode.
+    pub stream: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------
 // Meta response types
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
+pub struct RateLimitInfo {
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub global_per_minute: u32,
+    pub global_burst: u32,
+}
+
+#[derive(Serialize, ToSchema)]
 pub struct ProfileData {
     pub name: String,
     pub version: u32,
@@ -159,16 +201,18 @@ pub struct ProfileData {
     pub hard_fail: HashMap<String, Vec<String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MetaResponse {
     pub site_name: String,
+    #[schema(value_type = String)]
     pub version: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ecosystem: Option<MetaEcosystem>,
     pub profile: ProfileData,
+    pub rate_limit: RateLimitInfo,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MetaEcosystem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dns_base_url: Option<String>,
@@ -182,13 +226,15 @@ pub struct MetaEcosystem {
 // Health / Ready response types
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct HealthResponse {
+    #[schema(value_type = String)]
     pub status: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ReadyResponse {
+    #[schema(value_type = String)]
     pub status: &'static str,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub down: Vec<String>,
@@ -206,29 +252,43 @@ pub struct Assets;
 // Router builders
 // ---------------------------------------------------------------------------
 
-pub fn health_router(state: AppState) -> Router {
-    Router::new()
-        .route("/health", get(health_handler))
-        .route("/ready", get(ready_handler))
-        .with_state(state)
+pub fn health_router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(utoipa_axum::routes!(health_handler))
+        .routes(utoipa_axum::routes!(ready_handler))
 }
 
-pub fn api_router(state: AppState) -> Router {
-    Router::new()
-        .route("/api/meta", get(meta_handler))
-        .route("/api/check/{domain}", get(check_get_handler))
-        .route("/api/check", post(check_post_handler))
-        .with_state(state)
+pub fn api_router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(utoipa_axum::routes!(meta_handler))
+        .routes(utoipa_axum::routes!(check_get_handler))
+        .routes(utoipa_axum::routes!(check_post_handler))
 }
 
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service is healthy", body = HealthResponse)
+    )
+)]
 pub async fn health_handler() -> impl IntoResponse {
     Json(HealthResponse { status: "ok" })
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/meta",
+    tag = "api",
+    responses(
+        (status = 200, description = "Service metadata and scoring profile", body = MetaResponse)
+    )
+)]
 pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     let backends = &state.config.backends;
@@ -254,14 +314,30 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
         thresholds: profile.thresholds.clone(),
         hard_fail,
     };
+    let rl = &state.config.rate_limit;
     Json(MetaResponse {
         site_name: "lens — Domain Health Check".to_string(),
         version: VERSION,
         ecosystem,
         profile: profile_data,
+        rate_limit: RateLimitInfo {
+            per_ip_per_minute: rl.per_ip_per_minute,
+            per_ip_burst: rl.per_ip_burst,
+            global_per_minute: rl.global_per_minute,
+            global_burst: rl.global_burst,
+        },
     })
 }
 
+#[utoipa::path(
+    get,
+    path = "/ready",
+    tag = "health",
+    responses(
+        (status = 200, description = "All backends reachable", body = ReadyResponse),
+        (status = 503, description = "One or more backends unreachable", body = ReadyResponse)
+    )
+)]
 pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let client = &state.http_client;
     let config = &state.config;
@@ -319,17 +395,44 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/check/{domain}",
+    tag = "check",
+    params(
+        ("domain" = String, Path, description = "Domain name to check"),
+        CheckGetQuery,
+    ),
+    responses(
+        (status = 200, description = "Domain health check result (SSE stream or JSON object)", body = SyncCheckResponse),
+        (status = 400, description = "Invalid or blocked domain"),
+        (status = 429, description = "Rate limit exceeded"),
+    )
+)]
 pub async fn check_get_handler(
     State(state): State<AppState>,
     axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
     headers: axum::http::HeaderMap,
     Path(domain): Path<String>,
+    Query(query): Query<CheckGetQuery>,
 ) -> Response {
     let client_ip =
         extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
-    run_check_handler(state, client_ip, domain).await
+    let sync = is_sync_mode(&headers, query.stream);
+    run_check_handler(state, client_ip, domain, sync).await
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/check",
+    tag = "check",
+    request_body = CheckPostBody,
+    responses(
+        (status = 200, description = "Domain health check result (SSE stream or JSON object)", body = SyncCheckResponse),
+        (status = 400, description = "Invalid or blocked domain"),
+        (status = 429, description = "Rate limit exceeded"),
+    )
+)]
 pub async fn check_post_handler(
     State(state): State<AppState>,
     axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
@@ -338,7 +441,8 @@ pub async fn check_post_handler(
 ) -> Response {
     let client_ip =
         extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
-    run_check_handler(state, client_ip, body.domain).await
+    let sync = is_sync_mode(&headers, body.stream);
+    run_check_handler(state, client_ip, body.domain, sync).await
 }
 
 fn extract_client_ip_from_peer(
@@ -352,7 +456,26 @@ fn extract_client_ip_from_peer(
     extract_client_ip(headers, trusted_proxies)
 }
 
-async fn run_check_handler(state: AppState, client_ip: IpAddr, domain_raw: String) -> Response {
+/// Returns true when the request should be answered with a single JSON response
+/// rather than an SSE stream.
+fn is_sync_mode(headers: &axum::http::HeaderMap, stream_param: Option<bool>) -> bool {
+    if stream_param == Some(false) {
+        return true;
+    }
+    if let Some(accept) = headers.get(axum::http::header::ACCEPT) {
+        if let Ok(val) = accept.to_str() {
+            return val.contains("application/json") && !val.contains("text/event-stream");
+        }
+    }
+    false
+}
+
+async fn run_check_handler(
+    state: AppState,
+    client_ip: IpAddr,
+    domain_raw: String,
+    sync: bool,
+) -> Response {
     // Record client_ip into the TraceLayer span.
     tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
 
@@ -373,7 +496,11 @@ async fn run_check_handler(state: AppState, client_ip: IpAddr, domain_raw: Strin
         && let Some(cached) = cache.get(&key).await
         && is_fresh(&cached, state.config.cache.ttl_seconds)
     {
-        return sse_response_from_cached(domain, &cached, true, &state.scoring_profile);
+        return if sync {
+            sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
+        } else {
+            sse_response_from_cached(domain, &cached, true, &state.scoring_profile)
+        };
     }
 
     // 4. Run check.
@@ -392,13 +519,17 @@ async fn run_check_handler(state: AppState, client_ip: IpAddr, domain_raw: Strin
         cache.insert(key, entry).await;
     }
 
-    // 6. Stream SSE from output.
-    let events = build_sse_events(domain_out, output, false, &state.scoring_profile);
-    make_sse_stream(events, "MISS")
+    // 6. Return SSE stream or sync JSON.
+    if sync {
+        build_sync_response(domain_out, output, false, &state.scoring_profile)
+    } else {
+        let events = build_sse_events(domain_out, output, false, &state.scoring_profile);
+        make_sse_stream(events, "MISS")
+    }
 }
 
 // ---------------------------------------------------------------------------
-// SSE helpers
+// Payload-building helpers (used by both SSE and sync paths)
 // ---------------------------------------------------------------------------
 
 fn verdict_str(verdict: &CheckVerdict) -> &'static str {
@@ -455,10 +586,10 @@ fn error_headline(e: &SectionError) -> String {
     }
 }
 
-fn dns_event_from(
+fn dns_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
-) -> Event {
+) -> DnsEvent {
     let status = section_status_from_checks(result);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
@@ -475,21 +606,13 @@ fn dns_event_from(
         }
         Err(e) => (error_headline(e), vec![], String::new()),
     };
-    let payload = DnsEvent {
-        status,
-        headline,
-        checks,
-        detail_url,
-    };
-    Event::default()
-        .event("dns")
-        .data(serde_json::to_string(&payload).unwrap_or_default())
+    DnsEvent { status, headline, checks, detail_url }
 }
 
-fn tls_event_from(
+fn tls_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
-) -> Event {
+) -> TlsEvent {
     let status = section_status_from_checks(result);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
@@ -505,21 +628,13 @@ fn tls_event_from(
         }
         Err(e) => (error_headline(e), vec![], String::new()),
     };
-    let payload = TlsEvent {
-        status,
-        headline,
-        checks,
-        detail_url,
-    };
-    Event::default()
-        .event("tls")
-        .data(serde_json::to_string(&payload).unwrap_or_default())
+    TlsEvent { status, headline, checks, detail_url }
 }
 
-fn ip_event_from(
+fn ip_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
-) -> Event {
+) -> IpEvent {
     let status = section_status_from_checks(result);
     let (headline, checks, addresses, detail_url) = match result {
         Ok(r) => {
@@ -552,14 +667,91 @@ fn ip_event_from(
     } else {
         None
     };
-    let payload = IpEvent {
-        status,
-        headline,
-        checks,
-        addresses,
-        detail_url,
-        guide_url,
+    IpEvent { status, headline, checks, addresses, detail_url, guide_url }
+}
+
+fn summary_payload_from(
+    sections: &HashMap<String, Result<BackendResult, SectionError>>,
+    score: &OverallScore,
+    thresholds: &std::collections::BTreeMap<String, u32>,
+) -> SummaryEvent {
+    use crate::scoring::engine::lookup_grade;
+
+    let mut section_statuses: HashMap<String, String> = HashMap::new();
+    let mut section_grades: HashMap<String, String> = HashMap::new();
+
+    for (name, result) in sections {
+        section_statuses.insert(name.clone(), section_status_from_checks(result).to_string());
+        if let Some(s) = score.sections.get(name) {
+            section_grades.insert(name.clone(), lookup_grade(thresholds, s.percentage));
+        }
+    }
+
+    let overall = if section_statuses.values().any(|s| s == "error") {
+        "error".to_string()
+    } else if section_statuses.values().any(|s| s == "fail") {
+        "fail".to_string()
+    } else if section_statuses.values().any(|s| s == "warn") {
+        "warn".to_string()
+    } else {
+        "pass".to_string()
     };
+
+    let hard_fail_reason = if score.hard_fail_triggered {
+        Some(score.hard_fail_checks.join(", "))
+    } else {
+        None
+    };
+
+    SummaryEvent {
+        sections: section_statuses,
+        section_grades,
+        overall,
+        grade: score.grade.clone(),
+        score: (score.overall_percentage * 10.0).round() / 10.0,
+        hard_fail: score.hard_fail_triggered,
+        hard_fail_checks: score.hard_fail_checks.clone(),
+        hard_fail_reason,
+    }
+}
+
+fn done_payload(domain: &str, duration_ms: u64, cached: bool) -> DoneEvent {
+    DoneEvent {
+        domain: domain.to_string(),
+        duration_ms,
+        cached,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SSE helpers
+// ---------------------------------------------------------------------------
+
+fn dns_event_from(
+    result: &Result<BackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> Event {
+    let payload = dns_payload_from(result, weights);
+    Event::default()
+        .event("dns")
+        .data(serde_json::to_string(&payload).unwrap_or_default())
+}
+
+fn tls_event_from(
+    result: &Result<BackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> Event {
+    let payload = tls_payload_from(result, weights);
+    Event::default()
+        .event("tls")
+        .data(serde_json::to_string(&payload).unwrap_or_default())
+}
+
+fn ip_event_from(
+    result: &Result<BackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> Event {
+    let payload = ip_payload_from(result, weights);
     Event::default()
         .event("ip")
         .data(serde_json::to_string(&payload).unwrap_or_default())
@@ -570,50 +762,14 @@ fn summary_event_from(
     score: &OverallScore,
     thresholds: &std::collections::BTreeMap<String, u32>,
 ) -> Event {
-    use crate::scoring::engine::lookup_grade;
-
-    // Build section status and grade maps.
-    let mut section_statuses: HashMap<String, &'static str> = HashMap::new();
-    let mut section_grades: HashMap<String, String> = HashMap::new();
-
-    for (name, result) in sections {
-        section_statuses.insert(name.clone(), section_status_from_checks(result));
-        if let Some(s) = score.sections.get(name) {
-            section_grades.insert(name.clone(), lookup_grade(thresholds, s.percentage));
-        }
-    }
-
-    // Overall status: if any section is error → "error", else roll up worst.
-    let overall = if section_statuses.values().any(|s| *s == "error") {
-        "error"
-    } else if section_statuses.values().any(|s| *s == "fail") {
-        "fail"
-    } else if section_statuses.values().any(|s| *s == "warn") {
-        "warn"
-    } else {
-        "pass"
-    };
-
-    let payload = SummaryEvent {
-        sections: section_statuses,
-        section_grades,
-        overall,
-        grade: score.grade.clone(),
-        score: (score.overall_percentage * 10.0).round() / 10.0,
-        hard_fail: score.hard_fail_triggered,
-        hard_fail_checks: score.hard_fail_checks.clone(),
-    };
+    let payload = summary_payload_from(sections, score, thresholds);
     Event::default()
         .event("summary")
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
 fn done_event(domain: &str, duration_ms: u64, cached: bool) -> Event {
-    let payload = DoneEvent {
-        domain: domain.to_string(),
-        duration_ms,
-        cached,
-    };
+    let payload = done_payload(domain, duration_ms, cached);
     Event::default()
         .event("done")
         .data(serde_json::to_string(&payload).unwrap_or_default())
@@ -687,8 +843,64 @@ fn sse_response_from_cached(
     make_sse_stream(events, if is_cached { "HIT" } else { "MISS" })
 }
 
-/// Clone an OverallScore (which doesn't derive Clone due to non-Clone fields — all fields
-/// are primitives or String/Vec, so this is straightforward).
+// ---------------------------------------------------------------------------
+// Sync response helpers
+// ---------------------------------------------------------------------------
+
+fn build_sync_response(
+    domain: String,
+    output: CheckOutput,
+    cached: bool,
+    profile: &crate::scoring::profile::ScoringProfile,
+) -> Response {
+    let empty_checks = HashMap::new();
+    let empty_err: Result<BackendResult, SectionError> =
+        Err(SectionError::BackendError("absent".to_string()));
+    let dns_checks = profile
+        .sections
+        .get("dns")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
+    let tls_checks = profile
+        .sections
+        .get("tls")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
+    let ip_checks = profile
+        .sections
+        .get("ip")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
+    let duration_ms = output.duration_ms;
+    let response = SyncCheckResponse {
+        dns: dns_payload_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
+        tls: tls_payload_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
+        ip: ip_payload_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
+        summary: summary_payload_from(&output.sections, &output.score, &profile.thresholds),
+        done: done_payload(&domain, duration_ms, cached),
+    };
+    let cache_header = if cached { "HIT" } else { "MISS" };
+    let mut resp = Json(response).into_response();
+    resp.headers_mut()
+        .insert("x-cache", HeaderValue::from_static(cache_header));
+    resp
+}
+
+fn sync_response_from_cached(
+    domain: String,
+    cached: &CachedResult,
+    is_cached: bool,
+    profile: &crate::scoring::profile::ScoringProfile,
+) -> Response {
+    let dummy_output = CheckOutput {
+        domain: domain.clone(),
+        sections: cached.sections.clone(),
+        score: cached.score.clone(),
+        duration_ms: cached.duration_ms,
+    };
+    build_sync_response(domain, dummy_output, is_cached, profile)
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -696,8 +908,10 @@ fn sse_response_from_cached(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use axum::Router;
     use axum::body::{Body, to_bytes};
     use axum::http::{Request, StatusCode};
+    use axum::routing::{get, post};
     use tower::ServiceExt;
 
     use crate::config::Config;
@@ -748,22 +962,54 @@ pub mod tests {
             .with_state(state)
     }
 
-    /// Simplified GET handler for tests — uses loopback as client IP.
+    /// Simplified GET handler for tests — uses loopback as client IP, no sync mode.
     async fn check_get_no_connect_handler(
         State(state): State<AppState>,
         Path(domain): Path<String>,
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        run_check_handler(state, client_ip, domain).await
+        run_check_handler(state, client_ip, domain, false).await
     }
 
-    /// Simplified POST handler for tests — uses loopback as client IP.
+    /// Simplified POST handler for tests — uses loopback as client IP, no sync mode.
     async fn check_post_no_connect_handler(
         State(state): State<AppState>,
         Json(body): Json<CheckPostBody>,
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        run_check_handler(state, client_ip, body.domain).await
+        run_check_handler(state, client_ip, body.domain, false).await
+    }
+
+    /// GET handler for sync-mode tests — computes sync flag from headers and query.
+    async fn check_get_no_connect_with_sync(
+        State(state): State<AppState>,
+        headers: axum::http::HeaderMap,
+        Path(domain): Path<String>,
+        Query(query): Query<CheckGetQuery>,
+    ) -> Response {
+        let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
+        let sync = is_sync_mode(&headers, query.stream);
+        run_check_handler(state, client_ip, domain, sync).await
+    }
+
+    /// POST handler for sync-mode tests — computes sync flag from headers and body.
+    async fn check_post_no_connect_with_sync(
+        State(state): State<AppState>,
+        headers: axum::http::HeaderMap,
+        Json(body): Json<CheckPostBody>,
+    ) -> Response {
+        let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
+        let sync = is_sync_mode(&headers, body.stream);
+        run_check_handler(state, client_ip, body.domain, sync).await
+    }
+
+    /// Build a Router that computes sync mode from headers/query, for sync-mode tests.
+    fn test_app_with_sync() -> axum::Router {
+        let state = make_test_state();
+        Router::new()
+            .route("/api/check/{domain}", get(check_get_no_connect_with_sync))
+            .route("/api/check", post(check_post_no_connect_with_sync))
+            .with_state(state)
     }
 
     // ---
@@ -932,5 +1178,294 @@ pub mod tests {
         assert!(hf.is_object(), "hard_fail must be an object");
         assert!(hf["dns"].is_array(), "hard_fail.dns must be an array");
         assert!(hf["tls"].is_array(), "hard_fail.tls must be an array");
+
+        // Rate limit fields
+        let rl = &json["rate_limit"];
+        assert!(rl.is_object(), "rate_limit must be an object");
+        assert!(rl["per_ip_per_minute"].is_number(), "per_ip_per_minute must be a number");
+        assert!(rl["per_ip_burst"].is_number(), "per_ip_burst must be a number");
+        assert!(rl["global_per_minute"].is_number(), "global_per_minute must be a number");
+        assert!(rl["global_burst"].is_number(), "global_burst must be a number");
+    }
+
+    // --- AC-1: sync mode via Accept: application/json header
+
+    #[tokio::test]
+    async fn sync_mode_via_accept_header_returns_json() {
+        let app = test_app_with_sync();
+        let req = Request::builder()
+            .uri("/api/check/example.com")
+            .header("accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        assert!(ct.contains("application/json"), "expected JSON content-type, got: {ct}");
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(json["dns"].is_object(), "dns key missing");
+        assert!(json["tls"].is_object(), "tls key missing");
+        assert!(json["ip"].is_object(), "ip key missing");
+        assert!(json["summary"].is_object(), "summary key missing");
+        assert!(json["done"].is_object(), "done key missing");
+    }
+
+    // --- AC-2: sync mode via ?stream=false query param
+
+    #[tokio::test]
+    async fn sync_mode_via_query_param_returns_json() {
+        let app = test_app_with_sync();
+        let req = Request::builder()
+            .uri("/api/check/example.com?stream=false")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        assert!(ct.contains("application/json"), "expected JSON content-type, got: {ct}");
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(json["dns"].is_object(), "dns key missing");
+        assert!(json["tls"].is_object(), "tls key missing");
+        assert!(json["ip"].is_object(), "ip key missing");
+        assert!(json["summary"].is_object(), "summary key missing");
+        assert!(json["done"].is_object(), "done key missing");
+    }
+
+    // --- AC-3: sync mode via POST body stream:false
+
+    #[tokio::test]
+    async fn sync_mode_via_post_body_field_returns_json() {
+        let app = test_app_with_sync();
+        let req = Request::builder()
+            .uri("/api/check")
+            .method("POST")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"domain":"example.com","stream":false}"#))
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        assert!(ct.contains("application/json"), "expected JSON content-type, got: {ct}");
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(json["dns"].is_object(), "dns key missing");
+        assert!(json["tls"].is_object(), "tls key missing");
+        assert!(json["ip"].is_object(), "ip key missing");
+        assert!(json["summary"].is_object(), "summary key missing");
+        assert!(json["done"].is_object(), "done key missing");
+    }
+
+    // --- AC-5: hard_fail_reason populated when hard_fail is true
+
+    #[test]
+    fn hard_fail_reason_populated_when_hard_fail_triggered() {
+        use crate::scoring::engine::OverallScore;
+
+        let score = OverallScore {
+            sections: HashMap::new(),
+            overall_percentage: 0.0,
+            grade: "F".to_string(),
+            hard_fail_triggered: true,
+            hard_fail_checks: vec!["chain_trusted".to_string(), "cert_lifetime".to_string()],
+        };
+        let sections = HashMap::new();
+        let thresholds = BTreeMap::new();
+
+        let summary = summary_payload_from(&sections, &score, &thresholds);
+
+        assert!(summary.hard_fail);
+        assert_eq!(
+            summary.hard_fail_reason,
+            Some("chain_trusted, cert_lifetime".to_string())
+        );
+    }
+
+    // --- AC-6: hard_fail_reason is null when hard_fail is false
+
+    #[test]
+    fn hard_fail_reason_null_when_no_hard_fail() {
+        use crate::scoring::engine::OverallScore;
+
+        let score = OverallScore {
+            sections: HashMap::new(),
+            overall_percentage: 91.5,
+            grade: "A".to_string(),
+            hard_fail_triggered: false,
+            hard_fail_checks: vec![],
+        };
+        let sections = HashMap::new();
+        let thresholds = BTreeMap::new();
+
+        let summary = summary_payload_from(&sections, &score, &thresholds);
+
+        assert!(!summary.hard_fail);
+        assert_eq!(summary.hard_fail_reason, None);
+    }
+
+    // --- AC-7: hard_fail_reason present in SSE summary event JSON
+
+    #[test]
+    fn hard_fail_reason_in_sse_summary_payload() {
+        use crate::scoring::engine::OverallScore;
+
+        let score = OverallScore {
+            sections: HashMap::new(),
+            overall_percentage: 0.0,
+            grade: "F".to_string(),
+            hard_fail_triggered: true,
+            hard_fail_checks: vec!["chain_trusted".to_string()],
+        };
+        let sections = HashMap::new();
+        let thresholds = BTreeMap::new();
+
+        // summary_payload_from is used by summary_event_from — test its output directly.
+        let payload = summary_payload_from(&sections, &score, &thresholds);
+        let json_str = serde_json::to_string(&payload).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        assert!(
+            !json["hard_fail_reason"].is_null(),
+            "hard_fail_reason must be non-null when hard_fail is true"
+        );
+        assert_eq!(json["hard_fail_reason"], "chain_trusted");
+    }
+
+    // --- AC-8: domain validation error in sync mode returns JSON error body
+
+    #[tokio::test]
+    async fn invalid_domain_returns_400_in_sync_mode() {
+        let app = test_app_with_sync();
+        let req = Request::builder()
+            .uri("/api/check/192.168.1.1")
+            .header("accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        assert!(ct.contains("application/json"));
+        let bytes = to_bytes(resp.into_body(), 4096).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"]["code"], "DOMAIN_INVALID");
+    }
+
+    // --- AC-9: rate limit error in sync mode returns JSON error body
+
+    #[tokio::test]
+    async fn rate_limit_returns_429_in_sync_mode() {
+        let state = AppState::new(test_config_with_rate_limit(1, 1)).unwrap();
+        let app = Router::new()
+            .route("/api/check/{domain}", get(check_get_no_connect_with_sync))
+            .with_state(state);
+
+        let make_req = || {
+            Request::builder()
+                .uri("/api/check/example.com")
+                .header("accept", "application/json")
+                .body(Body::empty())
+                .unwrap()
+        };
+
+        let resp1 = app.clone().oneshot(make_req()).await.unwrap();
+        assert_ne!(resp1.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        let resp2 = app.oneshot(make_req()).await.unwrap();
+        assert_eq!(resp2.status(), StatusCode::TOO_MANY_REQUESTS);
+        let bytes = to_bytes(resp2.into_body(), 4096).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"]["code"], "RATE_LIMITED");
+    }
+
+    // --- AC-10: X-Cache: HIT in sync mode on second request
+
+    #[tokio::test]
+    async fn cache_hit_returns_x_cache_hit_in_sync_mode() {
+        let state = make_test_state();
+        let app = Router::new()
+            .route("/api/check/{domain}", get(check_get_no_connect_with_sync))
+            .with_state(state);
+
+        let make_req = || {
+            Request::builder()
+                .uri("/api/check/example.com")
+                .header("accept", "application/json")
+                .body(Body::empty())
+                .unwrap()
+        };
+
+        // First request — cache miss.
+        let resp1 = app.clone().oneshot(make_req()).await.unwrap();
+        let cache1 = resp1.headers().get("x-cache").map(|v| v.to_str().unwrap().to_string());
+        let _ = to_bytes(resp1.into_body(), usize::MAX).await.unwrap();
+
+        // Second request — should be a HIT; response is still JSON.
+        let resp2 = app.oneshot(make_req()).await.unwrap();
+        let cache2 = resp2.headers().get("x-cache").map(|v| v.to_str().unwrap().to_string());
+        let ct = resp2.headers().get("content-type").unwrap().to_str().unwrap();
+
+        assert_eq!(cache1.as_deref(), Some("MISS"));
+        assert_eq!(cache2.as_deref(), Some("HIT"));
+        assert!(ct.contains("application/json"), "cache hit in sync mode must return JSON");
+    }
+
+    // --- AC-11: /api-docs/openapi.json lists all five endpoints
+
+    #[tokio::test]
+    async fn openapi_spec_lists_all_endpoints() {
+        let (_, health_openapi) = health_router().split_for_parts();
+        let (_, api_openapi) = api_router().split_for_parts();
+        let openapi = crate::api_doc::build_openapi(health_openapi, api_openapi);
+
+        let app = Router::new().route(
+            "/api-docs/openapi.json",
+            get({
+                let spec = openapi.clone();
+                move || async move { axum::Json(spec) }
+            }),
+        );
+
+        let req = Request::builder()
+            .uri("/api-docs/openapi.json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        assert!(ct.contains("application/json"));
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let paths = &json["paths"];
+        assert!(paths.is_object(), "spec must have a paths object");
+        assert!(paths.get("/api/check/{domain}").is_some(), "/api/check/{{domain}} missing");
+        assert!(paths.get("/api/check").is_some(), "/api/check missing");
+        assert!(paths.get("/api/meta").is_some(), "/api/meta missing");
+        assert!(paths.get("/health").is_some(), "/health missing");
+        assert!(paths.get("/ready").is_some(), "/ready missing");
+    }
+
+    // --- AC-12: /docs returns HTML containing "Scalar"
+
+    #[tokio::test]
+    async fn scalar_ui_served() {
+        use utoipa_scalar::{Scalar, Servable};
+
+        let (_, health_openapi) = health_router().split_for_parts();
+        let (_, api_openapi) = api_router().split_for_parts();
+        let openapi = crate::api_doc::build_openapi(health_openapi, api_openapi);
+
+        let app = Router::new().merge(Scalar::with_url("/docs", openapi));
+
+        let req = Request::builder()
+            .uri("/docs")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
+        assert!(ct.contains("text/html"), "expected HTML, got: {ct}");
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let body = std::str::from_utf8(&bytes).unwrap();
+        assert!(body.contains("Scalar"), "HTML must reference Scalar");
     }
 }
