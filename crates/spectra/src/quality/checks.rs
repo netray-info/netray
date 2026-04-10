@@ -167,11 +167,10 @@ pub fn run_checks(resp: &InspectResponse) -> Vec<QualityCheck> {
     // Caching
     let caching_status = if resp.caching.directives.no_store {
         CheckStatus::Skip
-    } else if resp.caching.cache_control.is_none() {
-        CheckStatus::Warn
-    } else if resp.caching.directives.max_age == Some(0)
-        && !resp.caching.directives.no_cache
-        && !resp.caching.directives.must_revalidate
+    } else if resp.caching.cache_control.is_none()
+        || (resp.caching.directives.max_age == Some(0)
+            && !resp.caching.directives.no_cache
+            && !resp.caching.directives.must_revalidate)
     {
         CheckStatus::Warn
     } else {
