@@ -490,18 +490,13 @@ a:hover { text-decoration: underline; }
 
 /* ── top row: grade + dots + actions ── */
 .summary-top {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
   padding: 1.25rem 1.25rem 1rem;
-  flex-wrap: wrap;
 }
 
 .summary-grade {
   display: flex;
   align-items: center;
   gap: 1rem;
-  flex-shrink: 0;
 }
 
 .summary-grade__letter {
