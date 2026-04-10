@@ -8,6 +8,7 @@ import SuiteNav from '@netray-info/common-frontend/components/SuiteNav';
 import DomainInput from './components/DomainInput';
 import DnsSection from './components/DnsSection';
 import TlsSection from './components/TlsSection';
+import HttpSection from './components/HttpSection';
 import IpSection from './components/IpSection';
 import Summary from './components/Summary';
 import ValidationChips from './components/ValidationChips';
@@ -20,6 +21,7 @@ import type {
   CheckState,
   DnsEvent,
   TlsEvent,
+  HttpEvent,
   IpEvent,
   SummaryEvent,
   DoneEvent,
@@ -34,6 +36,7 @@ export default function App() {
   const [checkState, setCheckState] = createSignal<CheckState>('idle');
   const [dns, setDns] = createSignal<DnsEvent | null>(null);
   const [tls, setTls] = createSignal<TlsEvent | null>(null);
+  const [http, setHttp] = createSignal<HttpEvent | null>(null);
   const [ip, setIp] = createSignal<IpEvent | null>(null);
   const [summary, setSummary] = createSignal<SummaryEvent | null>(null);
   const [done, setDone] = createSignal<DoneEvent | null>(null);
@@ -108,6 +111,7 @@ export default function App() {
   function clearState() {
     setDns(null);
     setTls(null);
+    setHttp(null);
     setIp(null);
     setSummary(null);
     setDone(null);
@@ -129,6 +133,7 @@ export default function App() {
     ssCleanup = startCheck(domain, {
       onDns:     (data) => setDns(data),
       onTls:     (data) => setTls(data),
+      onHttp:    (data) => setHttp(data),
       onIp:      (data) => setIp(data),
       onSummary: (data) => setSummary(data),
       onDone:    (data) => { setDone(data); setCheckState('done'); },
@@ -173,6 +178,7 @@ export default function App() {
   const allChecks = () => [
     ...(tls()?.checks ?? []),
     ...(dns()?.checks ?? []),
+    ...(http()?.checks ?? []),
     ...(ip()?.checks ?? []),
   ];
 
@@ -272,6 +278,16 @@ export default function App() {
                   expanded={allExpanded()}
                 />
               </div>
+              <Show when={http() !== null || (isLoading() && meta()?.ecosystem?.http_base_url !== undefined)}>
+                <div data-card>
+                  <HttpSection
+                    data={http()}
+                    loading={isLoading() && http() === null}
+                    error={error() ?? undefined}
+                    expanded={allExpanded()}
+                  />
+                </div>
+              </Show>
               <div data-card>
                 <IpSection
                   data={ip()}
@@ -321,7 +337,8 @@ export default function App() {
           <div class="help-section">
             <div class="help-section__title">Scoring</div>
             <p class="help-desc">
-              Weighted average across TLS (45%), DNS (35%), and IP (20%).
+              Weighted average across TLS (40%), DNS (30%), HTTP (20%), and IP (10%).
+              The HTTP section is optional and only scored when the spectra backend is configured.
             </p>
             <Show when={meta()?.profile}>
               {(profile) => (

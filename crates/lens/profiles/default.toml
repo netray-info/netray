@@ -3,7 +3,7 @@ name = "default"
 version = 2
 
 [sections.dns]
-weight = 35
+weight = 30
 hard_fail = ["spf", "dmarc"]
 
 [sections.dns.checks]
@@ -25,7 +25,7 @@ dnskey_algorithm = 3
 dnssec_rollover = 2
 
 [sections.tls]
-weight = 45
+weight = 40
 hard_fail = ["chain_trusted", "not_expired"]
 
 [sections.tls.checks]
@@ -49,11 +49,21 @@ dane_valid = 3
 consistency = 3
 alpn_consistency = 2
 ech_advertised = 2
-hsts = 5
-https_redirect = 5
+
+[sections.http]
+weight = 20
+hard_fail = []
+
+[sections.http.checks]
+https_redirect   = 5
+hsts             = 5
+security_headers = 5
+cors             = 3
+cookie_secure    = 2
+hygiene          = 2
 
 [sections.ip]
-weight = 20
+weight = 10
 hard_fail = []
 
 [sections.ip.checks]

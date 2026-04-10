@@ -76,6 +76,9 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
         "ct_logged" => Some("https://netray.info/guide/certificate-transparency"),
         "ocsp_stapled" => Some("https://netray.info/guide/certificate-chain"),
         "hsts" | "https_redirect" => Some("https://netray.info/guide/hsts"),
+        "security_headers" | "cors" | "cookie_secure" | "hygiene" => {
+            Some("https://netray.info/guide/http-security")
+        }
         "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
         "mta_sts" => Some("https://netray.info/guide/mta-sts"),
         // IP
@@ -105,6 +108,15 @@ pub struct DnsEvent {
 
 #[derive(Serialize, ToSchema)]
 pub struct TlsEvent {
+    #[schema(value_type = String)]
+    pub status: &'static str,
+    pub headline: String,
+    pub checks: Vec<CheckItem>,
+    pub detail_url: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct HttpEvent {
     #[schema(value_type = String)]
     pub status: &'static str,
     pub headline: String,
@@ -155,6 +167,8 @@ pub struct DoneEvent {
 pub struct SyncCheckResponse {
     pub dns: DnsEvent,
     pub tls: TlsEvent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http: Option<HttpEvent>,
     pub ip: IpEvent,
     pub summary: SummaryEvent,
     pub done: DoneEvent,
@@ -220,6 +234,8 @@ pub struct MetaEcosystem {
     pub tls_base_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_base_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_base_url: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -296,6 +312,7 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
         dns_base_url: Some(backends.dns_url.clone()),
         tls_base_url: Some(backends.tls_url.clone()),
         ip_base_url: Some(backends.ip_url.clone()),
+        http_base_url: backends.http_url.clone(),
     });
     let profile = &state.scoring_profile;
     let mut all_checks = HashMap::new();
@@ -343,34 +360,41 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let config = &state.config;
     let mut down: Vec<String> = Vec::new();
 
-    // Probe all backends concurrently (3 s timeout each).
-    let backends = [
-        ("dns", config.backends.dns_url.as_str()),
-        ("tls", config.backends.tls_url.as_str()),
-        ("ip", config.backends.ip_url.as_str()),
+    // Build list of required backends to probe (3 s timeout each).
+    // Optional http backend is only probed when http_url is configured.
+    let mut probes: Vec<(String, String)> = vec![
+        ("dns".to_string(), config.backends.dns_url.clone()),
+        ("tls".to_string(), config.backends.tls_url.clone()),
+        ("ip".to_string(), config.backends.ip_url.clone()),
     ];
-    let checks = backends.map(|(name, url)| {
-        let client = client.clone();
-        async move {
-            if url.is_empty() {
-                return Some(name.to_string());
+    if let Some(ref http_url) = config.backends.http_url {
+        probes.push(("http".to_string(), http_url.clone()));
+    }
+
+    let futures: Vec<_> = probes
+        .into_iter()
+        .map(|(name, url)| {
+            let client = client.clone();
+            async move {
+                if url.is_empty() {
+                    return Some(name);
+                }
+                let health_url = format!("{}/health", url.trim_end_matches('/'));
+                let ok = tokio::time::timeout(
+                    std::time::Duration::from_secs(3),
+                    client.get(&health_url).send(),
+                )
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .map(|r| r.status().is_success())
+                .unwrap_or(false);
+                if !ok { Some(name) } else { None }
             }
-            let health_url = format!("{}/health", url.trim_end_matches('/'));
-            let ok = tokio::time::timeout(
-                std::time::Duration::from_secs(3),
-                client.get(&health_url).send(),
-            )
-            .await
-            .ok()
-            .and_then(|r| r.ok())
-            .map(|r| r.status().is_success())
-            .unwrap_or(false);
-            if !ok { Some(name.to_string()) } else { None }
-        }
-    });
-    let [r0, r1, r2] = checks;
-    let (r0, r1, r2) = tokio::join!(r0, r1, r2);
-    for name in [r0, r1, r2].into_iter().flatten() {
+        })
+        .collect();
+
+    for name in futures::future::join_all(futures).await.into_iter().flatten() {
         down.push(name);
     }
 
@@ -631,6 +655,28 @@ fn tls_payload_from(
     TlsEvent { status, headline, checks, detail_url }
 }
 
+fn http_payload_from(
+    result: &Result<BackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> HttpEvent {
+    let status = section_status_from_checks(result);
+    let (headline, checks, detail_url) = match result {
+        Ok(r) => {
+            let items = build_check_items(&r.checks, weights);
+            let (raw_headline, url) = match &r.extra {
+                BackendExtra::Http {
+                    raw_headline,
+                    detail_url,
+                } => (raw_headline.clone(), detail_url.clone()),
+                _ => (String::new(), String::new()),
+            };
+            (raw_headline, items, url)
+        }
+        Err(e) => (error_headline(e), vec![], String::new()),
+    };
+    HttpEvent { status, headline, checks, detail_url }
+}
+
 fn ip_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
@@ -747,6 +793,16 @@ fn tls_event_from(
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
+fn http_event_from(
+    result: &Result<BackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> Event {
+    let payload = http_payload_from(result, weights);
+    Event::default()
+        .event("http")
+        .data(serde_json::to_string(&payload).unwrap_or_default())
+}
+
 fn ip_event_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
@@ -795,18 +851,27 @@ fn build_sse_events(
         .get("tls")
         .map(|s| &s.checks)
         .unwrap_or(&empty_checks);
+    let http_checks = profile
+        .sections
+        .get("http")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
     let ip_checks = profile
         .sections
         .get("ip")
         .map(|s| &s.checks)
         .unwrap_or(&empty_checks);
-    vec![
+    let mut events = vec![
         dns_event_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
         tls_event_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
-        ip_event_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
-        summary_event_from(&output.sections, &output.score, &profile.thresholds),
-        done_event(&domain, duration_ms, cached),
-    ]
+    ];
+    if let Some(http_result) = output.sections.get("http") {
+        events.push(http_event_from(http_result, http_checks));
+    }
+    events.push(ip_event_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks));
+    events.push(summary_event_from(&output.sections, &output.score, &profile.thresholds));
+    events.push(done_event(&domain, duration_ms, cached));
+    events
 }
 
 fn build_sse_events_from_cached(
@@ -866,6 +931,11 @@ fn build_sync_response(
         .get("tls")
         .map(|s| &s.checks)
         .unwrap_or(&empty_checks);
+    let http_checks = profile
+        .sections
+        .get("http")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
     let ip_checks = profile
         .sections
         .get("ip")
@@ -875,6 +945,7 @@ fn build_sync_response(
     let response = SyncCheckResponse {
         dns: dns_payload_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
         tls: tls_payload_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
+        http: output.sections.get("http").map(|r| http_payload_from(r, http_checks)),
         ip: ip_payload_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
         summary: summary_payload_from(&output.sections, &output.score, &profile.thresholds),
         done: done_payload(&domain, duration_ms, cached),
@@ -930,6 +1001,7 @@ pub mod tests {
                 dns_url: "http://127.0.0.1:19999".to_string(),
                 tls_url: "http://127.0.0.1:19998".to_string(),
                 ip_url: "http://127.0.0.1:19997".to_string(),
+                http_url: None,
                 backend_timeout_secs: 1,
             },
             cache: CacheConfig {
@@ -1442,6 +1514,33 @@ pub mod tests {
         assert!(paths.get("/api/meta").is_some(), "/api/meta missing");
         assert!(paths.get("/health").is_some(), "/health missing");
         assert!(paths.get("/ready").is_some(), "/ready missing");
+    }
+
+    // --- AC-8: sync response omits http field when http_url is not configured
+
+    #[tokio::test]
+    async fn sync_response_has_no_http_when_http_url_absent() {
+        let app = test_app_with_sync();
+        let req = Request::builder()
+            .uri("/api/check/example.com")
+            .header("accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        // http_url is None in test config → http field must be absent from response.
+        assert!(
+            json.get("http").is_none(),
+            "http field must be absent when http_url is not configured, got: {:?}",
+            json.get("http"),
+        );
+        // Other sections must still be present.
+        assert!(json["dns"].is_object(), "dns must be present");
+        assert!(json["tls"].is_object(), "tls must be present");
+        assert!(json["ip"].is_object(), "ip must be present");
+        assert!(json["summary"].is_object(), "summary must be present");
     }
 
     // --- AC-12: /docs returns HTML containing "Scalar"

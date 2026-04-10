@@ -31,6 +31,7 @@ fn live_state() -> AppState {
             dns_url: "https://dns.netray.info".to_string(),
             tls_url: "https://tls.netray.info".to_string(),
             ip_url: "https://ip.netray.info".to_string(),
+            http_url: None,
             backend_timeout_secs: 20,
         },
         cache: CacheConfig {

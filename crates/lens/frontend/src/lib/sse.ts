@@ -1,8 +1,9 @@
-import type { DnsEvent, TlsEvent, IpEvent, SummaryEvent, DoneEvent } from './types';
+import type { DnsEvent, TlsEvent, HttpEvent, IpEvent, SummaryEvent, DoneEvent } from './types';
 
 export interface SseCallbacks {
   onDns: (data: DnsEvent) => void;
   onTls: (data: TlsEvent) => void;
+  onHttp: (data: HttpEvent) => void;
   onIp: (data: IpEvent) => void;
   onSummary: (data: SummaryEvent) => void;
   onDone: (data: DoneEvent) => void;
@@ -25,6 +26,14 @@ export function startCheck(domain: string, callbacks: SseCallbacks): () => void 
       callbacks.onTls(JSON.parse(e.data) as TlsEvent);
     } catch {
       callbacks.onError('Failed to parse tls event');
+    }
+  });
+
+  es.addEventListener('http', (e: MessageEvent) => {
+    try {
+      callbacks.onHttp(JSON.parse(e.data) as HttpEvent);
+    } catch {
+      callbacks.onError('Failed to parse http event');
     }
   });
 

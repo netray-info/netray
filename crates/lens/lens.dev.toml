@@ -3,9 +3,10 @@ bind = "127.0.0.1:8082"
 metrics_bind = "127.0.0.1:9090"
 
 [backends]
+http_url = "https://http.netray.info"
 dns_url = "https://dns.netray.info"
 tls_url = "https://tls.netray.info"
-ip_url  = "https://ip.netray.info"
+ip_url = "https://ip.netray.info"
 backend_timeout_secs = 20
 
 [cache]

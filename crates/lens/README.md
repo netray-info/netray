@@ -162,6 +162,7 @@ curl -s -X POST -H 'Content-Type: application/json' \
 |---|---|
 | `dns` | DNS findings, resolved IPs, per-check results |
 | `tls` | Certificate chain, quality checks, grade |
+| `http` | HTTP security headers, HTTPS redirect, CORS, cookie posture (omitted when `http_url` not configured) |
 | `ip` | Per-IP classification: network type, ASN, geo |
 | `summary` | Overall grade, score, section grades, `hard_fail`, `hard_fail_reason` |
 | `done` | Domain, duration_ms, cached flag |
@@ -237,9 +238,12 @@ Each backend returns a set of named checks. Every check has a status: `pass`, `w
 
 | Section | Weight | Rationale |
 |---|---|---|
-| TLS | 45% | Certificate validity and transport security are foundational |
-| DNS | 35% | Email authentication and DNS health have major deliverability impact |
-| IP | 20% | Reputation informs risk but is beyond the domain owner's direct control |
+| TLS  | 40% | Certificate validity and transport security are foundational |
+| DNS  | 30% | Email authentication and DNS health have major deliverability impact |
+| HTTP | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (requires spectra backend) |
+| IP   | 10% | Reputation informs risk but is beyond the domain owner's direct control |
+
+The HTTP section is optional. When `http_url` is not configured, lens scores from TLS, DNS, and IP only. Section weights are rebalanced proportionally across the active sections by the scoring engine.
 
 ### Grade thresholds
 
@@ -286,7 +290,7 @@ name = "default"
 version = 2
 
 [sections.tls]
-weight = 45
+weight = 40
 hard_fail = ["chain_trusted", "not_expired"]
 
 [sections.tls.checks]
@@ -304,7 +308,7 @@ ocsp_stapled     = 3
 ct_logged        = 3
 
 [sections.dns]
-weight = 35
+weight = 30
 hard_fail = ["spf", "dmarc"]
 
 [sections.dns.checks]
@@ -314,8 +318,20 @@ dnssec = 5
 caa    = 5
 mx     = 5
 
-[sections.ip]
+[sections.http]
 weight = 20
+hard_fail = []
+
+[sections.http.checks]
+https_redirect   = 5
+hsts             = 5
+security_headers = 5
+cors             = 3
+cookie_secure    = 2
+hygiene          = 2
+
+[sections.ip]
+weight = 10
 hard_fail = []
 
 [sections.ip.checks]

@@ -35,7 +35,7 @@ pub struct CheckOutput {
 // ---------------------------------------------------------------------------
 
 /// Wave 1: run concurrently. No cross-section data dependencies.
-const WAVE1_SECTIONS: &[&str] = &["dns", "tls"];
+const WAVE1_SECTIONS: &[&str] = &["dns", "tls", "http"];
 
 /// Wave 2: run after wave 1. IP backend needs resolved IPs from DNS.
 const WAVE2_SECTIONS: &[&str] = &["ip"];

@@ -151,7 +151,47 @@ fn default_profile_parses_correctly() {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Perfect domain (all pass) scores A+
+// 2. Profile structure: four sections, weights sum to 100, hsts/https_redirect
+//    moved out of TLS and into HTTP (AC-6, AC-7)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn profile_section_weights_sum_to_100() {
+    let profile = default_profile();
+    let sum: u32 = profile.sections.values().map(|s| s.weight).sum();
+    assert_eq!(sum, 100, "section weights must sum to 100, got {}", sum);
+    assert_eq!(profile.sections["dns"].weight, 30, "dns weight must be 30");
+    assert_eq!(profile.sections["tls"].weight, 40, "tls weight must be 40");
+    assert_eq!(profile.sections["http"].weight, 20, "http weight must be 20");
+    assert_eq!(profile.sections["ip"].weight, 10, "ip weight must be 10");
+}
+
+#[test]
+fn tls_section_does_not_contain_hsts_or_https_redirect() {
+    let profile = default_profile();
+    let tls_checks = &profile.sections["tls"].checks;
+    assert!(
+        !tls_checks.contains_key("hsts"),
+        "tls section must not contain hsts (moved to http)"
+    );
+    assert!(
+        !tls_checks.contains_key("https_redirect"),
+        "tls section must not contain https_redirect (moved to http)"
+    );
+    // Both checks are now owned by the http section.
+    let http_checks = &profile.sections["http"].checks;
+    assert!(
+        http_checks.contains_key("hsts"),
+        "http section must contain hsts"
+    );
+    assert!(
+        http_checks.contains_key("https_redirect"),
+        "http section must contain https_redirect"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 3. Perfect domain (all pass) scores A+
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -320,9 +360,9 @@ fn all_dns_warn_with_all_tls_pass_grades_below_a() {
 
     // DNS section should be 50% (all warn = half credit).
     // TLS and IP sections should be 100%.
-    // Overall will be between 50% and 100% depending on section weights.
-    // With section_weights dns=35, tls=45, ip=20:
-    //   overall = (50*35 + 100*45 + 100*20) / 100 = (1750 + 4500 + 2000) / 100 = 82.5
+    // HTTP section absent from inputs → excluded from weighted average.
+    // Active weights: dns=30, tls=40, ip=10, total=80.
+    //   overall = (50*30 + 100*40 + 100*10) / 80 = (1500 + 4000 + 1000) / 80 = 81.25
     // → grade B (75..89.9)
     assert!(
         !matches!(result.grade.as_str(), "A" | "A+"),

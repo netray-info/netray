@@ -1,4 +1,5 @@
 pub mod dns;
+pub mod http;
 pub mod ip;
 pub mod tls;
 
@@ -17,6 +18,10 @@ pub enum BackendExtra {
         detail_url: String,
     },
     Tls {
+        raw_headline: String,
+        detail_url: String,
+    },
+    Http {
         raw_headline: String,
         detail_url: String,
     },

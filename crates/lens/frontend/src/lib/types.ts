@@ -22,6 +22,13 @@ export interface TlsEvent {
   detail_url: string;
 }
 
+export interface HttpEvent {
+  status: Verdict;
+  headline: string;
+  checks: CheckItem[];
+  detail_url: string;
+}
+
 export interface IpAddress {
   ip: string;
   org?: string;
@@ -61,6 +68,7 @@ export interface MetaEcosystem {
   dns_base_url?: string;
   tls_base_url?: string;
   lens_base_url?: string;
+  http_base_url?: string;
 }
 
 export interface ProfileData {

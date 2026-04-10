@@ -38,6 +38,8 @@ pub struct BackendsConfig {
     pub dns_url: String,
     pub tls_url: String,
     pub ip_url: String,
+    #[serde(default)]
+    pub http_url: Option<String>,
     #[serde(default = "default_backend_timeout_secs")]
     pub backend_timeout_secs: u64,
 }
@@ -108,6 +110,7 @@ fn default_backends() -> BackendsConfig {
         dns_url: String::new(),
         tls_url: String::new(),
         ip_url: String::new(),
+        http_url: None,
         backend_timeout_secs: default_backend_timeout_secs(),
     }
 }
@@ -246,6 +249,7 @@ mod tests {
                 dns_url: "http://localhost:8080".to_string(),
                 tls_url: "http://localhost:8081".to_string(),
                 ip_url: "http://localhost:8082".to_string(),
+                http_url: None,
                 backend_timeout_secs: default_backend_timeout_secs(),
             },
             cache: default_cache(),

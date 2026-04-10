@@ -41,6 +41,11 @@ export const CHECK_LABELS: Record<string, string> = {
   ech_advertised: 'Encrypted Client Hello',
   hsts: 'HSTS',
   https_redirect: 'HTTPS Redirect',
+  // HTTP
+  security_headers: 'Security Headers',
+  cors: 'CORS Policy',
+  cookie_secure: 'Secure Cookies',
+  hygiene: 'Header Hygiene',
   // IP
   reputation: 'IP Reputation',
 };
@@ -88,6 +93,11 @@ export const CHECK_DESCRIPTIONS: Record<string, string> = {
   ech_advertised: 'Encrypted Client Hello hides the hostname from passive observers',
   hsts: 'HTTP Strict Transport Security forces browsers to use HTTPS for ≥ 6 months',
   https_redirect: 'HTTP must redirect to HTTPS',
+  // HTTP
+  security_headers: 'CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy',
+  cors: 'CORS policy should not allow arbitrary origins in production APIs',
+  cookie_secure: 'Session cookies must have the Secure and HttpOnly attributes',
+  hygiene: 'Deprecated headers, information leakage, caching directives, and redirect loops',
   // IP
   reputation: 'IP reputation: VPNs warn, Tor exit nodes and known C2 hosts fail',
 };

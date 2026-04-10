@@ -5,6 +5,7 @@ use moka::future::Cache;
 
 use crate::backends::Backend;
 use crate::backends::dns::DnsBackend;
+use crate::backends::http::HttpBackend;
 use crate::backends::ip::IpBackend;
 use crate::backends::tls::TlsBackend;
 use crate::cache::CachedResult;
@@ -51,17 +52,22 @@ impl AppState {
             config.scoring.profile_path.as_deref(),
         )?);
 
-        let backends: Vec<Box<dyn Backend + Send + Sync>> = vec![
+        let mut backends: Vec<Box<dyn Backend + Send + Sync>> = vec![
             Box::new(DnsBackend {
                 dns_url: config.backends.dns_url.clone(),
             }),
             Box::new(TlsBackend {
                 tls_url: config.backends.tls_url.clone(),
             }),
-            Box::new(IpBackend {
-                ip_url: config.backends.ip_url.clone(),
-            }),
         ];
+        if let Some(ref http_url) = config.backends.http_url {
+            backends.push(Box::new(HttpBackend {
+                http_url: http_url.clone(),
+            }));
+        }
+        backends.push(Box::new(IpBackend {
+            ip_url: config.backends.ip_url.clone(),
+        }));
 
         Ok(Self {
             config: Arc::new(config),
@@ -105,6 +111,7 @@ mod tests {
                 dns_url: "http://localhost:8080".to_string(),
                 tls_url: "http://localhost:8081".to_string(),
                 ip_url: "http://localhost:8082".to_string(),
+                http_url: None,
                 backend_timeout_secs: 20,
             },
             telemetry: Default::default(),
@@ -166,5 +173,17 @@ mod tests {
         assert_eq!(state.backends[0].section(), "dns");
         assert_eq!(state.backends[1].section(), "tls");
         assert_eq!(state.backends[2].section(), "ip");
+    }
+
+    #[test]
+    fn http_backend_registered_when_url_set() {
+        let mut config = test_config();
+        config.backends.http_url = Some("http://localhost:8083".to_string());
+        let state = AppState::new(config).unwrap();
+        assert_eq!(state.backends.len(), 4);
+        assert_eq!(state.backends[0].section(), "dns");
+        assert_eq!(state.backends[1].section(), "tls");
+        assert_eq!(state.backends[2].section(), "http");
+        assert_eq!(state.backends[3].section(), "ip");
     }
 }
