@@ -966,43 +966,56 @@ a:hover { text-decoration: underline; }
 }
 
 /* ================================================================
-   HTTP section metadata bar
+   Share button
    ================================================================ */
 
-.http-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  width: 100%;
-  padding-top: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.http-meta__item {
+.share-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  white-space: nowrap;
+  justify-content: center;
+  align-self: stretch;
+  flex-shrink: 0;
+  padding: 0 8px;
+  color: var(--accent);
+  background: rgba(0, 120, 212, 0.08);
+  border: 1px solid rgba(0, 120, 212, 0.25);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.share-btn:hover {
+  background: rgba(0, 120, 212, 0.18);
+  border-color: rgba(0, 120, 212, 0.4);
+}
+[data-theme="light"] .share-btn {
+  background: rgba(0, 119, 204, 0.08);
+  border-color: rgba(0, 119, 204, 0.25);
+}
+[data-theme="light"] .share-btn:hover {
+  background: rgba(0, 119, 204, 0.15);
+  border-color: rgba(0, 119, 204, 0.4);
 }
 
-.http-meta__label {
+/* ================================================================
+   Modal close button
+   ================================================================ */
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 20px;
   color: var(--text-muted);
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
 }
 
-.http-meta__value {
+.modal-close:hover {
   color: var(--text-primary);
-  font-weight: 500;
-}
-
-.http-meta__value--timing {
-  color: var(--verdict-pass);
-}
-
-.http-meta__value--mono {
-  font-family: var(--mono);
+  background: var(--bg-tertiary);
 }

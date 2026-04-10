@@ -1,4 +1,5 @@
 import { createSignal, createEffect, Show, For } from 'solid-js';
+import { copyToClipboard } from '@netray-info/common-frontend/utils';
 import { getHistory } from '../lib/history';
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
   loading: boolean;
   value?: string;
   inputRef?: (el: HTMLInputElement) => void;
+  showCopyLink?: boolean;
 }
 
 const LISTBOX_ID = 'domain-history-listbox';
@@ -15,6 +17,7 @@ export default function DomainInput(props: Props) {
   const [value, setValue] = createSignal(props.value ?? '');
   const [historyOpen, setHistoryOpen] = createSignal(false);
   const [historyIdx, setHistoryIdx] = createSignal(-1);
+  const [linkCopied, setLinkCopied] = createSignal(false);
 
   // Sync controlled value from parent (e.g. restore from URL on mount)
   createEffect(() => {
@@ -59,6 +62,11 @@ export default function DomainInput(props: Props) {
       setHistoryOpen(false);
       setHistoryIdx(-1);
     }
+  }
+
+  async function handleCopyLink() {
+    const ok = await copyToClipboard(window.location.href);
+    if (ok) { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }
   }
 
   const history = () => getHistory().slice(0, 8);
@@ -117,6 +125,26 @@ export default function DomainInput(props: Props) {
           </div>
         </Show>
       </div>
+      <Show when={props.showCopyLink}>
+        <button
+          class="share-btn"
+          type="button"
+          onClick={handleCopyLink}
+          title={linkCopied() ? 'Copied!' : 'Copy shareable link'}
+          aria-label="Copy shareable link"
+        >
+          <Show when={linkCopied()} fallback={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+          }>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </Show>
+        </button>
+      </Show>
       <button
         class="btn-primary domain-input__btn"
         type="submit"

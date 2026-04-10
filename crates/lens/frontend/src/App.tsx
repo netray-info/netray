@@ -212,6 +212,7 @@ export default function App() {
             loading={isLoading()}
             value={currentDomain()}
             inputRef={(el) => { inputEl = el; }}
+            showCopyLink={hasResults() || checkState() === 'done' || checkState() === 'error'}
           />
 
           <Show when={error()}>
@@ -244,6 +245,8 @@ export default function App() {
                 done={done()}
                 addresses={ip()?.addresses}
                 ipDetailUrl={ip()?.detail_url}
+                httpServerIp={http()?.server_ip}
+                httpServerOrg={http()?.server_org}
                 onCopyMd={done() ? handleCopyMd : undefined}
                 onDownloadJson={done() ? handleDownloadJson : undefined}
               />

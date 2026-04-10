@@ -29,6 +29,8 @@ interface Props {
   done: DoneEvent | null;
   addresses?: IpAddress[];
   ipDetailUrl?: string;
+  httpServerIp?: string;
+  httpServerOrg?: string;
   onCopyMd?: () => void;
   onDownloadJson?: () => void;
 }
@@ -40,7 +42,7 @@ export default function Summary(props: Props) {
   const sectionGrade = (name: string): string | undefined => s().section_grades[name];
   const hasErroredSection = () =>
     sectionVerdict('dns') === 'error' || sectionVerdict('tls') === 'error' || sectionVerdict('ip') === 'error';
-  const hasAddresses = () => (props.addresses?.length ?? 0) > 0;
+  const hasAddresses = () => (props.addresses?.length ?? 0) > 0 || !!props.httpServerIp;
 
   return (
     <div class="summary-card" role="region" aria-label="Summary">
@@ -120,10 +122,20 @@ export default function Summary(props: Props) {
         <div class="summary-divider" />
         <div class="summary-servers">
           <div class="summary-servers__list">
+            <Show when={props.httpServerIp}>
+              <div class="summary-server-row">
+                <span class="summary-server__label">HTTP</span>
+                <span class="summary-server__ip">{props.httpServerIp}</span>
+                <Show when={props.httpServerOrg}>
+                  <span class="summary-server__hosted">Hosted by</span>
+                  <span class="summary-server__org">{props.httpServerOrg}</span>
+                </Show>
+              </div>
+            </Show>
             <For each={props.addresses}>
               {(addr) => (
                 <div class="summary-server-row">
-                  <span class="summary-server__label">Server</span>
+                  <span class="summary-server__label">IP</span>
                   <span class="summary-server__ip">{addr.ip}</span>
                   <Show when={addr.org}>
                     <span class="summary-server__hosted">Hosted by</span>
