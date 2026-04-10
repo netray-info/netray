@@ -11,6 +11,7 @@ allow = [
     "Unicode-DFS-2016",
     "Unicode-3.0",
     "Zlib",
+    "CC0-1.0",
 ]
 
 [bans]
@@ -18,9 +19,9 @@ multiple-versions = "warn"
 
 [advisories]
 ignore = [
-    # rustls-pemfile is unmaintained (RUSTSEC-2025-0134); no safe upgrade available,
-    # it's a transitive dependency via rustls ecosystem. Tracked for future removal.
-    "RUSTSEC-2025-0134",
+    # paste is unmaintained (RUSTSEC-2024-0436); transitive dependency, no
+    # drop-in replacement available yet. Tracked for future removal.
+    "RUSTSEC-2024-0436",
 ]
 
 [sources]
