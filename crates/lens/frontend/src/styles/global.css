@@ -385,16 +385,13 @@ a:hover { text-decoration: underline; }
 
 .section-card__link {
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--accent);
   text-decoration: none;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.section-card__link:hover {
-  color: var(--text-secondary);
-  text-decoration: none;
-}
+.section-card__link:hover { text-decoration: underline; }
 
 /* ================================================================
    IP address list

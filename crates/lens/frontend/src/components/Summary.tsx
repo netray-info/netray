@@ -80,19 +80,17 @@ export default function Summary(props: Props) {
   );
 
   const actions = () => (
-    <Show when={props.onCopyMd || props.onDownloadJson}>
-      <div class="summary-actions">
-        <Show when={props.onCopyMd}>
-          <button class="summary-action-btn" type="button" onClick={props.onCopyMd}>copy MD</button>
-        </Show>
-        <Show when={props.onCopyMd && props.onDownloadJson}>
-          <span class="summary-action-sep">|</span>
-        </Show>
-        <Show when={props.onDownloadJson}>
-          <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
-        </Show>
-      </div>
-    </Show>
+    <div class="summary-actions">
+      <Show when={props.onCopyMd}>
+        <button class="summary-action-btn" type="button" onClick={props.onCopyMd}>copy MD</button>
+      </Show>
+      <Show when={props.onCopyMd && props.onDownloadJson}>
+        <span class="summary-action-sep">|</span>
+      </Show>
+      <Show when={props.onDownloadJson}>
+        <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
+      </Show>
+    </div>
   );
 
   return (
