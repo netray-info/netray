@@ -1,6 +1,6 @@
 [server]
-bind = "0.0.0.0:8082"
-metrics_bind = "127.0.0.1:9090"
+bind = "0.0.0.0:8085"
+metrics_bind = "127.0.0.1:9095"
 # trusted_proxies = ["10.0.0.0/8"]
 
 [backends]

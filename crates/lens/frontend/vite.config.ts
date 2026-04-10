@@ -4,9 +4,9 @@ import solidPlugin from 'vite-plugin-solid'
 export default defineConfig({
   plugins: [solidPlugin()],
   server: {
-    port: 5175,
+    port: 5178,
     proxy: {
-      '/api': 'http://localhost:8082'
+      '/api': 'http://localhost:8085'
     }
   },
   build: {

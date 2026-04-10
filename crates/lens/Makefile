@@ -78,7 +78,7 @@ frontend-install: ## Install frontend dependencies (npm ci)
 frontend: frontend-install ## Build frontend (npm ci + build)
 	cd $(FRONTEND_DIR) && $(NPM) run build
 
-frontend-dev: ## Start Vite dev server (:5174, proxies /api/* to :8082)
+frontend-dev: ## Start Vite dev server (:5178, proxies /api/* to :8085)
 	cd $(FRONTEND_DIR) && $(NPM) run dev
 
 frontend-test: frontend-install ## Run frontend tests (vitest)
@@ -121,5 +121,5 @@ clean: ## Remove target/, frontend/dist/, node_modules/
 docker: ## Build Docker image (ghcr.io/netray-info/lens:latest)
 	docker build -t $(DOCKER_TAG) .
 
-docker-run: ## Run Docker image locally (port 8082)
-	docker run --rm -p 8082:8082 -p 8090:8090 $(DOCKER_TAG)
+docker-run: ## Run Docker image locally (port 8085)
+	docker run --rm -p 8085:8085 -p 9095:9095 $(DOCKER_TAG)
