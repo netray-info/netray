@@ -294,9 +294,8 @@ export default function App() {
                     </div>
                     {/* Row 2: IP + enrichment */}
                     <div class="overview__row overview__row--enrichment">
-                      <span class="overview__row-label">Server</span>
                       <div class="overview__item">
-                        <span class="overview__label">IP</span>
+                        <span class="overview__label">Server</span>
                         <span class="overview__value">{data.enrichment.ip}</span>
                         <Show when={data.enrichment.threat}>
                           <span class="badge badge--fail">{data.enrichment.threat}</span>
@@ -304,15 +303,15 @@ export default function App() {
                       </div>
                       <Show when={data.enrichment.org}>
                         <div class="overview__item">
-                          <span class="overview__label" title="Server hosting provider">Org</span>
-                          <span class="overview__value">{data.enrichment.org}</span>
-                        </div>
-                      </Show>
-                      <Show when={data.enrichment.ip_type}>
-                        <div class="overview__item">
-                          <span class="overview__label" title="IP address classification">Category</span>
+                          <span class="overview__label">Hosted by</span>
                           <span class="overview__value">
-                            {data.enrichment.ip_type!.charAt(0).toUpperCase() + data.enrichment.ip_type!.slice(1)}
+                            {data.enrichment.org}
+                            <Show when={data.enrichment.ip_type}>
+                              {' '}
+                              <span class="overview__value--qualifier">
+                                ({data.enrichment.ip_type!.charAt(0).toUpperCase() + data.enrichment.ip_type!.slice(1)})
+                              </span>
+                            </Show>
                           </span>
                         </div>
                       </Show>

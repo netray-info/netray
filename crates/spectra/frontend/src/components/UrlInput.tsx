@@ -21,6 +21,7 @@ export default function UrlInput(props: Props) {
     if (ok) { setLinkCopied(true); setTimeout(() => setLinkCopied(false), 2000); }
   }
 
+
   function handleSubmit(e: Event) {
     e.preventDefault();
     const v = value().trim();
@@ -51,24 +52,34 @@ export default function UrlInput(props: Props) {
           disabled={props.loading}
         />
         <Show when={value().trim()}>
-          <div class="url-input__actions">
-            <Show when={props.showCopyLink}>
-              <button
-                class="url-input__copy-link"
-                type="button"
-                onClick={handleCopyLink}
-                title="Copy shareable link"
-              >{linkCopied() ? '✓' : '⎘'}</button>
-            </Show>
-            <button
-              class="url-input__clear"
-              type="button"
-              onClick={handleClear}
-              title="Clear"
-            >&times;</button>
-          </div>
+          <button
+            class="url-input__clear"
+            type="button"
+            onClick={handleClear}
+            title="Clear"
+          >&times;</button>
         </Show>
       </div>
+      <Show when={props.showCopyLink}>
+        <button
+          class="share-btn"
+          type="button"
+          onClick={handleCopyLink}
+          title={linkCopied() ? 'Copied!' : 'Copy shareable link'}
+          aria-label="Copy shareable link"
+        >
+          <Show when={linkCopied()} fallback={
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+          }>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </Show>
+        </button>
+      </Show>
       <button class="btn-primary url-input__submit" type="submit" disabled={props.loading || !value().trim()}>
         {props.loading ? 'Inspecting...' : 'Inspect'}
       </button>

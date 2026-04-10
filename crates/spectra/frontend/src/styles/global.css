@@ -80,7 +80,7 @@ a:hover { text-decoration: underline; }
 
 .url-input__field {
   flex: 1;
-  padding: 0.625rem 3.75rem 0.625rem 0.875rem;
+  padding: 0.625rem 2rem 0.625rem 0.875rem;
   font-family: var(--mono);
   font-size: 0.9rem;
   background: var(--bg-secondary);
@@ -99,29 +99,45 @@ a:hover { text-decoration: underline; }
   color: var(--text-muted);
 }
 
-.url-input__actions {
+.url-input__clear {
   position: absolute;
   right: 0.5rem;
-  display: flex;
-  align-items: center;
-  gap: 0.125rem;
-}
-
-.url-input__clear,
-.url-input__copy-link {
   background: none;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.8125rem;
+  font-size: 1rem;
   line-height: 1;
-  padding: 0.125rem 0.25rem;
-  border-radius: 3px;
-  transition: color var(--transition), background var(--transition);
+  padding: 0 0.25rem;
 }
-.url-input__clear { font-size: 1rem; }
-.url-input__clear:hover,
-.url-input__copy-link:hover { color: var(--text-primary); background: var(--bg-secondary); }
+.url-input__clear:hover { color: var(--text-primary); }
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  flex-shrink: 0;
+  padding: 0 8px;
+  color: var(--accent);
+  background: rgba(0, 120, 212, 0.08);
+  border: 1px solid rgba(0, 120, 212, 0.25);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+.share-btn:hover {
+  background: rgba(0, 120, 212, 0.18);
+  border-color: rgba(0, 120, 212, 0.4);
+}
+[data-theme="light"] .share-btn {
+  background: rgba(0, 119, 204, 0.08);
+  border-color: rgba(0, 119, 204, 0.25);
+}
+[data-theme="light"] .share-btn:hover {
+  background: rgba(0, 119, 204, 0.15);
+  border-color: rgba(0, 119, 204, 0.4);
+}
 
 /* ================================================================
    Section controls (expand/collapse all)
@@ -423,16 +439,7 @@ a:hover { text-decoration: underline; }
 
 .overview__label { color: var(--text-muted); font-family: var(--mono); cursor: default; }
 .overview__value { font-weight: 600; font-family: var(--mono); }
-.overview__row-label {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  align-self: center;
-  padding-right: 0.25rem;
-  white-space: nowrap;
-}
+.overview__value--qualifier { font-weight: 400; color: var(--text-muted); }
 .overview__value--fast { color: var(--pass); }
 .overview__value--ok   { color: var(--warn); }
 .overview__value--slow { color: var(--fail); }
