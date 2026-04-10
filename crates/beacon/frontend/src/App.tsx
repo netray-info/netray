@@ -61,6 +61,7 @@ export default function App() {
   onMount(() => {
     fetchMeta().then((m) => {
       if (m) setMeta(m);
+      if (m?.site_name) document.title = m.site_name;
     });
 
     // Check URL params
@@ -411,7 +412,7 @@ export default function App() {
                       when={result()}
                       fallback={
                         <Show when={loading()}>
-                          <div class="section-card" aria-busy="true" aria-label={`Loading ${CATEGORY_LABELS[cat]}...`}>
+                          <div class="section-card card--pending" aria-busy="true" aria-label={`Loading ${CATEGORY_LABELS[cat]}...`}>
                             <div class="section-card__header">
                               <span class="skeleton skeleton-line" style={{ width: '3rem', height: '1.25rem', 'flex-shrink': '0', margin: 0 }} />
                               <span class="section-card__title">{CATEGORY_LABELS[cat]}</span>

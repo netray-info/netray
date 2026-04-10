@@ -79,7 +79,7 @@ jobs:
         run: npm run lint
         working-directory: frontend
       - name: Test
-        run: npx vitest run --passWithNoTests --environment node
+        run: npm test
         working-directory: frontend
 
   audit:

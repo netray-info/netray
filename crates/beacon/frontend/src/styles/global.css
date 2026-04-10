@@ -184,13 +184,6 @@
   line-height: 1.5;
 }
 
-.mode-cards {
-  display: flex;
-  justify-content: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
 /* Error */
 .error-alert {
   padding: 0.75rem 1rem;
@@ -453,6 +446,16 @@
 }
 
 /* Skeleton loader */
+.card--pending {
+  background: var(--surface-2, var(--bg-secondary));
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
 .skeleton {
   background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
   background-size: 200% 100%;
