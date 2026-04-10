@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-04-10
+
+### Added
+- Add About section to help modal, add netray.info example (9941407)
+
+### Changed
+- Bump netray-common to 0.6.0 (55ea2ee)
+- Assign unique dev ports: backend 8081, metrics 9091, vite 5174 (d224e1b)
+
 ## [0.8.4] - 2026-04-09
 
 ### Fixed
