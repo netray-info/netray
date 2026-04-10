@@ -19,7 +19,7 @@ import type {
   SummaryEvent,
   Verdict,
 } from './lib/types';
-import { CATEGORY_LABELS, CATEGORY_ORDER } from './lib/types';
+import { CATEGORY_LABELS, CATEGORY_ORDER, VERDICT_ORDER } from './lib/types';
 
 const HISTORY_KEY = 'beacon_history';
 const MAX_HISTORY = 20;
@@ -334,6 +334,14 @@ export default function App() {
             </Show>
 
             <Show when={categories().size > 0}>
+              <Show when={summary() !== null}>
+                <OverviewCard
+                  summary={summary()!}
+                  mxResult={categories().get('mx')}
+                  ipBaseUrl={meta()?.ecosystem?.ip_base_url}
+                />
+              </Show>
+
               <div class="section-controls">
                 <div class="section-controls__left">
                   <Show when={loading()}>
@@ -467,6 +475,94 @@ export default function App() {
         </Modal>
       </div>
     </>
+  );
+}
+
+function OverviewCard(props: {
+  summary: SummaryEvent;
+  mxResult?: CheckResult;
+  ipBaseUrl?: string;
+}) {
+  const overallVerdict = (): Verdict => {
+    const vs = Object.values(props.summary.verdicts) as Verdict[];
+    return vs.reduce<Verdict>(
+      (worst, v) => (VERDICT_ORDER[v] > VERDICT_ORDER[worst] ? v : worst),
+      'skip',
+    );
+  };
+
+  const counts = () => {
+    const c: Partial<Record<Verdict, number>> = {};
+    for (const v of Object.values(props.summary.verdicts) as Verdict[]) {
+      c[v] = (c[v] ?? 0) + 1;
+    }
+    return c;
+  };
+
+  const firstEnrichment = () => props.mxResult?.enrichment?.[0];
+
+  return (
+    <div class="overview">
+      <div class="overview__row">
+        <div class="overview__item">
+          <span class="overview__label">Verdict</span>
+          <span class={`badge badge--${overallVerdict()}`}>{overallVerdict()}</span>
+        </div>
+        <Show when={(counts().fail ?? 0) > 0}>
+          <div class="overview__item">
+            <span class="overview__value overview__value--fail">{counts().fail}</span>
+            <span class="overview__label">failed</span>
+          </div>
+        </Show>
+        <Show when={(counts().warn ?? 0) > 0}>
+          <div class="overview__item">
+            <span class="overview__value overview__value--warn">{counts().warn}</span>
+            <span class="overview__label">warnings</span>
+          </div>
+        </Show>
+        <Show when={(counts().info ?? 0) > 0}>
+          <div class="overview__item">
+            <span class="overview__value overview__value--info">{counts().info}</span>
+            <span class="overview__label">info</span>
+          </div>
+        </Show>
+        <Show when={(counts().pass ?? 0) > 0}>
+          <div class="overview__item">
+            <span class="overview__value overview__value--pass">{counts().pass}</span>
+            <span class="overview__label">passed</span>
+          </div>
+        </Show>
+      </div>
+
+      <Show when={firstEnrichment()}>
+        {(e) => (
+          <div class="overview__row overview__row--enrichment">
+            <div class="overview__item">
+              <span class="overview__label">MX</span>
+              <span class="overview__value">{e().ip}</span>
+            </div>
+            <Show when={e().org}>
+              <div class="overview__item">
+                <span class="overview__label">Hosted by</span>
+                <span class="overview__value">
+                  {e().org}
+                  <Show when={e().ip_type}>
+                    {' '}
+                    <span class="overview__value--qualifier">({e().ip_type})</span>
+                  </Show>
+                </span>
+              </div>
+            </Show>
+            <a
+              href={`${props.ipBaseUrl ?? 'https://ip.netray.info'}/${encodeURIComponent(e().ip)}`}
+              class="overview__ip-link"
+              target="_blank"
+              rel="noopener noreferrer"
+            >IP ↗</a>
+          </div>
+        )}
+      </Show>
+    </div>
   );
 }
 
