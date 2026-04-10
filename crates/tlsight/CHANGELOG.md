@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] - 2026-04-10
+
+### Added
+- Add guide links in explain mode (fd43e0c)
+- Add About section to help modal, convert to shortcuts-table (abf4331)
+
+### Changed
+- Bump netray-common to 0.6.0 (76ea295)
+- Assign unique dev ports: backend 8082, metrics 9092, vite 5175 (e37ed0d)
+
 ## [0.10.4] - 2026-04-09
 
 ### Added
