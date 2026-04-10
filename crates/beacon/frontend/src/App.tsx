@@ -355,6 +355,8 @@ export default function App() {
                 />
               </Show>
 
+              <NoMailNotice mxResult={categories().get('mx')} />
+
               <div class="section-controls">
                 <div class="section-controls__left">
                   <Show when={loading()}>
@@ -487,6 +489,22 @@ export default function App() {
           </div>
         </Modal>
     </div>
+  );
+}
+
+function NoMailNotice(props: { mxResult?: CheckResult }) {
+  const reason = (): string | null => {
+    if (!props.mxResult) return null;
+    const names = props.mxResult.sub_checks.map((sc) => sc.name);
+    if (names.includes('null_mx')) return 'This domain explicitly declares it does not accept email (null MX).';
+    if (names.includes('no_mx')) return 'This domain does not appear to receive email — no MX records found.';
+    return null;
+  };
+
+  return (
+    <Show when={reason()}>
+      {(msg) => <div class="notice-banner" role="status">{msg()}</div>}
+    </Show>
   );
 }
 

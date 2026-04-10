@@ -427,6 +427,16 @@ a:hover { text-decoration: underline; }
    Error
    ================================================================ */
 
+.notice-banner {
+  padding: 0.75rem 1rem;
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+
 .error-banner {
   padding: 0.75rem 1rem;
   background: rgba(239, 68, 68, 0.1);
