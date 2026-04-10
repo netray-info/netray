@@ -10,6 +10,7 @@ interface Props {
   loading: boolean;
   error?: string;
   expanded?: boolean;
+  grade?: string;
 }
 
 export default function HttpSection(props: Props) {
@@ -49,7 +50,7 @@ export default function HttpSection(props: Props) {
                 aria-expanded={open()}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(v => !v); } }}
               >
-                <VerdictDot verdict={data().status} />
+                <VerdictDot verdict={data().status} grade={props.grade} />
                 <span class="section-card__title">HTTP</span>
                 <Show when={data().status === 'error'} fallback={
                   <SectionHeadline checks={data().checks} />

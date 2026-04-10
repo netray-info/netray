@@ -270,6 +270,7 @@ onCopyMd={done() ? handleCopyMd : undefined}
                     loading={isLoading() && http() === null}
                     error={error() ?? undefined}
                     expanded={allExpanded()}
+                    grade={summary()?.section_grades['http']}
                   />
                 </div>
               </Show>
@@ -279,6 +280,7 @@ onCopyMd={done() ? handleCopyMd : undefined}
                   loading={isLoading() && dns() === null}
                   error={error() ?? undefined}
                   expanded={allExpanded()}
+                  grade={summary()?.section_grades['dns']}
                 />
               </div>
               <div data-card>
@@ -287,6 +289,7 @@ onCopyMd={done() ? handleCopyMd : undefined}
                   loading={isLoading() && tls() === null}
                   error={error() ?? undefined}
                   expanded={allExpanded()}
+                  grade={summary()?.section_grades['tls']}
                 />
               </div>
               <div data-card>
@@ -295,6 +298,7 @@ onCopyMd={done() ? handleCopyMd : undefined}
                   loading={isLoading() && ip() === null}
                   error={error() ?? undefined}
                   expanded={allExpanded()}
+                  grade={summary()?.section_grades['ip']}
                 />
               </div>
             </div>

@@ -279,6 +279,13 @@ a:hover { text-decoration: underline; }
 .verdict-dot--error { background: var(--verdict-error); box-shadow: 0 0 4px var(--verdict-error); }
 .verdict-dot--skip { background: var(--verdict-skip); }
 
+/* Grade-based dot colours — used for section-level dots in summary and section cards */
+.verdict-dot--grade-a { background: var(--grade-a); }
+.verdict-dot--grade-b { background: var(--grade-b); }
+.verdict-dot--grade-c { background: var(--grade-c); }
+.verdict-dot--grade-d { background: var(--grade-d); box-shadow: 0 0 4px var(--grade-d); }
+.verdict-dot--grade-f { background: var(--grade-f); box-shadow: 0 0 4px var(--grade-f); }
+
 .verdict-icon {
   font-size: 0.8125rem;
   flex-shrink: 0;

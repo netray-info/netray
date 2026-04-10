@@ -14,11 +14,16 @@ function gradeStyle(grade: string): string {
   }
 }
 
-function overallLabel(v: Verdict): string {
+function overallLabel(v: Verdict, grade: string): string {
   switch (v) {
     case 'pass':  return 'All checks passing';
-    case 'warn':  return 'Warnings present';
-    case 'fail':  return 'Failures detected';
+    case 'warn':
+      if (grade === 'A+' || grade === 'A') return 'Minor warnings';
+      return 'Warnings present';
+    case 'fail':
+      if (grade === 'A+' || grade === 'A') return 'Minor failures detected';
+      if (grade === 'D' || grade === 'F') return 'Critical failures detected';
+      return 'Failures detected';
     case 'error': return 'Check error';
     case 'skip':  return 'Skipped';
   }
@@ -57,7 +62,7 @@ export default function Summary(props: Props) {
           {(section) => (
             <Show when={s().sections[section] !== undefined}>
               <div class="summary-dot-item" role="listitem">
-                <VerdictDot verdict={sectionVerdict(section)} />
+                <VerdictDot verdict={sectionVerdict(section)} grade={sectionGrade(section)} />
                 <span>{section.toUpperCase()}</span>
                 <Show when={sectionVerdict(section) === 'error'} fallback={
                   <Show when={sectionGrade(section)}>
@@ -107,7 +112,7 @@ export default function Summary(props: Props) {
                 {dotsAndActions()}
               </div>
               <div class="summary-labels">
-                <span class="summary-overall">{overallLabel(s().overall)}</span>
+                <span class="summary-overall">{overallLabel(s().overall, s().grade)}</span>
                 <Show when={hasErroredSection()}>
                   <span class="summary-incomplete">incomplete — some checks failed to run</span>
                 </Show>
