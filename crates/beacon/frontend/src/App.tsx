@@ -46,8 +46,10 @@ export default function App() {
   const [showExplanations, setShowExplanations] = createSignal(false);
   const [openSections, setOpenSections] = createSignal<Set<Category>>(new Set());
   const [completedCount, setCompletedCount] = createSignal(0);
+  const [clientDurationMs, setClientDurationMs] = createSignal<number | undefined>(undefined);
 
   let abortRef: AbortController | null = null;
+  let inspectStartedAt = 0;
 
   onMount(() => {
     fetchMeta().then((m) => {
@@ -143,6 +145,8 @@ export default function App() {
     setSummary(null);
     setCompletedCount(0);
     setLoading(true);
+    setClientDurationMs(undefined);
+    inspectStartedAt = Date.now();
 
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('domain', d);
@@ -161,6 +165,7 @@ export default function App() {
           setCompletedCount((c) => c + 1);
         } else if (event.type === 'summary') {
           setSummary(event);
+          setClientDurationMs(Date.now() - inspectStartedAt);
         }
       },
       (msg: string) => { setError(msg); },
@@ -342,6 +347,7 @@ export default function App() {
                   ipBaseUrl={meta()?.ecosystem?.ip_base_url}
                   domain={domain()}
                   categories={categories()}
+                  clientDurationMs={clientDurationMs()}
                 />
               </Show>
 
@@ -485,6 +491,7 @@ function OverviewCard(props: {
   ipBaseUrl?: string;
   domain: string;
   categories: Map<import('./lib/types').Category, CheckResult>;
+  clientDurationMs?: number;
 }) {
   const overallVerdict = (): Verdict => {
     const vs = Object.values(props.summary.verdicts) as Verdict[];
@@ -535,12 +542,15 @@ function OverviewCard(props: {
             <span class="overview__label">passed</span>
           </div>
         </Show>
-        <Show when={props.summary.duration_ms !== undefined}>
-          <div class="overview__item">
-            <span class="overview__label">Duration</span>
-            <span class={durationClass(props.summary.duration_ms!)}>{props.summary.duration_ms}ms</span>
-          </div>
-        </Show>
+        {(() => {
+          const ms = props.summary.duration_ms ?? props.clientDurationMs;
+          return ms !== undefined ? (
+            <div class="overview__item">
+              <span class="overview__label">Duration</span>
+              <span class={durationClass(ms)}>{ms}ms</span>
+            </div>
+          ) : null;
+        })()}
         <ExportButtons domain={props.domain} summary={props.summary} categories={props.categories} />
       </div>
 
