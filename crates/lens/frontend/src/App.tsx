@@ -11,7 +11,6 @@ import TlsSection from './components/TlsSection';
 import HttpSection from './components/HttpSection';
 import IpSection from './components/IpSection';
 import Summary from './components/Summary';
-import ValidationChips from './components/ValidationChips';
 import { startCheck } from './lib/sse';
 import { fetchMeta } from './lib/api';
 import { addToHistory } from './lib/history';
@@ -247,7 +246,8 @@ export default function App() {
                 ipDetailUrl={ip()?.detail_url}
                 httpServerIp={http()?.server_ip}
                 httpServerOrg={http()?.server_org}
-onCopyMd={done() ? handleCopyMd : undefined}
+                checks={allChecks()}
+                onCopyMd={done() ? handleCopyMd : undefined}
                 onDownloadJson={done() ? handleDownloadJson : undefined}
               />
             )}
@@ -255,7 +255,6 @@ onCopyMd={done() ? handleCopyMd : undefined}
 
           <Show when={hasResults() || isLoading()}>
             <div class="chips-row">
-              <ValidationChips checks={allChecks()} />
               <button
                 class="filter-toggle"
                 type="button"

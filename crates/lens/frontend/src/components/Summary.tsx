@@ -2,6 +2,7 @@ import { For, Show } from 'solid-js';
 import type { SummaryEvent, DoneEvent, IpAddress, Verdict } from '../lib/types';
 import { CHECK_LABELS } from '../lib/checkMeta';
 import VerdictDot from './VerdictDot';
+import ValidationChips from './ValidationChips';
 
 function gradeStyle(grade: string): string {
   switch (grade) {
@@ -42,6 +43,7 @@ interface Props {
   ipDetailUrl?: string;
   httpServerIp?: string;
   httpServerOrg?: string;
+  checks?: Array<{ verdict: string }>;
   onCopyMd?: () => void;
   onDownloadJson?: () => void;
 }
@@ -141,6 +143,12 @@ export default function Summary(props: Props) {
           </div>
         </Show>
       </div>
+
+      <Show when={(props.checks?.length ?? 0) > 0}>
+        <div class="summary-chips">
+          <ValidationChips checks={props.checks!} />
+        </div>
+      </Show>
 
       <Show when={s().hard_fail}>
         <div class="summary-hard-fail" role="alert">

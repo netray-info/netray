@@ -616,6 +616,10 @@ a:hover { text-decoration: underline; }
   user-select: none;
 }
 
+.summary-chips {
+  padding: 0 1.25rem 0.75rem;
+}
+
 .summary-hard-fail {
   margin: 0 1.25rem;
   padding: 0.5rem 0.875rem;
@@ -891,9 +895,7 @@ a:hover { text-decoration: underline; }
 
 .chips-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+  justify-content: flex-end;
   margin-bottom: 1rem;
 }
 
@@ -908,15 +910,13 @@ a:hover { text-decoration: underline; }
 }
 
 .chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-family: var(--mono);
+  display: inline-block;
   font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 3px 10px;
-  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
   white-space: nowrap;
 }
 
