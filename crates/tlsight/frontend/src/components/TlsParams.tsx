@@ -114,7 +114,7 @@ export default function TlsParams(props: Props) {
           &#x25B8;
         </span>
       </button>
-      <Explain when={!!props.explain}>These are the TLS connection parameters negotiated during the handshake. TLSv1.3 is current best practice. The cipher suite determines the encryption algorithm. OCSP stapling improves certificate revocation checking performance.</Explain>
+      <Explain when={!!props.explain} guideUrl="/guide/tls-protocol.html">These are the TLS connection parameters negotiated during the handshake. TLSv1.3 is current best practice. The cipher suite determines the encryption algorithm. OCSP stapling improves certificate revocation checking performance.</Explain>
       {expanded() && (
         <div class="dns-section__body">
           <table class="tls-params__table">

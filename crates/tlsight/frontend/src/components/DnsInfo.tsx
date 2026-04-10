@@ -50,7 +50,7 @@ export function CaaView(props: { caa: DnsContext['caa']; explain?: boolean; expa
               &#x25B8;
             </span>
           </button>
-          <Explain when={!!props.explain}>CAA (Certification Authority Authorization) DNS records declare which CAs are allowed to issue certificates for this domain. If the issuing CA is not listed, the certificate may violate the domain owner's policy.</Explain>
+          <Explain when={!!props.explain} guideUrl="/guide/caa-records.html">CAA (Certification Authority Authorization) DNS records declare which CAs are allowed to issue certificates for this domain. If the issuing CA is not listed, the certificate may violate the domain owner's policy.</Explain>
           <Show when={expanded()}>
             <div class="dns-section__body">
               <Show when={caa().records.length > 0} fallback={<p class="dns-section__empty">No CAA records found — any CA may issue.</p>}>
@@ -97,7 +97,7 @@ export function TlsaView(props: { tlsa: TlsaInfo; explain?: boolean; dnsUrl?: st
           &#x25B8;
         </span>
       </button>
-      <Explain when={!!props.explain}>TLSA records enable DANE — pinning certificates or CAs in DNS via DNSSEC. This provides an alternative trust path independent of the CA system. Requires DNSSEC to be meaningful.</Explain>
+      <Explain when={!!props.explain} guideUrl="/guide/dane-tlsa.html">TLSA records enable DANE — pinning certificates or CAs in DNS via DNSSEC. This provides an alternative trust path independent of the CA system. Requires DNSSEC to be meaningful.</Explain>
       <Show when={expanded()}>
         <div class="dns-section__body">
           <Show when={props.tlsa.records.length > 0} fallback={<p class="dns-section__empty">No TLSA records found.</p>}>

@@ -1265,6 +1265,13 @@ a:hover { text-decoration: underline; }
   line-height: 1.5;
 }
 
+.explain-card__guide-link {
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.explain-card__guide-link:hover { text-decoration: underline; }
+
 .check-explanations {
   display: grid;
   grid-template-columns: auto 1fr;

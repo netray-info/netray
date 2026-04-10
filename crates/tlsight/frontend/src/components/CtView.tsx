@@ -16,7 +16,7 @@ export default function CtView(props: { ct: CtInfo; explain?: boolean; expanded?
         <span class={`badge ${statusClass()}`}>{statusLabel()}</span>
         <span class="badge">{props.ct.sct_count} SCT{props.ct.sct_count !== 1 ? 's' : ''}</span>
       </div>
-      <Explain when={!!props.explain}>Certificate Transparency (CT) logs are public, append-only ledgers where CAs must publish certificates. Having 2+ SCTs (Signed Certificate Timestamps) from different logs is required by browsers.</Explain>
+      <Explain when={!!props.explain} guideUrl="/guide/certificate-transparency.html">Certificate Transparency (CT) logs are public, append-only ledgers where CAs must publish certificates. Having 2+ SCTs (Signed Certificate Timestamps) from different logs is required by browsers.</Explain>
       <Show when={props.ct.scts.length > 0}>
         <button
           class="detail-toggle"

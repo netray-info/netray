@@ -37,7 +37,7 @@ export default function ChainView(props: Props) {
   return (
     <div class="chain-view">
       <h2>Certificate Chain</h2>
-      <Explain when={!!props.explain}>This shows the certificate trust chain from your server's leaf certificate to the root CA. Each certificate in the chain vouches for the next. A complete chain is required for browsers to trust the connection. The root CA is typically not sent by the server — it lives in your browser's trust store. When omitted, it is shown here as an inferred card (dashed border) using the last certificate's issuer name.</Explain>
+      <Explain when={!!props.explain} guideUrl="/guide/certificate-chain.html">This shows the certificate trust chain from your server's leaf certificate to the root CA. Each certificate in the chain vouches for the next. A complete chain is required for browsers to trust the connection. The root CA is typically not sent by the server — it lives in your browser's trust store. When omitted, it is shown here as an inferred card (dashed border) using the last certificate's issuer name.</Explain>
       <div class="chain-view__chain">
         <For each={props.chain}>
           {(cert, i) => (
