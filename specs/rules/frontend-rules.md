@@ -250,6 +250,17 @@ Cards must use the `.mode-card` CSS class from `components.css`. For tools with 
 - If the tool has distinct common modes: include 2–3 quick-select preset chips (ghost/outline style) below the input.
 - For combobox inputs with history dropdown: use `role="combobox"`, `aria-expanded`, `aria-autocomplete="list"`, `aria-controls` referencing the listbox id.
 
+### Copy-link (share) button
+
+Every tool that encodes its query in the URL **must** include a copy-link button:
+
+- **Position**: standalone button in the input row, between the field-wrap and the primary action button.
+- **Appearance**: use the `.share-btn` class — bordered, accent-colored, icon-only (chain-link SVG). Same height as the primary button (`align-self: stretch`).
+- **Visibility**: render only when a result is present (i.e. after the first successful inspection). Do not show on the empty/idle state.
+- **Behavior**: copies `window.location.href` (the URL already contains the query param after inspection). On success, swap the icon for a checkmark SVG for 2 s, then revert.
+- **Accessibility**: `type="button"`, `aria-label="Copy shareable link"`, `title` shows "Copy shareable link" or "Copied!" dynamically.
+- Implement inside the input component (e.g. `UrlInput.tsx`) via a `showCopyLink?: boolean` prop passed from the parent. The parent sets `showCopyLink={!!result()}`.
+
 ### Primary button loading state
 
 The primary action button **must change its label** to a progressive form during loading (e.g. "Inspect" → "Inspecting…", "Look up" → "Looking up…", "Query" → "Querying…"). Never leave it static while a request is in flight. A spinner inside the button is optional but welcome alongside the label change.
@@ -740,6 +751,7 @@ What each tool must change to comply with the tightened rules above. ifconfig-rs
 | §6.1 Horizontal separator | Compliant | Has separator below header |
 | §6.1 SiteFooter | Missing | Add `<SiteFooter>` component |
 | §6.1 Header-actions order | Non-compliant | Missing help button; add ThemeToggle then help button |
+| §7 Copy-link button | Compliant | `.share-btn` between field-wrap and Inspect button; shown only when result present |
 | §11 Dark mode default | Non-compliant | Renders in light mode — switch default to dark |
 | §15 Verdict badges | Non-compliant | Uses bold uppercase text labels, not pill badges — adopt `.verdict-badge` |
 | §16 Collapsible sections | Non-compliant | Sections are flat/non-collapsible — wrap in collapsible cards, collapse by default |
