@@ -19,7 +19,7 @@ import type {
   SummaryEvent,
   Verdict,
 } from './lib/types';
-import { CATEGORY_LABELS, CATEGORY_ORDER, VERDICT_ORDER } from './lib/types';
+import { CATEGORY_LABELS, CATEGORY_ORDER, VERDICT_ORDER, subCheckLabel, subCheckExplanation } from './lib/types';
 
 const HISTORY_KEY = 'beacon_history';
 const MAX_HISTORY = 20;
@@ -43,6 +43,7 @@ export default function App() {
   const [categories, setCategories] = createSignal<Map<Category, CheckResult>>(new Map());
   const [summary, setSummary] = createSignal<SummaryEvent | null>(null);
   const [expandAll, setExpandAll] = createSignal(false);
+  const [showExplanations, setShowExplanations] = createSignal(false);
   const [openSections, setOpenSections] = createSignal<Set<Category>>(new Set());
   const [completedCount, setCompletedCount] = createSignal(0);
 
@@ -94,6 +95,7 @@ export default function App() {
 
     const cleanupShortcuts = createKeyboardShortcuts({
       '?':      (e) => { e.preventDefault(); setShowHelp(v => !v); },
+      'e':      (e) => { e.preventDefault(); setShowExplanations(v => !v); },
       '/':      (e) => { e.preventDefault(); inputEl?.focus(); },
       'r':      (e) => {
         const d = domain();
@@ -346,6 +348,13 @@ export default function App() {
                   <Show when={loading()}>
                     <span class="progress-text">{completedCount()} of 12 checks complete</span>
                   </Show>
+                  <button
+                    class="filter-toggle"
+                    classList={{ 'filter-toggle--active': showExplanations() }}
+                    onClick={() => setShowExplanations(v => !v)}
+                    aria-pressed={showExplanations()}
+                    title="Toggle explanations (e)"
+                  >explain</button>
                 </div>
                 <div class="section-controls__right">
                   <button
@@ -387,6 +396,7 @@ export default function App() {
                           result={r()}
                           open={openSections().has(cat)}
                           onToggle={() => toggleSection(cat)}
+                          showExplanations={showExplanations()}
                         />
                       )}
                     </Show>
@@ -464,6 +474,7 @@ export default function App() {
                 <tr><td class="shortcut-key">/</td><td>Focus domain input</td></tr>
                 <tr><td class="shortcut-key">Enter</td><td>Submit domain (when input focused)</td></tr>
                 <tr><td class="shortcut-key">r</td><td>Re-run last inspection</td></tr>
+                <tr><td class="shortcut-key">e</td><td>Toggle explanations</td></tr>
                 <tr><td class="shortcut-key">j / k</td><td>Navigate result categories</td></tr>
                 <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active category</td></tr>
                 <tr><td class="shortcut-key">Escape</td><td>Close help / dismiss history</td></tr>
@@ -568,6 +579,7 @@ function CategorySection(props: {
   result: CheckResult;
   open: boolean;
   onToggle: () => void;
+  showExplanations: boolean;
 }) {
   const counts = () => {
     const c: Partial<Record<Verdict, number>> = {};
@@ -622,11 +634,14 @@ function CategorySection(props: {
                     class={`check-list__item${
                       sc.verdict === 'fail' ? ' check-row--fail' :
                       sc.verdict === 'warn' ? ' check-row--warn' : ''
-                    }`}
+                    }${props.showExplanations ? ' check-list__item--explainable' : ''}`}
                   >
                     <span class={`badge badge--${sc.verdict}`}>{sc.verdict}</span>
-                    <span class="check-list__name">{sc.name}</span>
+                    <span class="check-list__name">{subCheckLabel(sc.name)}</span>
                     <span class="check-list__message">{sc.detail}</span>
+                    <Show when={props.showExplanations && subCheckExplanation(sc.name)}>
+                      <span class="check-explain">{subCheckExplanation(sc.name)}</span>
+                    </Show>
                   </li>
                 )}
               </For>
