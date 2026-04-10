@@ -81,7 +81,7 @@ frontend-install: ## Install frontend dependencies (npm ci)
 frontend: frontend-install ## Build frontend (npm ci + build)
 	cd $(FRONTEND_DIR) && $(NPM) run build
 
-frontend-dev: ## Start Vite dev server (:5174, proxies /api to :8081)
+frontend-dev: ## Start Vite dev server (:5175, proxies /api to :8082)
 	cd $(FRONTEND_DIR) && $(NPM) run dev
 
 frontend-test: frontend-install ## Run frontend tests (vitest)
@@ -127,8 +127,8 @@ clean: ## Remove target/, frontend/dist/, node_modules/
 docker: ## Build Docker image (ghcr.io/lukaspustina/tlsight:latest)
 	docker build -t ghcr.io/lukaspustina/$(APP):latest .
 
-docker-run: ## Run Docker image locally (port 8081)
-	docker run --rm -p 8081:8081 -p 9090:9090 ghcr.io/lukaspustina/$(APP):latest
+docker-run: ## Run Docker image locally (port 8082)
+	docker run --rm -p 8082:8082 -p 9092:9092 ghcr.io/lukaspustina/$(APP):latest
 
 # ══════════════════════════════════════════════════════════════════
 #  E2E Tests

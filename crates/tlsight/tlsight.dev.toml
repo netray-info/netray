@@ -3,8 +3,8 @@
 # site_name = "tlsight (dev)"
 
 [server]
-bind = "127.0.0.1:8081"
-metrics_bind = "127.0.0.1:9091"
+bind = "127.0.0.1:8082"
+metrics_bind = "127.0.0.1:9092"
 
 [limits]
 per_ip_per_minute = 600

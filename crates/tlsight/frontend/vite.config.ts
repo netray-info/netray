@@ -21,18 +21,18 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(cargoVersion()),
   },
   server: {
-    port: 5174,
+    port: 5175,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8081',
+        target: 'http://127.0.0.1:8082',
         changeOrigin: true,
       },
       '/api-docs': {
-        target: 'http://127.0.0.1:8081',
+        target: 'http://127.0.0.1:8082',
         changeOrigin: true,
       },
       '/docs': {
-        target: 'http://127.0.0.1:8081',
+        target: 'http://127.0.0.1:8082',
         changeOrigin: true,
       },
     },
