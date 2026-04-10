@@ -111,7 +111,8 @@ pub async fn inspect(
             }
             if let Some(ref e) = upgrade.as_ref().and_then(|r| r.error.as_ref()) {
                 tracing::warn!(error = %e, "http_upgrade probe failed");
-                metrics::counter!("spectra_probe_failures_total", "probe" => "http_upgrade").increment(1);
+                metrics::counter!("spectra_probe_failures_total", "probe" => "http_upgrade")
+                    .increment(1);
             }
             if let Some(ref e) = cors.error {
                 tracing::warn!(error = %e, "cors probe failed");
@@ -274,11 +275,8 @@ mod tests {
             loop {
                 if let Ok((mut stream, _)) = listener.accept().await {
                     let mut buf = [0u8; 1024];
-                    let _ = tokio::time::timeout(
-                        Duration::from_millis(200),
-                        stream.read(&mut buf),
-                    )
-                    .await;
+                    let _ = tokio::time::timeout(Duration::from_millis(200), stream.read(&mut buf))
+                        .await;
                     let _ = stream.write_all(response_bytes).await;
                 }
             }
@@ -334,7 +332,10 @@ mod tests {
         let result = inspect(&url, resolved, &cfg, &client).await.unwrap();
         // At least one probe should have an error (connection closed)
         let any_error = result.https.error.is_some() || result.cors.error.is_some();
-        assert!(any_error, "expected at least one probe to fail on closed connection");
+        assert!(
+            any_error,
+            "expected at least one probe to fail on closed connection"
+        );
     }
 
     #[tokio::test]

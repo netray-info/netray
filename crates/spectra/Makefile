@@ -39,6 +39,7 @@ frontend-install:  ## Install frontend dependencies
 
 frontend: frontend-install  ## Build frontend
 	cd frontend && npm run build
+	cd frontend && npm run lint
 
 frontend-dev:  ## Run Vite dev server
 	cd frontend && npm run dev

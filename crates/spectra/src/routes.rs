@@ -335,7 +335,13 @@ async fn do_inspect_inner(
         .unwrap_or("")
         .to_string();
     tracing::Span::current().record("request_id", request_id.as_str());
-    let result = inspect::inspect(&url, resolved_addr, &state.config.inspect, state.http_client.as_ref()).await?;
+    let result = inspect::inspect(
+        &url,
+        resolved_addr,
+        &state.config.inspect,
+        state.http_client.as_ref(),
+    )
+    .await?;
 
     // 5. IP enrichment (non-blocking, failure is OK)
     let enrichment = if let Some(ref client) = state.enrichment_client {
@@ -509,8 +515,7 @@ mod tests {
     #[tokio::test]
     async fn ssrf_blocked_returns_403() {
         let app = test_router();
-        let (status, body) =
-            post_json(&app, "/api/inspect", r#"{"url":"https://10.0.0.1"}"#).await;
+        let (status, body) = post_json(&app, "/api/inspect", r#"{"url":"https://10.0.0.1"}"#).await;
         assert_eq!(status, StatusCode::FORBIDDEN);
         assert_eq!(body["error"]["code"], "TARGET_BLOCKED");
     }

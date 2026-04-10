@@ -83,10 +83,7 @@ pub async fn execute_request(
         reqwest::header::ACCEPT_ENCODING,
         "gzip, br, zstd".parse().unwrap(),
     );
-    req_builder_headers.insert(
-        reqwest::header::USER_AGENT,
-        user_agent.parse().unwrap(),
-    );
+    req_builder_headers.insert(reqwest::header::USER_AGENT, user_agent.parse().unwrap());
     if let Some(origin) = cors_origin {
         req_builder_headers.insert("origin", origin.parse().unwrap());
     }
