@@ -1,6 +1,7 @@
 [server]
 bind = "127.0.0.1:3000"
 metrics_bind = "127.0.0.1:9090"
+trusted_proxies = []
 
 [dns]
 resolvers = ["cloudflare"]
@@ -20,6 +21,10 @@ timeout_ms = 10000
 
 [rate_limit]
 per_ip = "10/min"
+
+# [enrichment]
+# ip_url = "http://localhost:3001"
+# timeout_ms = 5000
 
 [dkim]
 max_user_selectors = 5
