@@ -143,4 +143,46 @@ mod tests {
         let err = validate_target(&url).await.unwrap_err();
         assert!(matches!(err, AppError::BlockedTarget(_)));
     }
+
+    #[tokio::test]
+    async fn validate_blocks_rfc1918_10() {
+        let url = Url::parse("https://10.0.0.1").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
+
+    #[tokio::test]
+    async fn validate_blocks_rfc1918_172_16() {
+        let url = Url::parse("https://172.16.0.1").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
+
+    #[tokio::test]
+    async fn validate_blocks_rfc1918_172_31() {
+        let url = Url::parse("https://172.31.255.255").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
+
+    #[tokio::test]
+    async fn validate_blocks_rfc1918_192_168() {
+        let url = Url::parse("https://192.168.0.1").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
+
+    #[tokio::test]
+    async fn validate_blocks_link_local_169_254() {
+        let url = Url::parse("https://169.254.1.1").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
+
+    #[tokio::test]
+    async fn validate_blocks_cgnat_100_64() {
+        let url = Url::parse("https://100.64.0.1").unwrap();
+        let err = validate_target(&url).await.unwrap_err();
+        assert!(matches!(err, AppError::BlockedTarget(_)));
+    }
 }

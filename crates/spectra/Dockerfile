@@ -16,10 +16,11 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates wget \
  && addgroup -S spectra && adduser -S spectra -G spectra
 WORKDIR /spectra
-COPY spectra.toml spectra.toml
+# Operators: copy spectra.example.toml to spectra.toml and edit before deploying
+COPY spectra.example.toml /etc/spectra/spectra.example.toml
 ENV SPECTRA_SERVER__BIND=0.0.0.0:8082
 COPY --from=builder /spectra .
 RUN chown -R spectra:spectra /spectra
 USER spectra
 EXPOSE 8082 9090
-CMD ["./spectra", "spectra.toml"]
+CMD ["./spectra"]

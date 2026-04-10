@@ -1,6 +1,6 @@
 # SDD: Spectra Post-Review Hardening
 
-**Status**: Ready for Implementation
+**Status**: Implemented (2026-04-10)
 **Original**: specs/sdd/spectra-review.md
 **Refined**: 2026-04-10
 

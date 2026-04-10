@@ -14,6 +14,9 @@ export default function CorsReport(props: Props) {
       <p class="cors-message">
         {props.cors.message}
       </p>
+      {props.cors.allows_any_origin && props.cors.allows_credentials && (
+        <span class="badge badge--fail">Credentials + wildcard</span>
+      )}
       <ul class="cors-flags-list">
         <li>Allows any origin: {props.cors.allows_any_origin ? 'Yes' : 'No'}</li>
         <li>Reflects origin: {props.cors.reflects_origin ? 'Yes' : 'No'}</li>

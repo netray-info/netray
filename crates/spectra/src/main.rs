@@ -8,6 +8,7 @@ mod config;
 mod error;
 mod input;
 mod inspect;
+mod metrics;
 mod quality;
 mod routes;
 mod security;
@@ -28,12 +29,14 @@ async fn main() {
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
-    // 2. Initialize tracing.
+    // 2. Initialize tracing and register metrics.
     let telemetry_config: netray_common::telemetry::TelemetryConfig = (&config.telemetry).into();
     netray_common::telemetry::init_subscriber(
         &telemetry_config,
         "info,spectra=debug,hyper=warn,h2=warn",
     );
+
+    metrics::register_metrics();
 
     tracing::info!(
         bind = %config.server.bind,

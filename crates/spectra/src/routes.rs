@@ -174,7 +174,7 @@ async fn health_handler() -> impl IntoResponse {
         (status = 200, description = "Service is ready", body = ReadyResponse),
     )
 )]
-async fn ready_handler() -> impl IntoResponse {
+async fn ready_handler(State(_state): State<AppState>) -> impl IntoResponse {
     (
         [(axum::http::header::CACHE_CONTROL, "no-cache")],
         Json(ReadyResponse { status: "ready" }),
@@ -304,7 +304,7 @@ async fn do_inspect(
         Err(AppError::Timeout(_)) => "timeout",
         Err(_) => "error",
     };
-    metrics::counter!("inspect_requests_total", "outcome" => outcome).increment(1);
+    metrics::counter!("spectra_inspect_requests_total", "outcome" => outcome).increment(1);
     result
 }
 
@@ -329,7 +329,13 @@ async fn do_inspect_inner(
     let resolved_addr = crate::input::validate_target(&url).await?;
 
     // 4. Execute inspection
-    let result = inspect::inspect(&url, resolved_addr, &state.config.inspect).await?;
+    let request_id = req_headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    tracing::Span::current().record("request_id", request_id.as_str());
+    let result = inspect::inspect(&url, resolved_addr, &state.config.inspect, state.http_client.as_ref()).await?;
 
     // 5. IP enrichment (non-blocking, failure is OK)
     let enrichment = if let Some(ref client) = state.enrichment_client {
@@ -365,6 +371,7 @@ async fn do_inspect_inner(
         .unwrap_or("https://ip.netray.info");
 
     let duration_ms = start.elapsed().as_millis() as u64;
+    metrics::histogram!("spectra_inspect_duration_ms").record(duration_ms as f64);
 
     // 6. Assemble response
     let response = inspect::assemble_response(
@@ -463,5 +470,56 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["openapi"], "3.1.0");
         assert_eq!(body["info"]["title"], "spectra");
+    }
+
+    async fn post_json(app: &Router, uri: &str, json: &str) -> (StatusCode, serde_json::Value) {
+        use axum::extract::connect_info::MockConnectInfo;
+        use std::net::{IpAddr, Ipv4Addr};
+        let peer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(203, 0, 113, 1)), 12345);
+        let app = app.clone().layer(MockConnectInfo(peer));
+        let response = app
+            .oneshot(
+                HttpRequest::builder()
+                    .method("POST")
+                    .uri(uri)
+                    .header("content-type", "application/json")
+                    .body(Body::from(json.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+        (status, body)
+    }
+
+    #[tokio::test]
+    async fn malformed_url_returns_400() {
+        let app = test_router();
+        // http:// scheme is explicitly rejected (port-80 probing is automatic)
+        let (status, body) =
+            post_json(&app, "/api/inspect", r#"{"url":"http://example.com"}"#).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["error"]["code"], "INVALID_URL");
+    }
+
+    #[tokio::test]
+    async fn ssrf_blocked_returns_403() {
+        let app = test_router();
+        let (status, body) =
+            post_json(&app, "/api/inspect", r#"{"url":"https://10.0.0.1"}"#).await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
+        assert_eq!(body["error"]["code"], "TARGET_BLOCKED");
+    }
+
+    #[tokio::test]
+    async fn missing_url_field_returns_400() {
+        let app = test_router();
+        let (status, body) = post_json(&app, "/api/inspect", r#"{}"#).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["error"]["code"], "INVALID_URL");
     }
 }

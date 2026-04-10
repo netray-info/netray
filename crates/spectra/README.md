@@ -112,12 +112,12 @@ Prerequisites: Rust toolchain, Node.js (for the frontend).
 # Full production build (frontend + Rust binary)
 make
 
-# Run the built binary
+# Build release binary + run it (reads spectra.dev.toml)
 make run
 
 # Development (two terminals)
 make frontend-dev   # Vite dev server on :5175, proxies /api/* to :3000
-make dev            # cargo run with spectra.toml
+make dev            # cargo run (debug build, reads spectra.dev.toml)
 
 # Tests and lints
 make test           # Rust tests
@@ -175,9 +175,9 @@ Each check produces a Pass / Warn / Fail / Skip verdict. The overall verdict is 
 **Security headers**
 - HSTS — max-age parsed; Warn below 1 year (31 536 000 s); Fail if absent; preload flag noted
 - CSP — enforced vs. report-only; detects `unsafe-inline`, `unsafe-eval`, missing `default-src`, wildcard schemes (`https:`, `*`), broad wildcards (`*.com`), and missing `object-src` restriction
-- X-Frame-Options — DENY or SAMEORIGIN accepted; Fail if absent
-- X-Content-Type-Options — must be `nosniff`; Fail if absent
-- Referrer-Policy — Warn on unsafe values (`unsafe-url`, `no-referrer-when-downgrade`); Fail if absent
+- X-Frame-Options — DENY or SAMEORIGIN accepted; Warn if absent
+- X-Content-Type-Options — must be `nosniff`; Warn if absent
+- Referrer-Policy — Warn on unsafe values (`origin`, `origin-when-cross-origin`, `unsafe-url`) and unrecognized values; Warn if absent
 - Permissions-Policy — Warn if absent
 - COOP / COEP / CORP — Warn if absent; required for cross-origin isolation
 
@@ -188,7 +188,7 @@ Each check produces a Pass / Warn / Fail / Skip verdict. The overall verdict is 
 
 **Cookies**
 Per-cookie checks across all `Set-Cookie` response headers:
-- `Secure` flag — Fail if absent (cookie can be sent over plain HTTP)
+- `Secure` flag — Warn if absent (cookie can be sent over plain HTTP)
 - `HttpOnly` flag — Warn if absent
 - `SameSite` — Warn on `None` without `Secure`; Skip if not present
 

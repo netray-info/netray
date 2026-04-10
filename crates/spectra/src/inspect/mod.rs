@@ -38,10 +38,12 @@ pub struct TaskResult {
 }
 
 /// Execute the full inspection: HTTPS + HTTP-upgrade probe + CORS probe.
+#[tracing::instrument(skip(client, config), fields(url = %url, request_id = tracing::field::Empty))]
 pub async fn inspect(
     url: &Url,
     resolved_addr: SocketAddr,
     config: &InspectConfig,
+    client: &reqwest::Client,
 ) -> Result<InspectResult, crate::error::AppError> {
     let total_timeout = Duration::from_secs(config.total_timeout_secs);
 
@@ -52,6 +54,7 @@ pub async fn inspect(
     let user_agent = format!("{}/{}", config.user_agent, env!("CARGO_PKG_VERSION"));
 
     let https_task = request::execute_request(
+        client,
         https_url,
         resolved_addr,
         max_redirects,
@@ -71,6 +74,7 @@ pub async fn inspect(
         let upgrade_addr = SocketAddr::new(resolved_addr.ip(), 80);
         Some(
             request::execute_request(
+                client,
                 http_url,
                 upgrade_addr,
                 max_redirects,
@@ -83,6 +87,7 @@ pub async fn inspect(
     };
 
     let cors_task = request::execute_request(
+        client,
         cors_url,
         resolved_addr,
         max_redirects,
@@ -102,12 +107,15 @@ pub async fn inspect(
         Ok((https, upgrade, cors)) => {
             if let Some(ref e) = https.error {
                 tracing::warn!(error = %e, "https probe failed");
+                metrics::counter!("spectra_probe_failures_total", "probe" => "https").increment(1);
             }
             if let Some(ref e) = upgrade.as_ref().and_then(|r| r.error.as_ref()) {
                 tracing::warn!(error = %e, "http_upgrade probe failed");
+                metrics::counter!("spectra_probe_failures_total", "probe" => "http_upgrade").increment(1);
             }
             if let Some(ref e) = cors.error {
                 tracing::warn!(error = %e, "cors probe failed");
+                metrics::counter!("spectra_probe_failures_total", "probe" => "cors").increment(1);
             }
             Ok(InspectResult {
                 https,
@@ -239,6 +247,156 @@ pub fn assemble_response(
     resp.quality = crate::quality::QualityReport::from_checks(checks);
 
     resp
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::{IpAddr, Ipv4Addr};
+    use std::time::Duration;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    fn test_config() -> InspectConfig {
+        InspectConfig {
+            request_timeout_secs: 5,
+            total_timeout_secs: 10,
+            max_redirects: 10,
+            user_agent: "test-agent".to_string(),
+        }
+    }
+
+    /// Spawn a minimal HTTP server that sends `response_bytes` to every connection
+    /// and returns the bound address.
+    async fn spawn_http_server(response_bytes: &'static [u8]) -> SocketAddr {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            loop {
+                if let Ok((mut stream, _)) = listener.accept().await {
+                    let mut buf = [0u8; 1024];
+                    let _ = tokio::time::timeout(
+                        Duration::from_millis(200),
+                        stream.read(&mut buf),
+                    )
+                    .await;
+                    let _ = stream.write_all(response_bytes).await;
+                }
+            }
+        });
+        addr
+    }
+
+    #[tokio::test]
+    async fn all_probes_succeed_returns_no_errors() {
+        let response: &'static [u8] = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+        let addr = spawn_http_server(response).await;
+        let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
+
+        let url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
+        let client = reqwest::Client::new();
+        let mut cfg = test_config();
+        cfg.total_timeout_secs = 5;
+
+        let result = inspect(&url, resolved, &cfg, &client).await.unwrap();
+        assert!(
+            result.https.error.is_none(),
+            "https probe should not error: {:?}",
+            result.https.error
+        );
+        assert!(
+            result.cors.error.is_none(),
+            "cors probe should not error: {:?}",
+            result.cors.error
+        );
+    }
+
+    #[tokio::test]
+    async fn one_probe_fails_partial_result_still_returned() {
+        // Server that closes connection immediately (no data)
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            loop {
+                if let Ok((_stream, _)) = listener.accept().await {
+                    // close immediately — no response
+                }
+            }
+        });
+
+        let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
+        let url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
+        let client = reqwest::Client::new();
+        let mut cfg = test_config();
+        cfg.request_timeout_secs = 2;
+        cfg.total_timeout_secs = 10;
+
+        // inspect() should return Ok (not Err) even when probes fail — partial result
+        let result = inspect(&url, resolved, &cfg, &client).await.unwrap();
+        // At least one probe should have an error (connection closed)
+        let any_error = result.https.error.is_some() || result.cors.error.is_some();
+        assert!(any_error, "expected at least one probe to fail on closed connection");
+    }
+
+    #[tokio::test]
+    async fn total_timeout_returns_timeout_error() {
+        // Server that never responds
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            loop {
+                if let Ok((mut stream, _)) = listener.accept().await {
+                    // Accept but never write — hang forever
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                    drop(stream);
+                }
+            }
+        });
+
+        let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
+        let url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
+        let client = reqwest::Client::new();
+        let mut cfg = test_config();
+        cfg.request_timeout_secs = 60;
+        cfg.total_timeout_secs = 1; // total timeout fires first
+
+        let result = inspect(&url, resolved, &cfg, &client).await;
+        assert!(
+            matches!(result, Err(crate::error::AppError::Timeout(1))),
+            "expected Timeout(1), got {:?}",
+            result.map(|_| "Ok")
+        );
+    }
+
+    #[tokio::test]
+    async fn http_upgrade_probe_attempted_for_https_scheme() {
+        // The upgrade probe always targets port 80 (fixed by inspect logic), so we can't
+        // intercept it in a unit test without root. We verify that the probe is *attempted*
+        // (http_upgrade is Some) for https:// URLs and skipped (None) for http:// URLs.
+        let response: &'static [u8] = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+        let addr = spawn_http_server(response).await;
+        let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
+
+        let client = reqwest::Client::new();
+        let mut cfg = test_config();
+        cfg.request_timeout_secs = 1;
+        cfg.total_timeout_secs = 5;
+
+        // https:// → upgrade probe is attempted (Some), even if it errors (port 80 not open)
+        let https_url = Url::parse(&format!("https://127.0.0.1:{}/", addr.port())).unwrap();
+        let result = inspect(&https_url, resolved, &cfg, &client).await.unwrap();
+        assert!(
+            result.http_upgrade.is_some(),
+            "expected http_upgrade to be Some for https:// URL"
+        );
+
+        // http:// → upgrade probe is skipped (None)
+        let http_url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
+        let result = inspect(&http_url, resolved, &cfg, &client).await.unwrap();
+        assert!(
+            result.http_upgrade.is_none(),
+            "expected http_upgrade to be None for http:// URL"
+        );
+    }
 }
 
 fn analyze_reporting(headers: &reqwest::header::HeaderMap) -> ReportingReport {

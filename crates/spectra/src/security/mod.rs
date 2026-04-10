@@ -4,12 +4,17 @@ pub mod rate_limit;
 pub use ip_extract::IpExtractor;
 pub use rate_limit::RateLimitState;
 
+use std::sync::LazyLock;
+
 use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::Response;
 use netray_common::security_headers::{SecurityHeadersConfig, security_headers_layer};
 
 pub use netray_common::cors::cors_layer;
+
+static CACHE_CONTROL_NO_STORE: LazyLock<axum::http::HeaderValue> =
+    LazyLock::new(|| axum::http::HeaderValue::from_static("private, no-store"));
 
 pub async fn security_headers(request: Request, next: Next) -> Response {
     let layer_fn = security_headers_layer(SecurityHeadersConfig {
@@ -20,7 +25,7 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
     let mut response = layer_fn(request, next).await;
     response.headers_mut().insert(
         axum::http::header::CACHE_CONTROL,
-        axum::http::HeaderValue::from_static("private, no-store"),
+        CACHE_CONTROL_NO_STORE.clone(),
     );
     response
 }

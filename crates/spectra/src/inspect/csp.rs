@@ -219,8 +219,7 @@ mod tests {
     fn missing_default_src_is_fail() {
         let h = headers_with_csp("script-src 'self'");
         let report = analyze_csp(&h);
-        // Missing default-src causes fail-level issue, but since we have other issues too
-        // let's just check the issue is present
+        assert_eq!(report.status, CheckStatus::Fail);
         assert!(report.issues.iter().any(|i| i.contains("default-src")));
     }
 

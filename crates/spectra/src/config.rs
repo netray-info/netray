@@ -38,9 +38,6 @@ pub struct InspectConfig {
     pub total_timeout_secs: u64,
     #[serde(default = "default_max_redirects")]
     pub max_redirects: usize,
-    #[allow(dead_code)] // Referenced by SDD; will be used when body sniffing is implemented
-    #[serde(default = "default_body_read_limit_bytes")]
-    pub body_read_limit_bytes: usize,
     #[serde(default = "default_user_agent")]
     pub user_agent: String,
 }
@@ -125,8 +122,8 @@ impl From<&TelemetryConfig> for netray_common::telemetry::TelemetryConfig {
             service_name: tc.service_name.clone(),
             sample_rate: tc.sample_rate,
             log_format: match tc.log_format.as_deref() {
-                Some("json") => netray_common::telemetry::LogFormat::Json,
-                _ => netray_common::telemetry::LogFormat::Text,
+                Some("text") => netray_common::telemetry::LogFormat::Text,
+                _ => netray_common::telemetry::LogFormat::Json, // default: json (production-friendly)
             },
         }
     }
@@ -155,7 +152,6 @@ fn default_inspect() -> InspectConfig {
         request_timeout_secs: default_request_timeout_secs(),
         total_timeout_secs: default_total_timeout_secs(),
         max_redirects: default_max_redirects(),
-        body_read_limit_bytes: default_body_read_limit_bytes(),
         user_agent: default_user_agent(),
     }
 }
@@ -168,9 +164,6 @@ fn default_total_timeout_secs() -> u64 {
 }
 fn default_max_redirects() -> usize {
     10
-}
-fn default_body_read_limit_bytes() -> usize {
-    1024
 }
 fn default_user_agent() -> String {
     "netray-spectra".to_string()
@@ -234,6 +227,7 @@ mod tests {
         assert_eq!(cfg.inspect.total_timeout_secs, 30);
         assert_eq!(cfg.inspect.max_redirects, 10);
         assert_eq!(cfg.limits.per_ip_per_minute, 10);
+        // body_read_limit_bytes removed (YAGNI — re-add when body sniffing is implemented)
     }
 
     #[test]

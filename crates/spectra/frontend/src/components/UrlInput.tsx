@@ -1,4 +1,4 @@
-import { createSignal, createEffect, Show } from 'solid-js';
+import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
 import { copyToClipboard } from '@netray-info/common-frontend/utils';
 
 interface Props {
@@ -14,7 +14,14 @@ interface Props {
 export default function UrlInput(props: Props) {
   const [value, setValue] = createSignal(props.initialValue ?? props.value ?? '');
   const [linkCopied, setLinkCopied] = createSignal(false);
+  const [elapsed, setElapsed] = createSignal(0);
   createEffect(() => { if (props.value !== undefined) setValue(props.value); });
+  createEffect(() => {
+    if (!props.loading) return;
+    setElapsed(0);
+    const id = setInterval(() => setElapsed(s => s + 1), 1000);
+    onCleanup(() => clearInterval(id));
+  });
 
   async function handleCopyLink() {
     const ok = await copyToClipboard(window.location.href);
@@ -57,6 +64,7 @@ export default function UrlInput(props: Props) {
             type="button"
             onClick={handleClear}
             title="Clear"
+            aria-label="Clear"
           >&times;</button>
         </Show>
       </div>
@@ -81,7 +89,7 @@ export default function UrlInput(props: Props) {
         </button>
       </Show>
       <button class="btn-primary url-input__submit" type="submit" disabled={props.loading || !value().trim()}>
-        {props.loading ? 'Inspecting...' : 'Inspect'}
+        {props.loading ? `Inspecting... ${elapsed()}s` : 'Inspect'}
       </button>
     </form>
   );

@@ -31,20 +31,20 @@ pub fn analyze_security_headers(headers: &HeaderMap) -> SecurityReport {
             }
         }),
         referrer_policy: analyze_header_presence(headers, "referrer-policy", |v| {
-            let safe_values = [
+            let pass_values = [
                 "no-referrer",
-                "same-origin",
+                "no-referrer-when-downgrade",
                 "strict-origin",
                 "strict-origin-when-cross-origin",
+                "same-origin",
             ];
-            if safe_values.iter().any(|s| v.eq_ignore_ascii_case(s)) {
+            let warn_values = ["origin", "origin-when-cross-origin", "unsafe-url"];
+            if pass_values.iter().any(|s| v.eq_ignore_ascii_case(s)) {
                 (CheckStatus::Pass, None)
-            } else if v.eq_ignore_ascii_case("unsafe-url")
-                || v.eq_ignore_ascii_case("no-referrer-when-downgrade")
-            {
+            } else if warn_values.iter().any(|s| v.eq_ignore_ascii_case(s)) {
                 (CheckStatus::Warn, Some(format!("Permissive policy: {v}")))
             } else {
-                (CheckStatus::Pass, None)
+                (CheckStatus::Warn, Some(format!("Unrecognized value: {v}")))
             }
         }),
         coop: analyze_header_presence(headers, "cross-origin-opener-policy", |_| {
@@ -210,5 +210,49 @@ mod tests {
         let report = analyze_security_headers(&h);
         assert_eq!(report.x_frame_options.status, CheckStatus::Warn);
         assert_eq!(report.permissions_policy.status, CheckStatus::Warn);
+    }
+
+    #[test]
+    fn referrer_policy_safe_values_are_pass() {
+        for value in &[
+            "no-referrer",
+            "no-referrer-when-downgrade",
+            "strict-origin",
+            "strict-origin-when-cross-origin",
+            "same-origin",
+        ] {
+            let h = headers_with(&[("referrer-policy", value)]);
+            let report = analyze_security_headers(&h);
+            assert_eq!(
+                report.referrer_policy.status,
+                CheckStatus::Pass,
+                "expected Pass for '{value}'"
+            );
+        }
+    }
+
+    #[test]
+    fn referrer_policy_risky_values_are_warn() {
+        for value in &["origin", "origin-when-cross-origin", "unsafe-url"] {
+            let h = headers_with(&[("referrer-policy", value)]);
+            let report = analyze_security_headers(&h);
+            assert_eq!(
+                report.referrer_policy.status,
+                CheckStatus::Warn,
+                "expected Warn for '{value}'"
+            );
+        }
+    }
+
+    #[test]
+    fn referrer_policy_unknown_value_is_warn_with_message() {
+        let h = headers_with(&[("referrer-policy", "some-unknown-value")]);
+        let report = analyze_security_headers(&h);
+        assert_eq!(report.referrer_policy.status, CheckStatus::Warn);
+        let msg = report.referrer_policy.message.unwrap_or_default();
+        assert!(
+            msg.contains("Unrecognized value"),
+            "expected 'Unrecognized value' in message, got: '{msg}'"
+        );
     }
 }

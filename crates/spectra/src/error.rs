@@ -23,10 +23,6 @@ pub enum AppError {
 
     #[error("inspection timed out after {0}s")]
     Timeout(u64),
-
-    #[allow(dead_code)] // Used by inspection error paths
-    #[error("connection failed: {0}")]
-    ConnectionFailed(String),
 }
 
 impl ApiError for AppError {
@@ -37,7 +33,6 @@ impl ApiError for AppError {
             Self::InvalidTarget(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             Self::Timeout(_) => StatusCode::GATEWAY_TIMEOUT,
-            Self::ConnectionFailed(_) => StatusCode::BAD_GATEWAY,
         }
     }
 
@@ -48,7 +43,6 @@ impl ApiError for AppError {
             Self::InvalidTarget(_) => "INVALID_TARGET",
             Self::RateLimited { .. } => "RATE_LIMITED",
             Self::Timeout(_) => "TIMEOUT",
-            Self::ConnectionFailed(_) => "CONNECTION_FAILED",
         }
     }
 
@@ -67,9 +61,6 @@ impl IntoResponse for AppError {
         let status = self.status_code();
 
         match status {
-            StatusCode::BAD_GATEWAY => {
-                tracing::warn!(error = %self, "upstream error");
-            }
             StatusCode::GATEWAY_TIMEOUT => {
                 tracing::warn!(error = %self, "request timeout");
             }

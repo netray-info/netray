@@ -543,6 +543,9 @@ a:hover { text-decoration: underline; }
 @media (max-width: 640px) {
   table { overflow-x: auto; display: block; }
   .check-list { min-width: 0; }
+  .url-input { flex-direction: column; }
+  .url-input input,
+  .url-input button { width: 100%; }
 }
 
 /* ================================================================

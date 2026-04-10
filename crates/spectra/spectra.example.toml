@@ -7,7 +7,6 @@ metrics_bind = "127.0.0.1:9090"
 request_timeout_secs = 10
 total_timeout_secs = 30
 max_redirects = 10
-body_read_limit_bytes = 1024  # Reserved for future body sniffing. Has no effect in the current version.
 user_agent = "netray-spectra"
 
 [limits]
@@ -22,7 +21,7 @@ ip_url = "https://ip.example.com"  # URL of the ifconfig-rs enrichment service. 
 timeout_ms = 500
 
 [telemetry]
-log_format = "text"
+log_format = "json"  # Override with log_format = "text" for local development
 enabled = false
 # otlp_endpoint = "http://localhost:4318"
 service_name = "spectra"

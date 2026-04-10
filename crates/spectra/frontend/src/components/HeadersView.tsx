@@ -7,6 +7,12 @@ interface Props {
 export default function HeadersView(props: Props) {
   return (
     <table class="headers-table">
+      <thead>
+        <tr>
+          <th>Header</th>
+          <th>Value</th>
+        </tr>
+      </thead>
       <tbody>
         <For each={Object.entries(props.headers)}>
           {([name, value]) => (

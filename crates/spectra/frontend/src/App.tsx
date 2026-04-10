@@ -348,6 +348,7 @@ export default function App() {
                       <button
                         class="filter-toggle"
                         onClick={() => setAllExpanded(!allExpanded())}
+                        aria-pressed={allExpanded() ? "true" : "false"}
                       >
                         {allExpanded() ? 'Collapse all' : 'Expand all'}
                       </button>

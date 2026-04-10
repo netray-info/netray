@@ -4,6 +4,7 @@ pub mod config;
 pub mod error;
 pub mod input;
 pub mod inspect;
+pub mod metrics;
 pub mod quality;
 pub mod routes;
 pub mod security;
