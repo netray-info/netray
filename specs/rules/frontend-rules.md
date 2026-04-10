@@ -1,7 +1,7 @@
 # Frontend Rules for New netray.info Tools
 
-Derived from analysis of ifconfig-rs, mhost-prism, tlsight, netray-common-frontend, and lens frontends.
-Validated against live UI via Playwright scan of all four tools.
+Derived from analysis of all six suite tools (ifconfig-rs, mhost-prism, tlsight, spectra, beacon, lens) and netray-common-frontend.
+Validated against live UI via Playwright scan and manual cross-tool review (last updated 2026-04-10).
 
 ---
 
@@ -203,6 +203,19 @@ The canonical page structure for DNS, TLS, and Lens tools is:
 **Header row** (the `<header class="header">` element):
 - **Left side**: `<h1 class="logo">` with tool name (gradient text via `--accent` → `--accent-secondary`), followed by `<span class="tagline">` with a short phrase.
 - **Right side**: `<div class="header-actions">` containing `<ThemeToggle>` then `<button class="header-btn">?</button>` (help). Order: theme toggle first, help button second.
+
+**Tagline convention** — taglines follow the `"[noun], [past-tense verb]"` format and favour optical or revealing metaphors that match the suite's identity:
+
+| Tool | Tagline |
+|------|---------|
+| ifconfig-rs | IP, decoded |
+| mhost-prism | DNS, refracted |
+| tlsight | TLS, illuminated |
+| spectra | HTTP, exposed |
+| beacon | email security, graded |
+| lens | domains, in focus |
+
+New tools must pick a tagline in this style — punchy, snarky, and under five words. Avoid generic descriptive phrases like "Domain health at a glance" or "Email security inspector".
 - A visible **horizontal separator** (`<hr>` or border-bottom) below the header, before the input area. This visually anchors the header and separates it from the content.
 - **Spacing**: There should be clear vertical breathing room between the SuiteNav bar and the header row (roughly `1rem`–`1.5rem`).
 
@@ -223,6 +236,8 @@ On the idle state (no results yet), show an engaging empty state. When the tool 
 - A clickable example query that pre-fills the input.
 
 Cards must use the `.mode-card` CSS class from `components.css`. For tools with a single obvious mode, a brief descriptive tagline and 2–3 clickable example domain/query chips is the minimum — never leave the idle state as a blank input box.
+
+**`netray.info` is always an example** — at least one example query in every tool (except ifconfig-rs, which shows your own IP) must use `netray.info` as the target. This dogfoods the suite and demonstrates real-world output to new users. Subsequent examples should use `example.com` (for documentation-safe demos) and one real well-known domain (e.g. `github.com`, `gmail.com`).
 
 ---
 
@@ -518,7 +533,158 @@ When a result section maps directly to another netray tool, the section header s
 
 ---
 
-## 20. Compliance Matrix (2026-04-09)
+## 20. Help Modal Structure
+
+Every tool must have a `?` help button in the header (theme toggle first, then `?`) that opens a `<Modal>` from `netray-common-frontend`. The modal title is always `"Help"`.
+
+### Required section order
+
+```
+1. About          — one-paragraph description of what the tool does + link to netray.info guide
+2. [Reference]    — tool-specific content (query syntax, flags, record types, scoring, etc.)
+3. Keyboard shortcuts — table listing all keyboard shortcuts
+```
+
+The "About" section is always first. The "Keyboard shortcuts" section is always last. Tool-specific reference sections go in the middle.
+
+### About section
+
+```tsx
+<div class="help-section">
+  <div class="help-section__title">About</div>
+  <p class="help-desc">
+    toolname does X, Y, and Z.{' '}
+    <a href="https://netray.info/guide/" target="_blank" rel="noopener noreferrer">
+      Reference guides ↗
+    </a>
+  </p>
+</div>
+```
+
+- One concise paragraph. Not a marketing blurb — describe what the tool actually does.
+- Always link to `https://netray.info/guide/` (or a specific guide page if one is particularly relevant).
+
+### Keyboard shortcuts section
+
+Use the `shortcuts-table` CSS pattern — **not** the `help-keys` / `help-key` div-based layout:
+
+```tsx
+<div class="help-section">
+  <div class="help-section__title">Keyboard shortcuts</div>
+  <table class="shortcuts-table">
+    <thead>
+      <tr><th>Key</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="shortcut-key">/</td><td>Focus input</td></tr>
+      <tr><td class="shortcut-key">Enter</td><td>Submit (when input focused)</td></tr>
+      <tr><td class="shortcut-key">r</td><td>Re-run last query</td></tr>
+      <tr><td class="shortcut-key">j / k</td><td>Navigate result cards</td></tr>
+      <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active card</td></tr>
+      <tr><td class="shortcut-key">Escape</td><td>Blur input / close help</td></tr>
+      <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
+    </tbody>
+  </table>
+</div>
+```
+
+Required CSS (add to tool `global.css` if not present):
+
+```css
+.shortcuts-table { width: 100%; border-collapse: collapse; }
+.shortcuts-table th { padding: 4px 4px 8px; font-size: 0.6875rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);
+  border-bottom: 1px solid var(--border); text-align: left; }
+.shortcuts-table td { padding: 6px 4px; font-size: 0.875rem; color: var(--text-secondary);
+  border-bottom: 1px solid var(--border); }
+.shortcuts-table tr:last-child td { border-bottom: none; }
+.shortcut-key { font-family: var(--mono); font-size: 0.8125rem; font-weight: 600;
+  color: var(--accent); white-space: nowrap; width: 80px; }
+```
+
+---
+
+## 21. Keyboard Navigation Pattern
+
+Every query tool must implement keyboard navigation. The minimum required shortcuts are:
+
+| Key | Action |
+|-----|--------|
+| `/` | Focus query input |
+| `Enter` | Submit (when input focused) |
+| `r` | Re-run last query |
+| `j` / `k` | Navigate result cards (if tool has collapsible cards) |
+| `Enter` | Expand / collapse active card (when card is focused) |
+| `Escape` | Blur input / close help / deselect active card |
+| `?` | Toggle help modal |
+
+Use `createKeyboardShortcuts()` from `@netray-info/common-frontend/keyboard` for all shortcuts except `Escape` (which may need to work inside inputs).
+
+### Card navigation implementation
+
+For tools with collapsible result cards, use the `data-card` / `data-card-active` DOM attribute pattern — the same pattern across all suite tools:
+
+```ts
+// Add to onMount
+function clearCardActive() {
+  document.querySelector('[data-card-active]')?.removeAttribute('data-card-active');
+}
+
+function navigateCards(e: KeyboardEvent) {
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-card]'));
+  if (cards.length === 0) return;
+  e.preventDefault();
+  const cur = document.querySelector<HTMLElement>('[data-card-active]');
+  let idx = cur ? cards.indexOf(cur) : -1;
+  if (idx === -1) {
+    idx = e.key === 'j' ? 0 : cards.length - 1;
+  } else {
+    cur!.removeAttribute('data-card-active');
+    idx += e.key === 'j' ? 1 : -1;
+  }
+  idx = Math.max(0, Math.min(idx, cards.length - 1));
+  cards[idx].setAttribute('data-card-active', '');
+  cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function expandActiveCard(e: KeyboardEvent) {
+  const active = document.querySelector<HTMLElement>('[data-card-active]');
+  if (active) {
+    e.preventDefault();
+    active.querySelector<HTMLElement>('.section-card__header')?.click();
+  }
+}
+
+document.addEventListener('mousedown', clearCardActive);
+
+const cleanupShortcuts = createKeyboardShortcuts({
+  'j': navigateCards, 'k': navigateCards, 'Enter': expandActiveCard,
+  // ... other shortcuts
+});
+
+onCleanup(() => {
+  cleanupShortcuts();
+  document.removeEventListener('mousedown', clearCardActive);
+});
+```
+
+Add `data-card` to each top-level result card element. If the card is a component whose root you can't modify directly, wrap it: `<div data-card><MySection .../></div>`.
+
+Required CSS (active card outline):
+
+```css
+[data-card-active] {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: var(--radius, 4px);
+}
+```
+
+The toggle button inside each card must use `.section-card__header` class so `expandActiveCard` can find it universally.
+
+---
+
+## 22. Compliance Matrix (2026-04-10)
 
 What each tool must change to comply with the tightened rules above. ifconfig-rs is exempt from §6.1 (canonical layout) and §16 (collapsible sections). DNS/prism is exempt from §16–§18 (uses table-row expand pattern).
 
