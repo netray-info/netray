@@ -1,43 +1,152 @@
-# lens
+<div align="center">
 
-**Unified domain health check — one request, three signals, one grade.**
+# **lens** — domains, in focus
 
-lens is a web-based tool that checks a domain's DNS configuration, TLS certificate, and IP reputation in a single operation. It fans out to mhost-prism, tlsight, and ifconfig-rs in parallel, streams results as they arrive, and produces a letter-graded health score. No plugins, no CLI setup — just a domain and a result.
+**TLS · DNS · IP reputation — three signals, one grade, streamed as they arrive.**
 
-Live at [lens.netray.info](https://lens.netray.info) · Part of the [netray.info](https://netray.info) toolchain alongside [dns.netray.info](https://dns.netray.info), [tls.netray.info](https://tls.netray.info), and [ip.netray.info](https://ip.netray.info).
+[![Live](https://img.shields.io/badge/live-lens.netray.info-0ea5e9?style=flat-square)](https://lens.netray.info)
+[![API Docs](https://img.shields.io/badge/API-OpenAPI%203.1-6366f1?style=flat-square)](https://lens.netray.info/docs)
+[![Version](https://img.shields.io/badge/version-0.2.4-22c55e?style=flat-square)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-94a3b8?style=flat-square)](LICENSE)
+
+<br>
+
+![lens welcome screen](docs/screenshots/welcome-dark.png)
+
+<br>
+
+</div>
 
 ---
 
 ## What it does
 
-Given a domain name, lens:
+Type a domain. Press Enter. Within seconds you know:
 
-- **Checks DNS** — queries mhost-prism for MX, SPF, DMARC, DKIM, BIMI, MTA-STS, and TLSRPT records; surfaces lint findings
-- **Checks TLS** — queries tlsight for certificate validity, chain trust, protocol version, cipher strength, and OCSP stapling
-- **Checks IP reputation** — queries ifconfig-rs for each resolved IP; classifies as residential, datacenter, VPN, Tor, or known botnet C2
-- **Runs in parallel** — DNS and TLS checks fire concurrently; IP enrichment runs after DNS resolves addresses
-- **Streams results via SSE** — each signal arrives as soon as its backend responds, no waiting for the slowest one
-- **Scores and grades** — weighted aggregate of check results produces an A+–F grade with per-section breakdowns
-- **Enforces a 20s deadline** — partial results returned if any backend is slow or unreachable
+- **TLS** — certificate chain trust, expiry, algorithm strength, OCSP stapling, CT logs, forward secrecy
+- **DNS** — SPF, DMARC, DKIM, MTA-STS, DNSSEC, CAA, MX configuration, lint findings
+- **IP reputation** — every resolved address classified: residential, datacenter, VPN, Tor, botnet C2
+
+All three checks run in parallel. Results stream in as each backend responds — no spinner, no wait-and-dump. The page comes alive progressively. A weighted aggregate produces an **A+–F grade** with per-section breakdowns and hard-fail overrides for baseline security requirements.
+
+---
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%">
+
+**Dark theme — results**
+
+![Results dark theme](docs/screenshots/results-dark.png)
+
+</td>
+<td width="50%">
+
+**Light theme — results**
+
+![Results light theme](docs/screenshots/results-light.png)
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**Expanded — full check list**
+
+![Expanded checks](docs/screenshots/results-cloudflare-expanded.png)
+
+</td>
+<td width="50%">
+
+**Mobile**
+
+![Mobile view](docs/screenshots/mobile-results.png)
+
+</td>
+</tr>
+</table>
+
+---
+
+## Try it
+
+**Browser** — [lens.netray.info](https://lens.netray.info)
+
+**Terminal:**
+```sh
+# SSE stream (results arrive as they complete)
+curl -N 'https://lens.netray.info/api/check/example.com'
+
+# Single JSON response — better for scripts and LLMs
+curl -s -H 'Accept: application/json' 'https://lens.netray.info/api/check/example.com' | jq .
+```
+
+**Shareable link:** `https://lens.netray.info/?d=yourdomain.com`
+
+---
+
+## Use with Claude
+
+lens has first-class Claude integration via MCP. Once installed, you can ask Claude to check domain health directly in any conversation — no copy-pasting `curl` output, no manual JSON parsing.
+
+![API Docs](docs/screenshots/api-docs.png)
+
+### Install the MCP server
+
+**Claude Code** — run this skill from the lens repo directory:
+
+```sh
+/lens-mcp-code
+```
+
+The skill writes `~/.claude/mcp-servers/lens/server.mjs`, installs dependencies, and registers the server with `claude mcp add`. Requires Node.js ≥ 18.
+
+**Claude Desktop** — same skill, different registration target:
+
+```sh
+/lens-mcp-desktop
+```
+
+Edits `~/Library/Application Support/Claude/claude_desktop_config.json` automatically. Restart Claude Desktop after the skill completes.
+
+### Available tools
+
+| Tool | What it does |
+|---|---|
+| `check_domain` | Full DNS + TLS + IP check for one domain — structured JSON with grade, scores, hard-fail details |
+| `check_domains` | Check up to 10 domains sequentially — per-domain results, errors captured per-entry |
+| `lens_meta` | Server metadata: version, backends, scoring profile, rate limits |
+
+### Usage examples
+
+Once installed, ask Claude things like:
+
+> *"Check the domain health of example.com — is anything hard-failing?"*
+
+> *"Check these three domains and compare their TLS grades: example.com, example.org, example.net"*
+
+> *"My deploy is failing the health gate. Check example.com and tell me what's causing the F grade."*
 
 ---
 
 ## API
 
-### Check endpoint
+### Check a domain
 
 ```
 GET  /api/check/{domain}
-POST /api/check
+POST /api/check          {"domain": "example.com"}
 ```
 
-By default returns a Server-Sent Events stream. Pass `?stream=false`, `Accept: application/json`, or `"stream": false` in the POST body to get a single JSON object instead (sync mode — useful for scripting and LLM tool calls).
+**Default output: SSE stream.** Set `Accept: application/json`, `?stream=false`, or `"stream": false` in the POST body to get a single merged JSON object (sync mode).
 
 ```sh
-# SSE stream
+# SSE — events stream in as backends respond
 curl -N 'https://lens.netray.info/api/check/example.com'
 
-# Single JSON response (sync mode)
+# Sync — one JSON object, all sections merged
 curl -s 'https://lens.netray.info/api/check/example.com?stream=false'
 curl -s -H 'Accept: application/json' 'https://lens.netray.info/api/check/example.com'
 curl -s -X POST -H 'Content-Type: application/json' \
@@ -45,121 +154,66 @@ curl -s -X POST -H 'Content-Type: application/json' \
   'https://lens.netray.info/api/check'
 ```
 
-#### SSE event types
+#### SSE events
 
-| Event | Description |
+| Event | Payload |
 |---|---|
-| `dns` | DNS check result from mhost-prism (lint findings, resolved IPs) |
-| `tls` | TLS check result from tlsight (cert chain, quality checks) |
-| `ip` | IP reputation result from ifconfig-rs (per-IP network classification) |
-| `summary` | Aggregated score, per-section grades, and overall grade |
-| `done` | Stream terminator (domain, duration_ms, cached flag) |
-| `error` | Structured error if the request is rejected before streaming begins |
+| `dns` | DNS findings, resolved IPs, per-check results |
+| `tls` | Certificate chain, quality checks, grade |
+| `ip` | Per-IP classification: network type, ASN, geo |
+| `summary` | Overall grade, score, section grades, `hard_fail`, `hard_fail_reason` |
+| `done` | Domain, duration_ms, cached flag |
 
-#### SSE event format
-
-```
-event: dns
-data: {"status":"ok","findings":[...],"resolved_ips":["93.184.216.34"]}
-
-event: tls
-data: {"status":"ok","checks":[{"name":"chain_trusted","status":"pass"},...],"grade":"A"}
-
-event: ip
-data: {"status":"ok","ips":[{"ip":"93.184.216.34","network_type":"hosting","asn":15133}]}
-
-event: summary
-data: {"overall":"A","grade":"A","score":87.0,"hard_fail":false,"hard_fail_reason":null,"sections":{"dns":"B","tls":"A","ip":"A+"}}
-
-event: done
-data: {"domain":"example.com","duration_ms":412,"cached":false}
-```
-
-#### Sync response format
-
-When sync mode is active, all five events are merged into a single JSON object:
+#### Sync response
 
 ```json
 {
   "dns":     { "status": "ok", "findings": [...], "resolved_ips": [...] },
   "tls":     { "status": "ok", "checks": [...], "grade": "A" },
   "ip":      { "status": "ok", "ips": [...] },
-  "summary": { "overall": "A", "grade": "A", "score": 87.0, "hard_fail": false, "hard_fail_reason": null, "sections": {...} },
-  "done":    { "domain": "example.com", "duration_ms": 412, "cached": false }
+  "summary": {
+    "overall": "A", "grade": "A", "score": 87.0,
+    "hard_fail": false, "hard_fail_reason": null,
+    "sections": { "dns": "B", "tls": "A", "ip": "A+" }
+  },
+  "done": { "domain": "example.com", "duration_ms": 412, "cached": false }
 }
 ```
 
-`hard_fail_reason` is a human-readable string listing the failing checks when `hard_fail` is `true`, otherwise `null`.
+`hard_fail_reason` is a human-readable string when `hard_fail` is `true` (e.g. `"SPF Record, Chain of Trust"`), otherwise `null`.
 
-#### Error format
+#### Caching
 
-If the request is rejected before streaming (invalid domain, rate limited), a standard JSON error is returned:
-
-```json
-{"error": {"code": "invalid_domain", "message": "..."}}
-```
+Results are cached for 5 minutes. Cache hits return `X-Cache: HIT` and complete in milliseconds.
 
 ### Other endpoints
 
 | Endpoint | Description |
 |---|---|
+| `GET /api/meta` | Server version, backends, scoring profile, rate limits |
 | `GET /health` | Liveness probe |
 | `GET /ready` | Readiness probe |
-| `GET /api/meta` | Server capabilities and configured backends |
 | `GET /api-docs/openapi.json` | OpenAPI 3.1 spec |
-| `GET /docs` | Interactive API documentation |
+| `GET /docs` | Interactive API docs (Scalar UI) |
 
 ### CI / Pipeline integration
 
-Use in GitHub Actions to gate deploys on domain health:
+Gate deploys on domain health — if the grade drops below B, fail the build:
 
 ```yaml
-# Fail the build if the overall grade is below B
-- run: |
-    curl -s -H 'Accept: application/json' \
+- name: Domain health check
+  run: |
+    curl -sf -H 'Accept: application/json' \
       "https://lens.netray.info/api/check/$DOMAIN" \
     | jq -e '.summary.grade | test("^(A|B)")'
 ```
 
----
-
-## Use with Claude
-
-lens ships two Claude Code skills that install a local MCP server. Once installed, you can ask Claude to check domain health directly in conversation — no copy-pasting `curl` commands.
-
-### Available MCP tools
-
-| Tool | Description |
-|---|---|
-| `check_domain` | Full DNS + TLS + IP check for one domain, returns structured JSON with grade |
-| `check_domains` | Check up to 10 domains sequentially |
-| `lens_meta` | Server metadata: version, backends, scoring profile, rate limits |
-
-### Install for Claude Code
-
-Run this skill from the lens repo directory:
+Or pull structured data for reporting:
 
 ```sh
-/lens-mcp-code
+curl -s -H 'Accept: application/json' 'https://lens.netray.info/api/check/example.com' \
+  | jq '{grade: .summary.grade, score: .summary.score, hard_fail: .summary.hard_fail_reason}'
 ```
-
-The skill will write the server files to `~/.claude/mcp-servers/lens/`, install dependencies, and register the server via `claude mcp add`. Requires Node.js ≥ 18.
-
-### Install for Claude Desktop
-
-```sh
-/lens-mcp-desktop
-```
-
-The skill writes the same server files and edits `~/Library/Application Support/Claude/claude_desktop_config.json` to register the server. Requires Node.js ≥ 18. Restart Claude Desktop after the skill completes.
-
-### Usage examples
-
-Once installed, you can say things like:
-
-- "Check the domain health of example.com"
-- "Check these three domains and tell me which ones have TLS issues: example.com, example.org, example.net"
-- "What rate limits does lens enforce?"
 
 ---
 
@@ -171,23 +225,11 @@ This section is the authoritative description of the scoring algorithm. Any chan
 
 Each backend returns a set of named checks. Every check has a status: `pass`, `warn`, `fail`, `not_found`, `skip`, or `error`.
 
-1. **Per-check score**: `pass` = full weight, `warn` = half weight, `fail`/`not_found` = 0 points. `skip` and `error` are excluded from the totals entirely.
-2. **Section score**: weighted sum of earned points divided by weighted sum of possible points, expressed as a percentage.
-3. **Overall score**: weighted average of section scores using section weights.
-4. **Hard-fail overrides**: certain critical failures force the overall grade to F regardless of the numeric score.
-5. **Letter grade**: overall score mapped to grade thresholds.
-
-### Weight tiers
-
-Weights express the relative importance of each check within its section:
-
-| Weight | Meaning |
-|---|---|
-| 10 | Security-critical — failure has immediate, severe consequences |
-| 5 | Important — strongly recommended by standards or best practice |
-| 3 | Significant — meaningful impact on deliverability or security posture |
-| 2 | Advisory — good practice, but failure is not operationally harmful |
-| 1 | Informational — present/absent signals low-cost improvement opportunities |
+1. **Per-check score**: `pass` = full weight, `warn` = half weight, `fail`/`not_found` = 0. `skip` and `error` are excluded entirely.
+2. **Section score**: weighted sum of earned points ÷ weighted sum of possible points, as a percentage.
+3. **Overall score**: weighted average of section scores.
+4. **Hard-fail overrides**: certain failures force the overall grade to **F** regardless of the numeric score.
+5. **Letter grade**: score mapped to thresholds.
 
 ### Section weights
 
@@ -202,41 +244,39 @@ Weights express the relative importance of each check within its section:
 | Grade | Score | Meaning |
 |---|---|---|
 | A+ | ≥ 97% | Exemplary — all checks pass |
-| A | ≥ 90% | Excellent — minor gaps only |
-| B | ≥ 75% | Good — some non-critical findings |
-| C | ≥ 60% | Fair — notable gaps, action recommended |
-| D | ≥ 40% | Poor — significant issues present |
-| F | < 40% | Failing — or hard-fail override triggered |
+| A  | ≥ 90% | Excellent — minor gaps only |
+| B  | ≥ 75% | Good — some non-critical findings |
+| C  | ≥ 60% | Fair — notable gaps, action recommended |
+| D  | ≥ 40% | Poor — significant issues present |
+| F  | < 40% | Failing — or hard-fail override triggered |
 
 ### Hard failures
 
-The following conditions force the overall grade to **F** regardless of the numeric score:
+These conditions force an **F** regardless of the numeric score:
 
-- Untrusted TLS chain (certificate not signed by a trusted CA)
-- Expired certificate (any certificate in the chain)
-- No SPF record (missing entirely, not a misconfigured one)
-- No DMARC record (missing entirely)
+| Condition | Why |
+|---|---|
+| Untrusted TLS chain | Certificate not signed by a trusted CA — browsers reject it |
+| Expired certificate | Any certificate in the chain |
+| No SPF record | Missing entirely (not misconfigured) |
+| No DMARC record | Missing entirely |
 
-These represent baseline requirements. A domain that fails any of them poses immediate risk to recipients or operators.
+### Check weight tiers
 
-### `not_found` treatment
+| Weight | Meaning |
+|---|---|
+| 10 | Security-critical — failure has immediate, severe consequences |
+| 5  | Important — strongly recommended by standards or best practice |
+| 3  | Significant — meaningful impact on deliverability or security posture |
+| 2  | Advisory — good practice, but failure is not operationally harmful |
+| 1  | Informational — low-cost improvement opportunity |
 
-A check that returns `not_found` (e.g. a missing SPF record, absent DMARC policy) scores 0 points — the same as an explicit `fail`. The distinction is preserved in the event payload for display purposes but has no effect on scoring.
+### Custom profiles
 
-### Skipped and errored checks
+The scoring profile is defined in TOML. The default is embedded in the binary; override it with `scoring.profile_path` in `lens.toml`.
 
-- `skip` — the check was intentionally not run (e.g. DANE requires DNSSEC). Excluded from both earned and possible points.
-- `error` — the check could not complete due to a backend error. Also excluded from totals. The response includes a `warnings` array listing which checks were excluded and why.
-
-Excluding errored checks means a backend outage degrades score precision but does not artificially inflate or deflate the result.
-
-If all three backends fail and every section is excluded, no numeric score can be computed. The grade is reported as `error` and the UI shows "Grade unavailable" instead of a letter grade.
-
-### Custom scoring profiles
-
-The scoring profile (weights, thresholds, hard-fail rules) is defined in a TOML file. The default profile is embedded in the binary. You can override it by setting `scoring.profile_path` in `lens.toml`.
-
-Example profile structure (v2 format):
+<details>
+<summary>Profile format (v2)</summary>
 
 ```toml
 [meta]
@@ -248,31 +288,29 @@ weight = 45
 hard_fail = ["chain_trusted", "not_expired"]
 
 [sections.tls.checks]
-chain_trusted   = 10
-not_expired     = 10
-hostname_match  = 10
-chain_complete  = 5
+chain_trusted    = 10
+not_expired      = 10
+hostname_match   = 10
+chain_complete   = 5
 strong_signature = 5
-key_strength    = 5
-expiry_window   = 5
-tls_version     = 5
-forward_secrecy = 5
-aead_cipher     = 5
-ocsp_stapled    = 3
-ct_logged       = 3
-# ... more checks
+key_strength     = 5
+expiry_window    = 5
+tls_version      = 5
+forward_secrecy  = 5
+aead_cipher      = 5
+ocsp_stapled     = 3
+ct_logged        = 3
 
 [sections.dns]
 weight = 35
 hard_fail = ["spf", "dmarc"]
 
 [sections.dns.checks]
-spf   = 10
-dmarc = 10
+spf    = 10
+dmarc  = 10
 dnssec = 5
-caa   = 5
-mx    = 5
-# ... more checks
+caa    = 5
+mx     = 5
 
 [sections.ip]
 weight = 20
@@ -290,23 +328,20 @@ reputation = 5
 "F"  = 0
 ```
 
-Each `[sections.<name>]` block defines:
-- `weight` — percentage weight of this section in the overall score (all weights must sum to 100)
-- `hard_fail` — check names that trigger an automatic F grade if they fail
-- `checks` — individual check names and their point weights
-
-Adding a new scoring section requires only a new `[sections.<name>]` block in the profile and a corresponding backend implementation.
+</details>
 
 ---
 
 ## Configuration
 
-Copy `lens.example.toml` to `lens.toml` and adjust as needed.
+```sh
+cp lens.example.toml lens.toml
+```
 
 ```toml
 [server]
 bind = "0.0.0.0:8082"
-metrics_bind = "127.0.0.1:8090"
+metrics_bind = "127.0.0.1:9090"
 # trusted_proxies = ["10.0.0.0/8"]
 
 [backends]
@@ -326,10 +361,10 @@ global_per_minute = 100
 global_burst = 20
 
 [scoring]
-# profile_path = "profiles/default.toml"   # override built-in default profile
+# profile_path = "profiles/default.toml"   # override built-in default
 ```
 
-Configuration is loaded from `lens.toml` by default. Override the path with the `LENS_CONFIG` environment variable. Environment variables take precedence over the file, using the `LENS_` prefix with `__` as the section separator — e.g. `LENS_SERVER__BIND=0.0.0.0:8082`.
+Override any value with environment variables: `LENS_` prefix, `__` for nesting — e.g. `LENS_SERVER__BIND=0.0.0.0:8082`.
 
 ---
 
@@ -338,30 +373,27 @@ Configuration is loaded from `lens.toml` by default. Override the path with the 
 Prerequisites: Rust toolchain, Node.js (for the frontend).
 
 ```sh
-# Full production build (frontend + Rust binary)
-make
+make          # frontend + release binary
+make dev      # cargo run (hot-reloads nothing, but starts quickly)
+make test     # Rust unit + integration tests + frontend tests
+make ci       # full gate: fmt, clippy, test, frontend build, audit
 
-# Run the built binary
-make run
-
-# Development (two terminals)
-make frontend-dev   # Vite dev server on :5174, proxies /api/* to :8082
-make dev            # cargo run
-
-# Tests
-make test           # Rust + frontend
-make ci             # Full CI: lint + test + frontend build
+# Two-terminal dev workflow
+make frontend-dev   # Vite dev server on :5174 (proxies /api/* to :8082)
+make dev            # cargo run on :8082
 ```
 
-The release binary embeds the compiled frontend. No separate static file hosting required.
+The release binary embeds the compiled frontend — no separate static file hosting required.
 
 ---
 
 ## Tech stack
 
-**Backend**: Rust · axum · reqwest · tokio · tower-governor
+**Backend** — Rust · Axum 0.8 · reqwest · tokio · utoipa (OpenAPI 3.1) · tower-governor (GCRA rate limiting) · moka (TTL cache)
 
-**Frontend**: SolidJS · Vite · TypeScript (strict)
+**Frontend** — SolidJS 1.9 · Vite · TypeScript (strict) · @netray-info/common-frontend
+
+**Part of** — [netray.info](https://netray.info) suite: [IP](https://ip.netray.info) · [DNS](https://dns.netray.info) · [TLS](https://tls.netray.info) · [HTTP](https://http.netray.info) · [Email](https://email.netray.info)
 
 ---
 
