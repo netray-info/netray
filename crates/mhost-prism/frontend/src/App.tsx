@@ -1238,6 +1238,13 @@ export default function App() {
                 </p>
                 <button
                   class="mode-card__example welcome-example"
+                  onClick={() => fillQuery('netray.info A AAAA @cloudflare @google')}
+                  title="Click to run"
+                >
+                  netray.info A AAAA @cloudflare @google
+                </button>
+                <button
+                  class="mode-card__example welcome-example"
                   onClick={() => fillQuery('example.com A AAAA @cloudflare @google')}
                   title="Click to run"
                 >
@@ -1585,6 +1592,15 @@ export default function App() {
 
       {/* Help modal */}
       <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
+        <div class="help-section">
+          <div class="help-section-title">About</div>
+          <p class="help-syntax-desc">
+            prism is a multi-server DNS debugging and inspection service. Fan out queries to multiple
+            resolvers at once, trace delegation chains, validate DNSSEC, and compare transports.{' '}
+            <a href="https://netray.info/guide/" target="_blank" rel="noopener noreferrer">Reference guides ↗</a>
+          </p>
+        </div>
+
         <div class="help-section">
           <div class="help-section-title">Query syntax</div>
           <code class="help-syntax">domain [TYPE...] [@server...] [+flag...]</code>
