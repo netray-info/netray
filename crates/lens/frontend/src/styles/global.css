@@ -378,13 +378,16 @@ a:hover { text-decoration: underline; }
 
 .section-card__link {
   font-size: 0.75rem;
-  color: var(--accent);
+  color: var(--text-muted);
   text-decoration: none;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.section-card__link:hover { text-decoration: underline; }
+.section-card__link:hover {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
 
 /* ================================================================
    IP address list
@@ -559,15 +562,6 @@ a:hover { text-decoration: underline; }
   gap: 5px;
   color: var(--text-secondary);
 }
-
-.summary-dot-link {
-  font-size: 0.8125rem;
-  color: var(--accent);
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.summary-dot-link:hover { text-decoration: underline; }
 
 .summary-dot-grade {
   font-family: var(--mono);

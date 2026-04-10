@@ -37,7 +37,6 @@ interface Props {
   ipDetailUrl?: string;
   httpServerIp?: string;
   httpServerOrg?: string;
-  sectionDetailUrls?: Partial<Record<string, string>>;
   onCopyMd?: () => void;
   onDownloadJson?: () => void;
 }
@@ -59,21 +58,7 @@ export default function Summary(props: Props) {
             <Show when={s().sections[section] !== undefined}>
               <div class="summary-dot-item" role="listitem">
                 <VerdictDot verdict={sectionVerdict(section)} />
-                <Show
-                  when={props.sectionDetailUrls?.[section]}
-                  fallback={<span>{section.toUpperCase()}</span>}
-                >
-                  {(url) => (
-                    <a
-                      class="summary-dot-link"
-                      href={url()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      {section.toUpperCase()} ↗
-                    </a>
-                  )}
-                </Show>
+                <span>{section.toUpperCase()}</span>
                 <Show when={sectionVerdict(section) === 'error'} fallback={
                   <Show when={sectionGrade(section)}>
                     <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade(section)!) }}>
@@ -129,7 +114,7 @@ export default function Summary(props: Props) {
                 <Show when={props.done}>
                   {(done) => (
                     <span class={durationClass(done().duration_ms)}>
-                      <span class="summary-duration__label">checked in </span>
+                      <span class="summary-duration__label">Duration: </span>
                       {done().duration_ms}ms
                       <Show when={done().cached}>
                         {' '}<span class="cached-badge">cached</span>
