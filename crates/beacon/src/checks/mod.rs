@@ -66,6 +66,7 @@ pub async fn run_all_checks(
         let _ = tx.send(SseEvent::Summary {
             grade: Grade::F,
             verdicts,
+            duration_ms: 30_000,
         }).await;
     }
 }
@@ -256,6 +257,8 @@ async fn run_inspection_inner(
     enrichment_client: Option<Arc<EnrichmentClient>>,
     tx: mpsc::Sender<SseEvent>,
 ) {
+    let inspection_start = std::time::Instant::now();
+
     // Accumulated phase-0 data
     let mut mx_result: Option<CheckResult> = None;
     let mut mx_hosts: Vec<String> = Vec::new();
@@ -597,5 +600,6 @@ async fn run_inspection_inner(
     let _ = tx.send(SseEvent::Summary {
         grade,
         verdicts: verdicts_map,
+        duration_ms: inspection_start.elapsed().as_millis() as u64,
     }).await;
 }

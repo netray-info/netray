@@ -129,6 +129,7 @@ pub enum SseEvent {
     Summary {
         grade: Grade,
         verdicts: HashMap<String, Verdict>,
+        duration_ms: u64,
     },
 }
 
