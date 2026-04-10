@@ -247,6 +247,12 @@ export default function App() {
                 ipDetailUrl={ip()?.detail_url}
                 httpServerIp={http()?.server_ip}
                 httpServerOrg={http()?.server_org}
+                sectionDetailUrls={{
+                  http: http()?.detail_url,
+                  tls:  tls()?.detail_url,
+                  dns:  dns()?.detail_url,
+                  ip:   ip()?.detail_url,
+                }}
                 onCopyMd={done() ? handleCopyMd : undefined}
                 onDownloadJson={done() ? handleDownloadJson : undefined}
               />

@@ -37,6 +37,7 @@ interface Props {
   ipDetailUrl?: string;
   httpServerIp?: string;
   httpServerOrg?: string;
+  sectionDetailUrls?: Partial<Record<string, string>>;
   onCopyMd?: () => void;
   onDownloadJson?: () => void;
 }
@@ -58,7 +59,21 @@ export default function Summary(props: Props) {
             <Show when={s().sections[section] !== undefined}>
               <div class="summary-dot-item" role="listitem">
                 <VerdictDot verdict={sectionVerdict(section)} />
-                <span>{section.toUpperCase()}</span>
+                <Show
+                  when={props.sectionDetailUrls?.[section]}
+                  fallback={<span>{section.toUpperCase()}</span>}
+                >
+                  {(url) => (
+                    <a
+                      class="summary-dot-link"
+                      href={url()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {section.toUpperCase()} ↗
+                    </a>
+                  )}
+                </Show>
                 <Show when={sectionVerdict(section) === 'error'} fallback={
                   <Show when={sectionGrade(section)}>
                     <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade(section)!) }}>
@@ -73,7 +88,7 @@ export default function Summary(props: Props) {
           )}
         </For>
       </div>
-      <Show when={props.done}>
+      <Show when={props.onCopyMd || props.onDownloadJson}>
         <div class="summary-actions">
           <Show when={props.onCopyMd}>
             <button class="summary-action-btn" type="button" onClick={props.onCopyMd}>copy MD</button>
@@ -110,6 +125,17 @@ export default function Summary(props: Props) {
                 <span class="summary-overall">{overallLabel(s().overall)}</span>
                 <Show when={hasErroredSection()}>
                   <span class="summary-incomplete">incomplete — some checks failed to run</span>
+                </Show>
+                <Show when={props.done}>
+                  {(done) => (
+                    <span class={durationClass(done().duration_ms)}>
+                      <span class="summary-duration__label">checked in </span>
+                      {done().duration_ms}ms
+                      <Show when={done().cached}>
+                        {' '}<span class="cached-badge">cached</span>
+                      </Show>
+                    </span>
+                  )}
                 </Show>
               </div>
             </div>
@@ -172,17 +198,6 @@ export default function Summary(props: Props) {
             </a>
           </Show>
         </div>
-      </Show>
-
-      <Show when={props.done}>
-        {(done) => (
-          <div class="summary-meta">
-            <span class={durationClass(done().duration_ms)}>{done().duration_ms}ms</span>
-            <Show when={done().cached}>
-              <span class="cached-badge">cached</span>
-            </Show>
-          </div>
-        )}
       </Show>
     </div>
   );
