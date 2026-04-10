@@ -23,7 +23,7 @@ const EXAMPLES: { title: string; desc: string; queries: string[] }[] = [
   {
     title: 'Inspect',
     desc: 'Full TLS inspection — certificate chain, validation, OCSP, CT, DNS cross-checks. The single view for "is this domain\'s TLS correct?"',
-    queries: ['example.com'],
+    queries: ['netray.info', 'example.com'],
   },
   {
     title: 'Multi-port',
@@ -402,39 +402,46 @@ export default function App() {
       {/* Help modal */}
       <Modal open={showHelp()} onClose={closeHelp} title="Help">
         <div class="help-section">
+          <div class="help-section__title">About</div>
+          <p class="help-desc">
+            tlsight inspects TLS certificate chains, negotiated parameters, DANE/TLSA records, and
+            CAA compliance across all resolved IPs. Works on expired, self-signed, and broken certs.{' '}
+            <a href="https://netray.info/guide/" target="_blank" rel="noopener noreferrer">Reference guides ↗</a>
+          </p>
+        </div>
+
+        <div class="help-section">
           <div class="help-section__title">Input syntax</div>
           <code class="help-syntax">hostname[:port[,port...]]</code>
-          <p class="help-desc">Enter a hostname to inspect its TLS certificate. Optionally append ports separated by commas.</p>
+          <p class="help-desc">Enter a hostname to inspect its TLS certificate. Append ports separated by commas to scan multiple in one shot.</p>
         </div>
 
         <div class="help-section">
           <div class="help-section__title">Keyboard shortcuts</div>
-          <div class="help-keys">
-            <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
-            <div class="help-key"><kbd>Enter</kbd><span>Submit query</span></div>
-            <div class="help-key"><kbd>r</kbd><span>Re-run last query</span></div>
-            <div class="help-key"><kbd>e</kbd><span>Toggle explain mode</span></div>
-            <div class="help-key"><kbd>j</kbd> / <kbd>k</kbd><span>Next / previous IP card</span></div>
-            <div class="help-key"><kbd>Enter</kbd><span>Expand / collapse IP card</span></div>
-            <div class="help-key"><kbd>Escape</kbd><span>Blur input / close help</span></div>
-            <div class="help-key"><kbd>?</kbd><span>Toggle help</span></div>
-          </div>
-        </div>
-
-        <div class="help-section">
-          <div class="help-section__title">History</div>
-          <p class="help-desc">Previous queries are available via arrow keys when the input is focused.</p>
-          <div class="help-keys">
-            <div class="help-key"><kbd>&darr;</kbd> / <kbd>Ctrl+j</kbd><span>Next (older) query</span></div>
-            <div class="help-key"><kbd>&uarr;</kbd> / <kbd>Ctrl+k</kbd><span>Previous (newer) query</span></div>
-          </div>
+          <table class="shortcuts-table">
+            <thead>
+              <tr><th>Key</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="shortcut-key">/</td><td>Focus input</td></tr>
+              <tr><td class="shortcut-key">Enter</td><td>Submit query (when input focused)</td></tr>
+              <tr><td class="shortcut-key">r</td><td>Re-run last query</td></tr>
+              <tr><td class="shortcut-key">e</td><td>Toggle explain mode</td></tr>
+              <tr><td class="shortcut-key">j / k</td><td>Next / previous IP card</td></tr>
+              <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active card</td></tr>
+              <tr><td class="shortcut-key">&darr; / Ctrl+j</td><td>Next (older) query in history</td></tr>
+              <tr><td class="shortcut-key">&uarr; / Ctrl+k</td><td>Previous (newer) query in history</td></tr>
+              <tr><td class="shortcut-key">Escape</td><td>Blur input / close help</td></tr>
+              <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <div class="help-section">
           <div class="help-section__title">What the results mean</div>
-          <p class="help-desc"><strong>CAA records</strong> — DNS Certification Authority Authorization. These records declare which CAs are allowed to issue certificates for a domain. If the issuing CA is not listed, the certificate may violate the domain owner's policy.</p>
-          <p class="help-desc"><strong>IP consistency</strong> — When a hostname resolves to multiple IPs, this check compares whether all IPs serve the same certificate, TLS version, and cipher suite. Mismatches may indicate misconfigured servers, stale deployments, or CDN inconsistencies.</p>
-          <p class="help-desc"><strong>DANE/TLSA</strong> — DNS-based Authentication of Named Entities. TLSA records pin certificates or CAs in DNS, validated via DNSSEC. Provides an alternative trust path independent of the CA system.</p>
+          <p class="help-desc"><strong>CAA records</strong> — Declare which CAs are allowed to issue certificates for a domain. If the issuing CA is not listed, the cert may violate policy.</p>
+          <p class="help-desc"><strong>IP consistency</strong> — When a hostname resolves to multiple IPs, checks whether all serve the same certificate, TLS version, and cipher suite.</p>
+          <p class="help-desc"><strong>DANE/TLSA</strong> — DNS-based Authentication of Named Entities. TLSA records pin certs or CAs in DNS via DNSSEC, independent of the CA system.</p>
         </div>
       </Modal>
 
