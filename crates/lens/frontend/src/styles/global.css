@@ -548,6 +548,7 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: 0.875rem;
+  flex: 1;
   font-size: 0.8125rem;
   flex-wrap: wrap;
 }
