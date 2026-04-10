@@ -58,7 +58,7 @@ export default function TlsSection(props: Props) {
                 <span class="section-card__error">{data().headline}</span>
               </Show>
               <a
-                class="section-card__link"
+                class="ext-link"
                 href={data().detail_url}
                 target="_blank"
                 rel="noopener noreferrer"

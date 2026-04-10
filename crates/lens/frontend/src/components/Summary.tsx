@@ -181,7 +181,7 @@ export default function Summary(props: Props) {
           </div>
           <Show when={props.ipDetailUrl}>
             <a
-              class="summary-servers__link"
+              class="ext-link summary-servers__link"
               href={props.ipDetailUrl}
               target="_blank"
               rel="noopener noreferrer"
