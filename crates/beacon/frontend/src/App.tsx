@@ -13,7 +13,6 @@ import type { MetaResponse } from './lib/api';
 import type {
   Category,
   CheckResult,
-  Grade,
   IpEnrichment,
   SseEvent,
   SubCheck,
@@ -24,15 +23,6 @@ import { CATEGORY_LABELS, CATEGORY_ORDER } from './lib/types';
 
 const HISTORY_KEY = 'beacon_history';
 const MAX_HISTORY = 20;
-
-const GRADE_COLORS: Record<Grade, string> = {
-  A: 'var(--color-pass)',
-  B: 'var(--color-info)',
-  C: 'var(--color-warn)',
-  D: 'var(--color-warn)',
-  F: 'var(--color-fail)',
-};
-
 const EXAMPLE_DOMAINS = ['netray.info', 'gmail.com', 'example.com'];
 
 export default function App() {
@@ -61,7 +51,6 @@ export default function App() {
   onMount(() => {
     fetchMeta().then((m) => {
       if (m) setMeta(m);
-      if (m?.site_name) document.title = m.site_name;
     });
 
     // Check URL params
@@ -122,9 +111,7 @@ export default function App() {
     });
   });
 
-  onCleanup(() => {
-    abortRef?.abort();
-  });
+  onCleanup(() => { abortRef?.abort(); });
 
   createEffect(() => {
     const expanded = expandAll();
@@ -155,7 +142,6 @@ export default function App() {
     setCompletedCount(0);
     setLoading(true);
 
-    // Update URL
     const newUrl = new URL(window.location.href);
     newUrl.searchParams.set('domain', d);
     window.history.replaceState(null, '', newUrl.toString());
@@ -175,13 +161,8 @@ export default function App() {
           setSummary(event);
         }
       },
-      (msg: string) => {
-        setError(msg);
-      },
-      () => {
-        setLoading(false);
-        addToHistory(d);
-      },
+      (msg: string) => { setError(msg); },
+      () => { setLoading(false); addToHistory(d); },
     );
   }
 
@@ -205,201 +186,169 @@ export default function App() {
   function toggleSection(cat: Category) {
     setOpenSections((prev) => {
       const next = new Set(prev);
-      if (next.has(cat)) {
-        next.delete(cat);
-      } else {
-        next.add(cat);
-      }
+      if (next.has(cat)) { next.delete(cat); } else { next.add(cat); }
       return next;
     });
   }
 
-  const hasResults = () => categories().size > 0 || summary() !== null || loading();
+  const hasResults = () => categories().size > 0 || loading();
   const isDone = () => summary() !== null && !loading();
   const isIdle = () => !hasResults() && !loading() && !error();
-
-  function verdictCounts(): Record<Verdict, number> {
-    const counts: Record<Verdict, number> = { skip: 0, pass: 0, info: 0, warn: 0, fail: 0 };
-    for (const r of categories().values()) {
-      counts[r.verdict]++;
-    }
-    return counts;
-  }
 
   return (
     <>
       <SuiteNav current="email" meta={meta()?.ecosystem as SuiteNavEcosystem} />
 
       <div class="app">
-      <header class="header">
-        <h1 class="logo">beacon</h1>
-        <span class="tagline">email security, graded</span>
-        <div class="header-actions">
-          <ThemeToggle theme={theme} class="header-btn" />
-          <button
-            class="header-btn"
-            type="button"
-            aria-label="Open help"
-            onClick={() => setShowHelp(true)}
-            title="Help (?)"
-          >?</button>
-        </div>
-      </header>
-
-      <main class="main">
-        <form class="inspect-form" onSubmit={handleSubmit}>
-          <div class="domain-input-row">
-            <div class="domain-input-wrapper">
-              <input
-                ref={inputEl}
-                type="text"
-                class="domain-input"
-                placeholder="example.com"
-                value={domain()}
-                onInput={(e) => setDomain(e.currentTarget.value)}
-                onFocus={() => setShowHistory(true)}
-                onBlur={() => setTimeout(() => setShowHistory(false), 200)}
-                role="combobox"
-                aria-label="Domain to inspect"
-                aria-expanded={showHistory() && getHistory().length > 0}
-                aria-autocomplete="list"
-                aria-controls="history-listbox"
-                autocomplete="off"
-                spellcheck={false}
-              />
-              <Show when={domain()}>
-                <button
-                  type="button"
-                  class="clear-btn"
-                  aria-label="Clear"
-                  onClick={() => setDomain('')}
-                >
-                  x
-                </button>
-              </Show>
-              <Show when={showHistory() && getHistory().length > 0}>
-                <ul
-                  class="history-dropdown"
-                  id="history-listbox"
-                  role="listbox"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') setShowHistory(false);
-                  }}
-                >
-                  <For each={getHistory()}>
-                    {(item) => (
-                      <li
-                        role="option"
-                        onMouseDown={() => {
-                          setDomain(item);
-                          handleInspect(item, selectors());
-                        }}
-                      >
-                        {item}
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </Show>
-            </div>
-            <button type="submit" class="btn-primary" disabled={loading() || !domain().trim()}>
-              {loading() ? 'Inspecting...' : 'Inspect'}
-            </button>
+        <header class="header">
+          <h1 class="logo">beacon</h1>
+          <span class="tagline">email security, analyzed</span>
+          <div class="header-actions">
+            <ThemeToggle theme={theme} class="header-btn" />
+            <button
+              class="header-btn"
+              type="button"
+              aria-label="Open help"
+              onClick={() => setShowHelp(true)}
+              title="Help (?)"
+            >?</button>
           </div>
+        </header>
 
-          <div class="selector-row">
-            <span class="selector-label">DKIM selectors:</span>
-            <div class="selector-chips">
-              <For each={selectors()}>
-                {(s) => (
-                  <span class="chip">
-                    {s}
-                    <button type="button" class="chip__remove" onClick={() => removeSelector(s)}>
-                      x
-                    </button>
-                  </span>
-                )}
-              </For>
-            </div>
-            <input
-              type="text"
-              class="selector-input"
-              placeholder="Add selector"
-              aria-label="DKIM selectors (comma-separated)"
-              value={selectorInput()}
-              onInput={(e) => setSelectorInput(e.currentTarget.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  addSelector();
-                }
-              }}
-            />
-            <button type="button" class="btn-secondary" onClick={addSelector}>
-              Add
-            </button>
-          </div>
-        </form>
-
-        <Show when={isIdle()}>
-          <div class="idle-state">
-            <p class="idle-state__text">
-              Enter a domain to inspect its email security posture. Checks MX, SPF, DKIM, DMARC,
-              MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, and DNSBL records.
-            </p>
-            <div class="mode-cards">
-              <For each={EXAMPLE_DOMAINS}>
-                {(d) => (
+        <main class="main">
+          <form class="inspect-form" onSubmit={handleSubmit}>
+            <div class="domain-input-row">
+              <div class="domain-input-wrapper">
+                <input
+                  ref={inputEl}
+                  type="text"
+                  class="domain-input"
+                  placeholder="example.com"
+                  value={domain()}
+                  onInput={(e) => setDomain(e.currentTarget.value)}
+                  onFocus={() => setShowHistory(true)}
+                  onBlur={() => setTimeout(() => setShowHistory(false), 200)}
+                  role="combobox"
+                  aria-label="Domain to inspect"
+                  aria-expanded={showHistory() && getHistory().length > 0}
+                  aria-autocomplete="list"
+                  aria-controls="history-listbox"
+                  autocomplete="off"
+                  spellcheck={false}
+                />
+                <Show when={domain()}>
                   <button
-                    class="mode-card"
-                    onClick={() => {
-                      setDomain(d);
-                      handleInspect(d, []);
-                    }}
+                    type="button"
+                    class="domain-input__clear"
+                    aria-label="Clear"
+                    onClick={() => setDomain('')}
+                  >×</button>
+                </Show>
+                <Show when={showHistory() && getHistory().length > 0}>
+                  <ul
+                    class="history-dropdown"
+                    id="history-listbox"
+                    role="listbox"
+                    onKeyDown={(e) => { if (e.key === 'Escape') setShowHistory(false); }}
                   >
-                    {d}
-                  </button>
-                )}
-              </For>
+                    <For each={getHistory()}>
+                      {(item) => (
+                        <li
+                          role="option"
+                          onMouseDown={() => {
+                            setDomain(item);
+                            handleInspect(item, selectors());
+                          }}
+                        >
+                          {item}
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </Show>
+              </div>
+              <button type="submit" class="btn-primary" disabled={loading() || !domain().trim()}>
+                {loading() ? 'Inspecting…' : 'Inspect'}
+              </button>
             </div>
-          </div>
-        </Show>
 
-        <Show when={error()}>
-          <div class="error-alert" role="alert">
-            {error()}
-          </div>
-        </Show>
+            <div class="selector-row">
+              <span class="selector-label">DKIM selectors:</span>
+              <div class="selector-chips">
+                <For each={selectors()}>
+                  {(s) => (
+                    <span class="chip">
+                      {s}
+                      <button type="button" class="chip__remove" onClick={() => removeSelector(s)}>×</button>
+                    </span>
+                  )}
+                </For>
+              </div>
+              <input
+                type="text"
+                class="selector-input"
+                placeholder="Add selector"
+                aria-label="DKIM selectors (comma-separated)"
+                value={selectorInput()}
+                onInput={(e) => setSelectorInput(e.currentTarget.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); addSelector(); }
+                }}
+              />
+              <button type="button" class="btn-secondary" onClick={addSelector}>Add</button>
+            </div>
+          </form>
 
-        <Show when={hasResults()}>
-          <div class="results">
-            <Show when={summary()}>
-              {(s) => (
-                <div class="grade-display" style={{ '--grade-color': GRADE_COLORS[s().grade] }}>
-                  <span class="grade-display__letter">{s().grade}</span>
-                  <span class="grade-display__label">Overall Grade</span>
+          <Show when={error()}>
+            <div class="error-banner" role="alert">{error()}</div>
+          </Show>
+
+          <Show when={isIdle()}>
+            <div class="empty-state">
+              <div class="empty-state__title">Inspect any domain</div>
+              <p>
+                Check MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, and
+                DNSBL — DNS-only, no mail servers contacted.
+              </p>
+              <div class="example-chips">
+                <For each={EXAMPLE_DOMAINS}>
+                  {(d) => (
+                    <button
+                      class="example-chip"
+                      onClick={() => { setDomain(d); handleInspect(d, []); }}
+                    >
+                      {d}
+                    </button>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+
+          <Show when={hasResults()}>
+            <Show when={loading() && categories().size === 0}>
+              <div class="loading" role="status" aria-live="polite">
+                <div class="spinner" />
+                <span>Inspecting…</span>
+              </div>
+            </Show>
+
+            <Show when={categories().size > 0}>
+              <div class="section-controls">
+                <div class="section-controls__left">
+                  <Show when={loading()}>
+                    <span class="progress-text">{completedCount()} of 12 checks complete</span>
+                  </Show>
                 </div>
-              )}
-            </Show>
-
-            <Show when={categories().size > 0 && !loading()}>
-              <div class="verdict-strip">
-                {(['pass', 'warn', 'fail', 'info'] as Verdict[]).map((v) => (
-                  <span class={`verdict-strip__chip badge badge--${v}`}>
-                    {verdictCounts()[v]} {v}
-                  </span>
-                ))}
-              </div>
-              <div class="results__controls">
-                <button class="btn-secondary btn-small" onClick={() => setExpandAll(!expandAll())}>
-                  {expandAll() ? 'Collapse All' : 'Expand All'}
-                </button>
-              </div>
-            </Show>
-
-            <Show when={loading()}>
-              <div class="loading-indicator" role="status" aria-live="polite">
-                {completedCount()} of 12 checks complete
+                <div class="section-controls__right">
+                  <button
+                    class="filter-toggle"
+                    onClick={() => setExpandAll(!expandAll())}
+                    aria-pressed={expandAll()}
+                  >
+                    {expandAll() ? 'Collapse all' : 'Expand all'}
+                  </button>
+                </div>
               </div>
             </Show>
 
@@ -412,11 +361,15 @@ export default function App() {
                       when={result()}
                       fallback={
                         <Show when={loading()}>
-                          <div class="section-card card--pending" aria-busy="true" aria-label={`Loading ${CATEGORY_LABELS[cat]}...`}>
+                          <div
+                            class="section-card card--pending"
+                            aria-busy="true"
+                            aria-label={`Loading ${CATEGORY_LABELS[cat]}…`}
+                          >
                             <div class="section-card__header">
-                              <span class="skeleton skeleton-line" style={{ width: '3rem', height: '1.25rem', 'flex-shrink': '0', margin: 0 }} />
+                              <span class="section-card__status section-card__status--skip" />
                               <span class="section-card__title">{CATEGORY_LABELS[cat]}</span>
-                              <span class="skeleton skeleton-line" style={{ width: '40%', height: '0.875rem', 'margin-left': 'auto', 'margin-top': 0, 'margin-bottom': 0 }} />
+                              <span class="section-card__spacer" />
                             </div>
                           </div>
                         </Show>
@@ -451,64 +404,67 @@ export default function App() {
                 />
               </div>
             </Show>
+          </Show>
+        </main>
+
+        <SiteFooter
+          aboutText={
+            <>
+              <em>beacon</em> performs DNS-only email security analysis. Built in{' '}
+              <a href="https://www.rust-lang.org" target="_blank" rel="noopener noreferrer">Rust</a> with{' '}
+              <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a> and{' '}
+              <a href="https://www.solidjs.com" target="_blank" rel="noopener noreferrer">SolidJS</a>.
+              Open to use — rate limiting applies. Part of the{' '}
+              <a href="https://netray.info" target="_blank" rel="noopener noreferrer"><strong>netray.info</strong></a> suite.
+            </>
+          }
+          links={[
+            { href: '/docs', label: 'API Docs' },
+            { href: 'https://lukas.pustina.de', label: 'Author', external: true },
+          ]}
+          version={meta()?.version}
+        />
+
+        <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
+          <div class="help-section">
+            <div class="help-section__title">About</div>
+            <p class="help-desc">
+              beacon checks email security posture via DNS only — no mail servers contacted.
+              Inspects MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, and
+              DNSBL.{' '}
+              <a href="https://netray.info/guide/email-auth.html" target="_blank" rel="noopener noreferrer">
+                Email auth guide ↗
+              </a>
+            </p>
           </div>
-        </Show>
-      </main>
 
-      <SiteFooter
-        aboutText={
-          <>
-            <em>beacon</em> performs DNS-only email security posture analysis. Built in{' '}
-            <a href="https://www.rust-lang.org" target="_blank" rel="noopener noreferrer">Rust</a> with{' '}
-            <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a> and{' '}
-            <a href="https://www.solidjs.com" target="_blank" rel="noopener noreferrer">SolidJS</a>.
-            Open to use — rate limiting applies. Part of the{' '}
-            <a href="https://netray.info" target="_blank" rel="noopener noreferrer"><strong>netray.info</strong></a> suite.
-          </>
-        }
-        links={[
-          { href: '/docs', label: 'API Docs' },
-          { href: 'https://lukas.pustina.de', label: 'Author', external: true },
-        ]}
-        version={meta()?.version}
-      />
+          <div class="help-section">
+            <div class="help-section__title">Input</div>
+            <code class="help-syntax">example.com</code>
+            <p class="help-desc">
+              Enter any domain name. Add DKIM selectors below the domain input for custom selector
+              testing.
+            </p>
+          </div>
 
-      {/* Help modal */}
-      <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
-        <div class="help-section">
-          <div class="help-section__title">About</div>
-          <p class="help-desc">
-            beacon checks email security posture via DNS only — no mail servers contacted.
-            Inspects MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, and DNSBL
-            and assigns an A–F grade.{' '}
-            <a href="https://netray.info/guide/email-auth.html" target="_blank" rel="noopener noreferrer">Email auth guide ↗</a>
-          </p>
-        </div>
-
-        <div class="help-section">
-          <div class="help-section__title">Input</div>
-          <code class="help-syntax">example.com</code>
-          <p class="help-desc">Enter any domain name. DKIM selectors can be added below the domain input for custom selector testing.</p>
-        </div>
-
-        <div class="help-section">
-          <div class="help-section__title">Keyboard shortcuts</div>
-          <table class="shortcuts-table">
-            <thead>
-              <tr><th>Key</th><th>Action</th></tr>
-            </thead>
-            <tbody>
-              <tr><td class="shortcut-key">/</td><td>Focus domain input</td></tr>
-              <tr><td class="shortcut-key">Enter</td><td>Submit domain (when input focused)</td></tr>
-              <tr><td class="shortcut-key">r</td><td>Re-run last inspection</td></tr>
-              <tr><td class="shortcut-key">j / k</td><td>Navigate result categories</td></tr>
-              <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active category</td></tr>
-              <tr><td class="shortcut-key">Escape</td><td>Close help / dismiss history</td></tr>
-              <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </Modal>
+          <div class="help-section">
+            <div class="help-section__title">Keyboard shortcuts</div>
+            <table class="shortcuts-table">
+              <thead>
+                <tr><th>Key</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="shortcut-key">/</td><td>Focus domain input</td></tr>
+                <tr><td class="shortcut-key">Enter</td><td>Submit domain (when input focused)</td></tr>
+                <tr><td class="shortcut-key">r</td><td>Re-run last inspection</td></tr>
+                <tr><td class="shortcut-key">j / k</td><td>Navigate result categories</td></tr>
+                <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active category</td></tr>
+                <tr><td class="shortcut-key">Escape</td><td>Close help / dismiss history</td></tr>
+                <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </Modal>
       </div>
     </>
   );
@@ -519,6 +475,14 @@ function CategorySection(props: {
   open: boolean;
   onToggle: () => void;
 }) {
+  const counts = () => {
+    const c: Partial<Record<Verdict, number>> = {};
+    for (const sc of props.result.sub_checks) {
+      c[sc.verdict] = (c[sc.verdict] ?? 0) + 1;
+    }
+    return c;
+  };
+
   return (
     <div class="section-card" data-card>
       <button
@@ -526,36 +490,64 @@ function CategorySection(props: {
         onClick={props.onToggle}
         aria-expanded={props.open}
       >
-        <span class={`badge badge--${props.result.verdict}`}>{props.result.verdict}</span>
+        <span class={`section-card__status section-card__status--${props.result.verdict}`} />
         <span class="section-card__title">{CATEGORY_LABELS[props.result.category]}</span>
-        <span class="section-card__detail">{props.result.detail}</span>
+        <span class="section-card__badges">
+          <Show when={(counts().fail ?? 0) > 0}>
+            <span class="badge badge--fail">{counts().fail} failed</span>
+          </Show>
+          <Show when={(counts().warn ?? 0) > 0}>
+            <span class="badge badge--warn">{counts().warn} warnings</span>
+          </Show>
+          <Show when={(counts().info ?? 0) > 0}>
+            <span class="badge badge--info">{counts().info} info</span>
+          </Show>
+          <Show when={(counts().pass ?? 0) > 0}>
+            <span class="badge badge--pass">{counts().pass} passed</span>
+          </Show>
+        </span>
+        <Show when={!props.open && props.result.detail}>
+          <span class="section-card__summary">{props.result.detail}</span>
+        </Show>
+        <span class="section-card__spacer" />
         <span class={`section-card__chevron${props.open ? ' section-card__chevron--open' : ''}`}>
           &#9660;
         </span>
       </button>
+
       <Show when={props.open}>
         <div class="section-card__body">
-          <For each={props.result.sub_checks}>
-            {(sc: SubCheck) => (
-              <div class="sub-check">
-                <span class={`badge badge--${sc.verdict} badge--small`}>{sc.verdict}</span>
-                <span class="sub-check__name">{sc.name}</span>
-                <span class="sub-check__detail">{sc.detail}</span>
-              </div>
-            )}
-          </For>
-          <Show when={props.result.sub_checks.length === 0}>
-            <p class="section-card__empty">No sub-checks</p>
+          <Show
+            when={props.result.sub_checks.length > 0}
+            fallback={<p class="section-empty">No sub-checks</p>}
+          >
+            <ul class="check-list">
+              <For each={props.result.sub_checks}>
+                {(sc: SubCheck) => (
+                  <li
+                    class={`check-list__item${
+                      sc.verdict === 'fail' ? ' check-row--fail' :
+                      sc.verdict === 'warn' ? ' check-row--warn' : ''
+                    }`}
+                  >
+                    <span class={`badge badge--${sc.verdict}`}>{sc.verdict}</span>
+                    <span class="check-list__name">{sc.name}</span>
+                    <span class="check-list__message">{sc.detail}</span>
+                  </li>
+                )}
+              </For>
+            </ul>
           </Show>
+
           <Show when={props.result.enrichment && props.result.enrichment.length > 0}>
-            <div class="enrichment-badges">
+            <div class="enrichment-list">
               <For each={props.result.enrichment!}>
                 {(e: IpEnrichment) => (
-                  <span class="enrichment-badge">
-                    <span class="enrichment-badge__ip">{e.ip}</span>
-                    <Show when={e.asn}><span class="enrichment-badge__tag">AS{e.asn}</span></Show>
-                    <Show when={e.org}><span class="enrichment-badge__tag">{e.org}</span></Show>
-                    <Show when={e.ip_type}><span class="enrichment-badge__tag">{e.ip_type}</span></Show>
+                  <span class="enrichment-item">
+                    <span class="enrichment-item__ip">{e.ip}</span>
+                    <Show when={e.asn}><span class="badge badge--skip">AS{e.asn}</span></Show>
+                    <Show when={e.org}><span class="badge badge--skip">{e.org}</span></Show>
+                    <Show when={e.ip_type}><span class="badge badge--skip">{e.ip_type}</span></Show>
                   </span>
                 )}
               </For>
