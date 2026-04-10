@@ -716,7 +716,16 @@ fn http_payload_from(
                     server_org.clone(),
                     server_network_type.clone(),
                 ),
-                _ => (String::new(), String::new(), None, None, None, None, None, None),
+                _ => (
+                    String::new(),
+                    String::new(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ),
             };
             (raw_headline, items, url, sc, hv, rdms, sip, sorg, snt)
         }
