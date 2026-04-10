@@ -519,28 +519,16 @@ function OverviewCard(props: {
           <span class={`badge badge--${overallVerdict()}`}>{overallVerdict()}</span>
         </div>
         <Show when={(counts().fail ?? 0) > 0}>
-          <div class="overview__item">
-            <span class="overview__value overview__value--fail">{counts().fail}</span>
-            <span class="overview__label">failed</span>
-          </div>
+          <span class="badge badge--fail">{counts().fail} failed</span>
         </Show>
         <Show when={(counts().warn ?? 0) > 0}>
-          <div class="overview__item">
-            <span class="overview__value overview__value--warn">{counts().warn}</span>
-            <span class="overview__label">warnings</span>
-          </div>
+          <span class="badge badge--warn">{counts().warn} warnings</span>
         </Show>
         <Show when={(counts().info ?? 0) > 0}>
-          <div class="overview__item">
-            <span class="overview__value overview__value--info">{counts().info}</span>
-            <span class="overview__label">info</span>
-          </div>
+          <span class="badge badge--info">{counts().info} info</span>
         </Show>
         <Show when={(counts().pass ?? 0) > 0}>
-          <div class="overview__item">
-            <span class="overview__value overview__value--pass">{counts().pass}</span>
-            <span class="overview__label">passed</span>
-          </div>
+          <span class="badge badge--pass">{counts().pass} passed</span>
         </Show>
         {(() => {
           const ms = props.summary.duration_ms ?? props.clientDurationMs;
