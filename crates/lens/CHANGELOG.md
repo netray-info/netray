@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-04-10
+
+### Added
+- Style example domain buttons and expand-all toggle (f372c90)
+- Move validation chips into summary card, fix chip styling (8915b65)
+- Tie section dot colors to grade, soften overall label (21a62bc)
+- Section dots as tool links, duration labeled in top section (3ec25c2)
+- Add share button, modal-close style, source-prefixed server rows, remove HTTP meta bar (6c03bc2)
+- Restructure summary card, restyle chips, move actions (832f506)
+- HTTP card improvements -- server info, explanations, card order (90680e5)
+- Add HTTP section via spectra backend (91ffb73)
+- Add MCP skills and update API docs for LLM usage (65b4e3a)
+- Add sync mode, OpenAPI docs, hard_fail_reason, rate_limit meta (7de204a)
+- Add About section, j/k nav, update tagline and examples (d5e7b74)
+
+### Fixed
+- Vertically center grade letter against info block height (1b11f35)
+- Fix three summary card alignment issues (ee053d7)
+- Thread server_network_type through HTTP backend; fix summary layout (6be0b33)
+- Hide section headline when only one check to avoid duplication (0e1816f)
+- Set font-weight: 400 on .ext-link to match summary IP link (3c77bdd)
+- Unify section and summary external link styling under .ext-link (fa5a323)
+- Remove flex from summary-top so actions right-align correctly (7ef8f00)
+- Always render summary-actions div; restore section-card link accent color (554afc9)
+- Reliably right-align copy MD | JSON via space-between layout (67138cf)
+- Match input row proportions to spectra (b9fe6c6)
+- Mute section card links to match summary IP link; revert dot-links; rename duration label (680ab8c)
+- Push copy MD | JSON actions to far right via flex: 1 on dots (427354b)
+- Align dots+actions with score row; color-code duration (beafebf)
+
+### Changed
+- Bump netray-common to 0.6.0 (5d79e68)
+- Replace hardcoded scoring sections with dynamic HashMap-based engine (68b684e)
+- Assign unique dev ports: backend 8085, metrics 9095, vite 5178 (8fe6cf8)
+
 ## [0.2.4] - 2026-04-09
 
 ### Fixed
