@@ -2,9 +2,11 @@ import { createSignal, onMount, onCleanup, Show, For, createEffect } from 'solid
 import SuiteNav from '@netray-info/common-frontend/components/SuiteNav';
 import type { SuiteNavEcosystem } from '@netray-info/common-frontend/components/SuiteNav';
 import ThemeToggle from '@netray-info/common-frontend/components/ThemeToggle';
+import Modal from '@netray-info/common-frontend/components/Modal';
 import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
 import CrossLink from '@netray-info/common-frontend/components/CrossLink';
 import { createTheme } from '@netray-info/common-frontend/theme';
+import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
 import { storageGet, storageSet } from '@netray-info/common-frontend/storage';
 import { fetchMeta, streamInspect } from './lib/api';
 import type { MetaResponse } from './lib/api';
@@ -31,14 +33,16 @@ const GRADE_COLORS: Record<Grade, string> = {
   F: 'var(--color-fail)',
 };
 
-const EXAMPLE_DOMAINS = ['example.com', 'gmail.com', 'protonmail.com'];
+const EXAMPLE_DOMAINS = ['netray.info', 'gmail.com', 'example.com'];
 
 export default function App() {
   const theme = createTheme('beacon_theme', 'system');
   const [meta, setMeta] = createSignal<MetaResponse | null>(null);
+  const [showHelp, setShowHelp] = createSignal(false);
 
   // Input state
   const [domain, setDomain] = createSignal('');
+  let inputEl: HTMLInputElement | undefined;
   const [selectors, setSelectors] = createSignal<string[]>([]);
   const [selectorInput, setSelectorInput] = createSignal('');
   const [showHistory, setShowHistory] = createSignal(false);
@@ -66,6 +70,55 @@ export default function App() {
       setDomain(urlDomain);
       handleInspect(urlDomain, []);
     }
+
+    function clearCardActive() {
+      document.querySelector('[data-card-active]')?.removeAttribute('data-card-active');
+    }
+
+    function navigateCards(e: KeyboardEvent) {
+      const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-card]'));
+      if (cards.length === 0) return;
+      e.preventDefault();
+      const cur = document.querySelector<HTMLElement>('[data-card-active]');
+      let idx = cur ? cards.indexOf(cur) : -1;
+      if (idx === -1) {
+        idx = e.key === 'j' ? 0 : cards.length - 1;
+      } else {
+        cur!.removeAttribute('data-card-active');
+        idx += e.key === 'j' ? 1 : -1;
+      }
+      idx = Math.max(0, Math.min(idx, cards.length - 1));
+      cards[idx].setAttribute('data-card-active', '');
+      cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function expandActiveCard(e: KeyboardEvent) {
+      const active = document.querySelector<HTMLElement>('[data-card-active]');
+      if (active) {
+        e.preventDefault();
+        active.querySelector<HTMLElement>('.section-card__header')?.click();
+      }
+    }
+
+    document.addEventListener('mousedown', clearCardActive);
+
+    const cleanupShortcuts = createKeyboardShortcuts({
+      '?':      (e) => { e.preventDefault(); setShowHelp(v => !v); },
+      '/':      (e) => { e.preventDefault(); inputEl?.focus(); },
+      'r':      (e) => {
+        const d = domain();
+        if (d && !loading()) { e.preventDefault(); handleInspect(d, selectors()); }
+      },
+      'j':      navigateCards,
+      'k':      navigateCards,
+      'Enter':  expandActiveCard,
+      'Escape': () => { setShowHelp(false); setShowHistory(false); },
+    });
+
+    onCleanup(() => {
+      cleanupShortcuts();
+      document.removeEventListener('mousedown', clearCardActive);
+    });
   });
 
   onCleanup(() => {
@@ -179,9 +232,16 @@ export default function App() {
       <div class="app">
       <header class="header">
         <h1 class="logo">beacon</h1>
-        <span class="tagline">Email security inspector</span>
+        <span class="tagline">email security, graded</span>
         <div class="header-actions">
           <ThemeToggle theme={theme} class="header-btn" />
+          <button
+            class="header-btn"
+            type="button"
+            aria-label="Open help"
+            onClick={() => setShowHelp(true)}
+            title="Help (?)"
+          >?</button>
         </div>
       </header>
 
@@ -190,6 +250,7 @@ export default function App() {
           <div class="domain-input-row">
             <div class="domain-input-wrapper">
               <input
+                ref={inputEl}
                 type="text"
                 class="domain-input"
                 placeholder="example.com"
@@ -397,9 +458,11 @@ export default function App() {
         aboutText={
           <>
             <em>beacon</em> performs DNS-only email security posture analysis. Built in{' '}
-            <a href="https://www.rust-lang.org">Rust</a> with{' '}
-            <a href="https://github.com/tokio-rs/axum">Axum</a> and{' '}
-            <a href="https://www.solidjs.com">SolidJS</a>.
+            <a href="https://www.rust-lang.org" target="_blank" rel="noopener noreferrer">Rust</a> with{' '}
+            <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a> and{' '}
+            <a href="https://www.solidjs.com" target="_blank" rel="noopener noreferrer">SolidJS</a>.
+            Open to use — rate limiting applies. Part of the{' '}
+            <a href="https://netray.info" target="_blank" rel="noopener noreferrer"><strong>netray.info</strong></a> suite.
           </>
         }
         links={[
@@ -408,6 +471,43 @@ export default function App() {
         ]}
         version={meta()?.version}
       />
+
+      {/* Help modal */}
+      <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
+        <div class="help-section">
+          <div class="help-section__title">About</div>
+          <p class="help-desc">
+            beacon checks email security posture via DNS only — no mail servers contacted.
+            Inspects MX, SPF, DKIM, DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, and DNSBL
+            and assigns an A–F grade.{' '}
+            <a href="https://netray.info/guide/email-auth.html" target="_blank" rel="noopener noreferrer">Email auth guide ↗</a>
+          </p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section__title">Input</div>
+          <code class="help-syntax">example.com</code>
+          <p class="help-desc">Enter any domain name. DKIM selectors can be added below the domain input for custom selector testing.</p>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section__title">Keyboard shortcuts</div>
+          <table class="shortcuts-table">
+            <thead>
+              <tr><th>Key</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="shortcut-key">/</td><td>Focus domain input</td></tr>
+              <tr><td class="shortcut-key">Enter</td><td>Submit domain (when input focused)</td></tr>
+              <tr><td class="shortcut-key">r</td><td>Re-run last inspection</td></tr>
+              <tr><td class="shortcut-key">j / k</td><td>Navigate result categories</td></tr>
+              <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active category</td></tr>
+              <tr><td class="shortcut-key">Escape</td><td>Close help / dismiss history</td></tr>
+              <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </Modal>
       </div>
     </>
   );
@@ -419,7 +519,7 @@ function CategorySection(props: {
   onToggle: () => void;
 }) {
   return (
-    <div class="section-card">
+    <div class="section-card" data-card>
       <button
         class="section-card__header"
         onClick={props.onToggle}
