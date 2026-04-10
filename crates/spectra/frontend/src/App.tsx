@@ -72,17 +72,52 @@ export default function App() {
     };
     document.addEventListener('keydown', ctrlLHandler);
 
+    function clearCardActive() {
+      document.querySelector('[data-card-active]')?.removeAttribute('data-card-active');
+    }
+
+    function navigateCards(e: KeyboardEvent) {
+      const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-card]'));
+      if (cards.length === 0) return;
+      e.preventDefault();
+      const cur = document.querySelector<HTMLElement>('[data-card-active]');
+      let idx = cur ? cards.indexOf(cur) : -1;
+      if (idx === -1) {
+        idx = e.key === 'j' ? 0 : cards.length - 1;
+      } else {
+        cur!.removeAttribute('data-card-active');
+        idx += e.key === 'j' ? 1 : -1;
+      }
+      idx = Math.max(0, Math.min(idx, cards.length - 1));
+      cards[idx].setAttribute('data-card-active', '');
+      cards[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    function expandActiveCard(e: KeyboardEvent) {
+      const active = document.querySelector<HTMLElement>('[data-card-active]');
+      if (active) {
+        e.preventDefault();
+        active.querySelector<HTMLElement>('.section-card__header')?.click();
+      }
+    }
+
+    document.addEventListener('mousedown', clearCardActive);
+
     const cleanupShortcuts = createKeyboardShortcuts({
       '?': (e) => { e.preventDefault(); setShowHelp(v => !v); },
       '/': (e) => { e.preventDefault(); inputEl?.focus(); },
       'e': (e) => { e.preventDefault(); setShowExplanations(v => !v); },
       'r': (e) => { const q = lastQuery(); if (q && !loading()) { e.preventDefault(); handleInspect(q); } },
+      'j': navigateCards,
+      'k': navigateCards,
+      'Enter': expandActiveCard,
       'Escape': (e) => { e.preventDefault(); inputEl?.blur(); setShowHelp(false); },
     });
 
     onCleanup(() => {
       cleanupShortcuts();
       document.removeEventListener('keydown', ctrlLHandler);
+      document.removeEventListener('mousedown', clearCardActive);
     });
   });
 
@@ -191,7 +226,7 @@ export default function App() {
       <main class="container">
         <header class="header">
           <h1 class="logo">spectra</h1>
-          <span class="tagline">HTTP headers, decoded</span>
+          <span class="tagline">HTTP, exposed</span>
           <div class="header-actions">
             <ThemeToggle theme={theme} class="header-btn" />
             <button class="header-btn" onClick={() => setShowHelp(true)} aria-label="Open help" title="Help (?)">?</button>
@@ -314,7 +349,7 @@ export default function App() {
                   </div>
 
                   {/* Quality Assessment */}
-                  <div class="section-card">
+                  <div class="section-card" data-card>
                     <button class="section-card__header" onClick={() => setOpenQuality(!openQuality())} aria-expanded={openQuality()} aria-controls="section-quality-body">
                       <span class={`section-card__status section-card__status--${data.quality.verdict}`} />
                       <span class="section-card__title">Quality Assessment</span>
@@ -385,7 +420,7 @@ export default function App() {
 
                   {/* Redirects */}
                   <Show when={hasRedirects}>
-                    <div class="section-card">
+                    <div class="section-card" data-card>
                       <button class="section-card__header" onClick={() => setOpenRedirects(!openRedirects())} aria-expanded={openRedirects()} aria-controls="section-redirects-body">
                         <span class="section-card__status section-card__status--skip" />
                         <span class="section-card__title">Redirects</span>
@@ -408,7 +443,7 @@ export default function App() {
                   </Show>
 
                   {/* Security Headers */}
-                  <div class="section-card">
+                  <div class="section-card" data-card>
                     <button class="section-card__header" onClick={() => setOpenSecurity(!openSecurity())} aria-expanded={openSecurity()} aria-controls="section-security-body">
                       <span class={`section-card__status section-card__status--${securityWorst(data.security)}`} />
                       <span class="section-card__title">Security Headers</span>
@@ -441,7 +476,7 @@ export default function App() {
 
                   {/* CSP */}
                   <Show when={hasCsp}>
-                    <div class="section-card">
+                    <div class="section-card" data-card>
                       <button class="section-card__header" onClick={() => setOpenCsp(!openCsp())} aria-expanded={openCsp()} aria-controls="section-csp-body">
                         <span class={`section-card__status section-card__status--${data.security.csp.status}`} />
                         <span class="section-card__title">
@@ -466,7 +501,7 @@ export default function App() {
                   </Show>
 
                   {/* CORS */}
-                  <div class="section-card">
+                  <div class="section-card" data-card>
                     <button class="section-card__header" onClick={() => setOpenCors(!openCors())} aria-expanded={openCors()} aria-controls="section-cors-body">
                       <span class={`section-card__status section-card__status--${data.cors.status}`} />
                       <span class="section-card__title">CORS</span>
@@ -489,7 +524,7 @@ export default function App() {
 
                   {/* Cookies */}
                   <Show when={hasCookies}>
-                    <div class="section-card">
+                    <div class="section-card" data-card>
                       <button class="section-card__header" onClick={() => setOpenCookies(!openCookies())} aria-expanded={openCookies()} aria-controls="section-cookies-body">
                         <span class="section-card__status section-card__status--skip" />
                         <span class="section-card__title">Cookies</span>
@@ -508,7 +543,7 @@ export default function App() {
                   </Show>
 
                   {/* Caching + CDN */}
-                  <div class="section-card">
+                  <div class="section-card" data-card>
                     <button class="section-card__header" onClick={() => setOpenCaching(!openCaching())} aria-expanded={openCaching()} aria-controls="section-caching-body">
                       {(() => {
                         const check = data.quality.checks.find(c => c.name === 'caching');
@@ -539,7 +574,7 @@ export default function App() {
                   </div>
 
                   {/* Fingerprint + deprecated */}
-                  <div class="section-card">
+                  <div class="section-card" data-card>
                     <button class="section-card__header" onClick={() => setOpenFingerprint(!openFingerprint())} aria-expanded={openFingerprint()} aria-controls="section-fingerprint-body">
                       <span class={`section-card__status section-card__status--${data.fingerprint.info_leakage.status}`} />
                       <span class="section-card__title">Server Fingerprint</span>
@@ -560,7 +595,7 @@ export default function App() {
                   </div>
 
                   {/* Response Headers */}
-                  <div class="section-card">
+                  <div class="section-card" data-card>
                     <button class="section-card__header" onClick={() => setOpenHeaders(!openHeaders())} aria-expanded={openHeaders()} aria-controls="section-headers-body">
                       <span class="section-card__status section-card__status--skip" />
                       <span class="section-card__title">Response Headers</span>
@@ -604,20 +639,33 @@ export default function App() {
 
       <Modal open={showHelp()} onClose={() => setShowHelp(false)} title="Help">
         <div class="help-section">
-          <div class="help-section__title">What is spectra?</div>
-          <p class="help-desc">Enter a URL to inspect its HTTP response headers, security posture, cookies, caching, CORS policy, and CSP configuration.</p>
+          <div class="help-section__title">About</div>
+          <p class="help-desc">
+            spectra inspects HTTP response headers, security posture, cookies, caching, CORS policy,
+            and CSP configuration for any URL. Fires three probes in parallel: HTTPS chain, HTTP
+            port-80 redirect, and CORS with an evil origin.{' '}
+            <a href="https://netray.info/guide/" target="_blank" rel="noopener noreferrer">Reference guides ↗</a>
+          </p>
         </div>
 
         <div class="help-section">
           <div class="help-section__title">Keyboard shortcuts</div>
-          <div class="help-keys">
-            <div class="help-key"><kbd>/</kbd><span>Focus input</span></div>
-            <div class="help-key"><kbd>r</kbd><span>Re-run last inspection</span></div>
-            <div class="help-key"><kbd>e</kbd><span>Toggle explanations</span></div>
-            <div class="help-key"><kbd>?</kbd><span>Toggle help</span></div>
-            <div class="help-key"><kbd>Esc</kbd><span>Blur input / close help</span></div>
-            <div class="help-key"><kbd>Ctrl L</kbd><span>Focus input</span></div>
-          </div>
+          <table class="shortcuts-table">
+            <thead>
+              <tr><th>Key</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="shortcut-key">/</td><td>Focus input</td></tr>
+              <tr><td class="shortcut-key">Enter</td><td>Submit URL (when input focused)</td></tr>
+              <tr><td class="shortcut-key">r</td><td>Re-run last inspection</td></tr>
+              <tr><td class="shortcut-key">e</td><td>Toggle explanations</td></tr>
+              <tr><td class="shortcut-key">j / k</td><td>Navigate result sections</td></tr>
+              <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active section</td></tr>
+              <tr><td class="shortcut-key">Ctrl+L</td><td>Focus input</td></tr>
+              <tr><td class="shortcut-key">Escape</td><td>Blur input / close help</td></tr>
+              <tr><td class="shortcut-key">?</td><td>Toggle this help</td></tr>
+            </tbody>
+          </table>
         </div>
       </Modal>
 
