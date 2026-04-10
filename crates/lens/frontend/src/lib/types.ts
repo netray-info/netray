@@ -27,6 +27,11 @@ export interface HttpEvent {
   headline: string;
   checks: CheckItem[];
   detail_url: string;
+  status_code?: number;
+  http_version?: string;
+  response_duration_ms?: number;
+  server_ip?: string;
+  server_org?: string;
 }
 
 export interface IpAddress {

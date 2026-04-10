@@ -122,6 +122,16 @@ pub struct HttpEvent {
     pub headline: String,
     pub checks: Vec<CheckItem>,
     pub detail_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_code: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub response_duration_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_ip: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_org: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -671,25 +681,61 @@ fn http_payload_from(
     weights: &HashMap<String, u32>,
 ) -> HttpEvent {
     let status = section_status_from_checks(result);
-    let (headline, checks, detail_url) = match result {
+    let (
+        headline,
+        checks,
+        detail_url,
+        status_code,
+        http_version,
+        response_duration_ms,
+        server_ip,
+        server_org,
+    ) = match result {
         Ok(r) => {
             let items = build_check_items(&r.checks, weights);
-            let (raw_headline, url) = match &r.extra {
+            let (raw_headline, url, sc, hv, rdms, sip, sorg) = match &r.extra {
                 BackendExtra::Http {
                     raw_headline,
                     detail_url,
-                } => (raw_headline.clone(), detail_url.clone()),
-                _ => (String::new(), String::new()),
+                    status_code,
+                    http_version,
+                    response_duration_ms,
+                    server_ip,
+                    server_org,
+                } => (
+                    raw_headline.clone(),
+                    detail_url.clone(),
+                    *status_code,
+                    http_version.clone(),
+                    *response_duration_ms,
+                    server_ip.clone(),
+                    server_org.clone(),
+                ),
+                _ => (String::new(), String::new(), None, None, None, None, None),
             };
-            (raw_headline, items, url)
+            (raw_headline, items, url, sc, hv, rdms, sip, sorg)
         }
-        Err(e) => (error_headline(e), vec![], String::new()),
+        Err(e) => (
+            error_headline(e),
+            vec![],
+            String::new(),
+            None,
+            None,
+            None,
+            None,
+            None,
+        ),
     };
     HttpEvent {
         status,
         headline,
         checks,
         detail_url,
+        status_code,
+        http_version,
+        response_duration_ms,
+        server_ip,
+        server_org,
     }
 }
 

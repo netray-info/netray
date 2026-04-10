@@ -262,22 +262,6 @@ export default function App() {
               </Show>
             </div>
             <div class="section-grid" role="status" aria-live="polite" aria-label="Check results">
-              <div data-card>
-                <TlsSection
-                  data={tls()}
-                  loading={isLoading() && tls() === null}
-                  error={error() ?? undefined}
-                  expanded={allExpanded()}
-                />
-              </div>
-              <div data-card>
-                <DnsSection
-                  data={dns()}
-                  loading={isLoading() && dns() === null}
-                  error={error() ?? undefined}
-                  expanded={allExpanded()}
-                />
-              </div>
               <Show when={http() !== null || (isLoading() && meta()?.ecosystem?.http_base_url !== undefined)}>
                 <div data-card>
                   <HttpSection
@@ -288,6 +272,22 @@ export default function App() {
                   />
                 </div>
               </Show>
+              <div data-card>
+                <DnsSection
+                  data={dns()}
+                  loading={isLoading() && dns() === null}
+                  error={error() ?? undefined}
+                  expanded={allExpanded()}
+                />
+              </div>
+              <div data-card>
+                <TlsSection
+                  data={tls()}
+                  loading={isLoading() && tls() === null}
+                  error={error() ?? undefined}
+                  expanded={allExpanded()}
+                />
+              </div>
               <div data-card>
                 <IpSection
                   data={ip()}

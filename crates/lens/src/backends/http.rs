@@ -52,6 +52,22 @@ struct HttpInspectResponse {
     http_upgrade: Option<HttpUpgrade>,
     #[serde(default)]
     quality: QualityReport,
+    #[serde(default)]
+    status: Option<u16>,
+    #[serde(default)]
+    http_version: Option<String>,
+    #[serde(default)]
+    duration_ms: Option<u64>,
+    #[serde(default)]
+    enrichment: Option<Enrichment>,
+}
+
+#[derive(Deserialize, Default)]
+struct Enrichment {
+    #[serde(default)]
+    ip: Option<String>,
+    #[serde(default)]
+    org: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +87,8 @@ struct QualityCheck {
     status: HttpCheckStatus,
     #[serde(default)]
     message: Option<String>,
+    #[serde(default)]
+    label: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +255,12 @@ fn parse_inspect(resp: HttpInspectResponse, http_url: &str, encoded_domain: &str
         CheckResult {
             name: "https_redirect".to_string(),
             verdict: https_redirect_status.to_verdict(),
-            messages: vec![],
+            messages: match https_redirect_status {
+                HttpCheckStatus::Fail => {
+                    vec!["HTTP port 80 does not redirect to HTTPS".to_string()]
+                }
+                _ => vec![],
+            },
         },
         CheckResult {
             name: "hsts".to_string(),
@@ -247,7 +270,16 @@ fn parse_inspect(resp: HttpInspectResponse, http_url: &str, encoded_domain: &str
         CheckResult {
             name: "security_headers".to_string(),
             verdict: security_headers_status.to_verdict(),
-            messages: vec![],
+            messages: aggregate_messages(
+                &resp.quality.checks,
+                &[
+                    "csp",
+                    "x_frame_options",
+                    "x_content_type_options",
+                    "referrer_policy",
+                    "permissions_policy",
+                ],
+            ),
         },
         CheckResult {
             name: "cors".to_string(),
@@ -262,7 +294,15 @@ fn parse_inspect(resp: HttpInspectResponse, http_url: &str, encoded_domain: &str
         CheckResult {
             name: "hygiene".to_string(),
             verdict: hygiene_status.to_verdict(),
-            messages: vec![],
+            messages: aggregate_messages(
+                &resp.quality.checks,
+                &[
+                    "deprecated_headers",
+                    "info_leakage",
+                    "caching",
+                    "redirect_limit",
+                ],
+            ),
         },
     ];
 
@@ -287,6 +327,11 @@ fn parse_inspect(resp: HttpInspectResponse, http_url: &str, encoded_domain: &str
         extra: BackendExtra::Http {
             raw_headline,
             detail_url,
+            status_code: resp.status,
+            http_version: resp.http_version,
+            response_duration_ms: resp.duration_ms,
+            server_ip: resp.enrichment.as_ref().and_then(|e| e.ip.clone()),
+            server_org: resp.enrichment.as_ref().and_then(|e| e.org.clone()),
         },
     }
 }
@@ -322,6 +367,25 @@ fn check_messages(checks: &[QualityCheck], name: &str, status: HttpCheckStatus) 
             .map(|m| vec![m])
             .unwrap_or_default(),
     }
+}
+
+/// Collect messages from constituent checks for an aggregated check, prefixed with their label.
+fn aggregate_messages(checks: &[QualityCheck], names: &[&str]) -> Vec<String> {
+    names
+        .iter()
+        .filter_map(|name| {
+            checks
+                .iter()
+                .find(|c| c.name == *name)
+                .and_then(|c| match c.status {
+                    HttpCheckStatus::Pass | HttpCheckStatus::Skip => None,
+                    _ => c.message.as_ref().map(|m| {
+                        let prefix = c.label.as_deref().unwrap_or(c.name.as_str());
+                        format!("{prefix}: {m}")
+                    }),
+                })
+        })
+        .collect()
 }
 
 fn verdict_symbol(s: HttpCheckStatus) -> &'static str {
@@ -364,6 +428,7 @@ mod tests {
             name: name.to_string(),
             status,
             message: None,
+            label: None,
         }
     }
 
@@ -404,6 +469,7 @@ mod tests {
                     make_check("caching", HttpCheckStatus::Pass),
                 ],
             },
+            ..Default::default()
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
         assert_eq!(result.checks.len(), 6);
@@ -421,7 +487,7 @@ mod tests {
     fn https_redirect_null_is_skip() {
         let resp = HttpInspectResponse {
             http_upgrade: None,
-            quality: QualityReport::default(),
+            ..Default::default()
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
         let c = result
@@ -438,7 +504,7 @@ mod tests {
             http_upgrade: Some(HttpUpgrade {
                 redirects_to_https: false,
             }),
-            quality: QualityReport::default(),
+            ..Default::default()
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
         let c = result
@@ -455,7 +521,7 @@ mod tests {
             http_upgrade: Some(HttpUpgrade {
                 redirects_to_https: true,
             }),
-            quality: QualityReport::default(),
+            ..Default::default()
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
         let c = result
@@ -480,6 +546,7 @@ mod tests {
                     make_check("permissions_policy", HttpCheckStatus::Skip),
                 ],
             },
+            ..Default::default()
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
         let c = result
@@ -502,6 +569,7 @@ mod tests {
                     // caching and redirect_limit absent
                 ],
             },
+            ..Default::default()
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
         let c = result.checks.iter().find(|c| c.name == "hygiene").unwrap();
@@ -535,6 +603,7 @@ mod tests {
                     make_check("cors", HttpCheckStatus::Pass),
                 ],
             },
+            ..Default::default()
         };
         let result = parse_inspect(resp, "http://spectra:3000", "example.com");
         let BackendExtra::Http { raw_headline, .. } = &result.extra else {

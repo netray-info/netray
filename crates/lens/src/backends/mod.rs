@@ -24,6 +24,11 @@ pub enum BackendExtra {
     Http {
         raw_headline: String,
         detail_url: String,
+        status_code: Option<u16>,
+        http_version: Option<String>,
+        response_duration_ms: Option<u64>,
+        server_ip: Option<String>,
+        server_org: Option<String>,
     },
     Ip {
         addresses: Vec<ip::IpInfo>,
