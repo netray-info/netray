@@ -4,4 +4,5 @@
 !lens.example.toml
 .env
 .DS_Store
-.claude/
+.claude/settings.json
+.claude/settings.local.json

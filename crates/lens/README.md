@@ -27,13 +27,22 @@ Given a domain name, lens:
 ### Check endpoint
 
 ```
-GET /api/check?d=domain
+GET  /api/check/{domain}
+POST /api/check
 ```
 
-Returns a Server-Sent Events stream. Each event carries a JSON payload.
+By default returns a Server-Sent Events stream. Pass `?stream=false`, `Accept: application/json`, or `"stream": false` in the POST body to get a single JSON object instead (sync mode — useful for scripting and LLM tool calls).
 
 ```sh
-curl -N 'https://lens.netray.info/api/check?d=example.com'
+# SSE stream
+curl -N 'https://lens.netray.info/api/check/example.com'
+
+# Single JSON response (sync mode)
+curl -s 'https://lens.netray.info/api/check/example.com?stream=false'
+curl -s -H 'Accept: application/json' 'https://lens.netray.info/api/check/example.com'
+curl -s -X POST -H 'Content-Type: application/json' \
+  -d '{"domain":"example.com","stream":false}' \
+  'https://lens.netray.info/api/check'
 ```
 
 #### SSE event types
@@ -44,10 +53,10 @@ curl -N 'https://lens.netray.info/api/check?d=example.com'
 | `tls` | TLS check result from tlsight (cert chain, quality checks) |
 | `ip` | IP reputation result from ifconfig-rs (per-IP network classification) |
 | `summary` | Aggregated score, per-section grades, and overall grade |
-| `done` | Stream terminator (no data payload) |
+| `done` | Stream terminator (domain, duration_ms, cached flag) |
 | `error` | Structured error if the request is rejected before streaming begins |
 
-#### Event format
+#### SSE event format
 
 ```
 event: dns
@@ -60,11 +69,27 @@ event: ip
 data: {"status":"ok","ips":[{"ip":"93.184.216.34","network_type":"hosting","asn":15133}]}
 
 event: summary
-data: {"grade":"A","score":87,"sections":{"dns":{"grade":"B","score":72},"tls":{"grade":"A","score":92},"ip":{"grade":"A+","score":100}}}
+data: {"overall":"A","grade":"A","score":87.0,"hard_fail":false,"hard_fail_reason":null,"sections":{"dns":"B","tls":"A","ip":"A+"}}
 
 event: done
-data:
+data: {"domain":"example.com","duration_ms":412,"cached":false}
 ```
+
+#### Sync response format
+
+When sync mode is active, all five events are merged into a single JSON object:
+
+```json
+{
+  "dns":     { "status": "ok", "findings": [...], "resolved_ips": [...] },
+  "tls":     { "status": "ok", "checks": [...], "grade": "A" },
+  "ip":      { "status": "ok", "ips": [...] },
+  "summary": { "overall": "A", "grade": "A", "score": 87.0, "hard_fail": false, "hard_fail_reason": null, "sections": {...} },
+  "done":    { "domain": "example.com", "duration_ms": 412, "cached": false }
+}
+```
+
+`hard_fail_reason` is a human-readable string listing the failing checks when `hard_fail` is `true`, otherwise `null`.
 
 #### Error format
 
@@ -91,11 +116,50 @@ Use in GitHub Actions to gate deploys on domain health:
 ```yaml
 # Fail the build if the overall grade is below B
 - run: |
-    curl -sN 'https://lens.netray.info/api/check?d=$DOMAIN' \
-      | grep '^data:' \
-      | awk -F'data: ' '/summary/{print $2;exit}' \
-      | jq -e '.grade | test("^(A|B)")'
+    curl -s -H 'Accept: application/json' \
+      "https://lens.netray.info/api/check/$DOMAIN" \
+    | jq -e '.summary.grade | test("^(A|B)")'
 ```
+
+---
+
+## Use with Claude
+
+lens ships two Claude Code skills that install a local MCP server. Once installed, you can ask Claude to check domain health directly in conversation — no copy-pasting `curl` commands.
+
+### Available MCP tools
+
+| Tool | Description |
+|---|---|
+| `check_domain` | Full DNS + TLS + IP check for one domain, returns structured JSON with grade |
+| `check_domains` | Check up to 10 domains sequentially |
+| `lens_meta` | Server metadata: version, backends, scoring profile, rate limits |
+
+### Install for Claude Code
+
+Run this skill from the lens repo directory:
+
+```sh
+/lens-mcp-code
+```
+
+The skill will write the server files to `~/.claude/mcp-servers/lens/`, install dependencies, and register the server via `claude mcp add`. Requires Node.js ≥ 18.
+
+### Install for Claude Desktop
+
+```sh
+/lens-mcp-desktop
+```
+
+The skill writes the same server files and edits `~/Library/Application Support/Claude/claude_desktop_config.json` to register the server. Requires Node.js ≥ 18. Restart Claude Desktop after the skill completes.
+
+### Usage examples
+
+Once installed, you can say things like:
+
+- "Check the domain health of example.com"
+- "Check these three domains and tell me which ones have TLS issues: example.com, example.org, example.net"
+- "What rate limits does lens enforce?"
 
 ---
 
