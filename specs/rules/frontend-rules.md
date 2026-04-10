@@ -277,6 +277,69 @@ The primary action button **must change its label** to a progressive form during
 
 ---
 
+## 8a. Result Overview Box
+
+The result overview box is the summary card that appears directly below the input after a successful inspection. It is always visible while results are shown and provides the at-a-glance answer before the user reads any detail section.
+
+### Structure
+
+Two rows inside a bordered card (`div.overview`):
+
+**Row 1 — Response facts** (left-aligned data items + export actions pushed right):
+
+| Item | Label | Value notes |
+|------|-------|-------------|
+| Verdict | `Verdict` | Colored badge reflecting the worst check status |
+| HTTP status | `Status` | Numeric code (e.g. `200`) |
+| Protocol version | `HTTP` | e.g. `h2`, `h3`, `http/1.1` |
+| Response time | `Duration` | Color-coded: green < 500 ms, amber < 2 s, red ≥ 2 s |
+| Export actions | — | Right-aligned text links (see below) |
+
+**Row 2 — Server / hosting context** (separated by a top border):
+
+| Item | Label | Value notes |
+|------|-------|-------------|
+| Server IP | `Server` | The IP that served the response |
+| Hosting provider | `Hosted by` | ASN org name + infra type in muted parens, e.g. `Oracle Corporation (Cloud)` |
+
+Show row 2 items conditionally — omit `Hosted by` when enrichment data is unavailable.
+
+### Item format
+
+Each item follows the `overview__item` pattern:
+
+```tsx
+<div class="overview__item">
+  <span class="overview__label">Label</span>
+  <span class="overview__value">value</span>
+</div>
+```
+
+- Labels: `var(--text-muted)`, monospace, `cursor: default`.
+- Values: `font-weight: 600`, monospace.
+- Qualifier text within a value (e.g. the infra type in parentheses): `overview__value--qualifier` — normal weight, muted color.
+
+### Export actions
+
+Placed as the last element of row 1, pushed to the far right via `margin-left: auto` on the `.export-buttons` container.
+
+- Style: **borderless text links** in `var(--text-muted)`, monospace, `font-size: 0.75rem`. Hover → `var(--accent)`.
+- Separated by a thin `border-left: 1px solid var(--border)` between buttons — no gaps, no backgrounds.
+- Current actions: **copy MD** (copies a Markdown summary to clipboard) and **JSON** (downloads the full result as a `.json` file).
+- Copy confirmation: label changes to `copied!` for 2 s on success, then reverts — no toast.
+- Do not place export actions outside the overview box (not in a separate controls row, not below the sections).
+
+### Section controls row
+
+Directly below the overview box, a single `section-controls` row provides section-level navigation:
+
+- **Left**: `explain` toggle — activates inline explanation text inside each section.
+- **Right**: `Expand all` / `Collapse all` toggle.
+
+No other controls belong in this row.
+
+---
+
 ## 9. API Client (`lib/api.ts`)
 
 ```ts
@@ -752,6 +815,7 @@ What each tool must change to comply with the tightened rules above. ifconfig-rs
 | §6.1 SiteFooter | Missing | Add `<SiteFooter>` component |
 | §6.1 Header-actions order | Non-compliant | Missing help button; add ThemeToggle then help button |
 | §7 Copy-link button | Compliant | `.share-btn` between field-wrap and Inspect button; shown only when result present |
+| §8a Result overview box | Compliant | Two-row overview with Server/Hosted-by row; export actions as text links in row 1 right |
 | §11 Dark mode default | Non-compliant | Renders in light mode — switch default to dark |
 | §15 Verdict badges | Non-compliant | Uses bold uppercase text labels, not pill badges — adopt `.verdict-badge` |
 | §16 Collapsible sections | Non-compliant | Sections are flat/non-collapsible — wrap in collapsible cards, collapse by default |
