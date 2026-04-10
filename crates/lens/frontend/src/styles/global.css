@@ -95,10 +95,14 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-family: var(--mono);
   transition: border-color var(--transition), box-shadow var(--transition);
   min-width: 0;
+}
+
+.domain-input__field::placeholder {
+  color: var(--text-muted);
 }
 
 .domain-input__field:focus {
@@ -113,10 +117,6 @@ a:hover { text-decoration: underline; }
 }
 
 .domain-input__btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
   white-space: nowrap;
 }
 
