@@ -38,6 +38,10 @@ pub use netray_common::ecosystem::EcosystemConfig;
 pub struct BackendsConfig {
     #[serde(default)]
     pub dns: netray_common::backend::BackendConfig,
+    /// DNS server names to pass to mhost-prism (e.g. `["cloudflare"]`).
+    /// When non-empty, sent as the `servers` field in the CheckRequest body.
+    #[serde(default)]
+    pub dns_servers: Vec<String>,
     #[serde(default)]
     pub tls: netray_common::backend::BackendConfig,
     #[serde(default)]
@@ -216,6 +220,7 @@ mod tests {
                     url: Some("http://localhost:8080".to_string()),
                     ..Default::default()
                 },
+                dns_servers: Vec::new(),
                 tls: netray_common::backend::BackendConfig {
                     url: Some("http://localhost:8081".to_string()),
                     ..Default::default()

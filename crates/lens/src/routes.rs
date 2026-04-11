@@ -1097,6 +1097,7 @@ pub mod tests {
                     timeout_ms: 1000,
                     ..Default::default()
                 },
+                dns_servers: Vec::new(),
                 tls: netray_common::backend::BackendConfig {
                     url: Some("http://127.0.0.1:19998".to_string()),
                     timeout_ms: 1000,

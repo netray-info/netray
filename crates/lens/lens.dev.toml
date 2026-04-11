@@ -3,6 +3,7 @@ bind = "127.0.0.1:8085"
 metrics_bind = "127.0.0.1:9095"
 
 [backends]
+dns_servers = ["cloudflare"]
 http_url = "https://http.netray.info"
 dns_url = "https://dns.netray.info"
 tls_url = "https://tls.netray.info"

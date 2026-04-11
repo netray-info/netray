@@ -3,6 +3,11 @@ bind = "0.0.0.0:8085"
 metrics_bind = "127.0.0.1:9095"
 # trusted_proxies = ["10.0.0.0/8"]
 
+[backends]
+# DNS server names to pass to mhost-prism (predefined provider names).
+# Empty = use prism's default. Single server recommended for reliable scoring.
+#dns_servers = ["cloudflare"]
+
 [backends.dns]
 url = "https://dns.netray.info"
 timeout_ms = 20000

@@ -34,6 +34,7 @@ fn live_state() -> AppState {
                 timeout_ms: 20000,
                 ..Default::default()
             },
+            dns_servers: Vec::new(),
             tls: netray_common::backend::BackendConfig {
                 url: Some("https://tls.netray.info".to_string()),
                 timeout_ms: 20000,

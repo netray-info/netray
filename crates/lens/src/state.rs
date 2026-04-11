@@ -57,6 +57,7 @@ impl AppState {
                 public_url: eco.dns_base_url.clone().unwrap_or_default(),
                 timeout: Duration::from_millis(config.backends.dns.timeout_ms),
                 client: http_client.clone(),
+                dns_servers: config.backends.dns_servers.clone(),
             }),
             Box::new(TlsBackend {
                 tls_url: config.backends.tls.url.clone().unwrap_or_default(),
@@ -125,6 +126,7 @@ mod tests {
                     url: Some("http://localhost:8080".to_string()),
                     ..Default::default()
                 },
+                dns_servers: Vec::new(),
                 tls: netray_common::backend::BackendConfig {
                     url: Some("http://localhost:8081".to_string()),
                     ..Default::default()

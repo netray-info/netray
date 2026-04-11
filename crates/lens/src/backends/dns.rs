@@ -32,6 +32,7 @@ pub struct DnsBackend {
     pub public_url: String,
     pub timeout: Duration,
     pub client: reqwest::Client,
+    pub dns_servers: Vec<String>,
 }
 
 impl Backend for DnsBackend {
@@ -51,8 +52,9 @@ impl Backend for DnsBackend {
         let dns_url = self.dns_url.clone();
         let public_url = self.public_url.clone();
         let timeout = self.timeout;
+        let dns_servers = self.dns_servers.clone();
         Box::pin(async move {
-            let mut result = check_dns(&client, &dns_url, &domain, timeout)
+            let mut result = check_dns(&client, &dns_url, &domain, &dns_servers, timeout)
                 .await
                 .map_err(|e| match e {
                     AppError::Timeout => SectionError::Timeout,
@@ -83,11 +85,12 @@ pub async fn check_dns(
     client: &reqwest::Client,
     dns_url: &str,
     domain: &str,
+    dns_servers: &[String],
     timeout: Duration,
 ) -> Result<DnsBackendResult, AppError> {
     let url = format!("{}/api/check", dns_url.trim_end_matches('/'),);
     let span = tracing::info_span!("backend_call", service = "prism", url = %url);
-    check_dns_inner(client, &url, domain, dns_url, timeout)
+    check_dns_inner(client, &url, domain, dns_url, dns_servers, timeout)
         .instrument(span)
         .await
 }
@@ -97,9 +100,13 @@ async fn check_dns_inner(
     url: &str,
     domain: &str,
     dns_url: &str,
+    dns_servers: &[String],
     timeout: Duration,
 ) -> Result<DnsBackendResult, AppError> {
-    let body = serde_json::json!({ "domain": domain });
+    let mut body = serde_json::json!({ "domain": domain });
+    if !dns_servers.is_empty() {
+        body["servers"] = serde_json::json!(dns_servers);
+    }
 
     // Connect and get headers — SSE stream starts immediately.
     let resp = tokio::time::timeout(
