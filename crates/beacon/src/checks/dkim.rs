@@ -183,20 +183,14 @@ pub async fn check_dkim(
                             sub_checks.push(SubCheck {
                                 name: "rsa_key_ok".to_string(),
                                 verdict: Verdict::Pass,
-                                detail: format!(
-                                    "selector '{}': RSA {} bits",
-                                    selector, bits
-                                ),
+                                detail: format!("selector '{}': RSA {} bits", selector, bits),
                             });
                         }
                         None => {
                             sub_checks.push(SubCheck {
                                 name: "key_parse_error".to_string(),
                                 verdict: Verdict::Info,
-                                detail: format!(
-                                    "selector '{}': could not parse key",
-                                    selector
-                                ),
+                                detail: format!("selector '{}': could not parse key", selector),
                             });
                         }
                     }
@@ -229,10 +223,7 @@ fn parse_dkim_tags(record: &str) -> std::collections::HashMap<String, String> {
     for part in record.split(';') {
         let part = part.trim();
         if let Some((key, value)) = part.split_once('=') {
-            tags.insert(
-                key.trim().to_lowercase(),
-                value.trim().replace(' ', ""),
-            );
+            tags.insert(key.trim().to_lowercase(), value.trim().replace(' ', ""));
         }
     }
     tags
@@ -248,8 +239,7 @@ fn check_rsa_key_size(p_value: &str) -> Option<usize> {
         .decode(p_value.replace(' ', ""))
         .ok()?;
 
-    let (_, spki) =
-        x509_parser::prelude::SubjectPublicKeyInfo::<'_>::from_der(&decoded).ok()?;
+    let (_, spki) = x509_parser::prelude::SubjectPublicKeyInfo::<'_>::from_der(&decoded).ok()?;
     match spki.parsed() {
         Ok(PublicKey::RSA(rsa)) => Some(rsa.key_size()),
         _ => None,

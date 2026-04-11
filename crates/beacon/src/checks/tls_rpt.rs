@@ -4,10 +4,7 @@ use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check TLS-RPT at _smtp._tls.<domain>.
 /// Returns (CheckResult, tls_rpt_present).
-pub async fn check_tls_rpt(
-    domain: &str,
-    resolver: &DnsResolver,
-) -> (CheckResult, bool) {
+pub async fn check_tls_rpt(domain: &str, resolver: &DnsResolver) -> (CheckResult, bool) {
     let name = format!("_smtp._tls.{}", domain);
     let txt_records = resolver.lookup_txt(&name).await;
 
@@ -43,11 +40,7 @@ pub async fn check_tls_rpt(
             verdict: Verdict::Fail,
             detail: "malformed TLS-RPT record: missing required fields".to_string(),
         });
-        let result = CheckResult::new(
-            Category::TlsRpt,
-            sub_checks,
-            format!("TLS-RPT: {}", record),
-        );
+        let result = CheckResult::new(Category::TlsRpt, sub_checks, format!("TLS-RPT: {}", record));
         return (result, true);
     }
 
@@ -81,12 +74,7 @@ pub async fn check_tls_rpt(
         }
     }
 
-    let result = CheckResult::new(
-        Category::TlsRpt,
-        sub_checks,
-        format!("TLS-RPT: {}", record),
-    );
+    let result = CheckResult::new(Category::TlsRpt, sub_checks, format!("TLS-RPT: {}", record));
 
     (result, true)
 }
-

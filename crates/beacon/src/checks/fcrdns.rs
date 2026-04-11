@@ -6,10 +6,7 @@ use crate::dns::DnsResolver;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check Forward-Confirmed reverse DNS for each MX IP.
-pub async fn check_fcrdns(
-    mx_ips: &[IpAddr],
-    resolver: &DnsResolver,
-) -> CheckResult {
+pub async fn check_fcrdns(mx_ips: &[IpAddr], resolver: &DnsResolver) -> CheckResult {
     if mx_ips.is_empty() {
         let sub_checks = vec![SubCheck {
             name: "no_ips".to_string(),
@@ -60,9 +57,9 @@ pub async fn check_fcrdns(
         }
 
         // Check if any forward lookup confirmed this IP
-        let confirmed = forward_results.iter().any(|(fwd_ip, fwd_ips)| {
-            fwd_ip == ip && fwd_ips.contains(ip)
-        });
+        let confirmed = forward_results
+            .iter()
+            .any(|(fwd_ip, fwd_ips)| fwd_ip == ip && fwd_ips.contains(ip));
 
         if confirmed {
             sub_checks.push(SubCheck {

@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
-use axum::routing::get;
 use axum::Router;
+use axum::routing::get;
 use tower_http::compression::CompressionLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
@@ -30,8 +30,7 @@ async fn main() -> anyhow::Result<()> {
         .nth(1)
         .or_else(|| std::env::var("BEACON_CONFIG").ok());
 
-    let config = config::Config::load(config_path.as_deref())
-        .expect("failed to load config");
+    let config = config::Config::load(config_path.as_deref()).expect("failed to load config");
 
     // Init telemetry
     let telemetry_config = netray_common::telemetry::TelemetryConfig::from(&config.telemetry);
@@ -105,9 +104,7 @@ async fn main() -> anyhow::Result<()> {
         .expect("invalid metrics_bind address");
     let metrics_shutdown = shutdown_rx.clone();
     tokio::spawn(async move {
-        if let Err(e) =
-            netray_common::server::serve_metrics(metrics_addr, metrics_shutdown).await
-        {
+        if let Err(e) = netray_common::server::serve_metrics(metrics_addr, metrics_shutdown).await {
             tracing::error!(error = %e, "metrics server failed");
         }
     });
@@ -120,11 +117,7 @@ async fn main() -> anyhow::Result<()> {
     });
 
     // Main server
-    let addr: SocketAddr = config
-        .server
-        .bind
-        .parse()
-        .expect("invalid bind address");
+    let addr: SocketAddr = config.server.bind.parse().expect("invalid bind address");
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!(%addr, "listening");
 
@@ -144,9 +137,15 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn robots_txt() -> ([(axum::http::header::HeaderName, &'static str); 1], &'static str) {
+async fn robots_txt() -> (
+    [(axum::http::header::HeaderName, &'static str); 1],
+    &'static str,
+) {
     (
-        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; charset=utf-8",
+        )],
         "User-agent: *\nAllow: /\n",
     )
 }

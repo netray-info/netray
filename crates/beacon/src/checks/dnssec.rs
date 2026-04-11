@@ -3,10 +3,7 @@ use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check DNSSEC for the domain.
 /// Returns (CheckResult, dnssec_ad).
-pub async fn check_dnssec(
-    domain: &str,
-    resolver: &DnsResolver,
-) -> (CheckResult, bool) {
+pub async fn check_dnssec(domain: &str, resolver: &DnsResolver) -> (CheckResult, bool) {
     let signed = resolver.check_dnssec_signed(domain).await;
 
     let mut sub_checks = Vec::new();

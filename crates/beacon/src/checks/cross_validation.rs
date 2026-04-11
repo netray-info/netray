@@ -148,10 +148,7 @@ fn check_null_mx_spf(r: &AllResults) -> Option<SubCheck> {
 }
 
 fn check_reject_no_dkim(r: &AllResults) -> Option<SubCheck> {
-    if r.dmarc_policy.as_deref() == Some("reject")
-        && r.spf_has_dash_all
-        && !r.dkim_found
-    {
+    if r.dmarc_policy.as_deref() == Some("reject") && r.spf_has_dash_all && !r.dkim_found {
         Some(SubCheck {
             name: "reject_no_dkim".to_string(),
             verdict: Verdict::Warn,
@@ -190,7 +187,10 @@ fn check_mta_sts_mx_coverage(r: &AllResults) -> Option<SubCheck> {
         .iter()
         .filter(|host| {
             let h = host.trim_end_matches('.');
-            !info.mx_patterns.iter().any(|pat| mta_sts_glob_match(pat, h))
+            !info
+                .mx_patterns
+                .iter()
+                .any(|pat| mta_sts_glob_match(pat, h))
         })
         .collect();
 
@@ -234,9 +234,7 @@ fn check_dmarc_rua_auth(r: &AllResults) -> Option<SubCheck> {
 }
 
 fn check_dmarc_sp_gap(r: &AllResults) -> Option<SubCheck> {
-    if r.dmarc_policy.as_deref() == Some("reject")
-        && r.dmarc_sp.as_deref() == Some("none")
-    {
+    if r.dmarc_policy.as_deref() == Some("reject") && r.dmarc_sp.as_deref() == Some("none") {
         Some(SubCheck {
             name: "dmarc_sp_gap".to_string(),
             verdict: Verdict::Warn,
@@ -309,7 +307,12 @@ mod tests {
         let names: Vec<&str> = result.sub_checks.iter().map(|s| s.name.as_str()).collect();
         assert!(names.contains(&"dane_without_dnssec"));
         assert_eq!(
-            result.sub_checks.iter().find(|s| s.name == "dane_without_dnssec").unwrap().verdict,
+            result
+                .sub_checks
+                .iter()
+                .find(|s| s.name == "dane_without_dnssec")
+                .unwrap()
+                .verdict,
             Verdict::Fail
         );
     }
@@ -399,7 +402,12 @@ mod tests {
         let names: Vec<&str> = result.sub_checks.iter().map(|s| s.name.as_str()).collect();
         assert!(names.contains(&"mta_sts_mx_coverage"));
         assert_eq!(
-            result.sub_checks.iter().find(|s| s.name == "mta_sts_mx_coverage").unwrap().verdict,
+            result
+                .sub_checks
+                .iter()
+                .find(|s| s.name == "mta_sts_mx_coverage")
+                .unwrap()
+                .verdict,
             Verdict::Warn
         );
     }
@@ -410,7 +418,11 @@ mod tests {
         r.dmarc_policy = Some("reject".to_string());
         r.dmarc_sp = Some("none".to_string());
         let result = cross_validate(&r);
-        let sc = result.sub_checks.iter().find(|s| s.name == "dmarc_sp_gap").unwrap();
+        let sc = result
+            .sub_checks
+            .iter()
+            .find(|s| s.name == "dmarc_sp_gap")
+            .unwrap();
         assert_eq!(sc.verdict, Verdict::Warn);
         assert!(sc.detail.contains("subdomains"));
     }

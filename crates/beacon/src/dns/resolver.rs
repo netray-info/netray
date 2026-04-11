@@ -1,12 +1,12 @@
 use std::net::{IpAddr, SocketAddr};
+use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
-use std::str::FromStr;
 
 use mhost::RecordType;
-use mhost::resolver::{Resolver, ResolverGroup, ResolverGroupBuilder, MultiQuery};
 use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
+use mhost::resolver::{MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder};
 
 use crate::config::DnsConfig;
 
@@ -17,8 +17,8 @@ pub struct DnsResolver {
 
 impl DnsResolver {
     pub async fn new(cfg: &DnsConfig) -> Result<Self, mhost::Error> {
-        let mut builder = ResolverGroupBuilder::new()
-            .timeout(Duration::from_millis(cfg.timeout_ms));
+        let mut builder =
+            ResolverGroupBuilder::new().timeout(Duration::from_millis(cfg.timeout_ms));
 
         for entry in &cfg.resolvers {
             if entry == "system" {

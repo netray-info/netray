@@ -36,7 +36,10 @@ pub async fn check_spf(
         sub_checks.push(SubCheck {
             name: "multiple_spf".to_string(),
             verdict: Verdict::Fail,
-            detail: format!("{} SPF records found (must be exactly one)", spf_records.len()),
+            detail: format!(
+                "{} SPF records found (must be exactly one)",
+                spf_records.len()
+            ),
         });
         let result = CheckResult::new(
             Category::Spf,
@@ -117,10 +120,7 @@ pub async fn check_spf(
                         sub_checks.push(SubCheck {
                             name: "spf_loop".to_string(),
                             verdict: Verdict::Warn,
-                            detail: format!(
-                                "SPF include loop detected at {}",
-                                include_domain
-                            ),
+                            detail: format!("SPF include loop detected at {}", include_domain),
                         });
                     }
                 }
@@ -271,116 +271,96 @@ fn expand_spf<'a>(
     sub_checks: &'a mut Vec<SubCheck>,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
     Box::pin(async move {
-    if depth > 10 {
-        sub_checks.push(SubCheck {
-            name: "depth_exceeded".to_string(),
-            verdict: Verdict::Fail,
-            detail: "SPF expansion depth exceeded 10".to_string(),
-        });
-        return;
-    }
+        if depth > 10 {
+            sub_checks.push(SubCheck {
+                name: "depth_exceeded".to_string(),
+                verdict: Verdict::Fail,
+                detail: "SPF expansion depth exceeded 10".to_string(),
+            });
+            return;
+        }
 
-    visited.insert(domain.to_string());
+        visited.insert(domain.to_string());
 
-    let txt_records = resolver.lookup_txt(domain).await;
-    let spf_records: Vec<&str> = txt_records
-        .iter()
-        .filter(|t| t.starts_with("v=spf1"))
-        .map(|s| s.as_str())
-        .collect();
+        let txt_records = resolver.lookup_txt(domain).await;
+        let spf_records: Vec<&str> = txt_records
+            .iter()
+            .filter(|t| t.starts_with("v=spf1"))
+            .map(|s| s.as_str())
+            .collect();
 
-    if spf_records.is_empty() {
-        *void_count = void_count.saturating_add(1);
-        return;
-    }
+        if spf_records.is_empty() {
+            *void_count = void_count.saturating_add(1);
+            return;
+        }
 
-    let spf = spf_records[0];
-    let mechanisms: Vec<&str> = spf.split_whitespace().skip(1).collect();
+        let spf = spf_records[0];
+        let mechanisms: Vec<&str> = spf.split_whitespace().skip(1).collect();
 
-    for mech in &mechanisms {
-        let (_qualifier, body) = parse_mechanism(mech);
+        for mech in &mechanisms {
+            let (_qualifier, body) = parse_mechanism(mech);
 
-        if body.starts_with("ip4:") || body.starts_with("ip6:") {
-            if let Some((_, cidr)) = body.split_once(':') {
-                let cidr = if cidr.contains('/') {
-                    cidr.to_string()
-                } else if body.starts_with("ip4:") {
-                    format!("{}/32", cidr)
-                } else {
-                    format!("{}/128", cidr)
-                };
-                if let Ok(net) = IpNet::from_str(&cidr) {
-                    authorized_prefixes.push(net);
+            if body.starts_with("ip4:") || body.starts_with("ip6:") {
+                if let Some((_, cidr)) = body.split_once(':') {
+                    let cidr = if cidr.contains('/') {
+                        cidr.to_string()
+                    } else if body.starts_with("ip4:") {
+                        format!("{}/32", cidr)
+                    } else {
+                        format!("{}/128", cidr)
+                    };
+                    if let Ok(net) = IpNet::from_str(&cidr) {
+                        authorized_prefixes.push(net);
+                    }
                 }
-            }
-        } else if body.starts_with("include:") {
-            if let Some(include_domain) = body.strip_prefix("include:") {
+            } else if body.starts_with("include:") {
+                if let Some(include_domain) = body.strip_prefix("include:") {
+                    *lookup_count = lookup_count.saturating_add(1);
+                    if visited.contains(include_domain) {
+                        sub_checks.push(SubCheck {
+                            name: "spf_loop".to_string(),
+                            verdict: Verdict::Warn,
+                            detail: format!("SPF include loop detected at {}", include_domain),
+                        });
+                    } else {
+                        expand_spf(
+                            include_domain,
+                            resolver,
+                            visited,
+                            depth + 1,
+                            lookup_count,
+                            void_count,
+                            authorized_prefixes,
+                            sub_checks,
+                        )
+                        .await;
+                    }
+                }
+            } else if body.starts_with("redirect=") {
+                if let Some(redirect_domain) = body.strip_prefix("redirect=") {
+                    *lookup_count = lookup_count.saturating_add(1);
+                    if !visited.contains(redirect_domain) {
+                        expand_spf(
+                            redirect_domain,
+                            resolver,
+                            visited,
+                            depth + 1,
+                            lookup_count,
+                            void_count,
+                            authorized_prefixes,
+                            sub_checks,
+                        )
+                        .await;
+                    }
+                }
+            } else if body == "a" || body.starts_with("a:") {
                 *lookup_count = lookup_count.saturating_add(1);
-                if visited.contains(include_domain) {
-                    sub_checks.push(SubCheck {
-                        name: "spf_loop".to_string(),
-                        verdict: Verdict::Warn,
-                        detail: format!("SPF include loop detected at {}", include_domain),
-                    });
+                let target = if body.starts_with("a:") {
+                    body.strip_prefix("a:").unwrap_or(domain)
                 } else {
-                    expand_spf(
-                        include_domain,
-                        resolver,
-                        visited,
-                        depth + 1,
-                        lookup_count,
-                        void_count,
-                        authorized_prefixes,
-                        sub_checks,
-                    )
-                    .await;
-                }
-            }
-        } else if body.starts_with("redirect=") {
-            if let Some(redirect_domain) = body.strip_prefix("redirect=") {
-                *lookup_count = lookup_count.saturating_add(1);
-                if !visited.contains(redirect_domain) {
-                    expand_spf(
-                        redirect_domain,
-                        resolver,
-                        visited,
-                        depth + 1,
-                        lookup_count,
-                        void_count,
-                        authorized_prefixes,
-                        sub_checks,
-                    )
-                    .await;
-                }
-            }
-        } else if body == "a" || body.starts_with("a:") {
-            *lookup_count = lookup_count.saturating_add(1);
-            let target = if body.starts_with("a:") {
-                body.strip_prefix("a:").unwrap_or(domain)
-            } else {
-                domain
-            };
-            let ips = resolver.lookup_ips(target).await;
-            for ip in ips {
-                let net = match ip {
-                    IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
-                    IpAddr::V6(_) => IpNet::from_str(&format!("{}/128", ip)),
+                    domain
                 };
-                if let Ok(net) = net {
-                    authorized_prefixes.push(net);
-                }
-            }
-        } else if body.starts_with("mx:") || body == "mx" {
-            *lookup_count = lookup_count.saturating_add(1);
-            let target = if body.starts_with("mx:") {
-                body.strip_prefix("mx:").unwrap_or(domain)
-            } else {
-                domain
-            };
-            let mx_records = resolver.lookup_mx(target).await;
-            for (_, exchange) in &mx_records {
-                let host = exchange.trim_end_matches('.');
-                let ips = resolver.lookup_ips(host).await;
+                let ips = resolver.lookup_ips(target).await;
                 for ip in ips {
                     let net = match ip {
                         IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
@@ -390,17 +370,37 @@ fn expand_spf<'a>(
                         authorized_prefixes.push(net);
                     }
                 }
-            }
-        } else if body.starts_with("exists:") {
-            *lookup_count = lookup_count.saturating_add(1);
-            if let Some(exists_domain) = body.strip_prefix("exists:") {
-                let found = resolver.lookup_exists(exists_domain).await;
-                if !found {
-                    *void_count = void_count.saturating_add(1);
+            } else if body.starts_with("mx:") || body == "mx" {
+                *lookup_count = lookup_count.saturating_add(1);
+                let target = if body.starts_with("mx:") {
+                    body.strip_prefix("mx:").unwrap_or(domain)
+                } else {
+                    domain
+                };
+                let mx_records = resolver.lookup_mx(target).await;
+                for (_, exchange) in &mx_records {
+                    let host = exchange.trim_end_matches('.');
+                    let ips = resolver.lookup_ips(host).await;
+                    for ip in ips {
+                        let net = match ip {
+                            IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
+                            IpAddr::V6(_) => IpNet::from_str(&format!("{}/128", ip)),
+                        };
+                        if let Ok(net) = net {
+                            authorized_prefixes.push(net);
+                        }
+                    }
+                }
+            } else if body.starts_with("exists:") {
+                *lookup_count = lookup_count.saturating_add(1);
+                if let Some(exists_domain) = body.strip_prefix("exists:") {
+                    let found = resolver.lookup_exists(exists_domain).await;
+                    if !found {
+                        *void_count = void_count.saturating_add(1);
+                    }
                 }
             }
         }
-    }
     })
 }
 
@@ -435,7 +435,10 @@ mod tests {
 
     #[test]
     fn parse_mechanism_default_qualifier() {
-        assert_eq!(parse_mechanism("include:example.com"), ('+', "include:example.com"));
+        assert_eq!(
+            parse_mechanism("include:example.com"),
+            ('+', "include:example.com")
+        );
     }
 
     #[test]

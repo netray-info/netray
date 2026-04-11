@@ -33,7 +33,10 @@ pub async fn check_mx(
     let mut mx_hosts = Vec::new();
 
     // Check for Null MX (RFC 7505: MX 0 .)
-    if mx_records.len() == 1 && mx_records[0].0 == 0 && mx_records[0].1.trim_end_matches('.').is_empty() {
+    if mx_records.len() == 1
+        && mx_records[0].0 == 0
+        && mx_records[0].1.trim_end_matches('.').is_empty()
+    {
         sub_checks.push(SubCheck {
             name: "null_mx".to_string(),
             verdict: Verdict::Info,
@@ -155,16 +158,16 @@ pub async fn check_mx(
                 }
             }
         });
-        join_all(enrich_futures).await.into_iter().flatten().collect()
+        join_all(enrich_futures)
+            .await
+            .into_iter()
+            .flatten()
+            .collect()
     } else {
         Vec::new()
     };
 
-    let detail = format!(
-        "{} MX record(s), {} IP(s)",
-        mx_records.len(),
-        all_ips.len()
-    );
+    let detail = format!("{} MX record(s), {} IP(s)", mx_records.len(), all_ips.len());
     let mut result = CheckResult::new(Category::Mx, sub_checks, detail);
     result.enrichment = enrichment_data;
 

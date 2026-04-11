@@ -5,10 +5,7 @@ use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check DANE/TLSA records for each MX hostname.
 /// Returns (CheckResult, dane_has_tlsa).
-pub async fn check_dane(
-    mx_hosts: &[String],
-    resolver: &DnsResolver,
-) -> (CheckResult, bool) {
+pub async fn check_dane(mx_hosts: &[String], resolver: &DnsResolver) -> (CheckResult, bool) {
     if mx_hosts.is_empty() {
         let sub_checks = vec![SubCheck {
             name: "absent".to_string(),
@@ -45,10 +42,7 @@ pub async fn check_dane(
                 sub_checks.push(SubCheck {
                     name: "invalid_usage".to_string(),
                     verdict: Verdict::Fail,
-                    detail: format!(
-                        "{}: TLSA usage {} out of range 0-3",
-                        host, record.usage
-                    ),
+                    detail: format!("{}: TLSA usage {} out of range 0-3", host, record.usage),
                 });
             }
 

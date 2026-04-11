@@ -19,7 +19,9 @@ pub fn validate_dkim_selector(s: &str) -> Result<(), MailError> {
     }
     if !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err(MailError::InvalidSelector {
-            reason: "selector contains invalid characters (only ASCII alphanumeric and hyphens allowed)".to_string(),
+            reason:
+                "selector contains invalid characters (only ASCII alphanumeric and hyphens allowed)"
+                    .to_string(),
         });
     }
     Ok(())
@@ -75,10 +77,7 @@ fn validate_label(label: &str) -> Result<(), MailError> {
             "label ends with a hyphen".to_string(),
         ));
     }
-    if !label
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-')
-    {
+    if !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
         return Err(MailError::InvalidDomain(
             "label contains invalid characters".to_string(),
         ));
@@ -166,7 +165,10 @@ mod tests {
     #[test]
     fn rejects_empty_selector() {
         let err = validate_dkim_selector("").unwrap_err();
-        assert!(err.to_string().contains("empty"), "expected 'empty' in: {err}");
+        assert!(
+            err.to_string().contains("empty"),
+            "expected 'empty' in: {err}"
+        );
     }
 
     #[test]
@@ -179,7 +181,10 @@ mod tests {
     fn rejects_selector_too_long() {
         let s = "a".repeat(64);
         let err = validate_dkim_selector(&s).unwrap_err();
-        assert!(err.to_string().contains("long") || err.to_string().contains("63"), "expected length error in: {err}");
+        assert!(
+            err.to_string().contains("long") || err.to_string().contains("63"),
+            "expected length error in: {err}"
+        );
     }
 
     #[test]

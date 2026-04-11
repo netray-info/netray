@@ -112,14 +112,9 @@ pub async fn check_dmarc(
         for rua_domain in &rua_domains {
             if *rua_domain != domain {
                 // External domain — check authorization
-                let auth_name = format!(
-                    "{}._report._dmarc.{}",
-                    domain, rua_domain
-                );
+                let auth_name = format!("{}._report._dmarc.{}", domain, rua_domain);
                 let auth_records = resolver.lookup_txt(&auth_name).await;
-                let authorized = auth_records
-                    .iter()
-                    .any(|t| t.starts_with("v=DMARC1"));
+                let authorized = auth_records.iter().any(|t| t.starts_with("v=DMARC1"));
                 if !authorized {
                     rua_external_auth_ok = false;
                     sub_checks.push(SubCheck {
@@ -145,14 +140,9 @@ pub async fn check_dmarc(
         let ruf_domains = extract_report_domains(ruf_val);
         for ruf_domain in &ruf_domains {
             if *ruf_domain != domain {
-                let auth_name = format!(
-                    "{}._report._dmarc.{}",
-                    domain, ruf_domain
-                );
+                let auth_name = format!("{}._report._dmarc.{}", domain, ruf_domain);
                 let auth_records = resolver.lookup_txt(&auth_name).await;
-                let authorized = auth_records
-                    .iter()
-                    .any(|t| t.starts_with("v=DMARC1"));
+                let authorized = auth_records.iter().any(|t| t.starts_with("v=DMARC1"));
                 if !authorized {
                     sub_checks.push(SubCheck {
                         name: "ruf_auth".to_string(),

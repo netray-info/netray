@@ -26,11 +26,7 @@ pub async fn check_bimi(
             verdict: Verdict::Info,
             detail: "no BIMI record".to_string(),
         });
-        let result = CheckResult::new(
-            Category::Bimi,
-            sub_checks,
-            "No BIMI record".to_string(),
-        );
+        let result = CheckResult::new(Category::Bimi, sub_checks, "No BIMI record".to_string());
         return (result, false);
     }
 
@@ -131,18 +127,16 @@ pub async fn check_bimi(
         });
     }
 
-    let result = CheckResult::new(
-        Category::Bimi,
-        sub_checks,
-        "BIMI record found".to_string(),
-    );
+    let result = CheckResult::new(Category::Bimi, sub_checks, "BIMI record found".to_string());
 
     (result, true)
 }
 
 /// Extract hostname from a URL (https://host/path -> host).
 fn extract_host(url: &str) -> Option<String> {
-    let url = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
+    let url = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
     let host = url.split('/').next()?;
     let host = host.split(':').next()?; // strip port
     if host.is_empty() {

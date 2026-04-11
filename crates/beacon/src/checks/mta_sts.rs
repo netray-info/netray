@@ -41,10 +41,7 @@ pub async fn check_mta_sts(
     let dns_id = dns_tags.get("id").cloned().unwrap_or_default();
 
     // Step 2: Fetch HTTPS policy
-    let policy_url = format!(
-        "https://mta-sts.{}/.well-known/mta-sts.txt",
-        domain
-    );
+    let policy_url = format!("https://mta-sts.{}/.well-known/mta-sts.txt", domain);
 
     // SSRF check: resolve mta-sts.<domain> and check for private IPs
     let sts_host = format!("mta-sts.{}", domain);
