@@ -1,15 +1,15 @@
-pub mod mx;
-pub mod spf;
+pub mod bimi;
+pub mod cross_validation;
+pub mod dane;
 pub mod dkim;
 pub mod dmarc;
-pub mod mta_sts;
-pub mod tls_rpt;
-pub mod dane;
-pub mod dnssec;
-pub mod bimi;
-pub mod fcrdns;
 pub mod dnsbl;
-pub mod cross_validation;
+pub mod dnssec;
+pub mod fcrdns;
+pub mod mta_sts;
+pub mod mx;
+pub mod spf;
+pub mod tls_rpt;
 pub mod util;
 
 use std::collections::HashMap;
@@ -17,8 +17,8 @@ use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::task::JoinSet;
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 
 use crate::config::Config;
 use crate::dns::DnsResolver;
@@ -27,6 +27,7 @@ use netray_common::enrichment::EnrichmentClient;
 
 /// Run all email security checks for a domain, streaming results via mpsc channel.
 /// Wraps `run_inspection_inner` with a 30-second timeout.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_all_checks(
     domain: String,
     selectors: Vec<String>,
@@ -56,18 +57,30 @@ pub async fn run_all_checks(
         tracing::warn!(domain = %domain, "inspection timed out after 30s");
         // Emit a partial summary with Skip verdicts for any missing checks
         let verdicts: HashMap<String, Verdict> = [
-            "mx", "spf", "dkim", "dmarc", "mta_sts", "tls_rpt",
-            "dane", "dnssec", "bimi", "fcrdns", "dnsbl", "cross_validation",
+            "mx",
+            "spf",
+            "dkim",
+            "dmarc",
+            "mta_sts",
+            "tls_rpt",
+            "dane",
+            "dnssec",
+            "bimi",
+            "fcrdns",
+            "dnsbl",
+            "cross_validation",
         ]
         .iter()
         .map(|k| (k.to_string(), Verdict::Skip))
         .collect();
 
-        let _ = tx.send(SseEvent::Summary {
-            grade: Grade::F,
-            verdicts,
-            duration_ms: 30_000,
-        }).await;
+        let _ = tx
+            .send(SseEvent::Summary {
+                grade: Grade::F,
+                verdicts,
+                duration_ms: 30_000,
+            })
+            .await;
     }
 }
 
@@ -97,7 +110,12 @@ struct Phase0Output {
 }
 
 impl Phase0Output {
-    fn from_mx(result: CheckResult, mx_hosts: Vec<String>, mx_ips: Vec<IpAddr>, null_mx: bool) -> Self {
+    fn from_mx(
+        result: CheckResult,
+        mx_hosts: Vec<String>,
+        mx_ips: Vec<IpAddr>,
+        null_mx: bool,
+    ) -> Self {
         Self {
             result,
             mx_hosts,
@@ -114,7 +132,11 @@ impl Phase0Output {
         }
     }
 
-    fn from_spf(result: CheckResult, flat: Option<crate::quality::SpfFlat>, dash_all: bool) -> Self {
+    fn from_spf(
+        result: CheckResult,
+        flat: Option<crate::quality::SpfFlat>,
+        dash_all: bool,
+    ) -> Self {
         Self {
             result,
             mx_hosts: Vec::new(),
@@ -131,7 +153,12 @@ impl Phase0Output {
         }
     }
 
-    fn from_dmarc(result: CheckResult, policy: Option<String>, sp: Option<String>, rua_ok: bool) -> Self {
+    fn from_dmarc(
+        result: CheckResult,
+        policy: Option<String>,
+        sp: Option<String>,
+        rua_ok: bool,
+    ) -> Self {
         Self {
             result,
             mx_hosts: Vec::new(),
@@ -219,19 +246,47 @@ struct Phase1Output {
 
 impl Phase1Output {
     fn from_dkim(result: CheckResult, found: bool) -> Self {
-        Self { result, dkim_found: found, mta_sts_info: None, mta_sts_present: false, dane_has_tlsa: false }
+        Self {
+            result,
+            dkim_found: found,
+            mta_sts_info: None,
+            mta_sts_present: false,
+            dane_has_tlsa: false,
+        }
     }
 
-    fn from_mta_sts(result: CheckResult, present: bool, info: Option<crate::quality::MtaStsInfo>) -> Self {
-        Self { result, dkim_found: false, mta_sts_info: info, mta_sts_present: present, dane_has_tlsa: false }
+    fn from_mta_sts(
+        result: CheckResult,
+        present: bool,
+        info: Option<crate::quality::MtaStsInfo>,
+    ) -> Self {
+        Self {
+            result,
+            dkim_found: false,
+            mta_sts_info: info,
+            mta_sts_present: present,
+            dane_has_tlsa: false,
+        }
     }
 
     fn from_dane(result: CheckResult, has_tlsa: bool) -> Self {
-        Self { result, dkim_found: false, mta_sts_info: None, mta_sts_present: false, dane_has_tlsa: has_tlsa }
+        Self {
+            result,
+            dkim_found: false,
+            mta_sts_info: None,
+            mta_sts_present: false,
+            dane_has_tlsa: has_tlsa,
+        }
     }
 
     fn from_other(result: CheckResult) -> Self {
-        Self { result, dkim_found: false, mta_sts_info: None, mta_sts_present: false, dane_has_tlsa: false }
+        Self {
+            result,
+            dkim_found: false,
+            mta_sts_info: None,
+            mta_sts_present: false,
+            dane_has_tlsa: false,
+        }
     }
 }
 
@@ -247,6 +302,7 @@ fn skip_result(category: Category) -> CheckResult {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_inspection_inner(
     domain: String,
     selectors: Vec<String>,
@@ -290,8 +346,12 @@ async fn run_inspection_inner(
             let (result, ips, hosts, is_null_mx) =
                 mx::check_mx(&domain, &dns, enrichment_client.as_deref()).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "mx").record(elapsed);
-            (Phase0Tag::Mx, Phase0Output::from_mx(result, hosts, ips, is_null_mx))
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "mx")
+                .record(elapsed);
+            (
+                Phase0Tag::Mx,
+                Phase0Output::from_mx(result, hosts, ips, is_null_mx),
+            )
         });
     }
 
@@ -302,8 +362,12 @@ async fn run_inspection_inner(
             let start = std::time::Instant::now();
             let (result, flat, dash_all) = spf::check_spf(&domain, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "spf").record(elapsed);
-            (Phase0Tag::Spf, Phase0Output::from_spf(result, flat, dash_all))
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "spf")
+                .record(elapsed);
+            (
+                Phase0Tag::Spf,
+                Phase0Output::from_spf(result, flat, dash_all),
+            )
         });
     }
 
@@ -314,8 +378,12 @@ async fn run_inspection_inner(
             let start = std::time::Instant::now();
             let (result, policy, sp, rua_ok) = dmarc::check_dmarc(&domain, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "dmarc").record(elapsed);
-            (Phase0Tag::Dmarc, Phase0Output::from_dmarc(result, policy, sp, rua_ok))
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "dmarc")
+                .record(elapsed);
+            (
+                Phase0Tag::Dmarc,
+                Phase0Output::from_dmarc(result, policy, sp, rua_ok),
+            )
         });
     }
 
@@ -326,8 +394,12 @@ async fn run_inspection_inner(
             let start = std::time::Instant::now();
             let (result, present) = tls_rpt::check_tls_rpt(&domain, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "tls_rpt").record(elapsed);
-            (Phase0Tag::TlsRpt, Phase0Output::from_tls_rpt(result, present))
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "tls_rpt")
+                .record(elapsed);
+            (
+                Phase0Tag::TlsRpt,
+                Phase0Output::from_tls_rpt(result, present),
+            )
         });
     }
 
@@ -338,7 +410,8 @@ async fn run_inspection_inner(
             let start = std::time::Instant::now();
             let (result, ad) = dnssec::check_dnssec(&domain, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "dnssec").record(elapsed);
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "dnssec")
+                .record(elapsed);
             (Phase0Tag::Dnssec, Phase0Output::from_dnssec(result, ad))
         });
     }
@@ -351,7 +424,8 @@ async fn run_inspection_inner(
             let start = std::time::Instant::now();
             let (result, present) = bimi::check_bimi(&domain, &dns, &http_follow).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "bimi").record(elapsed);
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "bimi")
+                .record(elapsed);
             (Phase0Tag::Bimi, Phase0Output::from_bimi(result, present))
         });
     }
@@ -421,9 +495,11 @@ async fn run_inspection_inner(
         let max_sels = config.dkim.max_user_selectors;
         phase1.spawn(async move {
             let start = std::time::Instant::now();
-            let (result, found) = dkim::check_dkim(&domain, &mx_hosts_clone, &selectors, max_sels, &dns).await;
+            let (result, found) =
+                dkim::check_dkim(&domain, &mx_hosts_clone, &selectors, max_sels, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "dkim").record(elapsed);
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "dkim")
+                .record(elapsed);
             (Phase1Tag::Dkim, Phase1Output::from_dkim(result, found))
         });
     }
@@ -435,11 +511,16 @@ async fn run_inspection_inner(
         let http = http_client.clone();
         phase1.spawn(async move {
             let start = std::time::Instant::now();
-            let (result, info) = mta_sts::check_mta_sts(&domain, &mx_hosts_clone, &dns, &http).await;
+            let (result, info) =
+                mta_sts::check_mta_sts(&domain, &mx_hosts_clone, &dns, &http).await;
             let present = info.is_some();
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "mta_sts").record(elapsed);
-            (Phase1Tag::MtaSts, Phase1Output::from_mta_sts(result, present, info))
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "mta_sts")
+                .record(elapsed);
+            (
+                Phase1Tag::MtaSts,
+                Phase1Output::from_mta_sts(result, present, info),
+            )
         });
     }
 
@@ -450,7 +531,8 @@ async fn run_inspection_inner(
             let start = std::time::Instant::now();
             let (result, has_tlsa) = dane::check_dane(&mx_hosts_clone, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "dane").record(elapsed);
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "dane")
+                .record(elapsed);
             (Phase1Tag::Dane, Phase1Output::from_dane(result, has_tlsa))
         });
     }
@@ -462,7 +544,8 @@ async fn run_inspection_inner(
             let start = std::time::Instant::now();
             let result = fcrdns::check_fcrdns(&mx_ips_clone, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "fcrdns").record(elapsed);
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "fcrdns")
+                .record(elapsed);
             (Phase1Tag::Fcrdns, Phase1Output::from_other(result))
         });
     }
@@ -476,7 +559,8 @@ async fn run_inspection_inner(
             let start = std::time::Instant::now();
             let result = dnsbl::check_dnsbl(&mx_ips_clone, &domain, &dnsbl_config, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
-            metrics::histogram!("beacon_check_duration_seconds", "category" => "dnsbl").record(elapsed);
+            metrics::histogram!("beacon_check_duration_seconds", "category" => "dnsbl")
+                .record(elapsed);
             (Phase1Tag::Dnsbl, Phase1Output::from_other(result))
         });
     }
@@ -527,7 +611,10 @@ async fn run_inspection_inner(
     let fcrdns_r = fcrdns_result.unwrap_or_else(|| skip_result(Category::Fcrdns));
     let dnsbl_r = dnsbl_result.unwrap_or_else(|| skip_result(Category::Dnsbl));
 
-    let fcrdns_all_pass = fcrdns_r.sub_checks.iter().all(|s| s.verdict == Verdict::Pass);
+    let fcrdns_all_pass = fcrdns_r
+        .sub_checks
+        .iter()
+        .all(|s| s.verdict == Verdict::Pass);
 
     let all_results = AllResults {
         mx: mx_r,
@@ -562,7 +649,8 @@ async fn run_inspection_inner(
     let cross_start = std::time::Instant::now();
     let cross_result = cross_validation::cross_validate(&all_results);
     let cross_elapsed = cross_start.elapsed().as_secs_f64();
-    metrics::histogram!("beacon_check_duration_seconds", "category" => "cross_validation").record(cross_elapsed);
+    metrics::histogram!("beacon_check_duration_seconds", "category" => "cross_validation")
+        .record(cross_elapsed);
 
     let _ = tx.send(SseEvent::Category(cross_result.clone())).await;
 
@@ -597,9 +685,11 @@ async fn run_inspection_inner(
         })
         .collect();
 
-    let _ = tx.send(SseEvent::Summary {
-        grade,
-        verdicts: verdicts_map,
-        duration_ms: inspection_start.elapsed().as_millis() as u64,
-    }).await;
+    let _ = tx
+        .send(SseEvent::Summary {
+            grade,
+            verdicts: verdicts_map,
+            duration_ms: inspection_start.elapsed().as_millis() as u64,
+        })
+        .await;
 }

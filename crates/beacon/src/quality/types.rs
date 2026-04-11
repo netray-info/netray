@@ -47,9 +47,7 @@ impl Grade {
     }
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Category {
     Mx,
@@ -178,6 +176,7 @@ pub struct SpfFlat {
 pub struct MtaStsInfo {
     pub dns_id: String,
     pub policy_id: Option<String>,
+    #[allow(dead_code)]
     pub mode: Option<String>,
     pub mx_patterns: Vec<String>,
 }

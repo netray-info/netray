@@ -81,33 +81,32 @@ pub async fn check_dnsbl(
     // Track which zones timed out vs listed
     let mut timed_out_zones: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    for result_opt in results {
-        if let Some((zone, query_name, listed)) = result_opt {
-            if listed {
-                // Check if this was actually a listing or a timeout marker
-                // We need to distinguish: re-examine by checking if original lookup returned true
-                // The structure above: Ok(true) -> Some((zone, _, true)), Err(_) -> Some((zone, _, false))
-                // So `listed == true` means it was actually listed
-                let zone_slug = zone.replace('.', "_");
-                // Determine if it's a domain-based or IP-based listing
-                if DOMAIN_ZONES.contains(&zone.as_str()) {
-                    sub_checks.push(SubCheck {
-                        name: format!("listed_{}", zone_slug),
-                        verdict: Verdict::Fail,
-                        detail: format!("domain {} listed in {}", domain, zone),
-                    });
-                } else {
-                    // Extract original IP from query name
-                    sub_checks.push(SubCheck {
-                        name: format!("listed_{}", zone_slug),
-                        verdict: Verdict::Fail,
-                        detail: format!("{} listed in {}", query_name.trim_end_matches(&format!(".{}", zone)), zone),
-                    });
-                }
+    for (zone, query_name, listed) in results.into_iter().flatten() {
+        if listed {
+            // Ok(true) -> Some((zone, _, true)) means actually listed
+            let zone_slug = zone.replace('.', "_");
+            // Determine if it's a domain-based or IP-based listing
+            if DOMAIN_ZONES.contains(&zone.as_str()) {
+                sub_checks.push(SubCheck {
+                    name: format!("listed_{}", zone_slug),
+                    verdict: Verdict::Fail,
+                    detail: format!("domain {} listed in {}", domain, zone),
+                });
             } else {
-                // Timed out
-                timed_out_zones.insert(zone);
+                // Extract original IP from query name
+                sub_checks.push(SubCheck {
+                    name: format!("listed_{}", zone_slug),
+                    verdict: Verdict::Fail,
+                    detail: format!(
+                        "{} listed in {}",
+                        query_name.trim_end_matches(&format!(".{}", zone)),
+                        zone
+                    ),
+                });
             }
+        } else {
+            // Timed out
+            timed_out_zones.insert(zone);
         }
     }
 
@@ -162,17 +161,12 @@ mod tests {
 
     #[test]
     fn test_reverse_ipv4() {
-        assert_eq!(
-            reverse_ipv4(Ipv4Addr::new(1, 2, 3, 4)),
-            "4.3.2.1"
-        );
+        assert_eq!(reverse_ipv4(Ipv4Addr::new(1, 2, 3, 4)), "4.3.2.1");
     }
 
     #[test]
     fn test_reverse_ipv6() {
-        let ip: Ipv6Addr = "2001:0db8:0000:0000:0000:0000:0000:0001"
-            .parse()
-            .unwrap();
+        let ip: Ipv6Addr = "2001:0db8:0000:0000:0000:0000:0000:0001".parse().unwrap();
         assert_eq!(
             reverse_ipv6(ip),
             "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2"

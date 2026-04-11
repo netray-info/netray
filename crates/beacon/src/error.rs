@@ -9,6 +9,7 @@ pub enum MailError {
     InvalidDomain(String),
 
     #[error("target resolves to a private address")]
+    #[allow(dead_code)]
     BlockedTarget,
 
     #[error("rate limited")]
@@ -24,6 +25,7 @@ pub enum MailError {
     InvalidSelector { reason: String },
 
     #[error("internal error: {0}")]
+    #[allow(dead_code)]
     Internal(String),
 
     #[error("DNS resolver error: {0}")]

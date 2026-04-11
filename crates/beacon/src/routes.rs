@@ -7,8 +7,8 @@ use axum::response::{Html, IntoResponse, Sse};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::Instrument;
 use utoipa::{OpenApi, ToSchema};
 
@@ -58,7 +58,10 @@ pub struct InspectQuery {
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "beacon", description = "Email security inspector — DNS-only mail posture analysis"),
+    info(
+        title = "beacon",
+        description = "Email security inspector — DNS-only mail posture analysis"
+    ),
     paths(
         health_handler,
         ready_handler,
@@ -115,8 +118,11 @@ async fn do_inspect(
     selectors: Vec<String>,
     client_ip: std::net::IpAddr,
     state: AppState,
-) -> Result<Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>, MailError> {
-    tracing::Span::current().record("domain", &domain.as_str());
+) -> Result<
+    Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>,
+    MailError,
+> {
+    tracing::Span::current().record("domain", domain.as_str());
     tracing::Span::current().record("client_ip", client_ip.to_string().as_str());
 
     let (tx, rx) = tokio::sync::mpsc::channel::<crate::quality::SseEvent>(32);
@@ -232,8 +238,10 @@ async fn inspect_post_handler(
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: axum::http::HeaderMap,
     Json(body): Json<InspectRequest>,
-) -> Result<Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>, MailError>
-{
+) -> Result<
+    Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>,
+    MailError,
+> {
     let domain = crate::input::parse_domain(&body.domain)?;
 
     if body.dkim_selectors.len() > state.config.dkim.max_user_selectors {
@@ -252,7 +260,8 @@ async fn inspect_post_handler(
         return Err(e);
     }
 
-    metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "post").increment(1);
+    metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "post")
+        .increment(1);
 
     do_inspect(domain, body.dkim_selectors, client_ip, state).await
 }
@@ -275,8 +284,10 @@ async fn inspect_get_handler(
     headers: axum::http::HeaderMap,
     Path(raw_domain): Path<String>,
     Query(query): Query<InspectQuery>,
-) -> Result<Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>, MailError>
-{
+) -> Result<
+    Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>,
+    MailError,
+> {
     let decoded = percent_encoding::percent_decode_str(&raw_domain)
         .decode_utf8_lossy()
         .to_string();
@@ -298,7 +309,8 @@ async fn inspect_get_handler(
         return Err(e);
     }
 
-    metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "get").increment(1);
+    metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "get")
+        .increment(1);
 
     do_inspect(domain, query.selector, client_ip, state).await
 }
@@ -333,12 +345,7 @@ mod tests {
     async fn do_get(app: &Router, uri: &str) -> (StatusCode, serde_json::Value) {
         let response = app
             .clone()
-            .oneshot(
-                HttpRequest::builder()
-                    .uri(uri)
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(HttpRequest::builder().uri(uri).body(Body::empty()).unwrap())
             .await
             .unwrap();
         let status = response.status();
@@ -380,7 +387,10 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["service"], "beacon");
         let eco = &body["ecosystem"];
-        assert!(eco.is_object(), "ecosystem should be present when configured");
+        assert!(
+            eco.is_object(),
+            "ecosystem should be present when configured"
+        );
         assert_eq!(eco["ip_base_url"], "https://ip.example.com");
         assert_eq!(eco["dns_base_url"], "https://dns.example.com");
         // Unconfigured fields should be absent (skip_serializing_if)
