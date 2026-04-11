@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.1] - 2026-04-11
+
+### Fixed
+- Resolve clippy collapsible-if warning in readiness check (7b79f72)
+
+### Changed
+- Migrate to standardized ecosystem/backend config (6857b78)
+
 ## [0.11.0] - 2026-04-10
 
 ### Added
