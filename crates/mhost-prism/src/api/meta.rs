@@ -63,10 +63,10 @@ pub async fn ready(State(state): State<AppState>) -> (StatusCode, Json<ReadyResp
         warnings.push("circuit breaker open for one or more DNS providers".to_owned());
     }
 
-    if let Some(url) = state.config.ecosystem.effective_api_url() {
-        let reachable = probe_tcp(url).await;
+    if let Some(ref client) = state.ip_enrichment {
+        let reachable = probe_tcp(client.base_url()).await;
         if !reachable {
-            warnings.push(format!("enrichment service unreachable: {url}"));
+            warnings.push(format!("enrichment service unreachable: {}", client.base_url()));
         }
     }
 
@@ -160,6 +160,8 @@ pub struct ClientConfig {
     ifconfig_url: Option<String>,
     /// Public TLS inspector URL for cross-links, or null if not configured.
     tls_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
 }
 
 /// Returns client-facing configuration (e.g. site name, ifconfig URL for IP links).
@@ -171,11 +173,18 @@ pub struct ClientConfig {
     )
 )]
 pub async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> {
+    let eco = &state.config.ecosystem;
+    let ecosystem = if eco.has_any() {
+        Some(eco.clone())
+    } else {
+        None
+    };
     Json(ClientConfig {
         site_name: state.config.site_name.clone(),
         version: env!("CARGO_PKG_VERSION"),
-        ifconfig_url: state.config.ecosystem.ifconfig_url.clone(),
-        tls_url: state.config.ecosystem.tls_url.clone(),
+        ifconfig_url: eco.ip_base_url.clone(),
+        tls_url: eco.tls_base_url.clone(),
+        ecosystem,
     })
 }
 

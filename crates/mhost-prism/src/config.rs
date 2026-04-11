@@ -39,6 +39,8 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     #[serde(default)]
     pub ecosystem: EcosystemConfig,
+    #[serde(default)]
+    pub backends: BackendsConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -115,51 +117,12 @@ pub struct DnsConfig {
 
 pub use netray_common::telemetry::TelemetryConfig;
 
-const HARD_CAP_ENRICHMENT_TIMEOUT_MS: u64 = 2000;
+pub use netray_common::ecosystem::EcosystemConfig;
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct EcosystemConfig {
-    /// Public URL for IP lookups (frontend links).
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct BackendsConfig {
     #[serde(default)]
-    pub ifconfig_url: Option<String>,
-    /// Backend API URL for IP enrichment fetches (defaults to ifconfig_url).
-    #[serde(default)]
-    pub ifconfig_api_url: Option<String>,
-    /// Timeout for enrichment HTTP requests in milliseconds (default 500, hard cap 2000).
-    #[serde(default = "default_enrichment_timeout_ms")]
-    pub enrichment_timeout_ms: u64,
-    /// Public URL for the TLS inspector (frontend cross-links).
-    #[serde(default)]
-    pub tls_url: Option<String>,
-}
-
-impl Default for EcosystemConfig {
-    fn default() -> Self {
-        Self {
-            ifconfig_url: None,
-            ifconfig_api_url: None,
-            enrichment_timeout_ms: default_enrichment_timeout_ms(),
-            tls_url: None,
-        }
-    }
-}
-
-impl EcosystemConfig {
-    /// Returns the effective API URL for backend enrichment fetches.
-    pub fn effective_api_url(&self) -> Option<&str> {
-        self.ifconfig_api_url
-            .as_deref()
-            .or(self.ifconfig_url.as_deref())
-    }
-
-    /// Returns true if enrichment is enabled (an API URL is configured).
-    pub fn enrichment_enabled(&self) -> bool {
-        self.effective_api_url().is_some()
-    }
-}
-
-fn default_enrichment_timeout_ms() -> u64 {
-    500
+    pub ip: Option<netray_common::backend::BackendConfig>,
 }
 
 /// Hot-reloadable subset of the configuration.
@@ -370,21 +333,6 @@ impl Config {
     fn validate(&mut self) -> Result<(), ConfigError> {
         self.validate_limits_and_trace()?;
 
-        // Ecosystem config validation.
-        if self.ecosystem.enrichment_timeout_ms == 0 && self.ecosystem.enrichment_enabled() {
-            return Err(ConfigError::Message(
-                "invalid configuration: ecosystem.enrichment_timeout_ms must not be zero when enrichment is enabled".to_owned(),
-            ));
-        }
-        if self.ecosystem.enrichment_timeout_ms > HARD_CAP_ENRICHMENT_TIMEOUT_MS {
-            tracing::warn!(
-                configured = self.ecosystem.enrichment_timeout_ms,
-                clamped = HARD_CAP_ENRICHMENT_TIMEOUT_MS,
-                "ecosystem.enrichment_timeout_ms exceeds hard cap, clamping"
-            );
-            self.ecosystem.enrichment_timeout_ms = HARD_CAP_ENRICHMENT_TIMEOUT_MS;
-        }
-
         // Telemetry config validation.
         if self.telemetry.enabled && !(0.0..=1.0).contains(&self.telemetry.sample_rate) {
             return Err(ConfigError::Message(
@@ -508,6 +456,7 @@ mod tests {
             trace: default_trace(),
             telemetry: TelemetryConfig::default(),
             ecosystem: EcosystemConfig::default(),
+            backends: BackendsConfig::default(),
         }
     }
 

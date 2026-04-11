@@ -177,6 +177,7 @@ mod tests {
             },
             telemetry: TelemetryConfig::default(),
             ecosystem: EcosystemConfig::default(),
+            backends: crate::config::BackendsConfig::default(),
         }
     }
 

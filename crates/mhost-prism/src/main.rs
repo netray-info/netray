@@ -75,10 +75,17 @@ async fn main() {
     // 3. Build shared application state.
     let hot_state = reload::HotState::new(&config);
 
-    let ip_enrichment = config.ecosystem.effective_api_url().map(|url| {
-        let timeout = std::time::Duration::from_millis(config.ecosystem.enrichment_timeout_ms);
-        tracing::info!(url = %url, timeout_ms = config.ecosystem.enrichment_timeout_ms, "IP enrichment enabled");
-        Arc::new(netray_common::enrichment::EnrichmentClient::new(url, timeout, "prism", Some("prism")))
+    let ip_enrichment = config.backends.ip.as_ref().and_then(|ip_cfg| {
+        ip_cfg.url.as_ref().map(|url| {
+            let timeout_ms = ip_cfg.timeout_ms;
+            tracing::info!(url = %url, timeout_ms, "IP enrichment enabled");
+            Arc::new(netray_common::enrichment::EnrichmentClient::new(
+                url,
+                std::time::Duration::from_millis(timeout_ms),
+                "prism",
+                Some("prism"),
+            ))
+        })
     });
 
     let http_client = reqwest::Client::builder()

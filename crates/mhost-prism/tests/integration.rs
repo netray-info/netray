@@ -215,6 +215,7 @@ async fn rate_limit_returns_429() {
         },
         telemetry: TelemetryConfig::default(),
         ecosystem: EcosystemConfig::default(),
+        backends: prism::config::BackendsConfig::default(),
     };
 
     let hot_state = HotState::new(&config);

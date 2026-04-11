@@ -116,25 +116,25 @@
 #allow_arbitrary_servers = false
 
 # ---------------------------------------------------------------------------
-# [ecosystem] — External service integration
+# [ecosystem] — Public URLs for cross-tool navigation (served to browser)
 # ---------------------------------------------------------------------------
-[ecosystem]
+#[ecosystem]
+#ip_base_url = "https://ip.example.com"
+#dns_base_url = "https://dns.example.com"
+#tls_base_url = "https://tls.example.com"
+#http_base_url = "https://http.example.com"
+#email_base_url = "https://email.example.com"
+#lens_base_url = "https://lens.example.com"
 
-# Public URL for ifconfig-style IP lookups (frontend clickable IP links).
-# When set, A/AAAA record values and trace server IPs become clickable links.
-#ifconfig_url = "https://ip.netray.info"
-
-# Backend API URL for IP enrichment fetches. Defaults to ifconfig_url if unset.
-# Useful when the public URL differs from the internal API endpoint.
-#ifconfig_api_url = "https://ip.netray.info"
-
-# Timeout for enrichment HTTP requests in milliseconds (default: 500, hard cap: 2000).
-# Enrichment never blocks DNS results — it runs after all DNS queries complete.
-#enrichment_timeout_ms = 500
-
-# Public URL for the TLS inspector (frontend cross-links to tls.netray.info).
-# When set, a "TLS →" link appears next to the queried domain.
-#tls_url = "https://tls.netray.info"
+# ---------------------------------------------------------------------------
+# [backends.ip] — IP enrichment backend (internal service-to-service)
+# ---------------------------------------------------------------------------
+#[backends.ip]
+#url = "http://ifconfig-rs:8000"
+#timeout_ms = 500
+#max_concurrent = 20
+#cache_ttl_secs = 300
+#cache_capacity = 1024
 
 # ---------------------------------------------------------------------------
 # [telemetry] — Logging and distributed tracing

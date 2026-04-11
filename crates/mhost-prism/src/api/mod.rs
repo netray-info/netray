@@ -558,6 +558,7 @@ mod tests {
             },
             telemetry: TelemetryConfig::default(),
             ecosystem: EcosystemConfig::default(),
+            backends: crate::config::BackendsConfig::default(),
         };
 
         let hot_state = HotState::new(&config);
