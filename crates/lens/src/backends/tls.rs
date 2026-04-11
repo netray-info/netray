@@ -82,6 +82,7 @@ struct HealthCheck {
 
 pub struct TlsBackend {
     pub tls_url: String,
+    pub public_url: String,
 }
 
 impl Backend for TlsBackend {
@@ -101,13 +102,19 @@ impl Backend for TlsBackend {
         let client = client.clone();
         let domain = domain.to_string();
         let tls_url = self.tls_url.clone();
+        let public_url = self.public_url.clone();
         Box::pin(async move {
-            let result = check_tls(&client, &tls_url, &domain, timeout)
+            let mut result = check_tls(&client, &tls_url, &domain, timeout)
                 .await
                 .map_err(|e| match e {
                     AppError::Timeout => SectionError::Timeout,
                     other => SectionError::BackendError(other.to_string()),
                 })?;
+            result.detail_url = format!(
+                "{}/?h={}",
+                public_url.trim_end_matches('/'),
+                percent_encode(&domain),
+            );
             Ok(BackendResult {
                 checks: result.checks,
                 extra: BackendExtra::Tls {
@@ -278,18 +285,4 @@ fn build_headline(ports: &[PortResult]) -> String {
 // Minimal percent-encoding for query string values
 // ---------------------------------------------------------------------------
 
-fn percent_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char);
-            }
-            _ => {
-                out.push('%');
-                out.push_str(&format!("{b:02X}"));
-            }
-        }
-    }
-    out
-}
+use super::percent_encode;

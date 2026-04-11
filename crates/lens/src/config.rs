@@ -13,6 +13,8 @@ pub struct Config {
     pub server: ServerConfig,
     #[serde(default = "default_backends")]
     pub backends: BackendsConfig,
+    #[serde(default)]
+    pub ecosystem: EcosystemConfig,
     #[serde(default = "default_cache")]
     pub cache: CacheConfig,
     #[serde(default = "default_rate_limit")]
@@ -62,6 +64,20 @@ pub struct RateLimitConfig {
     pub global_per_minute: u32,
     #[serde(default = "default_global_burst")]
     pub global_burst: u32,
+}
+
+/// Public-facing URLs for cross-links and the meta endpoint.
+///
+/// When backends run behind a reverse proxy (e.g. Docker internal network),
+/// their configured URLs are not reachable from the browser. This section
+/// lets you specify the external URLs that users should see.
+/// Falls back to `[backends]` URLs when not set.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct EcosystemConfig {
+    pub dns_url: Option<String>,
+    pub tls_url: Option<String>,
+    pub ip_url: Option<String>,
+    pub http_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -168,6 +184,39 @@ fn default_true() -> bool {
 }
 
 impl Config {
+    /// Resolve the public-facing URL for a backend section.
+    ///
+    /// Returns the `[ecosystem]` override if set, otherwise falls back to the
+    /// `[backends]` URL. Use this for user-visible links (detail URLs, meta endpoint).
+    pub fn public_url(&self, section: &str) -> Option<String> {
+        match section {
+            "dns" => Some(
+                self.ecosystem
+                    .dns_url
+                    .clone()
+                    .unwrap_or_else(|| self.backends.dns_url.clone()),
+            ),
+            "tls" => Some(
+                self.ecosystem
+                    .tls_url
+                    .clone()
+                    .unwrap_or_else(|| self.backends.tls_url.clone()),
+            ),
+            "ip" => Some(
+                self.ecosystem
+                    .ip_url
+                    .clone()
+                    .unwrap_or_else(|| self.backends.ip_url.clone()),
+            ),
+            "http" => self
+                .ecosystem
+                .http_url
+                .clone()
+                .or(self.backends.http_url.clone()),
+            _ => None,
+        }
+    }
+
     /// Load configuration from an optional TOML file path and environment variables.
     ///
     /// Precedence (highest first): env vars (LENS_ prefix) > TOML file > built-in defaults.
@@ -252,6 +301,7 @@ mod tests {
                 http_url: None,
                 backend_timeout_secs: default_backend_timeout_secs(),
             },
+            ecosystem: EcosystemConfig::default(),
             cache: default_cache(),
             rate_limit: default_rate_limit(),
             scoring: ScoringConfig::default(),

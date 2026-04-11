@@ -319,12 +319,12 @@ pub async fn health_handler() -> impl IntoResponse {
 )]
 pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    let backends = &state.config.backends;
+    let config = &state.config;
     let ecosystem = Some(MetaEcosystem {
-        dns_base_url: Some(backends.dns_url.clone()),
-        tls_base_url: Some(backends.tls_url.clone()),
-        ip_base_url: Some(backends.ip_url.clone()),
-        http_base_url: backends.http_url.clone(),
+        dns_base_url: config.public_url("dns"),
+        tls_base_url: config.public_url("tls"),
+        ip_base_url: config.public_url("ip"),
+        http_base_url: config.public_url("http"),
     });
     let profile = &state.scoring_profile;
     let mut all_checks = HashMap::new();
@@ -1082,7 +1082,7 @@ pub mod tests {
 
     use crate::config::Config;
     use crate::config::{
-        BackendsConfig, CacheConfig, RateLimitConfig, ScoringConfig, ServerConfig,
+        BackendsConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig, ServerConfig,
     };
 
     pub fn test_config_with_rate_limit(per_ip: u32, burst: u32) -> Config {
@@ -1099,6 +1099,7 @@ pub mod tests {
                 http_url: None,
                 backend_timeout_secs: 1,
             },
+            ecosystem: EcosystemConfig::default(),
             cache: CacheConfig {
                 enabled: true,
                 ttl_seconds: 300,

@@ -55,18 +55,22 @@ impl AppState {
         let mut backends: Vec<Box<dyn Backend + Send + Sync>> = vec![
             Box::new(DnsBackend {
                 dns_url: config.backends.dns_url.clone(),
+                public_url: config.public_url("dns").unwrap_or_default(),
             }),
             Box::new(TlsBackend {
                 tls_url: config.backends.tls_url.clone(),
+                public_url: config.public_url("tls").unwrap_or_default(),
             }),
         ];
         if let Some(ref http_url) = config.backends.http_url {
             backends.push(Box::new(HttpBackend {
                 http_url: http_url.clone(),
+                public_url: config.public_url("http").unwrap_or_default(),
             }));
         }
         backends.push(Box::new(IpBackend {
             ip_url: config.backends.ip_url.clone(),
+            public_url: config.public_url("ip").unwrap_or_default(),
         }));
 
         Ok(Self {
@@ -97,7 +101,7 @@ fn load_scoring_profile(path: Option<&str>) -> Result<ScoringProfile, Box<dyn st
 mod tests {
     use super::*;
     use crate::config::{
-        BackendsConfig, CacheConfig, RateLimitConfig, ScoringConfig, ServerConfig,
+        BackendsConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig, ServerConfig,
     };
 
     fn test_config() -> Config {
@@ -114,6 +118,7 @@ mod tests {
                 http_url: None,
                 backend_timeout_secs: 20,
             },
+            ecosystem: EcosystemConfig::default(),
             telemetry: Default::default(),
             cache: CacheConfig {
                 enabled: false,

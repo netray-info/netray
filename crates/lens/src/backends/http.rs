@@ -99,6 +99,7 @@ struct QualityCheck {
 
 pub struct HttpBackend {
     pub http_url: String,
+    pub public_url: String,
 }
 
 impl Backend for HttpBackend {
@@ -118,13 +119,25 @@ impl Backend for HttpBackend {
         let client = client.clone();
         let domain = domain.to_string();
         let http_url = self.http_url.clone();
+        let public_url = self.public_url.clone();
         Box::pin(async move {
-            check_http(&client, &http_url, &domain, timeout)
+            let mut result = check_http(&client, &http_url, &domain, timeout)
                 .await
                 .map_err(|e| match e {
                     AppError::Timeout => SectionError::Timeout,
                     other => SectionError::BackendError(other.to_string()),
-                })
+                })?;
+            if let BackendExtra::Http {
+                ref mut detail_url, ..
+            } = result.extra
+            {
+                *detail_url = format!(
+                    "{}/?url=https%3A%2F%2F{}",
+                    public_url.trim_end_matches('/'),
+                    percent_encode(&domain),
+                );
+            }
+            Ok(result)
         })
     }
 }
@@ -400,23 +413,7 @@ fn verdict_symbol(s: HttpCheckStatus) -> &'static str {
     }
 }
 
-/// Minimal percent-encoding for query string values.
-/// Copied locally: only two callers across the codebase (http.rs, tls.rs) — rule of three not yet met.
-fn percent_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for b in s.bytes() {
-        match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                out.push(b as char);
-            }
-            _ => {
-                out.push('%');
-                out.push_str(&format!("{b:02X}"));
-            }
-        }
-    }
-    out
-}
+use super::percent_encode;
 
 // ---------------------------------------------------------------------------
 // Tests

@@ -50,6 +50,23 @@ pub struct BackendContext {
     pub resolved_ips: Vec<IpAddr>,
 }
 
+/// Minimal percent-encoding for query string values (RFC 3986 unreserved set).
+pub(crate) fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => {
+                out.push('%');
+                out.push_str(&format!("{b:02X}"));
+            }
+        }
+    }
+    out
+}
+
 pub trait Backend: Send + Sync {
     /// Must match the key in `ScoringProfile.sections`.
     fn section(&self) -> &'static str;

@@ -23,4 +23,6 @@ COPY --from=builder /lens .
 RUN chown -R lens:lens /lens
 USER lens
 EXPOSE 8082 8090
+# To override the baked-in config, mount your file to /lens/lens.toml:
+#   volumes: ["./lens.toml:/lens/lens.toml:ro"]
 CMD ["./lens", "lens.toml"]

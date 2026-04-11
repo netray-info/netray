@@ -8,7 +8,8 @@
 ///   LENS_LIVE_TESTS=1 cargo test --test reference_domains -- --ignored --nocapture
 use lens::check::run_check;
 use lens::config::{
-    BackendsConfig, CacheConfig, Config, RateLimitConfig, ScoringConfig, ServerConfig,
+    BackendsConfig, CacheConfig, Config, EcosystemConfig, RateLimitConfig, ScoringConfig,
+    ServerConfig,
 };
 use lens::state::AppState;
 
@@ -44,6 +45,7 @@ fn live_state() -> AppState {
             global_per_minute: 200,
             global_burst: 40,
         },
+        ecosystem: EcosystemConfig::default(),
         scoring: ScoringConfig::default(),
         telemetry: Default::default(),
     };

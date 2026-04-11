@@ -10,6 +10,15 @@ ip_url  = "https://ip.netray.info"
 # http_url = "https://http.netray.info"   # optional; omit to disable HTTP section
 # backend_timeout_secs = 20
 
+# Public-facing URLs for cross-links and the /api/meta endpoint.
+# When backends run on an internal network (e.g. Docker), set these to the
+# external URLs that users should see. Falls back to [backends] URLs when omitted.
+# [ecosystem]
+# dns_url = "https://dns.netray.info"
+# tls_url = "https://tls.netray.info"
+# ip_url  = "https://ip.netray.info"
+# http_url = "https://http.netray.info"
+
 [cache]
 enabled = true
 ttl_seconds = 300

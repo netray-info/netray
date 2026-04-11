@@ -60,6 +60,7 @@ struct LocationInfo {
 
 pub struct IpBackend {
     pub ip_url: String,
+    pub public_url: String,
 }
 
 impl Backend for IpBackend {
@@ -82,13 +83,15 @@ impl Backend for IpBackend {
         let client = client.clone();
         let ips = context.resolved_ips.clone();
         let ip_url = self.ip_url.clone();
+        let public_url = self.public_url.clone();
         Box::pin(async move {
-            let result = check_ip(&client, &ip_url, &ips, timeout)
+            let mut result = check_ip(&client, &ip_url, &ips, timeout)
                 .await
                 .map_err(|e| match e {
                     AppError::Timeout => SectionError::Timeout,
                     other => SectionError::BackendError(other.to_string()),
                 })?;
+            result.detail_url = public_url;
             Ok(BackendResult {
                 checks: result.checks,
                 extra: BackendExtra::Ip {
@@ -298,6 +301,7 @@ mod tests {
     async fn ip_backend_returns_no_dns_results_when_empty() {
         let backend = IpBackend {
             ip_url: "https://ip.example.com".to_string(),
+            public_url: "https://ip.example.com".to_string(),
         };
         let client = reqwest::Client::new();
         let context = BackendContext {

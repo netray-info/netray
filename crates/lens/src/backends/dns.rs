@@ -29,6 +29,7 @@ pub struct DnsBackendResult {
 
 pub struct DnsBackend {
     pub dns_url: String,
+    pub public_url: String,
 }
 
 impl Backend for DnsBackend {
@@ -48,13 +49,19 @@ impl Backend for DnsBackend {
         let client = client.clone();
         let domain = domain.to_string();
         let dns_url = self.dns_url.clone();
+        let public_url = self.public_url.clone();
         Box::pin(async move {
-            let result = check_dns(&client, &dns_url, &domain, timeout)
+            let mut result = check_dns(&client, &dns_url, &domain, timeout)
                 .await
                 .map_err(|e| match e {
                     AppError::Timeout => SectionError::Timeout,
                     other => SectionError::BackendError(other.to_string()),
                 })?;
+            result.detail_url = format!(
+                "{}/?q={}+%2Bcheck",
+                public_url.trim_end_matches('/'),
+                super::percent_encode(&domain),
+            );
             Ok(BackendResult {
                 checks: result.checks,
                 extra: BackendExtra::Dns {
@@ -249,7 +256,7 @@ fn parse_events(
     let detail_url = format!(
         "{}/?q={}+%2Bcheck",
         dns_url.trim_end_matches('/'),
-        urlencoding::encode(domain),
+        super::percent_encode(domain),
     );
 
     Ok(DnsBackendResult {
@@ -414,24 +421,3 @@ fn build_headline(checks: &[CheckResult]) -> String {
     parts.join("  ")
 }
 
-// ---------------------------------------------------------------------------
-// URL encoding helper
-// ---------------------------------------------------------------------------
-
-mod urlencoding {
-    pub fn encode(s: &str) -> String {
-        let mut out = String::with_capacity(s.len());
-        for b in s.bytes() {
-            match b {
-                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                    out.push(b as char);
-                }
-                _ => {
-                    out.push('%');
-                    out.push_str(&format!("{b:02X}"));
-                }
-            }
-        }
-        out
-    }
-}
