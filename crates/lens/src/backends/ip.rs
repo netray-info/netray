@@ -61,6 +61,8 @@ struct LocationInfo {
 pub struct IpBackend {
     pub ip_url: String,
     pub public_url: String,
+    pub timeout: Duration,
+    pub client: reqwest::Client,
 }
 
 impl Backend for IpBackend {
@@ -70,20 +72,19 @@ impl Backend for IpBackend {
 
     fn run(
         &self,
-        client: &reqwest::Client,
         _domain: &str,
         context: &BackendContext,
-        timeout: Duration,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
     > {
         if context.resolved_ips.is_empty() {
             return Box::pin(async { Err(SectionError::NoDnsResults) });
         }
-        let client = client.clone();
+        let client = self.client.clone();
         let ips = context.resolved_ips.clone();
         let ip_url = self.ip_url.clone();
         let public_url = self.public_url.clone();
+        let timeout = self.timeout;
         Box::pin(async move {
             let mut result = check_ip(&client, &ip_url, &ips, timeout)
                 .await
@@ -145,7 +146,7 @@ async fn check_ip_inner(
     let futures: Vec<_> = capped
         .iter()
         .map(|ip| {
-            let url = format!("{base}/json?ip={ip}");
+            let url = format!("{base}/network/json?ip={ip}");
             let client = client.clone();
             async move {
                 let result = tokio::time::timeout(timeout, client.get(&url).send())
@@ -302,14 +303,13 @@ mod tests {
         let backend = IpBackend {
             ip_url: "https://ip.example.com".to_string(),
             public_url: "https://ip.example.com".to_string(),
+            timeout: Duration::from_secs(5),
+            client: reqwest::Client::new(),
         };
-        let client = reqwest::Client::new();
         let context = BackendContext {
             resolved_ips: vec![],
         };
-        let result = backend
-            .run(&client, "example.com", &context, Duration::from_secs(5))
-            .await;
+        let result = backend.run("example.com", &context).await;
         assert!(
             matches!(result, Err(SectionError::NoDnsResults)),
             "expected NoDnsResults, got: {result:?}"

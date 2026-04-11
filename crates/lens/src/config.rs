@@ -4,14 +4,11 @@ use serde::Deserialize;
 
 pub use config::ConfigError;
 
-/// Hard cap for backend_timeout_secs — no request to a backend may exceed this.
-const HARD_CAP_BACKEND_TIMEOUT_SECS: u64 = 25;
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     #[serde(default = "default_server")]
     pub server: ServerConfig,
-    #[serde(default = "default_backends")]
+    #[serde(default)]
     pub backends: BackendsConfig,
     #[serde(default)]
     pub ecosystem: EcosystemConfig,
@@ -35,15 +32,18 @@ pub struct ServerConfig {
     pub trusted_proxies: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+pub use netray_common::ecosystem::EcosystemConfig;
+
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct BackendsConfig {
-    pub dns_url: String,
-    pub tls_url: String,
-    pub ip_url: String,
     #[serde(default)]
-    pub http_url: Option<String>,
-    #[serde(default = "default_backend_timeout_secs")]
-    pub backend_timeout_secs: u64,
+    pub dns: netray_common::backend::BackendConfig,
+    #[serde(default)]
+    pub tls: netray_common::backend::BackendConfig,
+    #[serde(default)]
+    pub ip: netray_common::backend::BackendConfig,
+    #[serde(default)]
+    pub http: Option<netray_common::backend::BackendConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,20 +66,6 @@ pub struct RateLimitConfig {
     pub global_burst: u32,
 }
 
-/// Public-facing URLs for cross-links and the meta endpoint.
-///
-/// When backends run behind a reverse proxy (e.g. Docker internal network),
-/// their configured URLs are not reachable from the browser. This section
-/// lets you specify the external URLs that users should see.
-/// Falls back to `[backends]` URLs when not set.
-#[derive(Debug, Clone, Deserialize, Default)]
-pub struct EcosystemConfig {
-    pub dns_url: Option<String>,
-    pub tls_url: Option<String>,
-    pub ip_url: Option<String>,
-    pub http_url: Option<String>,
-}
-
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ScoringConfig {
     pub profile_path: Option<String>,
@@ -90,12 +76,6 @@ pub struct ScoringConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         default_server()
-    }
-}
-
-impl Default for BackendsConfig {
-    fn default() -> Self {
-        default_backends()
     }
 }
 
@@ -118,16 +98,6 @@ fn default_server() -> ServerConfig {
         bind: default_bind(),
         metrics_bind: default_metrics_bind(),
         trusted_proxies: Vec::new(),
-    }
-}
-
-fn default_backends() -> BackendsConfig {
-    BackendsConfig {
-        dns_url: String::new(),
-        tls_url: String::new(),
-        ip_url: String::new(),
-        http_url: None,
-        backend_timeout_secs: default_backend_timeout_secs(),
     }
 }
 
@@ -155,10 +125,6 @@ fn default_metrics_bind() -> SocketAddr {
     ([127, 0, 0, 1], 9090).into()
 }
 
-fn default_backend_timeout_secs() -> u64 {
-    20
-}
-
 fn default_cache_ttl_seconds() -> u64 {
     300
 }
@@ -184,39 +150,6 @@ fn default_true() -> bool {
 }
 
 impl Config {
-    /// Resolve the public-facing URL for a backend section.
-    ///
-    /// Returns the `[ecosystem]` override if set, otherwise falls back to the
-    /// `[backends]` URL. Use this for user-visible links (detail URLs, meta endpoint).
-    pub fn public_url(&self, section: &str) -> Option<String> {
-        match section {
-            "dns" => Some(
-                self.ecosystem
-                    .dns_url
-                    .clone()
-                    .unwrap_or_else(|| self.backends.dns_url.clone()),
-            ),
-            "tls" => Some(
-                self.ecosystem
-                    .tls_url
-                    .clone()
-                    .unwrap_or_else(|| self.backends.tls_url.clone()),
-            ),
-            "ip" => Some(
-                self.ecosystem
-                    .ip_url
-                    .clone()
-                    .unwrap_or_else(|| self.backends.ip_url.clone()),
-            ),
-            "http" => self
-                .ecosystem
-                .http_url
-                .clone()
-                .or(self.backends.http_url.clone()),
-            _ => None,
-        }
-    }
-
     /// Load configuration from an optional TOML file path and environment variables.
     ///
     /// Precedence (highest first): env vars (LENS_ prefix) > TOML file > built-in defaults.
@@ -243,26 +176,10 @@ impl Config {
         Ok(cfg)
     }
 
-    /// Validate and clamp configuration values.
+    /// Validate configuration values.
     ///
-    /// - `backend_timeout_secs` is clamped to `HARD_CAP_BACKEND_TIMEOUT_SECS`.
-    /// - Zero values for rate limits and timeouts are rejected.
+    /// - Zero values for rate limits are rejected.
     pub fn validate(&mut self) -> Result<(), ConfigError> {
-        // Clamp backend timeout to hard cap.
-        if self.backends.backend_timeout_secs > HARD_CAP_BACKEND_TIMEOUT_SECS {
-            tracing::warn!(
-                configured = self.backends.backend_timeout_secs,
-                clamped = HARD_CAP_BACKEND_TIMEOUT_SECS,
-                "backend_timeout_secs exceeds hard cap, clamping"
-            );
-            self.backends.backend_timeout_secs = HARD_CAP_BACKEND_TIMEOUT_SECS;
-        }
-
-        // Reject zero values — would disable protections or cause division-by-zero.
-        reject_zero(
-            "backends.backend_timeout_secs",
-            self.backends.backend_timeout_secs,
-        )?;
         reject_zero(
             "rate_limit.per_ip_per_minute",
             self.rate_limit.per_ip_per_minute,
@@ -295,11 +212,19 @@ mod tests {
         Config {
             server: default_server(),
             backends: BackendsConfig {
-                dns_url: "http://localhost:8080".to_string(),
-                tls_url: "http://localhost:8081".to_string(),
-                ip_url: "http://localhost:8082".to_string(),
-                http_url: None,
-                backend_timeout_secs: default_backend_timeout_secs(),
+                dns: netray_common::backend::BackendConfig {
+                    url: Some("http://localhost:8080".to_string()),
+                    ..Default::default()
+                },
+                tls: netray_common::backend::BackendConfig {
+                    url: Some("http://localhost:8081".to_string()),
+                    ..Default::default()
+                },
+                ip: netray_common::backend::BackendConfig {
+                    url: Some("http://localhost:8082".to_string()),
+                    ..Default::default()
+                },
+                http: None,
             },
             ecosystem: EcosystemConfig::default(),
             cache: default_cache(),
@@ -330,12 +255,6 @@ mod tests {
     }
 
     #[test]
-    fn default_backend_timeout_is_20() {
-        let cfg = valid_config();
-        assert_eq!(cfg.backends.backend_timeout_secs, 20);
-    }
-
-    #[test]
     fn default_cache_enabled_with_300s_ttl() {
         let cfg = valid_config();
         assert!(cfg.cache.enabled);
@@ -349,30 +268,6 @@ mod tests {
         assert_eq!(cfg.rate_limit.per_ip_burst, 3);
         assert_eq!(cfg.rate_limit.global_per_minute, 100);
         assert_eq!(cfg.rate_limit.global_burst, 20);
-    }
-
-    // --- Hard-cap clamping ---
-
-    #[test]
-    fn clamps_backend_timeout_secs() {
-        let mut cfg = valid_config();
-        cfg.backends.backend_timeout_secs = HARD_CAP_BACKEND_TIMEOUT_SECS + 99;
-        cfg.validate().unwrap();
-        assert_eq!(
-            cfg.backends.backend_timeout_secs,
-            HARD_CAP_BACKEND_TIMEOUT_SECS
-        );
-    }
-
-    #[test]
-    fn hard_cap_exact_value_is_accepted() {
-        let mut cfg = valid_config();
-        cfg.backends.backend_timeout_secs = HARD_CAP_BACKEND_TIMEOUT_SECS;
-        cfg.validate().unwrap();
-        assert_eq!(
-            cfg.backends.backend_timeout_secs,
-            HARD_CAP_BACKEND_TIMEOUT_SECS
-        );
     }
 
     // --- Zero-value rejection ---
@@ -392,9 +287,6 @@ mod tests {
         };
     }
 
-    zero_rejects!(rejects_zero_backend_timeout, |c: &mut Config| {
-        c.backends.backend_timeout_secs = 0
-    });
     zero_rejects!(rejects_zero_per_ip_per_minute, |c: &mut Config| {
         c.rate_limit.per_ip_per_minute = 0
     });

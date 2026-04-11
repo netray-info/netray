@@ -233,21 +233,9 @@ pub struct MetaResponse {
     #[schema(value_type = String)]
     pub version: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ecosystem: Option<MetaEcosystem>,
+    pub ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
     pub profile: ProfileData,
     pub rate_limit: RateLimitInfo,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct MetaEcosystem {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dns_base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tls_base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ip_base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub http_base_url: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -320,12 +308,12 @@ pub async fn health_handler() -> impl IntoResponse {
 pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     let config = &state.config;
-    let ecosystem = Some(MetaEcosystem {
-        dns_base_url: config.public_url("dns"),
-        tls_base_url: config.public_url("tls"),
-        ip_base_url: config.public_url("ip"),
-        http_base_url: config.public_url("http"),
-    });
+    let eco = &config.ecosystem;
+    let ecosystem = if eco.has_any() {
+        Some(eco.clone())
+    } else {
+        None
+    };
     let profile = &state.scoring_profile;
     let mut all_checks = HashMap::new();
     let mut section_weights = HashMap::new();
@@ -373,14 +361,25 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut down: Vec<String> = Vec::new();
 
     // Build list of required backends to probe (3 s timeout each).
-    // Optional http backend is only probed when http_url is configured.
+    // Optional http backend is only probed when its url is configured.
     let mut probes: Vec<(String, String)> = vec![
-        ("dns".to_string(), config.backends.dns_url.clone()),
-        ("tls".to_string(), config.backends.tls_url.clone()),
-        ("ip".to_string(), config.backends.ip_url.clone()),
+        (
+            "dns".to_string(),
+            config.backends.dns.url.clone().unwrap_or_default(),
+        ),
+        (
+            "tls".to_string(),
+            config.backends.tls.url.clone().unwrap_or_default(),
+        ),
+        (
+            "ip".to_string(),
+            config.backends.ip.url.clone().unwrap_or_default(),
+        ),
     ];
-    if let Some(ref http_url) = config.backends.http_url {
-        probes.push(("http".to_string(), http_url.clone()));
+    if let Some(ref http_cfg) = config.backends.http {
+        if let Some(ref url) = http_cfg.url {
+            probes.push(("http".to_string(), url.clone()));
+        }
     }
 
     let futures: Vec<_> = probes
@@ -1093,11 +1092,22 @@ pub mod tests {
                 trusted_proxies: Vec::new(),
             },
             backends: BackendsConfig {
-                dns_url: "http://127.0.0.1:19999".to_string(),
-                tls_url: "http://127.0.0.1:19998".to_string(),
-                ip_url: "http://127.0.0.1:19997".to_string(),
-                http_url: None,
-                backend_timeout_secs: 1,
+                dns: netray_common::backend::BackendConfig {
+                    url: Some("http://127.0.0.1:19999".to_string()),
+                    timeout_ms: 1000,
+                    ..Default::default()
+                },
+                tls: netray_common::backend::BackendConfig {
+                    url: Some("http://127.0.0.1:19998".to_string()),
+                    timeout_ms: 1000,
+                    ..Default::default()
+                },
+                ip: netray_common::backend::BackendConfig {
+                    url: Some("http://127.0.0.1:19997".to_string()),
+                    timeout_ms: 1000,
+                    ..Default::default()
+                },
+                http: None,
             },
             ecosystem: EcosystemConfig::default(),
             cache: CacheConfig {
@@ -1332,7 +1342,8 @@ pub mod tests {
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
         assert_eq!(json["site_name"], "lens — Domain Health Check");
-        assert!(json["ecosystem"].is_object());
+        // ecosystem is absent when no ecosystem config is set (skip_serializing_if)
+        assert!(json.get("ecosystem").is_none() || json["ecosystem"].is_null());
 
         // Profile section_weights and hard_fail are string-keyed maps
         let profile = &json["profile"];
@@ -1727,5 +1738,130 @@ pub mod tests {
         let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let body = std::str::from_utf8(&bytes).unwrap();
         assert!(body.contains("Scalar"), "HTML must reference Scalar");
+    }
+
+    // T8: Meta includes ecosystem when configured
+    #[tokio::test]
+    async fn meta_includes_ecosystem_when_configured() {
+        let mut config = test_config_with_rate_limit(60, 10);
+        config.ecosystem = EcosystemConfig {
+            ip_base_url: Some("https://ip.example.com".to_string()),
+            dns_base_url: Some("https://dns.example.com".to_string()),
+            tls_base_url: Some("https://tls.example.com".to_string()),
+            ..Default::default()
+        };
+        let state = AppState::new(config).unwrap();
+        let app = Router::new()
+            .route("/api/meta", get(meta_handler))
+            .with_state(state);
+        let req = Request::builder()
+            .uri("/api/meta")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = to_bytes(resp.into_body(), 8192).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let eco = &json["ecosystem"];
+        assert!(eco.is_object(), "ecosystem should be present when configured");
+        assert_eq!(eco["ip_base_url"], "https://ip.example.com");
+        assert_eq!(eco["dns_base_url"], "https://dns.example.com");
+        assert_eq!(eco["tls_base_url"], "https://tls.example.com");
+        // Unconfigured fields should be absent
+        assert!(
+            eco.get("http_base_url").is_none() || eco["http_base_url"].is_null(),
+            "unconfigured fields should be absent"
+        );
+    }
+
+    // T9: Ecosystem and backends are independent URL pools
+    #[tokio::test]
+    async fn ecosystem_and_backends_are_independent() {
+        let mut config = test_config_with_rate_limit(60, 10);
+        // Set ecosystem to public URLs
+        config.ecosystem = EcosystemConfig {
+            ip_base_url: Some("https://ip.example.com".to_string()),
+            ..Default::default()
+        };
+        // Set backend to internal URL
+        config.backends.ip = netray_common::backend::BackendConfig {
+            url: Some("http://127.0.0.1:19997".to_string()),
+            timeout_ms: 1000,
+            ..Default::default()
+        };
+        let state = AppState::new(config).unwrap();
+
+        // Meta endpoint should return the public ecosystem URL
+        let app = Router::new()
+            .route("/api/meta", get(meta_handler))
+            .with_state(state.clone());
+        let req = Request::builder()
+            .uri("/api/meta")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let bytes = to_bytes(resp.into_body(), 8192).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            json["ecosystem"]["ip_base_url"], "https://ip.example.com",
+            "ecosystem should use public URL"
+        );
+
+        // The backend config should use the internal URL
+        assert_eq!(
+            state.config.backends.ip.url.as_deref(),
+            Some("http://127.0.0.1:19997"),
+            "backend should use internal URL"
+        );
+    }
+
+    // T10: Lens IP backend uses /network/json path
+    #[tokio::test]
+    async fn ip_backend_uses_network_json_path() {
+        use crate::backends::ip::check_ip;
+        use std::sync::Arc;
+
+        let received_path = Arc::new(tokio::sync::Mutex::new(String::new()));
+        let path_ref = received_path.clone();
+
+        let app = axum::Router::new().route(
+            "/network/json",
+            axum::routing::get(
+                move |axum::extract::Query(params): axum::extract::Query<
+                    std::collections::HashMap<String, String>,
+                >| {
+                    let path_ref = path_ref.clone();
+                    async move {
+                        let ip = params.get("ip").cloned().unwrap_or_default();
+                        *path_ref.lock().await = format!("/network/json?ip={ip}");
+                        axum::Json(serde_json::json!({
+                            "network": { "type": "cloud", "org": "Example Corp" },
+                            "location": { "city": "Berlin", "country": "Germany" }
+                        }))
+                    }
+                },
+            ),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.ok(); });
+
+        let client = reqwest::Client::new();
+        let ip: std::net::IpAddr = "1.2.3.4".parse().unwrap();
+        let result = check_ip(
+            &client,
+            &format!("http://{addr}"),
+            &[ip],
+            std::time::Duration::from_secs(5),
+        )
+        .await;
+
+        assert!(result.is_ok(), "check_ip should succeed");
+        let path = received_path.lock().await;
+        assert_eq!(
+            *path, "/network/json?ip=1.2.3.4",
+            "should call /network/json?ip=<addr>"
+        );
     }
 }

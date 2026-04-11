@@ -4,7 +4,6 @@ pub mod ip;
 pub mod tls;
 
 use std::net::IpAddr;
-use std::time::Duration;
 
 use crate::check::SectionError;
 use crate::scoring::engine::CheckResult;
@@ -71,14 +70,11 @@ pub trait Backend: Send + Sync {
     /// Must match the key in `ScoringProfile.sections`.
     fn section(&self) -> &'static str;
 
-    /// Run the backend. Timeout is enforced by the caller (run_backends wraps with
-    /// tokio::time::timeout). Implementations must not apply their own outer timeout.
+    /// Run the backend. Each backend owns its own HTTP client and timeout.
     fn run(
         &self,
-        client: &reqwest::Client,
         domain: &str,
         context: &BackendContext,
-        timeout: Duration,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
     >;

@@ -29,11 +29,8 @@ pub struct AppState {
 impl AppState {
     /// Build `AppState` from a validated `Config`.
     pub fn new(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
-        let timeout = Duration::from_secs(config.backends.backend_timeout_secs);
-
         let http_client = reqwest::Client::builder()
             .use_rustls_tls()
-            .timeout(timeout)
             .user_agent(concat!("lens/", env!("CARGO_PKG_VERSION")))
             .build()?;
 
@@ -52,25 +49,37 @@ impl AppState {
             config.scoring.profile_path.as_deref(),
         )?);
 
+        let eco = &config.ecosystem;
+
         let mut backends: Vec<Box<dyn Backend + Send + Sync>> = vec![
             Box::new(DnsBackend {
-                dns_url: config.backends.dns_url.clone(),
-                public_url: config.public_url("dns").unwrap_or_default(),
+                dns_url: config.backends.dns.url.clone().unwrap_or_default(),
+                public_url: eco.dns_base_url.clone().unwrap_or_default(),
+                timeout: Duration::from_millis(config.backends.dns.timeout_ms),
+                client: http_client.clone(),
             }),
             Box::new(TlsBackend {
-                tls_url: config.backends.tls_url.clone(),
-                public_url: config.public_url("tls").unwrap_or_default(),
+                tls_url: config.backends.tls.url.clone().unwrap_or_default(),
+                public_url: eco.tls_base_url.clone().unwrap_or_default(),
+                timeout: Duration::from_millis(config.backends.tls.timeout_ms),
+                client: http_client.clone(),
             }),
         ];
-        if let Some(ref http_url) = config.backends.http_url {
-            backends.push(Box::new(HttpBackend {
-                http_url: http_url.clone(),
-                public_url: config.public_url("http").unwrap_or_default(),
-            }));
+        if let Some(ref http_cfg) = config.backends.http {
+            if let Some(ref url) = http_cfg.url {
+                backends.push(Box::new(HttpBackend {
+                    http_url: url.clone(),
+                    public_url: eco.http_base_url.clone().unwrap_or_default(),
+                    timeout: Duration::from_millis(http_cfg.timeout_ms),
+                    client: http_client.clone(),
+                }));
+            }
         }
         backends.push(Box::new(IpBackend {
-            ip_url: config.backends.ip_url.clone(),
-            public_url: config.public_url("ip").unwrap_or_default(),
+            ip_url: config.backends.ip.url.clone().unwrap_or_default(),
+            public_url: eco.ip_base_url.clone().unwrap_or_default(),
+            timeout: Duration::from_millis(config.backends.ip.timeout_ms),
+            client: http_client.clone(),
         }));
 
         Ok(Self {
@@ -112,11 +121,19 @@ mod tests {
                 trusted_proxies: Vec::new(),
             },
             backends: BackendsConfig {
-                dns_url: "http://localhost:8080".to_string(),
-                tls_url: "http://localhost:8081".to_string(),
-                ip_url: "http://localhost:8082".to_string(),
-                http_url: None,
-                backend_timeout_secs: 20,
+                dns: netray_common::backend::BackendConfig {
+                    url: Some("http://localhost:8080".to_string()),
+                    ..Default::default()
+                },
+                tls: netray_common::backend::BackendConfig {
+                    url: Some("http://localhost:8081".to_string()),
+                    ..Default::default()
+                },
+                ip: netray_common::backend::BackendConfig {
+                    url: Some("http://localhost:8082".to_string()),
+                    ..Default::default()
+                },
+                http: None,
             },
             ecosystem: EcosystemConfig::default(),
             telemetry: Default::default(),
@@ -183,7 +200,10 @@ mod tests {
     #[test]
     fn http_backend_registered_when_url_set() {
         let mut config = test_config();
-        config.backends.http_url = Some("http://localhost:8083".to_string());
+        config.backends.http = Some(netray_common::backend::BackendConfig {
+            url: Some("http://localhost:8083".to_string()),
+            ..Default::default()
+        });
         let state = AppState::new(config).unwrap();
         assert_eq!(state.backends.len(), 4);
         assert_eq!(state.backends[0].section(), "dns");

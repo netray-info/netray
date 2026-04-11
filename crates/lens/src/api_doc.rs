@@ -2,8 +2,8 @@ use utoipa::OpenApi;
 
 use crate::routes::{
     CheckItem, CheckPostBody, DnsEvent, DoneEvent, HealthResponse, IpAddressInfo, IpEvent,
-    MetaEcosystem, MetaResponse, ProfileData, RateLimitInfo, ReadyResponse, SummaryEvent,
-    SyncCheckResponse, TlsEvent,
+    MetaResponse, ProfileData, RateLimitInfo, ReadyResponse, SummaryEvent, SyncCheckResponse,
+    TlsEvent,
 };
 
 #[derive(OpenApi)]
@@ -22,7 +22,7 @@ use crate::routes::{
         HealthResponse,
         ReadyResponse,
         MetaResponse,
-        MetaEcosystem,
+        netray_common::ecosystem::EcosystemConfig,
         ProfileData,
         RateLimitInfo,
     ))

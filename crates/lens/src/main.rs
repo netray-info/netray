@@ -33,10 +33,10 @@ async fn main() {
 
     tracing::info!(
         bind = %config.server.bind,
-        dns_url = %config.backends.dns_url,
-        tls_url = %config.backends.tls_url,
-        ip_url  = %config.backends.ip_url,
-        http_url = config.backends.http_url.as_deref().unwrap_or("disabled"),
+        dns_url = config.backends.dns.url.as_deref().unwrap_or("disabled"),
+        tls_url = config.backends.tls.url.as_deref().unwrap_or("disabled"),
+        ip_url  = config.backends.ip.url.as_deref().unwrap_or("disabled"),
+        http_url = config.backends.http.as_ref().and_then(|h| h.url.as_deref()).unwrap_or("disabled"),
         per_ip_rate = config.rate_limit.per_ip_per_minute,
         per_ip_burst = config.rate_limit.per_ip_burst,
         global_rate = config.rate_limit.global_per_minute,

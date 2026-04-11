@@ -54,11 +54,9 @@ const WAVE2_SECTIONS: &[&str] = &["ip"];
 /// 5. Score is computed from whatever results are available.
 pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
     let start = Instant::now();
-    let config = &state.config;
-    let timeout = Duration::from_secs(config.backends.backend_timeout_secs);
     let hard_deadline = Duration::from_secs(20);
 
-    let result = tokio::time::timeout(hard_deadline, run_backends(state, domain, timeout)).await;
+    let result = tokio::time::timeout(hard_deadline, run_backends(state, domain)).await;
 
     match result {
         Ok(output) => output,
@@ -80,9 +78,8 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
 }
 
 /// Inner async function that runs the actual backend calls.
-async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> CheckOutput {
+async fn run_backends(state: &AppState, domain: &str) -> CheckOutput {
     let start = Instant::now();
-    let client = &state.http_client;
     let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
 
     // Wave 1: run concurrently.
@@ -96,15 +93,9 @@ async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> Chec
         .map(|b| {
             let section = b.section().to_string();
             let ctx = wave1_context.clone();
-            let client = client.clone();
             let domain = domain.to_string();
             async move {
-                let result =
-                    tokio::time::timeout(timeout, b.run(&client, &domain, &ctx, timeout)).await;
-                let result = match result {
-                    Ok(r) => r,
-                    Err(_) => Err(SectionError::Timeout),
-                };
+                let result = b.run(&domain, &ctx).await;
                 (section, result)
             }
         })
@@ -130,15 +121,7 @@ async fn run_backends(state: &AppState, domain: &str, timeout: Duration) -> Chec
     let wave2_context = BackendContext { resolved_ips };
     for backend in state.backends.iter() {
         if WAVE2_SECTIONS.contains(&backend.section()) {
-            let result = tokio::time::timeout(
-                timeout,
-                backend.run(client, domain, &wave2_context, timeout),
-            )
-            .await;
-            let result = match result {
-                Ok(r) => r,
-                Err(_) => Err(SectionError::Timeout),
-            };
+            let result = backend.run(domain, &wave2_context).await;
             sections.insert(backend.section().to_string(), result);
         }
     }

@@ -83,6 +83,8 @@ struct HealthCheck {
 pub struct TlsBackend {
     pub tls_url: String,
     pub public_url: String,
+    pub timeout: Duration,
+    pub client: reqwest::Client,
 }
 
 impl Backend for TlsBackend {
@@ -92,17 +94,16 @@ impl Backend for TlsBackend {
 
     fn run(
         &self,
-        client: &reqwest::Client,
         domain: &str,
         _context: &BackendContext,
-        timeout: Duration,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
     > {
-        let client = client.clone();
+        let client = self.client.clone();
         let domain = domain.to_string();
         let tls_url = self.tls_url.clone();
         let public_url = self.public_url.clone();
+        let timeout = self.timeout;
         Box::pin(async move {
             let mut result = check_tls(&client, &tls_url, &domain, timeout)
                 .await

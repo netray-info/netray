@@ -100,6 +100,8 @@ struct QualityCheck {
 pub struct HttpBackend {
     pub http_url: String,
     pub public_url: String,
+    pub timeout: Duration,
+    pub client: reqwest::Client,
 }
 
 impl Backend for HttpBackend {
@@ -109,17 +111,16 @@ impl Backend for HttpBackend {
 
     fn run(
         &self,
-        client: &reqwest::Client,
         domain: &str,
         _context: &BackendContext,
-        timeout: Duration,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
     > {
-        let client = client.clone();
+        let client = self.client.clone();
         let domain = domain.to_string();
         let http_url = self.http_url.clone();
         let public_url = self.public_url.clone();
+        let timeout = self.timeout;
         Box::pin(async move {
             let mut result = check_http(&client, &http_url, &domain, timeout)
                 .await

@@ -3,21 +3,35 @@ bind = "0.0.0.0:8085"
 metrics_bind = "127.0.0.1:9095"
 # trusted_proxies = ["10.0.0.0/8"]
 
-[backends]
-dns_url = "https://dns.netray.info"
-tls_url = "https://tls.netray.info"
-ip_url  = "https://ip.netray.info"
-# http_url = "https://http.netray.info"   # optional; omit to disable HTTP section
-# backend_timeout_secs = 20
+[backends.dns]
+url = "https://dns.netray.info"
+timeout_ms = 20000
+# max_concurrent = 10
 
-# Public-facing URLs for cross-links and the /api/meta endpoint.
-# When backends run on an internal network (e.g. Docker), set these to the
-# external URLs that users should see. Falls back to [backends] URLs when omitted.
+[backends.tls]
+url = "https://tls.netray.info"
+timeout_ms = 20000
+# max_concurrent = 10
+
+[backends.ip]
+url = "https://ip.netray.info"
+timeout_ms = 2000
+# max_concurrent = 20
+# cache_ttl_secs = 300
+# cache_capacity = 1024
+
+# [backends.http]
+# url = "https://http.netray.info"   # optional; omit to disable HTTP section
+# timeout_ms = 20000
+# max_concurrent = 10
+
 # [ecosystem]
-# dns_url = "https://dns.netray.info"
-# tls_url = "https://tls.netray.info"
-# ip_url  = "https://ip.netray.info"
-# http_url = "https://http.netray.info"
+# ip_base_url = "https://ip.netray.info"
+# dns_base_url = "https://dns.netray.info"
+# tls_base_url = "https://tls.netray.info"
+# http_base_url = "https://http.netray.info"
+# email_base_url = "https://email.netray.info"
+# lens_base_url = "https://lens.netray.info"
 
 [cache]
 enabled = true

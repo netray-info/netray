@@ -1386,22 +1386,24 @@ dependencies = [
 [[package]]
 name = "netray-common"
 version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31ec1319290ffde4737b219258f08078abe393bf0bf5e64d01ae9ce3dd92f7c4"
 dependencies = [
  "axum",
+ "bytes",
  "futures",
  "governor",
  "ip_network",
  "metrics",
  "metrics-exporter-prometheus",
  "mime_guess",
+ "moka",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "reqwest 0.13.1",
  "rust-embed",
  "serde",
+ "serde_json",
+ "thiserror 2.0.18",
  "tokio",
  "tower-http",
  "tracing",
