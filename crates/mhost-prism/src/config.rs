@@ -268,7 +268,7 @@ fn default_max_servers() -> usize {
 }
 
 fn default_servers_list() -> Vec<String> {
-    vec!["cloudflare".to_owned()]
+    vec!["google".to_owned()]
 }
 
 fn default_trace_max_hops() -> u32 {

@@ -103,7 +103,7 @@ mod tests {
 
         let loaded = hot_state.hot_config.load();
         assert_eq!(loaded.limits.per_ip_per_minute, 120);
-        assert_eq!(loaded.dns.default_servers, vec!["cloudflare".to_owned()]);
+        assert_eq!(loaded.dns.default_servers, vec!["google".to_owned()]);
     }
 
     #[test]

@@ -106,7 +106,7 @@
 
 # Default servers used when no @server is specified in the query.
 # Values: predefined provider names (cloudflare, google, quad9, etc.).
-#default_servers = ["cloudflare"]
+#default_servers = ["google"]
 
 # Allow @system to use the OS-configured resolvers.
 #allow_system_resolvers = true
