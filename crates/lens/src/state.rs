@@ -65,15 +65,15 @@ impl AppState {
                 client: http_client.clone(),
             }),
         ];
-        if let Some(ref http_cfg) = config.backends.http {
-            if let Some(ref url) = http_cfg.url {
-                backends.push(Box::new(HttpBackend {
-                    http_url: url.clone(),
-                    public_url: eco.http_base_url.clone().unwrap_or_default(),
-                    timeout: Duration::from_millis(http_cfg.timeout_ms),
-                    client: http_client.clone(),
-                }));
-            }
+        if let Some(ref http_cfg) = config.backends.http
+            && let Some(ref url) = http_cfg.url
+        {
+            backends.push(Box::new(HttpBackend {
+                http_url: url.clone(),
+                public_url: eco.http_base_url.clone().unwrap_or_default(),
+                timeout: Duration::from_millis(http_cfg.timeout_ms),
+                client: http_client.clone(),
+            }));
         }
         backends.push(Box::new(IpBackend {
             ip_url: config.backends.ip.url.clone().unwrap_or_default(),

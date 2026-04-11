@@ -376,10 +376,10 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
             config.backends.ip.url.clone().unwrap_or_default(),
         ),
     ];
-    if let Some(ref http_cfg) = config.backends.http {
-        if let Some(ref url) = http_cfg.url {
-            probes.push(("http".to_string(), url.clone()));
-        }
+    if let Some(ref http_cfg) = config.backends.http
+        && let Some(ref url) = http_cfg.url
+    {
+        probes.push(("http".to_string(), url.clone()));
     }
 
     let futures: Vec<_> = probes
@@ -1763,7 +1763,10 @@ pub mod tests {
         let bytes = to_bytes(resp.into_body(), 8192).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         let eco = &json["ecosystem"];
-        assert!(eco.is_object(), "ecosystem should be present when configured");
+        assert!(
+            eco.is_object(),
+            "ecosystem should be present when configured"
+        );
         assert_eq!(eco["ip_base_url"], "https://ip.example.com");
         assert_eq!(eco["dns_base_url"], "https://dns.example.com");
         assert_eq!(eco["tls_base_url"], "https://tls.example.com");
@@ -1845,7 +1848,9 @@ pub mod tests {
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move { axum::serve(listener, app).await.ok(); });
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.ok();
+        });
 
         let client = reqwest::Client::new();
         let ip: std::net::IpAddr = "1.2.3.4".parse().unwrap();
