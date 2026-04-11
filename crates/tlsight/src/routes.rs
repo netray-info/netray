@@ -105,7 +105,7 @@ pub struct MetaResponse {
     pub limits: MetaLimits,
     pub custom_ca_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ecosystem: Option<MetaEcosystem>,
+    pub ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -124,14 +124,6 @@ pub struct MetaLimits {
     pub max_ips_per_hostname: usize,
     pub handshake_timeout_secs: u64,
     pub request_timeout_secs: u64,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct MetaEcosystem {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dns_base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ip_base_url: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -198,7 +190,7 @@ fn default_ports() -> Vec<u16> {
         MetaResponse,
         MetaFeatures,
         MetaLimits,
-        MetaEcosystem,
+        netray_common::ecosystem::EcosystemConfig,
         HealthResponse,
         ReadyResponse,
         ErrorResponse,
@@ -277,16 +269,8 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut warnings: Vec<String> = Vec::new();
 
     // Check enrichment service reachability (2 s timeout HEAD request).
-    if let Some(ref url) = config.ecosystem.ip_api_url {
-        let health_url = format!("{}/health", url.trim_end_matches('/'));
-        let probe = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(2))
-            .build();
-        let reachable = match probe {
-            Ok(client) => client.get(&health_url).send().await.is_ok(),
-            Err(_) => false,
-        };
-        if !reachable {
+    if let Some(ref client) = state.enrichment_client {
+        if !client.is_reachable().await {
             warnings.push("enrichment service unreachable".to_owned());
         }
     }
@@ -319,15 +303,11 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
 )]
 async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
     let config = state.config.load();
-    let ecosystem =
-        if config.ecosystem.dns_base_url.is_some() || config.ecosystem.ip_base_url.is_some() {
-            Some(MetaEcosystem {
-                dns_base_url: config.ecosystem.dns_base_url.clone(),
-                ip_base_url: config.ecosystem.ip_base_url.clone(),
-            })
-        } else {
-            None
-        };
+    let ecosystem = if config.ecosystem.has_any() {
+        Some(config.ecosystem.clone())
+    } else {
+        None
+    };
 
     Json(MetaResponse {
         site_name: config.site_name.clone(),
@@ -1243,6 +1223,7 @@ mod tests {
             ecosystem: crate::config::EcosystemConfig::default(),
             quality: crate::config::QualityConfig::default(),
             telemetry: crate::config::TelemetryConfig::default(),
+            backends: crate::config::BackendsConfig::default(),
         }
     }
 

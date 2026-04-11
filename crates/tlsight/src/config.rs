@@ -9,7 +9,6 @@ const HARD_CAP_HANDSHAKE_TIMEOUT: u64 = 5;
 const HARD_CAP_REQUEST_TIMEOUT: u64 = 15;
 const HARD_CAP_MAX_PORTS: usize = 7;
 const HARD_CAP_MAX_IPS: usize = 10;
-const HARD_CAP_ENRICHMENT_TIMEOUT_MS: u64 = 2000;
 const HARD_CAP_HTTP_CHECK_TIMEOUT: u64 = 5;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -31,6 +30,8 @@ pub struct Config {
     pub quality: QualityConfig,
     #[serde(default)]
     pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub backends: BackendsConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -95,16 +96,12 @@ pub struct ValidationConfig {
     pub custom_ca_dir: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct EcosystemConfig {
-    pub dns_base_url: Option<String>,
-    pub ip_base_url: Option<String>,
-    /// Base URL for the ifconfig-rs IP enrichment API (e.g. `https://ip.netray.info`).
-    /// When set, enrichment lookups run concurrently with TLS handshakes.
-    pub ip_api_url: Option<String>,
-    /// Timeout for each enrichment HTTP call in milliseconds.
-    #[serde(default = "default_enrichment_timeout_ms")]
-    pub enrichment_timeout_ms: u64,
+pub use netray_common::ecosystem::EcosystemConfig;
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct BackendsConfig {
+    #[serde(default)]
+    pub ip: Option<netray_common::backend::BackendConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -121,27 +118,6 @@ impl Default for QualityConfig {
     fn default() -> Self {
         default_quality()
     }
-}
-
-impl Default for EcosystemConfig {
-    fn default() -> Self {
-        Self {
-            dns_base_url: None,
-            ip_base_url: None,
-            ip_api_url: None,
-            enrichment_timeout_ms: default_enrichment_timeout_ms(),
-        }
-    }
-}
-
-impl EcosystemConfig {
-    pub fn enrichment_enabled(&self) -> bool {
-        self.ip_api_url.is_some()
-    }
-}
-
-fn default_enrichment_timeout_ms() -> u64 {
-    500
 }
 
 fn default_quality() -> QualityConfig {
@@ -372,22 +348,6 @@ impl Config {
             self.validation.expiry_critical_days,
         )?;
 
-        // Enrichment timeout: clamp to hard cap, reject zero when enabled.
-        if self.ecosystem.enrichment_timeout_ms > HARD_CAP_ENRICHMENT_TIMEOUT_MS {
-            tracing::warn!(
-                configured = self.ecosystem.enrichment_timeout_ms,
-                clamped = HARD_CAP_ENRICHMENT_TIMEOUT_MS,
-                "enrichment_timeout_ms exceeds hard cap, clamping"
-            );
-            self.ecosystem.enrichment_timeout_ms = HARD_CAP_ENRICHMENT_TIMEOUT_MS;
-        }
-        if self.ecosystem.enrichment_enabled() {
-            reject_zero(
-                "ecosystem.enrichment_timeout_ms",
-                self.ecosystem.enrichment_timeout_ms,
-            )?;
-        }
-
         // Quality assessment HTTP check timeout: clamp to hard cap.
         if self.quality.http_check_timeout_secs > HARD_CAP_HTTP_CHECK_TIMEOUT {
             tracing::warn!(
@@ -433,6 +393,7 @@ mod tests {
             ecosystem: EcosystemConfig::default(),
             quality: default_quality(),
             telemetry: TelemetryConfig::default(),
+            backends: BackendsConfig::default(),
         }
     }
 
@@ -560,38 +521,6 @@ mod tests {
     });
 
     // --- Enrichment config ---
-
-    #[test]
-    fn clamps_enrichment_timeout_ms() {
-        let mut cfg = valid_config();
-        cfg.ecosystem.ip_api_url = Some("https://ip.netray.info".to_owned());
-        cfg.ecosystem.enrichment_timeout_ms = 9999;
-        cfg.validate().unwrap();
-        assert_eq!(
-            cfg.ecosystem.enrichment_timeout_ms,
-            HARD_CAP_ENRICHMENT_TIMEOUT_MS
-        );
-    }
-
-    #[test]
-    fn rejects_zero_enrichment_timeout_when_enabled() {
-        let mut cfg = valid_config();
-        cfg.ecosystem.ip_api_url = Some("https://ip.netray.info".to_owned());
-        cfg.ecosystem.enrichment_timeout_ms = 0;
-        let err = cfg.validate().unwrap_err().to_string();
-        assert!(
-            err.contains("must not be zero"),
-            "expected 'must not be zero' in: {err}"
-        );
-    }
-
-    #[test]
-    fn allows_zero_enrichment_timeout_when_disabled() {
-        let mut cfg = valid_config();
-        cfg.ecosystem.ip_api_url = None;
-        cfg.ecosystem.enrichment_timeout_ms = 0;
-        assert!(cfg.validate().is_ok());
-    }
 
     // --- Quality config ---
 

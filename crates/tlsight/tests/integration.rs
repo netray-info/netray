@@ -219,6 +219,7 @@ async fn rate_limit_returns_429() {
             skip_http_checks: true,
         },
         telemetry: TelemetryConfig::default(),
+        backends: tlsight::config::BackendsConfig::default(),
     };
 
     // Use Arc<ArcSwap<Config>> as AppState::new expects it stored via ArcSwap.

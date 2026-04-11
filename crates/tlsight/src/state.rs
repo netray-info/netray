@@ -50,13 +50,15 @@ impl AppState {
             .with_no_client_auth();
         let hsts_tls_connector = Arc::new(tokio_rustls::TlsConnector::from(Arc::new(hsts_config)));
 
-        let enrichment_client = config.ecosystem.ip_api_url.as_ref().map(|url| {
-            Arc::new(EnrichmentClient::new(
-                url,
-                Duration::from_millis(config.ecosystem.enrichment_timeout_ms),
-                "tlsight",
-                None,
-            ))
+        let enrichment_client = config.backends.ip.as_ref().and_then(|ip_cfg| {
+            ip_cfg.url.as_ref().map(|url| {
+                Arc::new(EnrichmentClient::new(
+                    url,
+                    Duration::from_millis(ip_cfg.timeout_ms),
+                    "tlsight",
+                    None,
+                ))
+            })
         });
 
         Self {
@@ -209,6 +211,7 @@ mod tests {
             ecosystem: crate::config::EcosystemConfig::default(),
             quality: crate::config::QualityConfig::default(),
             telemetry: crate::config::TelemetryConfig::default(),
+            backends: crate::config::BackendsConfig::default(),
         };
         // Ensure defaults pass validation (not strictly needed but defensive).
         let _ = &mut cfg;

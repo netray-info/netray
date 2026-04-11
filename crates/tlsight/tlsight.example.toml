@@ -33,11 +33,22 @@ check_caa = true
 check_ct = false
 # custom_ca_dir = "/etc/tlsight/ca.d/"
 
-[ecosystem]
-dns_base_url = "https://dns.netray.info"
-ip_base_url = "https://ip.netray.info"
-# ip_api_url = "https://ip.netray.info"   # enables IP enrichment (geo, ASN, rDNS)
-# enrichment_timeout_ms = 500
+# [ecosystem]
+# Public URLs for cross-tool navigation (served to browser frontends).
+# ip_base_url = "https://ip.example.com"
+# dns_base_url = "https://dns.example.com"
+# tls_base_url = "https://tls.example.com"
+# http_base_url = "https://http.example.com"
+# email_base_url = "https://email.example.com"
+# lens_base_url = "https://lens.example.com"
+
+# [backends.ip]
+# Internal IP enrichment backend (enables geo, ASN, rDNS badges).
+# url = "http://ifconfig-rs:8000"
+# timeout_ms = 500
+# max_concurrent = 20
+# cache_ttl_secs = 300
+# cache_capacity = 1024
 
 [quality]
 # enabled = true

@@ -32,7 +32,7 @@ axum = { version = "0.8", features = ["json"] }
 tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
 governor = "0.10"
-netray-common = { version = "0.6.0", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment"] }
+netray-common = { version = "0.7.0", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment", "backend"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
