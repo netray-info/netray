@@ -269,10 +269,10 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut warnings: Vec<String> = Vec::new();
 
     // Check enrichment service reachability (2 s timeout HEAD request).
-    if let Some(ref client) = state.enrichment_client {
-        if !client.is_reachable().await {
-            warnings.push("enrichment service unreachable".to_owned());
-        }
+    if let Some(ref client) = state.enrichment_client
+        && !client.is_reachable().await
+    {
+        warnings.push("enrichment service unreachable".to_owned());
     }
 
     // Check custom CA directory exists and is readable.
