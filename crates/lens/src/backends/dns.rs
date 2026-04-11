@@ -421,4 +421,3 @@ fn build_headline(checks: &[CheckResult]) -> String {
 
     parts.join("  ")
 }
-

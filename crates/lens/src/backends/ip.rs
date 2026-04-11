@@ -86,12 +86,13 @@ impl Backend for IpBackend {
         let public_url = self.public_url.clone();
         let timeout = self.timeout;
         Box::pin(async move {
-            let mut result = check_ip(&client, &ip_url, &ips, timeout)
-                .await
-                .map_err(|e| match e {
-                    AppError::Timeout => SectionError::Timeout,
-                    other => SectionError::BackendError(other.to_string()),
-                })?;
+            let mut result =
+                check_ip(&client, &ip_url, &ips, timeout)
+                    .await
+                    .map_err(|e| match e {
+                        AppError::Timeout => SectionError::Timeout,
+                        other => SectionError::BackendError(other.to_string()),
+                    })?;
             result.detail_url = public_url;
             Ok(BackendResult {
                 checks: result.checks,
