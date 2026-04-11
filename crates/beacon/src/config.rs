@@ -17,7 +17,9 @@ pub struct Config {
     #[serde(default)]
     pub telemetry: TelemetryConfig,
     #[serde(default)]
-    pub enrichment: Option<EnrichmentConfig>,
+    pub ecosystem: EcosystemConfig,
+    #[serde(default)]
+    pub backends: BackendsConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -75,11 +77,12 @@ pub struct TelemetryConfig {
     pub sample_rate: f64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-pub struct EnrichmentConfig {
-    pub ip_url: String,
-    #[serde(default = "default_enrichment_timeout")]
-    pub timeout_ms: u64,
+pub use netray_common::ecosystem::EcosystemConfig;
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct BackendsConfig {
+    #[serde(default)]
+    pub ip: Option<netray_common::backend::BackendConfig>,
 }
 
 impl Config {
@@ -212,10 +215,6 @@ fn default_service_name() -> String {
 
 fn default_sample_rate() -> f64 {
     1.0
-}
-
-fn default_enrichment_timeout() -> u64 {
-    5000
 }
 
 impl Default for TelemetryConfig {

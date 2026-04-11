@@ -23,13 +23,15 @@ impl AppState {
             .await
             .map_err(|e| crate::error::MailError::DnsError(e.to_string()))?;
 
-        let enrichment_client = config.enrichment.as_ref().map(|e| {
-            Arc::new(EnrichmentClient::new(
-                &e.ip_url,
-                Duration::from_millis(e.timeout_ms),
-                "beacon",
-                None,
-            ))
+        let enrichment_client = config.backends.ip.as_ref().and_then(|ip_cfg| {
+            ip_cfg.url.as_ref().map(|url| {
+                Arc::new(EnrichmentClient::new(
+                    url,
+                    Duration::from_millis(ip_cfg.timeout_ms),
+                    "beacon",
+                    None,
+                ))
+            })
         });
 
         let http_client = reqwest::Client::builder()

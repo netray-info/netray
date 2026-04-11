@@ -22,9 +22,20 @@ timeout_ms = 10000
 [rate_limit]
 per_ip = "10/min"
 
-# [enrichment]
-# ip_url = "http://localhost:3001"
-# timeout_ms = 5000
+# [ecosystem]
+# ip_base_url = "https://ip.netray.info"
+# dns_base_url = "https://dns.netray.info"
+# tls_base_url = "https://tls.netray.info"
+# http_base_url = "https://http.netray.info"
+# email_base_url = "https://email.netray.info"
+# lens_base_url = "https://lens.netray.info"
+
+# [backends.ip]
+# url = "http://localhost:3001"
+# timeout_ms = 500
+# max_concurrent = 20
+# cache_ttl_secs = 300
+# cache_capacity = 1024
 
 [dkim]
 max_user_selectors = 5

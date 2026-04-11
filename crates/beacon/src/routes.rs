@@ -35,6 +35,8 @@ pub struct ReadyResponse {
 pub struct MetaResponse {
     pub version: &'static str,
     pub service: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -68,6 +70,7 @@ pub struct InspectQuery {
         HealthResponse,
         ReadyResponse,
         MetaResponse,
+        netray_common::ecosystem::EcosystemConfig,
         InspectRequest,
         CheckResult,
         SubCheck,
@@ -198,10 +201,18 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
         (status = 200, description = "Service metadata", body = MetaResponse),
     )
 )]
-async fn meta_handler() -> Json<MetaResponse> {
+async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
+    let eco = &state.config.ecosystem;
+    let ecosystem = if eco.has_any() {
+        Some(eco.clone())
+    } else {
+        None
+    };
+
     Json(MetaResponse {
         version: env!("CARGO_PKG_VERSION"),
         service: "beacon",
+        ecosystem,
     })
 }
 
@@ -353,6 +364,38 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert!(body["version"].is_string());
         assert_eq!(body["service"], "beacon");
+    }
+
+    #[tokio::test]
+    async fn meta_includes_ecosystem_when_configured() {
+        let mut config = crate::config::Config::load(None).unwrap();
+        config.ecosystem = netray_common::ecosystem::EcosystemConfig {
+            ip_base_url: Some("https://ip.example.com".to_string()),
+            dns_base_url: Some("https://dns.example.com".to_string()),
+            ..Default::default()
+        };
+        let state = AppState::new(&config).await.unwrap();
+        let app = health_router(state.clone()).merge(api_router(state));
+        let (status, body) = do_get(&app, "/api/meta").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["service"], "beacon");
+        let eco = &body["ecosystem"];
+        assert!(eco.is_object(), "ecosystem should be present when configured");
+        assert_eq!(eco["ip_base_url"], "https://ip.example.com");
+        assert_eq!(eco["dns_base_url"], "https://dns.example.com");
+        // Unconfigured fields should be absent (skip_serializing_if)
+        assert!(eco.get("tls_base_url").is_none() || eco["tls_base_url"].is_null());
+    }
+
+    #[tokio::test]
+    async fn meta_omits_ecosystem_when_unconfigured() {
+        let app = test_router().await;
+        let (_, body) = do_get(&app, "/api/meta").await;
+        // Default config has no ecosystem set — field should be absent
+        assert!(
+            body.get("ecosystem").is_none() || body["ecosystem"].is_null(),
+            "ecosystem should be absent when not configured"
+        );
     }
 
     #[tokio::test]
