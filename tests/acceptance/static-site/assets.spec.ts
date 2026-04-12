@@ -8,7 +8,7 @@ const ASSETS = [
   '/robots.txt',
   '/favicon.svg',
   '/bimi-logo.svg',
-  '/.well-known/mta-sts.txt',
+  // TODO: mta-sts.txt is not served from the static site origin
 ];
 
 for (const path of ASSETS) {

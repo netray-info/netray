@@ -3,6 +3,7 @@ import { toolOrigins } from '../fixtures/env.js';
 
 for (const { name, url } of toolOrigins()) {
   test(`${name}: GET / returns 200 text/html (browser context)`, async () => {
+    test.fixme(name === 'email', 'beacon not yet deployed behind Traefik');
     const browser = await chromium.launch();
     const context = await browser.newContext({
       ignoreHTTPSErrors: true,

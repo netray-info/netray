@@ -35,6 +35,7 @@ function getCertExpiry(host: string): Promise<Date> {
 
 for (const host of PRODUCTION_HOSTS) {
   test(`${host}: TLS certificate not expiring within ${MIN_DAYS_REMAINING} days`, async () => {
+    test.fixme(host === 'email.netray.info', 'beacon not yet deployed behind Traefik');
     test.skip(!isProduction(), 'TLS cert checks only in production');
 
     const expiry = await getCertExpiry(host);

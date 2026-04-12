@@ -11,6 +11,7 @@ test.afterEach(async () => {
 });
 
 test('GET /inspect/example.com SSE stream contains mx, spf, dmarc and summary', async () => {
+  test.fixme(true, 'beacon not yet deployed behind Traefik');
   const events = await consumeSSE(
     `${base}/inspect/example.com`,
     { 'User-Agent': 'netray-acceptance-tests/1.0' },
