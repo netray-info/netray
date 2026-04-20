@@ -25,6 +25,14 @@ per_ip = "10/min"
 [dkim]
 max_user_selectors = 5
 
+[ecosystem]
+ip_base_url = "https://ip.netray.info"
+dns_base_url = "https://dns.netray.info"
+tls_base_url = "https://tls.netray.info"
+http_base_url = "https://http.netray.info"
+email_base_url = "https://email.netray.info"
+lens_base_url = "https://lens.netray.info"
+
 [telemetry]
 log_format = "text"
 service_name = "beacon"

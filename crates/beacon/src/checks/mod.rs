@@ -409,14 +409,9 @@ async fn run_inspection_inner(
     {
         let domain = domain.clone();
         let dns = dns.clone();
-        let tls_base_url = config
-            .ecosystem
-            .tls_base_url
-            .clone()
-            .unwrap_or_else(|| "https://tls.netray.info".to_string());
         phase0.spawn(async move {
             let start = std::time::Instant::now();
-            let (result, ad) = dnssec::check_dnssec(&domain, &dns, &tls_base_url).await;
+            let (result, ad) = dnssec::check_dnssec(&domain, &dns).await;
             let elapsed = start.elapsed().as_secs_f64();
             metrics::histogram!("beacon_check_duration_seconds", "category" => "dnssec")
                 .record(elapsed);

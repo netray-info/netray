@@ -82,6 +82,66 @@ export const GROUP_CATEGORIES: Record<Group, Category[]> = {
   brand_policy: ['bimi', 'cross_validation'],
 };
 
+export const CATEGORY_EXPLANATIONS: Record<Category, { summary: string; guideUrl?: string }> = {
+  mx: {
+    summary:
+      'MX records name the servers that accept inbound mail for this domain. Receivers query them before delivery; without valid MX records, mail cannot be delivered. Multiple MX records with different priorities provide redundancy.',
+  },
+  spf: {
+    summary:
+      'SPF (Sender Policy Framework) lists which servers are authorized to send mail on behalf of this domain. Receivers reject or flag mail from servers not in the list, which prevents spoofing of the envelope-from address.',
+    guideUrl: 'https://netray.info/guide/email-auth.html',
+  },
+  dkim: {
+    summary:
+      'DKIM (DomainKeys Identified Mail) cryptographically signs outgoing messages so receivers can verify they were authorized by the domain and were not modified in transit. Each sender publishes one or more public keys under named selectors.',
+    guideUrl: 'https://netray.info/guide/dkim.html',
+  },
+  dmarc: {
+    summary:
+      'DMARC ties SPF and DKIM together with a policy (none/quarantine/reject) and reporting addresses. It tells receivers what to do when authentication fails and lets the domain owner observe how their domain is used and abused.',
+    guideUrl: 'https://netray.info/guide/email-auth.html',
+  },
+  mta_sts: {
+    summary:
+      'MTA-STS (RFC 8461) lets a domain require TLS for inbound mail and pin the set of valid MX hosts. Senders fetch a signed policy over HTTPS from mta-sts.<domain> and refuse to deliver in cleartext or to unlisted servers.',
+    guideUrl: 'https://netray.info/guide/mta-sts.html',
+  },
+  tls_rpt: {
+    summary:
+      'TLS-RPT (RFC 8460) publishes an address where senders can send daily aggregate reports about TLS failures reaching this domain. It is the visibility layer for MTA-STS and DANE — without it, policy failures go unnoticed.',
+    guideUrl: 'https://netray.info/guide/tls-rpt.html',
+  },
+  dane: {
+    summary:
+      'DANE (RFC 7672) uses DNSSEC-signed TLSA records at _25._tcp.<mx-host> to pin the expected certificate or CA for SMTP TLS. Supporting senders refuse delivery if the presented certificate does not match, closing the gap left by opportunistic STARTTLS.',
+    guideUrl: 'https://netray.info/guide/dane-tlsa.html',
+  },
+  dnssec: {
+    summary:
+      'DNSSEC chains DNS responses with cryptographic signatures (DNSKEY, RRSIG, DS) so receivers can detect tampering. Several email protocols — notably DANE and secure MX discovery — are only meaningful when the DNS zone is DNSSEC-signed.',
+    guideUrl: 'https://netray.info/guide/dnssec.html',
+  },
+  bimi: {
+    summary:
+      'BIMI (Brand Indicators for Message Identification) lets receivers display the domain\'s logo next to authenticated mail. It requires an enforcing DMARC policy and, for most major mailbox providers, a Verified Mark Certificate.',
+    guideUrl: 'https://netray.info/guide/bimi.html',
+  },
+  fcrdns: {
+    summary:
+      'Forward-Confirmed reverse DNS checks that each MX host\'s IP has a PTR record and that the name that PTR points to resolves back to the same IP. Large mailbox providers (Google, Yahoo) require FCrDNS on outbound senders as of February 2024.',
+  },
+  dnsbl: {
+    summary:
+      'DNS-based blocklists (DNSBLs) let receivers look up whether an IP is known for spam or abuse. Being listed in a widely-consulted zone like zen.spamhaus.org typically causes inbound mail from that IP to be rejected or quarantined.',
+    guideUrl: 'https://netray.info/guide/dnsbl.html',
+  },
+  cross_validation: {
+    summary:
+      'Cross-validation checks that the individual signals above are mutually consistent — for example, that DANE is deployed alongside DNSSEC, that MTA-STS and TLS-RPT accompany each other, and that SPF and MX do not contradict each other for managed providers.',
+  },
+};
+
 export const VERDICT_ORDER: Record<Verdict, number> = {
   skip: 0,
   pass: 1,
