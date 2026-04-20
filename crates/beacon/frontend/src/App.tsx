@@ -78,10 +78,22 @@ interface EcoLink {
   label: string;
 }
 
+const DKIM_SELECTOR_RE = /selector '([A-Za-z0-9-]{1,63})'/;
+const DANE_HOST_RE = /^([A-Za-z0-9.-]+):\s/;
+
+function firstMatch(subChecks: SubCheck[], re: RegExp): string | null {
+  for (const sc of subChecks) {
+    const m = sc.detail.match(re);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 function categoryHeaderLink(
   cat: Category,
   domain: string,
   eco: Ecosystem | undefined,
+  result?: CheckResult,
 ): EcoLink | null {
   if (!domain || !eco) return null;
 
@@ -106,7 +118,14 @@ function categoryHeaderLink(
     case 'tls_rpt': return dnsQ(`_smtp._tls.${domain}`, 'TXT');
     case 'bimi':    return dnsQ(`default._bimi.${domain}`, 'TXT');
     case 'mta_sts': return tlsH(`mta-sts.${domain}`);
-    // DKIM/DANE omitted: keyed on selector / MX host not reliably available here.
+    case 'dkim': {
+      const sel = result ? firstMatch(result.sub_checks, DKIM_SELECTOR_RE) : null;
+      return sel ? dnsQ(`${sel}._domainkey.${domain}`, 'TXT') : null;
+    }
+    case 'dane': {
+      const host = result ? firstMatch(result.sub_checks, DANE_HOST_RE) : null;
+      return host ? dnsQ(`_25._tcp.${host}`, 'TLSA') : null;
+    }
     default:        return null;
   }
 }
@@ -708,7 +727,7 @@ function CategorySection(props: {
   ecosystem?: Ecosystem;
 }) {
   const headerLink = () =>
-    categoryHeaderLink(props.result.category, props.domain, props.ecosystem);
+    categoryHeaderLink(props.result.category, props.domain, props.ecosystem, props.result);
   const explanation = () => CATEGORY_EXPLANATIONS[props.result.category];
   const counts = () => {
     const c: Partial<Record<Verdict, number>> = {};

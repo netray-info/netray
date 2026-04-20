@@ -35,6 +35,7 @@ pub async fn check_dane(mx_hosts: &[String], resolver: &DnsResolver) -> (CheckRe
         }
 
         has_tlsa = true;
+        let host_had_error = sub_checks.len();
 
         for record in &records {
             // Validate usage (0-3)
@@ -70,15 +71,17 @@ pub async fn check_dane(mx_hosts: &[String], resolver: &DnsResolver) -> (CheckRe
                 });
             }
         }
+
+        if sub_checks.len() == host_had_error {
+            sub_checks.push(SubCheck {
+                name: "valid".to_string(),
+                verdict: Verdict::Pass,
+                detail: format!("{}: TLSA records present and valid", host),
+            });
+        }
     }
 
-    if has_tlsa && sub_checks.is_empty() {
-        sub_checks.push(SubCheck {
-            name: "valid".to_string(),
-            verdict: Verdict::Pass,
-            detail: "DANE TLSA records present and valid".to_string(),
-        });
-    } else if !has_tlsa {
+    if !has_tlsa {
         sub_checks.push(SubCheck {
             name: "absent".to_string(),
             verdict: Verdict::Info,
