@@ -12,7 +12,7 @@ pub async fn check_dnssec(domain: &str, resolver: &DnsResolver) -> (CheckResult,
         sub_checks.push(SubCheck {
             name: "ad_set".to_string(),
             verdict: Verdict::Pass,
-            detail: "DNSSEC validated (RRSIG records present)".to_string(),
+            detail: "DNSSEC signed (DNSKEY records present)".to_string(),
         });
     } else {
         sub_checks.push(SubCheck {

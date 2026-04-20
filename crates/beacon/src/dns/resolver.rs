@@ -286,21 +286,23 @@ impl DnsResolver {
         }
     }
 
-    /// Check for DNSSEC: query with RRSIG to see if the domain is signed.
-    /// Since mhost doesn't expose the AD bit, we check if RRSIG records
-    /// are returned for the domain's SOA record as a proxy.
+    /// Check for DNSSEC: query DNSKEY and treat presence of any DNSKEY
+    /// records as a signed-zone signal. We don't query RRSIG directly —
+    /// it's a meta-type many authoritative servers refuse (REFUSED/SERVFAIL),
+    /// which made the previous check report false negatives on properly
+    /// signed zones (e.g. NSOne-hosted domains).
     pub async fn check_dnssec_signed(&self, domain: &str) -> bool {
-        let query = match MultiQuery::single(domain, RecordType::RRSIG) {
+        let query = match MultiQuery::single(domain, RecordType::DNSKEY) {
             Ok(q) => q,
             Err(e) => {
-                tracing::warn!(query_name = %domain, record_type = "RRSIG", error = %e, "DNS lookup failed");
+                tracing::warn!(query_name = %domain, record_type = "DNSKEY", error = %e, "DNS lookup failed");
                 return false;
             }
         };
         match self.pick().lookup(query).await {
-            Ok(l) => !l.rrsig().is_empty(),
+            Ok(l) => !l.dnskey().is_empty(),
             Err(e) => {
-                tracing::warn!(query_name = %domain, record_type = "RRSIG", error = %e, "DNS lookup failed");
+                tracing::warn!(query_name = %domain, record_type = "DNSKEY", error = %e, "DNS lookup failed");
                 false
             }
         }
