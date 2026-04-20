@@ -46,6 +46,11 @@ pub struct DnsblConfig {
     pub zones: Vec<String>,
     #[serde(default = "default_dnsbl_timeout")]
     pub timeout_ms: u64,
+    /// Resolvers used for DNSBL queries only. Defaults to the system resolver
+    /// because most public DNSBLs (notably Spamhaus) block queries from
+    /// public/open resolvers like Cloudflare or Google.
+    #[serde(default = "default_dnsbl_resolvers")]
+    pub resolvers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -159,7 +164,12 @@ fn default_dnsbl() -> DnsblConfig {
     DnsblConfig {
         zones: default_dnsbl_zones(),
         timeout_ms: default_dnsbl_timeout(),
+        resolvers: default_dnsbl_resolvers(),
     }
+}
+
+fn default_dnsbl_resolvers() -> Vec<String> {
+    vec!["system".to_string()]
 }
 
 fn default_dnsbl_zones() -> Vec<String> {

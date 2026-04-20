@@ -285,11 +285,13 @@ const SUB_CHECK_EXPLANATIONS: Record<string, string> = {
 export function subCheckLabel(name: string): string {
   if (name in SUB_CHECK_LABELS) return SUB_CHECK_LABELS[name];
   if (name.startsWith('listed_')) return `Listed: ${name.slice(7).replace(/_/g, '.')}`;
+  if (name.startsWith('policy_response_')) return `Policy response: ${name.slice(16).replace(/_/g, '.')}`;
   return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function subCheckExplanation(name: string): string | undefined {
   if (name in SUB_CHECK_EXPLANATIONS) return SUB_CHECK_EXPLANATIONS[name];
   if (name.startsWith('listed_')) return `This IP is listed in the ${name.slice(7).replace(/_/g, '.')} blocklist zone.`;
+  if (name.startsWith('policy_response_')) return `The ${name.slice(16).replace(/_/g, '.')} zone returned a policy/error response (typically because the query came via a public DNS resolver). Results from this zone are unreliable — switch beacon to a local resolver.`;
   return undefined;
 }

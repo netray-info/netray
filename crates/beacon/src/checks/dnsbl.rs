@@ -17,6 +17,28 @@ const IPV4_ONLY_ZONES: &[&str] = &[
 /// Domain-based zones (query target domain, not IP).
 const DOMAIN_ZONES: &[&str] = &["dbl.spamhaus.org"];
 
+/// What a DNSBL query was asking about — the MX IP or the domain.
+#[derive(Clone)]
+enum Target {
+    Ip(IpAddr),
+    Domain(String),
+}
+
+impl std::fmt::Display for Target {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Target::Ip(ip) => write!(f, "{ip}"),
+            Target::Domain(d) => write!(f, "{d}"),
+        }
+    }
+}
+
+struct DnsblQuery {
+    zone: String,
+    query_name: String,
+    target: Target,
+}
+
 /// Check DNSBLs for MX IPs.
 pub async fn check_dnsbl(
     mx_ips: &[IpAddr],
@@ -35,13 +57,15 @@ pub async fn check_dnsbl(
         return CheckResult::new(Category::Dnsbl, sub_checks, "No MX IPs".to_string());
     }
 
-    // Build all (zone, query_name) pairs to look up in parallel
-    let mut queries: Vec<(String, String)> = Vec::new();
+    let mut queries: Vec<DnsblQuery> = Vec::new();
 
     for zone in &config.zones {
         if DOMAIN_ZONES.contains(&zone.as_str()) {
-            let query_name = format!("{}.{}", domain, zone);
-            queries.push((zone.clone(), query_name));
+            queries.push(DnsblQuery {
+                zone: zone.clone(),
+                query_name: format!("{}.{}", domain, zone),
+                target: Target::Domain(domain.to_string()),
+            });
         } else {
             for ip in mx_ips {
                 let is_ipv4_only = IPV4_ONLY_ZONES.contains(&zone.as_str());
@@ -52,65 +76,62 @@ pub async fn check_dnsbl(
                     IpAddr::V4(v4) => reverse_ipv4(*v4),
                     IpAddr::V6(v6) => reverse_ipv6(*v6),
                 };
-                let query_name = format!("{}.{}", reversed, zone);
-                queries.push((zone.clone(), query_name));
+                queries.push(DnsblQuery {
+                    zone: zone.clone(),
+                    query_name: format!("{}.{}", reversed, zone),
+                    target: Target::Ip(*ip),
+                });
             }
         }
     }
 
-    // Execute all queries in parallel
-    let futures = queries.iter().map(|(zone, query_name)| {
-        let zone = zone.clone();
-        let query_name = query_name.clone();
-        async move {
-            match tokio::time::timeout(timeout, resolver.lookup_exists(&query_name)).await {
-                Ok(true) => Some((zone, query_name, true)),
-                Ok(false) => None,
-                Err(_) => {
-                    tracing::debug!(zone = %zone, query_name = %query_name, "DNSBL query timed out");
-                    Some((zone, query_name, false)) // timed out, treat as timeout marker
-                }
-            }
-        }
+    let futures = queries.iter().map(|q| async move {
+        let lookup = tokio::time::timeout(timeout, resolver.lookup_a(&q.query_name)).await;
+        (q, lookup)
     });
 
-    let results: Vec<_> = join_all(futures).await;
+    let results = join_all(futures).await;
 
     let mut sub_checks = Vec::new();
-
-    // Track which zones timed out vs listed
     let mut timed_out_zones: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    for (zone, query_name, listed) in results.into_iter().flatten() {
-        if listed {
-            // Ok(true) -> Some((zone, _, true)) means actually listed
-            let zone_slug = zone.replace('.', "_");
-            // Determine if it's a domain-based or IP-based listing
-            if DOMAIN_ZONES.contains(&zone.as_str()) {
-                sub_checks.push(SubCheck {
-                    name: format!("listed_{}", zone_slug),
-                    verdict: Verdict::Fail,
-                    detail: format!("domain {} listed in {}", domain, zone),
-                });
-            } else {
-                // Extract original IP from query name
-                sub_checks.push(SubCheck {
-                    name: format!("listed_{}", zone_slug),
-                    verdict: Verdict::Fail,
-                    detail: format!(
-                        "{} listed in {}",
-                        query_name.trim_end_matches(&format!(".{}", zone)),
-                        zone
-                    ),
-                });
+    for (query, lookup) in results {
+        let values = match lookup {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::debug!(zone = %query.zone, query_name = %query.query_name, "DNSBL query timed out");
+                timed_out_zones.insert(query.zone.clone());
+                continue;
             }
-        } else {
-            // Timed out
-            timed_out_zones.insert(zone);
+        };
+
+        if values.is_empty() {
+            continue;
+        }
+
+        let (policy, listing): (Vec<_>, Vec<_>) = values.into_iter().partition(is_policy_response);
+        let zone_slug = query.zone.replace('.', "_");
+
+        if !listing.is_empty() {
+            let codes = format_codes(&listing);
+            sub_checks.push(SubCheck {
+                name: format!("listed_{}", zone_slug),
+                verdict: Verdict::Fail,
+                detail: format!("{} listed in {} ({})", query.target, query.zone, codes),
+            });
+        } else if !policy.is_empty() {
+            let codes = format_codes(&policy);
+            sub_checks.push(SubCheck {
+                name: format!("policy_response_{}", zone_slug),
+                verdict: Verdict::Info,
+                detail: format!(
+                    "{} rejected the query ({}); results from this zone are unreliable",
+                    query.zone, codes
+                ),
+            });
         }
     }
 
-    // Add one info sub-check per timed out zone
     for zone in timed_out_zones {
         sub_checks.push(SubCheck {
             name: "zone_unreachable".to_string(),
@@ -133,6 +154,21 @@ pub async fn check_dnsbl(
         mx_ips.len()
     );
     CheckResult::new(Category::Dnsbl, sub_checks, detail)
+}
+
+/// DNSBL error/policy responses live in `127.255.255.0/24`. Every major DNSBL
+/// follows this convention; Spamhaus documents `127.255.255.252`–`.255` for
+/// typo, anonymous query, blocked public resolver, and rate limit respectively.
+fn is_policy_response(ip: &Ipv4Addr) -> bool {
+    let o = ip.octets();
+    o[0] == 127 && o[1] == 255 && o[2] == 255
+}
+
+fn format_codes(ips: &[Ipv4Addr]) -> String {
+    let mut codes: Vec<String> = ips.iter().map(|ip| ip.to_string()).collect();
+    codes.sort();
+    codes.dedup();
+    codes.join(", ")
 }
 
 /// Reverse an IPv4 address: 1.2.3.4 -> "4.3.2.1"
@@ -180,5 +216,17 @@ mod tests {
             reverse_ipv6(ip),
             "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.8.b.d.0.1.0.0.2"
         );
+    }
+
+    #[test]
+    fn test_policy_response_range() {
+        // Spamhaus "query via public resolver" sentinel
+        assert!(is_policy_response(&Ipv4Addr::new(127, 255, 255, 254)));
+        assert!(is_policy_response(&Ipv4Addr::new(127, 255, 255, 252)));
+        assert!(is_policy_response(&Ipv4Addr::new(127, 255, 255, 0)));
+        // Real listing codes are NOT policy responses
+        assert!(!is_policy_response(&Ipv4Addr::new(127, 0, 0, 2))); // SBL
+        assert!(!is_policy_response(&Ipv4Addr::new(127, 0, 0, 10))); // PBL
+        assert!(!is_policy_response(&Ipv4Addr::new(127, 0, 0, 4))); // XBL
     }
 }

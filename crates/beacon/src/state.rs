@@ -12,6 +12,7 @@ pub struct AppState {
     pub ip_extractor: Arc<IpExtractor>,
     pub rate_limiter: Arc<RateLimitState>,
     pub dns_resolver: Arc<DnsResolver>,
+    pub dnsbl_resolver: Arc<DnsResolver>,
     pub http_client: reqwest::Client,
     pub http_client_follow: reqwest::Client,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
@@ -19,9 +20,14 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(config: &Config) -> Result<Self, crate::error::MailError> {
-        let dns_resolver = DnsResolver::new(&config.dns)
+        let dns_resolver = DnsResolver::new(&config.dns.resolvers, config.dns.timeout_ms)
             .await
             .map_err(|e| crate::error::MailError::DnsError(e.to_string()))?;
+
+        let dnsbl_resolver =
+            DnsResolver::new(&config.dnsbl.resolvers, config.dnsbl.timeout_ms)
+                .await
+                .map_err(|e| crate::error::MailError::DnsError(e.to_string()))?;
 
         let enrichment_client = config.backends.ip.as_ref().and_then(|ip_cfg| {
             ip_cfg.url.as_ref().map(|url| {
@@ -58,6 +64,7 @@ impl AppState {
             ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
             rate_limiter: Arc::new(RateLimitState::new(&config.rate_limit)),
             dns_resolver: Arc::new(dns_resolver),
+            dnsbl_resolver: Arc::new(dnsbl_resolver),
             http_client,
             http_client_follow,
             enrichment_client,

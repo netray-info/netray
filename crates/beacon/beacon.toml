@@ -15,6 +15,12 @@ zones = [
   "dbl.spamhaus.org",
 ]
 timeout_ms = 2000
+# Spamhaus and most public DNSBLs block queries from public/open resolvers
+# (Cloudflare 1.1.1.1, Google 8.8.8.8, Quad9), returning synthetic 127.255.255.x
+# responses that look like listings. Default to the system resolver so operators
+# can point at a local resolver if they have one. Override with ["1.1.1.1"] only
+# if you accept that Spamhaus results will be unreliable.
+resolvers = ["system"]
 
 [http]
 timeout_ms = 10000

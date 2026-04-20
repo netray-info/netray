@@ -20,7 +20,7 @@ Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows suite patterns.
 
 ### Key design decisions
 
-- **DNS resolver**: Shared `DnsResolver` built at startup. `ResolverGroup::resolvers()` returns `&[Resolver]`; stored as `Vec<Resolver>` with round-robin via `AtomicUsize`. Each request calls `self.pick().lookup(MultiQuery::single(...))` which returns a `Send` future — no `spawn_blocking`, no `LocalSet`.
+- **DNS resolver**: Shared `DnsResolver` built at startup. `ResolverGroup::resolvers()` returns `&[Resolver]`; stored as `Vec<Resolver>` with round-robin via `AtomicUsize`. Each request calls `self.pick().lookup(MultiQuery::single(...))` which returns a `Send` future — no `spawn_blocking`, no `LocalSet`. A **second** `DnsResolver` (`dnsbl_resolver`, configured via `[dnsbl] resolvers`, default `["system"]`) is used only for DNSBL queries, because most public DNSBLs (Spamhaus) block queries from public/open resolvers and return synthetic `127.255.255.x` responses.
 - **Three-phase SSE streaming**: Phase 0 (MX, SPF, DMARC, TLS-RPT, DNSSEC, BIMI) runs in parallel via `JoinSet`, emitting each result immediately to the SSE channel. Phase 1 (DKIM, MTA-STS, DANE, FCrDNS, DNSBL) runs in parallel after all Phase 0 tasks complete. Phase 2 (cross-validation, grade) runs sequentially and emits the Summary event.
 - **30-second timeout**: `tokio::time::timeout` wraps `run_inspection_inner`; on expiry a partial Summary with `Verdict::Skip` is emitted.
 - **DKIM selectors**: Static provider map (Google, Outlook, Amazon SES, Proofpoint, Mimecast) + user-supplied. No brute-force enumeration.

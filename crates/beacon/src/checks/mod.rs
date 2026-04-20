@@ -33,6 +33,7 @@ pub async fn run_all_checks(
     selectors: Vec<String>,
     config: Arc<Config>,
     dns: Arc<DnsResolver>,
+    dnsbl_dns: Arc<DnsResolver>,
     http_client: reqwest::Client,
     http_client_follow: reqwest::Client,
     enrichment_client: Option<Arc<EnrichmentClient>>,
@@ -45,6 +46,7 @@ pub async fn run_all_checks(
             selectors,
             config,
             dns,
+            dnsbl_dns,
             http_client,
             http_client_follow,
             enrichment_client,
@@ -308,6 +310,7 @@ async fn run_inspection_inner(
     selectors: Vec<String>,
     config: Arc<Config>,
     dns: Arc<DnsResolver>,
+    dnsbl_dns: Arc<DnsResolver>,
     http_client: reqwest::Client,
     http_client_follow: reqwest::Client,
     enrichment_client: Option<Arc<EnrichmentClient>>,
@@ -554,7 +557,7 @@ async fn run_inspection_inner(
         let mx_ips_clone = mx_ips.clone();
         let domain = domain.clone();
         let dnsbl_config = config.dnsbl.clone();
-        let dns = dns.clone();
+        let dns = dnsbl_dns.clone();
         phase1.spawn(async move {
             let start = std::time::Instant::now();
             let result = dnsbl::check_dnsbl(&mx_ips_clone, &domain, &dnsbl_config, &dns).await;

@@ -134,6 +134,7 @@ async fn do_inspect(
             selectors,
             state.config.clone(),
             state.dns_resolver.clone(),
+            state.dnsbl_resolver.clone(),
             state.http_client.clone(),
             state.http_client_follow.clone(),
             state.enrichment_client.clone(),

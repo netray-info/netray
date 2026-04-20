@@ -1,4 +1,4 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -8,19 +8,17 @@ use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
 use mhost::resolver::{MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder};
 
-use crate::config::DnsConfig;
-
 pub struct DnsResolver {
     resolvers: Vec<Resolver>,
     index: AtomicUsize,
 }
 
 impl DnsResolver {
-    pub async fn new(cfg: &DnsConfig) -> Result<Self, mhost::Error> {
+    pub async fn new(resolvers: &[String], timeout_ms: u64) -> Result<Self, mhost::Error> {
         let mut builder =
-            ResolverGroupBuilder::new().timeout(Duration::from_millis(cfg.timeout_ms));
+            ResolverGroupBuilder::new().timeout(Duration::from_millis(timeout_ms));
 
-        for entry in &cfg.resolvers {
+        for entry in resolvers {
             if entry == "system" {
                 builder = builder.system();
             } else if let Ok(ip) = entry.parse::<IpAddr>() {
@@ -263,20 +261,27 @@ impl DnsResolver {
         lookups.cname().iter().map(|n| n.to_string()).collect()
     }
 
-    /// Query a name and check if we get any result (used for DNSBL / SPF exists:).
+    /// Query a name and check if we get any result (used for SPF exists:).
     pub async fn lookup_exists(&self, name: &str) -> bool {
+        !self.lookup_a(name).await.is_empty()
+    }
+
+    /// Resolve A records for a name, returning the actual Ipv4 values.
+    /// DNSBL responses are typed: `127.0.0.x` values encode listing codes,
+    /// `127.255.255.x` values encode error/policy responses.
+    pub async fn lookup_a(&self, name: &str) -> Vec<Ipv4Addr> {
         let query = match MultiQuery::single(name, RecordType::A) {
             Ok(q) => q,
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "A", error = %e, "DNS lookup failed");
-                return false;
+                return Vec::new();
             }
         };
         match self.pick().lookup(query).await {
-            Ok(l) => !l.a().is_empty(),
+            Ok(l) => l.a().iter().map(|v| **v).collect(),
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "A", error = %e, "DNS lookup failed");
-                false
+                Vec::new()
             }
         }
     }
