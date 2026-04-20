@@ -250,6 +250,22 @@ a:hover { text-decoration: underline; }
   max-width: 40ch;
 }
 
+/* Full detail line shown at the top of the expanded card body — same
+   content as .section-card__summary but without truncation and in
+   monospace (most details embed a DNS record literal). */
+.section-card__detail {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
 /* ================================================================
    Check list (sub-checks)
    ================================================================ */

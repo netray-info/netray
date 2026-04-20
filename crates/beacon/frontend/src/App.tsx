@@ -792,6 +792,9 @@ function CategorySection(props: {
               </div>
             )}
           </Show>
+          <Show when={props.result.detail}>
+            <div class="section-card__detail">{props.result.detail}</div>
+          </Show>
           <Show
             when={props.result.sub_checks.length > 0}
             fallback={<p class="section-empty">No sub-checks</p>}
