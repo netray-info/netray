@@ -1,8 +1,5 @@
 # Frontend Rules for New netray.info Tools
 
-Derived from analysis of all six suite tools (ifconfig-rs, mhost-prism, tlsight, spectra, beacon, lens) and netray-common-frontend.
-Validated against live UI via Playwright scan and manual cross-tool review (last updated 2026-04-10).
-
 ---
 
 ## 0. Design Philosophy
@@ -755,79 +752,3 @@ Required CSS (active card outline):
 ```
 
 The toggle button inside each card must use `.section-card__header` class so `expandActiveCard` can find it universally.
-
----
-
-## 22. Compliance Matrix (2026-04-10)
-
-What each tool must change to comply with the tightened rules above. ifconfig-rs is exempt from §6.1 (canonical layout) and §16 (collapsible sections). DNS/prism is exempt from §16–§18 (uses table-row expand pattern).
-
-### mhost-prism (DNS)
-
-| Rule | Status | Action |
-|------|--------|--------|
-| §4 SuiteNav inside .app | Non-compliant | Move `<SuiteNav>` inside `.app` container with card background |
-| §6.1 Header row | Compliant | Already has logo + tagline left, theme + help right |
-| §6.1 Horizontal separator | Non-compliant | Add visible border-bottom or `<hr>` below header |
-| §6.1 SiteFooter | Compliant | Already uses `<SiteFooter>` |
-| §6.2 Stream callout | Non-compliant | Remove `<p class="stream-hint">Results stream as they arrive…</p>` |
-| §6.1 Header-actions order | Compliant | ThemeToggle then help button |
-| §15 Verdict badges | N/A | DNS uses record-type badges, not verdict badges |
-| §16 Collapsible sections | Exempt | Table-row expand pattern is appropriate |
-
-### tlsight (TLS)
-
-| Rule | Status | Action |
-|------|--------|--------|
-| §4 SuiteNav inside .app | Compliant | Already inside `.app` — verify card background styling |
-| §6.1 Header row | Compliant | Already has logo + tagline left, theme + help right |
-| §6.1 Horizontal separator | Check | Verify `<hr>` or border-bottom exists below header |
-| §6.1 SiteFooter | Compliant | Already uses `<SiteFooter>` |
-| §6.1 Header-actions order | Compliant | ThemeToggle then help button |
-| §15 Verdict badges | Non-compliant | Has colored pills but not standardized shape/tokens — align to common `.verdict-badge` |
-| §16 Collapsible sections | Non-compliant | Sections (Validation, CAA, TLS Params, Chain) are not collapsible — wrap in collapsible cards |
-| §17 Section headers | Non-compliant | No status dot, no chevron, no consistent anatomy — adopt standard header pattern |
-| §18 Check rows | Partial | Has badge + name but layout varies — standardize row anatomy |
-| §19 Cross-tool deep links | Missing | Add deep links to prism (DNS) and ifconfig-rs (IP) in relevant sections |
-
-### lens
-
-| Rule | Status | Action |
-|------|--------|--------|
-| §4 SuiteNav inside .app | Compliant | Already inside `.app` |
-| §6.1 Header row | Compliant | Already has logo + tagline left, help + theme right |
-| §6.1 Horizontal separator | Check | Verify `<hr>` or border-bottom exists below header |
-| §6.1 SiteFooter | Compliant | Already uses `<SiteFooter>` |
-| §6.1 Header-actions order | Non-compliant | Swap order: ThemeToggle first, then help button |
-| §15 Verdict badges | Partial | Has colored count chips — align shape/icons to common `.verdict-badge` |
-| §16 Collapsible sections | Compliant | Already collapses by default with expand all toggle |
-| §17 Section headers | Compliant | Already has status dot + title + badges + deep-link + chevron |
-| §18 Check rows | Partial | Has verdict + name + value but tinting and layout vary — standardize |
-| §19 Cross-tool deep links | Compliant | Already links to TLS, DNS, IP tools from section headers |
-
-### spectra (HTTP)
-
-| Rule | Status | Action |
-|------|--------|--------|
-| §4 SuiteNav inside .app | Check | Verify SuiteNav is inside `.app` with card background |
-| §6.1 Header row | Partial | Has logo + tagline but missing help button; has theme toggle but different icon |
-| §6.1 Horizontal separator | Compliant | Has separator below header |
-| §6.1 SiteFooter | Missing | Add `<SiteFooter>` component |
-| §6.1 Header-actions order | Non-compliant | Missing help button; add ThemeToggle then help button |
-| §7 Copy-link button | Compliant | `.share-btn` between field-wrap and Inspect button; shown only when result present |
-| §8a Result overview box | Compliant | Two-row overview with Server/Hosted-by row; export actions as text links in row 1 right |
-| §11 Dark mode default | Non-compliant | Renders in light mode — switch default to dark |
-| §15 Verdict badges | Non-compliant | Uses bold uppercase text labels, not pill badges — adopt `.verdict-badge` |
-| §16 Collapsible sections | Non-compliant | Sections are flat/non-collapsible — wrap in collapsible cards, collapse by default |
-| §17 Section headers | Non-compliant | Plain uppercase text titles — adopt standard header with status dot + badges + chevron |
-| §18 Check rows | Non-compliant | Badge shape and row layout differ from standard — adopt check row anatomy |
-| §19 Cross-tool deep links | Missing | Add deep link to ifconfig-rs (IP) where IP data is shown |
-
-### ifconfig-rs (IP) — exception
-
-| Rule | Status | Notes |
-|------|--------|-------|
-| §4 SuiteNav | Compliant | Uses `<SuiteNav>` |
-| §6.1 Canonical layout | Exempt | Dashboard layout is an intentional exception |
-| §6.1 SiteFooter | Compliant | Already uses `<SiteFooter>` |
-| §15–§19 | Exempt | Card grid + tab layout is intentional |
