@@ -100,12 +100,29 @@ pub async fn check_mx(
         all_ips.extend(ips);
     }
 
-    // Single MX check
+    // Single MX check: Warn if there's truly one endpoint, Info if the
+    // single MX resolves to multiple IPs (address-level redundancy still
+    // exists). `low_network_diversity` below flags the case where those
+    // IPs share a prefix.
     if mx_records.len() == 1 {
+        let (verdict, detail) = if all_ips.len() > 1 {
+            (
+                Verdict::Info,
+                format!(
+                    "only one MX record, but it resolves to {} IP addresses",
+                    all_ips.len()
+                ),
+            )
+        } else {
+            (
+                Verdict::Warn,
+                "only one MX record; no redundancy".to_string(),
+            )
+        };
         sub_checks.push(SubCheck {
             name: "single_mx".to_string(),
-            verdict: Verdict::Warn,
-            detail: "only one MX record; no redundancy".to_string(),
+            verdict,
+            detail,
         });
     }
 
