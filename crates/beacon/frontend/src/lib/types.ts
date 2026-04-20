@@ -271,7 +271,7 @@ const SUB_CHECK_EXPLANATIONS: Record<string, string> = {
   dane_without_dnssec: 'DANE TLSA records are only meaningful when DNSSEC is enabled.',
   mta_sts_without_tls_rpt: 'Without TLS-RPT, MTA-STS policy failures are invisible.',
   dane_without_tls_rpt: 'DANE is deployed without TLS-RPT reporting for visibility.',
-  spf_mx_coverage: 'SPF should authorize the IPs of your own MX hosts.',
+  spf_mx_coverage: 'SPF authorizes outbound senders. Listing inbound MX IPs is only meaningful when those same hosts also send mail on the domain\'s behalf — which is unusual for managed providers like Google Workspace or Microsoft 365, where inbound and outbound IP ranges are intentionally separate.',
   bimi_dmarc_policy: 'BIMI requires a DMARC policy of quarantine or reject.',
   null_mx_spf: 'A null-MX domain should have an SPF record ending in -all.',
   reject_no_dkim: 'DMARC reject without DKIM risks rejecting legitimate mail if SPF alignment fails.',

@@ -86,6 +86,39 @@ fn check_dane_without_tls_rpt(r: &AllResults) -> Option<SubCheck> {
     }
 }
 
+/// Inbound-mail providers whose MX IPs are intentionally disjoint from the
+/// provider's outbound SMTP ranges. Domains hosted on these should never be
+/// expected to list their MX IPs in SPF.
+const MANAGED_INBOUND_SUFFIXES: &[&str] = &[
+    // Google Workspace
+    "google.com",
+    "googlemail.com",
+    // Microsoft 365 / Exchange Online Protection
+    "protection.outlook.com",
+    "outlook.com",
+    // Proofpoint
+    "pphosted.com",
+    // Mimecast
+    "mimecast.com",
+    "mimecast-offshore.com",
+    // Symantec/Broadcom Email Security.cloud
+    "messagelabs.com",
+    // Amazon SES inbound
+    "amazonses.com",
+];
+
+fn mx_is_managed(mx_hosts: &[String]) -> bool {
+    if mx_hosts.is_empty() {
+        return false;
+    }
+    mx_hosts.iter().all(|host| {
+        let h = host.trim_end_matches('.').to_ascii_lowercase();
+        MANAGED_INBOUND_SUFFIXES
+            .iter()
+            .any(|suffix| h == *suffix || h.ends_with(&format!(".{suffix}")))
+    })
+}
+
 fn check_spf_mx_coverage(r: &AllResults) -> Option<SubCheck> {
     let spf_flat = r.spf_flat.as_ref()?;
     if r.mx_ips.is_empty() {
@@ -104,21 +137,36 @@ fn check_spf_mx_coverage(r: &AllResults) -> Option<SubCheck> {
         .collect();
 
     if uncovered.is_empty() {
-        None
-    } else {
-        Some(SubCheck {
-            name: "spf_mx_coverage".to_string(),
-            verdict: Verdict::Fail,
-            detail: format!(
-                "MX IP(s) not in SPF: {}",
-                uncovered
-                    .iter()
-                    .map(|ip| ip.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-        })
+        return None;
     }
+
+    let ips = uncovered
+        .iter()
+        .map(|ip| ip.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    // SPF authorizes *outbound* senders. Listing inbound MX IPs is only
+    // meaningful when those same hosts also relay mail on the domain's behalf.
+    // For managed providers the two IP sets are intentionally separate, so
+    // downgrade to Info.
+    let (verdict, note) = if mx_is_managed(&r.mx_hosts) {
+        (
+            Verdict::Info,
+            "MX uses a managed provider; outbound SPF and inbound MX IPs are intentionally separate",
+        )
+    } else {
+        (
+            Verdict::Warn,
+            "only relevant if these MX hosts also send outbound mail",
+        )
+    };
+
+    Some(SubCheck {
+        name: "spf_mx_coverage".to_string(),
+        verdict,
+        detail: format!("MX IP(s) not in SPF: {ips} ({note})"),
+    })
 }
 
 fn check_bimi_dmarc_policy(r: &AllResults) -> Option<SubCheck> {
@@ -409,6 +457,59 @@ mod tests {
                 .unwrap()
                 .verdict,
             Verdict::Warn
+        );
+    }
+
+    #[test]
+    fn spf_mx_coverage_warn_for_self_hosted() {
+        let mut r = base_results();
+        r.mx_hosts = vec!["mail.example.com".to_string()];
+        r.mx_ips = vec!["203.0.113.10".parse().unwrap()];
+        r.spf_flat = Some(SpfFlat {
+            authorized_prefixes: Vec::new(),
+        });
+        let result = cross_validate(&r);
+        let sc = result
+            .sub_checks
+            .iter()
+            .find(|s| s.name == "spf_mx_coverage")
+            .expect("spf_mx_coverage should fire");
+        assert_eq!(sc.verdict, Verdict::Warn);
+        assert!(sc.detail.contains("also send outbound"));
+    }
+
+    #[test]
+    fn spf_mx_coverage_info_for_managed_provider() {
+        let mut r = base_results();
+        r.mx_hosts = vec!["smtp.google.com".to_string()];
+        r.mx_ips = vec!["142.251.127.26".parse().unwrap()];
+        r.spf_flat = Some(SpfFlat {
+            authorized_prefixes: Vec::new(),
+        });
+        let result = cross_validate(&r);
+        let sc = result
+            .sub_checks
+            .iter()
+            .find(|s| s.name == "spf_mx_coverage")
+            .expect("spf_mx_coverage should fire");
+        assert_eq!(sc.verdict, Verdict::Info);
+        assert!(sc.detail.contains("managed provider"));
+    }
+
+    #[test]
+    fn spf_mx_coverage_silent_when_covered() {
+        let mut r = base_results();
+        r.mx_hosts = vec!["mail.example.com".to_string()];
+        r.mx_ips = vec!["203.0.113.10".parse().unwrap()];
+        r.spf_flat = Some(SpfFlat {
+            authorized_prefixes: vec!["203.0.113.0/24".parse().unwrap()],
+        });
+        let result = cross_validate(&r);
+        assert!(
+            !result
+                .sub_checks
+                .iter()
+                .any(|s| s.name == "spf_mx_coverage")
         );
     }
 
