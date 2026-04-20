@@ -29,6 +29,25 @@ const HISTORY_KEY = 'beacon_history';
 const MAX_HISTORY = 20;
 const EXAMPLE_DOMAINS = ['netray.info', 'gmail.com', 'example.com'];
 
+const MARKDOWN_LINK_RE = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+
+/** Render a sub-check detail string, turning `[label](url)` spans into links. */
+function renderDetail(detail: string) {
+  const parts: (string | ReturnType<typeof makeLink>)[] = [];
+  let last = 0;
+  for (const m of detail.matchAll(MARKDOWN_LINK_RE)) {
+    if (m.index! > last) parts.push(detail.slice(last, m.index));
+    parts.push(makeLink(m[1], m[2]));
+    last = m.index! + m[0].length;
+  }
+  if (last < detail.length) parts.push(detail.slice(last));
+  return parts;
+}
+
+function makeLink(label: string, href: string) {
+  return <a href={href} target="_blank" rel="noopener noreferrer">{label}</a>;
+}
+
 export default function App() {
   const theme = createTheme('beacon_theme', 'system');
   const [meta, setMeta] = createSignal<MetaResponse | null>(null);
@@ -693,7 +712,7 @@ function CategorySection(props: {
                   >
                     <span class={`badge badge--${sc.verdict}`}>{sc.verdict}</span>
                     <span class="check-list__name">{subCheckLabel(sc.name)}</span>
-                    <span class="check-list__message">{sc.detail}</span>
+                    <span class="check-list__message">{renderDetail(sc.detail)}</span>
                     <Show when={props.showExplanations && subCheckExplanation(sc.name)}>
                       <span class="check-explain">{subCheckExplanation(sc.name)}</span>
                     </Show>
