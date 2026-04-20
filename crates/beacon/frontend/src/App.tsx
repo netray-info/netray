@@ -29,6 +29,47 @@ import {
 const HISTORY_KEY = 'beacon_history';
 const MAX_HISTORY = 20;
 const EXAMPLE_DOMAINS = ['netray.info', 'gmail.com', 'example.com'];
+const MAX_SELECTORS = 5;
+
+interface ParsedQuery {
+  domain: string;
+  selectors: string[];
+}
+
+const SELECTOR_RE = /^[A-Za-z0-9-]{1,63}$/;
+
+function parseQuery(raw: string): ParsedQuery | { error: string } {
+  const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return { error: 'enter a domain' };
+
+  const [domain, ...rest] = tokens;
+  if (!domain.includes('.')) {
+    return { error: `"${domain}" is not a valid domain (must contain a dot)` };
+  }
+
+  const seen = new Set<string>();
+  const selectors: string[] = [];
+  for (const tok of rest) {
+    if (tok.includes('.')) {
+      return { error: `"${tok}" is not a valid DKIM selector (contains a dot)` };
+    }
+    if (!SELECTOR_RE.test(tok)) {
+      return { error: `"${tok}" is not a valid DKIM selector` };
+    }
+    if (!seen.has(tok)) {
+      seen.add(tok);
+      selectors.push(tok);
+    }
+  }
+  if (selectors.length > MAX_SELECTORS) {
+    return { error: `too many DKIM selectors (max ${MAX_SELECTORS})` };
+  }
+  return { domain: domain.toLowerCase().replace(/\.$/, ''), selectors };
+}
+
+function formatQuery(domain: string, selectors: string[]): string {
+  return selectors.length ? `${domain} ${selectors.join(' ')}` : domain;
+}
 
 type Ecosystem = NonNullable<MetaResponse['ecosystem']>;
 
@@ -76,10 +117,9 @@ export default function App() {
   const [showHelp, setShowHelp] = createSignal(false);
 
   // Input state
-  const [domain, setDomain] = createSignal('');
+  const [query, setQuery] = createSignal('');
+  const [inspectedDomain, setInspectedDomain] = createSignal('');
   let inputEl: HTMLInputElement | undefined;
-  const [selectors, setSelectors] = createSignal<string[]>([]);
-  const [selectorInput, setSelectorInput] = createSignal('');
   const [showHistory, setShowHistory] = createSignal(false);
 
   // Results state
@@ -101,12 +141,12 @@ export default function App() {
       if (m) setMeta(m);
     });
 
-    // Check URL params
+    // Check URL params: ?q= is the canonical form; ?domain= is a legacy alias
     const params = new URLSearchParams(window.location.search);
-    const urlDomain = params.get('domain');
-    if (urlDomain) {
-      setDomain(urlDomain);
-      handleInspect(urlDomain, []);
+    const rawQuery = params.get('q') ?? params.get('domain');
+    if (rawQuery) {
+      setQuery(rawQuery);
+      runQuery(rawQuery);
     }
 
     function clearCardActive() {
@@ -145,8 +185,8 @@ export default function App() {
       'e':      (e) => { e.preventDefault(); setShowExplanations(v => !v); },
       '/':      (e) => { e.preventDefault(); inputEl?.focus(); },
       'r':      (e) => {
-        const d = domain();
-        if (d && !loading()) { e.preventDefault(); handleInspect(d, selectors()); }
+        const raw = query();
+        if (raw.trim() && !loading()) { e.preventDefault(); runQuery(raw); }
       },
       'j':      navigateCards,
       'k':      navigateCards,
@@ -191,10 +231,12 @@ export default function App() {
     setCompletedCount(0);
     setLoading(true);
     setClientDurationMs(undefined);
+    setInspectedDomain(d);
     inspectStartedAt = Date.now();
 
     const newUrl = new URL(window.location.href);
-    newUrl.searchParams.set('domain', d);
+    newUrl.searchParams.delete('domain');
+    newUrl.searchParams.set('q', formatQuery(d, sels));
     window.history.replaceState(null, '', newUrl.toString());
 
     abortRef = streamInspect(
@@ -218,21 +260,19 @@ export default function App() {
     );
   }
 
+  function runQuery(raw: string) {
+    const parsed = parseQuery(raw);
+    if ('error' in parsed) {
+      setError(parsed.error);
+      return;
+    }
+    setError(null);
+    handleInspect(parsed.domain, parsed.selectors);
+  }
+
   function handleSubmit(e: Event) {
     e.preventDefault();
-    handleInspect(domain(), selectors());
-  }
-
-  function addSelector() {
-    const val = selectorInput().trim();
-    if (val && !selectors().includes(val)) {
-      setSelectors([...selectors(), val]);
-      setSelectorInput('');
-    }
-  }
-
-  function removeSelector(s: string) {
-    setSelectors(selectors().filter((x) => x !== s));
+    runQuery(query());
   }
 
   function toggleSection(cat: Category) {
@@ -273,25 +313,25 @@ export default function App() {
                   ref={inputEl}
                   type="text"
                   class="domain-input"
-                  placeholder="example.com"
-                  value={domain()}
-                  onInput={(e) => setDomain(e.currentTarget.value)}
+                  placeholder="example.com [dkim-selector ...]"
+                  value={query()}
+                  onInput={(e) => setQuery(e.currentTarget.value)}
                   onFocus={() => setShowHistory(true)}
                   onBlur={() => setTimeout(() => setShowHistory(false), 200)}
                   role="combobox"
-                  aria-label="Domain to inspect"
+                  aria-label="Domain and optional DKIM selectors, space-separated"
                   aria-expanded={showHistory() && getHistory().length > 0}
                   aria-autocomplete="list"
                   aria-controls="history-listbox"
                   autocomplete="off"
                   spellcheck={false}
                 />
-                <Show when={domain()}>
+                <Show when={query()}>
                   <button
                     type="button"
                     class="domain-input__clear"
                     aria-label="Clear"
-                    onClick={() => setDomain('')}
+                    onClick={() => setQuery('')}
                   >×</button>
                 </Show>
                 <Show when={showHistory() && getHistory().length > 0}>
@@ -306,8 +346,8 @@ export default function App() {
                         <li
                           role="option"
                           onMouseDown={() => {
-                            setDomain(item);
-                            handleInspect(item, selectors());
+                            setQuery(item);
+                            runQuery(item);
                           }}
                         >
                           {item}
@@ -318,35 +358,9 @@ export default function App() {
                 </Show>
               </div>
               <ShareButton />
-              <button type="submit" class="btn-primary" disabled={loading() || !domain().trim()}>
+              <button type="submit" class="btn-primary" disabled={loading() || !query().trim()}>
                 {loading() ? 'Inspecting…' : 'Inspect'}
               </button>
-            </div>
-
-            <div class="selector-row">
-              <span class="selector-label">DKIM selectors:</span>
-              <div class="selector-chips">
-                <For each={selectors()}>
-                  {(s) => (
-                    <span class="chip">
-                      {s}
-                      <button type="button" class="chip__remove" onClick={() => removeSelector(s)}>×</button>
-                    </span>
-                  )}
-                </For>
-              </div>
-              <input
-                type="text"
-                class="selector-input"
-                placeholder="Add selector"
-                aria-label="DKIM selectors (comma-separated)"
-                value={selectorInput()}
-                onInput={(e) => setSelectorInput(e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') { e.preventDefault(); addSelector(); }
-                }}
-              />
-              <button type="button" class="btn-secondary" onClick={addSelector}>Add</button>
             </div>
           </form>
 
@@ -366,7 +380,7 @@ export default function App() {
                   {(d) => (
                     <button
                       class="example-chip"
-                      onClick={() => { setDomain(d); handleInspect(d, []); }}
+                      onClick={() => { setQuery(d); runQuery(d); }}
                     >
                       {d}
                     </button>
@@ -390,7 +404,7 @@ export default function App() {
                   summary={summary()!}
                   mxResult={categories().get('mx')}
                   ipBaseUrl={meta()?.ecosystem?.ip_base_url}
-                  domain={domain()}
+                  domain={inspectedDomain()}
                   categories={categories()}
                   clientDurationMs={clientDurationMs()}
                 />
@@ -456,7 +470,7 @@ export default function App() {
                                 open={openSections().has(cat)}
                                 onToggle={() => toggleSection(cat)}
                                 showExplanations={showExplanations()}
-                                domain={domain()}
+                                domain={inspectedDomain()}
                                 ecosystem={meta()?.ecosystem}
                               />
                             )}
@@ -504,11 +518,23 @@ export default function App() {
           </div>
 
           <div class="help-section">
-            <div class="help-section__title">Input</div>
-            <code class="help-syntax">example.com</code>
+            <div class="help-section__title">Query syntax</div>
+            <code class="help-syntax">domain [dkim-selector ...]</code>
             <p class="help-desc">
-              Enter any domain name. Add DKIM selectors below the domain input for custom selector
-              testing.
+              The first token is the domain (must contain a dot). Any additional whitespace-separated
+              tokens are treated as DKIM selectors to probe. Up to {MAX_SELECTORS} selectors.
+            </p>
+            <p class="help-desc">
+              Examples:{' '}
+              <code class="help-syntax">example.com</code>,{' '}
+              <code class="help-syntax">example.com google</code>,{' '}
+              <code class="help-syntax">example.com google s1 s2</code>
+            </p>
+            <p class="help-desc">
+              beacon auto-probes Google, Outlook, SES, Proofpoint, Mimecast and{' '}
+              <code class="help-syntax">default</code>. Add selectors only for other providers —
+              use the value after <code class="help-syntax">s=</code> in a{' '}
+              <code class="help-syntax">DKIM-Signature</code> header.
             </p>
           </div>
 
@@ -519,8 +545,8 @@ export default function App() {
                 <tr><th>Key</th><th>Action</th></tr>
               </thead>
               <tbody>
-                <tr><td class="shortcut-key">/</td><td>Focus domain input</td></tr>
-                <tr><td class="shortcut-key">Enter</td><td>Submit domain (when input focused)</td></tr>
+                <tr><td class="shortcut-key">/</td><td>Focus query input</td></tr>
+                <tr><td class="shortcut-key">Enter</td><td>Submit query (when input focused)</td></tr>
                 <tr><td class="shortcut-key">r</td><td>Re-run last inspection</td></tr>
                 <tr><td class="shortcut-key">e</td><td>Toggle explanations</td></tr>
                 <tr><td class="shortcut-key">j / k</td><td>Navigate result categories</td></tr>
