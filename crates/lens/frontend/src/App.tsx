@@ -269,14 +269,36 @@ export default function App() {
               >{allExpanded() === true ? 'collapse all' : 'expand all'}</button>
             </div>
             <div class="section-grid" role="status" aria-live="polite" aria-label="Check results">
-              {/* Stack order: IP → DNS → TLS → HTTP → Email (network layer up to application layer) */}
+              {/* Top-down: Email → HTTP → TLS → DNS → IP (application layer down to network layer) */}
+              <Show when={email() !== null || (isLoading() && summary()?.sections['email'] !== undefined)}>
+                <div data-card>
+                  <EmailSection
+                    data={email()}
+                    loading={isLoading() && email() === null}
+                    error={error() ?? undefined}
+                    expanded={allExpanded()}
+                    grade={summary()?.section_grades['email']}
+                  />
+                </div>
+              </Show>
+              <Show when={http() !== null || (isLoading() && meta()?.ecosystem?.http_base_url !== undefined)}>
+                <div data-card>
+                  <HttpSection
+                    data={http()}
+                    loading={isLoading() && http() === null}
+                    error={error() ?? undefined}
+                    expanded={allExpanded()}
+                    grade={summary()?.section_grades['http']}
+                  />
+                </div>
+              </Show>
               <div data-card>
-                <IpSection
-                  data={ip()}
-                  loading={isLoading() && ip() === null}
+                <TlsSection
+                  data={tls()}
+                  loading={isLoading() && tls() === null}
                   error={error() ?? undefined}
                   expanded={allExpanded()}
-                  grade={summary()?.section_grades['ip']}
+                  grade={summary()?.section_grades['tls']}
                 />
               </div>
               <div data-card>
@@ -289,36 +311,14 @@ export default function App() {
                 />
               </div>
               <div data-card>
-                <TlsSection
-                  data={tls()}
-                  loading={isLoading() && tls() === null}
+                <IpSection
+                  data={ip()}
+                  loading={isLoading() && ip() === null}
                   error={error() ?? undefined}
                   expanded={allExpanded()}
-                  grade={summary()?.section_grades['tls']}
+                  grade={summary()?.section_grades['ip']}
                 />
               </div>
-              <Show when={http() !== null || (isLoading() && meta()?.ecosystem?.http_base_url !== undefined)}>
-                <div data-card>
-                  <HttpSection
-                    data={http()}
-                    loading={isLoading() && http() === null}
-                    error={error() ?? undefined}
-                    expanded={allExpanded()}
-                    grade={summary()?.section_grades['http']}
-                  />
-                </div>
-              </Show>
-              <Show when={email() !== null || (isLoading() && summary()?.sections['email'] !== undefined)}>
-                <div data-card>
-                  <EmailSection
-                    data={email()}
-                    loading={isLoading() && email() === null}
-                    error={error() ?? undefined}
-                    expanded={allExpanded()}
-                    grade={summary()?.section_grades['email']}
-                  />
-                </div>
-              </Show>
             </div>
           </Show>
         </main>
