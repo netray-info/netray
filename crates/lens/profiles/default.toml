@@ -3,29 +3,23 @@ name = "default"
 version = 2
 
 [sections.dns]
-weight = 30
-hard_fail = ["spf", "dmarc"]
+weight = 20
+hard_fail = []
 
 [sections.dns.checks]
-spf = 10
-dmarc = 10
-dnssec = 5
-caa = 5
-mx = 5
-ns = 3
-ns_lame = 5
-ns_delegation = 3
-mta_sts = 3
-tlsrpt = 2
-bimi = 1
-cname_apex = 5
-https_svcb = 2
-ttl = 2
-dnskey_algorithm = 3
-dnssec_rollover = 2
+dnssec            = 5
+caa               = 5
+ns                = 3
+ns_lame           = 5
+ns_delegation     = 3
+cname_apex        = 5
+https_svcb        = 2
+ttl               = 2
+dnskey_algorithm  = 3
+dnssec_rollover   = 2
 
 [sections.tls]
-weight = 40
+weight = 35
 hard_fail = ["chain_trusted", "not_expired"]
 
 [sections.tls.checks]
@@ -61,6 +55,16 @@ security_headers = 5
 cors             = 3
 cookie_secure    = 2
 hygiene          = 2
+
+[sections.email]
+weight = 15
+hard_fail = []
+
+[sections.email.checks]
+email_authentication = 10   # always scored; applies to every domain
+email_infrastructure = 5    # N/A (Skip) when no MX records
+email_transport      = 5    # N/A (Skip) when no MX records
+email_brand_policy   = 2    # N/A (Skip) when no MX records
 
 [sections.ip]
 weight = 10

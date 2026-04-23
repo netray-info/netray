@@ -231,19 +231,34 @@ Each backend returns a set of named checks. Every check has a status: `pass`, `w
 1. **Per-check score**: `pass` = full weight, `warn` = half weight, `fail`/`not_found` = 0. `skip` and `error` are excluded entirely.
 2. **Section score**: weighted sum of earned points ÷ weighted sum of possible points, as a percentage.
 3. **Overall score**: weighted average of section scores.
-4. **Hard-fail overrides**: certain failures force the overall grade to **F** regardless of the numeric score.
-5. **Letter grade**: score mapped to thresholds.
+4. **Section states**: a section can be `Scored` (contributes to overall), `Errored` (excluded silently), or `NotApplicable` (excluded; reason reported in `summary.not_applicable`).
+5. **Hard-fail overrides**: certain failures force the overall grade to **F** regardless of the numeric score.
+6. **Letter grade**: score mapped to thresholds.
 
 ### Section weights
 
-| Section | Weight | Rationale |
+| Section | Weight | Notes |
 |---|---|---|
-| TLS  | 40% | Certificate validity and transport security are foundational |
-| DNS  | 30% | Email authentication and DNS health have major deliverability impact |
-| HTTP | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (requires spectra backend) |
-| IP   | 10% | Reputation informs risk but is beyond the domain owner's direct control |
+| TLS   | 35% | Certificate validity and transport security are foundational |
+| DNS   | 20% | DNS infrastructure health (DNSSEC, CAA, NS delegation) |
+| HTTP  | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (requires spectra backend) |
+| Email | 15% | Email authentication (SPF, DKIM, DMARC) and receiving infrastructure (requires beacon backend) |
+| IP    | 10% | Reputation informs risk but is beyond the domain owner's direct control |
 
-The HTTP section is optional. When `http_url` is not configured, lens scores from TLS, DNS, and IP only. Section weights are rebalanced proportionally across the active sections by the scoring engine.
+The HTTP and Email sections are optional. When not configured, the scoring engine rebalances proportionally across active sections (weights are relative, not fixed-sum).
+
+### Email section: sending vs receiving
+
+The email section is split into four buckets:
+
+| Bucket | Weight | Applies to |
+|---|---|---|
+| `email_authentication` | 10 | Every domain — SPF, DKIM, DMARC |
+| `email_infrastructure` | 5  | Domains with MX records only — MX, FCrDNS, DNSBL |
+| `email_transport`      | 5  | Domains with MX records only — MTA-STS, TLS-RPT, DANE |
+| `email_brand_policy`   | 2  | Domains with MX records only — BIMI, DMARC policy |
+
+When a domain has no MX records (parked domain), the three receiving buckets are marked **not-applicable** and use `CheckVerdict::Skip`. They contribute 0 to both earned and possible points — no penalty. Only `email_authentication` (weight 10) is scored, as SPF/DKIM/DMARC apply to every domain for outbound mail protection.
 
 ### Grade thresholds
 
@@ -264,8 +279,6 @@ These conditions force an **F** regardless of the numeric score:
 |---|---|
 | Untrusted TLS chain | Certificate not signed by a trusted CA — browsers reject it |
 | Expired certificate | Any certificate in the chain |
-| No SPF record | Missing entirely (not misconfigured) |
-| No DMARC record | Missing entirely |
 
 ### Check weight tiers
 
@@ -276,6 +289,21 @@ These conditions force an **F** regardless of the numeric score:
 | 3  | Significant — meaningful impact on deliverability or security posture |
 | 2  | Advisory — good practice, but failure is not operationally harmful |
 | 1  | Informational — low-cost improvement opportunity |
+
+### SSE events
+
+| Event | When emitted | Key fields |
+|---|---|---|
+| `dns` | After DNS backend | `status`, `headline`, `checks`, `detail_url` |
+| `tls` | After TLS backend | `status`, `headline`, `checks`, `detail_url` |
+| `http` | After HTTP backend (optional) | `status`, `headline`, `checks`, `detail_url` |
+| `email` | After email backend (optional) | `status`, `grade`, `buckets`, `headline`, `detail_url` |
+| `ip` | After IP backend | `status`, `headline`, `checks`, `addresses`, `detail_url` |
+| `summary` | After all backends | `grade`, `score`, `sections`, `not_applicable`, `hard_fail` |
+| `done` | Stream complete | `domain`, `duration_ms`, `cached` |
+
+The `email` event `status` is one of: `pass`, `warn`, `fail`, `error`, `not_applicable`.
+The `summary` event includes `not_applicable: Record<string, string>` (always present, may be empty).
 
 ### Custom profiles
 
@@ -290,7 +318,7 @@ name = "default"
 version = 2
 
 [sections.tls]
-weight = 40
+weight = 35
 hard_fail = ["chain_trusted", "not_expired"]
 
 [sections.tls.checks]
@@ -308,15 +336,23 @@ ocsp_stapled     = 3
 ct_logged        = 3
 
 [sections.dns]
-weight = 30
-hard_fail = ["spf", "dmarc"]
+weight = 20
+hard_fail = []
 
 [sections.dns.checks]
-spf    = 10
-dmarc  = 10
 dnssec = 5
 caa    = 5
-mx     = 5
+ns     = 3
+
+[sections.email]
+weight = 15
+hard_fail = []
+
+[sections.email.checks]
+email_authentication = 10
+email_infrastructure = 5
+email_transport      = 5
+email_brand_policy   = 2
 
 [sections.http]
 weight = 20
