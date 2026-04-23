@@ -60,7 +60,7 @@ export default function Summary(props: Props) {
 
   const dots = () => (
     <div class="summary-dots" role="list" aria-label="Section statuses">
-      <For each={['http', 'tls', 'dns', 'ip']}>
+      <For each={['http', 'tls', 'dns', 'email', 'ip']}>
         {(section) => (
           <Show when={s().sections[section] !== undefined}>
             <div class="summary-dot-item" role="listitem">
@@ -156,6 +156,15 @@ export default function Summary(props: Props) {
       <Show when={s().hard_fail}>
         <div class="summary-hard-fail" role="alert">
           Hard fail: {(s().hard_fail_checks ?? []).map(name => CHECK_LABELS[name] ?? name).join(', ')}
+        </div>
+      </Show>
+
+      <Show when={s().not_applicable && Object.keys(s().not_applicable).length > 0}>
+        <div class="summary-na-note">
+          * Score computed without:{' '}
+          {Object.entries(s().not_applicable)
+            .map(([section, reason]) => `${section} (${reason})`)
+            .join(', ')}
         </div>
       </Show>
 

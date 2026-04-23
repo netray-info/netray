@@ -9,6 +9,7 @@ import DomainInput from './components/DomainInput';
 import DnsSection from './components/DnsSection';
 import TlsSection from './components/TlsSection';
 import HttpSection from './components/HttpSection';
+import EmailSection from './components/EmailSection';
 import IpSection from './components/IpSection';
 import Summary from './components/Summary';
 import { startCheck } from './lib/sse';
@@ -21,6 +22,7 @@ import type {
   DnsEvent,
   TlsEvent,
   HttpEvent,
+  EmailEvent,
   IpEvent,
   SummaryEvent,
   DoneEvent,
@@ -36,6 +38,7 @@ export default function App() {
   const [dns, setDns] = createSignal<DnsEvent | null>(null);
   const [tls, setTls] = createSignal<TlsEvent | null>(null);
   const [http, setHttp] = createSignal<HttpEvent | null>(null);
+  const [email, setEmail] = createSignal<EmailEvent | null>(null);
   const [ip, setIp] = createSignal<IpEvent | null>(null);
   const [summary, setSummary] = createSignal<SummaryEvent | null>(null);
   const [done, setDone] = createSignal<DoneEvent | null>(null);
@@ -111,6 +114,7 @@ export default function App() {
     setDns(null);
     setTls(null);
     setHttp(null);
+    setEmail(null);
     setIp(null);
     setSummary(null);
     setDone(null);
@@ -133,6 +137,7 @@ export default function App() {
       onDns:     (data) => setDns(data),
       onTls:     (data) => setTls(data),
       onHttp:    (data) => setHttp(data),
+      onEmail:   (data) => setEmail(data),
       onIp:      (data) => setIp(data),
       onSummary: (data) => setSummary(data),
       onDone:    (data) => { setDone(data); setCheckState('done'); },
@@ -172,7 +177,7 @@ export default function App() {
   onCleanup(() => { if (ssCleanup) ssCleanup(); });
 
   const isLoading  = () => checkState() === 'loading';
-  const hasResults = () => dns() !== null || tls() !== null || ip() !== null;
+  const hasResults = () => dns() !== null || tls() !== null || ip() !== null || email() !== null;
 
   const allChecks = () => [
     ...(tls()?.checks ?? []),
@@ -292,6 +297,17 @@ export default function App() {
                   grade={summary()?.section_grades['tls']}
                 />
               </div>
+              <Show when={email() !== null || (isLoading() && summary()?.sections['email'] !== undefined)}>
+                <div data-card>
+                  <EmailSection
+                    data={email()}
+                    loading={isLoading() && email() === null}
+                    error={error() ?? undefined}
+                    expanded={allExpanded()}
+                    grade={summary()?.section_grades['email']}
+                  />
+                </div>
+              </Show>
               <div data-card>
                 <IpSection
                   data={ip()}
@@ -342,8 +358,9 @@ export default function App() {
           <div class="help-section">
             <div class="help-section__title">Scoring</div>
             <p class="help-desc">
-              Weighted average across TLS (40%), DNS (30%), HTTP (20%), and IP (10%).
-              The HTTP section is optional and only scored when the spectra backend is configured.
+              Weighted average across TLS (35%), DNS (20%), HTTP (20%), Email (15%), and IP (10%).
+              HTTP and Email are optional — only scored when the respective backends are configured.
+              For domains without MX records, the three email receiving buckets are excluded from scoring automatically.
             </p>
             <Show when={meta()?.profile}>
               {(profile) => (

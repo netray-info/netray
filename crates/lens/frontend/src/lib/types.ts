@@ -51,6 +51,27 @@ export interface IpEvent {
   guide_url?: string;
 }
 
+export interface EmailBucket {
+  verdict: Verdict;
+  messages: string[];
+  not_applicable: boolean;
+}
+
+export interface EmailEvent {
+  status: 'ok' | 'pass' | 'warn' | 'fail' | 'error' | 'not_applicable';
+  grade?: string;
+  buckets?: {
+    email_authentication: EmailBucket;
+    email_infrastructure: EmailBucket;
+    email_transport: EmailBucket;
+    email_brand_policy: EmailBucket;
+  };
+  headline?: string;
+  detail_url?: string;
+  error?: string;
+  reason?: string;
+}
+
 export interface SummaryEvent {
   sections: Record<string, Verdict>;
   section_grades: Record<string, string>;
@@ -59,6 +80,8 @@ export interface SummaryEvent {
   score: number;
   hard_fail: boolean;
   hard_fail_checks: string[];
+  hard_fail_reason?: string;
+  not_applicable: Record<string, string>;
 }
 
 export interface DoneEvent {

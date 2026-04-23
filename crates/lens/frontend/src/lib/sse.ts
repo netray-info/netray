@@ -1,9 +1,10 @@
-import type { DnsEvent, TlsEvent, HttpEvent, IpEvent, SummaryEvent, DoneEvent } from './types';
+import type { DnsEvent, TlsEvent, HttpEvent, EmailEvent, IpEvent, SummaryEvent, DoneEvent } from './types';
 
 export interface SseCallbacks {
   onDns: (data: DnsEvent) => void;
   onTls: (data: TlsEvent) => void;
   onHttp: (data: HttpEvent) => void;
+  onEmail: (data: EmailEvent) => void;
   onIp: (data: IpEvent) => void;
   onSummary: (data: SummaryEvent) => void;
   onDone: (data: DoneEvent) => void;
@@ -34,6 +35,14 @@ export function startCheck(domain: string, callbacks: SseCallbacks): () => void 
       callbacks.onHttp(JSON.parse(e.data) as HttpEvent);
     } catch {
       callbacks.onError('Failed to parse http event');
+    }
+  });
+
+  es.addEventListener('email', (e: MessageEvent) => {
+    try {
+      callbacks.onEmail(JSON.parse(e.data) as EmailEvent);
+    } catch {
+      callbacks.onError('Failed to parse email event');
     }
   });
 
