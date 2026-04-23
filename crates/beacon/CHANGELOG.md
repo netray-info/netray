@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-23
+
+### Added
+
+- Production-readiness review covering SDD tracks A-I: trusted-proxy
+  client-IP extraction, SSE abort-on-disconnect, concurrency semaphore
+  with `TOO_MANY_INSPECTIONS`, SSRF guard on BIMI logo fetches, MTA-STS
+  body/MX caps, redacted domain in error logs, per-task panic counters,
+  DnsLookup trait for test injection, tagged `Phase0Result`/`Phase1Result`,
+  `Grade::Skipped`, error banner + aria-live in frontend (9b2dbef)
+- Surface full check detail in expanded card body (a46fe8d)
+- Cross-tool header link for DKIM and DANE cards (2129ddd)
+- DNSSEC cross-reference link to tls.netray.info (158714f)
+
+### Changed
+
+- Project-review remediations: swap jsdom for happy-dom with
+  vitest.workspace.ts and test-setup.ts, extract `lib/history.ts`,
+  canonical `[telemetry]` block in `beacon.toml.example`, move
+  cargo-machete from clippy gate to audit job (03a4417)
+- Unify domain + DKIM selectors into single query input (300e03b)
+- Inline cross-tool header links and per-card explainers (d3a1d24)
+- Apply cargo fmt (78c6af0)
+- Update .npmrc for GitHub Packages auth (7f171e8)
+
+### Fixed
+
+- mx: downgrade single_mx to Info when multiple IPs resolve (f8a4159)
+- dnssec: query DNSKEY instead of RRSIG to detect signed zones (04eecc5)
+- cross-validation: relax spf_mx_coverage verdict (f6bf8d7)
+- dnsbl: classify response codes and use a separate resolver (0a50734)
+- frontend: bump @netray-info/common-frontend to ^0.5.0 (1072cda)
+- frontend: regenerate lockfile after package.json bump (6e0fcd0)
+
 ## [0.1.0] - 2026-04-11
 
 Initial release of beacon, the email security inspector for netray.info.
@@ -34,4 +68,5 @@ Initial release of beacon, the email security inspector for netray.info.
 - SuiteNav placement and skip-link accessibility
 - Renamed project from mail-inspector to beacon
 
+[0.2.0]: https://github.com/netray-info/beacon/releases/tag/v0.2.0
 [0.1.0]: https://github.com/netray-info/beacon/releases/tag/v0.1.0
