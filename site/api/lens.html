@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lens API Reference - netray.info</title>
+  <meta name="description" content="Lens API reference: unified domain health check with A–F grading. SSE streaming, email security scoring, dkim_selectors, and CI integration examples.">
+  <link rel="canonical" href="https://netray.info/api/lens">
+  <meta property="og:title" content="Lens API Reference - netray.info">
+  <meta property="og:description" content="Lens API: domain health check with A–F grading, SSE streaming, email security, and CI-friendly endpoints.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://netray.info/api/lens">
+  <meta property="og:site_name" content="netray.info">
+  <meta name="twitter:card" content="summary">
+  <link rel="stylesheet" href="../guide/style.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Lens API Reference",
+    "description": "Lens API reference: unified domain health check with A–F grading. SSE streaming, email security scoring, dkim_selectors, and CI integration examples.",
+    "url": "https://netray.info/api/lens",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/api/lens"
+  }
+  </script>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://lens.netray.info">LENS</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Lens API</h1>
+  <p class="page-subtitle">Base URL: <code>https://lens.netray.info</code></p>
+
+  <article>
+
+    <p>
+      Unified domain health check. Runs IP, DNS, TLS, HTTP, and Email checks in parallel
+      and streams results as Server-Sent Events, producing an A+&ndash;F grade with
+      per-section breakdowns and hard-fail overrides.
+    </p>
+
+    <p>
+      See also: <a href="https://lens.netray.info/docs">interactive API reference</a>
+      (auto-generated OpenAPI)
+    </p>
+
+    <h2>Endpoints</h2>
+
+    <h3><code>GET /api/check/{domain}</code></h3>
+    <p>
+      Run a full domain health check. Returns an SSE stream by default;
+      append <code>?stream=false</code> or send <code>Accept: application/json</code>
+      for a single JSON response.
+    </p>
+<pre><code># SSE stream (default)
+curl -N https://lens.netray.info/api/check/example.com
+
+# Single JSON response
+curl -s https://lens.netray.info/api/check/example.com?stream=false | jq .
+
+# With custom DKIM selectors
+curl -N 'https://lens.netray.info/api/check/example.com?dkim_selectors=google,selector1'</code></pre>
+
+    <h3><code>POST /api/check</code></h3>
+    <p>Same check via POST body. Useful when the domain contains characters that are awkward in URLs.</p>
+<pre><code>curl -N -X POST https://lens.netray.info/api/check \
+  -H 'Content-Type: application/json' \
+  -d '{"domain": "example.com"}'
+
+# With DKIM selectors
+curl -N -X POST https://lens.netray.info/api/check \
+  -H 'Content-Type: application/json' \
+  -d '{"domain": "example.com", "dkim_selectors": "google,selector1"}'</code></pre>
+
+    <h3><code>GET /api/meta</code></h3>
+    <p>Returns server version, configured backends, scoring profile, and rate limit settings.</p>
+<pre><code>curl -s https://lens.netray.info/api/meta | jq .</code></pre>
+
+    <h2>Query Parameters</h2>
+
+    <table>
+      <thead>
+        <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>stream</code></td>
+          <td>boolean</td>
+          <td>Set to <code>false</code> for a single JSON response instead of SSE. Default: true.</td>
+        </tr>
+        <tr>
+          <td><code>dkim_selectors</code></td>
+          <td>string</td>
+          <td>
+            Comma-separated DKIM selectors to test against the email backend.
+            Each selector: characters <code>[a-zA-Z0-9-]</code>, 1&ndash;63 chars.
+            At most 10 selectors. Example: <code>google,selector1</code>.
+            Absent &rarr; beacon uses its built-in provider map.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>SSE Event Stream</h2>
+
+    <p>
+      Results stream as Server-Sent Events in the order each backend completes.
+      IP, DNS, TLS, HTTP, and Email run in parallel; IP waits for DNS-resolved
+      addresses. The stream ends with a <code>summary</code> and a <code>done</code> event.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Event</th><th>When</th><th>Key fields</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>dns</code></td><td>After DNS backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>tls</code></td><td>After TLS backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>http</code></td><td>After HTTP backend (optional)</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>status_code</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>email</code></td><td>After Email backend (optional)</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>grade</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>ip</code></td><td>After IP backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>addresses[]</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>summary</code></td><td>After all backends</td><td><code>grade</code>, <code>score</code>, <code>sections</code>, <code>section_grades</code>, <code>hard_fail</code>, <code>not_applicable</code></td></tr>
+        <tr><td><code>done</code></td><td>Stream complete</td><td><code>domain</code>, <code>duration_ms</code>, <code>cached</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Check status values</h3>
+    <p>Each section event carries a <code>status</code> field:</p>
+    <table>
+      <thead>
+        <tr><th>Value</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>pass</code></td><td>All weighted checks pass</td></tr>
+        <tr><td><code>warn</code></td><td>One or more checks have warnings</td></tr>
+        <tr><td><code>fail</code></td><td>One or more checks fail</td></tr>
+        <tr><td><code>error</code></td><td>Backend unreachable or timed out</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Example: dns event</h3>
+<pre><code>event: dns
+data: {
+  "status": "warn",
+  "headline": "DNSSEC ~  CAA ✓  NS ✓  CNAME-apex ✓",
+  "checks": [
+    {"name": "dnssec",     "verdict": "warn", "weight": 5, "messages": ["DNSKEY present but no RRSIG found"]},
+    {"name": "caa",        "verdict": "pass", "weight": 5},
+    {"name": "ns",         "verdict": "pass", "weight": 3},
+    {"name": "cname_apex", "verdict": "pass", "weight": 5}
+  ],
+  "detail_url": "https://dns.netray.info/?q=example.com+%2Bcheck"
+}</code></pre>
+
+    <h3>Example: email event</h3>
+<pre><code>event: email
+data: {
+  "status": "pass",
+  "headline": "Auth: OK  Infra: OK  Transport: OK  Brand: OK",
+  "grade": "A",
+  "checks": [
+    {"name": "email_authentication", "verdict": "pass", "weight": 10},
+    {"name": "email_infrastructure",  "verdict": "pass", "weight": 5},
+    {"name": "email_transport",       "verdict": "pass", "weight": 5},
+    {"name": "email_brand_policy",    "verdict": "pass", "weight": 2}
+  ],
+  "detail_url": "https://email.netray.info/?domain=example.com"
+}
+
+# For a parked domain (no MX records), infrastructure/transport/brand are skipped:
+data: {
+  "status": "pass",
+  "headline": "Auth: OK  Infra: N/A  Transport: N/A  Brand: N/A",
+  "grade": "B",
+  "checks": [
+    {"name": "email_authentication", "verdict": "pass",  "weight": 10},
+    {"name": "email_infrastructure",  "verdict": "skip",  "weight": 5,  "messages": ["No MX records — email receiving not configured"]},
+    {"name": "email_transport",       "verdict": "skip",  "weight": 5,  "messages": ["No MX records — email receiving not configured"]},
+    {"name": "email_brand_policy",    "verdict": "skip",  "weight": 2,  "messages": ["No MX records — email receiving not configured"]}
+  ],
+  "detail_url": "https://email.netray.info/?domain=parked.example.com"
+}</code></pre>
+
+    <h3>Example: summary event</h3>
+<pre><code>event: summary
+data: {
+  "grade": "A",
+  "score": 94.2,
+  "overall": "warn",
+  "sections": {
+    "ip": "pass", "dns": "warn", "tls": "pass", "http": "pass", "email": "pass"
+  },
+  "section_grades": {
+    "ip": "A+", "dns": "B", "tls": "A+", "http": "A", "email": "A"
+  },
+  "hard_fail": false,
+  "hard_fail_checks": [],
+  "hard_fail_reason": null,
+  "not_applicable": {}
+}</code></pre>
+
+    <p>
+      <code>not_applicable</code> is always present. When the email backend times out
+      internally it contains <code>{"email": "beacon timeout"}</code> and the email section
+      is excluded from scoring without penalising the overall grade.
+    </p>
+
+    <h2>Scoring</h2>
+
+    <p>
+      The overall grade is a weighted average of active section scores.
+      HTTP and Email sections are optional; when not configured they are excluded
+      and the denominator adjusts accordingly.
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Section</th><th>Weight</th><th>Hard fail checks</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>TLS</td><td>35%</td><td><code>chain_trusted</code>, <code>not_expired</code></td></tr>
+        <tr><td>DNS</td><td>20%</td><td>&mdash;</td></tr>
+        <tr><td>HTTP</td><td>20%</td><td>&mdash;</td></tr>
+        <tr><td>Email</td><td>15%</td><td>&mdash;</td></tr>
+        <tr><td>IP</td><td>10%</td><td>&mdash;</td></tr>
+      </tbody>
+    </table>
+
+    <table>
+      <thead>
+        <tr><th>Grade</th><th>Score</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>A+</strong></td><td>&ge; 97%</td></tr>
+        <tr><td><strong>A</strong></td><td>&ge; 90%</td></tr>
+        <tr><td><strong>B</strong></td><td>&ge; 75%</td></tr>
+        <tr><td><strong>C</strong></td><td>&ge; 60%</td></tr>
+        <tr><td><strong>D</strong></td><td>&ge; 40%</td></tr>
+        <tr><td><strong>F</strong></td><td>&lt; 40%, or hard-fail override</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Caching</h2>
+
+    <p>
+      Results are cached per domain (default TTL: 5 minutes). The response includes
+      an <code>X-Cache</code> header: <code>HIT</code> for a cached response,
+      <code>MISS</code> otherwise. Requests with <code>dkim_selectors</code> bypass
+      the cache.
+    </p>
+
+    <h2>Useful One-Liners</h2>
+
+<pre><code># Get the overall grade
+curl -s 'https://lens.netray.info/api/check/example.com?stream=false' \
+  | jq '.summary.grade'
+
+# CI gate: fail if grade is below A
+curl -s 'https://lens.netray.info/api/check/example.com?stream=false' \
+  | jq -e '.summary.grade | test("^A")'
+
+# Gate on a specific section
+curl -s 'https://lens.netray.info/api/check/example.com?stream=false' \
+  | jq -e '.summary.section_grades.tls == "A+"'
+
+# Stream and print each section as it arrives
+curl -N https://lens.netray.info/api/check/example.com \
+  | grep '^data:' | while read line; do
+      echo "${line#data: }" | jq '{section: .status}'
+    done
+
+# Check email with custom DKIM selectors
+curl -s 'https://lens.netray.info/api/check/example.com?stream=false&dkim_selectors=google,default' \
+  | jq '.email.checks'</code></pre>
+
+    <h2>CI / GitHub Actions</h2>
+
+<pre><code>- name: Check domain health
+  run: |
+    GRADE=$(curl -sf \
+      'https://lens.netray.info/api/check/${{ env.DOMAIN }}?stream=false' \
+      | jq -r '.summary.grade')
+    echo "Grade: $GRADE"
+    case "$GRADE" in
+      A+|A|B) echo "Health check passed" ;;
+      *)      echo "Health check failed: $GRADE"; exit 1 ;;
+    esac</code></pre>
+
+    <h2>Rate Limits</h2>
+
+    <p>
+      Per-IP GCRA rate limiting: 10 requests per minute, burst of 3.
+      When rate-limited, you receive a <code>429</code> response with a
+      <code>Retry-After</code> header.
+    </p>
+
+    <h2>Errors</h2>
+
+<pre><code>{
+  "error": {
+    "code": "DOMAIN_INVALID",
+    "message": "invalid domain: 192.168.1.1"
+  }
+}</code></pre>
+
+    <table>
+      <thead>
+        <tr><th>HTTP Status</th><th>Code</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>400</td><td><code>DOMAIN_INVALID</code></td><td>Domain is an IP address, contains wildcards, or exceeds 253 chars</td></tr>
+        <tr><td>400</td><td><code>DOMAIN_BLOCKED</code></td><td>Domain resolves to a private/loopback address</td></tr>
+        <tr><td>400</td><td><code>INVALID_INPUT</code></td><td>Invalid <code>dkim_selectors</code> (bad characters, too long, too many)</td></tr>
+        <tr><td>429</td><td><code>RATE_LIMITED</code></td><td>Rate limit exceeded; check <code>Retry-After</code> header</td></tr>
+        <tr><td>504</td><td><code>TIMEOUT</code></td><td>20-second hard deadline exceeded</td></tr>
+      </tbody>
+    </table>
+
+  </article>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/lens">Lens scoring guide</a></li>
+      <li><a href="email.html">Email API</a></li>
+      <li><a href="dns.html">DNS API</a></li>
+      <li><a href="tls.html">TLS API</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://lens.netray.info">LENS</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>
