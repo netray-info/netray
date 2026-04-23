@@ -1,4 +1,4 @@
-use lens::scoring::engine::{CheckResult, CheckVerdict, SectionInput, compute_score};
+use lens::scoring::engine::{CheckResult, CheckVerdict, SectionInput, SectionStatus, compute_score};
 use lens::scoring::profile::ScoringProfile;
 /// Pure unit regression tests for the scoring engine.
 ///
@@ -48,14 +48,14 @@ fn not_found(name: &str) -> CheckResult {
 fn no_error(checks: Vec<CheckResult>) -> SectionInput {
     SectionInput {
         checks,
-        errored: false,
+        status: SectionStatus::Scored,
     }
 }
 
 fn errored() -> SectionInput {
     SectionInput {
         checks: vec![],
-        errored: true,
+        status: SectionStatus::Errored,
     }
 }
 
@@ -125,14 +125,10 @@ fn default_profile_parses_correctly() {
         "profile must define F threshold"
     );
 
-    // Hard fail lists are present
+    // Hard fail lists: tls still has hard fails; dns hard_fail cleared in this version
     assert!(
         !profile.sections["tls"].hard_fail.is_empty(),
         "tls hard_fail must not be empty"
-    );
-    assert!(
-        !profile.sections["dns"].hard_fail.is_empty(),
-        "dns hard_fail must not be empty"
     );
 
     // Each section has at least one weighted check
@@ -160,11 +156,15 @@ fn profile_section_weights_sum_to_100() {
     let profile = default_profile();
     let sum: u32 = profile.sections.values().map(|s| s.weight).sum();
     assert_eq!(sum, 100, "section weights must sum to 100, got {}", sum);
-    assert_eq!(profile.sections["dns"].weight, 30, "dns weight must be 30");
-    assert_eq!(profile.sections["tls"].weight, 40, "tls weight must be 40");
+    assert_eq!(profile.sections["dns"].weight, 20, "dns weight must be 20");
+    assert_eq!(profile.sections["tls"].weight, 35, "tls weight must be 35");
     assert_eq!(
         profile.sections["http"].weight, 20,
         "http weight must be 20"
+    );
+    assert_eq!(
+        profile.sections["email"].weight, 15,
+        "email weight must be 15"
     );
     assert_eq!(profile.sections["ip"].weight, 10, "ip weight must be 10");
 }
@@ -209,56 +209,6 @@ fn perfect_domain_all_pass_scores_a_plus() {
         (result.overall_percentage - 100.0).abs() < 0.001,
         "all-pass should yield 100% score, got {:.2}",
         result.overall_percentage,
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 3. Missing SPF → F (hard fail)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn missing_spf_triggers_hard_fail_f() {
-    let profile = default_profile();
-    let (_, tls, ip) = all_pass(&profile);
-
-    // SPF not found — simulates domain with no SPF record
-    let dns = no_error(vec![not_found("spf"), pass("dmarc")]);
-    let result = compute_score(&profile, &inputs(dns, tls, ip));
-
-    assert!(
-        result.hard_fail_triggered,
-        "missing SPF must trigger hard fail"
-    );
-    assert_eq!(result.grade, "F", "missing SPF must produce grade F");
-    assert!(
-        result.hard_fail_checks.contains(&"spf".to_string()),
-        "spf must appear in hard_fail_checks, got {:?}",
-        result.hard_fail_checks,
-    );
-}
-
-// ---------------------------------------------------------------------------
-// 4. Missing DMARC → F (hard fail)
-// ---------------------------------------------------------------------------
-
-#[test]
-fn missing_dmarc_triggers_hard_fail_f() {
-    let profile = default_profile();
-    let (_, tls, ip) = all_pass(&profile);
-
-    // DMARC not found — simulates domain with no DMARC policy
-    let dns = no_error(vec![pass("spf"), not_found("dmarc")]);
-    let result = compute_score(&profile, &inputs(dns, tls, ip));
-
-    assert!(
-        result.hard_fail_triggered,
-        "missing DMARC must trigger hard fail"
-    );
-    assert_eq!(result.grade, "F", "missing DMARC must produce grade F");
-    assert!(
-        result.hard_fail_checks.contains(&"dmarc".to_string()),
-        "dmarc must appear in hard_fail_checks, got {:?}",
-        result.hard_fail_checks,
     );
 }
 
@@ -370,9 +320,9 @@ fn all_dns_warn_with_all_tls_pass_grades_below_a() {
 
     // DNS section should be 50% (all warn = half credit).
     // TLS and IP sections should be 100%.
-    // HTTP section absent from inputs → excluded from weighted average.
-    // Active weights: dns=30, tls=40, ip=10, total=80.
-    //   overall = (50*30 + 100*40 + 100*10) / 80 = (1500 + 4000 + 1000) / 80 = 81.25
+    // HTTP and email absent from inputs → excluded from weighted average.
+    // Active weights: dns=20, tls=35, ip=10, total=65.
+    //   overall = (50*20 + 100*35 + 100*10) / 65 = (1000 + 3500 + 1000) / 65 ≈ 84.6
     // → grade B (75..89.9)
     assert!(
         !matches!(result.grade.as_str(), "A" | "A+"),

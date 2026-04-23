@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
 use crate::backends::{BackendContext, BackendExtra, BackendResult};
-use crate::scoring::engine::{OverallScore, SectionInput, compute_score};
+use crate::scoring::engine::{OverallScore, SectionInput, SectionStatus, compute_score};
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -12,6 +12,7 @@ use crate::state::AppState;
 
 pub struct CheckInput {
     pub domain: String,
+    pub dkim_selectors: Option<Vec<String>>,
 }
 
 /// Error that can occur for a single backend section.
@@ -20,6 +21,7 @@ pub enum SectionError {
     BackendError(String),
     Timeout,
     NoDnsResults,
+    NotApplicable { reason: String },
 }
 
 /// Output of a full domain health check.
@@ -35,7 +37,7 @@ pub struct CheckOutput {
 // ---------------------------------------------------------------------------
 
 /// Wave 1: run concurrently. No cross-section data dependencies.
-const WAVE1_SECTIONS: &[&str] = &["dns", "tls", "http"];
+const WAVE1_SECTIONS: &[&str] = &["dns", "tls", "http", "email"];
 
 /// Wave 2: run after wave 1. IP backend needs resolved IPs from DNS.
 const WAVE2_SECTIONS: &[&str] = &["ip"];
@@ -53,10 +55,15 @@ const WAVE2_SECTIONS: &[&str] = &["ip"];
 /// 4. Each section independently captures errors — one failure never aborts the others.
 /// 5. Score is computed from whatever results are available.
 pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
+    run_check_with_input(state, CheckInput { domain: domain.to_string(), dkim_selectors: None }).await
+}
+
+pub async fn run_check_with_input(state: &AppState, input: CheckInput) -> CheckOutput {
+    let domain = input.domain.clone();
     let start = Instant::now();
     let hard_deadline = Duration::from_secs(20);
 
-    let result = tokio::time::timeout(hard_deadline, run_backends(state, domain)).await;
+    let result = tokio::time::timeout(hard_deadline, run_backends_with_input(state, &input)).await;
 
     match result {
         Ok(output) => output,
@@ -68,7 +75,7 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
                 sections.insert(backend.section().to_string(), Err(SectionError::Timeout));
             }
             CheckOutput {
-                domain: domain.to_string(),
+                domain,
                 sections,
                 score,
                 duration_ms: start.elapsed().as_millis() as u64,
@@ -77,14 +84,15 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
     }
 }
 
-/// Inner async function that runs the actual backend calls.
-async fn run_backends(state: &AppState, domain: &str) -> CheckOutput {
+async fn run_backends_with_input(state: &AppState, input: &CheckInput) -> CheckOutput {
+    let domain = &input.domain;
     let start = Instant::now();
     let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
 
     // Wave 1: run concurrently.
     let wave1_context = BackendContext {
         resolved_ips: vec![],
+        dkim_selectors: input.dkim_selectors.clone(),
     };
     let wave1_futures: Vec<_> = state
         .backends
@@ -118,7 +126,7 @@ async fn run_backends(state: &AppState, domain: &str) -> CheckOutput {
         .unwrap_or_default();
 
     // Wave 2: run after wave 1.
-    let wave2_context = BackendContext { resolved_ips };
+    let wave2_context = BackendContext { resolved_ips, dkim_selectors: None };
     for backend in state.backends.iter() {
         if WAVE2_SECTIONS.contains(&backend.section()) {
             let result = backend.run(domain, &wave2_context).await;
@@ -158,11 +166,15 @@ fn section_input_from_result(result: &Result<BackendResult, SectionError>) -> Se
     match result {
         Ok(r) => SectionInput {
             checks: r.checks.clone(),
-            errored: false,
+            status: SectionStatus::Scored,
+        },
+        Err(SectionError::NotApplicable { reason }) => SectionInput {
+            checks: vec![],
+            status: SectionStatus::NotApplicable { reason: reason.clone() },
         },
         Err(_) => SectionInput {
             checks: vec![],
-            errored: true,
+            status: SectionStatus::Errored,
         },
     }
 }
@@ -175,7 +187,7 @@ fn build_score_from_errors(state: &AppState) -> OverallScore {
             name.clone(),
             SectionInput {
                 checks: vec![],
-                errored: true,
+                status: SectionStatus::Errored,
             },
         );
     }

@@ -21,11 +21,18 @@ pub struct CheckResult {
     pub messages: Vec<String>,
 }
 
+/// Status of a section for scoring purposes.
+#[derive(Debug, Clone)]
+pub enum SectionStatus {
+    Scored,
+    Errored,
+    NotApplicable { reason: String },
+}
+
 /// Per-section input to the scoring engine.
 pub struct SectionInput {
     pub checks: Vec<CheckResult>,
-    /// true = backend unreachable; exclude this section entirely from scoring.
-    pub errored: bool,
+    pub status: SectionStatus,
 }
 
 #[derive(Debug, Clone)]
@@ -45,9 +52,11 @@ pub struct OverallScore {
     pub hard_fail_triggered: bool,
     /// Which specific checks triggered a hard fail.
     pub hard_fail_checks: Vec<String>,
+    /// Section name → reason. Always present (may be empty). Populated only for NotApplicable.
+    pub not_applicable: HashMap<String, String>,
 }
 
-/// Score a single section. Returns None if the section errored.
+/// Score a single section. Returns None if the section errored or is not applicable.
 ///
 /// Checks not present in `section_checks` are ignored (unweighted).
 /// Skip verdicts are excluded from both earned and possible.
@@ -57,8 +66,9 @@ pub fn score_section(
     section_checks: &HashMap<String, u32>,
     input: &SectionInput,
 ) -> Option<SectionScore> {
-    if input.errored {
-        return None;
+    match input.status {
+        SectionStatus::Errored | SectionStatus::NotApplicable { .. } => return None,
+        SectionStatus::Scored => {}
     }
 
     let mut earned: u32 = 0;
@@ -114,16 +124,21 @@ pub fn compute_score(
     inputs: &HashMap<String, SectionInput>,
 ) -> OverallScore {
     let mut sections: HashMap<String, SectionScore> = HashMap::new();
+    let mut not_applicable: HashMap<String, String> = HashMap::new();
     let mut weighted_sum: f64 = 0.0;
     let mut total_weight: u32 = 0;
 
     for (name, section) in &profile.sections {
-        if let Some(input) = inputs.get(name)
-            && let Some(score) = score_section(&section.checks, input)
-        {
-            weighted_sum += score.percentage * section.weight as f64;
-            total_weight += section.weight;
-            sections.insert(name.clone(), score);
+        if let Some(input) = inputs.get(name) {
+            if let SectionStatus::NotApplicable { reason } = &input.status {
+                not_applicable.insert(name.clone(), reason.clone());
+                continue;
+            }
+            if let Some(score) = score_section(&section.checks, input) {
+                weighted_sum += score.percentage * section.weight as f64;
+                total_weight += section.weight;
+                sections.insert(name.clone(), score);
+            }
         }
     }
 
@@ -135,6 +150,7 @@ pub fn compute_score(
             grade: "error".to_string(),
             hard_fail_triggered: false,
             hard_fail_checks: vec![],
+            not_applicable,
         };
     }
 
@@ -163,6 +179,7 @@ pub fn compute_score(
         grade,
         hard_fail_triggered,
         hard_fail_checks,
+        not_applicable,
     }
 }
 
@@ -261,14 +278,21 @@ mod tests {
     fn no_error(checks: Vec<CheckResult>) -> SectionInput {
         SectionInput {
             checks,
-            errored: false,
+            status: SectionStatus::Scored,
         }
     }
 
     fn errored() -> SectionInput {
         SectionInput {
             checks: vec![],
-            errored: true,
+            status: SectionStatus::Errored,
+        }
+    }
+
+    fn not_applicable(reason: &str) -> SectionInput {
+        SectionInput {
+            checks: vec![],
+            status: SectionStatus::NotApplicable { reason: reason.to_string() },
         }
     }
 
@@ -410,23 +434,9 @@ mod tests {
     }
 
     #[test]
-    fn hard_fail_on_not_found_verdict_forces_grade_f() {
-        let profile = default_profile();
-        // spf is in dns hard_fail list
-        let dns_input = no_error(vec![not_found("spf"), pass("dmarc")]);
-        let tls_input = no_error(vec![pass("chain_trusted"), pass("not_expired")]);
-        let ip_input = no_error(vec![pass("reputation")]);
-
-        let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
-        assert!(result.hard_fail_triggered);
-        assert_eq!(result.grade, "F");
-        assert!(result.hard_fail_checks.contains(&"spf".to_string()));
-    }
-
-    #[test]
     fn hard_fail_pass_verdict_does_not_trigger() {
         let profile = default_profile();
-        let dns_input = no_error(vec![pass("spf"), pass("dmarc")]);
+        let dns_input = no_error(vec![pass("dnssec"), pass("caa")]);
         let tls_input = no_error(vec![pass("chain_trusted"), pass("not_expired")]);
         let ip_input = no_error(vec![pass("reputation")]);
 
@@ -440,7 +450,7 @@ mod tests {
         let profile = default_profile();
         // skip on a hard_fail check should not trigger
         let tls_input = no_error(vec![skip("chain_trusted"), pass("not_expired")]);
-        let dns_input = no_error(vec![pass("spf"), pass("dmarc")]);
+        let dns_input = no_error(vec![pass("dnssec"), pass("caa")]);
         let ip_input = no_error(vec![]);
 
         let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
@@ -453,7 +463,7 @@ mod tests {
     fn errored_section_excluded_from_overall() {
         let profile = default_profile();
         // tls errored — overall score is computed from dns + ip only
-        let dns_input = no_error(vec![pass("spf"), pass("dmarc")]);
+        let dns_input = no_error(vec![pass("dnssec"), pass("caa")]);
         let tls_input = errored();
         let ip_input = no_error(vec![pass("reputation")]);
 
@@ -470,6 +480,72 @@ mod tests {
         let profile = default_profile();
         let result = compute_score(&profile, &inputs(errored(), errored(), errored()));
         assert_eq!(result.overall_percentage, 0.0);
+    }
+
+    // --- SectionStatus::NotApplicable tests ---
+
+    #[test]
+    fn not_applicable_section_returns_none_from_score_section() {
+        let weights = simple_weights();
+        let input = not_applicable("no MX");
+        assert!(score_section(&weights, &input).is_none());
+    }
+
+    #[test]
+    fn not_applicable_section_recorded_in_overall_score() {
+        let profile = default_profile();
+        let mut all_inputs = inputs(
+            no_error(vec![pass("dnssec")]),
+            no_error(vec![pass("chain_trusted")]),
+            no_error(vec![pass("reputation")]),
+        );
+        all_inputs.insert(
+            "email".to_string(),
+            not_applicable("beacon timeout"),
+        );
+
+        let result = compute_score(&profile, &all_inputs);
+        assert!(!result.sections.contains_key("email"), "N/A section must not appear in sections");
+        assert_eq!(
+            result.not_applicable.get("email").map(|s| s.as_str()),
+            Some("beacon timeout"),
+            "not_applicable must contain the email reason"
+        );
+    }
+
+    #[test]
+    fn errored_section_not_recorded_in_not_applicable() {
+        let profile = default_profile();
+        let mut all_inputs = inputs(
+            no_error(vec![pass("dnssec")]),
+            errored(),
+            no_error(vec![pass("reputation")]),
+        );
+        all_inputs.insert("email".to_string(), errored());
+
+        let result = compute_score(&profile, &all_inputs);
+        assert!(
+            result.not_applicable.is_empty(),
+            "errored sections must not populate not_applicable, got {:?}",
+            result.not_applicable
+        );
+    }
+
+    #[test]
+    fn all_scored_sections_not_applicable_is_empty() {
+        let profile = default_profile();
+        let result = compute_score(
+            &profile,
+            &inputs(
+                no_error(vec![pass("dnssec")]),
+                no_error(vec![pass("chain_trusted")]),
+                no_error(vec![pass("reputation")]),
+            ),
+        );
+        assert!(
+            result.not_applicable.is_empty(),
+            "not_applicable must be empty when all sections are Scored"
+        );
     }
 
     // --- grade boundary tests ---
@@ -582,7 +658,7 @@ mod tests {
         let profile = default_profile();
         // Both tls hard_fail checks fail
         let tls_input = no_error(vec![fail("chain_trusted"), fail("not_expired")]);
-        let dns_input = no_error(vec![pass("spf"), pass("dmarc")]);
+        let dns_input = no_error(vec![pass("dnssec"), pass("caa")]);
         let ip_input = no_error(vec![]);
 
         let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));
