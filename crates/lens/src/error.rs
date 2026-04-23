@@ -32,6 +32,9 @@ pub enum AppError {
 
     #[error("internal error: {0}")]
     Internal(String),
+
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
 }
 
 impl ApiError for AppError {
@@ -39,6 +42,7 @@ impl ApiError for AppError {
         match self {
             Self::DomainInvalid(_) => StatusCode::BAD_REQUEST,
             Self::DomainBlocked(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidInput(_) => StatusCode::BAD_REQUEST,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             Self::BackendError { .. } => StatusCode::BAD_GATEWAY,
             Self::Timeout => StatusCode::GATEWAY_TIMEOUT,
@@ -50,6 +54,7 @@ impl ApiError for AppError {
         match self {
             Self::DomainInvalid(_) => "DOMAIN_INVALID",
             Self::DomainBlocked(_) => "DOMAIN_BLOCKED",
+            Self::InvalidInput(_) => "INVALID_INPUT",
             Self::RateLimited { .. } => "RATE_LIMITED",
             Self::BackendError { .. } => "BACKEND_ERROR",
             Self::Timeout => "TIMEOUT",
@@ -85,6 +90,9 @@ impl IntoResponse for AppError {
             }
             Self::Internal(_) => {
                 tracing::error!(error = %self, "internal error");
+            }
+            Self::InvalidInput(_) => {
+                tracing::debug!(error = %self, "invalid input");
             }
         }
 

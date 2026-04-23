@@ -1,0 +1,16 @@
+{
+  "grade": "D",
+  "categories": {
+    "spf":         { "verdict": "Pass", "message": null },
+    "dkim":        { "verdict": "Pass", "message": null },
+    "dmarc":       { "verdict": "Pass", "message": null },
+    "mx":          { "verdict": "Fail", "message": "No MX records found" },
+    "fcrdns":      { "verdict": "Fail", "message": "No forward-confirmed reverse DNS" },
+    "dnsbl":       { "verdict": "Fail", "message": "Listed on blocklist" },
+    "mta_sts":     { "verdict": "Fail", "message": "No MTA-STS policy" },
+    "tlsrpt":      { "verdict": "Fail", "message": "No TLS-RPT record" },
+    "dane":        { "verdict": "Fail", "message": "No DANE record" },
+    "bimi":        { "verdict": "Fail", "message": "No BIMI record" },
+    "dmarc_policy":{ "verdict": "Fail", "message": "No DMARC policy" }
+  }
+}

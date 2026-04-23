@@ -48,6 +48,8 @@ pub struct BackendsConfig {
     pub ip: netray_common::backend::BackendConfig,
     #[serde(default)]
     pub http: Option<netray_common::backend::BackendConfig>,
+    #[serde(default)]
+    pub email: Option<netray_common::backend::BackendConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -230,6 +232,7 @@ mod tests {
                     ..Default::default()
                 },
                 http: None,
+                email: None,
             },
             ecosystem: EcosystemConfig::default(),
             cache: default_cache(),

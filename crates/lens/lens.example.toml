@@ -30,6 +30,10 @@ timeout_ms = 2000
 # timeout_ms = 20000
 # max_concurrent = 10
 
+# [backends.email]
+# url = "http://beacon:8085"          # optional; omit to disable email section
+# Public URL for detail_url is sourced from [ecosystem] email_base_url.
+
 # [ecosystem]
 # ip_base_url = "https://ip.netray.info"
 # dns_base_url = "https://dns.netray.info"

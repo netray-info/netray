@@ -5,6 +5,7 @@ use moka::future::Cache;
 
 use crate::backends::Backend;
 use crate::backends::dns::DnsBackend;
+use crate::backends::email::EmailBackend;
 use crate::backends::http::HttpBackend;
 use crate::backends::ip::IpBackend;
 use crate::backends::tls::TlsBackend;
@@ -76,6 +77,16 @@ impl AppState {
                 client: http_client.clone(),
             }));
         }
+        if let Some(ref email_cfg) = config.backends.email
+            && let Some(ref url) = email_cfg.url
+        {
+            backends.push(Box::new(EmailBackend {
+                email_url: url.clone(),
+                public_url: eco.email_base_url.clone().unwrap_or_else(|| url.clone()),
+                timeout: Duration::from_secs(15),
+                client: http_client.clone(),
+            }));
+        }
         backends.push(Box::new(IpBackend {
             ip_url: config.backends.ip.url.clone().unwrap_or_default(),
             public_url: eco.ip_base_url.clone().unwrap_or_default(),
@@ -136,6 +147,7 @@ mod tests {
                     ..Default::default()
                 },
                 http: None,
+                email: None,
             },
             ecosystem: EcosystemConfig::default(),
             telemetry: Default::default(),

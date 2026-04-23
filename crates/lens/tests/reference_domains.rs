@@ -46,6 +46,7 @@ fn live_state() -> AppState {
                 ..Default::default()
             },
             http: None,
+            email: None,
         },
         cache: CacheConfig {
             enabled: false,
