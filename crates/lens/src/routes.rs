@@ -16,7 +16,7 @@ use utoipa_axum::router::OpenApiRouter;
 
 use crate::backends::{BackendExtra, BackendResult};
 use crate::cache::{CachedResult, cache_key, is_fresh};
-use crate::check::{CheckOutput, SectionError, run_check};
+use crate::check::{CheckInput, CheckOutput, SectionError, run_check_with_input};
 use crate::input::validate_domain;
 use crate::scoring::engine::{CheckResult, CheckVerdict, OverallScore};
 use crate::security::{check_rate_limit, extract_client_ip};
@@ -43,16 +43,12 @@ pub struct CheckItem {
 /// Return the guide URL for a check name.
 fn guide_url_for(name: &str) -> Option<&'static str> {
     match name {
-        // DNS — email authentication
-        "spf" | "dmarc" | "dkim" | "tlsrpt" | "bimi" => {
-            Some("https://netray.info/guide/email-auth")
-        }
         // DNS — DNSSEC
         "dnssec" | "dnskey_algorithm" | "dnssec_rollover" => {
             Some("https://netray.info/guide/dnssec")
         }
         // DNS — record types & infrastructure
-        "cname_apex" | "https_svcb" | "mx" | "ns" | "ttl" => {
+        "cname_apex" | "https_svcb" | "ns" | "ttl" => {
             Some("https://netray.info/guide/record-types")
         }
         "caa" => Some("https://netray.info/guide/caa-records"),
@@ -80,11 +76,54 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
             Some("https://netray.info/guide/http-security")
         }
         "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
-        "mta_sts" => Some("https://netray.info/guide/mta-sts"),
+        // Email buckets
+        "email_authentication" | "email_infrastructure" | "email_transport"
+        | "email_brand_policy" => Some("https://netray.info/guide/email-auth"),
         // IP
         "reputation" => Some("https://netray.info/guide/ip-enrichment"),
         _ => None,
     }
+}
+
+/// Validate and split a comma-separated `dkim_selectors` string.
+///
+/// Returns `Ok(None)` when the input is absent. Returns `Ok(Some(vec))` for valid input.
+/// Returns `Err(message)` for any validation failure (invalid chars, too long, too many).
+fn validate_dkim_selectors(raw: Option<&str>) -> Result<Option<Vec<String>>, String> {
+    let raw = match raw {
+        None => return Ok(None),
+        Some(r) => r,
+    };
+
+    let tokens: Vec<&str> = raw.split(',').map(|s| s.trim()).collect();
+
+    if tokens.is_empty() || tokens.iter().all(|t| t.is_empty()) {
+        return Err("dkim_selectors must not be empty".to_string());
+    }
+
+    if tokens.iter().any(|t| t.is_empty()) {
+        return Err("dkim_selectors contains an empty token".to_string());
+    }
+
+    if tokens.len() > 10 {
+        return Err(format!(
+            "dkim_selectors: at most 10 selectors allowed, got {}",
+            tokens.len()
+        ));
+    }
+
+    for token in &tokens {
+        if token.len() > 63 {
+            return Err(format!("dkim_selectors: selector '{token}' exceeds 63 characters"));
+        }
+        if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return Err(format!(
+                "dkim_selectors: selector '{token}' contains invalid characters (allowed: [a-zA-Z0-9-])"
+            ));
+        }
+    }
+
+    Ok(Some(tokens.iter().map(|s| s.to_string()).collect()))
 }
 
 #[derive(Serialize, ToSchema)]
@@ -150,6 +189,30 @@ pub struct IpEvent {
 }
 
 #[derive(Serialize, ToSchema)]
+pub struct EmailBucketEvent {
+    pub verdict: String,
+    pub messages: Vec<String>,
+    pub not_applicable: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct EmailEvent {
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grade: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub buckets: Option<HashMap<String, EmailBucketEvent>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headline: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
 pub struct SummaryEvent {
     /// Section status map, keyed by section name.
     pub sections: HashMap<String, String>,
@@ -161,6 +224,8 @@ pub struct SummaryEvent {
     pub hard_fail_checks: Vec<String>,
     /// Comma-joined list of hard-fail check names; null when `hard_fail` is false.
     pub hard_fail_reason: Option<String>,
+    /// Section name → reason. Always present (may be empty). Populated only for NotApplicable.
+    pub not_applicable: HashMap<String, String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -181,6 +246,8 @@ pub struct SyncCheckResponse {
     pub tls: TlsEvent,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub http: Option<HttpEvent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<EmailEvent>,
     pub ip: IpEvent,
     pub summary: SummaryEvent,
     pub done: DoneEvent,
@@ -196,6 +263,9 @@ pub struct CheckPostBody {
     /// When `false`, triggers synchronous (non-SSE) response mode.
     #[serde(default)]
     pub stream: Option<bool>,
+    /// Comma-separated DKIM selectors to test. Each selector: [a-zA-Z0-9-], 1–63 chars, 1–10 total.
+    #[serde(default)]
+    pub dkim_selectors: Option<String>,
 }
 
 /// Query parameters for `GET /api/check/{domain}`.
@@ -203,6 +273,8 @@ pub struct CheckPostBody {
 pub struct CheckGetQuery {
     /// When `false`, triggers synchronous (non-SSE) response mode.
     pub stream: Option<bool>,
+    /// Comma-separated DKIM selectors to test. Each selector: [a-zA-Z0-9-], 1–63 chars, 1–10 total.
+    pub dkim_selectors: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -381,6 +453,11 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     {
         probes.push(("http".to_string(), url.clone()));
     }
+    if let Some(ref email_cfg) = config.backends.email
+        && let Some(ref url) = email_cfg.url
+    {
+        probes.push(("email".to_string(), url.clone()));
+    }
 
     let futures: Vec<_> = probes
         .into_iter()
@@ -458,7 +535,13 @@ pub async fn check_get_handler(
     let client_ip =
         extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
     let sync = is_sync_mode(&headers, query.stream);
-    run_check_handler(state, client_ip, domain, sync).await
+    let dkim_selectors = match validate_dkim_selectors(query.dkim_selectors.as_deref()) {
+        Ok(s) => s,
+        Err(msg) => {
+            return crate::error::AppError::InvalidInput(msg).into_response();
+        }
+    };
+    run_check_handler(state, client_ip, domain, sync, dkim_selectors).await
 }
 
 #[utoipa::path(
@@ -481,7 +564,13 @@ pub async fn check_post_handler(
     let client_ip =
         extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
     let sync = is_sync_mode(&headers, body.stream);
-    run_check_handler(state, client_ip, body.domain, sync).await
+    let dkim_selectors = match validate_dkim_selectors(body.dkim_selectors.as_deref()) {
+        Ok(s) => s,
+        Err(msg) => {
+            return crate::error::AppError::InvalidInput(msg).into_response();
+        }
+    };
+    run_check_handler(state, client_ip, body.domain, sync, dkim_selectors).await
 }
 
 fn extract_client_ip_from_peer(
@@ -514,6 +603,7 @@ async fn run_check_handler(
     client_ip: IpAddr,
     domain_raw: String,
     sync: bool,
+    dkim_selectors: Option<Vec<String>>,
 ) -> Response {
     // Record client_ip into the TraceLayer span.
     tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
@@ -529,21 +619,23 @@ async fn run_check_handler(
         return e.into_response();
     }
 
-    // 3. Cache lookup.
+    // 3. Cache lookup (only when no per-request options like dkim_selectors).
     let key = cache_key(&domain);
-    if let Some(cache) = &state.cache
-        && let Some(cached) = cache.get(&key).await
-        && is_fresh(&cached, state.config.cache.ttl_seconds)
-    {
-        return if sync {
-            sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
-        } else {
-            sse_response_from_cached(domain, &cached, true, &state.scoring_profile)
-        };
+    if dkim_selectors.is_none() {
+        if let Some(cache) = &state.cache
+            && let Some(cached) = cache.get(&key).await
+            && is_fresh(&cached, state.config.cache.ttl_seconds)
+        {
+            return if sync {
+                sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
+            } else {
+                sse_response_from_cached(domain, &cached, true, &state.scoring_profile)
+            };
+        }
     }
 
     // 4. Run check.
-    let output = run_check(&state, &domain).await;
+    let output = run_check_with_input(&state, CheckInput { domain: domain.clone(), dkim_selectors }).await;
     let duration_ms = output.duration_ms;
     let domain_out = output.domain.clone();
 
@@ -619,6 +711,7 @@ fn error_headline(e: &SectionError) -> String {
         SectionError::Timeout => "timeout".to_string(),
         SectionError::NoDnsResults => "no DNS results".to_string(),
         SectionError::BackendError(_) => "backend error".to_string(),
+        SectionError::NotApplicable { .. } => "not applicable".to_string(),
     }
 }
 
@@ -800,6 +893,68 @@ fn ip_payload_from(
     }
 }
 
+fn email_payload_from(result: &Result<BackendResult, SectionError>) -> EmailEvent {
+    match result {
+        Err(SectionError::NotApplicable { reason }) => EmailEvent {
+            status: "not_applicable".to_string(),
+            grade: None,
+            buckets: None,
+            headline: None,
+            detail_url: None,
+            error: None,
+            reason: Some(reason.clone()),
+        },
+        Err(e) => EmailEvent {
+            status: "error".to_string(),
+            grade: None,
+            buckets: None,
+            headline: None,
+            detail_url: None,
+            error: Some(error_headline(e)),
+            reason: None,
+        },
+        Ok(r) => {
+            let (raw_headline, detail_url, grade, bucket_na) = match &r.extra {
+                BackendExtra::Email {
+                    raw_headline,
+                    detail_url,
+                    grade,
+                    bucket_na,
+                } => (
+                    raw_headline.clone(),
+                    detail_url.clone(),
+                    grade.clone(),
+                    bucket_na.clone(),
+                ),
+                _ => (String::new(), String::new(), None, HashMap::new()),
+            };
+
+            let mut buckets: HashMap<String, EmailBucketEvent> = HashMap::new();
+            for check in &r.checks {
+                let not_applicable = bucket_na.contains_key(&check.name);
+                buckets.insert(
+                    check.name.clone(),
+                    EmailBucketEvent {
+                        verdict: verdict_str(&check.verdict).to_string(),
+                        messages: check.messages.clone(),
+                        not_applicable,
+                    },
+                );
+            }
+
+            EmailEvent {
+                status: section_status_from_checks(result).to_string(),
+                grade,
+                buckets: Some(buckets),
+                headline: Some(raw_headline),
+                detail_url: Some(detail_url),
+                error: None,
+                reason: None,
+            }
+        }
+    }
+}
+
 fn summary_payload_from(
     sections: &HashMap<String, Result<BackendResult, SectionError>>,
     score: &OverallScore,
@@ -842,6 +997,7 @@ fn summary_payload_from(
         hard_fail: score.hard_fail_triggered,
         hard_fail_checks: score.hard_fail_checks.clone(),
         hard_fail_reason,
+        not_applicable: score.not_applicable.clone(),
     }
 }
 
@@ -894,6 +1050,13 @@ fn ip_event_from(
     let payload = ip_payload_from(result, weights);
     Event::default()
         .event("ip")
+        .data(serde_json::to_string(&payload).unwrap_or_default())
+}
+
+fn email_event_from(result: &Result<BackendResult, SectionError>) -> Event {
+    let payload = email_payload_from(result);
+    Event::default()
+        .event("email")
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
@@ -951,6 +1114,9 @@ fn build_sse_events(
     ];
     if let Some(http_result) = output.sections.get("http") {
         events.push(http_event_from(http_result, http_checks));
+    }
+    if let Some(email_result) = output.sections.get("email") {
+        events.push(email_event_from(email_result));
     }
     events.push(ip_event_from(
         output.sections.get("ip").unwrap_or(&empty_err),
@@ -1040,6 +1206,7 @@ fn build_sync_response(
             .sections
             .get("http")
             .map(|r| http_payload_from(r, http_checks)),
+        email: output.sections.get("email").map(email_payload_from),
         ip: ip_payload_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
         summary: summary_payload_from(&output.sections, &output.score, &profile.thresholds),
         done: done_payload(&domain, duration_ms, cached),
@@ -1109,6 +1276,7 @@ pub mod tests {
                     ..Default::default()
                 },
                 http: None,
+                email: None,
             },
             ecosystem: EcosystemConfig::default(),
             cache: CacheConfig {
@@ -1147,7 +1315,7 @@ pub mod tests {
         Path(domain): Path<String>,
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        run_check_handler(state, client_ip, domain, false).await
+        run_check_handler(state, client_ip, domain, false, None).await
     }
 
     /// Simplified POST handler for tests — uses loopback as client IP, no sync mode.
@@ -1156,7 +1324,7 @@ pub mod tests {
         Json(body): Json<CheckPostBody>,
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        run_check_handler(state, client_ip, body.domain, false).await
+        run_check_handler(state, client_ip, body.domain, false, None).await
     }
 
     /// GET handler for sync-mode tests — computes sync flag from headers and query.
@@ -1168,7 +1336,7 @@ pub mod tests {
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
         let sync = is_sync_mode(&headers, query.stream);
-        run_check_handler(state, client_ip, domain, sync).await
+        run_check_handler(state, client_ip, domain, sync, None).await
     }
 
     /// POST handler for sync-mode tests — computes sync flag from headers and body.
@@ -1179,7 +1347,7 @@ pub mod tests {
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
         let sync = is_sync_mode(&headers, body.stream);
-        run_check_handler(state, client_ip, body.domain, sync).await
+        run_check_handler(state, client_ip, body.domain, sync, None).await
     }
 
     /// Build a Router that computes sync mode from headers/query, for sync-mode tests.
@@ -1485,6 +1653,7 @@ pub mod tests {
             grade: "F".to_string(),
             hard_fail_triggered: true,
             hard_fail_checks: vec!["chain_trusted".to_string(), "cert_lifetime".to_string()],
+            not_applicable: HashMap::new(),
         };
         let sections = HashMap::new();
         let thresholds = BTreeMap::new();
@@ -1510,6 +1679,7 @@ pub mod tests {
             grade: "A".to_string(),
             hard_fail_triggered: false,
             hard_fail_checks: vec![],
+            not_applicable: HashMap::new(),
         };
         let sections = HashMap::new();
         let thresholds = BTreeMap::new();
@@ -1532,6 +1702,7 @@ pub mod tests {
             grade: "F".to_string(),
             hard_fail_triggered: true,
             hard_fail_checks: vec!["chain_trusted".to_string()],
+            not_applicable: HashMap::new(),
         };
         let sections = HashMap::new();
         let thresholds = BTreeMap::new();
