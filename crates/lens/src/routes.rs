@@ -2041,4 +2041,109 @@ pub mod tests {
             "should call /network/json?ip=<addr>"
         );
     }
+
+    // --- dkim_selectors validation ---
+
+    #[test]
+    fn dkim_selectors_absent_returns_none() {
+        assert_eq!(validate_dkim_selectors(None), Ok(None));
+    }
+
+    #[test]
+    fn dkim_selectors_valid_two_selectors() {
+        let result = validate_dkim_selectors(Some("google,selector1"));
+        assert_eq!(
+            result,
+            Ok(Some(vec!["google".to_string(), "selector1".to_string()])),
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_single_valid_selector() {
+        let result = validate_dkim_selectors(Some("default"));
+        assert_eq!(result, Ok(Some(vec!["default".to_string()])));
+    }
+
+    #[test]
+    fn dkim_selectors_with_whitespace_trimmed() {
+        let result = validate_dkim_selectors(Some(" google , selector1 "));
+        assert_eq!(
+            result,
+            Ok(Some(vec!["google".to_string(), "selector1".to_string()])),
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_empty_string_returns_400_error() {
+        assert!(
+            validate_dkim_selectors(Some("")).is_err(),
+            "empty string must return Err"
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_invalid_chars_returns_error() {
+        // dots are not in [a-zA-Z0-9-]
+        let err = validate_dkim_selectors(Some("bad.selector")).unwrap_err();
+        assert!(
+            err.contains("invalid characters"),
+            "error must mention invalid characters, got: {err}"
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_11_selectors_returns_error() {
+        let selectors = "a,b,c,d,e,f,g,h,i,j,k"; // 11
+        let err = validate_dkim_selectors(Some(selectors)).unwrap_err();
+        assert!(
+            err.contains("10"),
+            "error must mention the 10-selector limit, got: {err}"
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_exactly_10_selectors_valid() {
+        let selectors = "a,b,c,d,e,f,g,h,i,j"; // 10
+        assert!(
+            validate_dkim_selectors(Some(selectors)).is_ok(),
+            "exactly 10 selectors must be valid"
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_selector_too_long_returns_error() {
+        let long = "a".repeat(64); // 64 chars, exceeds 63
+        let err = validate_dkim_selectors(Some(&long)).unwrap_err();
+        assert!(
+            err.contains("exceeds 63"),
+            "error must mention 63-char limit, got: {err}"
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_exactly_63_chars_valid() {
+        let at_limit = "a".repeat(63); // 63 chars, at limit
+        assert!(
+            validate_dkim_selectors(Some(&at_limit)).is_ok(),
+            "selector of exactly 63 chars must be valid"
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_hyphen_allowed() {
+        let result = validate_dkim_selectors(Some("my-selector-2024"));
+        assert_eq!(
+            result,
+            Ok(Some(vec!["my-selector-2024".to_string()])),
+        );
+    }
+
+    #[test]
+    fn dkim_selectors_empty_token_between_commas_returns_error() {
+        let err = validate_dkim_selectors(Some("a,,b")).unwrap_err();
+        assert!(
+            err.contains("empty token"),
+            "empty token between commas must return error, got: {err}"
+        );
+    }
 }
