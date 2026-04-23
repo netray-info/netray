@@ -47,7 +47,21 @@ max_user_selectors = 5
 # lens_base_url = ""
 
 [telemetry]
-log_format = "json"
-service_name = "beacon"
-sample_rate = 1.0
-# otlp_endpoint = "http://localhost:4317"
+
+# Log output format.
+#   "text" -- human-readable, colour-coded (default; best for terminals)
+#   "json" -- structured JSON lines (best for log aggregators: Loki, Dozzle, etc.)
+# Also configurable via: BEACON_TELEMETRY__LOG_FORMAT=json
+#log_format = "text"
+
+# Enable OpenTelemetry distributed tracing (OTLP/HTTP export).
+#enabled = false
+
+# OTLP HTTP endpoint to export spans to.
+#otlp_endpoint = "http://localhost:4318"
+
+# Service name reported in spans and logs.
+#service_name = "beacon"
+
+# Trace sampling rate (0.0 = off, 1.0 = 100%).
+#sample_rate = 1.0

@@ -6,8 +6,8 @@ import Modal from '@netray-info/common-frontend/components/Modal';
 import SiteFooter from '@netray-info/common-frontend/components/SiteFooter';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
-import { storageGet, storageSet } from '@netray-info/common-frontend/storage';
 import { copyToClipboard, downloadFile } from '@netray-info/common-frontend/utils';
+import { addToHistory, getHistory } from './lib/history';
 import { fetchMeta, streamInspect } from './lib/api';
 import type { MetaResponse } from './lib/api';
 import type {
@@ -27,8 +27,6 @@ import {
 } from './lib/types';
 import { parseQuery, formatQuery, MAX_SELECTORS } from './lib/parse';
 
-const HISTORY_KEY = 'beacon_history';
-const MAX_HISTORY = 20;
 const EXAMPLE_DOMAINS = ['netray.info', 'gmail.com', 'example.com'];
 
 type Ecosystem = NonNullable<MetaResponse['ecosystem']>;
@@ -197,16 +195,6 @@ export default function App() {
     }
   });
 
-  function getHistory(): string[] {
-    return storageGet<string[]>(HISTORY_KEY, []);
-  }
-
-  function addToHistory(d: string) {
-    const history = getHistory().filter((h) => h !== d);
-    history.unshift(d);
-    storageSet(HISTORY_KEY, history.slice(0, MAX_HISTORY));
-  }
-
   function handleInspect(d: string, sels: string[]) {
     if (!d.trim()) return;
     abortRef?.abort();
@@ -339,7 +327,7 @@ export default function App() {
                       const idx = historyIndex();
                       if (idx >= 0 && idx < items.length) {
                         e.preventDefault();
-                        const item = items[idx];
+                        const item = items[idx].query;
                         setQuery(item);
                         setShowHistory(false);
                         setHistoryIndex(-1);
@@ -373,7 +361,7 @@ export default function App() {
                     role="listbox"
                   >
                     <For each={getHistory()}>
-                      {(item, i) => {
+                      {(entry, i) => {
                         const isActive = () => historyIndex() === i();
                         return (
                           <li
@@ -382,13 +370,13 @@ export default function App() {
                             aria-selected={isActive()}
                             classList={{ 'history-dropdown__item--active': isActive() }}
                             onMouseDown={() => {
-                              setQuery(item);
+                              setQuery(entry.query);
                               setShowHistory(false);
                               setHistoryIndex(-1);
-                              runQuery(item);
+                              runQuery(entry.query);
                             }}
                           >
-                            {item}
+                            {entry.query}
                           </li>
                         );
                       }}
