@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Email security section powered by the beacon backend (`LENS_BACKENDS__EMAIL__URL`)
+- Four scored buckets: `email_authentication` (always), `email_infrastructure`, `email_transport`, `email_brand_policy` (N/A when no MX records)
+- `SectionStatus::NotApplicable` in the scoring engine; `OverallScore.not_applicable` map in summary event
+- `dkim_selectors` query parameter on `GET /api/check/{domain}` and POST body field for custom DKIM selector testing
+- `email` SSE event with bucket verdicts, N/A flags, beacon grade, and detail URL
+- `summary.not_applicable` field (always serialized; non-empty when a section is N/A)
+- `SectionError::NotApplicable` variant for beacon-Skipped sentinel
+- `EmailSection` frontend component with four bucket rows and N/A state rendering
+- N/A footnote in Summary when `not_applicable` is non-empty
+
+### Changed
+- Scoring weights: TLS 35% (was 40%), DNS 20% (was 30%), Email 15% (new), HTTP 20%, IP 10%
+- DNS section no longer scores SPF, DMARC, MTA-STS, TLS-RPT, BIMI, MX — transferred to email backend
+- DNS `hard_fail` cleared (SPF/DMARC hard-fails removed; email hard-fails deferred)
+- DNS headline now shows DNSSEC, CAA, NS, CNAME-apex (was SPF, DMARC, DNSSEC, MTA-STS)
+- Shared SSE collector extracted to `src/backends/sse.rs`; DNS backend uses it directly
+
 ## [0.4.0] - 2026-04-11
 
 ### Added
