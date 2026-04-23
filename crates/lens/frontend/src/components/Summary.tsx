@@ -55,12 +55,12 @@ export default function Summary(props: Props) {
   const sectionVerdict = (name: string): Verdict => s().sections[name] ?? 'error';
   const sectionGrade = (name: string): string | undefined => s().section_grades[name];
   const hasErroredSection = () =>
-    sectionVerdict('dns') === 'error' || sectionVerdict('tls') === 'error' || sectionVerdict('ip') === 'error';
+    Object.values(s().sections).some(v => v === 'error');
   const hasAddresses = () => (props.addresses?.length ?? 0) > 0 || !!props.httpServerIp;
 
   const dots = () => (
     <div class="summary-dots" role="list" aria-label="Section statuses">
-      <For each={['http', 'tls', 'dns', 'email', 'ip']}>
+      <For each={['ip', 'dns', 'tls', 'http', 'email']}>
         {(section) => (
           <Show when={s().sections[section] !== undefined}>
             <div class="summary-dot-item" role="listitem">

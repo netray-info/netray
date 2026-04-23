@@ -269,17 +269,16 @@ export default function App() {
               >{allExpanded() === true ? 'collapse all' : 'expand all'}</button>
             </div>
             <div class="section-grid" role="status" aria-live="polite" aria-label="Check results">
-              <Show when={http() !== null || (isLoading() && meta()?.ecosystem?.http_base_url !== undefined)}>
-                <div data-card>
-                  <HttpSection
-                    data={http()}
-                    loading={isLoading() && http() === null}
-                    error={error() ?? undefined}
-                    expanded={allExpanded()}
-                    grade={summary()?.section_grades['http']}
-                  />
-                </div>
-              </Show>
+              {/* Stack order: IP → DNS → TLS → HTTP → Email (network layer up to application layer) */}
+              <div data-card>
+                <IpSection
+                  data={ip()}
+                  loading={isLoading() && ip() === null}
+                  error={error() ?? undefined}
+                  expanded={allExpanded()}
+                  grade={summary()?.section_grades['ip']}
+                />
+              </div>
               <div data-card>
                 <DnsSection
                   data={dns()}
@@ -298,6 +297,17 @@ export default function App() {
                   grade={summary()?.section_grades['tls']}
                 />
               </div>
+              <Show when={http() !== null || (isLoading() && meta()?.ecosystem?.http_base_url !== undefined)}>
+                <div data-card>
+                  <HttpSection
+                    data={http()}
+                    loading={isLoading() && http() === null}
+                    error={error() ?? undefined}
+                    expanded={allExpanded()}
+                    grade={summary()?.section_grades['http']}
+                  />
+                </div>
+              </Show>
               <Show when={email() !== null || (isLoading() && summary()?.sections['email'] !== undefined)}>
                 <div data-card>
                   <EmailSection
@@ -309,15 +319,6 @@ export default function App() {
                   />
                 </div>
               </Show>
-              <div data-card>
-                <IpSection
-                  data={ip()}
-                  loading={isLoading() && ip() === null}
-                  error={error() ?? undefined}
-                  expanded={allExpanded()}
-                  grade={summary()?.section_grades['ip']}
-                />
-              </div>
             </div>
           </Show>
         </main>
@@ -359,7 +360,7 @@ export default function App() {
           <div class="help-section">
             <div class="help-section__title">Scoring</div>
             <p class="help-desc">
-              Weighted average across TLS (35%), DNS (20%), HTTP (20%), Email (15%), and IP (10%).
+              Weighted average across IP (10%), DNS (20%), TLS (35%), HTTP (20%), and Email (15%).
               HTTP and Email are optional — only scored when the respective backends are configured.
               For domains without MX records, the three email receiving buckets are excluded from scoring automatically.
             </p>
