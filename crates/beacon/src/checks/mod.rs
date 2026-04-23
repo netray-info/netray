@@ -421,10 +421,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 }
             }
             Err(e) => {
-                let category = phase0_categories
-                    .get(&e.id())
-                    .copied()
-                    .unwrap_or("unknown");
+                let category = phase0_categories.get(&e.id()).copied().unwrap_or("unknown");
                 if e.is_panic() {
                     metrics::counter!(
                         "beacon_check_task_panics_total",
@@ -462,7 +459,8 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
             async move {
                 let start = std::time::Instant::now();
                 let (result, found) =
-                    dkim::check_dkim(&domain, &mx_hosts_clone, &selectors, max_sels, dns.as_ref()).await;
+                    dkim::check_dkim(&domain, &mx_hosts_clone, &selectors, max_sels, dns.as_ref())
+                        .await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dkim")
                     .record(elapsed);
@@ -538,7 +536,8 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let result = dnsbl::check_dnsbl(&mx_ips_clone, &domain, &dnsbl_config, dns.as_ref()).await;
+                let result =
+                    dnsbl::check_dnsbl(&mx_ips_clone, &domain, &dnsbl_config, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dnsbl")
                     .record(elapsed);
@@ -596,10 +595,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 }
             }
             Err(e) => {
-                let category = phase1_categories
-                    .get(&e.id())
-                    .copied()
-                    .unwrap_or("unknown");
+                let category = phase1_categories.get(&e.id()).copied().unwrap_or("unknown");
                 if e.is_panic() {
                     metrics::counter!(
                         "beacon_check_task_panics_total",
@@ -773,8 +769,17 @@ mod tests {
 
         let grade = summary_grade.expect("Summary event must be emitted within 30s");
         let verdicts = summary_verdicts.unwrap();
-        assert!(matches!(grade, Grade::Skipped), "expected Grade::Skipped, got {:?}", grade);
-        assert_eq!(verdicts.len(), 12, "expected 12 verdicts, got {}", verdicts.len());
+        assert!(
+            matches!(grade, Grade::Skipped),
+            "expected Grade::Skipped, got {:?}",
+            grade
+        );
+        assert_eq!(
+            verdicts.len(),
+            12,
+            "expected 12 verdicts, got {}",
+            verdicts.len()
+        );
         for (k, v) in &verdicts {
             assert!(
                 matches!(v, Verdict::Skip),

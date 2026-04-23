@@ -6,7 +6,9 @@ use std::time::Duration;
 use mhost::RecordType;
 use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
-use mhost::resolver::{Error as ResolverError, MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder};
+use mhost::resolver::{
+    Error as ResolverError, MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder,
+};
 
 /// Map an mhost resolver error to the coarse taxonomy used by the
 /// `beacon_dns_queries_total` metric (see SDD Decision Log §12).
@@ -38,8 +40,7 @@ pub struct DnsResolver {
 
 impl DnsResolver {
     pub async fn new(resolvers: &[String], timeout_ms: u64) -> Result<Self, mhost::Error> {
-        let mut builder =
-            ResolverGroupBuilder::new().timeout(Duration::from_millis(timeout_ms));
+        let mut builder = ResolverGroupBuilder::new().timeout(Duration::from_millis(timeout_ms));
 
         for entry in resolvers {
             if entry == "system" {

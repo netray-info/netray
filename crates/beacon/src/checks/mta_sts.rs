@@ -244,10 +244,7 @@ async fn fetch_and_parse_policy(
         sub_checks.push(SubCheck {
             name: "policy_body_too_large".to_string(),
             verdict: Verdict::Warn,
-            detail: format!(
-                "policy body exceeds {}B, truncated",
-                MTA_STS_MAX_BODY_BYTES
-            ),
+            detail: format!("policy body exceeds {}B, truncated", MTA_STS_MAX_BODY_BYTES),
         });
     }
 
@@ -377,13 +374,10 @@ mod tests {
 
     /// Bind an ephemeral loopback TCP listener and serve the provided `axum::Router`.
     /// Returns the base URL (e.g. `http://127.0.0.1:54321`) and the server's `JoinHandle`.
-    async fn start_mock_server(
-        handler: axum::Router,
-    ) -> (String, tokio::task::JoinHandle<()>) {
+    async fn start_mock_server(handler: axum::Router) -> (String, tokio::task::JoinHandle<()>) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let handle =
-            tokio::spawn(async move { axum::serve(listener, handler).await.unwrap() });
+        let handle = tokio::spawn(async move { axum::serve(listener, handler).await.unwrap() });
         (format!("http://127.0.0.1:{}", addr.port()), handle)
     }
 
@@ -501,10 +495,7 @@ mod tests {
     async fn ssrf_hostname_blocked() {
         let domain = "example.com";
         let resolver = TestDnsResolver::new()
-            .with_txt(
-                "_mta-sts.example.com",
-                vec!["v=STSv1; id=20200101T000000;"],
-            )
+            .with_txt("_mta-sts.example.com", vec!["v=STSv1; id=20200101T000000;"])
             .with_ips(
                 "mta-sts.example.com",
                 vec!["10.0.0.1".parse::<std::net::IpAddr>().unwrap()],

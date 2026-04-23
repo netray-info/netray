@@ -15,8 +15,7 @@ pub struct RateLimitState {
 impl RateLimitState {
     pub fn new(config: &RateLimitConfig) -> Result<Self, String> {
         let rate = parse_rate(&config.per_ip)?;
-        let quota = NonZeroU32::new(rate)
-            .ok_or_else(|| format!("rate must be > 0, got {rate}"))?;
+        let quota = NonZeroU32::new(rate).ok_or_else(|| format!("rate must be > 0, got {rate}"))?;
         let per_ip = RateLimiter::keyed(Quota::per_minute(quota).allow_burst(quota));
         Ok(Self { per_ip })
     }

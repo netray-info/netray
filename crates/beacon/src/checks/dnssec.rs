@@ -58,4 +58,3 @@ mod tests {
         assert_eq!(result.sub_checks[0].verdict, Verdict::Info);
     }
 }
-

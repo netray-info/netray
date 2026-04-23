@@ -337,10 +337,8 @@ mod tests {
     /// `v=DKIM1; k=rsa;` (no p=) lands without a Pass subcheck.
     #[tokio::test]
     async fn txt_missing_p_tag_no_pass_verdict() {
-        let resolver = TestDnsResolver::new().with_txt(
-            "default._domainkey.example.com",
-            vec!["v=DKIM1; k=rsa;"],
-        );
+        let resolver = TestDnsResolver::new()
+            .with_txt("default._domainkey.example.com", vec!["v=DKIM1; k=rsa;"]);
         let (result, _found) = check_dkim("example.com", &[], &[], 3, &resolver).await;
         assert!(
             !result.sub_checks.iter().any(|s| s.verdict == Verdict::Pass),
@@ -352,10 +350,8 @@ mod tests {
     /// Empty p= (revoked key) surfaces as key_revoked Fail.
     #[tokio::test]
     async fn empty_p_value_reports_key_revoked() {
-        let resolver = TestDnsResolver::new().with_txt(
-            "default._domainkey.example.com",
-            vec!["v=DKIM1; k=rsa; p="],
-        );
+        let resolver = TestDnsResolver::new()
+            .with_txt("default._domainkey.example.com", vec!["v=DKIM1; k=rsa; p="]);
         let (result, _found) = check_dkim("example.com", &[], &[], 3, &resolver).await;
         assert!(
             result

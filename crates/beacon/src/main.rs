@@ -50,10 +50,7 @@ async fn main() -> anyhow::Result<()> {
         "info,beacon=debug,hyper=warn,h2=warn",
     );
 
-    metrics::describe_gauge!(
-        "beacon_sse_clients_active",
-        "Active SSE inspection streams"
-    );
+    metrics::describe_gauge!("beacon_sse_clients_active", "Active SSE inspection streams");
 
     tracing::info!(
         bind = %config.server.bind,

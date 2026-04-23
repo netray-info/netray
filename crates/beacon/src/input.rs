@@ -145,7 +145,10 @@ mod tests {
         let label = "a".repeat(63);
         let domain = format!("{}.{}.{}.{}.com", label, label, label, label);
         let err = parse_domain(&domain).unwrap_err();
-        assert!(err.to_string().contains("253"), "expected length error: {err}");
+        assert!(
+            err.to_string().contains("253"),
+            "expected length error: {err}"
+        );
     }
 
     /// A domain of exactly 253 characters with valid labels (each ≤63 chars)

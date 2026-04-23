@@ -27,10 +27,9 @@ impl AppState {
             .await
             .map_err(|e| crate::error::MailError::DnsError(e.to_string()))?;
 
-        let dnsbl_resolver =
-            DnsResolver::new(&config.dnsbl.resolvers, config.dnsbl.timeout_ms)
-                .await
-                .map_err(|e| crate::error::MailError::DnsError(e.to_string()))?;
+        let dnsbl_resolver = DnsResolver::new(&config.dnsbl.resolvers, config.dnsbl.timeout_ms)
+            .await
+            .map_err(|e| crate::error::MailError::DnsError(e.to_string()))?;
 
         let enrichment_client = config.backends.ip.as_ref().and_then(|ip_cfg| {
             ip_cfg.url.as_ref().map(|url| {
@@ -72,8 +71,8 @@ impl AppState {
             .build()
             .expect("failed to build HTTP client (follow redirects)");
 
-        let rate_limiter = RateLimitState::new(&config.rate_limit)
-            .map_err(crate::error::MailError::Config)?;
+        let rate_limiter =
+            RateLimitState::new(&config.rate_limit).map_err(crate::error::MailError::Config)?;
 
         Ok(Self {
             ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),

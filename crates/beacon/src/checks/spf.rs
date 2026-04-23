@@ -594,7 +594,9 @@ mod tests {
         // 3 includes whose targets have no TXT → 3 voids (> 2 limit).
         let resolver = TestDnsResolver::new().with_txt(
             "example.com",
-            vec!["v=spf1 include:v1.example.com include:v2.example.com include:v3.example.com -all"],
+            vec![
+                "v=spf1 include:v1.example.com include:v2.example.com include:v3.example.com -all",
+            ],
         );
         let (result, _flat, _has_dash_all) = check_spf("example.com", &resolver).await;
         assert!(

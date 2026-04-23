@@ -82,18 +82,19 @@ pub async fn check_bimi(
         Some(url) if !url.is_empty() => {
             // Scheme guard: BIMI logo URL must use HTTPS
             let parsed = url::Url::parse(url).ok();
-            if parsed.as_ref().map(|u| u.scheme() != "https").unwrap_or(true) {
+            if parsed
+                .as_ref()
+                .map(|u| u.scheme() != "https")
+                .unwrap_or(true)
+            {
                 record_upstream_error("other");
                 sub_checks.push(SubCheck {
                     name: "logo_http_not_allowed".to_string(),
                     verdict: Verdict::Fail,
                     detail: "BIMI logo URL must use HTTPS".to_string(),
                 });
-                let result = CheckResult::new(
-                    Category::Bimi,
-                    sub_checks,
-                    "BIMI record found".to_string(),
-                );
+                let result =
+                    CheckResult::new(Category::Bimi, sub_checks, "BIMI record found".to_string());
                 return (result, true);
             }
 
