@@ -120,7 +120,23 @@ max_age: 604800</code></pre>
   </article>
 
   <section class="tool-entry">
-    <h2 class="tool-entry__heading">Check your domain's MTA-STS and email authentication</h2>
+    <h2 class="tool-entry__heading">Check MTA-STS and email security with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="domain"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Validates MTA-STS policy, TLSRPT, DANE, and all email authentication records. Returns an A–F grade.</p>
+  </section>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect raw MTA-STS DNS records with prism</h2>
     <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
       <input
         class="tool-entry__input"
@@ -130,17 +146,9 @@ max_age: 604800</code></pre>
         aria-label="Domain to check"
         required
       >
-      <button class="tool-entry__submit" type="submit">Check</button>
+      <button class="tool-entry__submit" type="submit">Inspect</button>
     </form>
-    <p class="tool-entry__hint">Checks MTA-STS policy, TLSRPT, and all email authentication records for your domain.</p>
-  </section>
-
-  <section class="tool-entry">
-    <h2>Check your domain's email authentication with beacon</h2>
-    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
-      <input type="text" name="domain" placeholder="example.com" required>
-      <button type="submit">Check Email Security</button>
-    </form>
+    <p class="tool-entry__hint">Queries the <code>_mta-sts</code> TXT record and other email DNS records directly.</p>
   </section>
 
   <footer class="page-footer">

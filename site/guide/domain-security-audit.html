@@ -63,18 +63,14 @@
 
   <article>
     <h2>The quick answer: use lens</h2>
-    <p>If you want a single verdict fast, lens is the starting point. It checks DNS, TLS, and IP reputation in parallel and produces a letter-graded health score — no setup, no scripting. Enter your domain at <a href="https://lens.netray.info">lens.netray.info</a> or run:</p>
-    <pre><code>curl -sN 'https://lens.netray.info/api/check?d=example.com' \
-  | grep '^data:' \
-  | awk -F'data: ' '/summary/{print $2;exit}' \
-  | jq '{grade: .grade, score: .score, sections: .sections}'</code></pre>
-    <p>The <code>summary</code> event returns an overall grade (A+ through F), a numeric score, and a per-section breakdown for DNS, TLS, and IP. If any section shows a low grade, use the individual tools below to dig into the details.</p>
+    <p>If you want a single verdict fast, lens is the starting point. It checks IP, DNS, TLS, HTTP, and Email security in parallel and produces a letter-graded health score — no setup, no scripting. Enter your domain at <a href="https://lens.netray.info">lens.netray.info</a> or run:</p>
+    <pre><code>curl -s 'https://lens.netray.info/api/check/example.com?stream=false' \
+  | jq '{grade: .summary.grade, score: .summary.score, sections: .summary.sections}'</code></pre>
+    <p>The <code>summary</code> event returns an overall grade (A+ through F), a numeric score, and a per-section breakdown across all five checks. If any section shows a low grade, use the individual tools below to dig into the details.</p>
     <p>For CI pipelines, you can gate a deploy on the overall grade:</p>
     <pre><code># Fail if grade is below B
-curl -sN 'https://lens.netray.info/api/check?d=example.com' \
-  | grep '^data:' \
-  | awk -F'data: ' '/summary/{print $2;exit}' \
-  | jq -e '.grade | test("^(A|B)")'</code></pre>
+curl -sf 'https://lens.netray.info/api/check/example.com?stream=false' \
+  | jq -e '.summary.grade | test("^(A|B)")'</code></pre>
     <p>The rest of this guide explains what lens is checking and how to investigate any findings in depth using the individual tools.</p>
 
     <h2>What a domain audit covers</h2>
@@ -102,7 +98,7 @@ curl -sN 'https://lens.netray.info/api/check?d=example.com' \
       <li><strong>DKIM</strong>: configured on each sending platform. Required for DMARC alignment when messages are forwarded.</li>
     </ul>
     <p>If the domain does not send email at all, publish <code>v=spf1 -all</code> and <code>v=DMARC1; p=reject</code> to tell receivers to reject any mail claiming to be from this domain. This is the strongest possible posture for a non-sending domain and takes two DNS records to implement.</p>
-    <p>The DNS inspector's <code>+check</code> mode reports all email authentication records and flags common issues: multiple SPF records (a permerror), DMARC stuck at p=none, missing MX, and MTA-STS configuration mismatches.</p>
+    <p>Use <a href="https://email.netray.info">beacon</a> for the full email authentication analysis — it scores SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL across four graded buckets and flags common issues such as multiple SPF records (a permerror), DMARC stuck at p=none, and MTA-STS configuration mismatches. The DNS inspector's <code>+check</code> mode remains useful for raw record inspection and DNS-level lint rules.</p>
 
     <h2>Step 3: TLS certificate</h2>
     <p>Certificate issues are operationally impactful and often the most visible to end users. Check four things:</p>
@@ -138,16 +134,18 @@ curl -sN 'https://lens.netray.info/api/check?d=example.com' \
     <h2>Automating the audit</h2>
     <p>The simplest automation is the lens SSE endpoint — one request, all five signals, one grade:</p>
     <pre><code># Get the overall grade and per-section scores
-curl -sN 'https://lens.netray.info/api/check?d=example.com' \
-  | grep '^data:' \
-  | awk -F'data: ' '/summary/{print $2;exit}' \
-  | jq '{grade: .grade, score: .score, sections: .sections}'</code></pre>
-    <p>For threshold alerting on individual fields, the three component APIs return structured data with explicit pass/warn/fail fields:</p>
+curl -s 'https://lens.netray.info/api/check/example.com?stream=false' \
+  | jq '{grade: .summary.grade, score: .summary.score, sections: .summary.sections}'</code></pre>
+    <p>For threshold alerting on individual fields, the component APIs return structured data with explicit pass/warn/fail fields:</p>
     <pre><code># DNS check (returns JSON with lint results)
 curl -s "https://dns.netray.info/api/query?q=example.com+check" | jq .
 
 # TLS inspection (returns JSON with cert, chain, graded checks)
 curl -s "https://tls.netray.info/api/inspect?h=example.com" | jq .
+
+# Email security (SSE stream — wait for summary event)
+curl -sN https://email.netray.info/inspect/example.com \
+  | grep '"grade"' | head -1 | sed 's/^data: //' | jq .grade
 
 # IP enrichment for the domain's A record
 IP=$(dig +short example.com | head -1)
@@ -168,7 +166,7 @@ curl -s "https://ip.netray.info/${IP}" | jq .</code></pre>
       >
       <button class="tool-entry__submit" type="submit">Check</button>
     </form>
-    <p class="tool-entry__hint">Checks DNS, TLS, and IP reputation in parallel. Returns an A+–F grade with per-section breakdown.</p>
+    <p class="tool-entry__hint">Checks IP, DNS, TLS, HTTP, and Email security in parallel. Returns an A+–F grade with per-section breakdown.</p>
   </section>
 
   <section class="tool-entry">

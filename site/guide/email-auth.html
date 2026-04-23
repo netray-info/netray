@@ -106,7 +106,7 @@
       <li><strong>MTA-STS</strong>: TXT record at <code>_mta-sts.&lt;domain&gt;</code> plus HTTPS policy file</li>
       <li><strong>BIMI</strong>: TXT record at <code>default._bimi.&lt;domain&gt;</code> for brand indicators</li>
     </ul>
-    <p>The netray.info DNS inspector's <code>+check</code> mode runs all of these lookups at once and applies lint rules to catch common misconfigurations.</p>
+    <p>Use <a href="https://email.netray.info">beacon</a> for a full scored analysis — it evaluates SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL and produces an A–F grade with per-category verdicts. The DNS inspector's <code>+check</code> mode is useful for raw record inspection and DNS-level lint rules (e.g. flagging multiple SPF records or a malformed DMARC tag).</p>
 
     <h2>BIMI: brand indicators in email</h2>
     <p>Brand Indicators for Message Identification (BIMI) allows organizations to display their logo next to authenticated emails in supporting email clients (Gmail, Apple Mail, Yahoo Mail, and others). BIMI builds on top of DMARC: only messages that pass DMARC authentication with a policy of <code>p=quarantine</code> or <code>p=reject</code> are eligible to display the logo.</p>
@@ -150,7 +150,23 @@
   </article>
 
   <section class="tool-entry">
-    <h2 class="tool-entry__heading">Check your domain's email authentication</h2>
+    <h2 class="tool-entry__heading">Check email security with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="domain"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Scores SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL. Returns an A–F grade with per-category verdicts.</p>
+  </section>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect raw DNS records with prism</h2>
     <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
       <input
         class="tool-entry__input"
@@ -160,17 +176,9 @@
         aria-label="Domain to check"
         required
       >
-      <button class="tool-entry__submit" type="submit">Check</button>
+      <button class="tool-entry__submit" type="submit">Inspect</button>
     </form>
-    <p class="tool-entry__hint">Runs SPF, DKIM, DMARC, MTA-STS, TLSRPT, and BIMI checks on your domain.</p>
-  </section>
-
-  <section class="tool-entry">
-    <h2>Check your domain's email authentication with beacon</h2>
-    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
-      <input type="text" name="domain" placeholder="example.com" required>
-      <button type="submit">Check Email Security</button>
-    </form>
+    <p class="tool-entry__hint">Queries SPF, DKIM, DMARC, MTA-STS, BIMI, and MX records and applies DNS-level lint rules.</p>
   </section>
 
   <footer class="page-footer">
