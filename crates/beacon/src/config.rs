@@ -30,6 +30,8 @@ pub struct ServerConfig {
     pub metrics_bind: String,
     #[serde(default)]
     pub trusted_proxies: Vec<String>,
+    #[serde(default = "default_max_concurrent")]
+    pub max_concurrent_inspections: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -134,7 +136,12 @@ fn default_server() -> ServerConfig {
         bind: default_bind(),
         metrics_bind: default_metrics_bind(),
         trusted_proxies: Vec::new(),
+        max_concurrent_inspections: default_max_concurrent(),
     }
+}
+
+fn default_max_concurrent() -> usize {
+    16
 }
 
 fn default_bind() -> String {

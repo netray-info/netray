@@ -8,10 +8,6 @@ pub enum MailError {
     #[error("invalid domain: {0}")]
     InvalidDomain(String),
 
-    #[error("target resolves to a private address")]
-    #[allow(dead_code)]
-    BlockedTarget,
-
     #[error("rate limited")]
     RateLimited {
         retry_after_secs: u64,
@@ -24,36 +20,38 @@ pub enum MailError {
     #[error("invalid DKIM selector: {reason}")]
     InvalidSelector { reason: String },
 
-    #[error("internal error: {0}")]
-    #[allow(dead_code)]
-    Internal(String),
+    #[error("too many concurrent inspections")]
+    TooManyConcurrent,
 
     #[error("DNS resolver error: {0}")]
     DnsError(String),
+
+    #[error("configuration error: {0}")]
+    Config(String),
 }
 
 impl netray_common::error::ApiError for MailError {
     fn status_code(&self) -> StatusCode {
         match self {
             Self::InvalidDomain(_) => StatusCode::BAD_REQUEST,
-            Self::BlockedTarget => StatusCode::BAD_REQUEST,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             Self::TooManySelectors { .. } => StatusCode::BAD_REQUEST,
             Self::InvalidSelector { .. } => StatusCode::BAD_REQUEST,
-            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::TooManyConcurrent => StatusCode::TOO_MANY_REQUESTS,
             Self::DnsError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Config(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
     fn error_code(&self) -> &'static str {
         match self {
             Self::InvalidDomain(_) => "INVALID_DOMAIN",
-            Self::BlockedTarget => "INVALID_TARGET",
             Self::RateLimited { .. } => "RATE_LIMITED",
-            Self::TooManySelectors { .. } => "INVALID_DOMAIN",
+            Self::TooManySelectors { .. } => "TOO_MANY_SELECTORS",
             Self::InvalidSelector { .. } => "INVALID_SELECTOR",
-            Self::Internal(_) => "INTERNAL_ERROR",
+            Self::TooManyConcurrent => "TOO_MANY_INSPECTIONS",
             Self::DnsError(_) => "INTERNAL_ERROR",
+            Self::Config(_) => "INTERNAL_ERROR",
         }
     }
 

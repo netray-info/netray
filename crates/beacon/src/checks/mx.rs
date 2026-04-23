@@ -3,14 +3,15 @@ use std::net::IpAddr;
 
 use futures::future::join_all;
 
-use crate::dns::DnsResolver;
+use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, IpEnrichment, SubCheck, Verdict};
 
 /// Check MX records for the domain.
 /// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag).
+#[tracing::instrument(skip_all, fields(category = "mx", domain = %domain))]
 pub async fn check_mx(
     domain: &str,
-    resolver: &DnsResolver,
+    resolver: &impl DnsLookup,
     enrichment: Option<&netray_common::enrichment::EnrichmentClient>,
 ) -> (CheckResult, Vec<IpAddr>, Vec<String>, bool) {
     let mx_records = resolver.lookup_mx(domain).await;

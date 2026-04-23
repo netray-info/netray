@@ -1,10 +1,25 @@
+//! TLS-RPT (SMTP TLS Reporting) check, per RFC 8460.
+//!
+//! TLS-RPT publishes a reporting address so mail senders can deliver
+//! structured failure reports about TLS negotiation problems (e.g. MTA-STS
+//! policy violations, DANE mismatches). This module resolves the TXT
+//! record at `_smtp._tls.<domain>`, validates the `v=TLSRPTv1` prefix, and
+//! parses the `rua=` tag (which may contain one or more `mailto:` or
+//! `https:` URIs).
+//!
+//! The returned `CheckResult` flags missing records, malformed or empty
+//! `rua=` values, and records the presence of valid reporting endpoints.
+//! The boolean companion return value is used by cross-validation to
+//! correlate TLS reporting coverage with MTA-STS and DANE posture.
+
 use crate::checks::util;
-use crate::dns::DnsResolver;
+use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check TLS-RPT at _smtp._tls.<domain>.
 /// Returns (CheckResult, tls_rpt_present).
-pub async fn check_tls_rpt(domain: &str, resolver: &DnsResolver) -> (CheckResult, bool) {
+#[tracing::instrument(skip_all, fields(category = "tls_rpt", domain = %domain))]
+pub async fn check_tls_rpt(domain: &str, resolver: &impl DnsLookup) -> (CheckResult, bool) {
     let name = format!("_smtp._tls.{}", domain);
     let txt_records = resolver.lookup_txt(&name).await;
 

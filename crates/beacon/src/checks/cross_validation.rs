@@ -1,6 +1,7 @@
 use crate::quality::{AllResults, Category, CheckResult, SubCheck, Verdict};
 
 /// Run all cross-validation rules against collected results.
+#[tracing::instrument(skip_all, fields(category = "cross_validation"))]
 pub fn cross_validate(results: &AllResults) -> CheckResult {
     let mut sub_checks: Vec<SubCheck> = Vec::new();
 
@@ -51,7 +52,7 @@ pub fn cross_validate(results: &AllResults) -> CheckResult {
 }
 
 fn check_dane_without_dnssec(r: &AllResults) -> Option<SubCheck> {
-    if r.dane_has_tlsa && !r.dnssec_ad {
+    if r.dane_has_tlsa && !r.dnssec_dnskey_present {
         Some(SubCheck {
             name: "dane_without_dnssec".to_string(),
             verdict: Verdict::Fail,
@@ -337,7 +338,7 @@ mod tests {
             dane: empty_result(Category::Dane),
             dane_has_tlsa: false,
             dnssec: empty_result(Category::Dnssec),
-            dnssec_ad: false,
+            dnssec_dnskey_present: false,
             bimi: empty_result(Category::Bimi),
             bimi_present: false,
             fcrdns: empty_result(Category::Fcrdns),
@@ -350,7 +351,7 @@ mod tests {
     fn dane_without_dnssec() {
         let mut r = base_results();
         r.dane_has_tlsa = true;
-        r.dnssec_ad = false;
+        r.dnssec_dnskey_present = false;
         let result = cross_validate(&r);
         let names: Vec<&str> = result.sub_checks.iter().map(|s| s.name.as_str()).collect();
         assert!(names.contains(&"dane_without_dnssec"));

@@ -1,6 +1,6 @@
 [server]
-bind = "127.0.0.1:3000"
-metrics_bind = "127.0.0.1:9090"
+bind = "0.0.0.0:8084"
+metrics_bind = "0.0.0.0:9094"
 trusted_proxies = []
 
 [dns]
@@ -34,9 +34,17 @@ per_ip = "10/min"
 [dkim]
 max_user_selectors = 5
 
-# [enrichment]
-# ip_url = "https://ip.netray.info"
+# [backends.ip]
+# url = "https://ip.netray.info"
 # timeout_ms = 5000
+
+# [ecosystem]
+# ip_base_url = ""
+# dns_base_url = ""
+# tls_base_url = ""
+# http_base_url = ""
+# email_base_url = ""
+# lens_base_url = ""
 
 [telemetry]
 log_format = "json"

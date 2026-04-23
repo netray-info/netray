@@ -1,12 +1,30 @@
+//! DMARC (Domain-based Message Authentication, Reporting, and Conformance)
+//! check, per RFC 7489.
+//!
+//! Resolves the TXT record at `_dmarc.<domain>`, validates the `v=DMARC1`
+//! prefix, and parses the policy tags (`p=`, `sp=`, `rua=`, `ruf=`, `pct=`,
+//! `fo=`, `adkim=`, `aspf=`). The returned `CheckResult` flags missing
+//! records, weak policies (`p=none`), missing aggregate reporting
+//! addresses, and the external-destination authorisation requirement from
+//! RFC 7489 §7.1 (when `rua=` points to a different organisational domain,
+//! the destination must publish a `<domain>._report._dmarc.<original>`
+//! authorisation record).
+//!
+//! Callers receive the raw policy and subdomain policy strings plus a
+//! boolean summarising whether all `rua` external authorisations resolved
+//! successfully; these values flow into the cross-validation phase for
+//! consistency checks with SPF and DKIM.
+
 use crate::checks::util;
-use crate::dns::DnsResolver;
+use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check DMARC for the domain.
 /// Returns (CheckResult, dmarc_policy, dmarc_sp, rua_external_auth_ok).
+#[tracing::instrument(skip_all, fields(category = "dmarc", domain = %domain))]
 pub async fn check_dmarc(
     domain: &str,
-    resolver: &DnsResolver,
+    resolver: &impl DnsLookup,
 ) -> (CheckResult, Option<String>, Option<String>, bool) {
     let dmarc_name = format!("_dmarc.{}", domain);
     let txt_records = resolver.lookup_txt(&dmarc_name).await;

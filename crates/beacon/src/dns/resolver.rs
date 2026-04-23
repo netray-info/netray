@@ -6,7 +6,30 @@ use std::time::Duration;
 use mhost::RecordType;
 use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
-use mhost::resolver::{MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder};
+use mhost::resolver::{Error as ResolverError, MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder};
+
+/// Map an mhost resolver error to the coarse taxonomy used by the
+/// `beacon_dns_queries_total` metric (see SDD Decision Log §12).
+fn classify_dns_error(e: &ResolverError) -> &'static str {
+    match e {
+        ResolverError::Timeout => "timeout",
+        ResolverError::NoRecordsFound => "nxdomain",
+        _ => "error",
+    }
+}
+
+fn record_dns_outcome(rtype: &'static str, result: Result<(), &ResolverError>) {
+    let outcome = match result {
+        Ok(()) => "ok",
+        Err(e) => classify_dns_error(e),
+    };
+    metrics::counter!(
+        "beacon_dns_queries_total",
+        "record_type" => rtype,
+        "outcome" => outcome,
+    )
+    .increment(1);
+}
 
 pub struct DnsResolver {
     resolvers: Vec<Resolver>,
@@ -74,10 +97,13 @@ impl DnsResolver {
                     Ok(q) => q,
                     Err(e) => {
                         tracing::warn!(query_name = %hostname, record_type = "A", error = %e, "DNS lookup failed");
+                        record_dns_outcome("A", Err(&e));
                         return None;
                     }
                 };
-                match resolver.lookup(query).await {
+                let result = resolver.lookup(query).await;
+                record_dns_outcome("A", result.as_ref().map(|_| ()));
+                match result {
                     Ok(lookups) => Some(lookups.ips()),
                     Err(e) => {
                         tracing::warn!(query_name = %hostname, record_type = "A", error = %e, "DNS lookup failed");
@@ -90,10 +116,13 @@ impl DnsResolver {
                     Ok(q) => q,
                     Err(e) => {
                         tracing::warn!(query_name = %hostname, record_type = "AAAA", error = %e, "DNS lookup failed");
+                        record_dns_outcome("AAAA", Err(&e));
                         return None;
                     }
                 };
-                match resolver.lookup(query).await {
+                let result = resolver.lookup(query).await;
+                record_dns_outcome("AAAA", result.as_ref().map(|_| ()));
+                match result {
                     Ok(lookups) => Some(lookups.ips()),
                     Err(e) => {
                         tracing::warn!(query_name = %hostname, record_type = "AAAA", error = %e, "DNS lookup failed");
@@ -123,10 +152,13 @@ impl DnsResolver {
             Ok(q) => q,
             Err(e) => {
                 tracing::warn!(query_name = %domain, record_type = "MX", error = %e, "DNS lookup failed");
+                record_dns_outcome("MX", Err(&e));
                 return Vec::new();
             }
         };
-        let lookups = match self.pick().lookup(query).await {
+        let result = self.pick().lookup(query).await;
+        record_dns_outcome("MX", result.as_ref().map(|_| ()));
+        let lookups = match result {
             Ok(l) => l,
             Err(e) => {
                 tracing::warn!(query_name = %domain, record_type = "MX", error = %e, "DNS lookup failed");
@@ -153,10 +185,13 @@ impl DnsResolver {
             Ok(q) => q,
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "TXT", error = %e, "DNS lookup failed");
+                record_dns_outcome("TXT", Err(&e));
                 return Vec::new();
             }
         };
-        let lookups = match self.pick().lookup(query).await {
+        let result = self.pick().lookup(query).await;
+        record_dns_outcome("TXT", result.as_ref().map(|_| ()));
+        let lookups = match result {
             Ok(l) => l,
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "TXT", error = %e, "DNS lookup failed");
@@ -196,10 +231,13 @@ impl DnsResolver {
             Ok(q) => q,
             Err(e) => {
                 tracing::warn!(query_name = %arpa, record_type = "PTR", error = %e, "DNS lookup failed");
+                record_dns_outcome("PTR", Err(&e));
                 return Vec::new();
             }
         };
-        let lookups = match self.pick().lookup(query).await {
+        let result = self.pick().lookup(query).await;
+        record_dns_outcome("PTR", result.as_ref().map(|_| ()));
+        let lookups = match result {
             Ok(l) => l,
             Err(e) => {
                 tracing::warn!(query_name = %arpa, record_type = "PTR", error = %e, "DNS lookup failed");
@@ -219,10 +257,13 @@ impl DnsResolver {
             Ok(q) => q,
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "TLSA", error = %e, "DNS lookup failed");
+                record_dns_outcome("TLSA", Err(&e));
                 return Vec::new();
             }
         };
-        let lookups = match self.pick().lookup(query).await {
+        let result = self.pick().lookup(query).await;
+        record_dns_outcome("TLSA", result.as_ref().map(|_| ()));
+        let lookups = match result {
             Ok(l) => l,
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "TLSA", error = %e, "DNS lookup failed");
@@ -247,10 +288,13 @@ impl DnsResolver {
             Ok(q) => q,
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "CNAME", error = %e, "DNS lookup failed");
+                record_dns_outcome("CNAME", Err(&e));
                 return Vec::new();
             }
         };
-        let lookups = match self.pick().lookup(query).await {
+        let result = self.pick().lookup(query).await;
+        record_dns_outcome("CNAME", result.as_ref().map(|_| ()));
+        let lookups = match result {
             Ok(l) => l,
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "CNAME", error = %e, "DNS lookup failed");
@@ -274,10 +318,13 @@ impl DnsResolver {
             Ok(q) => q,
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "A", error = %e, "DNS lookup failed");
+                record_dns_outcome("A", Err(&e));
                 return Vec::new();
             }
         };
-        match self.pick().lookup(query).await {
+        let result = self.pick().lookup(query).await;
+        record_dns_outcome("A", result.as_ref().map(|_| ()));
+        match result {
             Ok(l) => l.a().iter().map(|v| **v).collect(),
             Err(e) => {
                 tracing::warn!(query_name = %name, record_type = "A", error = %e, "DNS lookup failed");
@@ -296,10 +343,13 @@ impl DnsResolver {
             Ok(q) => q,
             Err(e) => {
                 tracing::warn!(query_name = %domain, record_type = "DNSKEY", error = %e, "DNS lookup failed");
+                record_dns_outcome("DNSKEY", Err(&e));
                 return false;
             }
         };
-        match self.pick().lookup(query).await {
+        let result = self.pick().lookup(query).await;
+        record_dns_outcome("DNSKEY", result.as_ref().map(|_| ()));
+        match result {
             Ok(l) => !l.dnskey().is_empty(),
             Err(e) => {
                 tracing::warn!(query_name = %domain, record_type = "DNSKEY", error = %e, "DNS lookup failed");

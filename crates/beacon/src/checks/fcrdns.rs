@@ -2,11 +2,12 @@ use std::net::IpAddr;
 
 use futures::future::join_all;
 
-use crate::dns::DnsResolver;
+use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check Forward-Confirmed reverse DNS for each MX IP.
-pub async fn check_fcrdns(mx_ips: &[IpAddr], resolver: &DnsResolver) -> CheckResult {
+#[tracing::instrument(skip_all, fields(category = "fcrdns"))]
+pub async fn check_fcrdns(mx_ips: &[IpAddr], resolver: &impl DnsLookup) -> CheckResult {
     if mx_ips.is_empty() {
         let sub_checks = vec![SubCheck {
             name: "no_ips".to_string(),

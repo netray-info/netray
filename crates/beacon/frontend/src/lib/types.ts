@@ -1,5 +1,5 @@
 export type Verdict = 'skip' | 'pass' | 'info' | 'warn' | 'fail';
-export type Grade = 'A' | 'B' | 'C' | 'D' | 'F';
+export type Grade = 'A' | 'B' | 'C' | 'D' | 'F' | 'skipped';
 export type Category =
   | 'mx' | 'spf' | 'dkim' | 'dmarc' | 'mta_sts' | 'tls_rpt'
   | 'dane' | 'dnssec' | 'bimi' | 'fcrdns' | 'dnsbl' | 'cross_validation';
@@ -34,7 +34,13 @@ export interface SummaryEvent {
   duration_ms?: number;
 }
 
-export type SseEvent = CheckResult | SummaryEvent;
+export interface ErrorEvent {
+  type: 'error';
+  code: string;
+  message: string;
+}
+
+export type SseEvent = CheckResult | SummaryEvent | ErrorEvent;
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   mx: 'MX Records',
@@ -50,17 +56,6 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   dnsbl: 'DNSBL',
   cross_validation: 'Cross-Validation',
 };
-
-export const CATEGORY_ORDER: Category[] = [
-  // Infrastructure
-  'mx', 'fcrdns', 'dnsbl',
-  // Authentication
-  'spf', 'dkim', 'dmarc',
-  // Transport Security
-  'mta_sts', 'tls_rpt', 'dane', 'dnssec',
-  // Brand & Policy
-  'bimi', 'cross_validation',
-];
 
 export type Group = 'infrastructure' | 'authentication' | 'transport_security' | 'brand_policy';
 
@@ -81,6 +76,8 @@ export const GROUP_CATEGORIES: Record<Group, Category[]> = {
   transport_security: ['mta_sts', 'tls_rpt', 'dane', 'dnssec'],
   brand_policy: ['bimi', 'cross_validation'],
 };
+
+export const CATEGORY_ORDER: Category[] = GROUP_ORDER.flatMap((g) => GROUP_CATEGORIES[g]);
 
 export const CATEGORY_EXPLANATIONS: Record<Category, { summary: string; guideUrl?: string }> = {
   mx: {

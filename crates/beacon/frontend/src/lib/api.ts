@@ -23,6 +23,14 @@ export async function fetchMeta(): Promise<MetaResponse | null> {
   }
 }
 
+export type StreamErrorKind = 'backend' | 'disconnect';
+
+export interface StreamCallbacks {
+  onEvent: (event: SseEvent) => void;
+  onError: (msg: string, kind: StreamErrorKind) => void;
+  onDone: () => void;
+}
+
 /**
  * Stream inspection results via SSE.
  * Uses GET /inspect/{domain} when no selectors, POST /inspect otherwise.
@@ -30,11 +38,10 @@ export async function fetchMeta(): Promise<MetaResponse | null> {
 export function streamInspect(
   domain: string,
   selectors: string[],
-  onEvent: (event: SseEvent) => void,
-  onError: (msg: string) => void,
-  onDone: () => void,
+  cb: StreamCallbacks,
 ): AbortController {
   const controller = new AbortController();
+  let summaryReceived = false;
 
   if (selectors.length === 0) {
     // GET — can use EventSource for simplicity
@@ -46,10 +53,18 @@ export function streamInspect(
     es.onmessage = (e) => {
       try {
         const event: SseEvent = JSON.parse(e.data);
-        onEvent(event);
-        if (event.type === 'summary') {
+        if (event.type === 'error') {
+          cb.onEvent(event);
+          cb.onError(`${event.code}: ${event.message}`, 'backend');
           es.close();
-          onDone();
+          cb.onDone();
+          return;
+        }
+        cb.onEvent(event);
+        if (event.type === 'summary') {
+          summaryReceived = true;
+          es.close();
+          cb.onDone();
         }
       } catch {
         // ignore parse errors
@@ -58,12 +73,14 @@ export function streamInspect(
 
     es.onerror = () => {
       es.close();
-      onError('Connection lost');
-      onDone();
+      // If summary already arrived, this is a normal close — ignore.
+      if (summaryReceived) return;
+      cb.onError('Connection lost before inspection finished', 'disconnect');
+      cb.onDone();
     };
   } else {
     // POST — use fetch + ReadableStream to parse SSE
-    fetchSse(domain, selectors, controller.signal, onEvent, onError, onDone);
+    fetchSse(domain, selectors, controller.signal, cb);
   }
 
   return controller;
@@ -73,10 +90,9 @@ async function fetchSse(
   domain: string,
   selectors: string[],
   signal: AbortSignal,
-  onEvent: (event: SseEvent) => void,
-  onError: (msg: string) => void,
-  onDone: () => void,
+  cb: StreamCallbacks,
 ): Promise<void> {
+  let summaryReceived = false;
   try {
     const res = await fetch('/inspect', {
       method: 'POST',
@@ -87,16 +103,18 @@ async function fetchSse(
 
     if (!res.ok) {
       const body = await res.json().catch(() => null);
-      const msg = body?.error?.message ?? `HTTP ${res.status}`;
-      onError(msg);
-      onDone();
+      const code = body?.error?.code;
+      const message = body?.error?.message ?? `HTTP ${res.status}`;
+      const msg = code ? `${code}: ${message}` : message;
+      cb.onError(msg, 'backend');
+      cb.onDone();
       return;
     }
 
     const reader = res.body?.getReader();
     if (!reader) {
-      onError('No response body');
-      onDone();
+      cb.onError('No response body', 'backend');
+      cb.onDone();
       return;
     }
 
@@ -122,16 +140,27 @@ async function fetchSse(
         if (!json) continue;
         try {
           const event: SseEvent = JSON.parse(json);
-          onEvent(event);
+          if (event.type === 'error') {
+            cb.onEvent(event);
+            cb.onError(`${event.code}: ${event.message}`, 'backend');
+            cb.onDone();
+            return;
+          }
+          cb.onEvent(event);
+          if (event.type === 'summary') summaryReceived = true;
         } catch {
           // skip malformed events
         }
       }
     }
+
+    if (!summaryReceived) {
+      cb.onError('Connection lost before inspection finished', 'disconnect');
+    }
   } catch (e: unknown) {
     if (e instanceof DOMException && e.name === 'AbortError') return;
     const msg = e instanceof Error ? e.message : 'Request failed';
-    onError(msg);
+    cb.onError(msg, 'disconnect');
   }
-  onDone();
+  cb.onDone();
 }

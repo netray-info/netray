@@ -40,6 +40,10 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - run: cargo clippy --locked -- -D warnings
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
+      - name: Check for unused dependencies
+        run: cargo machete
 
   test:
     name: Test

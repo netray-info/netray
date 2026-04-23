@@ -33,6 +33,8 @@ pub enum Grade {
     C,
     B,
     A,
+    #[serde(rename = "skipped")]
+    Skipped,
 }
 
 impl Grade {
@@ -43,6 +45,7 @@ impl Grade {
             Grade::C => "C",
             Grade::D => "D",
             Grade::F => "F",
+            Grade::Skipped => "Skipped",
         }
     }
 }
@@ -161,7 +164,7 @@ pub struct AllResults {
     pub dane: CheckResult,
     pub dane_has_tlsa: bool,
     pub dnssec: CheckResult,
-    pub dnssec_ad: bool,
+    pub dnssec_dnskey_present: bool,
     pub bimi: CheckResult,
     pub bimi_present: bool,
     pub fcrdns: CheckResult,

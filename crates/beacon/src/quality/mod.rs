@@ -15,6 +15,11 @@ pub use types::{
 /// | 1     | any   | D     |
 /// | 2+    | any   | F     |
 pub fn compute_grade(verdicts: &[Verdict]) -> Grade {
+    // If every verdict is Skip (e.g., 30s timeout), report Skipped.
+    if !verdicts.is_empty() && verdicts.iter().all(|v| *v == Verdict::Skip) {
+        return Grade::Skipped;
+    }
+
     // Skip verdicts are excluded from grade calculation
     let fails = verdicts.iter().filter(|v| **v == Verdict::Fail).count();
     let warns = verdicts.iter().filter(|v| **v == Verdict::Warn).count();
@@ -75,10 +80,10 @@ mod tests {
     }
 
     #[test]
-    fn grade_skip_excluded() {
-        // All 12 Skips → Skip excluded, 0 fails, 0 warns → Grade::A
+    fn grade_all_skip_returns_skipped() {
+        // All 12 Skips → Grade::Skipped (e.g., 30s timeout)
         let v = vec![Verdict::Skip; 12];
-        assert_eq!(compute_grade(&v), Grade::A);
+        assert_eq!(compute_grade(&v), Grade::Skipped);
     }
 
     #[test]

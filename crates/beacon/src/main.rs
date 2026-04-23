@@ -1,3 +1,14 @@
+//! Binary entrypoint for the beacon email-security inspector service.
+//!
+//! Loads configuration (from `beacon.toml` or `$BEACON_CONFIG`, with
+//! `BEACON_*` environment overrides), initialises tracing and Prometheus
+//! metrics, constructs the shared [`AppState`], and serves the Axum router
+//! for public endpoints (`/inspect`, `/api/meta`, `/health`, `/ready`,
+//! `/api-docs/openapi.json`, `/docs`, the embedded SolidJS frontend) on
+//! `config.server.bind`. A second listener on `config.server.metrics_bind`
+//! exposes `/metrics` via `netray_common::server::serve_metrics`. Graceful
+//! shutdown is driven by `netray_common::server::shutdown_signal`.
+
 use std::net::SocketAddr;
 
 use axum::Router;
@@ -39,9 +50,28 @@ async fn main() -> anyhow::Result<()> {
         "info,beacon=debug,hyper=warn,h2=warn",
     );
 
+    metrics::describe_gauge!(
+        "beacon_sse_clients_active",
+        "Active SSE inspection streams"
+    );
+
     tracing::info!(
         bind = %config.server.bind,
         metrics_bind = %config.server.metrics_bind,
+        dns_resolvers = ?config.dns.resolvers,
+        dns_timeout_ms = config.dns.timeout_ms,
+        dnsbl_resolvers = ?config.dnsbl.resolvers,
+        dnsbl_zones = ?config.dnsbl.zones,
+        dnsbl_timeout_ms = config.dnsbl.timeout_ms,
+        per_ip_rate = %config.rate_limit.per_ip,
+        max_concurrent_inspections = config.server.max_concurrent_inspections,
+        trusted_proxy_count = config.server.trusted_proxies.len(),
+        ip_backend_url = config
+            .backends
+            .ip
+            .as_ref()
+            .and_then(|b| b.url.as_deref())
+            .unwrap_or("disabled"),
         "starting beacon"
     );
 

@@ -25,51 +25,11 @@ import {
   CATEGORY_EXPLANATIONS,
   subCheckLabel, subCheckExplanation,
 } from './lib/types';
+import { parseQuery, formatQuery, MAX_SELECTORS } from './lib/parse';
 
 const HISTORY_KEY = 'beacon_history';
 const MAX_HISTORY = 20;
 const EXAMPLE_DOMAINS = ['netray.info', 'gmail.com', 'example.com'];
-const MAX_SELECTORS = 5;
-
-interface ParsedQuery {
-  domain: string;
-  selectors: string[];
-}
-
-const SELECTOR_RE = /^[A-Za-z0-9-]{1,63}$/;
-
-function parseQuery(raw: string): ParsedQuery | { error: string } {
-  const tokens = raw.trim().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return { error: 'enter a domain' };
-
-  const [domain, ...rest] = tokens;
-  if (!domain.includes('.')) {
-    return { error: `"${domain}" is not a valid domain (must contain a dot)` };
-  }
-
-  const seen = new Set<string>();
-  const selectors: string[] = [];
-  for (const tok of rest) {
-    if (tok.includes('.')) {
-      return { error: `"${tok}" is not a valid DKIM selector (contains a dot)` };
-    }
-    if (!SELECTOR_RE.test(tok)) {
-      return { error: `"${tok}" is not a valid DKIM selector` };
-    }
-    if (!seen.has(tok)) {
-      seen.add(tok);
-      selectors.push(tok);
-    }
-  }
-  if (selectors.length > MAX_SELECTORS) {
-    return { error: `too many DKIM selectors (max ${MAX_SELECTORS})` };
-  }
-  return { domain: domain.toLowerCase().replace(/\.$/, ''), selectors };
-}
-
-function formatQuery(domain: string, selectors: string[]): string {
-  return selectors.length ? `${domain} ${selectors.join(' ')}` : domain;
-}
 
 type Ecosystem = NonNullable<MetaResponse['ecosystem']>;
 
@@ -138,12 +98,17 @@ export default function App() {
   // Input state
   const [query, setQuery] = createSignal('');
   const [inspectedDomain, setInspectedDomain] = createSignal('');
+  const [inspectedSelectors, setInspectedSelectors] = createSignal<string[]>([]);
+  // Last successfully inspected query (raw), used by the `r` shortcut and Retry button.
+  const [lastInspectedQuery, setLastInspectedQuery] = createSignal<string>('');
   let inputEl: HTMLInputElement | undefined;
   const [showHistory, setShowHistory] = createSignal(false);
+  const [historyIndex, setHistoryIndex] = createSignal<number>(-1);
 
   // Results state
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
+  const [disconnected, setDisconnected] = createSignal(false);
   const [categories, setCategories] = createSignal<Map<Category, CheckResult>>(new Map());
   const [summary, setSummary] = createSignal<SummaryEvent | null>(null);
   const [expandAll, setExpandAll] = createSignal(false);
@@ -204,8 +169,10 @@ export default function App() {
       'e':      (e) => { e.preventDefault(); setShowExplanations(v => !v); },
       '/':      (e) => { e.preventDefault(); inputEl?.focus(); },
       'r':      (e) => {
-        const raw = query();
-        if (raw.trim() && !loading()) { e.preventDefault(); runQuery(raw); }
+        // Re-run the last successfully inspected query, NOT the current
+        // edit-in-progress input value. See F11.
+        const last = lastInspectedQuery();
+        if (last.trim() && !loading()) { e.preventDefault(); runQuery(last); }
       },
       'j':      navigateCards,
       'k':      navigateCards,
@@ -245,12 +212,15 @@ export default function App() {
     abortRef?.abort();
 
     setError(null);
+    setDisconnected(false);
     setCategories(new Map());
     setSummary(null);
     setCompletedCount(0);
     setLoading(true);
     setClientDurationMs(undefined);
     setInspectedDomain(d);
+    setInspectedSelectors(sels);
+    setLastInspectedQuery(formatQuery(d, sels));
     inspectStartedAt = Date.now();
 
     const newUrl = new URL(window.location.href);
@@ -258,10 +228,8 @@ export default function App() {
     newUrl.searchParams.set('q', formatQuery(d, sels));
     window.history.replaceState(null, '', newUrl.toString());
 
-    abortRef = streamInspect(
-      d,
-      sels,
-      (event: SseEvent) => {
+    abortRef = streamInspect(d, sels, {
+      onEvent: (event: SseEvent) => {
         if (event.type === 'category') {
           setCategories((prev) => {
             const next = new Map(prev);
@@ -274,9 +242,16 @@ export default function App() {
           setClientDurationMs(Date.now() - inspectStartedAt);
         }
       },
-      (msg: string) => { setError(msg); },
-      () => { setLoading(false); addToHistory(d); },
-    );
+      onError: (msg, kind) => {
+        setError(msg);
+        // Preserve partial results and surface a Retry banner when the stream
+        // disconnects before the Summary event arrives.
+        if (kind === 'disconnect' && summary() === null) {
+          setDisconnected(true);
+        }
+      },
+      onDone: () => { setLoading(false); addToHistory(d); },
+    });
   }
 
   function runQuery(raw: string) {
@@ -334,14 +309,52 @@ export default function App() {
                   class="domain-input"
                   placeholder="example.com [dkim-selector ...]"
                   value={query()}
-                  onInput={(e) => setQuery(e.currentTarget.value)}
-                  onFocus={() => setShowHistory(true)}
+                  onInput={(e) => {
+                    setQuery(e.currentTarget.value);
+                    setHistoryIndex(-1);
+                  }}
+                  onFocus={() => { setShowHistory(true); setHistoryIndex(-1); }}
                   onBlur={() => setTimeout(() => setShowHistory(false), 200)}
+                  onKeyDown={(e) => {
+                    const items = getHistory();
+                    const open = showHistory() && items.length > 0;
+                    if (e.key === 'Escape') {
+                      if (showHistory()) { e.preventDefault(); setShowHistory(false); setHistoryIndex(-1); }
+                      return;
+                    }
+                    if (!open) return;
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setHistoryIndex((i) => (i + 1) % items.length);
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setHistoryIndex((i) => (i <= 0 ? items.length - 1 : i - 1));
+                    } else if (e.key === 'Home') {
+                      e.preventDefault();
+                      setHistoryIndex(0);
+                    } else if (e.key === 'End') {
+                      e.preventDefault();
+                      setHistoryIndex(items.length - 1);
+                    } else if (e.key === 'Enter') {
+                      const idx = historyIndex();
+                      if (idx >= 0 && idx < items.length) {
+                        e.preventDefault();
+                        const item = items[idx];
+                        setQuery(item);
+                        setShowHistory(false);
+                        setHistoryIndex(-1);
+                        runQuery(item);
+                      }
+                    }
+                  }}
                   role="combobox"
                   aria-label="Domain and optional DKIM selectors, space-separated"
                   aria-expanded={showHistory() && getHistory().length > 0}
                   aria-autocomplete="list"
                   aria-controls="history-listbox"
+                  aria-activedescendant={
+                    historyIndex() >= 0 ? `history-option-${historyIndex()}` : undefined
+                  }
                   autocomplete="off"
                   spellcheck={false}
                 />
@@ -358,33 +371,59 @@ export default function App() {
                     class="history-dropdown"
                     id="history-listbox"
                     role="listbox"
-                    onKeyDown={(e) => { if (e.key === 'Escape') setShowHistory(false); }}
                   >
                     <For each={getHistory()}>
-                      {(item) => (
-                        <li
-                          role="option"
-                          onMouseDown={() => {
-                            setQuery(item);
-                            runQuery(item);
-                          }}
-                        >
-                          {item}
-                        </li>
-                      )}
+                      {(item, i) => {
+                        const isActive = () => historyIndex() === i();
+                        return (
+                          <li
+                            id={`history-option-${i()}`}
+                            role="option"
+                            aria-selected={isActive()}
+                            classList={{ 'history-dropdown__item--active': isActive() }}
+                            onMouseDown={() => {
+                              setQuery(item);
+                              setShowHistory(false);
+                              setHistoryIndex(-1);
+                              runQuery(item);
+                            }}
+                          >
+                            {item}
+                          </li>
+                        );
+                      }}
                     </For>
                   </ul>
                 </Show>
               </div>
-              <ShareButton />
+              <ShareButton
+                domain={inspectedDomain}
+                selectors={inspectedSelectors}
+              />
               <button type="submit" class="btn-primary" disabled={loading() || !query().trim()}>
                 {loading() ? 'Inspecting…' : 'Inspect'}
               </button>
             </div>
           </form>
 
-          <Show when={error()}>
+          <Show when={error() && !disconnected()}>
             <div class="error-banner" role="alert">{error()}</div>
+          </Show>
+
+          <Show when={disconnected()}>
+            <div class="error-banner error-banner--retry" role="alert">
+              <span class="error-banner__message">
+                {error() ?? 'Connection lost before inspection finished'}
+              </span>
+              <button
+                type="button"
+                class="btn-secondary error-banner__retry"
+                onClick={() => {
+                  const last = lastInspectedQuery();
+                  if (last.trim()) runQuery(last);
+                }}
+              >Retry</button>
+            </div>
           </Show>
 
           <Show when={isIdle()}>
@@ -398,6 +437,7 @@ export default function App() {
                 <For each={EXAMPLE_DOMAINS}>
                   {(d) => (
                     <button
+                      type="button"
                       class="example-chip"
                       onClick={() => { setQuery(d); runQuery(d); }}
                     >
@@ -437,6 +477,7 @@ export default function App() {
                     <span class="progress-text">{completedCount()} of 12 checks complete</span>
                   </Show>
                   <button
+                    type="button"
                     class="filter-toggle"
                     classList={{ 'filter-toggle--active': showExplanations() }}
                     onClick={() => setShowExplanations(v => !v)}
@@ -446,6 +487,7 @@ export default function App() {
                 </div>
                 <div class="section-controls__right">
                   <button
+                    type="button"
                     class="filter-toggle"
                     onClick={() => setExpandAll(!expandAll())}
                     aria-pressed={expandAll()}
@@ -456,7 +498,7 @@ export default function App() {
               </div>
             </Show>
 
-            <div class="category-list">
+            <div class="category-list" role="list" aria-live="polite" aria-busy={loading()}>
               <For each={GROUP_ORDER}>
                 {(group) => (
                   <>
@@ -566,7 +608,7 @@ export default function App() {
               <tbody>
                 <tr><td class="shortcut-key">/</td><td>Focus query input</td></tr>
                 <tr><td class="shortcut-key">Enter</td><td>Submit query (when input focused)</td></tr>
-                <tr><td class="shortcut-key">r</td><td>Re-run last inspection</td></tr>
+                <tr><td class="shortcut-key">r</td><td>Re-run last inspected query (ignores unsaved input)</td></tr>
                 <tr><td class="shortcut-key">e</td><td>Toggle explanations</td></tr>
                 <tr><td class="shortcut-key">j / k</td><td>Navigate result categories</td></tr>
                 <tr><td class="shortcut-key">Enter</td><td>Expand / collapse active category</td></tr>
@@ -655,10 +697,28 @@ function OverviewCard(props: {
 
   const firstEnrichment = () => props.mxResult?.enrichment?.[0];
 
+  // F8: grade is primary, verdict is subheading. Backend sends Grade as
+  // uppercase letter (A-F) today; G3 will introduce "skipped" (lowercase).
+  const gradeLabel = (): string => {
+    const g = props.summary.grade as string;
+    return g === 'skipped' ? 'Skipped' : g;
+  };
+  const gradeModifier = (): string => {
+    const g = props.summary.grade as string;
+    return g === 'skipped' ? 'skipped' : g.toLowerCase();
+  };
+
   return (
     <div class="overview">
-      <div class="overview__row">
-        <div class="overview__item">
+      <div class="overview__row overview__row--grade">
+        <div class="overview__item overview__item--grade">
+          <span class="overview__label">Grade</span>
+          <span
+            class={`overview__grade overview__grade--${gradeModifier()}`}
+            aria-label={`Grade ${gradeLabel()}`}
+          >{gradeLabel()}</span>
+        </div>
+        <div class="overview__item overview__item--verdict">
           <span class="overview__label">Verdict</span>
           <span class={`badge badge--${overallVerdict()}`}>{overallVerdict()}</span>
         </div>
@@ -737,12 +797,18 @@ function CategorySection(props: {
     return c;
   };
 
+  const headerId = `card-header-${props.result.category}`;
+  const cardId = `card-body-${props.result.category}`;
+
   return (
-    <div class="section-card" data-card>
+    <div class="section-card" data-card role="listitem">
       <button
+        id={headerId}
+        type="button"
         class="section-card__header"
         onClick={props.onToggle}
         aria-expanded={props.open}
+        aria-controls={cardId}
       >
         <span class={`section-card__status section-card__status--${props.result.verdict}`} />
         <span class="section-card__title">{CATEGORY_LABELS[props.result.category]}</span>
@@ -781,7 +847,12 @@ function CategorySection(props: {
       </button>
 
       <Show when={props.open}>
-        <div class="section-card__body">
+        <div
+          id={cardId}
+          class="section-card__body"
+          role="region"
+          aria-labelledby={headerId}
+        >
           <Show when={props.showExplanations && explanation()}>
             {(e) => (
               <div class="explain-card">
@@ -840,28 +911,49 @@ function CategorySection(props: {
   );
 }
 
-function ShareButton() {
+function ShareButton(props: {
+  domain: () => string;
+  selectors: () => string[];
+}) {
   const [status, setStatus] = createSignal<'idle' | 'copied'>('idle');
 
+  const buildShareUrl = (): string => {
+    const d = props.domain();
+    if (!d) return window.location.href;
+    const base = `${window.location.origin}${window.location.pathname}`;
+    const params = new URLSearchParams();
+    params.set('q', formatQuery(d, props.selectors()));
+    return `${base}?${params.toString()}`;
+  };
+
+  const disabled = () => !props.domain();
+
   const handleClick = async () => {
-    await copyToClipboard(window.location.href);
+    if (disabled()) return;
+    await copyToClipboard(buildShareUrl());
     setStatus('copied');
     setTimeout(() => setStatus('idle'), 2000);
   };
 
   return (
-    <button
-      type="button"
-      class="share-btn"
-      aria-label="Copy shareable link"
-      title={status() === 'copied' ? 'Copied!' : 'Copy shareable link'}
-      onClick={handleClick}
-    >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-      </svg>
-    </button>
+    <span class="share-btn-wrapper">
+      <button
+        type="button"
+        class="share-btn"
+        aria-label="Copy shareable link"
+        title={status() === 'copied' ? 'Copied!' : 'Copy shareable link'}
+        disabled={disabled()}
+        onClick={handleClick}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      </button>
+      <Show when={status() === 'copied'}>
+        <span class="share-btn__toast" role="status" aria-live="polite">Copied!</span>
+      </Show>
+    </span>
   );
 }
 
@@ -917,10 +1009,10 @@ function ExportButtons(props: {
 
   return (
     <div class="export-buttons">
-      <button class="export-buttons__btn" onClick={copyMarkdown} aria-label="Copy as Markdown">
+      <button type="button" class="export-buttons__btn" onClick={copyMarkdown} aria-label="Copy as Markdown">
         {copyStatus() === 'success' ? 'copied!' : copyStatus() === 'error' ? 'failed' : 'copy MD'}
       </button>
-      <button class="export-buttons__btn" onClick={downloadJson} aria-label="Download as JSON">
+      <button type="button" class="export-buttons__btn" onClick={downloadJson} aria-label="Download as JSON">
         JSON
       </button>
     </div>

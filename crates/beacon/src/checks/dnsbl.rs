@@ -4,7 +4,7 @@ use std::time::Duration;
 use futures::future::join_all;
 
 use crate::config::DnsblConfig;
-use crate::dns::DnsResolver;
+use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// IPv4 zones that don't support IPv6 lookups.
@@ -40,11 +40,12 @@ struct DnsblQuery {
 }
 
 /// Check DNSBLs for MX IPs.
+#[tracing::instrument(skip_all, fields(category = "dnsbl", domain = %domain))]
 pub async fn check_dnsbl(
     mx_ips: &[IpAddr],
     domain: &str,
     config: &DnsblConfig,
-    resolver: &DnsResolver,
+    resolver: &impl DnsLookup,
 ) -> CheckResult {
     let timeout = Duration::from_millis(config.timeout_ms);
 
@@ -228,5 +229,88 @@ mod tests {
         assert!(!is_policy_response(&Ipv4Addr::new(127, 0, 0, 2))); // SBL
         assert!(!is_policy_response(&Ipv4Addr::new(127, 0, 0, 10))); // PBL
         assert!(!is_policy_response(&Ipv4Addr::new(127, 0, 0, 4))); // XBL
+    }
+
+    /// SDD E4: verify the specific Spamhaus policy-response sentinels
+    /// called out in the SDD (127.255.255.1/2/3) are partitioned into the
+    /// policy bucket and never treated as listings.
+    #[test]
+    fn policy_response_partitions_out_sentinel_ips() {
+        for last in 1..=3 {
+            assert!(
+                is_policy_response(&Ipv4Addr::new(127, 255, 255, last)),
+                "expected 127.255.255.{last} to be classified as policy response",
+            );
+        }
+    }
+
+    /// SDD E4: the canonical Spamhaus SBL listing code 127.0.0.2 must fall
+    /// on the "listed" side of the partition.
+    #[test]
+    fn listing_code_127_0_0_2_is_not_policy_response() {
+        let listing = Ipv4Addr::new(127, 0, 0, 2);
+        assert!(!is_policy_response(&listing));
+    }
+
+    /// SDD E4: `partition` splits a mixed set of responses into (policy, listings).
+    /// This exercises the exact partition call shape that `check_dnsbl` uses.
+    #[test]
+    fn partition_separates_policy_from_listings() {
+        let responses = vec![
+            Ipv4Addr::new(127, 255, 255, 1), // policy
+            Ipv4Addr::new(127, 0, 0, 2),     // listing (SBL)
+            Ipv4Addr::new(127, 255, 255, 3), // policy
+            Ipv4Addr::new(127, 0, 0, 4),     // listing (XBL)
+        ];
+        let (policy, listing): (Vec<_>, Vec<_>) =
+            responses.into_iter().partition(is_policy_response);
+        assert_eq!(policy.len(), 2);
+        assert_eq!(listing.len(), 2);
+        assert!(listing.contains(&Ipv4Addr::new(127, 0, 0, 2)));
+        assert!(listing.contains(&Ipv4Addr::new(127, 0, 0, 4)));
+    }
+
+    /// SDD E4: IPv6 addresses directed at an IPv4-only zone must be skipped
+    /// up-front in the query-building loop — no query is emitted for them.
+    /// This mirrors the `is_ipv4_only && ip.is_ipv6()` guard in `check_dnsbl`.
+    #[test]
+    fn ipv4_only_zone_skips_ipv6_input() {
+        let zone = "zen.spamhaus.org";
+        assert!(IPV4_ONLY_ZONES.contains(&zone));
+        let ip: IpAddr = "2001:db8::1".parse().unwrap();
+        let should_skip = IPV4_ONLY_ZONES.contains(&zone) && ip.is_ipv6();
+        assert!(should_skip, "ipv6 must be skipped for IPv4-only zone");
+    }
+
+    /// SDD E4: IPv4 addresses against the same IPv4-only zone are not skipped.
+    #[test]
+    fn ipv4_only_zone_accepts_ipv4_input() {
+        let zone = "zen.spamhaus.org";
+        let ip: IpAddr = "192.0.2.10".parse().unwrap();
+        let should_skip = IPV4_ONLY_ZONES.contains(&zone) && ip.is_ipv6();
+        assert!(!should_skip);
+    }
+
+    /// SDD E4: the domain zone `dbl.spamhaus.org` is driven by the target
+    /// domain string rather than a reversed IP. Confirms `DOMAIN_ZONES`
+    /// membership and the shape of the query name that would be emitted.
+    #[test]
+    fn domain_zone_uses_target_domain_query_name() {
+        let zone = "dbl.spamhaus.org";
+        assert!(DOMAIN_ZONES.contains(&zone));
+        let domain = "example.com";
+        let query_name = format!("{}.{}", domain, zone);
+        assert_eq!(query_name, "example.com.dbl.spamhaus.org");
+    }
+
+    /// SDD E4: the IP zone path builds query names from a reversed IPv4
+    /// (nibble-order) concatenated with the zone.
+    #[test]
+    fn ip_zone_uses_reversed_ip_query_name() {
+        let zone = "zen.spamhaus.org";
+        let ip = Ipv4Addr::new(192, 0, 2, 10);
+        let reversed = reverse_ipv4(ip);
+        let query_name = format!("{}.{}", reversed, zone);
+        assert_eq!(query_name, "10.2.0.192.zen.spamhaus.org");
     }
 }

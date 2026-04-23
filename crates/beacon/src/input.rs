@@ -139,9 +139,65 @@ mod tests {
 
     #[test]
     fn rejects_total_too_long() {
+        // Four 63-char labels (252 chars) plus ".com" (4) plus three separators (3)
+        // = 259 chars total, exceeding the 253 cap. Each label is exactly 63 chars,
+        // so the failure must come from the overall length check, not per-label.
         let label = "a".repeat(63);
         let domain = format!("{}.{}.{}.{}.com", label, label, label, label);
-        assert!(parse_domain(&domain).is_err());
+        let err = parse_domain(&domain).unwrap_err();
+        assert!(err.to_string().contains("253"), "expected length error: {err}");
+    }
+
+    /// A domain of exactly 253 characters with valid labels (each ≤63 chars)
+    /// is at the permitted boundary and must parse successfully.
+    #[test]
+    fn accepts_total_length_at_boundary() {
+        // 63 + 1 + 63 + 1 + 63 + 1 + 61 = 253 chars.
+        let a = "a".repeat(63);
+        let b = "b".repeat(63);
+        let c = "c".repeat(63);
+        let d = "d".repeat(61);
+        let domain = format!("{a}.{b}.{c}.{d}");
+        assert_eq!(domain.len(), 253);
+        assert_eq!(parse_domain(&domain).unwrap(), domain);
+    }
+
+    /// One character past the 253-byte RFC 1035 domain cap must be rejected.
+    #[test]
+    fn rejects_total_length_one_over_boundary() {
+        let a = "a".repeat(63);
+        let b = "b".repeat(63);
+        let c = "c".repeat(63);
+        let d = "d".repeat(62);
+        let domain = format!("{a}.{b}.{c}.{d}");
+        assert_eq!(domain.len(), 254);
+        let err = parse_domain(&domain).unwrap_err();
+        assert!(matches!(err, MailError::InvalidDomain(_)));
+    }
+
+    /// An empty middle label (`a..b`) must be rejected with InvalidDomain.
+    #[test]
+    fn rejects_empty_middle_label() {
+        let err = parse_domain("example..com").unwrap_err();
+        assert!(matches!(err, MailError::InvalidDomain(_)));
+        assert!(err.to_string().contains("empty"), "got: {err}");
+    }
+
+    /// A label of exactly 63 characters is the maximum permitted by RFC 1035.
+    #[test]
+    fn accepts_label_at_max_length() {
+        let label = "a".repeat(63);
+        let domain = format!("{label}.example.com");
+        assert!(parse_domain(&domain).is_ok());
+    }
+
+    /// A label one character past the 63-byte cap must be rejected.
+    #[test]
+    fn rejects_label_one_over_max_length() {
+        let label = "a".repeat(64);
+        let domain = format!("{label}.example.com");
+        let err = parse_domain(&domain).unwrap_err();
+        assert!(matches!(err, MailError::InvalidDomain(_)));
     }
 
     // --- validate_dkim_selector ---

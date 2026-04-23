@@ -17,9 +17,10 @@ RUN apk add --no-cache ca-certificates wget \
  && addgroup -S beacon && adduser -S beacon -G beacon
 WORKDIR /beacon
 COPY beacon.toml beacon.toml
-ENV BEACON__SERVER__BIND=0.0.0.0:3000
+ENV BEACON__SERVER__BIND=0.0.0.0:8084
 COPY --from=builder /beacon .
 RUN chown -R beacon:beacon /beacon
 USER beacon
-EXPOSE 3000 9090
+EXPOSE 8084 9094
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -qO- http://127.0.0.1:8084/ready || exit 1
 CMD ["./beacon", "beacon.toml"]

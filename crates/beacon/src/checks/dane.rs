@@ -1,11 +1,29 @@
+//! DANE (DNS-Based Authentication of Named Entities) check for SMTP, per
+//! RFC 7672.
+//!
+//! DANE binds a server's TLS certificate to the DNS via `TLSA` records
+//! published under `_25._tcp.<mx-host>`. For each MX host discovered by the
+//! MX check, this module performs a TLSA lookup in parallel (`join_all`)
+//! and records whether at least one usable TLSA record is present. The
+//! verdict does not attempt full TLS handshake validation (beacon is
+//! DNS-only); presence of a syntactically valid TLSA record with a
+//! supported `usage`/`selector`/`matching_type` tuple is reported as
+//! `Pass`, and missing records are reported as `Info` when the domain has
+//! no mail (empty MX set) or `Warn` otherwise.
+//!
+//! Effective DANE protection additionally requires DNSSEC on the parent
+//! zone; the [`super::dnssec`] check and cross-validation surface that
+//! requirement.
+
 use futures::future::join_all;
 
-use crate::dns::DnsResolver;
+use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check DANE/TLSA records for each MX hostname.
 /// Returns (CheckResult, dane_has_tlsa).
-pub async fn check_dane(mx_hosts: &[String], resolver: &DnsResolver) -> (CheckResult, bool) {
+#[tracing::instrument(skip_all, fields(category = "dane"))]
+pub async fn check_dane(mx_hosts: &[String], resolver: &impl DnsLookup) -> (CheckResult, bool) {
     if mx_hosts.is_empty() {
         let sub_checks = vec![SubCheck {
             name: "absent".to_string(),

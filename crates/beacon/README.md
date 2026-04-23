@@ -6,7 +6,7 @@ DNS-only email security inspector for the [netray.info](https://netray.info) sui
 
 - Rust 1.85+
 - Node 20+
-- `NODE_AUTH_TOKEN` environment variable set to a GitHub personal access token with `read:packages` scope (required to install `@netray-info/common-frontend` from GitHub Packages)
+- `NODE_AUTH_TOKEN` environment variable set to a GitHub personal access token with `read:packages` scope (required for `npm install` to fetch `@netray-info/common-frontend` from GitHub Packages via `npm.pkg.github.com`)
 
 ## Quick Start
 
@@ -21,6 +21,57 @@ npm run dev   # Vite dev server on :5176
 ```
 
 Copy `beacon.toml.example` to `beacon.toml` and adjust settings as needed.
+
+## Configuration
+
+Beacon loads configuration from a TOML file and allows every value to be overridden via environment variables.
+
+- **`beacon.toml.example`** — template, committed to the repo. Copy this as a starting point.
+- **`beacon.toml`** — production config. Deployed to the server, not checked into the repo with real values.
+- **`beacon.dev.toml`** — local development config. Used with `cargo run -- --config beacon.dev.toml`.
+
+### Environment variables
+
+Environment variables use the `BEACON_` prefix and `__` (double underscore) to traverse nested sections:
+
+```sh
+# [backends.ip] url = "..."
+BEACON_BACKENDS__IP__URL=http://ip.netray.info
+
+# [telemetry] level = "..."
+BEACON_TELEMETRY__LEVEL=info
+```
+
+## API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/inspect` | Start an inspection from a JSON body; streams SSE results |
+| `GET`  | `/inspect/{domain}` | Start an inspection from a path parameter; streams SSE results |
+| `GET`  | `/api/meta` | Ecosystem metadata (version, sibling services) |
+| `GET`  | `/health` | Liveness probe |
+| `GET`  | `/ready` | Readiness probe |
+| `GET`  | `/docs` | Scalar UI over the OpenAPI schema |
+| `GET`  | `/api-docs/openapi.json` | OpenAPI 3.1 schema |
+
+### SSE example
+
+```sh
+curl -N https://email.netray.info/inspect/example.com
+```
+
+Each category emits its own SSE event as it completes; a final `summary` event carries the aggregate grade.
+
+## Testing & Build
+
+Common tasks are exposed via the Makefile:
+
+```sh
+make           # default build (cargo + frontend)
+make test      # run Rust and frontend tests
+make dev       # run backend + frontend with dev configs
+make pre-push  # full lint + test gate run before pushing
+```
 
 ## Architecture
 
