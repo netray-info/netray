@@ -104,7 +104,17 @@ async fn check_email(
             SectionError::BackendError(format!("failed to read beacon stream: {e}"))
         })?;
 
-    tracing::debug!(service = "beacon", url = %url, events = events.len(), "backend call succeeded");
+    let event_types: Vec<&str> = events
+        .iter()
+        .filter_map(|e| e.get("type").and_then(|v| v.as_str()))
+        .collect();
+    tracing::debug!(
+        service = "beacon",
+        url = %url,
+        events = events.len(),
+        ?event_types,
+        "backend call succeeded"
+    );
 
     let summary = parse_summary(&events)?;
 
@@ -174,15 +184,24 @@ pub struct BeaconSummary {
 // ---------------------------------------------------------------------------
 
 /// Extract the summary event from drained SSE events.
+///
+/// Beacon may omit `event:` type lines and send raw `data:` only. In that case all
+/// events arrive with an empty type. We find the summary by looking for an explicit
+/// `event: summary` first, then fall back to the event whose data contains a `"grade"` field.
 pub fn parse_summary(events: &[Value]) -> Result<BeaconSummary, SectionError> {
-    let summary_event = events
+    let data = events
         .iter()
         .find(|e| e.get("type").and_then(|v| v.as_str()) == Some("summary"))
+        .or_else(|| {
+            // Beacon sends no event type names — locate by data content.
+            events
+                .iter()
+                .find(|e| e.get("data").and_then(|d| d.get("grade")).is_some())
+        })
+        .and_then(|e| e.get("data"))
         .ok_or_else(|| SectionError::BackendError("no summary event from beacon".to_string()))?;
 
-    let data = summary_event.get("data").ok_or_else(|| {
-        SectionError::BackendError("summary event has no data field".to_string())
-    })?;
+    tracing::debug!(summary_data = ?data, "beacon summary data");
 
     let grade = data
         .get("grade")
@@ -190,22 +209,39 @@ pub fn parse_summary(events: &[Value]) -> Result<BeaconSummary, SectionError> {
         .map(|s| s.to_string());
 
     let mut categories = Vec::new();
-    if let Some(cats) = data.get("categories").and_then(|v| v.as_object()) {
-        for (name, cat_data) in cats {
-            let verdict = cat_data
-                .get("verdict")
-                .and_then(|v| v.as_str())
-                .unwrap_or("Skip")
-                .to_string();
-            let message = cat_data
-                .get("message")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            categories.push(CategoryVerdict {
-                name: name.clone(),
-                verdict,
-                message,
-            });
+    if let Some(cats) = data.get("categories") {
+        if let Some(obj) = cats.as_object() {
+            // Object form: {"spf": {"verdict": "Pass", ...}, ...}
+            for (name, cat_data) in obj {
+                let verdict = cat_data
+                    .get("verdict")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Skip")
+                    .to_string();
+                let message = cat_data
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                categories.push(CategoryVerdict { name: name.clone(), verdict, message });
+            }
+        } else if let Some(arr) = cats.as_array() {
+            // Array form: [{"name": "spf", "verdict": "Pass", ...}, ...]
+            for cat_data in arr {
+                let name = match cat_data.get("name").and_then(|v| v.as_str()) {
+                    Some(n) => n.to_string(),
+                    None => continue,
+                };
+                let verdict = cat_data
+                    .get("verdict")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Skip")
+                    .to_string();
+                let message = cat_data
+                    .get("message")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                categories.push(CategoryVerdict { name, verdict, message });
+            }
         }
     }
 
