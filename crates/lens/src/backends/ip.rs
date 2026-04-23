@@ -309,6 +309,7 @@ mod tests {
         };
         let context = BackendContext {
             resolved_ips: vec![],
+            dkim_selectors: None,
         };
         let result = backend.run("example.com", &context).await;
         assert!(

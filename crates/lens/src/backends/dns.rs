@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::net::IpAddr;
 use std::time::Duration;
 
-use futures::StreamExt;
 use serde_json::Value;
 use tracing::Instrument;
 
@@ -139,7 +138,7 @@ async fn check_dns_inner(
     }
 
     // Collect SSE events until "done" or timeout.
-    let events = tokio::time::timeout(timeout, collect_sse(resp))
+    let events = tokio::time::timeout(timeout, super::sse::collect(resp, "done"))
         .await
         .map_err(|_| {
             tracing::warn!(service = "prism", url = %url, error = "stream timeout", "backend call failed");
@@ -155,62 +154,6 @@ async fn check_dns_inner(
 
     tracing::debug!(service = "prism", url = %url, events = events.len(), "backend call succeeded");
     parse_events(events, domain, dns_url)
-}
-
-// ---------------------------------------------------------------------------
-// SSE stream reader
-// ---------------------------------------------------------------------------
-
-/// Read an SSE stream from a reqwest response.
-///
-/// Returns events as `{"type": "...", "data": {...}}` values — the same shape
-/// the former `stream=false` CollectedResponse used, so `parse_events` works
-/// without changes.
-async fn collect_sse(resp: reqwest::Response) -> Result<Vec<Value>, String> {
-    let mut stream = resp.bytes_stream();
-    let mut buf = String::new();
-    let mut events: Vec<Value> = Vec::new();
-    let mut cur_type = String::new();
-    let mut cur_data = String::new();
-
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| e.to_string())?;
-        buf.push_str(&String::from_utf8_lossy(&chunk));
-
-        loop {
-            match buf.find('\n') {
-                None => break,
-                Some(pos) => {
-                    let line = buf[..pos].trim_end_matches('\r').to_string();
-                    buf = buf[pos + 1..].to_string();
-
-                    if line.is_empty() {
-                        // Blank line = dispatch current event.
-                        if !cur_data.is_empty()
-                            && let Ok(data) = serde_json::from_str::<Value>(&cur_data)
-                        {
-                            let done = cur_type == "done";
-                            events.push(serde_json::json!({
-                                "type": cur_type,
-                                "data": data,
-                            }));
-                            if done {
-                                return Ok(events);
-                            }
-                        }
-                        cur_type.clear();
-                        cur_data.clear();
-                    } else if let Some(rest) = line.strip_prefix("event: ") {
-                        cur_type = rest.to_string();
-                    } else if let Some(rest) = line.strip_prefix("data: ") {
-                        cur_data = rest.to_string();
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(events)
 }
 
 // ---------------------------------------------------------------------------
@@ -332,15 +275,22 @@ fn collect_ips_from_batch(
 
 /// Parse a lint event and return a single CheckResult representing the worst verdict.
 ///
-/// All non-passing messages (warn, fail, not-found) are collected and attached to
-/// the result so the frontend can show the user why points were deducted.
+/// Email-security categories (spf, dmarc, mta_sts, tlsrpt, bimi, mx) are handled by
+/// the email backend. DNS lint events for those categories are ignored here.
 ///
 /// Lint event data shape:
 /// ```json
-/// { "category": "spf", "results": [ {"Ok": "msg"} | {"Warning": "msg"} | {"Failed": "msg"} | {"NotFound": null} ] }
+/// { "category": "dnssec", "results": [ {"Ok": "msg"} | {"Warning": "msg"} | {"Failed": "msg"} | {"NotFound": null} ] }
 /// ```
 fn parse_lint_event(data: &Value) -> Option<CheckResult> {
     let category = data.get("category").and_then(|v| v.as_str())?;
+
+    // Email checks are owned by the email backend; skip them here.
+    const EMAIL_CATEGORIES: &[&str] = &["spf", "dmarc", "mta_sts", "tlsrpt", "bimi", "mx"];
+    if EMAIL_CATEGORIES.contains(&category) {
+        return None;
+    }
+
     let results = data.get("results").and_then(|v| v.as_array())?;
 
     let mut worst = CheckVerdict::Pass;
@@ -403,11 +353,9 @@ fn classify_lint_result(result: &Value) -> (CheckVerdict, Option<String>) {
 }
 
 /// Build a summary headline from the collected checks.
-///
-/// Shows the key email-security checks in order: SPF, DMARC, DNSSEC, MTA-STS.
 fn build_headline(checks: &[CheckResult]) -> String {
-    let keys = ["spf", "dmarc", "dnssec", "mta_sts"];
-    let labels = ["SPF", "DMARC", "DNSSEC", "MTA-STS"];
+    let keys = ["dnssec", "caa", "ns", "cname_apex"];
+    let labels = ["DNSSEC", "CAA", "NS", "CNAME-apex"];
 
     let parts: Vec<String> = keys
         .iter()

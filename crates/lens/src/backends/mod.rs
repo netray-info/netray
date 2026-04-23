@@ -1,8 +1,11 @@
 pub mod dns;
+pub mod email;
 pub mod http;
 pub mod ip;
+pub mod sse;
 pub mod tls;
 
+use std::collections::HashMap;
 use std::net::IpAddr;
 
 use crate::check::SectionError;
@@ -35,6 +38,13 @@ pub enum BackendExtra {
         raw_headline: String,
         detail_url: String,
     },
+    Email {
+        raw_headline: String,
+        detail_url: String,
+        grade: Option<String>,
+        /// Bucket name → reason for buckets that are not-applicable (e.g. no MX records).
+        bucket_na: HashMap<String, String>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -47,6 +57,8 @@ pub struct BackendResult {
 #[derive(Clone)]
 pub struct BackendContext {
     pub resolved_ips: Vec<IpAddr>,
+    /// Validated DKIM selectors forwarded to the email backend.
+    pub dkim_selectors: Option<Vec<String>>,
 }
 
 /// Minimal percent-encoding for query string values (RFC 3986 unreserved set).
