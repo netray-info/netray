@@ -183,6 +183,7 @@ export default function App() {
     ...(tls()?.checks ?? []),
     ...(dns()?.checks ?? []),
     ...(http()?.checks ?? []),
+    ...(email()?.checks ?? []),
     ...(ip()?.checks ?? []),
   ];
 

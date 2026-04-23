@@ -189,27 +189,14 @@ pub struct IpEvent {
 }
 
 #[derive(Serialize, ToSchema)]
-pub struct EmailBucketEvent {
-    pub verdict: String,
-    pub messages: Vec<String>,
-    pub not_applicable: bool,
-}
-
-#[derive(Serialize, ToSchema)]
 pub struct EmailEvent {
-    pub status: String,
+    #[schema(value_type = String)]
+    pub status: &'static str,
+    pub headline: String,
+    pub checks: Vec<CheckItem>,
+    pub detail_url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grade: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub buckets: Option<HashMap<String, EmailBucketEvent>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub headline: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub detail_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -893,63 +880,40 @@ fn ip_payload_from(
     }
 }
 
-fn email_payload_from(result: &Result<BackendResult, SectionError>) -> EmailEvent {
+fn email_payload_from(
+    result: &Result<BackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> EmailEvent {
+    let status = section_status_from_checks(result);
     match result {
         Err(SectionError::NotApplicable { reason }) => EmailEvent {
-            status: "not_applicable".to_string(),
+            status,
+            headline: format!("unavailable ({})", reason),
+            checks: vec![],
+            detail_url: String::new(),
             grade: None,
-            buckets: None,
-            headline: None,
-            detail_url: None,
-            error: None,
-            reason: Some(reason.clone()),
         },
         Err(e) => EmailEvent {
-            status: "error".to_string(),
+            status,
+            headline: error_headline(e),
+            checks: vec![],
+            detail_url: String::new(),
             grade: None,
-            buckets: None,
-            headline: None,
-            detail_url: None,
-            error: Some(error_headline(e)),
-            reason: None,
         },
         Ok(r) => {
-            let (raw_headline, detail_url, grade, bucket_na) = match &r.extra {
-                BackendExtra::Email {
-                    raw_headline,
-                    detail_url,
-                    grade,
-                    bucket_na,
-                } => (
-                    raw_headline.clone(),
-                    detail_url.clone(),
-                    grade.clone(),
-                    bucket_na.clone(),
-                ),
-                _ => (String::new(), String::new(), None, HashMap::new()),
+            let items = build_check_items(&r.checks, weights);
+            let (raw_headline, detail_url, grade) = match &r.extra {
+                BackendExtra::Email { raw_headline, detail_url, grade, .. } => {
+                    (raw_headline.clone(), detail_url.clone(), grade.clone())
+                }
+                _ => (String::new(), String::new(), None),
             };
-
-            let mut buckets: HashMap<String, EmailBucketEvent> = HashMap::new();
-            for check in &r.checks {
-                let not_applicable = bucket_na.contains_key(&check.name);
-                buckets.insert(
-                    check.name.clone(),
-                    EmailBucketEvent {
-                        verdict: verdict_str(&check.verdict).to_string(),
-                        messages: check.messages.clone(),
-                        not_applicable,
-                    },
-                );
-            }
-
             EmailEvent {
-                status: section_status_from_checks(result).to_string(),
+                status,
+                headline: raw_headline,
+                checks: items,
+                detail_url,
                 grade,
-                buckets: Some(buckets),
-                headline: Some(raw_headline),
-                detail_url: Some(detail_url),
-                error: None,
-                reason: None,
             }
         }
     }
@@ -1053,8 +1017,11 @@ fn ip_event_from(
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
-fn email_event_from(result: &Result<BackendResult, SectionError>) -> Event {
-    let payload = email_payload_from(result);
+fn email_event_from(
+    result: &Result<BackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> Event {
+    let payload = email_payload_from(result, weights);
     Event::default()
         .event("email")
         .data(serde_json::to_string(&payload).unwrap_or_default())
@@ -1108,6 +1075,11 @@ fn build_sse_events(
         .get("ip")
         .map(|s| &s.checks)
         .unwrap_or(&empty_checks);
+    let email_checks = profile
+        .sections
+        .get("email")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
     let mut events = vec![
         dns_event_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
         tls_event_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
@@ -1116,7 +1088,7 @@ fn build_sse_events(
         events.push(http_event_from(http_result, http_checks));
     }
     if let Some(email_result) = output.sections.get("email") {
-        events.push(email_event_from(email_result));
+        events.push(email_event_from(email_result, email_checks));
     }
     events.push(ip_event_from(
         output.sections.get("ip").unwrap_or(&empty_err),
@@ -1198,6 +1170,11 @@ fn build_sync_response(
         .get("ip")
         .map(|s| &s.checks)
         .unwrap_or(&empty_checks);
+    let email_checks = profile
+        .sections
+        .get("email")
+        .map(|s| &s.checks)
+        .unwrap_or(&empty_checks);
     let duration_ms = output.duration_ms;
     let response = SyncCheckResponse {
         dns: dns_payload_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
@@ -1206,7 +1183,10 @@ fn build_sync_response(
             .sections
             .get("http")
             .map(|r| http_payload_from(r, http_checks)),
-        email: output.sections.get("email").map(email_payload_from),
+        email: output
+            .sections
+            .get("email")
+            .map(|r| email_payload_from(r, email_checks)),
         ip: ip_payload_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
         summary: summary_payload_from(&output.sections, &output.score, &profile.thresholds),
         done: done_payload(&domain, duration_ms, cached),

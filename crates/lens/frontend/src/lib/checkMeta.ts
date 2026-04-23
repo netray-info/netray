@@ -46,6 +46,11 @@ export const CHECK_LABELS: Record<string, string> = {
   cors: 'CORS Policy',
   cookie_secure: 'Secure Cookies',
   hygiene: 'Header Hygiene',
+  // Email
+  email_authentication: 'Authentication',
+  email_infrastructure: 'Infrastructure',
+  email_transport: 'Transport',
+  email_brand_policy: 'Brand Policy',
   // IP
   reputation: 'IP Reputation',
 };
@@ -98,6 +103,11 @@ export const CHECK_DESCRIPTIONS: Record<string, string> = {
   cors: 'CORS policy should not allow arbitrary origins in production APIs',
   cookie_secure: 'Session cookies must have the Secure and HttpOnly attributes',
   hygiene: 'Deprecated headers, information leakage, caching directives, and redirect loops',
+  // Email
+  email_authentication: 'SPF, DKIM, and DMARC — applies to every domain regardless of whether it receives mail',
+  email_infrastructure: 'MX records, forward-confirmed reverse DNS, and DNSBL — receiving infrastructure',
+  email_transport: 'MTA-STS, TLS-RPT, and DANE — enforces encrypted and authenticated inbound delivery',
+  email_brand_policy: 'BIMI and DMARC enforcement policy — brand display and strict rejection of spoofed mail',
   // IP
   reputation: 'IP reputation: VPNs warn, Tor exit nodes and known C2 hosts fail',
 };
