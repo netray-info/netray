@@ -55,7 +55,14 @@ const WAVE2_SECTIONS: &[&str] = &["ip"];
 /// 4. Each section independently captures errors — one failure never aborts the others.
 /// 5. Score is computed from whatever results are available.
 pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
-    run_check_with_input(state, CheckInput { domain: domain.to_string(), dkim_selectors: None }).await
+    run_check_with_input(
+        state,
+        CheckInput {
+            domain: domain.to_string(),
+            dkim_selectors: None,
+        },
+    )
+    .await
 }
 
 pub async fn run_check_with_input(state: &AppState, input: CheckInput) -> CheckOutput {
@@ -126,7 +133,10 @@ async fn run_backends_with_input(state: &AppState, input: &CheckInput) -> CheckO
         .unwrap_or_default();
 
     // Wave 2: run after wave 1.
-    let wave2_context = BackendContext { resolved_ips, dkim_selectors: None };
+    let wave2_context = BackendContext {
+        resolved_ips,
+        dkim_selectors: None,
+    };
     for backend in state.backends.iter() {
         if WAVE2_SECTIONS.contains(&backend.section()) {
             let result = backend.run(domain, &wave2_context).await;
@@ -170,7 +180,9 @@ fn section_input_from_result(result: &Result<BackendResult, SectionError>) -> Se
         },
         Err(SectionError::NotApplicable { reason }) => SectionInput {
             checks: vec![],
-            status: SectionStatus::NotApplicable { reason: reason.clone() },
+            status: SectionStatus::NotApplicable {
+                reason: reason.clone(),
+            },
         },
         Err(_) => SectionInput {
             checks: vec![],

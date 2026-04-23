@@ -130,9 +130,15 @@ async fn check_email(
 
     let bucket_na: HashMap<String, String> = if no_mx {
         [
-            ("email_infrastructure".to_string(), "no MX records".to_string()),
+            (
+                "email_infrastructure".to_string(),
+                "no MX records".to_string(),
+            ),
             ("email_transport".to_string(), "no MX records".to_string()),
-            ("email_brand_policy".to_string(), "no MX records".to_string()),
+            (
+                "email_brand_policy".to_string(),
+                "no MX records".to_string(),
+            ),
         ]
         .into_iter()
         .collect()
@@ -222,7 +228,11 @@ pub fn parse_summary(events: &[Value]) -> Result<BeaconSummary, SectionError> {
                     .get("message")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-                categories.push(CategoryVerdict { name: name.clone(), verdict, message });
+                categories.push(CategoryVerdict {
+                    name: name.clone(),
+                    verdict,
+                    message,
+                });
             }
         } else if let Some(arr) = cats.as_array() {
             // Array form: [{"name": "spf", "verdict": "Pass", ...}, ...]
@@ -240,7 +250,11 @@ pub fn parse_summary(events: &[Value]) -> Result<BeaconSummary, SectionError> {
                     .get("message")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-                categories.push(CategoryVerdict { name, verdict, message });
+                categories.push(CategoryVerdict {
+                    name,
+                    verdict,
+                    message,
+                });
             }
         }
     }
@@ -267,9 +281,11 @@ const BUCKET_BRAND: &[&str] = &["bimi", "dmarc_policy"];
 
 /// Map beacon's per-category verdicts into four scored CheckResults.
 pub fn map_buckets(summary: &BeaconSummary, no_mx: bool) -> Vec<CheckResult> {
-    let mut results = vec![
-        aggregate_bucket("email_authentication", BUCKET_AUTH, summary),
-    ];
+    let mut results = vec![aggregate_bucket(
+        "email_authentication",
+        BUCKET_AUTH,
+        summary,
+    )];
 
     if no_mx {
         let na_msg = "No MX records — email receiving not configured".to_string();
@@ -289,9 +305,21 @@ pub fn map_buckets(summary: &BeaconSummary, no_mx: bool) -> Vec<CheckResult> {
             messages: vec![na_msg],
         });
     } else {
-        results.push(aggregate_bucket("email_infrastructure", BUCKET_INFRA, summary));
-        results.push(aggregate_bucket("email_transport", BUCKET_TRANSPORT, summary));
-        results.push(aggregate_bucket("email_brand_policy", BUCKET_BRAND, summary));
+        results.push(aggregate_bucket(
+            "email_infrastructure",
+            BUCKET_INFRA,
+            summary,
+        ));
+        results.push(aggregate_bucket(
+            "email_transport",
+            BUCKET_TRANSPORT,
+            summary,
+        ));
+        results.push(aggregate_bucket(
+            "email_brand_policy",
+            BUCKET_BRAND,
+            summary,
+        ));
     }
 
     results
@@ -392,12 +420,9 @@ mod tests {
     use serde_json::json;
 
     fn load_fixture(name: &str) -> Value {
-        let path = format!(
-            "{}/tests/email_fixtures/{name}",
-            env!("CARGO_MANIFEST_DIR")
-        );
-        let contents = std::fs::read_to_string(&path)
-            .unwrap_or_else(|_| panic!("fixture not found: {path}"));
+        let path = format!("{}/tests/email_fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+        let contents =
+            std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("fixture not found: {path}"));
         serde_json::from_str(&contents).expect("fixture must be valid JSON")
     }
 
@@ -418,9 +443,15 @@ mod tests {
         let checks = map_buckets(&summary, no_mx);
         let bucket_na: HashMap<String, String> = if no_mx {
             [
-                ("email_infrastructure".to_string(), "no MX records".to_string()),
+                (
+                    "email_infrastructure".to_string(),
+                    "no MX records".to_string(),
+                ),
                 ("email_transport".to_string(), "no MX records".to_string()),
-                ("email_brand_policy".to_string(), "no MX records".to_string()),
+                (
+                    "email_brand_policy".to_string(),
+                    "no MX records".to_string(),
+                ),
             ]
             .into_iter()
             .collect()
@@ -455,7 +486,9 @@ mod tests {
             );
         }
         match &result.extra {
-            BackendExtra::Email { bucket_na, grade, .. } => {
+            BackendExtra::Email {
+                bucket_na, grade, ..
+            } => {
                 assert!(bucket_na.is_empty(), "no MX N/A expected for mail domain");
                 assert_eq!(grade.as_deref(), Some("A"));
             }
@@ -468,12 +501,27 @@ mod tests {
         let result = run_fixture("no_mx.json").expect("fixture must succeed");
         let checks = &result.checks;
 
-        let auth = checks.iter().find(|c| c.name == "email_authentication").unwrap();
-        assert_eq!(auth.verdict, CheckVerdict::Pass, "auth should pass in no-MX scenario");
+        let auth = checks
+            .iter()
+            .find(|c| c.name == "email_authentication")
+            .unwrap();
+        assert_eq!(
+            auth.verdict,
+            CheckVerdict::Pass,
+            "auth should pass in no-MX scenario"
+        );
 
-        for bucket in &["email_infrastructure", "email_transport", "email_brand_policy"] {
+        for bucket in &[
+            "email_infrastructure",
+            "email_transport",
+            "email_brand_policy",
+        ] {
             let check = checks.iter().find(|c| c.name == *bucket).unwrap();
-            assert_eq!(check.verdict, CheckVerdict::Skip, "{bucket} must be Skip when no MX");
+            assert_eq!(
+                check.verdict,
+                CheckVerdict::Skip,
+                "{bucket} must be Skip when no MX"
+            );
             assert!(
                 check.messages.iter().any(|m| m.contains("No MX")),
                 "{bucket} must have N/A message"
@@ -514,9 +562,6 @@ mod tests {
             CheckVerdict::Warn,
             "worst of Pass/Warn/Pass must be Warn"
         );
-        assert!(
-            !auth.messages.is_empty(),
-            "warn bucket must carry messages"
-        );
+        assert!(!auth.messages.is_empty(), "warn bucket must carry messages");
     }
 }

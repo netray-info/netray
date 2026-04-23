@@ -168,7 +168,7 @@ async fn check_ip_inner(
     let mut worst_verdict = CheckVerdict::Pass;
     let mut reputation_messages: Vec<String> = Vec::new();
 
-    for (ip, maybe_resp) in capped.iter().zip(responses.into_iter()) {
+    for (ip, maybe_resp) in capped.iter().zip(responses) {
         let entry = match maybe_resp {
             Some(resp) if resp.status().is_success() => resp.json::<EnrichmentEntry>().await.ok(),
             _ => None,

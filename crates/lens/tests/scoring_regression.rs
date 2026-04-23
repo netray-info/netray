@@ -1,4 +1,6 @@
-use lens::scoring::engine::{CheckResult, CheckVerdict, SectionInput, SectionStatus, compute_score};
+use lens::scoring::engine::{
+    CheckResult, CheckVerdict, SectionInput, SectionStatus, compute_score,
+};
 use lens::scoring::profile::ScoringProfile;
 /// Pure unit regression tests for the scoring engine.
 ///
@@ -438,9 +440,21 @@ fn email_no_mx() -> SectionInput {
     // Authentication passes; infra/transport/brand are Skip (no MX records).
     no_error(vec![
         pass("email_authentication"),
-        CheckResult { name: "email_infrastructure".to_string(), verdict: CheckVerdict::Skip, messages: vec![] },
-        CheckResult { name: "email_transport".to_string(),      verdict: CheckVerdict::Skip, messages: vec![] },
-        CheckResult { name: "email_brand_policy".to_string(),   verdict: CheckVerdict::Skip, messages: vec![] },
+        CheckResult {
+            name: "email_infrastructure".to_string(),
+            verdict: CheckVerdict::Skip,
+            messages: vec![],
+        },
+        CheckResult {
+            name: "email_transport".to_string(),
+            verdict: CheckVerdict::Skip,
+            messages: vec![],
+        },
+        CheckResult {
+            name: "email_brand_policy".to_string(),
+            verdict: CheckVerdict::Skip,
+            messages: vec![],
+        },
     ])
 }
 
@@ -466,7 +480,10 @@ fn all_inputs_with_email(email: SectionInput) -> HashMap<String, SectionInput> {
 fn email_full_pass_scores_a_plus() {
     let profile = default_profile();
     let result = compute_score(&profile, &all_inputs_with_email(email_all_pass()));
-    assert_eq!(result.grade, "A+", "all-pass including email should produce A+");
+    assert_eq!(
+        result.grade, "A+",
+        "all-pass including email should produce A+"
+    );
     assert!(
         result.not_applicable.is_empty(),
         "not_applicable must be empty for all-Scored email section"
@@ -489,11 +506,17 @@ fn email_no_mx_scored_on_auth_only() {
     );
     let email_score = &result.sections["email"];
     // Only email_authentication weight=10 is non-Skip; infra/transport/brand are Skip → excluded
-    assert_eq!(email_score.possible, 10, "possible=10: authentication weight only");
+    assert_eq!(
+        email_score.possible, 10,
+        "possible=10: authentication weight only"
+    );
     assert_eq!(email_score.earned, 10);
     assert!((email_score.percentage - 100.0).abs() < 0.001);
     // Auth passes → no penalty → A+
-    assert_eq!(result.grade, "A+", "no-MX domain with passing auth must not drop below A+");
+    assert_eq!(
+        result.grade, "A+",
+        "no-MX domain with passing auth must not drop below A+"
+    );
 }
 
 // SR3: Auth fail → grade drops via email section; dns section unaffected (auth is no longer in DNS)
@@ -509,8 +532,7 @@ fn email_auth_fail_lowers_grade_not_via_dns() {
     assert_ne!(
         result.grade, "A+",
         "auth fail must drop below A+, got {} (overall={:.1})",
-        result.grade,
-        result.overall_percentage,
+        result.grade, result.overall_percentage,
     );
     // And the overall is measurably lower than 100%
     assert!(
@@ -519,7 +541,10 @@ fn email_auth_fail_lowers_grade_not_via_dns() {
         result.overall_percentage,
     );
     // No hard-fail triggered (email hard_fail = [] in v1)
-    assert!(!result.hard_fail_triggered, "email auth fail must not trigger hard_fail in v1");
+    assert!(
+        !result.hard_fail_triggered,
+        "email auth fail must not trigger hard_fail in v1"
+    );
     // DNS section still 100% — auth is now in email backend
     let dns_score = &result.sections["dns"];
     assert!(
@@ -542,8 +567,14 @@ fn email_backend_errored_excluded_from_overall() {
     map.insert("ip".to_string(), ip);
 
     let result = compute_score(&profile, &map);
-    assert!(!result.sections.contains_key("email"), "errored email must be absent from sections");
-    assert!(result.not_applicable.is_empty(), "errored section must not populate not_applicable");
+    assert!(
+        !result.sections.contains_key("email"),
+        "errored email must be absent from sections"
+    );
+    assert!(
+        result.not_applicable.is_empty(),
+        "errored section must not populate not_applicable"
+    );
     // Remaining sections all pass → A+
     assert_eq!(result.grade, "A+");
     assert!(result.overall_percentage > 0.0);
@@ -555,7 +586,9 @@ fn email_not_applicable_recorded_and_excluded() {
     let profile = default_profile();
     let mut map = all_inputs_with_email(SectionInput {
         checks: vec![],
-        status: SectionStatus::NotApplicable { reason: "beacon timeout".to_string() },
+        status: SectionStatus::NotApplicable {
+            reason: "beacon timeout".to_string(),
+        },
     });
     let (dns, tls, ip) = all_pass(&profile);
     map.insert("dns".to_string(), dns);
@@ -563,7 +596,10 @@ fn email_not_applicable_recorded_and_excluded() {
     map.insert("ip".to_string(), ip);
 
     let result = compute_score(&profile, &map);
-    assert!(!result.sections.contains_key("email"), "N/A email must be absent from sections");
+    assert!(
+        !result.sections.contains_key("email"),
+        "N/A email must be absent from sections"
+    );
     assert_eq!(
         result.not_applicable.get("email").map(|s| s.as_str()),
         Some("beacon timeout"),
@@ -571,4 +607,3 @@ fn email_not_applicable_recorded_and_excluded() {
     );
     assert_eq!(result.grade, "A+");
 }
-

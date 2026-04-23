@@ -77,7 +77,9 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
         }
         "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
         // Email buckets
-        "email_authentication" | "email_infrastructure" | "email_transport"
+        "email_authentication"
+        | "email_infrastructure"
+        | "email_transport"
         | "email_brand_policy" => Some("https://netray.info/guide/email-auth"),
         // IP
         "reputation" => Some("https://netray.info/guide/ip-enrichment"),
@@ -114,7 +116,9 @@ fn validate_dkim_selectors(raw: Option<&str>) -> Result<Option<Vec<String>>, Str
 
     for token in &tokens {
         if token.len() > 63 {
-            return Err(format!("dkim_selectors: selector '{token}' exceeds 63 characters"));
+            return Err(format!(
+                "dkim_selectors: selector '{token}' exceeds 63 characters"
+            ));
         }
         if !token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
             return Err(format!(
@@ -608,21 +612,27 @@ async fn run_check_handler(
 
     // 3. Cache lookup (only when no per-request options like dkim_selectors).
     let key = cache_key(&domain);
-    if dkim_selectors.is_none() {
-        if let Some(cache) = &state.cache
-            && let Some(cached) = cache.get(&key).await
-            && is_fresh(&cached, state.config.cache.ttl_seconds)
-        {
-            return if sync {
-                sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
-            } else {
-                sse_response_from_cached(domain, &cached, true, &state.scoring_profile)
-            };
-        }
+    if dkim_selectors.is_none()
+        && let Some(cache) = &state.cache
+        && let Some(cached) = cache.get(&key).await
+        && is_fresh(&cached, state.config.cache.ttl_seconds)
+    {
+        return if sync {
+            sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
+        } else {
+            sse_response_from_cached(domain, &cached, true, &state.scoring_profile)
+        };
     }
 
     // 4. Run check.
-    let output = run_check_with_input(&state, CheckInput { domain: domain.clone(), dkim_selectors }).await;
+    let output = run_check_with_input(
+        &state,
+        CheckInput {
+            domain: domain.clone(),
+            dkim_selectors,
+        },
+    )
+    .await;
     let duration_ms = output.duration_ms;
     let domain_out = output.domain.clone();
 
@@ -903,9 +913,12 @@ fn email_payload_from(
         Ok(r) => {
             let items = build_check_items(&r.checks, weights);
             let (raw_headline, detail_url, grade) = match &r.extra {
-                BackendExtra::Email { raw_headline, detail_url, grade, .. } => {
-                    (raw_headline.clone(), detail_url.clone(), grade.clone())
-                }
+                BackendExtra::Email {
+                    raw_headline,
+                    detail_url,
+                    grade,
+                    ..
+                } => (raw_headline.clone(), detail_url.clone(), grade.clone()),
                 _ => (String::new(), String::new(), None),
             };
             EmailEvent {
@@ -2112,10 +2125,7 @@ pub mod tests {
     #[test]
     fn dkim_selectors_hyphen_allowed() {
         let result = validate_dkim_selectors(Some("my-selector-2024"));
-        assert_eq!(
-            result,
-            Ok(Some(vec!["my-selector-2024".to_string()])),
-        );
+        assert_eq!(result, Ok(Some(vec!["my-selector-2024".to_string()])),);
     }
 
     #[test]

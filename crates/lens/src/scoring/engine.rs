@@ -292,7 +292,9 @@ mod tests {
     fn not_applicable(reason: &str) -> SectionInput {
         SectionInput {
             checks: vec![],
-            status: SectionStatus::NotApplicable { reason: reason.to_string() },
+            status: SectionStatus::NotApplicable {
+                reason: reason.to_string(),
+            },
         }
     }
 
@@ -499,13 +501,13 @@ mod tests {
             no_error(vec![pass("chain_trusted")]),
             no_error(vec![pass("reputation")]),
         );
-        all_inputs.insert(
-            "email".to_string(),
-            not_applicable("beacon timeout"),
-        );
+        all_inputs.insert("email".to_string(), not_applicable("beacon timeout"));
 
         let result = compute_score(&profile, &all_inputs);
-        assert!(!result.sections.contains_key("email"), "N/A section must not appear in sections");
+        assert!(
+            !result.sections.contains_key("email"),
+            "N/A section must not appear in sections"
+        );
         assert_eq!(
             result.not_applicable.get("email").map(|s| s.as_str()),
             Some("beacon timeout"),
