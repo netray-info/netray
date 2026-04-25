@@ -72,8 +72,3 @@ path = "tests/reference_domains.rs"
 [[test]]
 name = "scoring_regression"
 path = "tests/scoring_regression.rs"
-
-# Local development override — uses the side-by-side netray-common checkout
-# until 0.8.0 is published to crates.io. Remove this block once published.
-[patch.crates-io]
-netray-common = { path = "../netray-common" }
