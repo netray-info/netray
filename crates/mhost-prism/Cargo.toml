@@ -7,7 +7,7 @@ description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
 mhost = { version = "0.11", default-features = false, features = ["dot", "doh"] }
-netray-common = { version = "0.7.0", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment-cache", "backend"] }
+netray-common = { version = "0.8", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment-cache", "backend"] }
 
 # Web framework
 axum = { version = "0.8", features = ["json"] }
@@ -65,3 +65,7 @@ tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 serde_json = "1"
 
+# Local development override — uses the side-by-side netray-common checkout
+# until 0.8.0 is published to crates.io. Remove this block once published.
+[patch.crates-io]
+netray-common = { path = "../netray-common" }

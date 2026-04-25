@@ -164,6 +164,56 @@ pub struct ClientConfig {
     ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
 }
 
+/// Suite-wide `/api/meta` endpoint returning the shared
+/// [`netray_common::ecosystem::EcosystemMeta`] payload (project-review SDD Req 8).
+#[utoipa::path(
+    get, path = "/api/meta",
+    tag = "Metadata",
+    responses(
+        (status = 200, description = "Service metadata (EcosystemMeta)", body = netray_common::ecosystem::EcosystemMeta),
+    )
+)]
+pub async fn meta(State(state): State<AppState>) -> Json<netray_common::ecosystem::EcosystemMeta> {
+    use netray_common::ecosystem::{EcosystemMeta, EcosystemUrls, RateLimitSummary};
+    use serde_json::{Map, Value};
+
+    let cfg = &state.config;
+
+    let mut features = Map::new();
+    features.insert(
+        "ip_enrichment".into(),
+        Value::Bool(state.ip_enrichment.is_some()),
+    );
+
+    let mut limits = Map::new();
+    limits.insert(
+        "max_record_types".into(),
+        Value::from(cfg.limits.max_record_types as u64),
+    );
+    limits.insert(
+        "max_servers".into(),
+        Value::from(cfg.limits.max_servers as u64),
+    );
+    limits.insert(
+        "max_timeout_secs".into(),
+        Value::from(cfg.limits.max_timeout_secs),
+    );
+
+    Json(EcosystemMeta {
+        site_name: cfg.site_name.clone(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        ecosystem: EcosystemUrls::from(&cfg.ecosystem),
+        features,
+        limits,
+        rate_limit: RateLimitSummary {
+            per_ip_per_minute: cfg.limits.per_ip_per_minute,
+            per_ip_burst: cfg.limits.per_ip_burst,
+            global_per_minute: 0,
+            global_burst: 0,
+        },
+    })
+}
+
 /// Returns client-facing configuration (e.g. site name, ifconfig URL for IP links).
 #[utoipa::path(
     get, path = "/api/config",

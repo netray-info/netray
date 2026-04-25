@@ -122,6 +122,7 @@ pub struct AppState {
         meta::health,
         meta::ready,
         meta::client_config,
+        meta::meta,
     ),
     components(schemas(
         query::PostQueryRequest,
@@ -138,6 +139,9 @@ pub struct AppState {
         meta::ServerConfigInfo,
         meta::RecordTypeInfo,
         meta::ClientConfig,
+        netray_common::ecosystem::EcosystemMeta,
+        netray_common::ecosystem::EcosystemUrls,
+        netray_common::ecosystem::RateLimitSummary,
         crate::result_cache::CachedResult,
         crate::result_cache::CachedEvent,
         ErrorResponse,
@@ -198,6 +202,7 @@ pub fn api_router(state: AppState) -> Router {
         .route("/api/servers", get(meta::servers))
         .route("/api/record-types", get(meta::record_types))
         .route("/api/config", get(meta::client_config))
+        .route("/api/meta", get(meta::meta))
         .route("/api/check", post(check::post_handler))
         .route("/api/trace", post(trace::post_handler))
         .route("/api/dnssec", post(dnssec::post_handler))
