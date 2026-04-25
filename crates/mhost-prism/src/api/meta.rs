@@ -66,7 +66,10 @@ pub async fn ready(State(state): State<AppState>) -> (StatusCode, Json<ReadyResp
     if let Some(ref client) = state.ip_enrichment {
         let reachable = probe_tcp(client.base_url()).await;
         if !reachable {
-            warnings.push(format!("enrichment service unreachable: {}", client.base_url()));
+            warnings.push(format!(
+                "enrichment service unreachable: {}",
+                client.base_url()
+            ));
         }
     }
 
