@@ -322,10 +322,7 @@ async fn meta_handler(
         "max_user_dkim_selectors".into(),
         Value::from(cfg.dkim.max_user_selectors),
     );
-    limits.insert(
-        "dns_timeout_ms".into(),
-        Value::from(cfg.dns.timeout_ms),
-    );
+    limits.insert("dns_timeout_ms".into(), Value::from(cfg.dns.timeout_ms));
 
     // Beacon's RateLimitConfig stores per_ip as a "<n>/<unit>" string. Parse
     // it into a per-minute rate; fall back to 0 on unrecognised formats.
