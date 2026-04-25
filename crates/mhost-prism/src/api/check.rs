@@ -1187,10 +1187,8 @@ fn parse_mta_sts_policy(text: &str) -> Result<MtaStsPolicy, String> {
                 }
                 max_age = Some(n);
             }
-            "mx" => {
-                if !value.is_empty() {
-                    mx_patterns.push(value.trim_end_matches('.').to_lowercase());
-                }
+            "mx" if !value.is_empty() => {
+                mx_patterns.push(value.trim_end_matches('.').to_lowercase());
             }
             _ => {} // ignore extension fields per RFC 8461 §3.2
         }

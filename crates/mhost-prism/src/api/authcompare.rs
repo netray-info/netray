@@ -238,8 +238,8 @@ pub async fn post_handler(
 
         // Build auth server list (IPv4 only, port 53).
         let auth_servers: Vec<SocketAddr> = ns_ips
-            .iter()
-            .flat_map(|(_, ips)| ips.iter().filter(|ip| ip.is_ipv4()).copied())
+            .values()
+            .flat_map(|ips| ips.iter().filter(|ip| ip.is_ipv4()).copied())
             .map(|ip| SocketAddr::new(ip, 53))
             .collect();
 
