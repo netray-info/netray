@@ -1,12 +1,15 @@
+@import '@netray-info/common-frontend/styles/theme.css';
+@import '@netray-info/common-frontend/styles/reset.css';
+@import '@netray-info/common-frontend/styles/layout.css';
+@import '@netray-info/common-frontend/styles/components.css';
+
 /* ================================================================
    beacon — project-specific styles
    ================================================================ */
 
 :root {
-  --pass: #22c55e;
-  --warn: #f59e0b;
-  --fail: #ef4444;
-  --skip: #94a3b8;
+  /* beacon-only tokens. --pass/--warn/--fail/--skip come from
+     @netray-info/common-frontend/styles/theme.css (shared across the suite). */
   --info: #3b82f6;
   --mono: var(--font-mono);
   --sans: var(--font-sans);
@@ -15,10 +18,6 @@
 }
 
 [data-theme="light"] {
-  --pass: #008800;
-  --warn: #b86e00;
-  --fail: #cc0000;
-  --skip: #4a5568;
   --info: #1d6cc8;
   --explain-bg: rgba(29, 108, 200, 0.06);
   --explain-border: rgba(29, 108, 200, 0.18);
