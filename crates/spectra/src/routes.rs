@@ -207,7 +207,10 @@ async fn meta_handler(
         "total_timeout_secs".into(),
         json!(state.config.inspect.total_timeout_secs),
     );
-    limits.insert("max_redirects".into(), json!(state.config.inspect.max_redirects));
+    limits.insert(
+        "max_redirects".into(),
+        json!(state.config.inspect.max_redirects),
+    );
     limits.insert(
         "max_concurrent_connections".into(),
         json!(limits_cfg.max_concurrent_connections),
