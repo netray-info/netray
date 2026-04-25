@@ -1,19 +1,7 @@
 # CLAUDE.md — tlsight
 
-## Rules
+## Tool-specific principles
 
-- No Co-Authored-By for Claude in commits
-- Scoped changes only: no formatting mixed with functional changes, no unrelated modifications
-- No heavy deps for minor convenience; no speculative flags/config/abstractions without a caller
-- Don't bypass failing checks (`--no-verify`, `#[allow(...)]`) without explaining why
-- No PII, real emails, or real domains (use example.com) in test data, docs, commits
-- `TODO("reason")` over hidden guesses; conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
-
-## Engineering Principles
-
-KISS · YAGNI · DRY (rule of three) · SRP · Fail Fast · Reversibility · Performance
-
-- **Rust patterns**: Use idiomatic Rust (enums, traits, iterators). Leverage the type system to prevent invalid states.
 - **Secure by Default**: This service makes outbound TCP+TLS connections to user-specified targets -- security is load-bearing (see SDD S8).
 
 ## Project Overview
@@ -24,46 +12,7 @@ KISS · YAGNI · DRY (rule of three) · SRP · Fail Fast · Reversibility · Per
 - **Repository**: Standalone repo. Depends on `mhost` as a published crate (no `app` feature).
 - **SDD**: `docs/done/sdd-2026-03-08.md` — the original design document (archived). Active design docs live in `docs/`.
 
-Core principles:
-
-- high performance
-- high efficiency
-- high stability
-- high security (defense-in-depth: target restrictions, rate limiting, IP extraction, security headers)
-
-## Design Document
-
-The Software Design Document (`docs/done/sdd-2026-03-08.md`) is the source of truth for architecture, API design, security model, and phased delivery. Always consult it before making design decisions. Key sections:
-
-- **§4** Input language (hostname[:port[,port...]])
-- **§5** API endpoints (inspect, health, ready, meta, OpenAPI)
-- **§7** Backend architecture (axum, inspection pipeline, TLS handshake)
-- **§8** Security architecture (4-layer defense-in-depth)
-- **§9** Configuration (TOML + env vars)
-- **§14** Phased delivery plan
-
-## Technology Decisions
-
-Decisions made during project setup, supplementing the SDD:
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| **Repository** | Standalone repo, `mhost` via crates.io | Independent release cadence; same pattern as prism/ifconfig-rs |
-| **TLS implementation** | `rustls` (pure Rust) | No OpenSSL dependency, static musl builds, memory-safe. Trade-off: no legacy cipher support (RC4, 3DES) |
-| **Certificate verifier** | `AcceptAnyCert` custom verifier | Inspection tool must see broken certs, not reject them. Validation is application-level, post-handshake |
-| **Trust store** | `webpki-roots` + optional CA directory (`custom_ca_dir` config) | Mozilla bundle as baseline; operators drop PEM/CRT files into a directory for private CAs. All `*.pem` and `*.crt` files loaded at startup. Supports internal PKI (e.g., Step-CA) without rebuilds |
-| **Cert parsing** | `x509-parser` + `x509-ocsp` | DER/PEM parsing, extension extraction, OID mapping. `x509-ocsp` for OCSP staple parsing |
-| **DNS resolution** | `mhost` (not `hickory-resolver`) | Ecosystem consistency, proven DNSSEC support, same-team maintenance. Heavier than needed but accepted cost |
-| **STARTTLS** | Auto-detected by port (25 → SMTP, 587 → SMTP, 143 → IMAP stub, 21 → FTP stub) | SMTP STARTTLS implemented; IMAP/FTP are stubs. No separate config flag — port-based inference keeps the API simple |
-| **Response model** | Synchronous JSON (not SSE) | TLS handshakes complete in milliseconds; SSE is unnecessary overhead |
-| **Rate limiting** | `governor = "0.8"` (GCRA), two-tier + cap-and-warn | Per-source-IP + per-target-hostname. Multi-IP fan-out degrades gracefully instead of rejecting |
-| **CSS** | Plain CSS with custom properties | Small frontend, zero build config, maps to ecosystem design language |
-| **Config parsing** | `config` crate | Same pattern as prism/ifconfig-rs: TOML + `TLSIGHT_` prefix + `__` separators |
-| **Error handling** | `thiserror` | Structured `AppError` enum maps to HTTP status + error codes |
-| **Request IDs** | `uuid` crate with `v7` feature | Time-ordered UUIDs, same as prism |
-| **TypeScript** | Strict mode | Low ceremony cost, catches bugs at compile time |
-| **Input** | Plain `<input>`, no CodeMirror | No query language — just `hostname[:port[,port...]]`. CodeMirror is overkill |
-| **CAA issuer matching** | Static table (SSLMate + CCADB) generated at compile time | CAA `issue` values are opaque domain names (e.g. `pki.goog`) with no guaranteed lexical relation to the CA's DN fields. A heuristic cannot reliably bridge that gap. The table (155 entries, binary-search lookup) is built from SSLMate's `caahelper/issuers` API and CCADB's CAA Identifiers V2 CSV; refreshed with `make data`. Unknown CAA domains yield Fail. |
+Core principles: high performance, high efficiency, high stability, high security (defense-in-depth: target restrictions, rate limiting, IP extraction, security headers).
 
 ## Frontend Rules
 
@@ -269,15 +218,7 @@ Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.
 
 Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
 
-**GitHub Packages auth**: Any CI step that runs `npm ci` for the frontend must set `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` as an env var on that step. The project `.npmrc` uses `${NODE_AUTH_TOKEN}` as a placeholder (not a hardcoded token) so the token must be injected at runtime. Missing this env var causes E401 from `https://npm.pkg.github.com`.
-
-```yaml
-- name: frontend build
-  run: npm ci && npm run build
-  working-directory: frontend
-  env:
-    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
+GitHub Packages auth (`NODE_AUTH_TOKEN`) requirement: see workflow-rules R-J3.
 
 ## Security Checklist
 
