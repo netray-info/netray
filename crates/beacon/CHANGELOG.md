@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-25
+
 ### Changed (BREAKING)
 
 - `GET /api/meta` response shape now matches the suite-wide `EcosystemMeta`
@@ -20,6 +22,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   segments). `BEACON_BACKENDS__IP__TIMEOUT_MS` is replaced by a shared
   `BEACON_BACKENDS__TIMEOUT_MS`. The TOML form is `[backends] ip_url = "…"`,
   `timeout_ms = 5000`.
+
+### Refactored
+
+- `frontend/src/App.tsx` decomposed from 1008 lines to 293; new components
+  in `frontend/src/components/` (`DomainInput`, `CategoryCard`,
+  `ResultsGrid`, `SummaryCard`, `GradeDisplay`, plus helpers).
+- `frontend/src/styles/global.css` now imports the four shared stylesheets
+  from `@netray-info/common-frontend` (theme, reset, layout, components).
+  Per-tool `--pass`/`--warn`/`--fail`/`--skip` redefinitions removed.
+
+### Added
+
+- Integration test at `tests/enrichment_integration.rs` (wiremock-based)
+  asserting that setting `BEACON_BACKENDS__IP_URL` causes the enrichment
+  client to issue an outbound HTTP request.
 
 ## [0.2.0] - 2026-04-23
 
