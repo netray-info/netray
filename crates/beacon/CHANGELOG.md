@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- `GET /api/meta` response shape now matches the suite-wide `EcosystemMeta`
+  contract from `netray-common`. The legacy top-level `service` key is
+  renamed to `site_name`. The `ecosystem` object is always present (sibling
+  URLs default to empty strings when unset) and three new top-level fields
+  are added: `features`, `limits`, `rate_limit`. Any client that read
+  `body.service` must now read `body.site_name`.
+- `[backends]` configuration flattened. `BEACON_BACKENDS__IP__URL` is
+  removed; use `BEACON_BACKENDS__IP_URL` (single underscore between
+  segments). `BEACON_BACKENDS__IP__TIMEOUT_MS` is replaced by a shared
+  `BEACON_BACKENDS__TIMEOUT_MS`. The TOML form is `[backends] ip_url = "…"`,
+  `timeout_ms = 5000`.
+
 ## [0.2.0] - 2026-04-23
 
 ### Added

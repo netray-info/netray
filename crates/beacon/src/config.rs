@@ -88,8 +88,16 @@ pub use netray_common::ecosystem::EcosystemConfig;
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct BackendsConfig {
+    /// IP enrichment service base URL. Empty string disables enrichment.
     #[serde(default)]
-    pub ip: Option<netray_common::backend::BackendConfig>,
+    pub ip_url: String,
+    /// Shared timeout for all backend HTTP calls, in milliseconds.
+    #[serde(default = "default_backends_timeout_ms")]
+    pub timeout_ms: u64,
+}
+
+fn default_backends_timeout_ms() -> u64 {
+    5000
 }
 
 impl Config {

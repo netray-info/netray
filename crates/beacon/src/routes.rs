@@ -68,13 +68,8 @@ pub struct ReadyResponse {
     pub status: &'static str,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct MetaResponse {
-    pub version: &'static str,
-    pub service: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
-}
+// `MetaResponse` is now `netray_common::ecosystem::EcosystemMeta`.
+// Breaking change: the legacy `service` key is renamed to `site_name`.
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct InspectRequest {
@@ -111,8 +106,9 @@ pub struct InspectQuery {
     components(schemas(
         HealthResponse,
         ReadyResponse,
-        MetaResponse,
-        netray_common::ecosystem::EcosystemConfig,
+        netray_common::ecosystem::EcosystemMeta,
+        netray_common::ecosystem::EcosystemUrls,
+        netray_common::ecosystem::RateLimitSummary,
         InspectRequest,
         CheckResult,
         SubCheck,
@@ -296,22 +292,73 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     path = "/api/meta",
     tag = "Meta",
     responses(
-        (status = 200, description = "Service metadata", body = MetaResponse),
+        (status = 200, description = "Service metadata", body = netray_common::ecosystem::EcosystemMeta),
     )
 )]
-async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
-    let eco = &state.config.ecosystem;
-    let ecosystem = if eco.has_any() {
-        Some(eco.clone())
-    } else {
-        None
-    };
+async fn meta_handler(
+    State(state): State<AppState>,
+) -> Json<netray_common::ecosystem::EcosystemMeta> {
+    use netray_common::ecosystem::{EcosystemMeta, EcosystemUrls, RateLimitSummary};
+    use serde_json::{Map, Value};
 
-    Json(MetaResponse {
-        version: env!("CARGO_PKG_VERSION"),
-        service: "beacon",
-        ecosystem,
+    let cfg = &state.config;
+
+    let mut features = Map::new();
+    features.insert(
+        "ip_enrichment".into(),
+        Value::Bool(state.enrichment_client.is_some()),
+    );
+    features.insert(
+        "dnsbl_zones_count".into(),
+        Value::from(cfg.dnsbl.zones.len()),
+    );
+
+    let mut limits = Map::new();
+    limits.insert(
+        "max_concurrent_inspections".into(),
+        Value::from(cfg.server.max_concurrent_inspections),
+    );
+    limits.insert(
+        "max_user_dkim_selectors".into(),
+        Value::from(cfg.dkim.max_user_selectors),
+    );
+    limits.insert(
+        "dns_timeout_ms".into(),
+        Value::from(cfg.dns.timeout_ms),
+    );
+
+    // Beacon's RateLimitConfig stores per_ip as a "<n>/<unit>" string. Parse
+    // it into a per-minute rate; fall back to 0 on unrecognised formats.
+    let (per_ip_per_minute, per_ip_burst) = parse_per_ip_rate(&cfg.rate_limit.per_ip);
+
+    Json(EcosystemMeta {
+        site_name: "beacon".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        ecosystem: EcosystemUrls::from(&cfg.ecosystem),
+        features,
+        limits,
+        rate_limit: RateLimitSummary {
+            per_ip_per_minute,
+            per_ip_burst,
+            global_per_minute: 0,
+            global_burst: 0,
+        },
     })
+}
+
+/// Parse beacon's `"<n>/<unit>"` rate-limit string (e.g. `"10/min"`).
+/// Returns `(per_minute, burst)`; burst is 0 since the string form has no
+/// burst component.
+fn parse_per_ip_rate(s: &str) -> (u32, u32) {
+    let mut parts = s.split('/');
+    let n: u32 = parts.next().unwrap_or("0").trim().parse().unwrap_or(0);
+    let per_minute = match parts.next().map(str::trim) {
+        Some("min") => n,
+        Some("sec") => n.saturating_mul(60),
+        Some("hour") => n / 60,
+        _ => 0,
+    };
+    (per_minute, 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -488,7 +535,9 @@ mod tests {
         let (status, body) = do_get(&app, "/api/meta").await;
         assert_eq!(status, StatusCode::OK);
         assert!(body["version"].is_string());
-        assert_eq!(body["service"], "beacon");
+        assert_eq!(body["site_name"], "beacon");
+        // The legacy `service` key must not appear after the 0.3 migration.
+        assert!(body.get("service").is_none());
     }
 
     #[tokio::test]
@@ -502,27 +551,40 @@ mod tests {
         let app = test_router_with_config(config).await;
         let (status, body) = do_get(&app, "/api/meta").await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["service"], "beacon");
+        assert_eq!(body["site_name"], "beacon");
         let eco = &body["ecosystem"];
         assert!(
             eco.is_object(),
-            "ecosystem should be present when configured"
+            "ecosystem should be present (with empty strings when unset)"
         );
         assert_eq!(eco["ip_base_url"], "https://ip.example.com");
         assert_eq!(eco["dns_base_url"], "https://dns.example.com");
-        // Unconfigured fields should be absent (skip_serializing_if)
-        assert!(eco.get("tls_base_url").is_none() || eco["tls_base_url"].is_null());
+        // Unconfigured fields are now always present as empty strings
+        // (uniform shape across services).
+        assert_eq!(eco["tls_base_url"], "");
+        assert_eq!(eco["http_base_url"], "");
+        assert_eq!(eco["email_base_url"], "");
+        assert_eq!(eco["lens_base_url"], "");
     }
 
     #[tokio::test]
-    async fn meta_omits_ecosystem_when_unconfigured() {
+    async fn meta_emits_uniform_shape_when_unconfigured() {
         let app = test_router().await;
         let (_, body) = do_get(&app, "/api/meta").await;
-        // Default config has no ecosystem set — field should be absent
-        assert!(
-            body.get("ecosystem").is_none() || body["ecosystem"].is_null(),
-            "ecosystem should be absent when not configured"
-        );
+        // The shape is uniform across services: `ecosystem` is always
+        // present, with empty strings for any sibling URL not configured.
+        let eco = &body["ecosystem"];
+        assert!(eco.is_object(), "ecosystem must be present even when unset");
+        for key in [
+            "ip_base_url",
+            "dns_base_url",
+            "tls_base_url",
+            "http_base_url",
+            "email_base_url",
+            "lens_base_url",
+        ] {
+            assert_eq!(eco[key], "", "{key} must default to empty string");
+        }
     }
 
     #[tokio::test]

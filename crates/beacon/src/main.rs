@@ -63,12 +63,11 @@ async fn main() -> anyhow::Result<()> {
         per_ip_rate = %config.rate_limit.per_ip,
         max_concurrent_inspections = config.server.max_concurrent_inspections,
         trusted_proxy_count = config.server.trusted_proxies.len(),
-        ip_backend_url = config
-            .backends
-            .ip
-            .as_ref()
-            .and_then(|b| b.url.as_deref())
-            .unwrap_or("disabled"),
+        ip_backend_url = if config.backends.ip_url.is_empty() {
+            "disabled"
+        } else {
+            config.backends.ip_url.as_str()
+        },
         "starting beacon"
     );
 

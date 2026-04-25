@@ -31,16 +31,16 @@ impl AppState {
             .await
             .map_err(|e| crate::error::MailError::DnsError(e.to_string()))?;
 
-        let enrichment_client = config.backends.ip.as_ref().and_then(|ip_cfg| {
-            ip_cfg.url.as_ref().map(|url| {
-                Arc::new(EnrichmentClient::new(
-                    url,
-                    Duration::from_millis(ip_cfg.timeout_ms),
-                    "beacon",
-                    None,
-                ))
-            })
-        });
+        let enrichment_client = if config.backends.ip_url.is_empty() {
+            None
+        } else {
+            Some(Arc::new(EnrichmentClient::new(
+                &config.backends.ip_url,
+                Duration::from_millis(config.backends.timeout_ms),
+                "beacon",
+                None,
+            )))
+        };
 
         let http_client = reqwest::Client::builder()
             .timeout(Duration::from_millis(config.http.timeout_ms))
