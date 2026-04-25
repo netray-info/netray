@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>netray.info — Network Intelligence Tools</title>
+  <title>Tools — netray.info</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <meta name="description" content="Six open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, TLS analysis, HTTP header inspection, and email security.">
+  <meta name="description" content="The raw data behind the grade. Five inspectors for DNS, TLS, HTTP headers, email, and IP — each one standalone, each one queryable from browser, curl, or CI. Open source, self-hostable.">
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://netray.info/" />
-  <meta property="og:title" content="netray.info — Network Intelligence Tools" />
-  <meta property="og:description" content="Six open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, TLS analysis, HTTP header inspection, and email security. Self-hostable, Rust-based, no account needed." />
+  <meta property="og:url" content="https://netray.info/tools" />
+  <meta property="og:title" content="Tools — netray.info" />
+  <meta property="og:description" content="The raw data behind the grade. Five inspectors for DNS, TLS, HTTP headers, email, and IP — each one standalone, each one queryable from browser, curl, or CI. Open source, self-hostable." />
   <meta property="og:image" content="https://netray.info/og/landing.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="netray.info — six open-source tools for understanding your network" />
+  <meta property="og:image:alt" content="netray.info — open-source inspectors for DNS, TLS, HTTP, email, and IP" />
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="netray.info — Network Intelligence Tools" />
-  <meta name="twitter:description" content="Six open-source tools for understanding your network: lens for a unified domain health grade, plus IP enrichment, DNS inspection, TLS analysis, HTTP header inspection, and email security." />
+  <meta name="twitter:title" content="Tools — netray.info" />
+  <meta name="twitter:description" content="The raw data behind the grade. Five inspectors for DNS, TLS, HTTP headers, email, and IP — each one standalone, each one queryable from browser, curl, or CI. Open source, self-hostable." />
   <meta name="twitter:image" content="https://netray.info/og/landing.png" />
-  <meta name="twitter:image:alt" content="netray.info — six open-source tools for understanding your network" />
+  <meta name="twitter:image:alt" content="netray.info — open-source inspectors for DNS, TLS, HTTP, email, and IP" />
   <meta name="theme-color" content="#07090f" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#f6f8fb" media="(prefers-color-scheme: light)" />
 
@@ -836,6 +836,8 @@
   <nav class="suite-nav" aria-label="netray.info suite">
     <span class="suite-nav__brand">netray.info</span>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/">← Back to the grade</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="/guide/">Guides</a>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="/api/">API</a>
@@ -855,70 +857,19 @@
       open source &middot; self-hosted &middot; built in Rust
     </div>
 
-    <h1>Network intelligence,<br>laid bare.</h1>
+    <h1>The raw data<br>behind the grade.</h1>
 
     <p class="subtitle">
-      Stop switching between SSL Labs, dig, ifconfig.co, and security header scanners.
-      Everything you need to understand a domain — in one place.
+      Five inspectors for DNS, TLS, HTTP headers, email, and IP.
+      Each one standalone. Each one queryable from browser, curl, or CI.
     </p>
 
     <p class="suite-narrative">
-      Built for DevOps, SRE, and security engineers who need IP context, DNS
-      health, TLS details, HTTP security headers, and email security posture
-      in the same workflow. Start with lens for a single A+–F health grade,
-      or go deep with the individual tools. Self-hostable, open-source, no account needed.
+      Use one when you need it, compose them in CI, or mix with your own
+      pipeline. Open source, self-hostable, no account needed. The same
+      checks lens runs to produce a grade — exposed individually, with
+      full detail.
     </p>
-
-    <div class="tool-chips">
-      <div class="tool-chips__row">
-        <a href="https://lens.netray.info" class="chip chip--lens">
-          <span class="chip-dot"></span>lens.netray.info
-        </a>
-      </div>
-      <div class="tool-chips__row">
-        <a href="https://ip.netray.info"  class="chip chip--ip">
-          <span class="chip-dot"></span>ip.netray.info
-        </a>
-        <a href="https://dns.netray.info" class="chip chip--dns">
-          <span class="chip-dot"></span>dns.netray.info
-        </a>
-        <a href="https://tls.netray.info" class="chip chip--tls">
-          <span class="chip-dot"></span>tls.netray.info
-        </a>
-      </div>
-      <div class="tool-chips__row">
-        <a href="https://http.netray.info" class="chip chip--http">
-          <span class="chip-dot"></span>http.netray.info
-        </a>
-        <a href="https://email.netray.info" class="chip chip--email">
-          <span class="chip-dot"></span>email.netray.info
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <section class="lens-featured" aria-label="lens — unified domain health check">
-    <div class="card card--lens">
-      <div class="card-head">
-        <span class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="12" cy="12" r="9.5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="5.5" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="1.75" fill="currentColor"/></svg></span>
-        <span class="card-badge">lens.netray.info</span>
-      </div>
-      <h2>lens</h2>
-      <div class="card-tag">// unified domain health check</div>
-      <a href="https://github.com/netray-info/lens" class="card-github" target="_blank" rel="noopener noreferrer" aria-label="lens on GitHub"><svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>lens</a>
-      <p class="card-desc">One domain. Five signals — IP, DNS, TLS, HTTP, and Email — one grade, streamed in real time as each check completes. Use the individual tools below to dig deeper into any finding.</p>
-      <ul class="features">
-        <li><span class="feat-arrow">→</span> IP, DNS, TLS, HTTP, and Email checked in parallel</li>
-        <li><span class="feat-arrow">→</span> A+–F grade with per-section breakdown</li>
-        <li><span class="feat-arrow">→</span> Results arrive in real time — no waiting for the slowest check</li>
-        <li><span class="feat-arrow">→</span> CI-friendly API — gate deploys on a health grade</li>
-      </ul>
-      <form class="card-form lens-form" action="https://lens.netray.info/" method="get">
-        <input class="card-form-input" type="text" name="d" placeholder="example.com" autocomplete="off" spellcheck="false" aria-label="Domain to check" />
-        <button class="card-form-btn" type="submit">Check health →</button>
-      </form>
-      <a href="https://lens.netray.info" class="card-cta">Open lens ↗</a>
-    </div>
   </section>
 
   <section class="tools">

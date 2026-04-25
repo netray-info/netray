@@ -18,8 +18,10 @@ const SITE_ROOT = resolve(__dirname, '..');
 const REPO_ROOT = resolve(SITE_ROOT, '..');
 const ORIGIN = 'https://netray.info';
 
+// Five drill-down tool subdomains. lens.netray.info is intentionally absent —
+// post-repositioning the apex is lens, and lens.netray.info 301s to it.
 const TOOL_DOMAINS = [
-  'ip', 'dns', 'tls', 'http', 'email', 'lens',
+  'ip', 'dns', 'tls', 'http', 'email',
 ];
 
 const writeStdout = process.argv.includes('--stdout');
@@ -52,6 +54,7 @@ function urlFor(htmlPath) {
 function priorityFor(htmlPath) {
   const rel = relative(SITE_ROOT, htmlPath);
   if (rel === 'index.html') return '1.0';
+  if (rel === 'tools/index.html') return '0.9';
   if (rel.startsWith('guide/')) return '0.8';
   if (rel.startsWith('api/')) return '0.7';
   return '0.8';
