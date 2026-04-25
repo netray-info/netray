@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-25
+
+### Added
+- Apex repositioning: lens is now configurable as a public landing product via a 12-field `[site]` config section (`title`, `description`, `og_image`, `og_site_name`, `brand_name`, `brand_tagline`, `status_pill`, `hero_heading`, `hero_subheading`, `example_domains`, `trust_strip`, `footer_about`, `footer_links`). Override per-field with `LENS_SITE__*` env vars (673b4f6).
+- `GET /api/meta` exposes `features.site` so the SPA reads branding from the live config instead of hard-coded strings (673b4f6).
+- HTML shell templating: `frontend/index.html` placeholders (`{{site_title}}`, `{{site_description}}`, `{{site_og_image}}`, `{{site_og_site_name}}`) substituted once at startup with HTML-escaped values; `og:image` line stripped when value is absent (5a96913).
+- Public `Landing` SolidJS component for the idle apex state: hero heading + subheading + status pill, domain input, example chips, six grade descriptors (A+ through F, exact wording in `gradeLegend.ts`), trust strip, and a "Want to look deeper? → Raw data for every check" callout pointing at `/tools` (32d0fac).
+- `CheckItem` SSE/sync wire fields `fix_hint` and `fix_owner` with skip-when-empty serialization; `CheckList` renders a remediation block (hint, "Fix: <owner>", "Learn more →") when populated. Per-check copy ships empty in 0.7.0 — content lands incrementally in later releases (e34e3d0).
+- Result-state Summary now shows the grade descriptor inline (e.g. "ok — weaknesses worth fixing") and a count-driven headline ("4 things to fix and 6 warnings worth a look") instead of static status labels (ac2c721).
+- Persistent deeper-callout below the section grid in result state, so users with failures always have a visible path to the raw inspectors (ac2c721).
+- README "Customizing the apex landing" section documenting the `[site]` surface (3199950).
+
+### Fixed
+- Hero now renders above the domain input on the idle landing (eef9da5).
+
+### Changed
+- Hero typography polished: heavier weight, tighter tracking, accent-gradient rule under the heading; status pill padding refined (eef9da5).
+- Grade legend uses the project-wide `--grade-*` palette so B and C read distinctly (lime / amber); same colors as the verdict dots in result state (eef9da5).
+- Default `hero_subheading` now mentions IPs alongside DNS/TLS/HTTP/email (eef9da5).
+- Default `example_domains` leads with `netray.info` as a self-demo (9442683).
+- Pre-existing clippy lints fixed: useless `format!` in `email.rs`, items-after-test-module in `ip.rs`, dead `not_found` helper in `tests/scoring_regression.rs`. No behavior change (c3913d4).
+
 ## [0.5.0] - 2026-04-23
 
 ### Added
