@@ -34,6 +34,18 @@ pub struct CheckItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub guide_url: Option<&'static str>,
+    /// Plain-English remediation sentence ("Your SPF record doesn't include
+    /// your MX hosts — external mail from you may be rejected."). Populated
+    /// per-check from `fix_for()`; absent until SDD product-repositioning
+    /// Phase 4 fills the copy in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub fix_hint: Option<&'static str>,
+    /// Who can fix it ("your DNS provider", "your web server config").
+    /// Populated alongside `fix_hint`. Absent until Phase 4.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
+    pub fix_owner: Option<&'static str>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub weight: Option<u32>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -85,6 +97,17 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
         "reputation" => Some("https://netray.info/guide/ip-enrichment"),
         _ => None,
     }
+}
+
+/// Return the `(fix_hint, fix_owner)` pair for a check name.
+///
+/// Plain-English remediation copy. Empty for every check today; SDD
+/// product-repositioning Phase 4 fills entries one-by-one as copy is written.
+/// The mechanism (this lookup + the wire fields on `CheckItem`) ships now so
+/// the frontend can render remediation blocks the moment any entry is added.
+/// Phase 4 PRs convert this to a `match name { ... }` as entries are written.
+fn fix_for(_name: &str) -> (Option<&'static str>, Option<&'static str>) {
+    (None, None)
 }
 
 /// Validate and split a comma-separated `dkim_selectors` string.
@@ -679,8 +702,11 @@ fn build_check_items(checks: &[CheckResult], weights: &HashMap<String, u32>) -> 
         .iter()
         .map(|c| {
             let verdict = verdict_str(&c.verdict);
+            let (fix_hint, fix_owner) = fix_for(&c.name);
             CheckItem {
                 guide_url: guide_url_for(&c.name),
+                fix_hint,
+                fix_owner,
                 name: c.name.clone(),
                 verdict,
                 weight: weights.get(&c.name).copied(),
@@ -1540,6 +1566,61 @@ pub mod tests {
             rl["global_burst"].is_number(),
             "global_burst must be a number"
         );
+    }
+
+    // --- SDD product-repositioning §3 Requirement 14: fix_hint / fix_owner wire fields ---
+
+    #[test]
+    fn check_item_omits_fix_fields_when_empty() {
+        let item = CheckItem {
+            name: "hsts".to_string(),
+            verdict: "warn",
+            guide_url: Some("https://netray.info/guide/hsts"),
+            fix_hint: None,
+            fix_owner: None,
+            weight: Some(10),
+            messages: vec!["max-age too short".to_string()],
+        };
+        let json = serde_json::to_value(&item).unwrap();
+        assert!(
+            json.get("fix_hint").is_none(),
+            "fix_hint must be omitted when None"
+        );
+        assert!(
+            json.get("fix_owner").is_none(),
+            "fix_owner must be omitted when None"
+        );
+    }
+
+    #[test]
+    fn check_item_serializes_fix_fields_when_present() {
+        let item = CheckItem {
+            name: "hsts".to_string(),
+            verdict: "warn",
+            guide_url: Some("https://netray.info/guide/hsts"),
+            fix_hint: Some("HSTS max-age should be at least 1 year."),
+            fix_owner: Some("Your web server config"),
+            weight: Some(10),
+            messages: vec![],
+        };
+        let json = serde_json::to_value(&item).unwrap();
+        assert_eq!(json["fix_hint"], "HSTS max-age should be at least 1 year.");
+        assert_eq!(json["fix_owner"], "Your web server config");
+    }
+
+    #[test]
+    fn fix_for_returns_empty_for_all_known_check_names() {
+        // Phase 1 contract: mechanism plumbed, content empty.
+        // Phase 4 will fill entries; this test then becomes obsolete and is removed.
+        for name in [
+            "hsts",
+            "dnssec",
+            "tls_version",
+            "spf_align",
+            "unknown_check",
+        ] {
+            assert_eq!(fix_for(name), (None, None), "fix_for({name}) must be empty");
+        }
     }
 
     // --- SDD product-repositioning §3 Requirement 8: /api/meta exposes `site` ---
