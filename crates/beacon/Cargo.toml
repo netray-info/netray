@@ -68,8 +68,3 @@ serde_json = "1"
 tokio = { version = "1", features = ["full", "test-util"] }
 # HTTP mock server for the enrichment integration test (per project-review SDD Req 12).
 wiremock = "0.6"
-
-# Local development override — uses the side-by-side netray-common checkout
-# until 0.8.0 is published to crates.io. Remove this block once published.
-[patch.crates-io]
-netray-common = { path = "../netray-common" }
