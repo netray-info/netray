@@ -1495,12 +1495,24 @@ pub mod tests {
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(json["version"], env!("CARGO_PKG_VERSION"));
         assert_eq!(json["site_name"], "lens — Domain Health Check");
-        // ecosystem is absent when no ecosystem config is set (skip_serializing_if)
-        assert!(json.get("ecosystem").is_none() || json["ecosystem"].is_null());
+        // EcosystemMeta now uniformly carries the `ecosystem` object across
+        // every service; sibling URLs default to empty strings when unset.
+        let eco = &json["ecosystem"];
+        assert!(eco.is_object(), "ecosystem must be present even when unset");
+        for key in [
+            "ip_base_url",
+            "dns_base_url",
+            "tls_base_url",
+            "http_base_url",
+            "email_base_url",
+            "lens_base_url",
+        ] {
+            assert!(eco.get(key).is_some(), "ecosystem must contain {key}");
+        }
 
-        // Profile section_weights and hard_fail are string-keyed maps
-        let profile = &json["profile"];
-        assert!(profile.is_object(), "profile must be an object");
+        // Profile is now nested under `features.profile`.
+        let profile = &json["features"]["profile"];
+        assert!(profile.is_object(), "features.profile must be an object");
         let sw = &profile["section_weights"];
         assert!(sw.is_object(), "section_weights must be an object");
         assert!(sw.get("dns").is_some(), "section_weights must contain dns");
@@ -1926,11 +1938,11 @@ pub mod tests {
         assert_eq!(eco["ip_base_url"], "https://ip.example.com");
         assert_eq!(eco["dns_base_url"], "https://dns.example.com");
         assert_eq!(eco["tls_base_url"], "https://tls.example.com");
-        // Unconfigured fields should be absent
-        assert!(
-            eco.get("http_base_url").is_none() || eco["http_base_url"].is_null(),
-            "unconfigured fields should be absent"
-        );
+        // Unconfigured fields are now always present as empty strings
+        // (uniform shape across the suite per EcosystemMeta contract).
+        assert_eq!(eco["http_base_url"], "");
+        assert_eq!(eco["email_base_url"], "");
+        assert_eq!(eco["lens_base_url"], "");
     }
 
     // T9: Ecosystem and backends are independent URL pools
