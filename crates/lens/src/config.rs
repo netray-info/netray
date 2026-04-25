@@ -86,23 +86,43 @@ pub struct ScoringConfig {
 /// rebrand on the apex without rebuilding the lens image. Product semantics
 /// (grade thresholds, per-check `fix_hint` copy, check labels) are NOT
 /// configurable here — see `specs/sdd/product-repositioning.md` §11.
+///
+/// Each field carries a `#[serde(default = "...")]` so that a partial TOML
+/// override (the common case: set one URL, inherit the rest) keeps every
+/// unspecified field at its built-in default. Without per-field defaults,
+/// the presence of any `[site]` table in the TOML would fall through to
+/// `Option::default()` = `None` for every other field — visibly breaking
+/// the apex `<head>`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SiteConfig {
+    #[serde(default = "default_site_title")]
     pub title: Option<String>,
+    #[serde(default = "default_site_description")]
     pub description: Option<String>,
+    #[serde(default = "default_site_og_image")]
     pub og_image: Option<String>,
+    #[serde(default = "default_site_og_site_name")]
     pub og_site_name: Option<String>,
 
+    #[serde(default = "default_site_brand_name")]
     pub brand_name: Option<String>,
+    #[serde(default = "default_site_brand_tagline")]
     pub brand_tagline: Option<String>,
+    #[serde(default = "default_site_status_pill")]
     pub status_pill: Option<String>,
 
+    #[serde(default = "default_site_hero_heading")]
     pub hero_heading: Option<String>,
+    #[serde(default = "default_site_hero_subheading")]
     pub hero_subheading: Option<String>,
+    #[serde(default = "default_site_example_domains")]
     pub example_domains: Option<Vec<String>>,
+    #[serde(default = "default_site_trust_strip")]
     pub trust_strip: Option<String>,
 
+    #[serde(default = "default_site_footer_about")]
     pub footer_about: Option<String>,
+    #[serde(default = "default_site_footer_links")]
     pub footer_links: Option<Vec<FooterLink>>,
 }
 
@@ -113,42 +133,92 @@ pub struct FooterLink {
     pub external: bool,
 }
 
+fn default_site_title() -> Option<String> {
+    Some("netray.info — your domain's health grade, in under a second".into())
+}
+
+fn default_site_description() -> Option<String> {
+    Some(
+        "Type a domain, get an A+ to F grade across DNS, TLS, HTTP, and email security. \
+         No account, no ads, open source."
+            .into(),
+    )
+}
+
+fn default_site_og_image() -> Option<String> {
+    None
+}
+
+fn default_site_og_site_name() -> Option<String> {
+    Some("netray.info".into())
+}
+
+fn default_site_brand_name() -> Option<String> {
+    Some("lens".into())
+}
+
+fn default_site_brand_tagline() -> Option<String> {
+    Some("your domain's health grade, in under a second".into())
+}
+
+fn default_site_status_pill() -> Option<String> {
+    Some("open source · self-hosted · built in Rust".into())
+}
+
+fn default_site_hero_heading() -> Option<String> {
+    Some("How healthy is your domain?".into())
+}
+
+fn default_site_hero_subheading() -> Option<String> {
+    Some(
+        "DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second.".into(),
+    )
+}
+
+// netray.info leads as a self-demonstration ("eat your own dog food"); SDD §3
+// Requirement 24 listed only the three external examples, but for the
+// netray.info-flavored lens build it makes sense to surface our own apex
+// first. Self-hosters override.
+fn default_site_example_domains() -> Option<Vec<String>> {
+    Some(vec![
+        "netray.info".into(),
+        "example.com".into(),
+        "github.com".into(),
+        "cloudflare.com".into(),
+    ])
+}
+
+fn default_site_trust_strip() -> Option<String> {
+    Some("No account · No ads · Open source · Self-hostable".into())
+}
+
+fn default_site_footer_about() -> Option<String> {
+    None
+}
+
+fn default_site_footer_links() -> Option<Vec<FooterLink>> {
+    None
+}
+
 impl Default for SiteConfig {
     fn default() -> Self {
         Self {
-            title: Some(
-                "netray.info — your domain's health grade, in under a second".into(),
-            ),
-            description: Some(
-                "Type a domain, get an A+ to F grade across DNS, TLS, HTTP, and email security. \
-                 No account, no ads, open source."
-                    .into(),
-            ),
-            og_image: None,
-            og_site_name: Some("netray.info".into()),
+            title: default_site_title(),
+            description: default_site_description(),
+            og_image: default_site_og_image(),
+            og_site_name: default_site_og_site_name(),
 
-            brand_name: Some("lens".into()),
-            brand_tagline: Some("your domain's health grade, in under a second".into()),
-            status_pill: Some("open source · self-hosted · built in Rust".into()),
+            brand_name: default_site_brand_name(),
+            brand_tagline: default_site_brand_tagline(),
+            status_pill: default_site_status_pill(),
 
-            hero_heading: Some("How healthy is your domain?".into()),
-            hero_subheading: Some(
-                "DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second.".into(),
-            ),
-            // netray.info leads as a self-demonstration ("eat your own dog
-            // food"); SDD §3 Requirement 24 listed only the three external
-            // examples, but for the netray.info-flavored lens build it makes
-            // sense to surface our own apex first. Self-hosters override.
-            example_domains: Some(vec![
-                "netray.info".into(),
-                "example.com".into(),
-                "github.com".into(),
-                "cloudflare.com".into(),
-            ]),
-            trust_strip: Some("No account · No ads · Open source · Self-hostable".into()),
+            hero_heading: default_site_hero_heading(),
+            hero_subheading: default_site_hero_subheading(),
+            example_domains: default_site_example_domains(),
+            trust_strip: default_site_trust_strip(),
 
-            footer_about: None,
-            footer_links: None,
+            footer_about: default_site_footer_about(),
+            footer_links: default_site_footer_links(),
         }
     }
 }
@@ -396,6 +466,45 @@ mod tests {
     fn default_brand_name_is_lens() {
         let s = SiteConfig::default();
         assert_eq!(s.brand_name.as_deref(), Some("lens"));
+    }
+
+    // Regression: a TOML file that contains a [site] table with only a
+    // subset of fields (the common operator pattern: override one URL,
+    // inherit everything else) used to drop every other field to None
+    // because #[serde(default)] on the Config field only fires when the
+    // entire [site] table is missing — once it exists, partial fields
+    // fall through to Option::default() = None, not SiteConfig::default().
+    // Caused empty <title>, og:title, og:description in production.
+    #[test]
+    fn partial_site_toml_inherits_defaults_for_missing_fields() {
+        let toml_str = r#"og_image = "https://netray.info/og/landing.png""#;
+        let s: SiteConfig = toml::from_str(toml_str).expect("partial [site] should deserialize");
+
+        assert_eq!(
+            s.og_image.as_deref(),
+            Some("https://netray.info/og/landing.png"),
+            "explicit override wins"
+        );
+        assert!(s.title.is_some(), "title must inherit default");
+        assert!(s.description.is_some(), "description must inherit default");
+        assert!(
+            s.og_site_name.is_some(),
+            "og_site_name must inherit default"
+        );
+        assert!(s.brand_name.is_some(), "brand_name must inherit default");
+        assert!(
+            s.hero_heading.is_some(),
+            "hero_heading must inherit default"
+        );
+        assert!(
+            s.hero_subheading.is_some(),
+            "hero_subheading must inherit default"
+        );
+        assert!(
+            s.example_domains.is_some(),
+            "example_domains must inherit default"
+        );
+        assert!(s.trust_strip.is_some(), "trust_strip must inherit default");
     }
 
     // --- Zero-value rejection ---
