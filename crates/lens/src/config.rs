@@ -135,7 +135,12 @@ impl Default for SiteConfig {
             hero_subheading: Some(
                 "DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second.".into(),
             ),
+            // netray.info leads as a self-demonstration ("eat your own dog
+            // food"); SDD §3 Requirement 24 listed only the three external
+            // examples, but for the netray.info-flavored lens build it makes
+            // sense to surface our own apex first. Self-hosters override.
             example_domains: Some(vec![
+                "netray.info".into(),
                 "example.com".into(),
                 "github.com".into(),
                 "cloudflare.com".into(),
@@ -369,12 +374,16 @@ mod tests {
     }
 
     #[test]
-    fn default_example_domains_match_sdd_requirement_24() {
+    fn default_example_domains_lead_with_netray_info() {
+        // SDD §3 Requirement 24 specified the three external examples;
+        // for the netray.info-flavored build we prepend netray.info as a
+        // self-demonstration. Self-hosters override via [site] / env.
         let s = SiteConfig::default();
         assert_eq!(
             s.example_domains.as_deref(),
             Some(
                 &[
+                    "netray.info".to_string(),
                     "example.com".to_string(),
                     "github.com".to_string(),
                     "cloudflare.com".to_string()

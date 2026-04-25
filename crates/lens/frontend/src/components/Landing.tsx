@@ -32,7 +32,7 @@ export default function Landing(props: Props) {
     props.site?.status_pill ?? 'open source · self-hosted · built in Rust';
 
   const exampleDomains = () =>
-    props.site?.example_domains ?? ['example.com', 'github.com', 'cloudflare.com'];
+    props.site?.example_domains ?? ['netray.info', 'example.com', 'github.com', 'cloudflare.com'];
 
   const trustStrip = () =>
     props.site?.trust_strip ?? 'No account · No ads · Open source · Self-hostable';

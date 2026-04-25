@@ -1665,7 +1665,7 @@ pub mod tests {
         assert_eq!(site["brand_name"], "lens");
         assert_eq!(
             site["example_domains"],
-            serde_json::json!(["example.com", "github.com", "cloudflare.com"])
+            serde_json::json!(["netray.info", "example.com", "github.com", "cloudflare.com"])
         );
     }
 
