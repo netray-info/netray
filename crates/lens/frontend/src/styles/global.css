@@ -1071,43 +1071,66 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2.5rem;
+  gap: 1.75rem;
   padding: 2.5rem 1rem 3rem;
   text-align: center;
+}
+
+.landing__input-slot {
+  width: 100%;
+  max-width: 640px;
+  /* The DomainInput is its own form with margin reset; this slot just
+     reserves space below the hero before chips/legend follow. */
 }
 
 .landing__hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-  max-width: 640px;
+  gap: 0.85rem;
+  max-width: 680px;
 }
 
 .landing__heading {
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
-  font-weight: 600;
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 700;
   margin: 0;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+/* A small accent rule under the heading anchors the hero visually without
+   forcing a colored heading (which would fight the rest of the page). */
+.landing__heading::after {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 3px;
+  margin: 0.85rem auto 0;
+  background: linear-gradient(90deg, var(--accent), var(--accent-secondary, var(--accent)));
+  border-radius: 2px;
+  opacity: 0.85;
 }
 
 .landing__subheading {
   font-size: 1.0625rem;
   margin: 0;
+  max-width: 640px;
   color: var(--text-secondary);
   line-height: 1.55;
 }
 
 .landing__status-pill {
   display: inline-block;
-  margin-top: 0.5rem;
-  padding: 0.25rem 0.75rem;
+  margin-top: 0.4rem;
+  padding: 0.3rem 0.85rem;
   font-size: 0.8125rem;
   color: var(--text-muted);
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: 999px;
+  letter-spacing: 0.005em;
 }
 
 .landing__examples {
@@ -1174,14 +1197,17 @@ a:hover { text-decoration: underline; }
   color: var(--text-primary);
 }
 
-/* Color the grade letter by tier — matches verdict palette so the legend
-   is consistent with how verdicts are colored elsewhere in the UI. */
-.landing__legend-grade--Aplus,
-.landing__legend-grade--A { color: var(--verdict-pass); }
-.landing__legend-grade--B { color: var(--verdict-warn); }
-.landing__legend-grade--C { color: var(--verdict-warn); }
-.landing__legend-grade--D { color: var(--verdict-fail); }
-.landing__legend-grade--F { color: var(--verdict-fail); }
+/* Color the grade letter using the project-wide --grade-* palette
+   (defined in :root above; same one used by verdict dots elsewhere).
+   Reads as a 5-step gradient (green → lime → amber → orange → red)
+   so B and C are visually distinct, and the legend matches the dot
+   colors users see beside the section grades after a check. */
+.landing__legend-grade--Aplus { color: var(--grade-a-plus); }
+.landing__legend-grade--A     { color: var(--grade-a); }
+.landing__legend-grade--B     { color: var(--grade-b); }
+.landing__legend-grade--C     { color: var(--grade-c); }
+.landing__legend-grade--D     { color: var(--grade-d); }
+.landing__legend-grade--F     { color: var(--grade-f); }
 
 .landing__legend-descriptor {
   font-weight: 600;

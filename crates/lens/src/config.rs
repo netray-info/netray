@@ -133,7 +133,7 @@ impl Default for SiteConfig {
 
             hero_heading: Some("How healthy is your domain?".into()),
             hero_subheading: Some(
-                "DNS, TLS, HTTP, and email — checked in parallel, one grade, usually under a second.".into(),
+                "DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second.".into(),
             ),
             example_domains: Some(vec![
                 "example.com".into(),

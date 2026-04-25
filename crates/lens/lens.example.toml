@@ -82,7 +82,7 @@ global_burst = 20
 
 # Idle-state hero copy.
 #hero_heading = "How healthy is your domain?"
-#hero_subheading = "DNS, TLS, HTTP, and email — checked in parallel, one grade, usually under a second."
+#hero_subheading = "DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second."
 
 # Clickable example chips on the landing page.
 #example_domains = ["example.com", "github.com", "cloudflare.com"]

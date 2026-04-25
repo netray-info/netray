@@ -215,24 +215,40 @@ export default function App() {
         </header>
 
         <main class="main" id="main-content">
-          <DomainInput
-            onSubmit={handleSubmit}
-            onClear={handleClear}
-            loading={isLoading()}
-            value={currentDomain()}
-            inputRef={(el) => { inputEl = el; }}
-            showCopyLink={hasResults() || checkState() === 'done' || checkState() === 'error'}
-          />
-
-          <Show when={error()}>
-            <div class="error-banner" role="alert">{error()}</div>
-          </Show>
-
-          <Show when={!hasResults() && !isLoading() && !error()}>
+          {/* Idle state: Landing places the hero ABOVE the input, then chips
+              + legend + trust + callout BELOW it (SDD §3 Requirement 10).
+              Non-idle: input renders at the top so the user always sees the
+              term they typed when results stream in. */}
+          <Show
+            when={!hasResults() && !isLoading() && !error()}
+            fallback={
+              <DomainInput
+                onSubmit={handleSubmit}
+                onClear={handleClear}
+                loading={isLoading()}
+                value={currentDomain()}
+                inputRef={(el) => { inputEl = el; }}
+                showCopyLink={hasResults() || checkState() === 'done' || checkState() === 'error'}
+              />
+            }
+          >
             <Landing
               site={meta()?.features?.site}
               onExampleClick={handleSubmit}
-            />
+            >
+              <DomainInput
+                onSubmit={handleSubmit}
+                onClear={handleClear}
+                loading={isLoading()}
+                value={currentDomain()}
+                inputRef={(el) => { inputEl = el; }}
+                showCopyLink={false}
+              />
+            </Landing>
+          </Show>
+
+          <Show when={error()}>
+            <div class="error-banner" role="alert">{error()}</div>
           </Show>
 
           <Show when={summary()}>

@@ -1,16 +1,21 @@
-import { For, Show } from 'solid-js';
+import { For, Show, type JSX } from 'solid-js';
 import type { SiteMeta } from '../lib/types';
 import { GRADE_LEGEND } from '../lib/gradeLegend';
 
 interface Props {
   site?: SiteMeta;
   onExampleClick: (domain: string) => void;
+  /** The DomainInput, slotted between the hero and the example chips so the
+   *  visual order is: hero → input → chips → legend → trust → callout
+   *  (SDD §3 Requirement 10). */
+  children?: JSX.Element;
 }
 
 // Apex landing-state content (idle, no `?d=` param). Per SDD product-
 // repositioning §3 Requirement 10: hero heading + subheading + status pill,
-// example chips, grade legend, trust strip, deeper-callout. Brand + tagline
-// are rendered by the persistent <header> in App.tsx (also meta-driven).
+// domain input, example chips, grade legend, trust strip, deeper-callout.
+// Brand + tagline are rendered by the persistent <header> in App.tsx (also
+// meta-driven).
 //
 // Reads strings from meta.features.site.* with hardcoded fallbacks so the
 // component renders sensibly when /api/meta has not loaded or is missing.
@@ -20,7 +25,7 @@ export default function Landing(props: Props) {
 
   const heroSubheading = () =>
     props.site?.hero_subheading ??
-    'DNS, TLS, HTTP, and email — checked in parallel, one grade, usually under a second.';
+    'DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second.';
 
   const statusPill = () =>
     props.site?.status_pill ?? 'open source · self-hosted · built in Rust';
@@ -40,6 +45,10 @@ export default function Landing(props: Props) {
           <span class="landing__status-pill">{statusPill()}</span>
         </Show>
       </section>
+
+      <Show when={props.children}>
+        <div class="landing__input-slot">{props.children}</div>
+      </Show>
 
       <section class="landing__examples" aria-label="Example domains">
         <p class="landing__examples-label">Try one:</p>
