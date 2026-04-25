@@ -7,11 +7,8 @@
    ================================================================ */
 
 :root {
-  /* tlsight-specific tokens (dark default from shared theme) */
-  --pass: #22c55e;
-  --warn: #f59e0b;
-  --fail: #ef4444;
-  --skip: #94a3b8;
+  /* tlsight-only tokens. --pass/--warn/--fail/--skip come from
+     @netray-info/common-frontend/styles/theme.css (shared across the suite). */
   --mono: var(--font-mono);
   --sans: var(--font-sans);
   --explain-bg: rgba(0, 212, 255, 0.06);
@@ -19,10 +16,6 @@
 }
 
 [data-theme="light"] {
-  --pass: #008800;
-  --warn: #b86e00;
-  --fail: #cc0000;
-  --skip: #4a5568;
   --explain-bg: rgba(0, 119, 204, 0.06);
   --explain-border: rgba(0, 119, 204, 0.15);
 }

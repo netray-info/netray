@@ -83,7 +83,11 @@ export default function IpCard(props: Props) {
         </div>
 
         <Show when={props.result.error}>
-          {(err) => <span class="ip-card__error">{err().message}</span>}
+          {(err) => (
+            <span class="ip-card__error" role="alert">
+              {err().message}
+            </span>
+          )}
         </Show>
 
         <Show when={tls()}>

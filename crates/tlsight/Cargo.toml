@@ -32,7 +32,7 @@ axum = { version = "0.8", features = ["json"] }
 tower = { version = "0.5", features = ["limit"] }
 tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
 governor = "0.10"
-netray-common = { version = "0.7.0", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment", "backend"] }
+netray-common = { version = "0.8", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment", "backend"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -78,3 +78,7 @@ http-body-util = "0.1"
 rcgen = "0.14"
 serde_json = "1"
 
+# Local development override — uses the side-by-side netray-common checkout
+# until 0.8.0 is published to crates.io. Remove this block once published.
+[patch.crates-io]
+netray-common = { path = "../netray-common" }

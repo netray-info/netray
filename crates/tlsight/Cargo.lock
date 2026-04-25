@@ -1694,9 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "netray-common"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "793dff2148a2fbf6fd71f8e874c7b0b2527c52818df387d6a8bb2107b36e79b9"
+version = "0.8.0"
 dependencies = [
  "axum",
  "bytes",

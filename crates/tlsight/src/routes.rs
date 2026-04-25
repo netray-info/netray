@@ -97,34 +97,9 @@ pub struct ConsistencyMismatch {
     pub values: HashMap<String, String>,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct MetaResponse {
-    pub site_name: String,
-    pub version: &'static str,
-    pub features: MetaFeatures,
-    pub limits: MetaLimits,
-    pub custom_ca_count: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct MetaFeatures {
-    pub dane: bool,
-    pub caa: bool,
-    pub ct: bool,
-    pub multi_port: bool,
-    pub multi_ip: bool,
-    pub ip_enrichment: bool,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct MetaLimits {
-    pub max_ports: usize,
-    pub max_ips_per_hostname: usize,
-    pub handshake_timeout_secs: u64,
-    pub request_timeout_secs: u64,
-}
+// `MetaResponse` is now `netray_common::ecosystem::EcosystemMeta`; tlsight's
+// previously bespoke fields (features, limits, custom_ca_count) are folded
+// into the shared shape's `features` and `limits` maps.
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct HealthResponse {
@@ -187,10 +162,9 @@ fn default_ports() -> Vec<u16> {
         TlsaInfo,
         ConsistencyResult,
         ConsistencyMismatch,
-        MetaResponse,
-        MetaFeatures,
-        MetaLimits,
-        netray_common::ecosystem::EcosystemConfig,
+        netray_common::ecosystem::EcosystemMeta,
+        netray_common::ecosystem::EcosystemUrls,
+        netray_common::ecosystem::RateLimitSummary,
         HealthResponse,
         ReadyResponse,
         ErrorResponse,
@@ -298,36 +272,56 @@ async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     get,
     path = "/api/meta",
     responses(
-        (status = 200, description = "Service metadata", body = MetaResponse),
+        (status = 200, description = "Service metadata", body = netray_common::ecosystem::EcosystemMeta),
     )
 )]
-async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
-    let config = state.config.load();
-    let ecosystem = if config.ecosystem.has_any() {
-        Some(config.ecosystem.clone())
-    } else {
-        None
-    };
+async fn meta_handler(
+    State(state): State<AppState>,
+) -> Json<netray_common::ecosystem::EcosystemMeta> {
+    use netray_common::ecosystem::{EcosystemMeta, EcosystemUrls, RateLimitSummary};
+    use serde_json::{Map, Value, json};
 
-    Json(MetaResponse {
+    let config = state.config.load();
+
+    let mut features = Map::new();
+    features.insert("dane".into(), Value::Bool(config.validation.check_dane));
+    features.insert("caa".into(), Value::Bool(config.validation.check_caa));
+    features.insert("ct".into(), Value::Bool(config.validation.check_ct));
+    features.insert("multi_port".into(), Value::Bool(true));
+    features.insert("multi_ip".into(), Value::Bool(true));
+    features.insert(
+        "ip_enrichment".into(),
+        Value::Bool(state.enrichment_client.is_some()),
+    );
+
+    let mut limits = Map::new();
+    limits.insert("max_ports".into(), json!(config.limits.max_ports));
+    limits.insert(
+        "max_ips_per_hostname".into(),
+        json!(config.limits.max_ips_per_hostname),
+    );
+    limits.insert(
+        "handshake_timeout_secs".into(),
+        json!(config.limits.handshake_timeout_secs),
+    );
+    limits.insert(
+        "request_timeout_secs".into(),
+        json!(config.limits.request_timeout_secs),
+    );
+    limits.insert("custom_ca_count".into(), json!(state.custom_ca_count));
+
+    Json(EcosystemMeta {
         site_name: config.site_name.clone(),
-        version: env!("CARGO_PKG_VERSION"),
-        features: MetaFeatures {
-            dane: config.validation.check_dane,
-            caa: config.validation.check_caa,
-            ct: config.validation.check_ct,
-            multi_port: true,
-            multi_ip: true,
-            ip_enrichment: state.enrichment_client.is_some(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        ecosystem: EcosystemUrls::from(&config.ecosystem),
+        features,
+        limits,
+        rate_limit: RateLimitSummary {
+            per_ip_per_minute: config.limits.per_ip_per_minute,
+            per_ip_burst: config.limits.per_ip_burst,
+            global_per_minute: 0,
+            global_burst: 0,
         },
-        limits: MetaLimits {
-            max_ports: config.limits.max_ports,
-            max_ips_per_hostname: config.limits.max_ips_per_hostname,
-            handshake_timeout_secs: config.limits.handshake_timeout_secs,
-            request_timeout_secs: config.limits.request_timeout_secs,
-        },
-        custom_ca_count: state.custom_ca_count,
-        ecosystem,
     })
 }
 
