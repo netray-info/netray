@@ -6,7 +6,13 @@ const root = document.getElementById('root');
 if (root) {
   render(
     () => (
-      <ErrorBoundary fallback={(err) => <div class="error-banner">Something went wrong: {err.message}</div>}>
+      <ErrorBoundary
+        fallback={(err) => (
+          <div class="error-banner" role="alert">
+            Something went wrong: {err.message}
+          </div>
+        )}
+      >
         <App />
       </ErrorBoundary>
     ),

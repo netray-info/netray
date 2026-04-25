@@ -38,27 +38,8 @@ pub struct ConfigResponse {
     pub version: &'static str,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-pub struct MetaResponse {
-    pub version: &'static str,
-    pub site_name: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ecosystem: Option<EcosystemLinks>,
-}
-
-#[derive(Debug, Serialize, ToSchema)]
-pub struct EcosystemLinks {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ip_base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dns_base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tls_base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub http_base_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub lens_base_url: Option<String>,
-}
+// `MetaResponse` is now `netray_common::ecosystem::EcosystemMeta`; the local
+// `EcosystemLinks` type was deleted in favour of `EcosystemUrls`.
 
 // ---------------------------------------------------------------------------
 // Request types
@@ -96,8 +77,9 @@ pub struct InspectQuery {
         HealthResponse,
         ReadyResponse,
         ConfigResponse,
-        MetaResponse,
-        EcosystemLinks,
+        netray_common::ecosystem::EcosystemMeta,
+        netray_common::ecosystem::EcosystemUrls,
+        netray_common::ecosystem::RateLimitSummary,
         InspectRequest,
         InspectResponse,
         SecurityReport,
@@ -198,33 +180,58 @@ async fn config_handler() -> Json<ConfigResponse> {
     get,
     path = "/api/meta",
     responses(
-        (status = 200, description = "Service metadata and ecosystem links", body = MetaResponse),
+        (status = 200, description = "Service metadata and ecosystem links", body = netray_common::ecosystem::EcosystemMeta),
     )
 )]
-async fn meta_handler(State(state): State<AppState>) -> Json<MetaResponse> {
+async fn meta_handler(
+    State(state): State<AppState>,
+) -> Json<netray_common::ecosystem::EcosystemMeta> {
+    use netray_common::ecosystem::{EcosystemMeta, EcosystemUrls, RateLimitSummary};
+    use serde_json::{Map, Value, json};
+
     let meta = &state.config.meta;
-    let has_any = meta.ip_base_url.is_some()
-        || meta.dns_base_url.is_some()
-        || meta.tls_base_url.is_some()
-        || meta.http_base_url.is_some()
-        || meta.lens_base_url.is_some();
+    let limits_cfg = &state.config.limits;
 
-    let ecosystem = if has_any {
-        Some(EcosystemLinks {
-            ip_base_url: meta.ip_base_url.clone(),
-            dns_base_url: meta.dns_base_url.clone(),
-            tls_base_url: meta.tls_base_url.clone(),
-            http_base_url: meta.http_base_url.clone(),
-            lens_base_url: meta.lens_base_url.clone(),
-        })
-    } else {
-        None
-    };
+    let mut features = Map::new();
+    features.insert(
+        "ip_enrichment".into(),
+        Value::Bool(state.config.enrichment.ip_url.is_some()),
+    );
 
-    Json(MetaResponse {
-        version: env!("CARGO_PKG_VERSION"),
-        site_name: "spectra",
-        ecosystem,
+    let mut limits = Map::new();
+    limits.insert(
+        "request_timeout_secs".into(),
+        json!(state.config.inspect.request_timeout_secs),
+    );
+    limits.insert(
+        "total_timeout_secs".into(),
+        json!(state.config.inspect.total_timeout_secs),
+    );
+    limits.insert("max_redirects".into(), json!(state.config.inspect.max_redirects));
+    limits.insert(
+        "max_concurrent_connections".into(),
+        json!(limits_cfg.max_concurrent_connections),
+    );
+
+    Json(EcosystemMeta {
+        site_name: "spectra".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        ecosystem: EcosystemUrls {
+            ip_base_url: meta.ip_base_url.clone().unwrap_or_default(),
+            dns_base_url: meta.dns_base_url.clone().unwrap_or_default(),
+            tls_base_url: meta.tls_base_url.clone().unwrap_or_default(),
+            http_base_url: meta.http_base_url.clone().unwrap_or_default(),
+            email_base_url: String::new(),
+            lens_base_url: meta.lens_base_url.clone().unwrap_or_default(),
+        },
+        features,
+        limits,
+        rate_limit: RateLimitSummary {
+            per_ip_per_minute: limits_cfg.per_ip_per_minute,
+            per_ip_burst: limits_cfg.per_ip_burst,
+            global_per_minute: 0,
+            global_burst: 0,
+        },
     })
 }
 
@@ -360,7 +367,7 @@ async fn do_inspect_inner(
                     org: info.org,
                     ip_type: info.ip_type,
                     threat,
-                    role: None, // TODO: wire up once netray-common >= 0.5.5 (network_role field)
+                    role: info.network_role,
                 }
             }
             None => inspect::EnrichmentData::default(),
