@@ -1,6 +1,7 @@
 import { For, Show, type JSX } from 'solid-js';
 import type { SiteMeta } from '../lib/types';
 import { GRADE_LEGEND } from '../lib/gradeLegend';
+import DeeperCallout from './DeeperCallout';
 
 interface Props {
   site?: SiteMeta;
@@ -84,10 +85,7 @@ export default function Landing(props: Props) {
 
       <p class="landing__trust">{trustStrip()}</p>
 
-      <p class="landing__deeper">
-        Want to look deeper? →{' '}
-        <a class="landing__deeper-link" href="/tools">Raw data for every check</a>
-      </p>
+      <DeeperCallout />
     </div>
   );
 }

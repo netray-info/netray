@@ -552,8 +552,24 @@ a:hover { text-decoration: underline; }
 }
 
 .summary-overall {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* Grade descriptor (e.g. "ok — weaknesses worth fixing") rendered above
+   the count headline. Pulls the same wording from gradeLegend.ts that the
+   idle Landing shows, so users carry the meaning of B/C/D into results. */
+.summary-grade-descriptor {
   font-size: 0.8125rem;
   color: var(--text-secondary);
+  letter-spacing: 0.005em;
+}
+
+.summary-grade-descriptor strong {
+  color: var(--text-primary);
+  font-weight: 600;
+  text-transform: lowercase;
 }
 
 .summary-dots {
@@ -1224,14 +1240,21 @@ a:hover { text-decoration: underline; }
   color: var(--text-muted);
 }
 
-.landing__deeper {
+.deeper-callout {
   margin: 0;
   font-size: 0.9375rem;
   color: var(--text-secondary);
+  text-align: center;
 }
 
-.landing__deeper-link {
+.deeper-callout__link {
   font-weight: 500;
+}
+
+/* In result-state contexts (rendered outside .landing) the callout needs
+   its own breathing room. Inside .landing the parent's flex gap handles it. */
+.main > .deeper-callout {
+  margin: 2.5rem 0 1rem;
 }
 
 /* ================================================================

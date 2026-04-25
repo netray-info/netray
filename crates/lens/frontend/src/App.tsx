@@ -12,6 +12,7 @@ import HttpSection from './components/HttpSection';
 import EmailSection from './components/EmailSection';
 import IpSection from './components/IpSection';
 import Landing from './components/Landing';
+import DeeperCallout from './components/DeeperCallout';
 import Summary from './components/Summary';
 import { startCheck } from './lib/sse';
 import { fetchMeta } from './lib/api';
@@ -328,6 +329,12 @@ export default function App() {
                 />
               </div>
             </div>
+          </Show>
+
+          {/* Deeper-callout persists across idle and result states so users
+              who got a failure always have a visible path to /tools. */}
+          <Show when={hasResults() || isLoading() || error()}>
+            <DeeperCallout />
           </Show>
         </main>
 

@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { SummaryEvent, DoneEvent, IpAddress, Verdict } from '../lib/types';
 import { CHECK_LABELS } from '../lib/checkMeta';
+import { GRADE_LEGEND } from '../lib/gradeLegend';
 import VerdictDot from './VerdictDot';
 import ValidationChips from './ValidationChips';
 
@@ -15,19 +16,43 @@ function gradeStyle(grade: string): string {
   }
 }
 
-function overallLabel(v: Verdict, grade: string): string {
-  switch (v) {
-    case 'pass':  return 'All checks passing';
-    case 'warn':
-      if (grade === 'A+' || grade === 'A') return 'Minor warnings';
-      return 'Warnings present';
-    case 'fail':
-      if (grade === 'A+' || grade === 'A') return 'Minor failures detected';
-      if (grade === 'D' || grade === 'F') return 'Critical failures detected';
-      return 'Failures detected';
-    case 'error': return 'Check error';
-    case 'skip':  return 'Skipped';
+/// Plain-English descriptor + meaning for the overall grade, sourced from
+/// the same gradeLegend the idle Landing shows. Users who saw "B = ok,
+/// weaknesses worth fixing" on the Landing get the same wording here.
+function gradeDescriptor(grade: string): { descriptor: string; meaning: string } | null {
+  return GRADE_LEGEND.find((e) => e.grade === grade) ?? null;
+}
+
+interface CountRollup {
+  fail: number;
+  warn: number;
+  pass: number;
+}
+
+function rollup(checks?: Array<{ verdict: string }>): CountRollup {
+  const r: CountRollup = { fail: 0, warn: 0, pass: 0 };
+  for (const c of checks ?? []) {
+    if (c.verdict === 'fail' || c.verdict === 'error') r.fail++;
+    else if (c.verdict === 'warn') r.warn++;
+    else if (c.verdict === 'pass') r.pass++;
   }
+  return r;
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/// Headline that adapts to the actual count of failures and warnings.
+/// Replaces the previous static labels ("Failures detected" etc.) with
+/// something a non-technical reader can act on.
+function countHeadline(v: Verdict, counts: CountRollup): string {
+  if (v === 'error') return 'Check error';
+  if (v === 'skip') return 'Skipped';
+  if (counts.fail === 0 && counts.warn === 0) return 'Everything checks out';
+  if (counts.fail === 0) return `${plural(counts.warn, 'warning', 'warnings')} worth a look`;
+  if (counts.warn === 0) return `${plural(counts.fail, 'thing', 'things')} to fix`;
+  return `${plural(counts.fail, 'thing', 'things')} to fix and ${plural(counts.warn, 'warning', 'warnings')} worth a look`;
 }
 
 function durationClass(ms: number): string {
@@ -117,8 +142,15 @@ export default function Summary(props: Props) {
                 {actions()}
               </div>
               <div class="summary-labels">
+                <Show when={gradeDescriptor(s().grade)}>
+                  {(d) => (
+                    <span class="summary-grade-descriptor">
+                      <strong>{d().descriptor}</strong> — {d().meaning}
+                    </span>
+                  )}
+                </Show>
                 <span class="summary-overall">
-                  {overallLabel(s().overall, s().grade)}
+                  {countHeadline(s().overall, rollup(props.checks))}
                   <Show when={hasErroredSection()}>
                     <span class="summary-incomplete">: incomplete — some checks failed to run</span>
                   </Show>
