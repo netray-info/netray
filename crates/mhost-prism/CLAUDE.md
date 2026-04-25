@@ -1,19 +1,7 @@
 # CLAUDE.md — prism
 
-## Rules
+## Tool-specific principles
 
-- No Co-Authored-By for Claude in commits
-- Scoped changes only: no formatting mixed with functional changes, no unrelated modifications
-- No heavy deps for minor convenience; no speculative flags/config/abstractions without a caller
-- Don't bypass failing checks (`--no-verify`, `#[allow(...)]`) without explaining why
-- No PII, real emails, or real domains (use example.com) in test data, docs, commits
-- `TODO("reason")` over hidden guesses; conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
-
-## Engineering Principles
-
-KISS · YAGNI · DRY (rule of three) · SRP · Fail Fast · Reversibility · Performance
-
-- **Rust patterns**: Use idiomatic Rust (enums, traits, iterators). Leverage the type system to prevent invalid states.
 - **Secure by Default**: This is an open DNS proxy -- security is load-bearing (see Security Checklist below).
 - **Determinism**: Same input -> same output. Pin randomness in tests, avoid time-dependent logic where possible.
 
@@ -26,48 +14,7 @@ KISS · YAGNI · DRY (rule of three) · SRP · Fail Fast · Reversibility · Per
 - **README**: `README.md` — user-facing docs: features, query language, all three modes, API reference, configuration, security, dev setup.
 - **SDD**: `docs/done/sdd-2025-03-07.md` (historical) — the original design document. Current architecture is documented in this file (CLAUDE.md) and README.md.
 
-prism provides and all functionality must adhere to these core principles:
-
-- high performance
-- high efficiency
-- high stability
-- high security (defense-in-depth: query restrictions, rate limiting, IP extraction, security headers)
-
-## Design Document
-
-The original Software Design Document (`docs/done/sdd-2025-03-07.md`, historical) defined the initial architecture, API design, security model, and phased delivery. It is kept for reference but is no longer the source of truth — the implemented architecture is documented in this file (CLAUDE.md) and README.md. Key SDD sections for historical context:
-
-- **§4** Query language syntax and semantics
-- **§5** API endpoints (query, check, trace, parse, metadata)
-- **§7** Backend architecture (axum, SSE streaming, FuturesUnordered pattern)
-- **§8** Security architecture (4-layer defense-in-depth)
-- **§9** Configuration (TOML + env vars)
-- **§14** Phased delivery plan
-
-## Technology Decisions
-
-Decisions made during project setup, supplementing the SDD:
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| **Repository** | Standalone repo, `mhost` via crates.io | Independent release cadence; gaps in mhost-lib addressed upstream separately |
-| **CSS** | Plain CSS with custom properties | Frontend is ~3 components; custom properties map directly to mhost's color palette and dark mode toggle; zero build config |
-| **Config parsing** | `config` crate | Built-in layering (TOML file + env vars + defaults); handles `PRISM_` prefix and `__` section separators natively |
-| **Error handling** | `thiserror` | Structured `ApiError` enum maps to specific HTTP status + error codes; no need for `anyhow`'s erased types |
-| **Request IDs** | `uuid` crate with `v7` feature | Time-ordered UUIDs; universally recognized in headers/logs/JSON |
-| **TypeScript** | Strict mode (`strict: true`) | Frontend is thin — low ceremony cost, catches bugs at compile time |
-
-## Roadmap
-
-Phased delivery as originally defined in the SDD (historical):
-
-- ~~**Phase 0**: Workspace conversion (mhost repo)~~ — N/A (standalone repo)
-- ~~**Phase 1**: MVP — query endpoint, parser, results table, rate limiting, circuit breaker, metrics~~
-- ~~**Phase 2**: Transport & UI enhancements — transport flags, DNSSEC, server comparison, expandable rows~~
-- ~~**Phase 3**: Polish — server-side autocomplete, keyboard shortcuts, history, mobile~~
-- ~~**Phase 4**: check/trace endpoints, stream timeouts, domain-length validation, `+check`/`+trace` routing~~
-- ~~**Phase 5**: IP enrichment via ifconfig-rs — clickable IPs, inline badges, infrastructure lint, trace annotations~~
-- ~~**Phase 6**: Transport comparison (`+compare`) and auth-vs-recursive (`+auth`) endpoints + frontend~~
+Core principles: high performance, high efficiency, high stability, high security (defense-in-depth: query restrictions, rate limiting, IP extraction, security headers).
 
 ## Build & Test
 
@@ -225,15 +172,7 @@ Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.
 
 Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
 
-**GitHub Packages auth**: Any CI step that runs `npm ci` for the frontend must set `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` as an env var on that step. The project `.npmrc` uses `${NODE_AUTH_TOKEN}` as a placeholder (not a hardcoded token) so the token must be injected at runtime. Missing this env var causes E401 from `https://npm.pkg.github.com`.
-
-```yaml
-- name: frontend build
-  run: npm ci && npm run build
-  working-directory: frontend
-  env:
-    NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
+GitHub Packages auth (`NODE_AUTH_TOKEN`) requirement: see workflow-rules R-J3.
 
 ## Frontend Rules
 
