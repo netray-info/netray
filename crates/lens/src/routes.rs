@@ -272,15 +272,13 @@ pub struct CheckGetQuery {
 // Meta response types
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize, ToSchema)]
-pub struct RateLimitInfo {
-    pub per_ip_per_minute: u32,
-    pub per_ip_burst: u32,
-    pub global_per_minute: u32,
-    pub global_burst: u32,
-}
-
-#[derive(Serialize, ToSchema)]
+/// Lens scoring profile, serialized into `EcosystemMeta.features["profile"]`.
+///
+/// Kept as a struct (not derived as ToSchema any more) because the shared
+/// `EcosystemMeta` carries it through `serde_json::Value`. The acceptance
+/// schema only constrains `features` to be a JSON object; the inner shape
+/// is service-specific.
+#[derive(Serialize)]
 pub struct ProfileData {
     pub name: String,
     pub version: u32,
@@ -288,17 +286,6 @@ pub struct ProfileData {
     pub section_weights: HashMap<String, u32>,
     pub thresholds: BTreeMap<String, u32>,
     pub hard_fail: HashMap<String, Vec<String>>,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct MetaResponse {
-    pub site_name: String,
-    #[schema(value_type = String)]
-    pub version: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
-    pub profile: ProfileData,
-    pub rate_limit: RateLimitInfo,
 }
 
 // ---------------------------------------------------------------------------
@@ -365,18 +352,14 @@ pub async fn health_handler() -> impl IntoResponse {
     path = "/api/meta",
     tag = "api",
     responses(
-        (status = 200, description = "Service metadata and scoring profile", body = MetaResponse)
+        (status = 200, description = "Service metadata and scoring profile", body = netray_common::ecosystem::EcosystemMeta)
     )
 )]
 pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
-    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    use netray_common::ecosystem::{EcosystemMeta, EcosystemUrls, RateLimitSummary};
+    use serde_json::Map;
+
     let config = &state.config;
-    let eco = &config.ecosystem;
-    let ecosystem = if eco.has_any() {
-        Some(eco.clone())
-    } else {
-        None
-    };
     let profile = &state.scoring_profile;
     let mut all_checks = HashMap::new();
     let mut section_weights = HashMap::new();
@@ -394,13 +377,21 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
         thresholds: profile.thresholds.clone(),
         hard_fail,
     };
-    let rl = &state.config.rate_limit;
-    Json(MetaResponse {
+
+    let mut features = Map::new();
+    features.insert(
+        "profile".into(),
+        serde_json::to_value(&profile_data).unwrap_or(serde_json::Value::Null),
+    );
+
+    let rl = &config.rate_limit;
+    Json(EcosystemMeta {
         site_name: "lens — Domain Health Check".to_string(),
-        version: VERSION,
-        ecosystem,
-        profile: profile_data,
-        rate_limit: RateLimitInfo {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        ecosystem: EcosystemUrls::from(&config.ecosystem),
+        features,
+        limits: Map::new(),
+        rate_limit: RateLimitSummary {
             per_ip_per_minute: rl.per_ip_per_minute,
             per_ip_burst: rl.per_ip_burst,
             global_per_minute: rl.global_per_minute,
