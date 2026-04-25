@@ -1,5 +1,6 @@
 use lens::config;
 use lens::routes;
+use lens::spa;
 use lens::state;
 
 use std::net::SocketAddr;
@@ -58,9 +59,10 @@ async fn main() {
     // 5. Build the main app with all middleware.
     let app = Router::new()
         .merge(health_router.with_state(state.clone()))
-        .merge(api_router.with_state(state))
+        .merge(api_router.with_state(state.clone()))
         .route("/robots.txt", get(robots_txt))
-        .fallback(netray_common::server::static_handler::<routes::Assets>())
+        .fallback(spa::handler)
+        .with_state(state)
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("lens", req, next)
         }))

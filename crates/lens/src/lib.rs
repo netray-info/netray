@@ -8,4 +8,5 @@ pub mod input;
 pub mod routes;
 pub mod scoring;
 pub mod security;
+pub mod spa;
 pub mod state;

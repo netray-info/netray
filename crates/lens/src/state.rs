@@ -13,6 +13,7 @@ use crate::cache::CachedResult;
 use crate::config::Config;
 use crate::scoring::ScoringProfile;
 use crate::security::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
+use crate::spa::{Assets, render_apex_html};
 
 /// Shared application state passed to every axum handler via `axum::extract::State`.
 #[derive(Clone)]
@@ -25,6 +26,10 @@ pub struct AppState {
     pub scoring_profile: Arc<ScoringProfile>,
     /// Ordered: WAVE1_SECTIONS order, then WAVE2_SECTIONS order.
     pub backends: Arc<Vec<Box<dyn Backend + Send + Sync>>>,
+    /// SPA HTML shell with `[site]` placeholders substituted once at startup.
+    /// `None` when the embedded `frontend/dist` has no `index.html` (test
+    /// builds with a `.gitkeep`-only dist).
+    pub rendered_html: Option<Arc<String>>,
 }
 
 impl AppState {
@@ -94,6 +99,11 @@ impl AppState {
             client: http_client.clone(),
         }));
 
+        let rendered_html = Assets::get("index.html").map(|f| {
+            let template = std::str::from_utf8(&f.data).unwrap_or("").to_string();
+            Arc::new(render_apex_html(&template, &config.site))
+        });
+
         Ok(Self {
             config: Arc::new(config),
             per_ip_limiter,
@@ -102,6 +112,7 @@ impl AppState {
             cache,
             scoring_profile,
             backends: Arc::new(backends),
+            rendered_html,
         })
     }
 }
