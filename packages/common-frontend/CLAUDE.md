@@ -1,14 +1,5 @@
 # CLAUDE.md — netray-common-frontend
 
-## Rules
-
-- No Co-Authored-By for Claude in commits
-- Scoped changes only: no formatting mixed with functional changes, no unrelated modifications
-- No heavy deps for minor convenience; no speculative flags/config/abstractions without a caller
-- Don't bypass failing checks (`--no-verify`, `#[allow(...)]`) without explaining why
-- No PII, real emails, or real domains (use example.com) in test data, docs, commits
-- `TODO("reason")` over hidden guesses; conventional commits (`feat:`, `fix:`, `refactor:`, etc.)
-
 ## Frontend Rules
 
 Full spec: [`specs/rules/frontend-rules.md`](../specs/rules/frontend-rules.md) in the netray.info meta repo. Apply when modifying components, CSS tokens, or the theme system.
