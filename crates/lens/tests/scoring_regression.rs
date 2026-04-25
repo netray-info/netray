@@ -39,14 +39,6 @@ fn fail(name: &str) -> CheckResult {
     }
 }
 
-fn not_found(name: &str) -> CheckResult {
-    CheckResult {
-        name: name.to_string(),
-        verdict: CheckVerdict::NotFound,
-        messages: vec![],
-    }
-}
-
 fn no_error(checks: Vec<CheckResult>) -> SectionInput {
     SectionInput {
         checks,

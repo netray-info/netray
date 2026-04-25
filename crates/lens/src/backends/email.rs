@@ -459,7 +459,7 @@ mod tests {
             HashMap::new()
         };
         let raw_headline = build_headline(&checks, &bucket_na);
-        let detail_url = format!("https://email.netray.info/?domain=example.com");
+        let detail_url = "https://email.netray.info/?domain=example.com".to_string();
         Ok(BackendResult {
             checks,
             extra: BackendExtra::Email {

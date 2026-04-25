@@ -295,6 +295,22 @@ fn build_headline(addresses: &[IpInfo]) -> String {
     }
 }
 
+fn build_detail_url(ip_url: &str, ips: &[IpAddr]) -> String {
+    let base = ip_url.trim_end_matches('/');
+    if ips.len() == 1 {
+        format!("{base}/?ip={}", ips[0])
+    } else if ips.is_empty() {
+        base.to_string()
+    } else {
+        let query = ips
+            .iter()
+            .map(|ip| format!("ip={ip}"))
+            .collect::<Vec<_>>()
+            .join("&");
+        format!("{base}/?{query}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,21 +332,5 @@ mod tests {
             matches!(result, Err(SectionError::NoDnsResults)),
             "expected NoDnsResults, got: {result:?}"
         );
-    }
-}
-
-fn build_detail_url(ip_url: &str, ips: &[IpAddr]) -> String {
-    let base = ip_url.trim_end_matches('/');
-    if ips.len() == 1 {
-        format!("{base}/?ip={}", ips[0])
-    } else if ips.is_empty() {
-        base.to_string()
-    } else {
-        let query = ips
-            .iter()
-            .map(|ip| format!("ip={ip}"))
-            .collect::<Vec<_>>()
-            .join("&");
-        format!("{base}/?{query}")
     }
 }
