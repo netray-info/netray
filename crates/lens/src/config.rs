@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub use config::ConfigError;
 
@@ -18,6 +18,8 @@ pub struct Config {
     pub rate_limit: RateLimitConfig,
     #[serde(default)]
     pub scoring: ScoringConfig,
+    #[serde(default)]
+    pub site: SiteConfig,
     #[serde(default)]
     pub telemetry: netray_common::telemetry::TelemetryConfig,
 }
@@ -75,6 +77,75 @@ pub struct RateLimitConfig {
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ScoringConfig {
     pub profile_path: Option<String>,
+}
+
+/// Apex landing-page branding.
+///
+/// Every field is optional; missing values fall back to the strings in
+/// `SiteConfig::default()`. The 12 fields cover everything an operator can
+/// rebrand on the apex without rebuilding the lens image. Product semantics
+/// (grade thresholds, per-check `fix_hint` copy, check labels) are NOT
+/// configurable here — see `specs/sdd/product-repositioning.md` §11.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SiteConfig {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub og_image: Option<String>,
+    pub og_site_name: Option<String>,
+
+    pub brand_name: Option<String>,
+    pub brand_tagline: Option<String>,
+    pub status_pill: Option<String>,
+
+    pub hero_heading: Option<String>,
+    pub hero_subheading: Option<String>,
+    pub example_domains: Option<Vec<String>>,
+    pub trust_strip: Option<String>,
+
+    pub footer_about: Option<String>,
+    pub footer_links: Option<Vec<FooterLink>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FooterLink {
+    pub label: String,
+    pub href: String,
+    pub external: bool,
+}
+
+impl Default for SiteConfig {
+    fn default() -> Self {
+        Self {
+            title: Some(
+                "netray.info — your domain's health grade, in under a second".into(),
+            ),
+            description: Some(
+                "Type a domain, get an A+ to F grade across DNS, TLS, HTTP, and email security. \
+                 No account, no ads, open source."
+                    .into(),
+            ),
+            og_image: None,
+            og_site_name: Some("netray.info".into()),
+
+            brand_name: Some("lens".into()),
+            brand_tagline: Some("your domain's health grade, in under a second".into()),
+            status_pill: Some("open source · self-hosted · built in Rust".into()),
+
+            hero_heading: Some("How healthy is your domain?".into()),
+            hero_subheading: Some(
+                "DNS, TLS, HTTP, and email — checked in parallel, one grade, usually under a second.".into(),
+            ),
+            example_domains: Some(vec![
+                "example.com".into(),
+                "github.com".into(),
+                "cloudflare.com".into(),
+            ]),
+            trust_strip: Some("No account · No ads · Open source · Self-hostable".into()),
+
+            footer_about: None,
+            footer_links: None,
+        }
+    }
 }
 
 // --- Default implementations ---
@@ -238,6 +309,7 @@ mod tests {
             cache: default_cache(),
             rate_limit: default_rate_limit(),
             scoring: ScoringConfig::default(),
+            site: SiteConfig::default(),
             telemetry: Default::default(),
         }
     }
@@ -276,6 +348,45 @@ mod tests {
         assert_eq!(cfg.rate_limit.per_ip_burst, 3);
         assert_eq!(cfg.rate_limit.global_per_minute, 100);
         assert_eq!(cfg.rate_limit.global_burst, 20);
+    }
+
+    // --- SiteConfig defaults (per SDD product-repositioning §6.1) ---
+
+    #[test]
+    fn default_site_populates_all_branding_fields() {
+        let s = SiteConfig::default();
+        assert!(s.title.is_some());
+        assert!(s.description.is_some());
+        assert!(s.og_site_name.is_some());
+        assert!(s.brand_name.is_some());
+        assert!(s.brand_tagline.is_some());
+        assert!(s.status_pill.is_some());
+        assert!(s.hero_heading.is_some());
+        assert!(s.hero_subheading.is_some());
+        assert!(s.example_domains.is_some());
+        assert!(s.trust_strip.is_some());
+        // og_image, footer_about, footer_links default to None — frontend supplies fallbacks.
+    }
+
+    #[test]
+    fn default_example_domains_match_sdd_requirement_24() {
+        let s = SiteConfig::default();
+        assert_eq!(
+            s.example_domains.as_deref(),
+            Some(
+                &[
+                    "example.com".to_string(),
+                    "github.com".to_string(),
+                    "cloudflare.com".to_string()
+                ][..]
+            )
+        );
+    }
+
+    #[test]
+    fn default_brand_name_is_lens() {
+        let s = SiteConfig::default();
+        assert_eq!(s.brand_name.as_deref(), Some("lens"));
     }
 
     // --- Zero-value rejection ---

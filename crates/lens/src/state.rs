@@ -123,6 +123,7 @@ mod tests {
     use super::*;
     use crate::config::{
         BackendsConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig, ServerConfig,
+        SiteConfig,
     };
 
     fn test_config() -> Config {
@@ -162,6 +163,7 @@ mod tests {
                 global_burst: 20,
             },
             scoring: ScoringConfig::default(),
+            site: SiteConfig::default(),
         }
     }
 

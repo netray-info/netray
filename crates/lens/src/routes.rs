@@ -383,6 +383,10 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
         "profile".into(),
         serde_json::to_value(&profile_data).unwrap_or(serde_json::Value::Null),
     );
+    features.insert(
+        "site".into(),
+        serde_json::to_value(&config.site).unwrap_or(serde_json::Value::Null),
+    );
 
     let rl = &config.rate_limit;
     Json(EcosystemMeta {
@@ -1233,6 +1237,7 @@ pub mod tests {
     use crate::config::Config;
     use crate::config::{
         BackendsConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig, ServerConfig,
+        SiteConfig,
     };
 
     pub fn test_config_with_rate_limit(per_ip: u32, burst: u32) -> Config {
@@ -1275,6 +1280,7 @@ pub mod tests {
                 global_burst: 100,
             },
             scoring: ScoringConfig::default(),
+            site: SiteConfig::default(),
         }
     }
 
@@ -1541,6 +1547,52 @@ pub mod tests {
         assert!(
             rl["global_burst"].is_number(),
             "global_burst must be a number"
+        );
+    }
+
+    // --- SDD product-repositioning §3 Requirement 8: /api/meta exposes `site` ---
+
+    #[tokio::test]
+    async fn meta_includes_site_with_all_12_fields() {
+        let state = make_test_state();
+        let app = Router::new()
+            .route("/api/meta", get(meta_handler))
+            .with_state(state);
+        let req = Request::builder()
+            .uri("/api/meta")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = to_bytes(resp.into_body(), 8192).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        let site = &json["features"]["site"];
+        assert!(site.is_object(), "features.site must be an object");
+        for key in [
+            "title",
+            "description",
+            "og_image",
+            "og_site_name",
+            "brand_name",
+            "brand_tagline",
+            "status_pill",
+            "hero_heading",
+            "hero_subheading",
+            "example_domains",
+            "trust_strip",
+            "footer_about",
+            "footer_links",
+        ] {
+            assert!(
+                site.get(key).is_some(),
+                "features.site must contain field {key}"
+            );
+        }
+        assert_eq!(site["brand_name"], "lens");
+        assert_eq!(
+            site["example_domains"],
+            serde_json::json!(["example.com", "github.com", "cloudflare.com"])
         );
     }
 

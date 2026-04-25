@@ -9,7 +9,7 @@
 use lens::check::run_check;
 use lens::config::{
     BackendsConfig, CacheConfig, Config, EcosystemConfig, RateLimitConfig, ScoringConfig,
-    ServerConfig,
+    ServerConfig, SiteConfig,
 };
 use lens::state::AppState;
 
@@ -60,6 +60,7 @@ fn live_state() -> AppState {
         },
         ecosystem: EcosystemConfig::default(),
         scoring: ScoringConfig::default(),
+        site: SiteConfig::default(),
         telemetry: Default::default(),
     };
     AppState::new(config).expect("failed to build AppState for live tests")

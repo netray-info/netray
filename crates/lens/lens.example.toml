@@ -56,6 +56,50 @@ global_burst = 20
 [scoring]
 # profile_path = "profiles/default.toml"   # override built-in default profile
 
+[site]
+# Apex landing-page branding. Every field is optional; missing values fall
+# back to the built-in defaults shown below. All fields can also be overridden
+# via LENS_SITE__<FIELD> env vars (e.g. LENS_SITE__HERO_HEADING).
+#
+# Product semantics (grade thresholds, per-check `fix_hint` copy, check labels)
+# are NOT configurable here — see specs/sdd/product-repositioning.md §11.
+
+# <title> + og:title.
+#title = "netray.info — your domain's health grade, in under a second"
+
+# <meta name=description> + og:description.
+#description = "Type a domain, get an A+ to F grade across DNS, TLS, HTTP, and email security. No account, no ads, open source."
+
+# Absolute URL for og:image. Omitted from <head> when unset.
+#og_image = "https://netray.info/og-card.png"
+
+#og_site_name = "netray.info"
+
+# Brand strings rendered in the apex header.
+#brand_name = "lens"
+#brand_tagline = "your domain's health grade, in under a second"
+#status_pill = "open source · self-hosted · built in Rust"
+
+# Idle-state hero copy.
+#hero_heading = "How healthy is your domain?"
+#hero_subheading = "DNS, TLS, HTTP, and email — checked in parallel, one grade, usually under a second."
+
+# Clickable example chips on the landing page.
+#example_domains = ["example.com", "github.com", "cloudflare.com"]
+
+# Trust strip rendered below the hero.
+#trust_strip = "No account · No ads · Open source · Self-hostable"
+
+# Footer about-text (frontend supplies a sensible default when unset).
+#footer_about = "lens is part of the netray.info suite — open source, MIT licensed, self-hostable."
+
+# Footer link list (frontend supplies a sensible default set when unset).
+#footer_links = [
+#    { label = "Tools", href = "https://netray.info/tools", external = true },
+#    { label = "Guides", href = "https://netray.info/guide", external = true },
+#    { label = "GitHub", href = "https://github.com/netrayinfo", external = true },
+#]
+
 [telemetry]
 # Log output format.
 #   "text" -- human-readable, colour-coded (default; best for terminals)
