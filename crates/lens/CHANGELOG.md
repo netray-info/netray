@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-04-25
+
+### Fixed
+- `[site]` config: a partial TOML override (e.g. setting only `og_image`) used to reset every other field to `None`, producing an empty `<title>`, `og:title`, `og:description` and `og:site_name` at the apex. Each field now carries its own `#[serde(default = "...")]` so missing fields inherit `SiteConfig::default()` regardless of whether the `[site]` table is present.
+
 ## [0.7.0] - 2026-04-25
 
 ### Added
