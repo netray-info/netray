@@ -5,6 +5,10 @@ export interface CheckItem {
   verdict: Verdict;
   messages?: string[];
   guide_url?: string;
+  // Plain-English remediation, populated per check by lens. Empty/missing
+  // means render nothing (Phase 1 ships the mechanism; Phase 4 fills copy).
+  fix_hint?: string;
+  fix_owner?: string;
   weight?: number;
 }
 
@@ -96,9 +100,39 @@ export interface ProfileData {
   hard_fail: Record<string, string[]>;
 }
 
+export interface FooterLink {
+  label: string;
+  href: string;
+  external: boolean;
+}
+
+/// Apex-landing branding from lens [site] config. All fields optional;
+/// the frontend supplies hardcoded fallbacks when meta or a single field
+/// is missing.
+export interface SiteMeta {
+  title?: string;
+  description?: string;
+  og_image?: string | null;
+  og_site_name?: string;
+  brand_name?: string;
+  brand_tagline?: string;
+  status_pill?: string;
+  hero_heading?: string;
+  hero_subheading?: string;
+  example_domains?: string[];
+  trust_strip?: string;
+  footer_about?: string | null;
+  footer_links?: FooterLink[] | null;
+}
+
+export interface MetaFeatures {
+  profile?: ProfileData;
+  site?: SiteMeta;
+}
+
 export interface MetaResponse {
   site_name: string;
   version: string;
   ecosystem?: MetaEcosystem;
-  profile?: ProfileData;
+  features?: MetaFeatures;
 }

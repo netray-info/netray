@@ -75,6 +75,24 @@ export default function CheckList(props: Props) {
                   {(msg) => <div class="check-item__message">{msg}</div>}
                 </For>
               </Show>
+              <Show when={check.fix_hint || check.fix_owner}>
+                <div class="check-item__fix">
+                  <Show when={check.fix_hint}>
+                    <p class="check-item__fix-hint">{check.fix_hint}</p>
+                  </Show>
+                  <Show when={check.fix_owner}>
+                    <p class="check-item__fix-owner">Fix: {check.fix_owner}</p>
+                  </Show>
+                  <Show when={check.guide_url}>
+                    <a
+                      class="check-item__fix-learn"
+                      href={check.guide_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >Learn more →</a>
+                  </Show>
+                </div>
+              </Show>
             </div>
             <Show when={check.weight !== undefined && check.verdict !== 'skip'}>
               <span class={scoreClass(check.verdict)}>

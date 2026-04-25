@@ -11,6 +11,7 @@ import TlsSection from './components/TlsSection';
 import HttpSection from './components/HttpSection';
 import EmailSection from './components/EmailSection';
 import IpSection from './components/IpSection';
+import Landing from './components/Landing';
 import Summary from './components/Summary';
 import { startCheck } from './lib/sse';
 import { fetchMeta } from './lib/api';
@@ -53,7 +54,8 @@ export default function App() {
   onMount(() => {
     fetchMeta().then(m => {
       setMeta(m);
-      if (m?.site_name) document.title = m.site_name;
+      const title = m?.features?.site?.title ?? m?.site_name;
+      if (title) document.title = title;
     });
 
     const params = new URLSearchParams(window.location.search);
@@ -194,8 +196,10 @@ export default function App() {
         <SuiteNav current="lens" meta={meta()?.ecosystem} />
 
         <header class="header">
-          <h1 class="logo">lens</h1>
-          <span class="tagline">domains, in focus</span>
+          <h1 class="logo">{meta()?.features?.site?.brand_name ?? 'lens'}</h1>
+          <span class="tagline">
+            {meta()?.features?.site?.brand_tagline ?? 'domains, in focus'}
+          </span>
           <div class="header-actions">
             <ThemeToggle theme={themeResult} class="header-btn" />
             <button
@@ -225,22 +229,10 @@ export default function App() {
           </Show>
 
           <Show when={!hasResults() && !isLoading() && !error()}>
-            <div class="welcome">
-              <p class="welcome-tagline">
-                TLS certificate status, DNS health, and IP reputation — checked together, streamed as they arrive.
-              </p>
-              <div class="example-chips">
-                <For each={['netray.info', 'example.com', 'github.com']}>
-                  {(domain) => (
-                    <button
-                      class="example-chip"
-                      type="button"
-                      onClick={() => handleSubmit(domain)}
-                    >{domain}</button>
-                  )}
-                </For>
-              </div>
-            </div>
+            <Landing
+              site={meta()?.features?.site}
+              onExampleClick={handleSubmit}
+            />
           </Show>
 
           <Show when={summary()}>
@@ -325,21 +317,25 @@ export default function App() {
 
         <SiteFooter
           aboutText={
-            <>
-              <em>lens</em> checks TLS certificate validity, DNS health, and IP reputation for any
-              domain — results stream in as each check completes. Built in{' '}
-              <a href="https://www.rust-lang.org" target="_blank" rel="noopener noreferrer">Rust</a> with{' '}
-              <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a> and{' '}
-              <a href="https://www.solidjs.com" target="_blank" rel="noopener noreferrer">SolidJS</a>.
-              Open to use — rate limiting applies. Part of the{' '}
-              <a href="https://netray.info"><strong>netray.info</strong></a> suite.
-            </>
+            meta()?.features?.site?.footer_about ?? (
+              <>
+                <em>lens</em> checks TLS certificate validity, DNS health, and IP reputation for any
+                domain — results stream in as each check completes. Built in{' '}
+                <a href="https://www.rust-lang.org" target="_blank" rel="noopener noreferrer">Rust</a> with{' '}
+                <a href="https://github.com/tokio-rs/axum" target="_blank" rel="noopener noreferrer">Axum</a> and{' '}
+                <a href="https://www.solidjs.com" target="_blank" rel="noopener noreferrer">SolidJS</a>.
+                Open to use — rate limiting applies. Part of the{' '}
+                <a href="https://netray.info"><strong>netray.info</strong></a> suite.
+              </>
+            )
           }
-          links={[
-            { href: 'https://github.com/netray-info/lens', label: 'GitHub',   external: true },
-            { href: '/docs',                               label: 'API Docs', external: true },
-            { href: 'https://lukas.pustina.de',            label: 'Author',   external: true },
-          ]}
+          links={
+            meta()?.features?.site?.footer_links ?? [
+              { href: 'https://github.com/netray-info/lens', label: 'GitHub',   external: true },
+              { href: '/docs',                               label: 'API Docs', external: true },
+              { href: 'https://lukas.pustina.de',            label: 'Author',   external: true },
+            ]
+          }
           version={meta()?.version}
         />
 
@@ -364,7 +360,7 @@ export default function App() {
               HTTP and Email are optional — only scored when the respective backends are configured.
               For domains without MX records, the three email receiving buckets are excluded from scoring automatically.
             </p>
-            <Show when={meta()?.profile}>
+            <Show when={meta()?.features?.profile}>
               {(profile) => (
                 <div class="help-scoring">
                   <div class="help-scoring__thresholds">
