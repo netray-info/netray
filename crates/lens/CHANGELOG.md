@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-26
+
+### Added
+- CONTRIBUTING.md and DCO sign-off CI workflow (3f9d784)
+
+### Fixed
+- `/api/meta`: `site` is now a top-level field instead of nested under `features.site`, matching SDD product-repositioning §7.1. The SolidJS frontend reads `meta.site.*` directly so `LENS_SITE__*` overrides flow into the visible apex UX. (0d9b2c1)
+
 ## [0.7.1] - 2026-04-25
 
 ### Fixed
