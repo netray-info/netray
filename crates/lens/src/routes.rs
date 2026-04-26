@@ -311,6 +311,18 @@ pub struct ProfileData {
     pub hard_fail: HashMap<String, Vec<String>>,
 }
 
+/// Lens-specific extension of the shared `EcosystemMeta`: flattens the common
+/// shape and adds a top-level `site` object holding apex-landing branding from
+/// the `[site]` config. Per SDD product-repositioning §7.1, `site` is a
+/// top-level field — not nested under `features` — so the SolidJS frontend
+/// (and any external consumer) can read `meta.site.hero_heading` directly.
+#[derive(Serialize)]
+struct LensMetaResponse {
+    #[serde(flatten)]
+    base: netray_common::ecosystem::EcosystemMeta,
+    site: crate::config::SiteConfig,
+}
+
 // ---------------------------------------------------------------------------
 // Health / Ready response types
 // ---------------------------------------------------------------------------
@@ -398,24 +410,23 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
         "profile".into(),
         serde_json::to_value(&profile_data).unwrap_or(serde_json::Value::Null),
     );
-    features.insert(
-        "site".into(),
-        serde_json::to_value(&config.site).unwrap_or(serde_json::Value::Null),
-    );
 
     let rl = &config.rate_limit;
-    Json(EcosystemMeta {
-        site_name: "lens — Domain Health Check".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        ecosystem: EcosystemUrls::from(&config.ecosystem),
-        features,
-        limits: Map::new(),
-        rate_limit: RateLimitSummary {
-            per_ip_per_minute: rl.per_ip_per_minute,
-            per_ip_burst: rl.per_ip_burst,
-            global_per_minute: rl.global_per_minute,
-            global_burst: rl.global_burst,
+    Json(LensMetaResponse {
+        base: EcosystemMeta {
+            site_name: "lens — Domain Health Check".to_string(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            ecosystem: EcosystemUrls::from(&config.ecosystem),
+            features,
+            limits: Map::new(),
+            rate_limit: RateLimitSummary {
+                per_ip_per_minute: rl.per_ip_per_minute,
+                per_ip_burst: rl.per_ip_burst,
+                global_per_minute: rl.global_per_minute,
+                global_burst: rl.global_burst,
+            },
         },
+        site: config.site.clone(),
     })
 }
 
@@ -1623,7 +1634,8 @@ pub mod tests {
         }
     }
 
-    // --- SDD product-repositioning §3 Requirement 8: /api/meta exposes `site` ---
+    // --- SDD product-repositioning §3 Requirement 8 / §7.1: /api/meta exposes
+    //     `site` as a top-level field (not under `features`).
 
     #[tokio::test]
     async fn meta_includes_site_with_all_12_fields() {
@@ -1640,8 +1652,8 @@ pub mod tests {
         let bytes = to_bytes(resp.into_body(), 8192).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
-        let site = &json["features"]["site"];
-        assert!(site.is_object(), "features.site must be an object");
+        let site = &json["site"];
+        assert!(site.is_object(), "site must be a top-level object");
         for key in [
             "title",
             "description",
@@ -1657,16 +1669,53 @@ pub mod tests {
             "footer_about",
             "footer_links",
         ] {
-            assert!(
-                site.get(key).is_some(),
-                "features.site must contain field {key}"
-            );
+            assert!(site.get(key).is_some(), "site must contain field {key}");
         }
         assert_eq!(site["brand_name"], "lens");
         assert_eq!(
             site["example_domains"],
             serde_json::json!(["netray.info", "example.com", "github.com", "cloudflare.com"])
         );
+
+        // The pre-0.7.2 implementation nested site under `features.site`. The
+        // top-level field is the SDD-canonical location; assert the legacy
+        // location is gone so we don't accidentally re-introduce duplication.
+        assert!(
+            json["features"].get("site").is_none(),
+            "site must NOT be duplicated under features.site"
+        );
+    }
+
+    #[tokio::test]
+    async fn meta_site_reflects_configured_overrides() {
+        let mut state = make_test_state();
+        // Overlay an operator override on top of the default SiteConfig — the
+        // common partial-override case (one URL set, rest inherited).
+        let mut cfg = (*state.config).clone();
+        cfg.site.hero_heading = Some("Is your domain healthy?".to_string());
+        cfg.site.example_domains = Some(vec!["example.com".to_string()]);
+        state.config = std::sync::Arc::new(cfg);
+
+        let app = Router::new()
+            .route("/api/meta", get(meta_handler))
+            .with_state(state);
+        let req = Request::builder()
+            .uri("/api/meta")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = to_bytes(resp.into_body(), 8192).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        assert_eq!(json["site"]["hero_heading"], "Is your domain healthy?");
+        assert_eq!(
+            json["site"]["example_domains"],
+            serde_json::json!(["example.com"])
+        );
+        // Unspecified fields keep their defaults.
+        assert_eq!(json["site"]["brand_name"], "lens");
+        assert!(json["site"]["trust_strip"].is_string());
     }
 
     // --- AC-1: sync mode via Accept: application/json header

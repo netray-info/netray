@@ -55,7 +55,7 @@ export default function App() {
   onMount(() => {
     fetchMeta().then(m => {
       setMeta(m);
-      const title = m?.features?.site?.title ?? m?.site_name;
+      const title = m?.site?.title ?? m?.site_name;
       if (title) document.title = title;
     });
 
@@ -197,9 +197,9 @@ export default function App() {
         <SuiteNav current="lens" meta={meta()?.ecosystem} />
 
         <header class="header">
-          <h1 class="logo">{meta()?.features?.site?.brand_name ?? 'lens'}</h1>
+          <h1 class="logo">{meta()?.site?.brand_name ?? 'lens'}</h1>
           <span class="tagline">
-            {meta()?.features?.site?.brand_tagline ?? 'domains, in focus'}
+            {meta()?.site?.brand_tagline ?? 'domains, in focus'}
           </span>
           <div class="header-actions">
             <ThemeToggle theme={themeResult} class="header-btn" />
@@ -234,7 +234,7 @@ export default function App() {
             }
           >
             <Landing
-              site={meta()?.features?.site}
+              site={meta()?.site}
               onExampleClick={handleSubmit}
             >
               <DomainInput
@@ -340,7 +340,7 @@ export default function App() {
 
         <SiteFooter
           aboutText={
-            meta()?.features?.site?.footer_about ?? (
+            meta()?.site?.footer_about ?? (
               <>
                 <em>lens</em> checks TLS certificate validity, DNS health, and IP reputation for any
                 domain — results stream in as each check completes. Built in{' '}
@@ -353,7 +353,7 @@ export default function App() {
             )
           }
           links={
-            meta()?.features?.site?.footer_links ?? [
+            meta()?.site?.footer_links ?? [
               { href: 'https://github.com/netray-info/lens', label: 'GitHub',   external: true },
               { href: '/docs',                               label: 'API Docs', external: true },
               { href: 'https://lukas.pustina.de',            label: 'Author',   external: true },

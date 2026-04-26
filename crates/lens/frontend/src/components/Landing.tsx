@@ -18,8 +18,8 @@ interface Props {
 // Brand + tagline are rendered by the persistent <header> in App.tsx (also
 // meta-driven).
 //
-// Reads strings from meta.features.site.* with hardcoded fallbacks so the
-// component renders sensibly when /api/meta has not loaded or is missing.
+// Reads strings from meta.site.* with hardcoded fallbacks so the component
+// renders sensibly when /api/meta has not loaded or is missing.
 export default function Landing(props: Props) {
   const heroHeading = () =>
     props.site?.hero_heading ?? 'How healthy is your domain?';

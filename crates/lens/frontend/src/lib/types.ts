@@ -127,7 +127,6 @@ export interface SiteMeta {
 
 export interface MetaFeatures {
   profile?: ProfileData;
-  site?: SiteMeta;
 }
 
 export interface MetaResponse {
@@ -135,4 +134,7 @@ export interface MetaResponse {
   version: string;
   ecosystem?: MetaEcosystem;
   features?: MetaFeatures;
+  /// Apex-landing branding from lens [site] config. Top-level per SDD
+  /// product-repositioning §7.1; the SolidJS Landing reads from here.
+  site?: SiteMeta;
 }
