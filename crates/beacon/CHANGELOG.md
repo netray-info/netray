@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-01
+
+### Changed
+- Bump @netray-info/common-frontend to 0.5.2
+- Bump netray-common to 0.8.1
+
 ## [0.3.0] - 2026-04-25
 
 ### Changed (BREAKING)
