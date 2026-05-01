@@ -250,6 +250,21 @@ pub fn assemble_response(
     resp
 }
 
+fn analyze_reporting(headers: &reqwest::header::HeaderMap) -> ReportingReport {
+    let report_to = headers.contains_key("report-to");
+    let nel = headers.contains_key("nel");
+    let csp_reporting = headers
+        .get("content-security-policy")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.contains("report-uri") || v.contains("report-to"));
+
+    ReportingReport {
+        report_to,
+        nel,
+        csp_reporting,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -345,7 +360,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         tokio::spawn(async move {
             loop {
-                if let Ok((mut stream, _)) = listener.accept().await {
+                if let Ok((stream, _)) = listener.accept().await {
                     // Accept but never write — hang forever
                     tokio::time::sleep(Duration::from_secs(60)).await;
                     drop(stream);
@@ -397,20 +412,5 @@ mod tests {
             result.http_upgrade.is_none(),
             "expected http_upgrade to be None for http:// URL"
         );
-    }
-}
-
-fn analyze_reporting(headers: &reqwest::header::HeaderMap) -> ReportingReport {
-    let report_to = headers.contains_key("report-to");
-    let nel = headers.contains_key("nel");
-    let csp_reporting = headers
-        .get("content-security-policy")
-        .and_then(|v| v.to_str().ok())
-        .is_some_and(|v| v.contains("report-uri") || v.contains("report-to"));
-
-    ReportingReport {
-        report_to,
-        nel,
-        csp_reporting,
     }
 }

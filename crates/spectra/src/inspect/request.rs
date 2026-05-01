@@ -175,6 +175,17 @@ pub async fn execute_request(
     }
 }
 
+fn format_http_version(version: reqwest::Version) -> String {
+    match version {
+        reqwest::Version::HTTP_09 => "h0.9".to_string(),
+        reqwest::Version::HTTP_10 => "h1.0".to_string(),
+        reqwest::Version::HTTP_11 => "h1.1".to_string(),
+        reqwest::Version::HTTP_2 => "h2".to_string(),
+        reqwest::Version::HTTP_3 => "h3".to_string(),
+        _ => format!("{version:?}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,20 +228,9 @@ mod tests {
         .await;
 
         assert!(
-            result.redirects.len() >= 1 || result.redirect_limit_reached,
+            !result.redirects.is_empty() || result.redirect_limit_reached,
             "expected at least one redirect hop or limit reached, got {:?}",
             result.redirects
         );
-    }
-}
-
-fn format_http_version(version: reqwest::Version) -> String {
-    match version {
-        reqwest::Version::HTTP_09 => "h0.9".to_string(),
-        reqwest::Version::HTTP_10 => "h1.0".to_string(),
-        reqwest::Version::HTTP_11 => "h1.1".to_string(),
-        reqwest::Version::HTTP_2 => "h2".to_string(),
-        reqwest::Version::HTTP_3 => "h3".to_string(),
-        _ => format!("{version:?}"),
     }
 }
