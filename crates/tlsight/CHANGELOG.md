@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.1] - 2026-05-01
+
+### Security
+- Bump frontend lockfile for postcss XSS (GHSA-qx2v-qp2m-jg93)
+
+### Changed
+- Bump @netray-info/common-frontend to 0.5.2
+- Bump netray-common to 0.8.1
+- Add CONTRIBUTING.md and DCO sign-off CI
+- Drop monitoring-service example from licensing section
+
 ## [0.11.1] - 2026-04-11
 
 ### Fixed
