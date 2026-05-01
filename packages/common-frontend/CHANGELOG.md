@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-05-01
+
+### Security
+- Bump happy-dom to ^20 to patch VM context escape RCE (GHSA-37j7-fg3j-429f), ECMAScript module compiler RCE (GHSA-6q6h-j7hj-3r64), and fetch credentials origin issue (GHSA-w4gp-fjgq-3q4g) (6001631)
+
+### Changed
+- Add CONTRIBUTING.md and DCO sign-off CI (354c236)
+- Drop monitoring-service example from licensing section (bc20deb)
+
 ## [0.5.0] - 2026-04-09
 
 ### Added
