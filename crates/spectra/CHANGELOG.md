@@ -3,6 +3,19 @@
 All notable changes to spectra are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.3] - 2026-05-01
+
+Note: v0.2.1 and v0.2.2 were never released; v0.2.2 exists as a dangling
+tag on the remote pointing at an abandoned commit chain that was reset.
+
+### Fixed
+- Hoist `analyze_reporting` and `format_http_version` above their `#[cfg(test)]` modules; drop unused `mut` and replace `len() >= 1` with `!is_empty()` (newer clippy)
+
+### Changed
+- Assign unique dev ports (backend 8083, metrics 9093, vite 5176) to avoid conflicts when running multiple tools in parallel
+- Bump @netray-info/common-frontend to 0.5.2
+- Bump netray-common to 0.8.1
+
 ## [0.1.0] - 2026-04-10
 
 ### Added
