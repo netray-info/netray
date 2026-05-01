@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-05-01
+
+### Security
+- Bump frontend lockfile for postcss XSS (GHSA-qx2v-qp2m-jg93)
+
+### Changed
+- Bump @netray-info/common-frontend to 0.5.2
+- Bump netray-common to 0.8.1
+
 ## [0.7.2] - 2026-04-26
 
 ### Added
