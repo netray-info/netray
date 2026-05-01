@@ -23,7 +23,6 @@ use prism::config::Config;
 use prism::reload::HotState;
 use prism::result_cache::ResultCache;
 use prism::security::IpExtractor;
-use reqwest;
 use tokio::sync::Semaphore;
 
 // ---------------------------------------------------------------------------
