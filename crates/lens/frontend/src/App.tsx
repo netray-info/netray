@@ -265,6 +265,8 @@ export default function App() {
                 checks={allChecks()}
                 onCopyMd={done() ? handleCopyMd : undefined}
                 onDownloadJson={done() ? handleDownloadJson : undefined}
+                domain={currentDomain() || undefined}
+                badgesEnabled={meta()?.features?.badges !== false}
               />
             )}
           </Show>

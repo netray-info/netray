@@ -8,8 +8,8 @@
 ///   LENS_LIVE_TESTS=1 cargo test --test reference_domains -- --ignored --nocapture
 use lens::check::run_check;
 use lens::config::{
-    BackendsConfig, CacheConfig, Config, EcosystemConfig, RateLimitConfig, ScoringConfig,
-    ServerConfig, SiteConfig,
+    BackendsConfig, BadgesConfig, CacheConfig, Config, EcosystemConfig, RateLimitConfig,
+    ScoringConfig, ServerConfig, SiteConfig,
 };
 use lens::state::AppState;
 
@@ -61,6 +61,7 @@ fn live_state() -> AppState {
         ecosystem: EcosystemConfig::default(),
         scoring: ScoringConfig::default(),
         site: SiteConfig::default(),
+        badges: BadgesConfig::default(),
         telemetry: Default::default(),
     };
     AppState::new(config).expect("failed to build AppState for live tests")

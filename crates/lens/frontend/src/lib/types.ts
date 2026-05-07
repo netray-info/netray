@@ -127,6 +127,7 @@ export interface SiteMeta {
 
 export interface MetaFeatures {
   profile?: ProfileData;
+  badges?: boolean;
 }
 
 export interface MetaResponse {

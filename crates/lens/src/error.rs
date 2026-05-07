@@ -35,6 +35,9 @@ pub enum AppError {
 
     #[error("invalid input: {0}")]
     InvalidInput(String),
+
+    #[error("invalid label: {0}")]
+    InvalidLabel(String),
 }
 
 impl ApiError for AppError {
@@ -43,6 +46,7 @@ impl ApiError for AppError {
             Self::DomainInvalid(_) => StatusCode::BAD_REQUEST,
             Self::DomainBlocked(_) => StatusCode::BAD_REQUEST,
             Self::InvalidInput(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidLabel(_) => StatusCode::BAD_REQUEST,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
             Self::BackendError { .. } => StatusCode::BAD_GATEWAY,
             Self::Timeout => StatusCode::GATEWAY_TIMEOUT,
@@ -55,6 +59,7 @@ impl ApiError for AppError {
             Self::DomainInvalid(_) => "DOMAIN_INVALID",
             Self::DomainBlocked(_) => "DOMAIN_BLOCKED",
             Self::InvalidInput(_) => "INVALID_INPUT",
+            Self::InvalidLabel(_) => "INVALID_LABEL",
             Self::RateLimited { .. } => "RATE_LIMITED",
             Self::BackendError { .. } => "BACKEND_ERROR",
             Self::Timeout => "TIMEOUT",
@@ -68,6 +73,7 @@ impl ApiError for AppError {
             _ => None,
         }
     }
+
 }
 
 impl IntoResponse for AppError {
@@ -93,6 +99,9 @@ impl IntoResponse for AppError {
             }
             Self::InvalidInput(_) => {
                 tracing::debug!(error = %self, "invalid input");
+            }
+            Self::InvalidLabel(_) => {
+                tracing::debug!(error = %self, "invalid label");
             }
         }
 

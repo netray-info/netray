@@ -100,6 +100,22 @@ global_burst = 20
 #    { label = "GitHub", href = "https://github.com/netrayinfo", external = true },
 #]
 
+[badges]
+# Enable the /badge/:domain.svg endpoint.
+enabled = true
+
+# How long a cached grade is considered fresh for badge requests.
+# Recomputes are throttled to at most one per domain per this window.
+# Default: 3600 (1 hour)
+ttl_seconds = 3600
+
+# Left-segment label text shown in every badge.
+# Max 32 ASCII printable characters. Operators can brand as "myco" etc.
+default_label = "lens"
+
+# Maximum length for the ?label= query parameter override (bytes).
+max_label_len = 32
+
 [telemetry]
 # Log output format.
 #   "text" -- human-readable, colour-coded (default; best for terminals)

@@ -21,7 +21,44 @@ pub struct Config {
     #[serde(default)]
     pub site: SiteConfig,
     #[serde(default)]
+    pub badges: BadgesConfig,
+    #[serde(default)]
     pub telemetry: netray_common::telemetry::TelemetryConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BadgesConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_badge_ttl")]
+    pub ttl_seconds: u64,
+    #[serde(default = "default_badge_label")]
+    pub default_label: String,
+    #[serde(default = "default_badge_max_label_len")]
+    pub max_label_len: usize,
+}
+
+fn default_badge_ttl() -> u64 {
+    3600
+}
+
+fn default_badge_label() -> String {
+    "lens".into()
+}
+
+fn default_badge_max_label_len() -> usize {
+    32
+}
+
+impl Default for BadgesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            ttl_seconds: default_badge_ttl(),
+            default_label: default_badge_label(),
+            max_label_len: default_badge_max_label_len(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -385,6 +422,7 @@ mod tests {
             rate_limit: default_rate_limit(),
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
+            badges: BadgesConfig::default(),
             telemetry: Default::default(),
         }
     }
@@ -395,6 +433,15 @@ mod tests {
     fn default_config_passes_validation() {
         let mut cfg = valid_config();
         assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn badges_defaults_enabled_with_3600s_ttl() {
+        let cfg = BadgesConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.ttl_seconds, 3600);
+        assert_eq!(cfg.default_label, "lens");
+        assert_eq!(cfg.max_label_len, 32);
     }
 
     #[test]

@@ -1,9 +1,10 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import type { SummaryEvent, DoneEvent, IpAddress, Verdict } from '../lib/types';
 import { CHECK_LABELS } from '../lib/checkMeta';
 import { GRADE_LEGEND } from '../lib/gradeLegend';
 import VerdictDot from './VerdictDot';
 import ValidationChips from './ValidationChips';
+import BadgeModal from './BadgeModal';
 
 function gradeStyle(grade: string): string {
   switch (grade) {
@@ -72,9 +73,12 @@ interface Props {
   checks?: Array<{ verdict: string }>;
   onCopyMd?: () => void;
   onDownloadJson?: () => void;
+  domain?: string;
+  badgesEnabled?: boolean;
 }
 
 export default function Summary(props: Props) {
+  const [showBadgeModal, setShowBadgeModal] = createSignal(false);
   const s = () => props.summary;
   const isError = () => s().grade === 'error';
   const sectionVerdict = (name: string): Verdict => s().sections[name] ?? 'error';
@@ -118,10 +122,15 @@ export default function Summary(props: Props) {
       <Show when={props.onDownloadJson}>
         <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
       </Show>
+      <Show when={!isError() && props.badgesEnabled !== false && !!props.domain}>
+        <span class="summary-action-sep">|</span>
+        <button class="summary-action-btn" type="button" onClick={() => setShowBadgeModal(true)}>Get the badge</button>
+      </Show>
     </div>
   );
 
   return (
+    <>
     <div class="summary-card" role="region" aria-label="Summary">
       <div class="summary-top">
         <Show when={isError()} fallback={
@@ -247,5 +256,10 @@ export default function Summary(props: Props) {
         </div>
       </Show>
     </div>
+
+    <Show when={showBadgeModal() && !!props.domain}>
+      <BadgeModal domain={props.domain!} onClose={() => setShowBadgeModal(false)} />
+    </Show>
+    </>
   );
 }

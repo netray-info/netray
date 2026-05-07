@@ -30,9 +30,11 @@ pub struct ApiDoc;
 pub fn build_openapi(
     health_api: utoipa::openapi::OpenApi,
     api_api: utoipa::openapi::OpenApi,
+    badge_api: utoipa::openapi::OpenApi,
 ) -> utoipa::openapi::OpenApi {
     let mut doc = ApiDoc::openapi();
     doc.merge(health_api);
     doc.merge(api_api);
+    doc.merge(badge_api);
     doc
 }

@@ -15,8 +15,10 @@ use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
 use crate::backends::{BackendExtra, BackendResult};
+use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
+use crate::badge::render::svg_for_grade;
 use crate::cache::{CachedResult, cache_key, is_fresh};
-use crate::check::{CheckInput, CheckOutput, SectionError, run_check_with_input};
+use crate::check::{CheckInput, CheckOutput, SectionError, run_check, run_check_with_input};
 use crate::input::validate_domain;
 use crate::scoring::engine::{CheckResult, CheckVerdict, OverallScore};
 use crate::security::{check_rate_limit, extract_client_ip};
@@ -358,6 +360,16 @@ pub fn api_router() -> OpenApiRouter<AppState> {
         .routes(utoipa_axum::routes!(check_post_handler))
 }
 
+/// Returns an OpenApiRouter for the badge endpoint.
+///
+/// The route captures `/badge/{domain}` where `{domain}` includes the `.svg`
+/// suffix (matchit does not support literal suffixes after a parameter).
+/// The handler strips the `.svg` suffix and returns 404 for any other extension.
+/// The utoipa annotation documents the path as `/badge/{domain}` for the same reason.
+pub fn badge_router() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new().routes(utoipa_axum::routes!(badge_handler))
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -409,6 +421,10 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
     features.insert(
         "profile".into(),
         serde_json::to_value(&profile_data).unwrap_or(serde_json::Value::Null),
+    );
+    features.insert(
+        "badges".into(),
+        serde_json::Value::Bool(config.badges.enabled),
     );
 
     let rl = &config.rate_limit;
@@ -522,6 +538,164 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
             .into_response()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Badge helpers
+// ---------------------------------------------------------------------------
+
+fn badge_is_not_modified(headers: &axum::http::HeaderMap, etag: &str) -> bool {
+    headers
+        .get(axum::http::header::IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v == etag)
+        .unwrap_or(false)
+}
+
+fn build_svg_response(svg: String, cache_control: &str, etag: &str) -> Response {
+    use axum::http::{StatusCode, header};
+    let mut resp = (StatusCode::OK, svg).into_response();
+    let headers = resp.headers_mut();
+    headers.insert(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8".parse().unwrap());
+    headers.insert(header::CACHE_CONTROL, cache_control.parse().unwrap());
+    headers.insert(header::ETAG, etag.parse().unwrap());
+    resp
+}
+
+// ---------------------------------------------------------------------------
+// Badge handler
+// ---------------------------------------------------------------------------
+
+#[utoipa::path(
+    get,
+    path = "/badge/{domain}",
+    tag = "badge",
+    params(
+        ("domain" = String, Path, description = "DNS hostname (with .svg suffix) to show grade for, e.g. example.com.svg"),
+        ("style" = Option<String>, Query, description = "Badge style: flat (default) or for-the-badge"),
+        ("label" = Option<String>, Query, description = "Left-segment label text, ASCII printable, max 32 chars"),
+    ),
+    responses(
+        (status = 200, description = "SVG badge", content_type = "image/svg+xml"),
+        (status = 304, description = "Not Modified"),
+        (status = 400, description = "Invalid domain or label", body = netray_common::error::ErrorResponse),
+        (status = 404, description = "Badge feature disabled"),
+    )
+)]
+pub async fn badge_handler(
+    State(state): State<AppState>,
+    Path(domain): Path<String>,
+    Query(query): Query<BadgeQuery>,
+    req_headers: axum::http::HeaderMap,
+) -> Response {
+    use netray_common::rate_limit::check_keyed_cost;
+    use std::num::NonZeroU32;
+    use std::time::{Instant, SystemTime};
+
+    let domain = match domain.strip_suffix(".svg") {
+        Some(d) => d.to_owned(),
+        None => return axum::http::StatusCode::NOT_FOUND.into_response(),
+    };
+
+    let badge_req = match parse_badge_request(&domain, query, &state.config.badges) {
+        Ok(r) => r,
+        Err(e) => return e.into_response(),
+    };
+
+    let key = cache_key(&badge_req.domain);
+    let ttl = state.config.badges.ttl_seconds;
+
+    // Cache hit — serve immediately, bypass all rate limiters.
+    if let Some(cache) = &state.cache {
+        if let Some(cached) = cache.get(&key).await {
+            if is_fresh(&cached, ttl) {
+                metrics::counter!("lens_badge_requests_total", "cache" => "hit").increment(1);
+                let grade = cached.score.grade.clone();
+                let render_start = Instant::now();
+                let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
+                metrics::histogram!("lens_badge_render_duration_seconds")
+                    .record(render_start.elapsed().as_secs_f64());
+                let etag = compute_etag(&badge_req.domain, &grade, &badge_req.label, badge_req.style);
+                if badge_is_not_modified(&req_headers, &etag) {
+                    return axum::http::StatusCode::NOT_MODIFIED.into_response();
+                }
+                let cache_ctrl = if grade == "error" {
+                    "public, max-age=300, s-maxage=300"
+                } else {
+                    "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+                };
+                return build_svg_response(svg, cache_ctrl, &etag);
+            }
+        }
+    }
+
+    // Per-domain recompute limiter — throttled requests get a ? badge.
+    let cost = NonZeroU32::new(1).unwrap();
+    if check_keyed_cost(&state.badge_recompute_limiter, &key, cost, "badge", "lens").is_err() {
+        metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
+        let render_start = Instant::now();
+        let svg = svg_for_grade(&badge_req.label, "error", badge_req.style);
+        metrics::histogram!("lens_badge_render_duration_seconds")
+            .record(render_start.elapsed().as_secs_f64());
+        let etag = compute_etag(&badge_req.domain, "?", &badge_req.label, badge_req.style);
+        if badge_is_not_modified(&req_headers, &etag) {
+            return axum::http::StatusCode::NOT_MODIFIED.into_response();
+        }
+        return build_svg_response(svg, "public, max-age=300, s-maxage=300", &etag);
+    }
+
+    // Coalesced recompute via moka entry API.
+    let grade = if let Some(cache) = &state.cache {
+        let state_for_init = state.clone();
+        let domain_for_init = badge_req.domain.clone();
+        let entry = cache
+            .entry(key.clone())
+            .or_insert_with_if(
+                async move {
+                    let output = run_check(&state_for_init, &domain_for_init).await;
+                    Arc::new(CachedResult {
+                        sections: output.sections,
+                        score: output.score,
+                        duration_ms: output.duration_ms,
+                        cached_at: SystemTime::now(),
+                    })
+                },
+                |existing| !is_fresh(existing, ttl),
+            )
+            .await;
+        entry.into_value().score.grade.clone()
+    } else {
+        let output = run_check(&state, &badge_req.domain).await;
+        output.score.grade
+    };
+
+    let is_error = grade == "error";
+    let render_start = Instant::now();
+    let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
+    metrics::histogram!("lens_badge_render_duration_seconds")
+        .record(render_start.elapsed().as_secs_f64());
+
+    if is_error {
+        metrics::counter!("lens_badge_requests_total", "cache" => "failed").increment(1);
+    } else {
+        metrics::counter!("lens_badge_requests_total", "cache" => "miss").increment(1);
+    }
+
+    let etag = compute_etag(&badge_req.domain, &grade, &badge_req.label, badge_req.style);
+    if badge_is_not_modified(&req_headers, &etag) {
+        return axum::http::StatusCode::NOT_MODIFIED.into_response();
+    }
+
+    let cache_ctrl = if is_error {
+        "public, max-age=300, s-maxage=300"
+    } else {
+        "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+    };
+    build_svg_response(svg, cache_ctrl, &etag)
+}
+
+// ---------------------------------------------------------------------------
+// Check handlers
+// ---------------------------------------------------------------------------
 
 #[utoipa::path(
     get,
@@ -1265,8 +1439,8 @@ pub mod tests {
 
     use crate::config::Config;
     use crate::config::{
-        BackendsConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig, ServerConfig,
-        SiteConfig,
+        BackendsConfig, BadgesConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig,
+        ServerConfig, SiteConfig,
     };
 
     pub fn test_config_with_rate_limit(per_ip: u32, burst: u32) -> Config {
@@ -1310,6 +1484,7 @@ pub mod tests {
             },
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
+            badges: BadgesConfig::default(),
         }
     }
 
@@ -1991,7 +2166,8 @@ pub mod tests {
     async fn openapi_spec_lists_all_endpoints() {
         let (_, health_openapi) = health_router().split_for_parts();
         let (_, api_openapi) = api_router().split_for_parts();
-        let openapi = crate::api_doc::build_openapi(health_openapi, api_openapi);
+        let (_, badge_openapi) = badge_router().split_for_parts();
+        let openapi = crate::api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
 
         let app = Router::new().route(
             "/api-docs/openapi.json",
@@ -2063,7 +2239,8 @@ pub mod tests {
 
         let (_, health_openapi) = health_router().split_for_parts();
         let (_, api_openapi) = api_router().split_for_parts();
-        let openapi = crate::api_doc::build_openapi(health_openapi, api_openapi);
+        let (_, badge_openapi) = badge_router().split_for_parts();
+        let openapi = crate::api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
 
         let app = Router::new().merge(Scalar::with_url("/docs", openapi));
 

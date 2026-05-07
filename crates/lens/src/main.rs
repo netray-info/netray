@@ -51,15 +51,29 @@ async fn main() {
     // 3. Build app state.
     let state = state::AppState::new(config.clone()).expect("failed to build app state");
 
+    if config.badges.enabled {
+        tracing::info!(
+            ttl_seconds = config.badges.ttl_seconds,
+            default_label = %config.badges.default_label,
+            "badges enabled"
+        );
+    }
+
     // 4. Build routers and collect OpenAPI spec fragments.
     let (health_router, health_openapi) = routes::health_router().split_for_parts();
     let (api_router, api_openapi) = routes::api_router().split_for_parts();
-    let openapi = lens::api_doc::build_openapi(health_openapi, api_openapi);
+    let (badge_routes, badge_openapi) = routes::badge_router().split_for_parts();
+    let openapi = lens::api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
 
     // 5. Build the main app with all middleware.
     let app = Router::new()
         .merge(health_router.with_state(state.clone()))
         .merge(api_router.with_state(state.clone()))
+        .merge(if config.badges.enabled {
+            badge_routes.with_state(state.clone())
+        } else {
+            Router::new()
+        })
         .route("/robots.txt", get(robots_txt))
         .fallback(spa::handler)
         .with_state(state)

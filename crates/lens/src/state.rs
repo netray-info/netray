@@ -1,7 +1,10 @@
+use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::time::Duration;
 
+use governor::{Quota, RateLimiter};
 use moka::future::Cache;
+use netray_common::rate_limit::KeyedLimiter;
 
 use crate::backends::Backend;
 use crate::backends::dns::DnsBackend;
@@ -15,12 +18,16 @@ use crate::scoring::ScoringProfile;
 use crate::security::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
 use crate::spa::{Assets, render_apex_html};
 
+/// Per-domain GCRA rate limiter for badge recomputes.
+pub type BadgeRecomputeLimiter = KeyedLimiter<String>;
+
 /// Shared application state passed to every axum handler via `axum::extract::State`.
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
     pub per_ip_limiter: Arc<PerIpRateLimiter>,
     pub global_limiter: Arc<GlobalRateLimiter>,
+    pub badge_recompute_limiter: Arc<BadgeRecomputeLimiter>,
     pub http_client: reqwest::Client,
     pub cache: Option<Arc<Cache<String, Arc<CachedResult>>>>,
     pub scoring_profile: Arc<ScoringProfile>,
@@ -42,6 +49,11 @@ impl AppState {
 
         let per_ip_limiter = Arc::new(PerIpRateLimiter::new(&config.rate_limit));
         let global_limiter = Arc::new(GlobalRateLimiter::new(&config.rate_limit));
+
+        let badge_quota = Quota::with_period(Duration::from_secs(config.badges.ttl_seconds))
+            .expect("badge ttl_seconds must be non-zero")
+            .allow_burst(NonZeroU32::new(1).unwrap());
+        let badge_recompute_limiter = Arc::new(RateLimiter::keyed(badge_quota));
 
         let cache = if config.cache.enabled {
             let ttl = Duration::from_secs(config.cache.ttl_seconds);
@@ -108,6 +120,7 @@ impl AppState {
             config: Arc::new(config),
             per_ip_limiter,
             global_limiter,
+            badge_recompute_limiter,
             http_client,
             cache,
             scoring_profile,
@@ -133,8 +146,8 @@ fn load_scoring_profile(path: Option<&str>) -> Result<ScoringProfile, Box<dyn st
 mod tests {
     use super::*;
     use crate::config::{
-        BackendsConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig, ServerConfig,
-        SiteConfig,
+        BackendsConfig, BadgesConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig,
+        ServerConfig, SiteConfig,
     };
 
     fn test_config() -> Config {
@@ -175,6 +188,7 @@ mod tests {
             },
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
+            badges: BadgesConfig::default(),
         }
     }
 

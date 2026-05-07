@@ -1,5 +1,6 @@
 pub mod api_doc;
 pub mod backends;
+pub mod badge;
 pub mod cache;
 pub mod check;
 pub mod config;

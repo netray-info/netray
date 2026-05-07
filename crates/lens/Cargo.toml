@@ -72,3 +72,15 @@ path = "tests/reference_domains.rs"
 [[test]]
 name = "scoring_regression"
 path = "tests/scoring_regression.rs"
+
+[[test]]
+name = "badge_render"
+path = "tests/badge_render.rs"
+
+[[test]]
+name = "badge_routes"
+path = "tests/badge_routes.rs"
+
+[[test]]
+name = "sdd_lens_badges_p2_c5_meta_badges"
+path = "tests/sdd_lens_badges_p2_c5_meta_badges.rs"
