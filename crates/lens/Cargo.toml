@@ -84,3 +84,7 @@ path = "tests/badge_routes.rs"
 [[test]]
 name = "sdd_lens_badges_p2_c5_meta_badges"
 path = "tests/sdd_lens_badges_p2_c5_meta_badges.rs"
+
+[[test]]
+name = "sdd_lens_badges_p1_c11_cache_coalesce"
+path = "tests/sdd_lens_badges_p1_c11_cache_coalesce.rs"

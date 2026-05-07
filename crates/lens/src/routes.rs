@@ -24,6 +24,15 @@ use crate::scoring::engine::{CheckResult, CheckVerdict, OverallScore};
 use crate::security::{check_rate_limit, extract_client_ip};
 use crate::state::AppState;
 
+/// Calls `state.badge_check_fn` when set (tests), otherwise the real `run_check`.
+async fn invoke_badge_check(state: &AppState, domain: &str) -> CheckOutput {
+    if let Some(ref f) = state.badge_check_fn {
+        f(domain.to_owned()).await
+    } else {
+        run_check(state, domain).await
+    }
+}
+
 // ---------------------------------------------------------------------------
 // SSE event payload types
 // ---------------------------------------------------------------------------
@@ -651,7 +660,7 @@ pub async fn badge_handler(
             .entry(key.clone())
             .or_insert_with_if(
                 async move {
-                    let output = run_check(&state_for_init, &domain_for_init).await;
+                    let output = invoke_badge_check(&state_for_init, &domain_for_init).await;
                     Arc::new(CachedResult {
                         sections: output.sections,
                         score: output.score,
@@ -664,7 +673,7 @@ pub async fn badge_handler(
             .await;
         entry.into_value().score.grade.clone()
     } else {
-        let output = run_check(&state, &badge_req.domain).await;
+        let output = invoke_badge_check(&state, &badge_req.domain).await;
         output.score.grade
     };
 

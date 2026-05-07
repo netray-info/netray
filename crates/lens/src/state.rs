@@ -1,4 +1,6 @@
+use std::future::Future;
 use std::num::NonZeroU32;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,6 +15,7 @@ use crate::backends::http::HttpBackend;
 use crate::backends::ip::IpBackend;
 use crate::backends::tls::TlsBackend;
 use crate::cache::CachedResult;
+use crate::check::CheckOutput;
 use crate::config::Config;
 use crate::scoring::ScoringProfile;
 use crate::security::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
@@ -20,6 +23,11 @@ use crate::spa::{Assets, render_apex_html};
 
 /// Per-domain GCRA rate limiter for badge recomputes.
 pub type BadgeRecomputeLimiter = KeyedLimiter<String>;
+
+/// Injectable check function for badge handler. When `Some`, replaces the real `run_check`.
+/// Used in tests to inject a mock without backends.
+pub type BadgeCheckFn =
+    Arc<dyn Fn(String) -> Pin<Box<dyn Future<Output = CheckOutput> + Send>> + Send + Sync>;
 
 /// Shared application state passed to every axum handler via `axum::extract::State`.
 #[derive(Clone)]
@@ -37,6 +45,8 @@ pub struct AppState {
     /// `None` when the embedded `frontend/dist` has no `index.html` (test
     /// builds with a `.gitkeep`-only dist).
     pub rendered_html: Option<Arc<String>>,
+    /// When `Some`, badge_handler calls this instead of the real `run_check`.
+    pub badge_check_fn: Option<BadgeCheckFn>,
 }
 
 impl AppState {
@@ -126,6 +136,7 @@ impl AppState {
             scoring_profile,
             backends: Arc::new(backends),
             rendered_html,
+            badge_check_fn: None,
         })
     }
 }
