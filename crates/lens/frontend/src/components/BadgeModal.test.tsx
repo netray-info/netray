@@ -51,4 +51,20 @@ describe('BadgeModal', () => {
     fireEvent.click(getByLabelText('Close'));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it('shows "Copied!" after clicking Copy HTML', async () => {
+    const { getByText, findByText } = render(() => (
+      <BadgeModal domain="example.com" onClose={vi.fn()} />
+    ));
+    fireEvent.click(getByText('Copy HTML'));
+    expect(await findByText('Copied!')).toBeTruthy();
+  });
+
+  it('shows "Copied!" after clicking Copy Markdown', async () => {
+    const { getByText, findByText } = render(() => (
+      <BadgeModal domain="example.com" onClose={vi.fn()} />
+    ));
+    fireEvent.click(getByText('Copy Markdown'));
+    expect(await findByText('Copied!')).toBeTruthy();
+  });
 });
