@@ -54,14 +54,14 @@ export default function BadgeModal(props: Props) {
           <button
             class="badge-modal__copy-btn"
             type="button"
-            onClick={() => copy(buildHtmlSnippet(badgeUrl(), props.domain), 'html')}
+            onClick={() => copy(buildHtmlSnippet(badgeUrl(), props.domain, window.location.origin), 'html')}
           >
             {copied() === 'html' ? 'Copied!' : 'Copy HTML'}
           </button>
           <button
             class="badge-modal__copy-btn"
             type="button"
-            onClick={() => copy(buildMarkdownSnippet(badgeUrl(), props.domain), 'md')}
+            onClick={() => copy(buildMarkdownSnippet(badgeUrl(), props.domain, window.location.origin), 'md')}
           >
             {copied() === 'md' ? 'Copied!' : 'Copy Markdown'}
           </button>

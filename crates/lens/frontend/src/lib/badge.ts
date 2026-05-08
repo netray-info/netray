@@ -9,12 +9,12 @@ export function buildBadgeUrl(
   return url.toString();
 }
 
-export function buildHtmlSnippet(badgeUrl: string, domain: string): string {
-  return `<a href="${escapeHtml(location.origin)}/?d=${escapeHtml(domain)}"><img src="${escapeHtml(badgeUrl)}" alt="lens grade for ${escapeHtml(domain)}" /></a>`;
+export function buildHtmlSnippet(badgeUrl: string, domain: string, origin = ''): string {
+  return `<a href="${escapeHtml(origin)}/?d=${escapeHtml(domain)}"><img src="${escapeHtml(badgeUrl)}" alt="lens grade for ${escapeHtml(domain)}" /></a>`;
 }
 
-export function buildMarkdownSnippet(badgeUrl: string, domain: string): string {
-  const checkUrl = `${location.origin}/?d=${domain}`;
+export function buildMarkdownSnippet(badgeUrl: string, domain: string, origin = ''): string {
+  const checkUrl = `${origin}/?d=${domain}`;
   return `[![lens grade for ${domain}](${badgeUrl})](${checkUrl})`;
 }
 
