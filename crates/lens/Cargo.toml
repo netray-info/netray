@@ -57,7 +57,7 @@ utoipa-scalar = { version = "0.3", features = ["axum"] }
 uuid = { version = "1", features = ["v7"] }
 
 # Scoring profile
-toml = "0.8"
+toml = "1"
 
 # OG cards: SVG→PNG rasterization and deterministic ETag hashing
 resvg = { version = "0.45", default-features = false, features = ["text"] }
