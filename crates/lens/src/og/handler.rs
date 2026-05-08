@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -61,7 +63,6 @@ pub async fn og_handler(
 ) -> Response {
     use netray_common::rate_limit::check_keyed_cost;
     use std::num::NonZeroU32;
-    use std::time::SystemTime;
 
     // Strip .png suffix; return 404 for anything else.
     let domain_raw = match domain_png.strip_suffix(".png") {
@@ -100,11 +101,12 @@ pub async fn og_handler(
     {
         let grade = cached.score.grade.clone();
         let score_pct = cached.score.overall_percentage;
+        let checked_at = cached.cached_at;
         let etag = compute_etag(&domain, &grade, &label, score_pct);
         if is_not_modified(&req_headers, &etag) {
             return StatusCode::NOT_MODIFIED.into_response();
         }
-        let svg = svg_for_grade(&domain, &grade, &label, score_pct);
+        let svg = svg_for_grade(&domain, &grade, &label, score_pct, checked_at);
         let png = match svg_to_png(&svg, state.font_db.clone()) {
             Ok(b) => b,
             Err(e) => return render_error_from(e),
@@ -125,7 +127,7 @@ pub async fn og_handler(
         if is_not_modified(&req_headers, &etag) {
             return StatusCode::NOT_MODIFIED.into_response();
         }
-        let svg = svg_for_grade(&domain, "?", &label, 0.0);
+        let svg = svg_for_grade(&domain, "?", &label, 0.0, SystemTime::now());
         let png = match svg_to_png(&svg, state.font_db.clone()) {
             Ok(b) => b,
             Err(e) => return render_error_from(e),
@@ -134,7 +136,7 @@ pub async fn og_handler(
     }
 
     // Coalesced recompute.
-    let (grade, score_pct) = if let Some(cache) = &state.cache {
+    let (grade, score_pct, checked_at) = if let Some(cache) = &state.cache {
         let state_for_init = state.clone();
         let domain_for_init = domain.clone();
         let entry = cache
@@ -154,10 +156,18 @@ pub async fn og_handler(
             )
             .await;
         let val = entry.into_value();
-        (val.score.grade.clone(), val.score.overall_percentage)
+        (
+            val.score.grade.clone(),
+            val.score.overall_percentage,
+            val.cached_at,
+        )
     } else {
         let output = invoke_check(&state, &domain).await;
-        (output.score.grade, output.score.overall_percentage)
+        (
+            output.score.grade,
+            output.score.overall_percentage,
+            SystemTime::now(),
+        )
     };
 
     let is_error = grade == "error";
@@ -166,7 +176,7 @@ pub async fn og_handler(
         return StatusCode::NOT_MODIFIED.into_response();
     }
 
-    let svg = svg_for_grade(&domain, &grade, &label, score_pct);
+    let svg = svg_for_grade(&domain, &grade, &label, score_pct, checked_at);
     let png = match svg_to_png(&svg, state.font_db.clone()) {
         Ok(b) => b,
         Err(e) => return render_error_from(e),

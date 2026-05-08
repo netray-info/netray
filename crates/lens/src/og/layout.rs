@@ -22,11 +22,15 @@ pub const SEP_COLOR: &str = "#1a2740";
 
 // Score percentage (large, grade-colored)
 pub const SCORE_FONT_SIZE: f32 = 130.0;
-pub const SCORE_BASELINE_Y: f32 = 415.0;
+pub const SCORE_BASELINE_Y: f32 = 385.0;
+
+// Timestamp ("May 8, 2026 · 17:44 UTC")
+pub const TIMESTAMP_FONT_SIZE: f32 = 26.0;
+pub const TIMESTAMP_BASELINE_Y: f32 = 495.0;
 
 // Footer (bottom right)
 pub const FOOTER_FONT_SIZE: f32 = 30.0;
-pub const FOOTER_BASELINE_Y: f32 = 570.0;
+pub const FOOTER_BASELINE_Y: f32 = 560.0;
 pub const FOOTER_COLOR: &str = "#4d6480";
 
 // Shared colors

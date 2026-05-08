@@ -1,6 +1,13 @@
 /// Unit tests for OG card rendering (SVG template and PNG rasterization).
+use std::time::SystemTime;
+
 use lens::og::fonts::init_font_db;
-use lens::og::render::{svg_for_grade, svg_to_png, truncate_domain, xml_escape};
+use lens::og::render::{format_utc_timestamp, svg_for_grade, svg_to_png, truncate_domain, xml_escape};
+
+fn ts() -> SystemTime {
+    // 2026-05-08 17:44:00 UTC → unix 1778262240
+    SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_778_262_240)
+}
 
 // ---------------------------------------------------------------------------
 // xml_escape
@@ -48,19 +55,39 @@ fn truncate_domain_50_chars_gives_38() {
 }
 
 // ---------------------------------------------------------------------------
+// format_utc_timestamp
+// ---------------------------------------------------------------------------
+
+#[test]
+fn format_utc_timestamp_known_value() {
+    assert_eq!(
+        format_utc_timestamp(ts()),
+        "May 8, 2026 \u{00b7} 17:44 UTC"
+    );
+}
+
+#[test]
+fn format_utc_timestamp_epoch() {
+    assert_eq!(
+        format_utc_timestamp(SystemTime::UNIX_EPOCH),
+        "Jan 1, 1970 \u{00b7} 00:00 UTC"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // svg_for_grade — grade letter presence
 // ---------------------------------------------------------------------------
 
 #[test]
 fn svg_contains_grade_a_plus() {
-    let svg = svg_for_grade("example.com", "A+", "lens", 95.0);
+    let svg = svg_for_grade("example.com", "A+", "lens", 95.0, ts());
     assert!(svg.contains(">A+<"), "A+ not found in SVG");
 }
 
 #[test]
 fn svg_all_known_grades_present() {
     for grade in &["A+", "A", "B", "C", "D", "F"] {
-        let svg = svg_for_grade("example.com", grade, "lens", 80.0);
+        let svg = svg_for_grade("example.com", grade, "lens", 80.0, ts());
         assert!(
             svg.contains(&format!(">{grade}<")),
             "grade {grade} not found in SVG"
@@ -70,14 +97,14 @@ fn svg_all_known_grades_present() {
 
 #[test]
 fn svg_error_grade_renders_question_mark() {
-    let svg = svg_for_grade("example.com", "error", "lens", 0.0);
+    let svg = svg_for_grade("example.com", "error", "lens", 0.0, ts());
     assert!(svg.contains(">?<"), "error grade should render ?");
     assert!(!svg.contains(">error<"));
 }
 
 #[test]
 fn svg_unknown_grade_renders_question_mark() {
-    let svg = svg_for_grade("example.com", "Z", "lens", 0.0);
+    let svg = svg_for_grade("example.com", "Z", "lens", 0.0, ts());
     assert!(svg.contains(">?<"), "unknown grade should render ?");
 }
 
@@ -87,14 +114,25 @@ fn svg_unknown_grade_renders_question_mark() {
 
 #[test]
 fn svg_score_shown_for_known_grade() {
-    let svg = svg_for_grade("example.com", "A", "lens", 91.7);
+    let svg = svg_for_grade("example.com", "A", "lens", 91.7, ts());
     assert!(svg.contains("91.7%"), "score must appear for known grade");
 }
 
 #[test]
 fn svg_score_hidden_for_unknown_grade() {
-    let svg = svg_for_grade("example.com", "?", "lens", 0.0);
+    let svg = svg_for_grade("example.com", "?", "lens", 0.0, ts());
     assert!(!svg.contains('%'), "score % must not appear for unknown grade");
+}
+
+// ---------------------------------------------------------------------------
+// svg_for_grade — timestamp
+// ---------------------------------------------------------------------------
+
+#[test]
+fn svg_timestamp_present() {
+    let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts());
+    assert!(svg.contains("May 8, 2026"), "timestamp date must appear");
+    assert!(svg.contains("17:44 UTC"), "timestamp time must appear");
 }
 
 // ---------------------------------------------------------------------------
@@ -103,14 +141,14 @@ fn svg_score_hidden_for_unknown_grade() {
 
 #[test]
 fn svg_domain_with_ampersand_is_escaped() {
-    let svg = svg_for_grade("a&b.com", "A", "lens", 80.0);
+    let svg = svg_for_grade("a&b.com", "A", "lens", 80.0, ts());
     assert!(svg.contains("a&amp;b.com"));
     assert!(!svg.contains("a&b.com"));
 }
 
 #[test]
 fn svg_label_with_angle_brackets_is_escaped() {
-    let svg = svg_for_grade("example.com", "A", "<test>", 80.0);
+    let svg = svg_for_grade("example.com", "A", "<test>", 80.0, ts());
     assert!(svg.contains("&lt;test&gt;"));
     assert!(!svg.contains("<test>"));
 }
@@ -122,10 +160,8 @@ fn svg_label_with_angle_brackets_is_escaped() {
 #[test]
 fn svg_long_domain_truncated_in_text() {
     let domain = "a".repeat(50);
-    let svg = svg_for_grade(&domain, "A", "lens", 80.0);
-    // Full 50-char domain must NOT appear verbatim in SVG
+    let svg = svg_for_grade(&domain, "A", "lens", 80.0, ts());
     assert!(!svg.contains(&domain));
-    // Ellipsis must be present
     assert!(svg.contains('\u{2026}'));
 }
 
@@ -135,7 +171,7 @@ fn svg_long_domain_truncated_in_text() {
 
 #[test]
 fn svg_has_correct_canvas_dimensions() {
-    let svg = svg_for_grade("example.com", "A", "lens", 80.0);
+    let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts());
     assert!(svg.contains("width=\"1200\""));
     assert!(svg.contains("height=\"630\""));
 }
@@ -148,10 +184,9 @@ fn svg_has_correct_canvas_dimensions() {
 fn png_is_1200x630() {
     let font_db = init_font_db();
     for grade in &["A+", "A", "B", "C", "D", "F", "error"] {
-        let svg = svg_for_grade("example.com", grade, "lens", 80.0);
+        let svg = svg_for_grade("example.com", grade, "lens", 80.0, ts());
         let png_bytes = svg_to_png(&svg, font_db.clone()).expect("render should succeed");
 
-        // Decode using the image crate to check dimensions.
         use image::ImageReader;
         use std::io::Cursor;
         let img = ImageReader::new(Cursor::new(&png_bytes))
