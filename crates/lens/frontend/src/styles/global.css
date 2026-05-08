@@ -1096,14 +1096,6 @@ a:hover { text-decoration: underline; }
    Badge embed button (below grade letter)
    ================================================================ */
 
-.summary-grade__letter-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.375rem;
-  align-self: flex-start;
-}
-
 .summary-badge-embed {
   background: none;
   border: none;
@@ -1111,8 +1103,9 @@ a:hover { text-decoration: underline; }
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  opacity: 0.85;
+  opacity: 0.75;
   transition: opacity var(--transition);
+  vertical-align: middle;
 }
 
 .summary-badge-embed:hover {

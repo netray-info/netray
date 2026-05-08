@@ -112,6 +112,8 @@ export default function Summary(props: Props) {
     </div>
   );
 
+  const showBadgeBtn = () => !isError() && props.badgesEnabled !== false && !!props.domain && !!props.done;
+
   const actions = () => (
     <div class="summary-actions">
       <Show when={props.onCopyMd}>
@@ -123,6 +125,20 @@ export default function Summary(props: Props) {
       <Show when={props.onDownloadJson}>
         <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
       </Show>
+      <Show when={showBadgeBtn() && (!!props.onCopyMd || !!props.onDownloadJson)}>
+        <span class="summary-action-sep">|</span>
+      </Show>
+      <Show when={showBadgeBtn()}>
+        <button
+          class="summary-badge-embed"
+          type="button"
+          onClick={() => setShowBadgeModal(true)}
+          aria-label="Get embed code for this grade badge"
+          title="Get embed code"
+        >
+          <GradeBadgePreview grade={s().grade} color={gradeStyle(s().grade)} />
+        </button>
+      </Show>
     </div>
   );
 
@@ -132,26 +148,13 @@ export default function Summary(props: Props) {
       <div class="summary-top">
         <Show when={isError()} fallback={
           <div class="summary-grade">
-            <div class="summary-grade__letter-col">
-              <span
-                class="summary-grade__letter"
-                style={{ color: gradeStyle(s().grade) }}
-                aria-label={`Grade ${s().grade}`}
-              >
-                {s().grade}
-              </span>
-              <Show when={!isError() && props.badgesEnabled !== false && !!props.domain && !!props.done}>
-                <button
-                  class="summary-badge-embed"
-                  type="button"
-                  onClick={() => setShowBadgeModal(true)}
-                  aria-label="Get embed code for this grade badge"
-                  title="Get embed code"
-                >
-                  <GradeBadgePreview grade={s().grade} color={gradeStyle(s().grade)} />
-                </button>
-              </Show>
-            </div>
+            <span
+              class="summary-grade__letter"
+              style={{ color: gradeStyle(s().grade) }}
+              aria-label={`Grade ${s().grade}`}
+            >
+              {s().grade}
+            </span>
             <div class="summary-grade__meta">
               <div class="summary-meta-row">
                 <div class="summary-meta-left">
