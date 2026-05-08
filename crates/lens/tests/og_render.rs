@@ -2,7 +2,9 @@
 use std::time::SystemTime;
 
 use lens::og::fonts::init_font_db;
-use lens::og::render::{format_utc_timestamp, svg_for_grade, svg_to_png, truncate_domain, xml_escape};
+use lens::og::render::{
+    format_utc_timestamp, svg_for_grade, svg_to_png, truncate_domain, xml_escape,
+};
 
 fn ts() -> SystemTime {
     // 2026-05-08 17:44:00 UTC → unix 1778262240
@@ -60,10 +62,7 @@ fn truncate_domain_50_chars_gives_38() {
 
 #[test]
 fn format_utc_timestamp_known_value() {
-    assert_eq!(
-        format_utc_timestamp(ts()),
-        "May 8, 2026 \u{00b7} 17:44 UTC"
-    );
+    assert_eq!(format_utc_timestamp(ts()), "May 8, 2026 \u{00b7} 17:44 UTC");
 }
 
 #[test]
@@ -121,7 +120,10 @@ fn svg_score_shown_for_known_grade() {
 #[test]
 fn svg_score_hidden_for_unknown_grade() {
     let svg = svg_for_grade("example.com", "?", "lens", 0.0, ts());
-    assert!(!svg.contains('%'), "score % must not appear for unknown grade");
+    assert!(
+        !svg.contains('%'),
+        "score % must not appear for unknown grade"
+    );
 }
 
 // ---------------------------------------------------------------------------

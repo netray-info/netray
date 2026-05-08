@@ -7,8 +7,8 @@ use crate::badge::palette::color_for_grade;
 use crate::og::layout::{
     BG_COLOR, CANVAS_H, CANVAS_W, DOMAIN_BASELINE_Y, DOMAIN_COLOR, DOMAIN_FONT_SIZE,
     DOMAIN_MAX_CHARS, FOOTER_BASELINE_Y, FOOTER_COLOR, FOOTER_FONT_SIZE, GRADE_BASELINE_Y,
-    GRADE_CENTER_X, GRADE_FONT_SIZE, RIGHT_X, SCORE_BASELINE_Y, SCORE_FONT_SIZE, SEP_COLOR,
-    SEP_X2, SEP_Y, TIMESTAMP_BASELINE_Y, TIMESTAMP_FONT_SIZE, UNKNOWN_GRADE_COLOR,
+    GRADE_CENTER_X, GRADE_FONT_SIZE, RIGHT_X, SCORE_BASELINE_Y, SCORE_FONT_SIZE, SEP_COLOR, SEP_X2,
+    SEP_Y, TIMESTAMP_BASELINE_Y, TIMESTAMP_FONT_SIZE, UNKNOWN_GRADE_COLOR,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -92,7 +92,7 @@ fn epoch_days_to_ymd(mut days: u64) -> (u64, u8, u8) {
 }
 
 fn is_leap(y: u64) -> bool {
-    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+    (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400)
 }
 
 pub fn svg_for_grade(
@@ -273,19 +273,31 @@ mod tests {
     #[test]
     fn svg_score_shown_for_known_grade() {
         let svg = svg_for_grade("example.com", "A", "lens", 91.7, ts());
-        assert!(svg.contains("91.7%"), "score percentage should appear in SVG");
+        assert!(
+            svg.contains("91.7%"),
+            "score percentage should appear in SVG"
+        );
     }
 
     #[test]
     fn svg_score_hidden_for_unknown_grade() {
         let svg = svg_for_grade("example.com", "?", "lens", 0.0, ts());
-        assert!(!svg.contains('%'), "score % must not appear for unknown grade");
+        assert!(
+            !svg.contains('%'),
+            "score % must not appear for unknown grade"
+        );
     }
 
     #[test]
     fn svg_timestamp_present() {
         let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts());
-        assert!(svg.contains("May 8, 2026"), "timestamp date must appear in SVG");
-        assert!(svg.contains("17:44 UTC"), "timestamp time must appear in SVG");
+        assert!(
+            svg.contains("May 8, 2026"),
+            "timestamp date must appear in SVG"
+        );
+        assert!(
+            svg.contains("17:44 UTC"),
+            "timestamp time must appear in SVG"
+        );
     }
 }
