@@ -873,9 +873,21 @@ async fn run_check_handler(
 
     // 7. Return SSE stream or sync JSON.
     if sync {
-        build_sync_response(domain_out, output, false, &state.scoring_profile, snapshot_id)
+        build_sync_response(
+            domain_out,
+            output,
+            false,
+            &state.scoring_profile,
+            snapshot_id,
+        )
     } else {
-        let events = build_sse_events(domain_out, output, false, &state.scoring_profile, snapshot_id);
+        let events = build_sse_events(
+            domain_out,
+            output,
+            false,
+            &state.scoring_profile,
+            snapshot_id,
+        );
         make_sse_stream(events, "MISS")
     }
 }
@@ -1205,7 +1217,12 @@ fn summary_payload_from(
     }
 }
 
-fn done_payload(domain: &str, duration_ms: u64, cached: bool, snapshot_id: Option<String>) -> DoneEvent {
+fn done_payload(
+    domain: &str,
+    duration_ms: u64,
+    cached: bool,
+    snapshot_id: Option<String>,
+) -> DoneEvent {
     DoneEvent {
         domain: domain.to_string(),
         duration_ms,
@@ -1490,8 +1507,7 @@ fn snapshot_section_results(
         .iter()
         .filter_map(|(key, display)| {
             // Only include sections that were actually checked (present in output)
-            if !output.sections.contains_key(*key)
-                && output.score.not_applicable.contains_key(*key)
+            if !output.sections.contains_key(*key) && output.score.not_applicable.contains_key(*key)
             {
                 return None;
             }
@@ -1501,10 +1517,7 @@ fn snapshot_section_results(
             let grade = if output.score.not_applicable.contains_key(*key) {
                 "N/A".to_string()
             } else if let Some(section_score) = output.score.sections.get(*key) {
-                crate::scoring::engine::lookup_grade(
-                    &profile.thresholds,
-                    section_score.percentage,
-                )
+                crate::scoring::engine::lookup_grade(&profile.thresholds, section_score.percentage)
             } else {
                 "error".to_string()
             };
@@ -1525,11 +1538,7 @@ fn snapshot_section_results(
 
 /// Create a snapshot for a completed check. Returns the shortid on success.
 /// Logs and returns `None` on any failure — snapshot errors never surface to the user.
-async fn create_snapshot(
-    state: &AppState,
-    domain: &str,
-    output: &CheckOutput,
-) -> Option<String> {
+async fn create_snapshot(state: &AppState, domain: &str, output: &CheckOutput) -> Option<String> {
     let store = state.snapshot_store.as_ref()?;
     let sections = snapshot_section_results(output, &state.scoring_profile);
     let snap = crate::snapshot::Snapshot::from_check_output(

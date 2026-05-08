@@ -1,6 +1,8 @@
 /// Integration tests for SnapshotStore (insert, get, sweep).
 use chrono::Utc;
-use lens::snapshot::{Snapshot, SnapshotSection, SnapshotFinding, SnapshotStore, SNAPSHOT_TTL_SECS};
+use lens::snapshot::{
+    SNAPSHOT_TTL_SECS, Snapshot, SnapshotFinding, SnapshotSection, SnapshotStore,
+};
 use tempfile::NamedTempFile;
 
 fn make_snapshot(domain: &str) -> Snapshot {

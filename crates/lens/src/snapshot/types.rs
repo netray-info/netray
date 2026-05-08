@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use super::store::MAX_FINDINGS_PER_SECTION;
 use crate::backends::{BackendExtra, BackendResult};
 use crate::check::SectionError;
 use crate::scoring::engine::{CheckVerdict, OverallScore};
 use crate::scoring::profile::ScoringProfile;
-use super::store::MAX_FINDINGS_PER_SECTION;
 
 /// One section's data passed to `Snapshot::from_check_output`.
 pub struct SectionResult {

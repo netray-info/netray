@@ -117,7 +117,10 @@ async fn make_app_with_store() -> (Router, Arc<SnapshotStore>, NamedTempFile) {
 #[tokio::test]
 async fn existing_snapshot_returns_200_html() {
     let (app, store, _tmp) = make_app_with_store().await;
-    let id = store.insert(make_snapshot("example.com", "A")).await.unwrap();
+    let id = store
+        .insert(make_snapshot("example.com", "A"))
+        .await
+        .unwrap();
 
     let req = Request::builder()
         .uri(format!("/r/{id}"))
@@ -126,14 +129,25 @@ async fn existing_snapshot_returns_200_html() {
     let resp = app.oneshot(req).await.unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
-    let ct = resp.headers().get("content-type").unwrap().to_str().unwrap();
-    assert!(ct.contains("text/html"), "content-type must be text/html, got: {ct}");
+    let ct = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(
+        ct.contains("text/html"),
+        "content-type must be text/html, got: {ct}"
+    );
 }
 
 #[tokio::test]
 async fn existing_snapshot_has_correct_cache_control() {
     let (app, store, _tmp) = make_app_with_store().await;
-    let id = store.insert(make_snapshot("example.com", "B")).await.unwrap();
+    let id = store
+        .insert(make_snapshot("example.com", "B"))
+        .await
+        .unwrap();
 
     let req = Request::builder()
         .uri(format!("/r/{id}"))
@@ -148,15 +162,27 @@ async fn existing_snapshot_has_correct_cache_control() {
         .expect("cache-control must be present")
         .to_str()
         .unwrap();
-    assert!(cc.contains("public"), "cache-control must be public, got: {cc}");
-    assert!(cc.contains("max-age=86400"), "cache-control must have max-age=86400, got: {cc}");
-    assert!(cc.contains("immutable"), "cache-control must include immutable, got: {cc}");
+    assert!(
+        cc.contains("public"),
+        "cache-control must be public, got: {cc}"
+    );
+    assert!(
+        cc.contains("max-age=86400"),
+        "cache-control must have max-age=86400, got: {cc}"
+    );
+    assert!(
+        cc.contains("immutable"),
+        "cache-control must include immutable, got: {cc}"
+    );
 }
 
 #[tokio::test]
 async fn existing_snapshot_body_contains_domain() {
     let (app, store, _tmp) = make_app_with_store().await;
-    let id = store.insert(make_snapshot("example.com", "A")).await.unwrap();
+    let id = store
+        .insert(make_snapshot("example.com", "A"))
+        .await
+        .unwrap();
 
     let req = Request::builder()
         .uri(format!("/r/{id}"))
@@ -166,7 +192,10 @@ async fn existing_snapshot_body_contains_domain() {
     let body = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
     let html = std::str::from_utf8(&body).unwrap();
     assert!(html.contains("example.com"), "body must contain domain");
-    assert!(html.contains("<!DOCTYPE html>"), "body must be full HTML page");
+    assert!(
+        html.contains("<!DOCTYPE html>"),
+        "body must be full HTML page"
+    );
 }
 
 #[tokio::test]

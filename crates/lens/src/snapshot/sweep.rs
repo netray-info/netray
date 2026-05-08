@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tracing::{info, warn};
 
-use super::store::{SnapshotStore, SNAPSHOT_SWEEP_INTERVAL, SNAPSHOT_TTL_SECS};
+use super::store::{SNAPSHOT_SWEEP_INTERVAL, SNAPSHOT_TTL_SECS, SnapshotStore};
 
 pub async fn run_sweep_loop(store: Arc<SnapshotStore>) {
     loop {

@@ -6,12 +6,12 @@ use crate::snapshot::types::Snapshot;
 fn grade_color_var(grade: &str) -> &'static str {
     match grade {
         "A+" => "var(--grade-a-plus)",
-        "A"  => "var(--grade-a)",
-        "B"  => "var(--grade-b)",
-        "C"  => "var(--grade-c)",
-        "D"  => "var(--grade-d)",
-        "F"  => "var(--grade-f)",
-        _    => "var(--text-muted)",
+        "A" => "var(--grade-a)",
+        "B" => "var(--grade-b)",
+        "C" => "var(--grade-c)",
+        "D" => "var(--grade-d)",
+        "F" => "var(--grade-f)",
+        _ => "var(--text-muted)",
     }
 }
 
@@ -187,13 +187,19 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
     let brand_tagline_html = if brand_tagline.is_empty() {
         String::new()
     } else {
-        format!(r#"<span class="brand-tagline">{}</span>"#, html_escape(brand_tagline))
+        format!(
+            r#"<span class="brand-tagline">{}</span>"#,
+            html_escape(brand_tagline)
+        )
     };
 
     let footer_about_html = if footer_about.is_empty() {
         String::new()
     } else {
-        format!(r#"<p class="footer-about">{}</p>"#, html_escape(footer_about))
+        format!(
+            r#"<p class="footer-about">{}</p>"#,
+            html_escape(footer_about)
+        )
     };
 
     let grade = html_escape(&snap.grade);
@@ -201,16 +207,24 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
     // Chips
     let mut chips = String::new();
     if total_fail > 0 {
-        chips.push_str(&format!(r#"<span class="chip chip--fail">{total_fail} FAILED</span>"#));
+        chips.push_str(&format!(
+            r#"<span class="chip chip--fail">{total_fail} FAILED</span>"#
+        ));
     }
     if total_warn > 0 {
-        chips.push_str(&format!(r#"<span class="chip chip--warn">{total_warn} WARNINGS</span>"#));
+        chips.push_str(&format!(
+            r#"<span class="chip chip--warn">{total_warn} WARNINGS</span>"#
+        ));
     }
     if total_pass > 0 {
-        chips.push_str(&format!(r#"<span class="chip chip--pass">{total_pass} PASSED</span>"#));
+        chips.push_str(&format!(
+            r#"<span class="chip chip--pass">{total_pass} PASSED</span>"#
+        ));
     }
     if total_skip > 0 {
-        chips.push_str(&format!(r#"<span class="chip chip--skip">{total_skip} SKIPPED</span>"#));
+        chips.push_str(&format!(
+            r#"<span class="chip chip--skip">{total_skip} SKIPPED</span>"#
+        ));
     }
 
     let descriptor_html = if let Some((desc, meaning)) = descriptor {
@@ -674,19 +688,22 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
 fn grade_descriptor(grade: &str) -> Option<(&'static str, &'static str)> {
     match grade {
         "A+" => Some(("perfect", "no findings")),
-        "A"  => Some(("strong", "minor polish possible")),
-        "B"  => Some(("ok", "weaknesses worth fixing")),
-        "C"  => Some(("fair", "significant issues")),
-        "D"  => Some(("weak", "serious problems")),
-        "F"  => Some(("failing", "critical failures")),
-        _    => None,
+        "A" => Some(("strong", "minor polish possible")),
+        "B" => Some(("ok", "weaknesses worth fixing")),
+        "C" => Some(("fair", "significant issues")),
+        "D" => Some(("weak", "serious problems")),
+        "F" => Some(("failing", "critical failures")),
+        _ => None,
     }
 }
 
 fn count_headline(total_warn: u32, total_fail: u32) -> String {
     match (total_fail, total_warn) {
         (0, 0) => "Everything checks out".to_string(),
-        (0, w) => format!("{w} {} worth a look", if w == 1 { "warning" } else { "warnings" }),
+        (0, w) => format!(
+            "{w} {} worth a look",
+            if w == 1 { "warning" } else { "warnings" }
+        ),
         (f, 0) => format!("{f} {} to fix", if f == 1 { "thing" } else { "things" }),
         (f, w) => format!(
             "{f} {} to fix and {w} {} worth a look",
@@ -698,72 +715,80 @@ fn count_headline(total_warn: u32, total_fail: u32) -> String {
 
 fn check_label(name: &str) -> &str {
     match name {
-        "spf"                  => "SPF Record",
-        "dmarc"                => "DMARC Policy",
-        "dnssec"               => "DNSSEC",
-        "caa"                  => "CAA Records",
-        "mx"                   => "MX Records",
-        "ns"                   => "Nameservers",
-        "ns_lame"              => "Lame Delegation",
-        "ns_delegation"        => "NS Delegation",
-        "dkim"                 => "DKIM",
-        "mta_sts"              => "MTA-STS",
-        "tlsrpt"               => "SMTP TLS Reporting",
-        "bimi"                 => "BIMI",
-        "cname_apex"           => "CNAME at Apex",
-        "https_svcb"           => "HTTPS Record",
-        "ttl"                  => "TTL Consistency",
-        "dnskey_algorithm"     => "DNSKEY Algorithm",
-        "dnssec_rollover"      => "DNSSEC Key Rollover",
-        "infrastructure"       => "Infrastructure",
-        "chain_trusted"        => "Chain of Trust",
-        "not_expired"          => "Not Expired",
-        "hostname_match"       => "Hostname Match",
-        "chain_complete"       => "Chain Complete",
-        "strong_signature"     => "Signature Algorithm",
-        "key_strength"         => "Key Strength",
-        "expiry_window"        => "Expiry Window",
-        "cert_lifetime"        => "Certificate Lifetime",
-        "san_quality"          => "SAN Quality",
-        "aia_reachability"     => "AIA Reachability",
-        "tls_version"          => "TLS Version",
-        "forward_secrecy"      => "Forward Secrecy",
-        "aead_cipher"          => "AEAD Cipher",
-        "ocsp_stapled"         => "OCSP Stapling",
-        "ct_logged"            => "CT Logged",
-        "caa_compliant"        => "CAA Compliance",
-        "dane_valid"           => "DANE / TLSA",
-        "consistency"          => "Multi-IP Consistency",
-        "alpn_consistency"     => "ALPN Consistency",
-        "ech_advertised"       => "Encrypted Client Hello",
-        "hsts"                 => "HSTS",
-        "https_redirect"       => "HTTPS Redirect",
-        "security_headers"     => "Security Headers",
-        "cors"                 => "CORS Policy",
-        "cookie_secure"        => "Secure Cookies",
-        "hygiene"              => "Header Hygiene",
+        "spf" => "SPF Record",
+        "dmarc" => "DMARC Policy",
+        "dnssec" => "DNSSEC",
+        "caa" => "CAA Records",
+        "mx" => "MX Records",
+        "ns" => "Nameservers",
+        "ns_lame" => "Lame Delegation",
+        "ns_delegation" => "NS Delegation",
+        "dkim" => "DKIM",
+        "mta_sts" => "MTA-STS",
+        "tlsrpt" => "SMTP TLS Reporting",
+        "bimi" => "BIMI",
+        "cname_apex" => "CNAME at Apex",
+        "https_svcb" => "HTTPS Record",
+        "ttl" => "TTL Consistency",
+        "dnskey_algorithm" => "DNSKEY Algorithm",
+        "dnssec_rollover" => "DNSSEC Key Rollover",
+        "infrastructure" => "Infrastructure",
+        "chain_trusted" => "Chain of Trust",
+        "not_expired" => "Not Expired",
+        "hostname_match" => "Hostname Match",
+        "chain_complete" => "Chain Complete",
+        "strong_signature" => "Signature Algorithm",
+        "key_strength" => "Key Strength",
+        "expiry_window" => "Expiry Window",
+        "cert_lifetime" => "Certificate Lifetime",
+        "san_quality" => "SAN Quality",
+        "aia_reachability" => "AIA Reachability",
+        "tls_version" => "TLS Version",
+        "forward_secrecy" => "Forward Secrecy",
+        "aead_cipher" => "AEAD Cipher",
+        "ocsp_stapled" => "OCSP Stapling",
+        "ct_logged" => "CT Logged",
+        "caa_compliant" => "CAA Compliance",
+        "dane_valid" => "DANE / TLSA",
+        "consistency" => "Multi-IP Consistency",
+        "alpn_consistency" => "ALPN Consistency",
+        "ech_advertised" => "Encrypted Client Hello",
+        "hsts" => "HSTS",
+        "https_redirect" => "HTTPS Redirect",
+        "security_headers" => "Security Headers",
+        "cors" => "CORS Policy",
+        "cookie_secure" => "Secure Cookies",
+        "hygiene" => "Header Hygiene",
         "email_authentication" => "Authentication",
         "email_infrastructure" => "Infrastructure",
-        "email_transport"      => "Transport",
-        "email_brand_policy"   => "Brand Policy",
-        "reputation"           => "IP Reputation",
-        other                  => other,
+        "email_transport" => "Transport",
+        "email_brand_policy" => "Brand Policy",
+        "reputation" => "IP Reputation",
+        other => other,
     }
 }
 
 fn guide_url_for(name: &str) -> Option<&'static str> {
     match name {
-        "dnssec" | "dnskey_algorithm" | "dnssec_rollover" => Some("https://netray.info/guide/dnssec"),
-        "cname_apex" | "https_svcb" | "ns" | "ttl" => Some("https://netray.info/guide/record-types"),
+        "dnssec" | "dnskey_algorithm" | "dnssec_rollover" => {
+            Some("https://netray.info/guide/dnssec")
+        }
+        "cname_apex" | "https_svcb" | "ns" | "ttl" => {
+            Some("https://netray.info/guide/record-types")
+        }
         "caa" => Some("https://netray.info/guide/caa-records"),
         "ns_lame" | "ns_delegation" => Some("https://netray.info/guide/lame-delegation"),
         "infrastructure" => Some("https://netray.info/guide/ip-enrichment"),
         "chain_trusted" | "chain_complete" | "strong_signature" | "key_strength"
-        | "not_expired" | "hostname_match" | "ocsp_stapled" => Some("https://netray.info/guide/certificate-chain"),
+        | "not_expired" | "hostname_match" | "ocsp_stapled" => {
+            Some("https://netray.info/guide/certificate-chain")
+        }
         "expiry_window" | "cert_lifetime" | "san_quality" | "aia_reachability" => {
             Some("https://netray.info/guide/certificate-management")
         }
-        "tls_version" | "forward_secrecy" | "aead_cipher" => Some("https://netray.info/guide/tls-protocol"),
+        "tls_version" | "forward_secrecy" | "aead_cipher" => {
+            Some("https://netray.info/guide/tls-protocol")
+        }
         "consistency" | "alpn_consistency" => Some("https://netray.info/guide/multi-ip-tls"),
         "ech_advertised" => Some("https://netray.info/guide/encrypted-client-hello"),
         "ct_logged" => Some("https://netray.info/guide/certificate-transparency"),
@@ -772,9 +797,10 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
             Some("https://netray.info/guide/http-security")
         }
         "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
-        "email_authentication" | "email_infrastructure" | "email_transport" | "email_brand_policy" => {
-            Some("https://netray.info/guide/email-auth")
-        }
+        "email_authentication"
+        | "email_infrastructure"
+        | "email_transport"
+        | "email_brand_policy" => Some("https://netray.info/guide/email-auth"),
         "reputation" => Some("https://netray.info/guide/ip-enrichment"),
         _ => None,
     }
