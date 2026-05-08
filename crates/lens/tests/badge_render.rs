@@ -43,21 +43,21 @@ macro_rules! grade_color_test {
 }
 
 // Flat style
-grade_color_test!(flat_aplus_color, "A+", "#16a34a", BadgeStyle::Flat);
+grade_color_test!(flat_aplus_color, "A+", "#22c55e", BadgeStyle::Flat);
 grade_color_test!(flat_a_color, "A", "#22c55e", BadgeStyle::Flat);
-grade_color_test!(flat_b_color, "B", "#eab308", BadgeStyle::Flat);
+grade_color_test!(flat_b_color, "B", "#84cc16", BadgeStyle::Flat);
 grade_color_test!(flat_c_color, "C", "#f59e0b", BadgeStyle::Flat);
-grade_color_test!(flat_d_color, "D", "#dc2626", BadgeStyle::Flat);
-grade_color_test!(flat_f_color, "F", "#991b1b", BadgeStyle::Flat);
+grade_color_test!(flat_d_color, "D", "#f97316", BadgeStyle::Flat);
+grade_color_test!(flat_f_color, "F", "#ef4444", BadgeStyle::Flat);
 grade_color_test!(flat_error_color, "error", "#6b7280", BadgeStyle::Flat);
 
 // For-the-badge style
-grade_color_test!(ftb_aplus_color, "A+", "#16a34a", BadgeStyle::ForTheBadge);
+grade_color_test!(ftb_aplus_color, "A+", "#22c55e", BadgeStyle::ForTheBadge);
 grade_color_test!(ftb_a_color, "A", "#22c55e", BadgeStyle::ForTheBadge);
-grade_color_test!(ftb_b_color, "B", "#eab308", BadgeStyle::ForTheBadge);
+grade_color_test!(ftb_b_color, "B", "#84cc16", BadgeStyle::ForTheBadge);
 grade_color_test!(ftb_c_color, "C", "#f59e0b", BadgeStyle::ForTheBadge);
-grade_color_test!(ftb_d_color, "D", "#dc2626", BadgeStyle::ForTheBadge);
-grade_color_test!(ftb_f_color, "F", "#991b1b", BadgeStyle::ForTheBadge);
+grade_color_test!(ftb_d_color, "D", "#f97316", BadgeStyle::ForTheBadge);
+grade_color_test!(ftb_f_color, "F", "#ef4444", BadgeStyle::ForTheBadge);
 grade_color_test!(ftb_error_color, "error", "#6b7280", BadgeStyle::ForTheBadge);
 
 // ---------------------------------------------------------------------------
@@ -160,13 +160,13 @@ fn error_grade_ftb_shows_question_mark_uppercased() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn palette_a_plus_is_green_600() {
-    assert_eq!(color_for_grade("A+"), "#16a34a");
+fn palette_a_plus_matches_frontend_grade_color() {
+    assert_eq!(color_for_grade("A+"), "#22c55e");
 }
 
 #[test]
-fn palette_f_is_red_800() {
-    assert_eq!(color_for_grade("F"), "#991b1b");
+fn palette_f_matches_frontend_grade_color() {
+    assert_eq!(color_for_grade("F"), "#ef4444");
 }
 
 #[test]

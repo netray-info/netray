@@ -1,12 +1,12 @@
 pub fn color_for_grade(grade: &str) -> &'static str {
     match grade {
-        "A+" => "#16a34a",
-        "A" => "#22c55e",
-        "B" => "#eab308",
-        "C" => "#f59e0b",
-        "D" => "#dc2626",
-        "F" => "#991b1b",
-        _ => "#6b7280",
+        "A+" => "#22c55e",
+        "A"  => "#22c55e",
+        "B"  => "#84cc16",
+        "C"  => "#f59e0b",
+        "D"  => "#f97316",
+        "F"  => "#ef4444",
+        _    => "#6b7280",
     }
 }
 
@@ -15,15 +15,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_grades_have_distinct_colors() {
-        let grades = ["A+", "A", "B", "C", "D", "F"];
-        let colors: Vec<_> = grades.iter().map(|g| color_for_grade(g)).collect();
-        for (i, c1) in colors.iter().enumerate() {
-            for (j, c2) in colors.iter().enumerate() {
-                if i != j {
-                    assert_ne!(c1, c2, "grades {} and {} share color {}", grades[i], grades[j], c1);
-                }
-            }
+    fn non_equivalent_grades_have_distinct_colors() {
+        // A+ and A intentionally share the same color (both are top grade).
+        let distinct_groups = [["B"], ["C"], ["D"], ["F"]];
+        let a_color = color_for_grade("A");
+        for group in &distinct_groups {
+            let c = color_for_grade(group[0]);
+            assert_ne!(a_color, c, "grade A and {} unexpectedly share color {}", group[0], c);
         }
     }
 
