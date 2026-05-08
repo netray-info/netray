@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Tests SDD §10 step 17: Summary shows "Get the badge" button.
+// Tests SDD §10 step 17: Summary shows grade badge embed button.
 import { render, cleanup } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Summary from './Summary';
@@ -23,9 +23,23 @@ const SUMMARY: SummaryEvent = {
   not_applicable: {},
 };
 
-describe('Summary — "Get the badge" button (SDD §10 step 17)', () => {
-  it('shows "Get the badge" button when badgesEnabled and domain are set', () => {
-    const { getByText } = render(() => (
+const DONE = { domain: 'example.com', duration_ms: 100, cached: false };
+
+describe('Summary — grade badge embed button (SDD §10 step 17)', () => {
+  it('shows badge embed button when badgesEnabled, domain, and done are set', () => {
+    const { getByRole } = render(() => (
+      <Summary
+        summary={SUMMARY}
+        done={DONE}
+        domain="example.com"
+        badgesEnabled={true}
+      />
+    ));
+    expect(getByRole('button', { name: /embed code/i })).toBeTruthy();
+  });
+
+  it('does not show button when done is null (check not yet complete)', () => {
+    const { queryByRole } = render(() => (
       <Summary
         summary={SUMMARY}
         done={null}
@@ -33,43 +47,43 @@ describe('Summary — "Get the badge" button (SDD §10 step 17)', () => {
         badgesEnabled={true}
       />
     ));
-    expect(getByText('Get the badge')).toBeTruthy();
+    expect(queryByRole('button', { name: /embed code/i })).toBeNull();
   });
 
   it('does not show button when grade is error', () => {
     const errorSummary = { ...SUMMARY, grade: 'error' };
-    const { queryByText } = render(() => (
+    const { queryByRole } = render(() => (
       <Summary
         summary={errorSummary}
-        done={null}
+        done={DONE}
         domain="example.com"
         badgesEnabled={true}
       />
     ));
-    expect(queryByText('Get the badge')).toBeNull();
+    expect(queryByRole('button', { name: /embed code/i })).toBeNull();
   });
 
   it('does not show button when badgesEnabled is false', () => {
-    const { queryByText } = render(() => (
+    const { queryByRole } = render(() => (
       <Summary
         summary={SUMMARY}
-        done={null}
+        done={DONE}
         domain="example.com"
         badgesEnabled={false}
       />
     ));
-    expect(queryByText('Get the badge')).toBeNull();
+    expect(queryByRole('button', { name: /embed code/i })).toBeNull();
   });
 
   it('does not show button when domain is empty', () => {
-    const { queryByText } = render(() => (
+    const { queryByRole } = render(() => (
       <Summary
         summary={SUMMARY}
-        done={null}
+        done={DONE}
         domain=""
         badgesEnabled={true}
       />
     ));
-    expect(queryByText('Get the badge')).toBeNull();
+    expect(queryByRole('button', { name: /embed code/i })).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ import { GRADE_LEGEND } from '../lib/gradeLegend';
 import VerdictDot from './VerdictDot';
 import ValidationChips from './ValidationChips';
 import BadgeModal from './BadgeModal';
+import { buildBadgeUrl } from '../lib/badge';
 
 function gradeStyle(grade: string): string {
   switch (grade) {
@@ -122,10 +123,6 @@ export default function Summary(props: Props) {
       <Show when={props.onDownloadJson}>
         <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
       </Show>
-      <Show when={!isError() && props.badgesEnabled !== false && !!props.domain}>
-        <span class="summary-action-sep">|</span>
-        <button class="summary-action-btn" type="button" onClick={() => setShowBadgeModal(true)}>Get the badge</button>
-      </Show>
     </div>
   );
 
@@ -135,13 +132,30 @@ export default function Summary(props: Props) {
       <div class="summary-top">
         <Show when={isError()} fallback={
           <div class="summary-grade">
-            <span
-              class="summary-grade__letter"
-              style={{ color: gradeStyle(s().grade) }}
-              aria-label={`Grade ${s().grade}`}
-            >
-              {s().grade}
-            </span>
+            <div class="summary-grade__letter-col">
+              <span
+                class="summary-grade__letter"
+                style={{ color: gradeStyle(s().grade) }}
+                aria-label={`Grade ${s().grade}`}
+              >
+                {s().grade}
+              </span>
+              <Show when={!isError() && props.badgesEnabled !== false && !!props.domain && !!props.done}>
+                <button
+                  class="summary-badge-embed"
+                  type="button"
+                  onClick={() => setShowBadgeModal(true)}
+                  aria-label="Get embed code for this grade badge"
+                  title="Get embed code"
+                >
+                  <img
+                    src={buildBadgeUrl(window.location.origin, props.domain!)}
+                    alt={`lens grade badge for ${props.domain}`}
+                    height="18"
+                  />
+                </button>
+              </Show>
+            </div>
             <div class="summary-grade__meta">
               <div class="summary-meta-row">
                 <div class="summary-meta-left">
