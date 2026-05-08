@@ -1342,7 +1342,7 @@ dependencies = [
 
 [[package]]
 name = "lens"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "axum",
  "axum-extra",

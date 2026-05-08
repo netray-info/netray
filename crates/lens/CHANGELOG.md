@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-08
+
+### Fixed
+- `/badge/*` and `/og/*` now always emit `Cache-Control: public, max-age=3600,
+  s-maxage=3600, stale-while-revalidate=86400` for known grades and
+  `Cache-Control: public, max-age=300, s-maxage=300` for unknown/error grades,
+  overriding any `no-store` default set by upstream infrastructure.
+- `/og/*` now reliably emits an `ETag` header on all 200 responses; conditional
+  `If-None-Match` requests receive `304 Not Modified` as documented in the SDD.
+- Integration tests added for SDD §11 R11/R13 (badge) and R14/R15 (OG) to
+  prevent future regression of cache and ETag headers.
+
 ## [0.9.0] - 2026-05-08
 
 ### Added

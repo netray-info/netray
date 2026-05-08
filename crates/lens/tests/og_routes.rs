@@ -133,18 +133,40 @@ async fn cold_cache_returns_200_valid_png_with_headers() {
         .to_str()
         .unwrap();
     assert_eq!(ct, "image/png");
+    // R14: success response must have long cache-control and ETag
     let cc = resp
         .headers()
         .get("cache-control")
-        .unwrap()
+        .expect("cache-control header must be present")
         .to_str()
         .unwrap();
     assert!(
-        cc.contains("max-age=3600"),
-        "cache-control should have max-age=3600"
+        cc.contains("public"),
+        "Cache-Control must be public, got: {cc}"
     );
-    let etag = resp.headers().get("etag");
-    assert!(etag.is_some(), "ETag header must be present");
+    assert!(
+        cc.contains("max-age=3600"),
+        "Cache-Control must include max-age=3600, got: {cc}"
+    );
+    assert!(
+        cc.contains("s-maxage=3600"),
+        "Cache-Control must include s-maxage=3600, got: {cc}"
+    );
+    assert!(
+        cc.contains("stale-while-revalidate=86400"),
+        "Cache-Control must include stale-while-revalidate=86400, got: {cc}"
+    );
+
+    let etag = resp
+        .headers()
+        .get("etag")
+        .expect("ETag header must be present on a 200 OG response")
+        .to_str()
+        .unwrap();
+    assert!(
+        etag.starts_with('"') && etag.ends_with('"'),
+        "ETag must be double-quoted, got: {etag}"
+    );
 
     let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
     assert!(is_png(&bytes), "response body must be a valid PNG");

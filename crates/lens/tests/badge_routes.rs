@@ -310,6 +310,89 @@ async fn error_grade_badge_has_short_cache_control() {
 }
 
 // ---------------------------------------------------------------------------
+// §11.11 R11/R13 — Known grade returns correct Cache-Control and ETag
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn known_grade_badge_has_correct_cache_headers() {
+    // Backends are unreachable in tests, so we pre-populate the cache with a
+    // known grade to exercise the success code path.
+    use lens::cache::{CachedResult, cache_key};
+    use lens::scoring::engine::OverallScore;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::time::SystemTime;
+
+    let state = make_badge_state(lens::config::BadgesConfig::default(), true);
+
+    let domain = "example.com";
+    let key = cache_key(domain);
+    state
+        .cache
+        .as_ref()
+        .expect("cache must be present when enabled")
+        .insert(
+            key,
+            Arc::new(CachedResult {
+                sections: HashMap::new(),
+                score: OverallScore {
+                    sections: HashMap::new(),
+                    overall_percentage: 91.0,
+                    grade: "A".to_string(),
+                    hard_fail_triggered: false,
+                    hard_fail_checks: vec![],
+                    not_applicable: HashMap::new(),
+                },
+                duration_ms: 1,
+                cached_at: SystemTime::now(),
+            }),
+        )
+        .await;
+
+    let app = badge_app(state);
+    let req = Request::builder()
+        .uri(&format!("/badge/{domain}.svg"))
+        .body(Body::empty())
+        .unwrap();
+    let resp = app.oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let cc = resp
+        .headers()
+        .get("cache-control")
+        .expect("cache-control header must be present on a known-grade badge")
+        .to_str()
+        .unwrap();
+    assert!(
+        cc.contains("public"),
+        "Cache-Control must be public, got: {cc}"
+    );
+    assert!(
+        cc.contains("max-age=3600"),
+        "Cache-Control must include max-age=3600, got: {cc}"
+    );
+    assert!(
+        cc.contains("s-maxage=3600"),
+        "Cache-Control must include s-maxage=3600, got: {cc}"
+    );
+    assert!(
+        cc.contains("stale-while-revalidate=86400"),
+        "Cache-Control must include stale-while-revalidate=86400, got: {cc}"
+    );
+
+    let etag = resp
+        .headers()
+        .get("etag")
+        .expect("ETag header must be present on a 200 badge response")
+        .to_str()
+        .unwrap();
+    assert!(
+        etag.starts_with('"') && etag.ends_with('"'),
+        "ETag must be double-quoted, got: {etag}"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // §11.10 — Per-domain throttle after first miss
 // ---------------------------------------------------------------------------
 
