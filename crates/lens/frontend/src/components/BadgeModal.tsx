@@ -1,9 +1,22 @@
 import { createSignal } from 'solid-js';
 import Modal from '@netray-info/common-frontend/components/Modal';
 import { buildBadgeUrl, buildHtmlSnippet, buildMarkdownSnippet } from '../lib/badge';
+import GradeBadgePreview from './GradeBadgePreview';
+
+function gradeColor(grade: string): string {
+  switch (grade) {
+    case 'A+':
+    case 'A':  return 'var(--grade-a)';
+    case 'B':  return 'var(--grade-b)';
+    case 'C':  return 'var(--grade-c)';
+    case 'D':  return 'var(--grade-d)';
+    default:   return 'var(--grade-f)';
+  }
+}
 
 interface Props {
   domain: string;
+  grade: string;
   onClose: () => void;
 }
 
@@ -22,7 +35,7 @@ export default function BadgeModal(props: Props) {
     <Modal open={true} onClose={props.onClose} title="Get the badge">
       <div class="badge-modal">
         <div class="badge-modal__preview">
-          <img src={badgeUrl()} alt={`lens grade badge for ${props.domain}`} height="20" />
+          <GradeBadgePreview grade={props.grade} color={gradeColor(props.grade)} />
         </div>
 
         <div class="badge-modal__field">

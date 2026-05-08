@@ -15,7 +15,7 @@ describe('BadgeModal — Escape key (SDD §10 step 16)', () => {
   it('calls onClose when Escape is pressed inside the dialog', () => {
     const onClose = vi.fn();
     const { getByRole } = render(() => (
-      <BadgeModal domain="example.com" onClose={onClose} />
+      <BadgeModal domain="example.com" grade="A" onClose={onClose} />
     ));
     const dialog = getByRole('dialog');
     fireEvent.keyDown(dialog, { key: 'Escape' });

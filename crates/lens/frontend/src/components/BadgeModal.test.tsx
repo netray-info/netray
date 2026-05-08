@@ -12,16 +12,16 @@ Object.defineProperty(navigator, 'clipboard', {
 });
 
 describe('BadgeModal', () => {
-  it('renders with domain in img alt text', () => {
-    const { getByAltText } = render(() => (
-      <BadgeModal domain="example.com" onClose={vi.fn()} />
+  it('renders badge preview svg', () => {
+    const { container } = render(() => (
+      <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
-    expect(getByAltText(/example\.com/)).toBeTruthy();
+    expect(container.querySelector('svg')).toBeTruthy();
   });
 
   it('renders Copy HTML and Copy Markdown buttons', () => {
     const { getByText } = render(() => (
-      <BadgeModal domain="example.com" onClose={vi.fn()} />
+      <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
     expect(getByText('Copy HTML')).toBeTruthy();
     expect(getByText('Copy Markdown')).toBeTruthy();
@@ -29,7 +29,7 @@ describe('BadgeModal', () => {
 
   it('calls clipboard.writeText when Copy HTML is clicked', async () => {
     const { getByText } = render(() => (
-      <BadgeModal domain="example.com" onClose={vi.fn()} />
+      <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
     fireEvent.click(getByText('Copy HTML'));
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
@@ -37,7 +37,7 @@ describe('BadgeModal', () => {
 
   it('calls clipboard.writeText when Copy Markdown is clicked', async () => {
     const { getByText } = render(() => (
-      <BadgeModal domain="example.com" onClose={vi.fn()} />
+      <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
     fireEvent.click(getByText('Copy Markdown'));
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
@@ -46,7 +46,7 @@ describe('BadgeModal', () => {
   it('calls onClose when the close button is clicked', () => {
     const onClose = vi.fn();
     const { getByLabelText } = render(() => (
-      <BadgeModal domain="example.com" onClose={onClose} />
+      <BadgeModal domain="example.com" grade="A" onClose={onClose} />
     ));
     fireEvent.click(getByLabelText('Close'));
     expect(onClose).toHaveBeenCalled();
@@ -54,7 +54,7 @@ describe('BadgeModal', () => {
 
   it('shows "Copied!" after clicking Copy HTML', async () => {
     const { getByText, findByText } = render(() => (
-      <BadgeModal domain="example.com" onClose={vi.fn()} />
+      <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
     fireEvent.click(getByText('Copy HTML'));
     expect(await findByText('Copied!')).toBeTruthy();
@@ -62,7 +62,7 @@ describe('BadgeModal', () => {
 
   it('shows "Copied!" after clicking Copy Markdown', async () => {
     const { getByText, findByText } = render(() => (
-      <BadgeModal domain="example.com" onClose={vi.fn()} />
+      <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
     fireEvent.click(getByText('Copy Markdown'));
     expect(await findByText('Copied!')).toBeTruthy();

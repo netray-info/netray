@@ -15,7 +15,7 @@ describe('BadgeModal — backdrop click (SDD §10 step 16)', () => {
   it('calls onClose when the backdrop overlay is clicked', () => {
     const onClose = vi.fn();
     const { container } = render(() => (
-      <BadgeModal domain="example.com" onClose={onClose} />
+      <BadgeModal domain="example.com" grade="A" onClose={onClose} />
     ));
     const overlay = container.querySelector('.modal-overlay');
     expect(overlay).not.toBeNull();
