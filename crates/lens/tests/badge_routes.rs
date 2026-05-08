@@ -14,8 +14,8 @@ use lens::state::AppState;
 
 fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
     use lens::config::{
-        BackendsConfig, Config, EcosystemConfig, RateLimitConfig, ScoringConfig, ServerConfig,
-        SiteConfig,
+        BackendsConfig, Config, EcosystemConfig, OgCardsConfig, RateLimitConfig, ScoringConfig,
+        ServerConfig, SiteConfig,
     };
     let config = Config {
         server: ServerConfig {
@@ -58,6 +58,7 @@ fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
         scoring: ScoringConfig::default(),
         site: SiteConfig::default(),
         badges,
+        og_cards: OgCardsConfig::default(),
     };
     AppState::new(config).unwrap()
 }

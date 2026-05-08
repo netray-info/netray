@@ -59,10 +59,15 @@ async fn main() {
         );
     }
 
+    if config.og_cards.enabled {
+        tracing::info!("og cards enabled");
+    }
+
     // 4. Build routers and collect OpenAPI spec fragments.
     let (health_router, health_openapi) = routes::health_router().split_for_parts();
     let (api_router, api_openapi) = routes::api_router().split_for_parts();
     let (badge_routes, badge_openapi) = routes::badge_router().split_for_parts();
+    let og_routes = routes::og_router();
     let openapi = lens::api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
 
     // 5. Build the main app with all middleware.
@@ -71,6 +76,11 @@ async fn main() {
         .merge(api_router.with_state(state.clone()))
         .merge(if config.badges.enabled {
             badge_routes.with_state(state.clone())
+        } else {
+            Router::new()
+        })
+        .merge(if config.og_cards.enabled {
+            og_routes.with_state(state.clone())
         } else {
             Router::new()
         })

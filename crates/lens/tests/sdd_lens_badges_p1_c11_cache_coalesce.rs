@@ -71,6 +71,7 @@ fn make_state_with_cache(ttl_seconds: u64) -> AppState {
             ttl_seconds,
             ..BadgesConfig::default()
         },
+        og_cards: lens::config::OgCardsConfig::default(),
     };
     AppState::new(config).unwrap()
 }

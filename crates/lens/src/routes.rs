@@ -379,6 +379,16 @@ pub fn badge_router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new().routes(utoipa_axum::routes!(badge_handler))
 }
 
+/// Returns an Axum Router for the OG card endpoint.
+///
+/// The route captures `/og/{domain_png}` where `{domain_png}` includes the `.png`
+/// suffix. The handler strips the `.png` suffix and returns 404 for any other extension.
+pub fn og_router() -> axum::Router<AppState> {
+    use crate::og::handler::og_handler;
+    use axum::routing::get;
+    axum::Router::new().route("/og/{domain_png}", get(og_handler))
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -1450,8 +1460,8 @@ pub mod tests {
 
     use crate::config::Config;
     use crate::config::{
-        BackendsConfig, BadgesConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig,
-        ServerConfig, SiteConfig,
+        BackendsConfig, BadgesConfig, CacheConfig, EcosystemConfig, OgCardsConfig, RateLimitConfig,
+        ScoringConfig, ServerConfig, SiteConfig,
     };
 
     pub fn test_config_with_rate_limit(per_ip: u32, burst: u32) -> Config {
@@ -1496,6 +1506,7 @@ pub mod tests {
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
+            og_cards: OgCardsConfig::default(),
         }
     }
 
