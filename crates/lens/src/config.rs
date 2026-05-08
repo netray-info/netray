@@ -25,6 +25,8 @@ pub struct Config {
     #[serde(default)]
     pub og_cards: OgCardsConfig,
     #[serde(default)]
+    pub snapshots: SnapshotsConfig,
+    #[serde(default)]
     pub telemetry: netray_common::telemetry::TelemetryConfig,
 }
 
@@ -348,6 +350,27 @@ impl Default for OgCardsConfig {
     }
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct SnapshotsConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_snapshots_db_path")]
+    pub db_path: std::path::PathBuf,
+}
+
+fn default_snapshots_db_path() -> std::path::PathBuf {
+    std::path::PathBuf::from("snapshots.db")
+}
+
+impl Default for SnapshotsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            db_path: default_snapshots_db_path(),
+        }
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -438,6 +461,7 @@ mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             og_cards: OgCardsConfig::default(),
+            snapshots: SnapshotsConfig::default(),
             telemetry: Default::default(),
         }
     }

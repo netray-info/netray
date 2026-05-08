@@ -141,3 +141,12 @@ enabled = true
 
 # Trace sampling rate (0.0 = off, 1.0 = 100%).
 #sample_rate = 1.0
+
+[snapshots]
+# Enable persistent snapshot storage. Each completed SSE check is saved to SQLite,
+# and GET /r/:shortid returns a static HTML page rendering that snapshot.
+enabled = true
+
+# Path to the SQLite database file for snapshots.
+# The file is created automatically if it does not exist.
+db_path = "snapshots.db"

@@ -267,6 +267,7 @@ export default function App() {
                 onDownloadJson={done() ? handleDownloadJson : undefined}
                 domain={currentDomain() || undefined}
                 badgesEnabled={meta()?.features?.badges !== false}
+                snapshotId={done()?.snapshot_id}
               />
             )}
           </Show>

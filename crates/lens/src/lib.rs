@@ -10,5 +10,6 @@ pub mod og;
 pub mod routes;
 pub mod scoring;
 pub mod security;
+pub mod snapshot;
 pub mod spa;
 pub mod state;

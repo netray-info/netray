@@ -63,6 +63,7 @@ fn live_state() -> AppState {
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
         og_cards: OgCardsConfig::default(),
+        snapshots: lens::config::SnapshotsConfig::default(),
         telemetry: Default::default(),
     };
     AppState::new(config).expect("failed to build AppState for live tests")

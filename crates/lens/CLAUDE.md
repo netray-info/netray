@@ -56,6 +56,15 @@ lens/
       rate_limit.rs       # GCRA per-IP + global
       ip_extract.rs       # Client IP from proxy headers
       target_policy.rs    # No RFC1918, no IPs, domain-only
+    snapshot/
+      mod.rs
+      types.rs            # Snapshot, SnapshotSection, SnapshotFinding, SectionResult
+      store.rs            # SnapshotStore (sqlx SqlitePool), SnapshotError, constants
+      sweep.rs            # Background TTL sweep task (1-hour interval)
+      shortid.rs          # nanoid 8-char base62 ID generation + regex validation
+      render.rs           # render_snapshot_html — self-contained dark-theme HTML, no JS
+  migrations/
+    0001_create_snapshots.sql   # snapshots table + created_at index
   frontend/               # SolidJS + Vite (strict TypeScript)
 ```
 
@@ -73,6 +82,9 @@ Any code change to scoring must update README.md in the same commit.
 - `tokio-stream` + `futures` — SSE streaming
 - `config` — TOML + env var layering (LENS_ prefix, __ separator)
 - `toml` — Scoring profile deserialization
+- `sqlx` 0.8 (sqlite, runtime-tokio, migrate, chrono) — durable snapshot storage; WAL mode; auto-migrated at startup
+- `nanoid` 0.4 + `regex` 1 — 8-char base62 shortids for `GET /r/:shortid`
+- `chrono` 0.4 — UTC timestamps in snapshots
 
 ## Frontend Rules
 

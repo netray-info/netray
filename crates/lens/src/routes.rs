@@ -258,6 +258,8 @@ pub struct DoneEvent {
     pub domain: String,
     pub duration_ms: u64,
     pub cached: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_id: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -863,11 +865,14 @@ async fn run_check_handler(
         cache.insert(key, entry).await;
     }
 
-    // 6. Return SSE stream or sync JSON.
+    // 6. Create snapshot (fresh checks only).
+    let snapshot_id = create_snapshot(&state, &domain_out, &output).await;
+
+    // 7. Return SSE stream or sync JSON.
     if sync {
         build_sync_response(domain_out, output, false, &state.scoring_profile)
     } else {
-        let events = build_sse_events(domain_out, output, false, &state.scoring_profile);
+        let events = build_sse_events(domain_out, output, false, &state.scoring_profile, snapshot_id);
         make_sse_stream(events, "MISS")
     }
 }
@@ -1197,11 +1202,12 @@ fn summary_payload_from(
     }
 }
 
-fn done_payload(domain: &str, duration_ms: u64, cached: bool) -> DoneEvent {
+fn done_payload(domain: &str, duration_ms: u64, cached: bool, snapshot_id: Option<String>) -> DoneEvent {
     DoneEvent {
         domain: domain.to_string(),
         duration_ms,
         cached,
+        snapshot_id,
     }
 }
 
@@ -1270,8 +1276,8 @@ fn summary_event_from(
         .data(serde_json::to_string(&payload).unwrap_or_default())
 }
 
-fn done_event(domain: &str, duration_ms: u64, cached: bool) -> Event {
-    let payload = done_payload(domain, duration_ms, cached);
+fn done_event(domain: &str, duration_ms: u64, cached: bool, snapshot_id: Option<String>) -> Event {
+    let payload = done_payload(domain, duration_ms, cached, snapshot_id);
     Event::default()
         .event("done")
         .data(serde_json::to_string(&payload).unwrap_or_default())
@@ -1282,6 +1288,7 @@ fn build_sse_events(
     output: CheckOutput,
     cached: bool,
     profile: &crate::scoring::profile::ScoringProfile,
+    snapshot_id: Option<String>,
 ) -> Vec<Event> {
     let duration_ms = output.duration_ms;
     let empty_checks = HashMap::new();
@@ -1331,7 +1338,7 @@ fn build_sse_events(
         &output.score,
         &profile.thresholds,
     ));
-    events.push(done_event(&domain, duration_ms, cached));
+    events.push(done_event(&domain, duration_ms, cached, snapshot_id));
     events
 }
 
@@ -1346,7 +1353,7 @@ fn build_sse_events_from_cached(
         score: cached.score.clone(),
         duration_ms: cached.duration_ms,
     };
-    build_sse_events(domain.to_string(), dummy_output, true, profile)
+    build_sse_events(domain.to_string(), dummy_output, true, profile, None)
 }
 
 fn make_sse_stream(events: Vec<Event>, cache_header: &'static str) -> Response {
@@ -1421,7 +1428,7 @@ fn build_sync_response(
             .map(|r| email_payload_from(r, email_checks)),
         ip: ip_payload_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
         summary: summary_payload_from(&output.sections, &output.score, &profile.thresholds),
-        done: done_payload(&domain, duration_ms, cached),
+        done: done_payload(&domain, duration_ms, cached, None),
     };
     let cache_header = if cached { "HIT" } else { "MISS" };
     let mut resp = Json(response).into_response();
@@ -1443,6 +1450,144 @@ fn sync_response_from_cached(
         duration_ms: cached.duration_ms,
     };
     build_sync_response(domain, dummy_output, is_cached, profile)
+}
+
+// ---------------------------------------------------------------------------
+// Snapshot helpers and handler
+// ---------------------------------------------------------------------------
+
+/// Build section results for snapshot creation from a CheckOutput.
+fn snapshot_section_results(
+    output: &CheckOutput,
+    profile: &crate::scoring::profile::ScoringProfile,
+) -> Vec<crate::snapshot::SectionResult> {
+    // Section order and display names
+    let known_sections: &[(&str, &str)] = &[
+        ("dns", "DNS"),
+        ("tls", "TLS"),
+        ("http", "HTTP"),
+        ("email", "Email"),
+        ("ip", "IP"),
+    ];
+
+    known_sections
+        .iter()
+        .filter_map(|(key, display)| {
+            // Only include sections that were actually checked (present in output)
+            if !output.sections.contains_key(*key)
+                && output.score.not_applicable.contains_key(*key)
+            {
+                return None;
+            }
+            if !output.sections.contains_key(*key) {
+                return None;
+            }
+            let grade = if output.score.not_applicable.contains_key(*key) {
+                "N/A".to_string()
+            } else if let Some(section_score) = output.score.sections.get(*key) {
+                crate::scoring::engine::lookup_grade(
+                    &profile.thresholds,
+                    section_score.percentage,
+                )
+            } else {
+                "error".to_string()
+            };
+            let backend_result = output
+                .sections
+                .get(*key)
+                .cloned()
+                .unwrap_or_else(|| Err(SectionError::BackendError("absent".to_string())));
+            Some(crate::snapshot::SectionResult {
+                name: key.to_string(),
+                display_name: display.to_string(),
+                grade,
+                backend_result,
+            })
+        })
+        .collect()
+}
+
+/// Create a snapshot for a completed check. Returns the shortid on success.
+/// Logs and returns `None` on any failure — snapshot errors never surface to the user.
+async fn create_snapshot(
+    state: &AppState,
+    domain: &str,
+    output: &CheckOutput,
+) -> Option<String> {
+    let store = state.snapshot_store.as_ref()?;
+    let sections = snapshot_section_results(output, &state.scoring_profile);
+    let snap = crate::snapshot::Snapshot::from_check_output(
+        domain.to_string(),
+        String::new(), // shortid assigned by store.insert
+        &output.score,
+        &sections,
+        env!("CARGO_PKG_VERSION"),
+    );
+    match store.insert(snap).await {
+        Ok(id) => Some(id),
+        Err(e) => {
+            tracing::warn!(domain, error = %e, "failed to create snapshot");
+            None
+        }
+    }
+}
+
+/// Returns an Axum Router for the snapshot page endpoint.
+pub fn snapshot_router() -> axum::Router<AppState> {
+    use axum::routing::get;
+    axum::Router::new().route("/r/{shortid}", get(snapshot_handler))
+}
+
+/// `GET /r/:shortid` — render a saved snapshot as HTML.
+pub async fn snapshot_handler(
+    State(state): State<AppState>,
+    Path(shortid): Path<String>,
+) -> Response {
+    use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+    use serde_json::json;
+
+    if !crate::snapshot::validate_shortid(&shortid) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": {"code": "INVALID_SHORTID", "message": "shortid must be 8 alphanumeric characters"}})),
+        )
+            .into_response();
+    }
+    let store = match &state.snapshot_store {
+        None => return not_found_html().into_response(),
+        Some(s) => s,
+    };
+    match store.get(&shortid).await {
+        Err(e) => {
+            tracing::warn!(shortid, error = %e, "snapshot lookup failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": {"code": "INTERNAL", "message": "snapshot unavailable"}})),
+            )
+                .into_response()
+        }
+        Ok(None) => not_found_html().into_response(),
+        Ok(Some(snap)) => {
+            let html = crate::snapshot::render_snapshot_html(&snap, &state.config.site);
+            (
+                StatusCode::OK,
+                [
+                    (CONTENT_TYPE, "text/html; charset=utf-8"),
+                    (CACHE_CONTROL, "public, max-age=86400, immutable"),
+                ],
+                html,
+            )
+                .into_response()
+        }
+    }
+}
+
+fn not_found_html() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
+        r#"<!DOCTYPE html><html><head><title>Not found</title></head><body><h1>Snapshot not found</h1><p>This snapshot may have expired or the ID is invalid.</p></body></html>"#,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1507,6 +1652,7 @@ pub mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             og_cards: OgCardsConfig::default(),
+            snapshots: crate::config::SnapshotsConfig::default(),
         }
     }
 

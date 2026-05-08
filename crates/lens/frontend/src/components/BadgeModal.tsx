@@ -1,6 +1,7 @@
-import { createSignal } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import Modal from '@netray-info/common-frontend/components/Modal';
 import { buildBadgeUrl, buildHtmlSnippet, buildMarkdownSnippet, buildOgUrl, buildOgMetaTag } from '../lib/badge';
+import { buildSnapshotUrl, buildShareSnippets } from '../lib/snapshot';
 import GradeBadgePreview from './GradeBadgePreview';
 
 function gradeColor(grade: string): string {
@@ -14,11 +15,12 @@ function gradeColor(grade: string): string {
   }
 }
 
-type Tab = 'badge' | 'social';
+type Tab = 'badge' | 'social' | 'share';
 
 interface Props {
   domain: string;
   grade: string;
+  snapshotId?: string | null;
   onClose: () => void;
 }
 
@@ -28,6 +30,8 @@ export default function BadgeModal(props: Props) {
 
   const badgeUrl = () => buildBadgeUrl(window.location.origin, props.domain);
   const ogUrl = () => buildOgUrl(window.location.origin, props.domain);
+  const snapshotUrl = () =>
+    props.snapshotId ? buildSnapshotUrl(window.location.origin, props.snapshotId) : null;
 
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
@@ -56,6 +60,15 @@ export default function BadgeModal(props: Props) {
             onClick={() => setActiveTab('social')}
           >
             Social card
+          </button>
+          <button
+            class={`badge-modal__tab${activeTab() === 'share' ? ' badge-modal__tab--active' : ''}`}
+            role="tab"
+            aria-selected={activeTab() === 'share'}
+            type="button"
+            onClick={() => setActiveTab('share')}
+          >
+            Share link
           </button>
         </div>
 
@@ -135,6 +148,65 @@ export default function BadgeModal(props: Props) {
                 {copied() === 'url' ? 'Copied!' : 'Copy URL'}
               </button>
             </div>
+          </div>
+        )}
+
+        {activeTab() === 'share' && (
+          <div class="badge-modal__panel">
+            <Show
+              when={snapshotUrl()}
+              fallback={
+                <p class="badge-modal__share-unavailable">
+                  Share link is not available for this check.
+                </p>
+              }
+            >
+              {(url) => {
+                const snippets = () =>
+                  buildShareSnippets(props.domain, props.snapshotId!, window.location.origin);
+                return (
+                  <>
+                    <div class="badge-modal__field">
+                      <label class="badge-modal__label" for="share-url">Snapshot URL</label>
+                      <input
+                        id="share-url"
+                        class="badge-modal__input"
+                        type="text"
+                        readonly
+                        value={url()}
+                        onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+                      />
+                    </div>
+                    <div class="badge-modal__field">
+                      <a
+                        class="badge-modal__share-preview-link"
+                        href={url()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Preview snapshot ↗
+                      </a>
+                    </div>
+                    <div class="badge-modal__actions">
+                      <button
+                        class="badge-modal__copy-btn"
+                        type="button"
+                        onClick={() => copy(snippets().plainUrl, 'share-url')}
+                      >
+                        {copied() === 'share-url' ? 'Copied!' : 'Copy URL'}
+                      </button>
+                      <button
+                        class="badge-modal__copy-btn"
+                        type="button"
+                        onClick={() => copy(snippets().markdown, 'share-md')}
+                      >
+                        {copied() === 'share-md' ? 'Copied!' : 'Copy Markdown'}
+                      </button>
+                    </div>
+                  </>
+                );
+              }}
+            </Show>
           </div>
         )}
       </div>

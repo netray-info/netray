@@ -59,6 +59,7 @@ fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
         site: SiteConfig::default(),
         badges,
         og_cards: OgCardsConfig::default(),
+        snapshots: lens::config::SnapshotsConfig::default(),
     };
     AppState::new(config).unwrap()
 }

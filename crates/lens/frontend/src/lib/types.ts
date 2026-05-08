@@ -79,6 +79,7 @@ export interface DoneEvent {
   domain: string;
   duration_ms: number;
   cached: boolean;
+  snapshot_id: string | null;
 }
 
 export type CheckState = 'idle' | 'loading' | 'done' | 'error';

@@ -76,6 +76,7 @@ interface Props {
   onDownloadJson?: () => void;
   domain?: string;
   badgesEnabled?: boolean;
+  snapshotId?: string | null;
 }
 
 export default function Summary(props: Props) {
@@ -271,7 +272,7 @@ export default function Summary(props: Props) {
     </div>
 
     <Show when={showBadgeModal() && !!props.domain}>
-      <BadgeModal domain={props.domain!} grade={s().grade} onClose={() => setShowBadgeModal(false)} />
+      <BadgeModal domain={props.domain!} grade={s().grade} snapshotId={props.snapshotId} onClose={() => setShowBadgeModal(false)} />
     </Show>
     </>
   );

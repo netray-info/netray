@@ -1,5 +1,6 @@
 use lens::config;
 use lens::routes;
+use lens::snapshot::{SnapshotStore, run_sweep_loop};
 use lens::spa;
 use lens::state;
 
@@ -49,7 +50,30 @@ async fn main() {
     );
 
     // 3. Build app state.
-    let state = state::AppState::new(config.clone()).expect("failed to build app state");
+    let mut state = state::AppState::new(config.clone()).expect("failed to build app state");
+
+    // 3a. Init snapshot store if enabled.
+    if config.snapshots.enabled {
+        match SnapshotStore::new(&config.snapshots.db_path).await {
+            Ok(store) => {
+                if let Err(e) = store.migrate().await {
+                    tracing::error!(error = %e, "snapshot migration failed");
+                    std::process::exit(1);
+                }
+                let arc_store = std::sync::Arc::new(store);
+                state.snapshot_store = Some(std::sync::Arc::clone(&arc_store));
+                tokio::spawn(run_sweep_loop(arc_store));
+                tracing::info!(
+                    db_path = %config.snapshots.db_path.display(),
+                    "snapshots enabled"
+                );
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "failed to open snapshot store");
+                std::process::exit(1);
+            }
+        }
+    }
 
     if config.badges.enabled {
         tracing::info!(
@@ -68,6 +92,7 @@ async fn main() {
     let (api_router, api_openapi) = routes::api_router().split_for_parts();
     let (badge_routes, badge_openapi) = routes::badge_router().split_for_parts();
     let og_routes = routes::og_router();
+    let snapshot_routes = routes::snapshot_router();
     let openapi = lens::api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
 
     // 5. Build the main app with all middleware.
@@ -81,6 +106,11 @@ async fn main() {
         })
         .merge(if config.og_cards.enabled {
             og_routes.with_state(state.clone())
+        } else {
+            Router::new()
+        })
+        .merge(if config.snapshots.enabled {
+            snapshot_routes.with_state(state.clone())
         } else {
             Router::new()
         })

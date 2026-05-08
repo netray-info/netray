@@ -72,6 +72,7 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
         og_cards: OgCardsConfig {
             enabled: og_enabled,
         },
+        snapshots: lens::config::SnapshotsConfig::default(),
     };
     AppState::new(config).unwrap()
 }

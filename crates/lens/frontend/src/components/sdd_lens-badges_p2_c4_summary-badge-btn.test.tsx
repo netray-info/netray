@@ -23,7 +23,7 @@ const SUMMARY: SummaryEvent = {
   not_applicable: {},
 };
 
-const DONE = { domain: 'example.com', duration_ms: 100, cached: false };
+const DONE = { domain: 'example.com', duration_ms: 100, cached: false, snapshot_id: null };
 
 describe('Summary — grade badge embed button (SDD §10 step 17)', () => {
   it('shows badge embed button when badgesEnabled, domain, and done are set', () => {

@@ -51,6 +51,8 @@ pub struct AppState {
     pub font_db: Arc<Database>,
     /// When `Some`, badge_handler calls this instead of the real `run_check`.
     pub badge_check_fn: Option<BadgeCheckFn>,
+    /// Snapshot storage. `None` when snapshots are disabled.
+    pub snapshot_store: Option<Arc<crate::snapshot::SnapshotStore>>,
 }
 
 impl AppState {
@@ -144,6 +146,7 @@ impl AppState {
             rendered_html,
             font_db,
             badge_check_fn: None,
+            snapshot_store: None,
         })
     }
 }
@@ -208,6 +211,7 @@ mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             og_cards: crate::config::OgCardsConfig::default(),
+            snapshots: crate::config::SnapshotsConfig::default(),
         }
     }
 
