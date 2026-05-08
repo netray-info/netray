@@ -8,16 +8,11 @@ use crate::config::BadgesConfig;
 use crate::error::AppError;
 use crate::input::validate_domain;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BadgeStyle {
+    #[default]
     Flat,
     ForTheBadge,
-}
-
-impl Default for BadgeStyle {
-    fn default() -> Self {
-        BadgeStyle::Flat
-    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -59,7 +54,11 @@ pub fn parse_badge_request(
         label_raw
     };
 
-    Ok(BadgeRequest { domain, style, label })
+    Ok(BadgeRequest {
+        domain,
+        style,
+        label,
+    })
 }
 
 /// Derive an ETag for a badge response.
@@ -87,7 +86,10 @@ mod tests {
 
     #[test]
     fn valid_domain_and_defaults() {
-        let q = BadgeQuery { style: None, label: None };
+        let q = BadgeQuery {
+            style: None,
+            label: None,
+        };
         let r = parse_badge_request("example.com", q, &default_cfg()).unwrap();
         assert_eq!(r.domain, "example.com");
         assert_eq!(r.style, BadgeStyle::Flat);
@@ -96,21 +98,30 @@ mod tests {
 
     #[test]
     fn for_the_badge_style_parsed() {
-        let q = BadgeQuery { style: Some("for-the-badge".into()), label: None };
+        let q = BadgeQuery {
+            style: Some("for-the-badge".into()),
+            label: None,
+        };
         let r = parse_badge_request("example.com", q, &default_cfg()).unwrap();
         assert_eq!(r.style, BadgeStyle::ForTheBadge);
     }
 
     #[test]
     fn unknown_style_falls_back_to_flat() {
-        let q = BadgeQuery { style: Some("garbage".into()), label: None };
+        let q = BadgeQuery {
+            style: Some("garbage".into()),
+            label: None,
+        };
         let r = parse_badge_request("example.com", q, &default_cfg()).unwrap();
         assert_eq!(r.style, BadgeStyle::Flat);
     }
 
     #[test]
     fn label_override_accepted() {
-        let q = BadgeQuery { style: None, label: Some("myco".into()) };
+        let q = BadgeQuery {
+            style: None,
+            label: Some("myco".into()),
+        };
         let r = parse_badge_request("example.com", q, &default_cfg()).unwrap();
         assert_eq!(r.label, "myco");
     }
@@ -118,7 +129,10 @@ mod tests {
     #[test]
     fn label_truncated_to_max_len() {
         let long = "a".repeat(64);
-        let q = BadgeQuery { style: None, label: Some(long) };
+        let q = BadgeQuery {
+            style: None,
+            label: Some(long),
+        };
         let r = parse_badge_request("example.com", q, &default_cfg()).unwrap();
         assert_eq!(r.label.len(), 32);
     }
@@ -126,7 +140,10 @@ mod tests {
     #[test]
     fn invalid_label_non_ascii_printable_rejected() {
         // 0x01 is a control character, outside 0x20–0x7E range
-        let q = BadgeQuery { style: None, label: Some("bad\x01label".into()) };
+        let q = BadgeQuery {
+            style: None,
+            label: Some("bad\x01label".into()),
+        };
         let err = parse_badge_request("example.com", q, &default_cfg()).unwrap_err();
         assert!(matches!(err, AppError::InvalidLabel(_)));
     }
@@ -135,14 +152,20 @@ mod tests {
     fn label_with_angle_brackets_is_valid_and_escaped_in_svg() {
         // < and > are ASCII printable (0x3C, 0x3E), so they pass the byte check.
         // They are HTML-escaped in the SVG output.
-        let q = BadgeQuery { style: None, label: Some("<script>".into()) };
+        let q = BadgeQuery {
+            style: None,
+            label: Some("<script>".into()),
+        };
         let r = parse_badge_request("example.com", q, &default_cfg()).unwrap();
         assert_eq!(r.label, "<script>");
     }
 
     #[test]
     fn invalid_domain_rejected() {
-        let q = BadgeQuery { style: None, label: None };
+        let q = BadgeQuery {
+            style: None,
+            label: None,
+        };
         let err = parse_badge_request("192.168.1.1", q, &default_cfg()).unwrap_err();
         assert!(matches!(err, AppError::DomainInvalid(_)));
     }

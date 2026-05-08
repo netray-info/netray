@@ -15,8 +15,8 @@ use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
 use crate::backends::{BackendExtra, BackendResult};
-use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
 use crate::badge::render::svg_for_grade;
+use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
 use crate::cache::{CachedResult, cache_key, is_fresh};
 use crate::check::{CheckInput, CheckOutput, SectionError, run_check, run_check_with_input};
 use crate::input::validate_domain;
@@ -564,7 +564,10 @@ fn build_svg_response(svg: String, cache_control: &str, etag: &str) -> Response 
     use axum::http::{StatusCode, header};
     let mut resp = (StatusCode::OK, svg).into_response();
     let headers = resp.headers_mut();
-    headers.insert(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8".parse().unwrap());
+    headers.insert(
+        header::CONTENT_TYPE,
+        "image/svg+xml; charset=utf-8".parse().unwrap(),
+    );
     headers.insert(header::CACHE_CONTROL, cache_control.parse().unwrap());
     headers.insert(header::ETAG, etag.parse().unwrap());
     resp
@@ -614,27 +617,26 @@ pub async fn badge_handler(
     let ttl = state.config.badges.ttl_seconds;
 
     // Cache hit — serve immediately, bypass all rate limiters.
-    if let Some(cache) = &state.cache {
-        if let Some(cached) = cache.get(&key).await {
-            if is_fresh(&cached, ttl) {
-                metrics::counter!("lens_badge_requests_total", "cache" => "hit").increment(1);
-                let grade = cached.score.grade.clone();
-                let render_start = Instant::now();
-                let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
-                metrics::histogram!("lens_badge_render_duration_seconds")
-                    .record(render_start.elapsed().as_secs_f64());
-                let etag = compute_etag(&badge_req.domain, &grade, &badge_req.label, badge_req.style);
-                if badge_is_not_modified(&req_headers, &etag) {
-                    return axum::http::StatusCode::NOT_MODIFIED.into_response();
-                }
-                let cache_ctrl = if grade == "error" {
-                    "public, max-age=300, s-maxage=300"
-                } else {
-                    "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
-                };
-                return build_svg_response(svg, cache_ctrl, &etag);
-            }
+    if let Some(cache) = &state.cache
+        && let Some(cached) = cache.get(&key).await
+        && is_fresh(&cached, ttl)
+    {
+        metrics::counter!("lens_badge_requests_total", "cache" => "hit").increment(1);
+        let grade = cached.score.grade.clone();
+        let render_start = Instant::now();
+        let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
+        metrics::histogram!("lens_badge_render_duration_seconds")
+            .record(render_start.elapsed().as_secs_f64());
+        let etag = compute_etag(&badge_req.domain, &grade, &badge_req.label, badge_req.style);
+        if badge_is_not_modified(&req_headers, &etag) {
+            return axum::http::StatusCode::NOT_MODIFIED.into_response();
         }
+        let cache_ctrl = if grade == "error" {
+            "public, max-age=300, s-maxage=300"
+        } else {
+            "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+        };
+        return build_svg_response(svg, cache_ctrl, &etag);
     }
 
     // Per-domain recompute limiter — throttled requests get a ? badge.

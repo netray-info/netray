@@ -6,16 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-## [0.8.0] - 2026-05-07
+## [0.8.0] - 2026-05-08
 
 ### Added
 - Grade badge endpoint `GET /badge/:domain.svg` with flat and for-the-badge styles
 - Per-domain recompute rate limiter with moka cache coalescing (at-most-one `run_check` per TTL window)
-- Frontend "Get the badge" button in Summary with `BadgeModal` (SVG preview, URL field, HTML/Markdown copy with "Copied!" confirmation)
+- Frontend badge embed button in Summary actions row with `BadgeModal` (SVG preview, URL field, HTML/Markdown copy with "Copied!" confirmation)
 - `features.badges` flag in `GET /api/meta` response
 - `[badges]` config section: `enabled`, `ttl_seconds`, `default_label`, `max_label_len`
 - `lens_badge_requests_total` counter and `lens_badge_render_duration_seconds` histogram metrics
 - OpenAPI documentation for `/badge/{domain}` via `utoipa`
+
+### Fixed
+- Badge preview in Summary and BadgeModal now renders as inline SVG using theme-aware CSS color variables, fixing color mismatch between badge and grade letter in light/dark mode (dc90835)
+- SVG palette colors aligned with frontend CSS grade variables: A+/A `#22c55e`, B `#84cc16`, C `#f59e0b`, D `#f97316`, F `#ef4444` (9b18268)
+- Badge embed button moved to end of actions row (`copy MD | JSON | badge`), removing it from below the grade letter (a7ce8f3)
+- Race condition fixed: badge embed only renders after `done` event, ensuring moka cache is populated before the badge request fires (e20bcdb)
+- Grade letter now vertically fills full height of the meta block (a15eea3)
+- Development cache enabled in `lens.dev.toml` to prevent rate limiter from blocking repeated badge requests in dev
 
 ## [0.7.3] - 2026-05-01
 
