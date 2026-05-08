@@ -496,17 +496,15 @@ a:hover { text-decoration: underline; }
 
 .summary-grade {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 1rem;
 }
 
 .summary-grade__letter {
   font-family: var(--mono);
-  font-size: 3.5rem;
+  font-size: 5.5rem;
   font-weight: 700;
   line-height: 1;
-  display: flex;
-  align-items: center;
 }
 
 .grade--A\+ { color: var(--grade-a-plus); }
