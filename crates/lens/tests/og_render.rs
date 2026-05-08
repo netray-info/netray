@@ -53,14 +53,14 @@ fn truncate_domain_50_chars_gives_38() {
 
 #[test]
 fn svg_contains_grade_a_plus() {
-    let svg = svg_for_grade("example.com", "A+", "lens");
+    let svg = svg_for_grade("example.com", "A+", "lens", 95.0);
     assert!(svg.contains(">A+<"), "A+ not found in SVG");
 }
 
 #[test]
 fn svg_all_known_grades_present() {
     for grade in &["A+", "A", "B", "C", "D", "F"] {
-        let svg = svg_for_grade("example.com", grade, "lens");
+        let svg = svg_for_grade("example.com", grade, "lens", 80.0);
         assert!(
             svg.contains(&format!(">{grade}<")),
             "grade {grade} not found in SVG"
@@ -70,15 +70,31 @@ fn svg_all_known_grades_present() {
 
 #[test]
 fn svg_error_grade_renders_question_mark() {
-    let svg = svg_for_grade("example.com", "error", "lens");
+    let svg = svg_for_grade("example.com", "error", "lens", 0.0);
     assert!(svg.contains(">?<"), "error grade should render ?");
     assert!(!svg.contains(">error<"));
 }
 
 #[test]
 fn svg_unknown_grade_renders_question_mark() {
-    let svg = svg_for_grade("example.com", "Z", "lens");
+    let svg = svg_for_grade("example.com", "Z", "lens", 0.0);
     assert!(svg.contains(">?<"), "unknown grade should render ?");
+}
+
+// ---------------------------------------------------------------------------
+// svg_for_grade — score percentage
+// ---------------------------------------------------------------------------
+
+#[test]
+fn svg_score_shown_for_known_grade() {
+    let svg = svg_for_grade("example.com", "A", "lens", 91.7);
+    assert!(svg.contains("91.7%"), "score must appear for known grade");
+}
+
+#[test]
+fn svg_score_hidden_for_unknown_grade() {
+    let svg = svg_for_grade("example.com", "?", "lens", 0.0);
+    assert!(!svg.contains('%'), "score % must not appear for unknown grade");
 }
 
 // ---------------------------------------------------------------------------
@@ -87,14 +103,14 @@ fn svg_unknown_grade_renders_question_mark() {
 
 #[test]
 fn svg_domain_with_ampersand_is_escaped() {
-    let svg = svg_for_grade("a&b.com", "A", "lens");
+    let svg = svg_for_grade("a&b.com", "A", "lens", 80.0);
     assert!(svg.contains("a&amp;b.com"));
     assert!(!svg.contains("a&b.com"));
 }
 
 #[test]
 fn svg_label_with_angle_brackets_is_escaped() {
-    let svg = svg_for_grade("example.com", "A", "<test>");
+    let svg = svg_for_grade("example.com", "A", "<test>", 80.0);
     assert!(svg.contains("&lt;test&gt;"));
     assert!(!svg.contains("<test>"));
 }
@@ -106,7 +122,7 @@ fn svg_label_with_angle_brackets_is_escaped() {
 #[test]
 fn svg_long_domain_truncated_in_text() {
     let domain = "a".repeat(50);
-    let svg = svg_for_grade(&domain, "A", "lens");
+    let svg = svg_for_grade(&domain, "A", "lens", 80.0);
     // Full 50-char domain must NOT appear verbatim in SVG
     assert!(!svg.contains(&domain));
     // Ellipsis must be present
@@ -119,7 +135,7 @@ fn svg_long_domain_truncated_in_text() {
 
 #[test]
 fn svg_has_correct_canvas_dimensions() {
-    let svg = svg_for_grade("example.com", "A", "lens");
+    let svg = svg_for_grade("example.com", "A", "lens", 80.0);
     assert!(svg.contains("width=\"1200\""));
     assert!(svg.contains("height=\"630\""));
 }
@@ -132,7 +148,7 @@ fn svg_has_correct_canvas_dimensions() {
 fn png_is_1200x630() {
     let font_db = init_font_db();
     for grade in &["A+", "A", "B", "C", "D", "F", "error"] {
-        let svg = svg_for_grade("example.com", grade, "lens");
+        let svg = svg_for_grade("example.com", grade, "lens", 80.0);
         let png_bytes = svg_to_png(&svg, font_db.clone()).expect("render should succeed");
 
         // Decode using the image crate to check dimensions.
@@ -156,16 +172,19 @@ fn png_is_1200x630() {
 fn etag_is_deterministic() {
     use xxhash_rust::xxh3::xxh3_64;
 
-    fn etag(domain: &str, grade: &str, label: &str) -> String {
-        let input = format!("{domain}\x00{grade}\x00{label}");
+    fn etag(domain: &str, grade: &str, label: &str, score_pct: f64) -> String {
+        let input = format!("{domain}\x00{grade}\x00{label}\x00{score_pct:.1}");
         let hash = xxh3_64(input.as_bytes());
         format!("\"{hash:016x}\"")
     }
 
-    let e1 = etag("example.com", "A", "lens");
-    let e2 = etag("example.com", "A", "lens");
+    let e1 = etag("example.com", "A", "lens", 80.0);
+    let e2 = etag("example.com", "A", "lens", 80.0);
     assert_eq!(e1, e2, "same inputs must produce same ETag");
 
-    let e3 = etag("example.com", "B", "lens");
+    let e3 = etag("example.com", "B", "lens", 80.0);
     assert_ne!(e1, e3, "different grade must produce different ETag");
+
+    let e4 = etag("example.com", "A", "lens", 90.0);
+    assert_ne!(e1, e4, "different score must produce different ETag");
 }

@@ -5,8 +5,9 @@ use fontdb::Database;
 use crate::badge::palette::color_for_grade;
 use crate::og::layout::{
     BG_COLOR, CANVAS_H, CANVAS_W, DOMAIN_BASELINE_Y, DOMAIN_COLOR, DOMAIN_FONT_SIZE,
-    DOMAIN_MAX_CHARS, DOMAIN_X, FOOTER_BASELINE_Y, FOOTER_COLOR, FOOTER_FONT_SIZE, FOOTER_X,
-    GRADE_BASELINE_Y, GRADE_CENTER_X, GRADE_FONT_SIZE, UNKNOWN_GRADE_COLOR,
+    DOMAIN_MAX_CHARS, FOOTER_BASELINE_Y, FOOTER_COLOR, FOOTER_FONT_SIZE, GRADE_BASELINE_Y,
+    GRADE_CENTER_X, GRADE_FONT_SIZE, RIGHT_X, SCORE_BASELINE_Y, SCORE_FONT_SIZE, SEP_COLOR,
+    SEP_X2, SEP_Y, UNKNOWN_GRADE_COLOR,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -43,7 +44,7 @@ pub fn truncate_domain(domain: &str) -> String {
     }
 }
 
-pub fn svg_for_grade(domain: &str, grade: &str, label: &str) -> String {
+pub fn svg_for_grade(domain: &str, grade: &str, label: &str, score_pct: f64) -> String {
     let grade_letter = match grade {
         "A+" | "A" | "B" | "C" | "D" | "F" => grade,
         _ => "?",
@@ -57,6 +58,12 @@ pub fn svg_for_grade(domain: &str, grade: &str, label: &str) -> String {
     let domain_display = xml_escape(&truncate_domain(domain));
     let grade_display = xml_escape(grade_letter);
 
+    let score_display = if grade_letter == "?" {
+        String::new()
+    } else {
+        format!("{score_pct:.1}%")
+    };
+
     let footer_text = if label.is_empty() {
         xml_escape(" \u{00b7} netray.info")
     } else {
@@ -66,9 +73,11 @@ pub fn svg_for_grade(domain: &str, grade: &str, label: &str) -> String {
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{CANVAS_W}" height="{CANVAS_H}">
   <rect width="{CANVAS_W}" height="{CANVAS_H}" fill="{BG_COLOR}"/>
-  <text x="{DOMAIN_X}" y="{DOMAIN_BASELINE_Y}" font-family="Inter" font-size="{DOMAIN_FONT_SIZE}" font-weight="400" fill="{DOMAIN_COLOR}">{domain_display}</text>
   <text x="{GRADE_CENTER_X}" y="{GRADE_BASELINE_Y}" text-anchor="middle" font-family="Inter" font-size="{GRADE_FONT_SIZE}" font-weight="700" fill="{grade_color}">{grade_display}</text>
-  <text x="{FOOTER_X}" y="{FOOTER_BASELINE_Y}" font-family="Inter" font-size="{FOOTER_FONT_SIZE}" font-weight="400" fill="{FOOTER_COLOR}">{footer_text}</text>
+  <text x="{RIGHT_X}" y="{DOMAIN_BASELINE_Y}" font-family="Inter" font-size="{DOMAIN_FONT_SIZE}" font-weight="400" fill="{DOMAIN_COLOR}">{domain_display}</text>
+  <line x1="{RIGHT_X}" y1="{SEP_Y}" x2="{SEP_X2}" y2="{SEP_Y}" stroke="{SEP_COLOR}" stroke-width="2"/>
+  <text x="{RIGHT_X}" y="{SCORE_BASELINE_Y}" font-family="Inter" font-size="{SCORE_FONT_SIZE}" font-weight="700" fill="{grade_color}">{score_display}</text>
+  <text x="{RIGHT_X}" y="{FOOTER_BASELINE_Y}" font-family="Inter" font-size="{FOOTER_FONT_SIZE}" font-weight="400" fill="{FOOTER_COLOR}">{footer_text}</text>
 </svg>"#
     )
 }
@@ -121,7 +130,6 @@ mod tests {
     fn truncate_domain_41_chars_truncated() {
         let s = "a".repeat(41);
         let result = truncate_domain(&s);
-        // 37 chars + ellipsis (3 bytes UTF-8) = 40 chars display, 39 bytes
         assert!(result.ends_with('\u{2026}'));
         let without_ellipsis: String = result.chars().filter(|&c| c != '\u{2026}').collect();
         assert_eq!(without_ellipsis.len(), 37);
@@ -139,7 +147,7 @@ mod tests {
     #[test]
     fn svg_contains_grade_letter() {
         for grade in &["A+", "A", "B", "C", "D", "F"] {
-            let svg = svg_for_grade("example.com", grade, "lens");
+            let svg = svg_for_grade("example.com", grade, "lens", 80.0);
             assert!(
                 svg.contains(grade),
                 "SVG for grade {grade} should contain the grade letter"
@@ -149,39 +157,51 @@ mod tests {
 
     #[test]
     fn svg_error_grade_renders_question_mark() {
-        let svg = svg_for_grade("example.com", "error", "lens");
+        let svg = svg_for_grade("example.com", "error", "lens", 0.0);
         assert!(svg.contains(">?<"), "error grade should render as ?");
     }
 
     #[test]
     fn svg_unknown_grade_renders_question_mark() {
-        let svg = svg_for_grade("example.com", "X", "lens");
+        let svg = svg_for_grade("example.com", "X", "lens", 0.0);
         assert!(svg.contains(">?<"), "unknown grade should render as ?");
     }
 
     #[test]
     fn svg_domain_is_escaped() {
-        let svg = svg_for_grade("a&b.com", "A", "lens");
+        let svg = svg_for_grade("a&b.com", "A", "lens", 80.0);
         assert!(svg.contains("a&amp;b.com"));
         assert!(!svg.contains("a&b.com"));
     }
 
     #[test]
     fn svg_label_is_escaped() {
-        let svg = svg_for_grade("example.com", "A", "<test>");
+        let svg = svg_for_grade("example.com", "A", "<test>", 80.0);
         assert!(svg.contains("&lt;test&gt;"));
     }
 
     #[test]
     fn svg_empty_label_renders_bullet_only() {
-        let svg = svg_for_grade("example.com", "A", "");
+        let svg = svg_for_grade("example.com", "A", "", 80.0);
         assert!(svg.contains("\u{00b7} netray.info"));
     }
 
     #[test]
     fn svg_dimensions_present() {
-        let svg = svg_for_grade("example.com", "A", "lens");
+        let svg = svg_for_grade("example.com", "A", "lens", 80.0);
         assert!(svg.contains("width=\"1200\""));
         assert!(svg.contains("height=\"630\""));
+    }
+
+    #[test]
+    fn svg_score_shown_for_known_grade() {
+        let svg = svg_for_grade("example.com", "A", "lens", 91.7);
+        assert!(svg.contains("91.7%"), "score percentage should appear in SVG");
+    }
+
+    #[test]
+    fn svg_score_hidden_for_unknown_grade() {
+        let svg = svg_for_grade("example.com", "?", "lens", 0.0);
+        assert!(!svg.contains('%'), "score % must not appear for unknown grade");
     }
 }

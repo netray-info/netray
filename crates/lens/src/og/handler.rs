@@ -16,8 +16,8 @@ pub struct OgQueryParams {
     pub label: Option<String>,
 }
 
-fn compute_etag(domain: &str, grade: &str, label: &str) -> String {
-    let input = format!("{domain}\x00{grade}\x00{label}");
+fn compute_etag(domain: &str, grade: &str, label: &str, score_pct: f64) -> String {
+    let input = format!("{domain}\x00{grade}\x00{label}\x00{score_pct:.1}");
     let hash = xxh3_64(input.as_bytes());
     format!("\"{hash:016x}\"")
 }
@@ -99,11 +99,12 @@ pub async fn og_handler(
         && is_fresh(&cached, OG_TTL_SECONDS)
     {
         let grade = cached.score.grade.clone();
-        let etag = compute_etag(&domain, &grade, &label);
+        let score_pct = cached.score.overall_percentage;
+        let etag = compute_etag(&domain, &grade, &label, score_pct);
         if is_not_modified(&req_headers, &etag) {
             return StatusCode::NOT_MODIFIED.into_response();
         }
-        let svg = svg_for_grade(&domain, &grade, &label);
+        let svg = svg_for_grade(&domain, &grade, &label, score_pct);
         let png = match svg_to_png(&svg, state.font_db.clone()) {
             Ok(b) => b,
             Err(e) => return render_error_from(e),
@@ -120,11 +121,11 @@ pub async fn og_handler(
     // Per-domain recompute limiter.
     let cost = NonZeroU32::new(1).unwrap();
     if check_keyed_cost(&state.badge_recompute_limiter, &key, cost, "og", "lens").is_err() {
-        let etag = compute_etag(&domain, "?", &label);
+        let etag = compute_etag(&domain, "?", &label, 0.0);
         if is_not_modified(&req_headers, &etag) {
             return StatusCode::NOT_MODIFIED.into_response();
         }
-        let svg = svg_for_grade(&domain, "?", &label);
+        let svg = svg_for_grade(&domain, "?", &label, 0.0);
         let png = match svg_to_png(&svg, state.font_db.clone()) {
             Ok(b) => b,
             Err(e) => return render_error_from(e),
@@ -133,7 +134,7 @@ pub async fn og_handler(
     }
 
     // Coalesced recompute.
-    let grade = if let Some(cache) = &state.cache {
+    let (grade, score_pct) = if let Some(cache) = &state.cache {
         let state_for_init = state.clone();
         let domain_for_init = domain.clone();
         let entry = cache
@@ -152,19 +153,20 @@ pub async fn og_handler(
                 |existing| !is_fresh(existing, OG_TTL_SECONDS),
             )
             .await;
-        entry.into_value().score.grade.clone()
+        let val = entry.into_value();
+        (val.score.grade.clone(), val.score.overall_percentage)
     } else {
         let output = invoke_check(&state, &domain).await;
-        output.score.grade
+        (output.score.grade, output.score.overall_percentage)
     };
 
     let is_error = grade == "error";
-    let etag = compute_etag(&domain, &grade, &label);
+    let etag = compute_etag(&domain, &grade, &label, score_pct);
     if is_not_modified(&req_headers, &etag) {
         return StatusCode::NOT_MODIFIED.into_response();
     }
 
-    let svg = svg_for_grade(&domain, &grade, &label);
+    let svg = svg_for_grade(&domain, &grade, &label, score_pct);
     let png = match svg_to_png(&svg, state.font_db.clone()) {
         Ok(b) => b,
         Err(e) => return render_error_from(e),

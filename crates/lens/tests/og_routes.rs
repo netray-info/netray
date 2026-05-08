@@ -448,24 +448,28 @@ async fn feature_disabled_returns_404_from_router() {
 fn etag_stable_for_same_inputs() {
     use xxhash_rust::xxh3::xxh3_64;
 
-    fn etag(domain: &str, grade: &str, label: &str) -> String {
-        let input = format!("{domain}\x00{grade}\x00{label}");
+    fn etag(domain: &str, grade: &str, label: &str, score_pct: f64) -> String {
+        let input = format!("{domain}\x00{grade}\x00{label}\x00{score_pct:.1}");
         let hash = xxh3_64(input.as_bytes());
         format!("\"{hash:016x}\"")
     }
 
     // Simulate two process "lifetimes" by calling the function twice.
-    let e1 = etag("example.com", "A", "lens");
-    let e2 = etag("example.com", "A", "lens");
+    let e1 = etag("example.com", "A", "lens", 80.0);
+    let e2 = etag("example.com", "A", "lens", 80.0);
     assert_eq!(e1, e2);
 
     // Different inputs differ.
     assert_ne!(
-        etag("example.com", "A", "lens"),
-        etag("example.com", "B", "lens")
+        etag("example.com", "A", "lens", 80.0),
+        etag("example.com", "B", "lens", 80.0)
     );
     assert_ne!(
-        etag("example.com", "A", "lens"),
-        etag("example.com", "A", "other")
+        etag("example.com", "A", "lens", 80.0),
+        etag("example.com", "A", "other", 80.0)
+    );
+    assert_ne!(
+        etag("example.com", "A", "lens", 80.0),
+        etag("example.com", "A", "lens", 90.0)
     );
 }
