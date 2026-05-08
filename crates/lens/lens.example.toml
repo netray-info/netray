@@ -116,6 +116,13 @@ default_label = "lens"
 # Maximum length for the ?label= query parameter override (bytes).
 max_label_len = 32
 
+[og_cards]
+# Enable the /og/:domain.png endpoint (1200×630 social preview cards).
+enabled = true
+# Note: OG card freshness uses OG_TTL_SECONDS (3600 s, compile-time constant).
+# Ensure cache.ttl_seconds is >= 3600 s; otherwise cache entries expire before
+# the OG freshness window and every request triggers a recompute.
+
 [telemetry]
 # Log output format.
 #   "text" -- human-readable, colour-coded (default; best for terminals)

@@ -59,11 +59,17 @@ uuid = { version = "1", features = ["v7"] }
 # Scoring profile
 toml = "0.8"
 
+# OG cards: SVG→PNG rasterization and deterministic ETag hashing
+resvg = { version = "0.45", default-features = false, features = ["text"] }
+fontdb = "0.23"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [[test]]
 name = "reference_domains"
@@ -88,3 +94,11 @@ path = "tests/sdd_lens_badges_p2_c5_meta_badges.rs"
 [[test]]
 name = "sdd_lens_badges_p1_c11_cache_coalesce"
 path = "tests/sdd_lens_badges_p1_c11_cache_coalesce.rs"
+
+[[test]]
+name = "og_render"
+path = "tests/og_render.rs"
+
+[[test]]
+name = "og_routes"
+path = "tests/og_routes.rs"

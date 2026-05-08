@@ -4,6 +4,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use fontdb::Database;
+
 use governor::{Quota, RateLimiter};
 use moka::future::Cache;
 use netray_common::rate_limit::KeyedLimiter;
@@ -45,6 +47,8 @@ pub struct AppState {
     /// `None` when the embedded `frontend/dist` has no `index.html` (test
     /// builds with a `.gitkeep`-only dist).
     pub rendered_html: Option<Arc<String>>,
+    /// Embedded Inter font database for OG card PNG rasterization.
+    pub font_db: Arc<Database>,
     /// When `Some`, badge_handler calls this instead of the real `run_check`.
     pub badge_check_fn: Option<BadgeCheckFn>,
 }
@@ -126,6 +130,8 @@ impl AppState {
             Arc::new(render_apex_html(&template, &config.site))
         });
 
+        let font_db = crate::og::fonts::init_font_db();
+
         Ok(Self {
             config: Arc::new(config),
             per_ip_limiter,
@@ -136,6 +142,7 @@ impl AppState {
             scoring_profile,
             backends: Arc::new(backends),
             rendered_html,
+            font_db,
             badge_check_fn: None,
         })
     }
@@ -200,6 +207,7 @@ mod tests {
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
+            og_cards: crate::config::OgCardsConfig::default(),
         }
     }
 

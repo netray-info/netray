@@ -6,6 +6,7 @@ pub mod check;
 pub mod config;
 pub mod error;
 pub mod input;
+pub mod og;
 pub mod routes;
 pub mod scoring;
 pub mod security;

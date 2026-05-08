@@ -8,6 +8,7 @@
   is the transparency contract.
 - **Secure by Default**: lens makes outbound HTTP calls to user-specified domains -- target policy validation is load-bearing.
 - **Partial failure is expected**: one backend down must never block the others.
+- **Server-side PNG uses embedded Inter fonts**: `src/og/fonts.rs` embeds Inter Regular and Bold (rsms/inter v4.1) via `include_bytes!` for deterministic rasterization. The "system fonts only" rule in the meta-repo CLAUDE.md applies to client-rendered surfaces; server-side OG card rasterization requires embedded fonts.
 
 ## Project Overview
 

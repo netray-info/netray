@@ -23,6 +23,8 @@ pub struct Config {
     #[serde(default)]
     pub badges: BadgesConfig,
     #[serde(default)]
+    pub og_cards: OgCardsConfig,
+    #[serde(default)]
     pub telemetry: netray_common::telemetry::TelemetryConfig,
 }
 
@@ -334,6 +336,18 @@ fn default_global_burst() -> u32 {
     20
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct OgCardsConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for OgCardsConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -423,6 +437,7 @@ mod tests {
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
+            og_cards: OgCardsConfig::default(),
             telemetry: Default::default(),
         }
     }
