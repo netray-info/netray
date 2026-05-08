@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-09
+
+### Added
+- Add `GET /r/:shortid` snapshot endpoint with durable SQLite storage,
+  background TTL sweep, and nanoid-based 8-char base62 shortids; emit
+  `snapshot_id` in the SSE `done` event so the SPA can surface a permanent
+  share URL. (0670aeb)
+- Self-contained dark/light themed snapshot HTML page mirroring the SPA's
+  CSS variables, fonts, and layout; CSS-only theme switcher via `:has()`
+  selector (no script tags). (aa0cd5d)
+- Share modal restructured into four clearly separated tabs — Snapshot,
+  Re-run link, Badge, Social card — with consistent panel shape
+  (description → preview → URL field → actions); prominent "share & embed"
+  pill replaces the buried text-only share entry point. (51945b3, aa0cd5d)
+- Snapshot URL now reused on cache hits: `CachedResult.snapshot_id` is
+  stored at first compute and forwarded to the SSE/sync response on every
+  subsequent hit, so the Snapshot tab is populated whether the result is
+  fresh or cached. (aa0cd5d)
+
 ## [0.9.1] - 2026-05-08
 
 ### Fixed
