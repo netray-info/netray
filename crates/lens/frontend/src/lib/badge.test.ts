@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import type { MetaFeatures } from './types';
 import { buildBadgeUrl, buildHtmlSnippet, buildMarkdownSnippet } from './badge';
 
 const BASE = 'https://example.com';
 const DOMAIN = 'example.com';
+
+describe('MetaFeatures.badges', () => {
+  it('badges field accepts boolean values', () => {
+    const withBadges: MetaFeatures = { badges: true };
+    const withoutBadges: MetaFeatures = { badges: false };
+    const absent: MetaFeatures = {};
+    expect(withBadges.badges).toBe(true);
+    expect(withoutBadges.badges).toBe(false);
+    expect(absent.badges).toBeUndefined();
+  });
+});
 
 describe('buildBadgeUrl', () => {
   it('produces a .svg URL for the domain', () => {

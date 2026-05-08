@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-07
+
+### Added
+- Grade badge endpoint `GET /badge/:domain.svg` with flat and for-the-badge styles
+- Per-domain recompute rate limiter with moka cache coalescing (at-most-one `run_check` per TTL window)
+- Frontend "Get the badge" button in Summary with `BadgeModal` (SVG preview, URL field, HTML/Markdown copy with "Copied!" confirmation)
+- `features.badges` flag in `GET /api/meta` response
+- `[badges]` config section: `enabled`, `ttl_seconds`, `default_label`, `max_label_len`
+- `lens_badge_requests_total` counter and `lens_badge_render_duration_seconds` histogram metrics
+- OpenAPI documentation for `/badge/{domain}` via `utoipa`
+
 ## [0.7.3] - 2026-05-01
 
 ### Security
