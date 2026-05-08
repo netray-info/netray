@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-08
+
+### Added
+- Add `/og/:domain.png` endpoint returning 1200×630 PNG social preview cards with
+  two-column layout (grade left, domain/score/timestamp/footer right), reusing
+  the existing cache, rate-limiter, and palette from Phase 2a badges
+- Add "Social card" tab to share modal with OG card preview, copy meta tag, and
+  copy URL buttons; fix `{{site_title}}` substitution in Vite dev mode
+
+### Fixed
+- Use `is_multiple_of` for leap-year check in UTC timestamp formatter;
+  apply cargo fmt
+
 ## [0.8.0] - 2026-05-08
 
 ### Added
