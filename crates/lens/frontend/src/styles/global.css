@@ -496,7 +496,7 @@ a:hover { text-decoration: underline; }
 
 .summary-grade {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 1rem;
 }
 
@@ -505,7 +505,8 @@ a:hover { text-decoration: underline; }
   font-size: 3.5rem;
   font-weight: 700;
   line-height: 1;
-  align-self: center;
+  display: flex;
+  align-items: center;
 }
 
 .grade--A\+ { color: var(--grade-a-plus); }
