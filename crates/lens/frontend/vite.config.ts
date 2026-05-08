@@ -7,7 +7,8 @@ export default defineConfig({
     port: 5178,
     proxy: {
       '/api': 'http://localhost:8085',
-      '/badge': 'http://localhost:8085'
+      '/badge': 'http://localhost:8085',
+      '/og': 'http://localhost:8085'
     }
   },
   build: {

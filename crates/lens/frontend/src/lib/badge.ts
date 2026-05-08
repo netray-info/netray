@@ -1,3 +1,11 @@
+export function buildOgUrl(baseUrl: string, domain: string): string {
+  return `${baseUrl}/og/${encodeURIComponent(domain)}.png`;
+}
+
+export function buildOgMetaTag(ogUrl: string): string {
+  return `<meta property="og:image" content="${escapeHtml(ogUrl)}">`;
+}
+
 export function buildBadgeUrl(
   baseUrl: string,
   domain: string,
