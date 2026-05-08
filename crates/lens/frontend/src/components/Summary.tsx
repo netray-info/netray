@@ -5,7 +5,23 @@ import { GRADE_LEGEND } from '../lib/gradeLegend';
 import VerdictDot from './VerdictDot';
 import ValidationChips from './ValidationChips';
 import BadgeModal from './BadgeModal';
-import { buildBadgeUrl } from '../lib/badge';
+
+function GradeBadgePreview(props: { grade: string; color: string }) {
+  const text = () => props.grade === 'error' ? '?' : props.grade;
+  const labelW = 38; // "lens" = 4 chars * 7 + 10
+  const valueW = () => text().length * 7 + 10;
+  const totalW = () => labelW + valueW();
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={totalW()} height="20" role="img" aria-hidden="true">
+      <rect rx="3" width={totalW()} height="20" fill="#555"/>
+      <rect rx="3" x={labelW} width={valueW()} height="20" style={{ fill: props.color }}/>
+      <rect x={labelW} width="4" height="20" style={{ fill: props.color }}/>
+      <rect rx="3" width="4" height="20" fill="#555"/>
+      <text x={labelW / 2} y="14" fill="white" font-size="11" font-family="monospace" text-anchor="middle">lens</text>
+      <text x={labelW + valueW() / 2} y="14" fill="white" font-size="11" font-family="monospace" text-anchor="middle">{text()}</text>
+    </svg>
+  );
+}
 
 function gradeStyle(grade: string): string {
   switch (grade) {
@@ -148,11 +164,7 @@ export default function Summary(props: Props) {
                   aria-label="Get embed code for this grade badge"
                   title="Get embed code"
                 >
-                  <img
-                    src={buildBadgeUrl(window.location.origin, props.domain!)}
-                    alt={`lens grade badge for ${props.domain}`}
-                    height="18"
-                  />
+                  <GradeBadgePreview grade={s().grade} color={gradeStyle(s().grade)} />
                 </button>
               </Show>
             </div>

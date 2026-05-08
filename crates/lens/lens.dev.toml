@@ -33,7 +33,7 @@ email_base_url = "https://email.netray.info"
 lens_base_url  = "https://lens.netray.info"
 
 [cache]
-enabled = false
+enabled = true
 
 [rate_limit]
 per_ip_per_minute = 120
