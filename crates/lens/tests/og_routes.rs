@@ -208,6 +208,7 @@ async fn cache_hit_skips_run_check() {
                     },
                     duration_ms: 1,
                     cached_at: SystemTime::now(),
+                    snapshot_id: None,
                 }),
             )
             .await;

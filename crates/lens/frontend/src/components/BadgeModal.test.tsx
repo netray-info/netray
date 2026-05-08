@@ -13,9 +13,10 @@ Object.defineProperty(navigator, 'clipboard', {
 
 describe('BadgeModal', () => {
   it('renders badge preview svg', () => {
-    const { container } = render(() => (
+    const { container, getByText } = render(() => (
       <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
+    fireEvent.click(getByText('Badge'));
     expect(container.querySelector('svg')).toBeTruthy();
   });
 
@@ -23,6 +24,7 @@ describe('BadgeModal', () => {
     const { getByText } = render(() => (
       <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
+    fireEvent.click(getByText('Badge'));
     expect(getByText('Copy HTML')).toBeTruthy();
     expect(getByText('Copy Markdown')).toBeTruthy();
   });
@@ -31,6 +33,7 @@ describe('BadgeModal', () => {
     const { getByText } = render(() => (
       <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
+    fireEvent.click(getByText('Badge'));
     fireEvent.click(getByText('Copy HTML'));
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
   });
@@ -39,6 +42,7 @@ describe('BadgeModal', () => {
     const { getByText } = render(() => (
       <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
+    fireEvent.click(getByText('Badge'));
     fireEvent.click(getByText('Copy Markdown'));
     expect(navigator.clipboard.writeText).toHaveBeenCalled();
   });
@@ -56,6 +60,7 @@ describe('BadgeModal', () => {
     const { getByText, findByText } = render(() => (
       <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
+    fireEvent.click(getByText('Badge'));
     fireEvent.click(getByText('Copy HTML'));
     expect(await findByText('Copied!')).toBeTruthy();
   });
@@ -64,6 +69,7 @@ describe('BadgeModal', () => {
     const { getByText, findByText } = render(() => (
       <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
+    fireEvent.click(getByText('Badge'));
     fireEvent.click(getByText('Copy Markdown'));
     expect(await findByText('Copied!')).toBeTruthy();
   });

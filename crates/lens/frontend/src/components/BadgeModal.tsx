@@ -35,7 +35,7 @@ interface Props {
 
 export default function BadgeModal(props: Props) {
   const [copied, setCopied] = createSignal<string | null>(null);
-  const [activeTab, setActiveTab] = createSignal<Tab>('badge');
+  const [activeTab, setActiveTab] = createSignal<Tab>('snapshot');
 
   const modalTitle = () => {
     switch (activeTab()) {
@@ -63,24 +63,6 @@ export default function BadgeModal(props: Props) {
       <div class="badge-modal">
         <div class="badge-modal__tabs" role="tablist">
           <button
-            class={`badge-modal__tab${activeTab() === 'badge' ? ' badge-modal__tab--active' : ''}`}
-            role="tab"
-            aria-selected={activeTab() === 'badge'}
-            type="button"
-            onClick={() => setActiveTab('badge')}
-          >
-            Badge
-          </button>
-          <button
-            class={`badge-modal__tab${activeTab() === 'social' ? ' badge-modal__tab--active' : ''}`}
-            role="tab"
-            aria-selected={activeTab() === 'social'}
-            type="button"
-            onClick={() => setActiveTab('social')}
-          >
-            Social card
-          </button>
-          <button
             class={`badge-modal__tab${activeTab() === 'snapshot' ? ' badge-modal__tab--active' : ''}`}
             role="tab"
             aria-selected={activeTab() === 'snapshot'}
@@ -98,26 +80,46 @@ export default function BadgeModal(props: Props) {
           >
             Re-run link
           </button>
+          <button
+            class={`badge-modal__tab${activeTab() === 'badge' ? ' badge-modal__tab--active' : ''}`}
+            role="tab"
+            aria-selected={activeTab() === 'badge'}
+            type="button"
+            onClick={() => setActiveTab('badge')}
+          >
+            Badge
+          </button>
+          <button
+            class={`badge-modal__tab${activeTab() === 'social' ? ' badge-modal__tab--active' : ''}`}
+            role="tab"
+            aria-selected={activeTab() === 'social'}
+            type="button"
+            onClick={() => setActiveTab('social')}
+          >
+            Social card
+          </button>
         </div>
 
         {activeTab() === 'badge' && (
           <div class="badge-modal__panel">
+            <p class="badge-modal__desc">
+              A status badge to embed in a README, dashboard, or docs.
+            </p>
             <div class="badge-modal__preview">
               <GradeBadgePreview grade={props.grade} color={gradeColor(props.grade)} />
             </div>
-
             <div class="badge-modal__field">
-              <label class="badge-modal__label" for="badge-url">Badge URL</label>
-              <input
-                id="badge-url"
-                class="badge-modal__input"
-                type="text"
-                readonly
-                value={badgeUrl()}
-                onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-              />
+              <div class="badge-modal__input-row">
+                <input
+                  id="badge-url"
+                  class="badge-modal__input"
+                  type="text"
+                  readonly
+                  value={badgeUrl()}
+                  onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+                />
+              </div>
             </div>
-
             <div class="badge-modal__actions">
               <button
                 class="badge-modal__copy-btn"
@@ -139,6 +141,9 @@ export default function BadgeModal(props: Props) {
 
         {activeTab() === 'social' && (
           <div class="badge-modal__panel">
+            <p class="badge-modal__desc">
+              Open Graph image shown when this page is linked on social or chat.
+            </p>
             <div class="badge-modal__preview badge-modal__preview--og">
               <img
                 class="badge-modal__og-preview"
@@ -147,19 +152,18 @@ export default function BadgeModal(props: Props) {
                 loading="lazy"
               />
             </div>
-
             <div class="badge-modal__field">
-              <label class="badge-modal__label" for="og-url">Card URL</label>
-              <input
-                id="og-url"
-                class="badge-modal__input"
-                type="text"
-                readonly
-                value={ogUrl()}
-                onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-              />
+              <div class="badge-modal__input-row">
+                <input
+                  id="og-url"
+                  class="badge-modal__input"
+                  type="text"
+                  readonly
+                  value={ogUrl()}
+                  onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+                />
+              </div>
             </div>
-
             <div class="badge-modal__actions">
               <button
                 class="badge-modal__copy-btn"
@@ -201,7 +205,7 @@ export default function BadgeModal(props: Props) {
                   buildShareSnippets(props.domain, props.snapshotId!, window.location.origin);
                 return (
                   <>
-                    <p class="badge-modal__share-desc">
+                    <p class="badge-modal__desc">
                       Permanent link to this exact result. Anyone visiting sees the same grades and findings.
                     </p>
                     <div class="badge-modal__field">
@@ -249,7 +253,7 @@ export default function BadgeModal(props: Props) {
 
         {activeTab() === 'rerun' && (
           <div class="badge-modal__panel">
-            <p class="badge-modal__share-desc">
+            <p class="badge-modal__desc">
               Re-runs the check from scratch. Use for monitoring, bookmarks, or to invite others to verify.
             </p>
             <div class="badge-modal__field">

@@ -150,6 +150,7 @@ pub async fn og_handler(
                         score: output.score,
                         duration_ms: output.duration_ms,
                         cached_at: SystemTime::now(),
+                        snapshot_id: None,
                     })
                 },
                 |existing| !is_fresh(existing, OG_TTL_SECONDS),

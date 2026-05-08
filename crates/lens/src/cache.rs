@@ -11,6 +11,9 @@ pub struct CachedResult {
     pub score: OverallScore,
     pub duration_ms: u64,
     pub cached_at: SystemTime,
+    /// Snapshot id created at first compute. Reused on cache hits so the
+    /// snapshot URL stays available for the lifetime of the cache entry.
+    pub snapshot_id: Option<String>,
 }
 
 /// Build the cache key for a domain: lowercased + trimmed.

@@ -346,6 +346,7 @@ async fn known_grade_badge_has_correct_cache_headers() {
                 },
                 duration_ms: 1,
                 cached_at: SystemTime::now(),
+                snapshot_id: None,
             }),
         )
         .await;

@@ -680,6 +680,7 @@ pub async fn badge_handler(
                         score: output.score,
                         duration_ms: output.duration_ms,
                         cached_at: SystemTime::now(),
+                        snapshot_id: None,
                     })
                 },
                 |existing| !is_fresh(existing, ttl),
@@ -854,23 +855,25 @@ async fn run_check_handler(
     let duration_ms = output.duration_ms;
     let domain_out = output.domain.clone();
 
-    // 5. Store in cache.
+    // 5. Create snapshot before caching so the cache entry carries the
+    //    snapshot_id and subsequent cache hits expose the same URL.
+    let snapshot_id = create_snapshot(&state, &domain_out, &output).await;
+
+    // 6. Store in cache (with snapshot_id).
     if let Some(cache) = &state.cache {
         let entry = Arc::new(CachedResult {
             sections: output.sections.clone(),
             score: output.score.clone(),
             duration_ms,
             cached_at: SystemTime::now(),
+            snapshot_id: snapshot_id.clone(),
         });
         cache.insert(key, entry).await;
     }
 
-    // 6. Create snapshot (fresh checks only).
-    let snapshot_id = create_snapshot(&state, &domain_out, &output).await;
-
     // 7. Return SSE stream or sync JSON.
     if sync {
-        build_sync_response(domain_out, output, false, &state.scoring_profile)
+        build_sync_response(domain_out, output, false, &state.scoring_profile, snapshot_id)
     } else {
         let events = build_sse_events(domain_out, output, false, &state.scoring_profile, snapshot_id);
         make_sse_stream(events, "MISS")
@@ -1353,7 +1356,13 @@ fn build_sse_events_from_cached(
         score: cached.score.clone(),
         duration_ms: cached.duration_ms,
     };
-    build_sse_events(domain.to_string(), dummy_output, true, profile, None)
+    build_sse_events(
+        domain.to_string(),
+        dummy_output,
+        true,
+        profile,
+        cached.snapshot_id.clone(),
+    )
 }
 
 fn make_sse_stream(events: Vec<Event>, cache_header: &'static str) -> Response {
@@ -1385,6 +1394,7 @@ fn build_sync_response(
     output: CheckOutput,
     cached: bool,
     profile: &crate::scoring::profile::ScoringProfile,
+    snapshot_id: Option<String>,
 ) -> Response {
     let empty_checks = HashMap::new();
     let empty_err: Result<BackendResult, SectionError> =
@@ -1428,7 +1438,7 @@ fn build_sync_response(
             .map(|r| email_payload_from(r, email_checks)),
         ip: ip_payload_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
         summary: summary_payload_from(&output.sections, &output.score, &profile.thresholds),
-        done: done_payload(&domain, duration_ms, cached, None),
+        done: done_payload(&domain, duration_ms, cached, snapshot_id),
     };
     let cache_header = if cached { "HIT" } else { "MISS" };
     let mut resp = Json(response).into_response();
@@ -1449,7 +1459,13 @@ fn sync_response_from_cached(
         score: cached.score.clone(),
         duration_ms: cached.duration_ms,
     };
-    build_sync_response(domain, dummy_output, is_cached, profile)
+    build_sync_response(
+        domain,
+        dummy_output,
+        is_cached,
+        profile,
+        cached.snapshot_id.clone(),
+    )
 }
 
 // ---------------------------------------------------------------------------

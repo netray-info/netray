@@ -132,7 +132,7 @@ export default function Summary(props: Props) {
           onClick={() => setShowBadgeModal(true)}
           aria-label="Share or embed this result"
         >
-          share &amp; embed ↗
+          share &amp; embed
         </button>
       </Show>
     </div>

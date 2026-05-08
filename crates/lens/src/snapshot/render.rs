@@ -1,6 +1,19 @@
-use crate::badge::palette::color_for_grade;
 use crate::config::SiteConfig;
 use crate::snapshot::types::Snapshot;
+
+/// CSS-variable expression for the colour associated with a grade.
+/// Returns a `var(--grade-X)` string so the value adapts to the active theme.
+fn grade_color_var(grade: &str) -> &'static str {
+    match grade {
+        "A+" => "var(--grade-a-plus)",
+        "A"  => "var(--grade-a)",
+        "B"  => "var(--grade-b)",
+        "C"  => "var(--grade-c)",
+        "D"  => "var(--grade-d)",
+        "F"  => "var(--grade-f)",
+        _    => "var(--text-muted)",
+    }
+}
 
 /// Canonical section display order (matches SPA visual order).
 const SECTION_ORDER: &[&str] = &["Email", "HTTP", "TLS", "DNS", "IP"];
@@ -19,7 +32,7 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
     let footer_about = site.footer_about.as_deref().unwrap_or("");
     let footer_links = site.footer_links.as_deref().unwrap_or(&[]);
 
-    let grade_color = color_for_grade(&snap.grade);
+    let grade_color = grade_color_var(&snap.grade);
     let domain = html_escape(&snap.domain);
     let lens_version = html_escape(&snap.lens_version);
     let checked_at = snap.created_at.format("%Y-%m-%d %H:%M UTC").to_string();
@@ -58,7 +71,7 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
     let section_dots_html: String = sections
         .iter()
         .map(|s| {
-            let color = color_for_grade(&s.grade);
+            let color = grade_color_var(&s.grade);
             let name = html_escape(&s.name);
             let grade = html_escape(&s.grade);
             format!(
@@ -69,7 +82,7 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
 
     // Build sections HTML
     let sections_html: String = sections.iter().map(|section| {
-        let sec_color = color_for_grade(&section.grade);
+        let sec_color = grade_color_var(&section.grade);
         let sec_name = html_escape(&section.name);
         let sec_grade = html_escape(&section.grade);
 
@@ -235,54 +248,143 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
   <meta property="og:url" content="{og_url}">
   <meta name="twitter:card" content="summary_large_image">
   <style>
+    /* ── Theme tokens (mirrors SPA common-frontend theme.css) ── */
+    :root {{
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-tertiary: #0f3460;
+      --text-primary: #e0e0e0;
+      --text-secondary: #a0a0a0;
+      --text-muted: #888888;
+      --accent: #00d4ff;
+      --accent-secondary: #7b68ee;
+      --bg-card-hover: #0f3460;
+      --border: #2a2a4a;
+      --border-subtle: #222240;
+      --pass: #22c55e;
+      --warn: #f59e0b;
+      --fail: #ef4444;
+      --skip: #94a3b8;
+      --grade-a-plus: #22c55e;
+      --grade-a: #22c55e;
+      --grade-b: #84cc16;
+      --grade-c: #f59e0b;
+      --grade-d: #f97316;
+      --grade-f: #ef4444;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --radius: 8px;
+      --radius-lg: 10px;
+      --transition: 150ms ease;
+    }}
+    html:has(#theme-toggle:checked) {{
+      --bg-primary: #f5f7fa;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #edf0f5;
+      --text-primary: #1a1a2e;
+      --text-secondary: #4a4a6a;
+      --text-muted: #8888a0;
+      --accent: #0077cc;
+      --bg-card-hover: #edf0f5;
+      --border: #d0d4dc;
+      --border-subtle: #e4e8ee;
+      --pass: #008800;
+      --warn: #b86e00;
+      --fail: #cc0000;
+      --skip: #4a5568;
+      --grade-a-plus: #008800;
+      --grade-a: #008800;
+      --grade-b: #4a7c00;
+      --grade-c: #b86e00;
+      --grade-d: #c05000;
+      --grade-f: #cc0000;
+    }}
+
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      background: #0a0f1e;
-      color: #dce6f5;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 16px;
       min-height: 100vh;
-      padding: 1.25rem 1rem 3rem;
+      padding: 1.5rem 1rem 3rem;
     }}
-    a {{ color: #60a5fa; text-decoration: none; }}
+    a {{ color: var(--accent); text-decoration: none; }}
     a:hover {{ text-decoration: underline; }}
-    .page {{ max-width: 860px; margin: 0 auto; }}
+    .page {{ max-width: 960px; margin: 0 auto; }}
 
-    /* ── Nav ── */
+    /* ── Nav (mirrors SPA .header / .logo / .tagline) ── */
     .site-nav {{
       display: flex;
-      align-items: baseline;
-      gap: 0.75rem;
-      margin-bottom: 1.5rem;
-      padding-bottom: 0.875rem;
-      border-bottom: 1px solid #1a2540;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 2rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border-subtle);
     }}
     .brand-name {{
-      font-size: 1.375rem;
-      font-weight: 800;
-      color: #dce6f5;
-      letter-spacing: -0.02em;
+      font-family: var(--font-mono);
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-decoration: none;
     }}
-    .brand-tagline {{ font-size: 0.8rem; color: #3d5278; }}
+    .brand-name:hover {{ text-decoration: none; }}
+    .brand-tagline {{ font-size: 0.875rem; color: var(--text-muted); }}
+    .nav-actions {{ margin-left: auto; display: flex; align-items: center; gap: 6px; }}
+
+    /* ── Theme toggle (CSS-only via :has() + checkbox) ── */
+    .theme-toggle__input {{
+      position: absolute;
+      width: 1px; height: 1px;
+      padding: 0; margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }}
+    .theme-toggle {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px; height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      transition: background var(--transition), color var(--transition), border-color var(--transition);
+      user-select: none;
+    }}
+    .theme-toggle:hover {{ background: var(--bg-card-hover); color: var(--text-primary); }}
+    .theme-toggle__input:focus-visible + .theme-toggle {{ outline: 2px solid var(--accent); outline-offset: 2px; }}
+    .theme-toggle__icon--sun {{ display: none; }}
+    html:has(#theme-toggle:checked) .theme-toggle__icon--moon {{ display: none; }}
+    html:has(#theme-toggle:checked) .theme-toggle__icon--sun {{ display: inline; }}
 
     /* ── Summary card ── */
     .summary-card {{
-      background: #101827;
-      border: 1px solid #1a2844;
-      border-radius: 0.625rem;
-      padding: 1.125rem 1.5rem;
-      margin-bottom: 1.25rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
     }}
     .summary-top {{
       display: flex;
       align-items: stretch;
-      gap: 1.25rem;
+      gap: 1rem;
     }}
     .grade-letter {{
+      font-family: var(--font-mono);
       font-size: 5.5rem;
-      font-weight: 800;
+      font-weight: 700;
       line-height: 1;
       flex-shrink: 0;
-      letter-spacing: -0.03em;
       display: flex;
       align-items: center;
       min-width: 4rem;
@@ -292,49 +394,52 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
       min-width: 0;
       display: flex;
       flex-direction: column;
-      gap: 0.3rem;
+      gap: 4px;
     }}
     .summary-domain {{
       font-size: 1.25rem;
       font-weight: 700;
+      color: var(--text-primary);
       word-break: break-all;
       line-height: 1.2;
     }}
     .summary-row {{
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.875rem;
       flex-wrap: wrap;
     }}
     .summary-score {{
       font-size: 1.375rem;
       font-weight: 700;
-      color: #dce6f5;
+      color: var(--text-primary);
+      flex-shrink: 0;
     }}
     .sdot {{
       display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
+      gap: 5px;
       font-size: 0.8125rem;
+      color: var(--text-secondary);
     }}
     .sdot__dot {{
-      width: 0.5rem;
-      height: 0.5rem;
+      width: 10px;
+      height: 10px;
       border-radius: 50%;
       flex-shrink: 0;
     }}
-    .sdot__name {{
-      color: #5a6f94;
-      text-transform: uppercase;
-      font-size: 0.75rem;
-      letter-spacing: 0.04em;
+    .sdot__name {{ color: var(--text-secondary); }}
+    .sdot__grade {{
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 0.8125rem;
+      letter-spacing: 0.02em;
     }}
-    .sdot__grade {{ font-weight: 700; font-size: 0.8125rem; }}
-    .summary-descriptor {{ font-size: 0.9rem; color: #94afd4; }}
-    .summary-descriptor strong {{ color: #dce6f5; font-weight: 600; }}
-    .summary-headline {{ font-size: 0.9rem; color: #94afd4; }}
+    .summary-descriptor {{ font-size: 0.8125rem; color: var(--text-secondary); }}
+    .summary-descriptor strong {{ color: var(--text-primary); font-weight: 600; }}
+    .summary-headline {{ font-size: 0.875rem; color: var(--text-primary); font-weight: 500; }}
     .summary-chips {{
-      margin-top: 0.75rem;
+      margin-top: 0.875rem;
       display: flex;
       gap: 0.5rem;
       flex-wrap: wrap;
@@ -348,17 +453,17 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
       font-weight: 600;
       letter-spacing: 0.03em;
     }}
-    .chip--warn {{ background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }}
-    .chip--pass {{ background: rgba(34,197,94,0.12); color: #22c55e; border: 1px solid rgba(34,197,94,0.25); }}
-    .chip--skip {{ background: rgba(100,116,139,0.12); color: #64748b; border: 1px solid rgba(100,116,139,0.25); }}
-    .chip--fail {{ background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }}
-    .summary-checked {{ margin-top: 0.5rem; font-size: 0.775rem; color: #3d5278; }}
+    .chip--warn {{ background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }}
+    .chip--pass {{ background: color-mix(in srgb, var(--pass) 12%, transparent); color: var(--pass); border: 1px solid color-mix(in srgb, var(--pass) 25%, transparent); }}
+    .chip--skip {{ background: color-mix(in srgb, var(--skip) 12%, transparent); color: var(--skip); border: 1px solid color-mix(in srgb, var(--skip) 25%, transparent); }}
+    .chip--fail {{ background: color-mix(in srgb, var(--fail) 12%, transparent); color: var(--fail); border: 1px solid color-mix(in srgb, var(--fail) 25%, transparent); }}
+    .summary-checked {{ margin-top: 0.625rem; font-size: 0.75rem; color: var(--text-muted); }}
 
     /* ── Server addresses ── */
     .server-addrs {{
       margin-top: 0.875rem;
       padding-top: 0.75rem;
-      border-top: 1px solid #1a2540;
+      border-top: 1px solid var(--border-subtle);
       display: flex;
       flex-direction: column;
       gap: 0.25rem;
@@ -369,31 +474,31 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
       gap: 0.75rem;
       font-size: 0.8125rem;
     }}
-    .addr-role {{ color: #3d5278; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; min-width: 2.5rem; }}
-    .addr-ip {{ font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; color: #94afd4; font-weight: 600; }}
-    .addr-org {{ color: #5a6f94; font-size: 0.75rem; }}
+    .addr-role {{ color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; min-width: 2.5rem; }}
+    .addr-ip {{ font-family: var(--font-mono); color: var(--text-secondary); font-weight: 600; }}
+    .addr-org {{ color: var(--text-muted); font-size: 0.75rem; }}
 
     /* ── Section cards ── */
     .section-card {{
-      background: #101827;
-      border: 1px solid #1a2844;
-      border-radius: 0.5rem;
-      margin-bottom: 0.625rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      margin-bottom: 0.75rem;
       overflow: hidden;
     }}
     .section-header {{
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.625rem 1rem;
-      background: #0d1627;
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid var(--border-subtle);
       gap: 0.75rem;
       flex-wrap: wrap;
     }}
     .section-header__left {{
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.625rem;
       flex-wrap: wrap;
     }}
     .section-grade-badge {{
@@ -409,35 +514,35 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
       flex-shrink: 0;
     }}
     .section-name {{
+      font-family: var(--font-mono);
       font-weight: 700;
       font-size: 0.9375rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #dce6f5;
+      letter-spacing: 0.02em;
+      color: var(--text-primary);
     }}
     .issue-tag {{
-      font-size: 0.7rem;
+      font-size: 0.75rem;
       font-weight: 600;
-      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      font-family: var(--font-mono);
       padding: 0.1rem 0.35rem;
       border-radius: 0.2rem;
     }}
-    .issue-tag--warn {{ color: #f59e0b; }}
-    .issue-tag--fail {{ color: #ef4444; }}
-    .section-counts {{ font-size: 0.8rem; white-space: nowrap; }}
-    .count-pass {{ color: #22c55e; }}
-    .count-warn {{ color: #f59e0b; }}
-    .count-fail {{ color: #ef4444; }}
-    .count-sep {{ color: #1e2d4a; }}
+    .issue-tag--warn {{ color: var(--warn); }}
+    .issue-tag--fail {{ color: var(--fail); }}
+    .section-counts {{ font-size: 0.8125rem; white-space: nowrap; color: var(--text-secondary); }}
+    .count-pass {{ color: var(--pass); }}
+    .count-warn {{ color: var(--warn); }}
+    .count-fail {{ color: var(--fail); }}
+    .count-sep {{ color: var(--border-subtle); }}
 
     /* ── Findings ── */
-    .findings {{ font-size: 0.875rem; }}
+    .findings {{ font-size: 0.875rem; padding: 0.5rem 0; }}
     .finding {{ padding: 0.45rem 1rem; }}
-    .finding + .finding {{ border-top: 1px solid #111d30; }}
+    .finding + .finding {{ border-top: 1px solid var(--border-subtle); }}
     .finding-row {{
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.5rem;
     }}
     .verdict-sym {{
       font-size: 0.9rem;
@@ -446,57 +551,76 @@ pub fn render_snapshot_html(snap: &Snapshot, site: &SiteConfig) -> String {
       width: 1rem;
       text-align: center;
     }}
-    .verdict-sym--pass {{ color: #22c55e; }}
-    .verdict-sym--warn {{ color: #f59e0b; }}
-    .verdict-sym--fail {{ color: #ef4444; }}
-    .verdict-sym--skip {{ color: #3d5278; }}
+    .verdict-sym--pass {{ color: var(--pass); }}
+    .verdict-sym--warn {{ color: var(--warn); }}
+    .verdict-sym--fail {{ color: var(--fail); }}
+    .verdict-sym--skip {{ color: var(--skip); }}
     .check-name {{ font-weight: 500; cursor: default; font-size: 0.875rem; }}
-    .check-name--pass {{ color: #7b90b5; }}
-    .check-name--warn {{ color: #f59e0b; }}
-    .check-name--fail {{ color: #ef4444; }}
-    .check-name--skip {{ color: #3d5278; }}
-    .learn-more {{ color: #3d5278; font-size: 0.75rem; flex-shrink: 0; text-decoration: none; }}
-    .learn-more:hover {{ color: #60a5fa; text-decoration: none; }}
+    .check-name--pass {{ color: var(--text-secondary); }}
+    .check-name--warn {{ color: var(--warn); }}
+    .check-name--fail {{ color: var(--fail); }}
+    .check-name--skip {{ color: var(--skip); }}
+    .learn-more {{ color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0; text-decoration: none; }}
+    .learn-more:hover {{ color: var(--accent); text-decoration: none; }}
     .finding-spacer {{ flex: 1; }}
     .check-score {{
-      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 0.775rem;
-      color: #3d5278;
-      background: #0d1627;
-      border-radius: 0.25rem;
-      padding: 0.1rem 0.4rem;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      border-radius: var(--radius);
+      padding: 0.1rem 0.5rem;
       white-space: nowrap;
       flex-shrink: 0;
     }}
     .finding-msg {{
-      color: #5a6f94;
+      color: var(--text-secondary);
       font-size: 0.8125rem;
-      margin-left: 1.4rem;
+      margin-left: 1.5rem;
       margin-top: 0.15rem;
     }}
 
     /* ── Footer ── */
     .page-footer {{
-      margin-top: 1.75rem;
-      padding-top: 0.875rem;
-      border-top: 1px solid #111d30;
-      font-size: 0.775rem;
-      color: #3d5278;
+      margin-top: 2rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-subtle);
+      font-size: 0.8125rem;
+      color: var(--text-muted);
       display: flex;
       flex-wrap: wrap;
       align-items: baseline;
-      gap: 0.375rem 1.5rem;
+      gap: 0.5rem 1.5rem;
     }}
-    .footer-about {{ flex-basis: 100%; color: #5a6f94; }}
+    .footer-about {{ flex-basis: 100%; color: var(--text-secondary); }}
     .footer-links {{ display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }}
     .rerun-link {{ margin-left: auto; }}
   </style>
 </head>
 <body>
 <div class="page">
+  <input type="checkbox" id="theme-toggle" class="theme-toggle__input" aria-label="Toggle light theme">
   <nav class="site-nav">
     <a class="brand-name" href="/">{brand_name}</a>
     {brand_tagline_html}
+    <span class="nav-actions">
+      <label for="theme-toggle" class="theme-toggle" title="Toggle theme">
+        <svg class="theme-toggle__icon theme-toggle__icon--moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <svg class="theme-toggle__icon theme-toggle__icon--sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="2" x2="12" y2="5"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/>
+          <line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
+          <line x1="2" y1="12" x2="5" y2="12"/>
+          <line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/>
+          <line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
+        </svg>
+      </label>
+    </span>
   </nav>
 
   <div class="summary-card">
@@ -624,60 +748,6 @@ fn check_label(name: &str) -> &str {
         "email_brand_policy"   => "Brand Policy",
         "reputation"           => "IP Reputation",
         other                  => other,
-    }
-}
-
-fn check_description(name: &str) -> &str {
-    match name {
-        "spf"                  => "SPF authorises which servers may send email for this domain",
-        "dmarc"                => "DMARC instructs receivers how to handle unauthenticated messages",
-        "dnssec"               => "DNSSEC cryptographically signs DNS records, preventing cache poisoning",
-        "caa"                  => "CAA restricts which Certificate Authorities may issue certificates",
-        "mx"                   => "MX records must agree between recursive and authoritative resolvers",
-        "ns"                   => "At least two NS records ensure availability if one nameserver fails",
-        "ns_lame"              => "All NS records should respond authoritatively for the zone",
-        "ns_delegation"        => "Parent and child NS records must be consistent",
-        "dkim"                 => "DKIM signs outgoing mail to prove it hasn't been tampered with",
-        "mta_sts"              => "MTA-STS enforces TLS for inbound SMTP connections",
-        "tlsrpt"               => "SMTP TLS Reporting provides visibility into delivery failures",
-        "bimi"                 => "BIMI displays a brand logo in supporting email clients",
-        "cname_apex"           => "A CNAME at the zone apex breaks MX, NS and other records",
-        "https_svcb"           => "HTTPS DNS records enable HTTP/3 and Encrypted Client Hello",
-        "ttl"                  => "Inconsistent TTLs across record types can cause caching problems",
-        "dnskey_algorithm"     => "Deprecated DNSSEC algorithms (RSA/MD5, RSA/SHA-1) must be replaced",
-        "dnssec_rollover"      => "DNSSEC key rollover must be clean — no orphaned DS or duplicate KSKs",
-        "chain_trusted"        => "The certificate chain must verify to a trusted root CA",
-        "not_expired"          => "All certificates in the chain must be within their validity period",
-        "hostname_match"       => "The leaf certificate SAN must cover the queried hostname",
-        "chain_complete"       => "All intermediate certificates must be present in correct order",
-        "strong_signature"     => "SHA-1 and MD5 signatures are deprecated and must not appear",
-        "key_strength"         => "RSA keys must be ≥ 2048 bits; ECDSA must use P-256 or better",
-        "expiry_window"        => "Certificate expires within 30 days (warn) or 7 days (fail)",
-        "cert_lifetime"        => "CA/Browser Forum requires certificates valid for ≤ 398 days",
-        "san_quality"          => "The SAN list should be reasonable in size and not overly broad",
-        "aia_reachability"     => "AIA CA Issuers URL must be reachable when the chain is incomplete",
-        "tls_version"          => "TLS 1.3 is preferred; TLS 1.2 acceptable; older versions must not be offered",
-        "forward_secrecy"      => "Ephemeral key exchange protects past sessions if the key is compromised",
-        "aead_cipher"          => "AEAD ciphers (GCM, ChaCha20-Poly1305) provide authenticated encryption",
-        "ocsp_stapled"         => "OCSP stapling avoids a separate revocation check by the browser",
-        "ct_logged"            => "Certificate Transparency requires ≥ 2 SCTs for browser trust",
-        "caa_compliant"        => "The issuing CA must be authorised by the domain's CAA records",
-        "dane_valid"           => "TLSA records must match the presented certificate if DANE is configured",
-        "consistency"          => "All resolved IPs must present the same certificate and TLS configuration",
-        "alpn_consistency"     => "ALPN protocol negotiation must be consistent across all IPs",
-        "ech_advertised"       => "Encrypted Client Hello hides the hostname from passive observers",
-        "hsts"                 => "HTTP Strict Transport Security forces browsers to use HTTPS",
-        "https_redirect"       => "HTTP must redirect to HTTPS",
-        "security_headers"     => "CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy",
-        "cors"                 => "CORS policy should not allow arbitrary origins in production APIs",
-        "cookie_secure"        => "Session cookies must have the Secure and HttpOnly attributes",
-        "hygiene"              => "Deprecated headers, information leakage, caching directives",
-        "email_authentication" => "SPF, DKIM, and DMARC — authentication for every domain",
-        "email_infrastructure" => "MX records, forward-confirmed reverse DNS, and DNSBL",
-        "email_transport"      => "MTA-STS, TLS-RPT, and DANE — enforces encrypted inbound delivery",
-        "email_brand_policy"   => "BIMI and DMARC enforcement — brand display and spoofing protection",
-        "reputation"           => "IP reputation: VPNs warn, Tor exit nodes and known C2 hosts fail",
-        _                      => "",
     }
 }
 

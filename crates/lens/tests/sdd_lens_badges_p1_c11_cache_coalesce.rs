@@ -162,6 +162,7 @@ async fn warm_cache_skips_run_check() {
             },
             duration_ms: 1,
             cached_at: SystemTime::now(),
+            snapshot_id: None,
         });
         cache.insert(cache_key("example.com"), cached).await;
     }
