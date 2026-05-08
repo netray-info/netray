@@ -1,12 +1,12 @@
 pub fn color_for_grade(grade: &str) -> &'static str {
     match grade {
         "A+" => "#22c55e",
-        "A"  => "#22c55e",
-        "B"  => "#84cc16",
-        "C"  => "#f59e0b",
-        "D"  => "#f97316",
-        "F"  => "#ef4444",
-        _    => "#6b7280",
+        "A" => "#22c55e",
+        "B" => "#84cc16",
+        "C" => "#f59e0b",
+        "D" => "#f97316",
+        "F" => "#ef4444",
+        _ => "#6b7280",
     }
 }
 
@@ -21,7 +21,11 @@ mod tests {
         let a_color = color_for_grade("A");
         for group in &distinct_groups {
             let c = color_for_grade(group[0]);
-            assert_ne!(a_color, c, "grade A and {} unexpectedly share color {}", group[0], c);
+            assert_ne!(
+                a_color, c,
+                "grade A and {} unexpectedly share color {}",
+                group[0], c
+            );
         }
     }
 

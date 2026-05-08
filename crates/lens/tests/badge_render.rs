@@ -31,12 +31,9 @@ macro_rules! grade_color_test {
             let svg = svg_for_grade("lens", $grade, $style);
             let color = right_segment_fill(&svg);
             assert_eq!(
-                color,
-                $expected_color,
+                color, $expected_color,
                 "grade={} style={:?}: expected fill={} in SVG",
-                $grade,
-                $style,
-                $expected_color
+                $grade, $style, $expected_color
             );
         }
     };
@@ -152,7 +149,10 @@ fn error_grade_flat_shows_question_mark() {
 #[test]
 fn error_grade_ftb_shows_question_mark_uppercased() {
     let svg = svg_for_grade("lens", "error", BadgeStyle::ForTheBadge);
-    assert!(svg.contains(">?<"), "error grade must render ? in for-the-badge");
+    assert!(
+        svg.contains(">?<"),
+        "error grade must render ? in for-the-badge"
+    );
 }
 
 // ---------------------------------------------------------------------------

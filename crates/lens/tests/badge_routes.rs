@@ -134,7 +134,10 @@ async fn label_ampersand_is_html_escaped_in_svg() {
     assert!(ct.contains("image/svg+xml"), "must be SVG content-type");
     let bytes = to_bytes(resp.into_body(), 65536).await.unwrap();
     let body = std::str::from_utf8(&bytes).unwrap();
-    assert!(body.contains("a&amp;b"), "& must be escaped as &amp; in SVG");
+    assert!(
+        body.contains("a&amp;b"),
+        "& must be escaped as &amp; in SVG"
+    );
     assert!(!body.contains(">a&b<"), "bare & must not appear in SVG");
 }
 
@@ -228,7 +231,10 @@ async fn etag_round_trip_produces_304() {
         .to_str()
         .unwrap()
         .to_owned();
-    assert!(etag.starts_with('"') && etag.ends_with('"'), "ETag must be quoted");
+    assert!(
+        etag.starts_with('"') && etag.ends_with('"'),
+        "ETag must be quoted"
+    );
 
     // Second request with matching If-None-Match.
     let app2 = badge_app(default_badges_state());

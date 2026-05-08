@@ -73,7 +73,6 @@ impl ApiError for AppError {
             _ => None,
         }
     }
-
 }
 
 impl IntoResponse for AppError {

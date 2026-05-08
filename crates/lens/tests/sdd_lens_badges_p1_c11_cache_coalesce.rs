@@ -25,8 +25,7 @@ use lens::state::{AppState, BadgeCheckFn};
 
 fn make_state_with_cache(ttl_seconds: u64) -> AppState {
     use lens::config::{
-        BackendsConfig, Config, EcosystemConfig, ScoringConfig, ServerConfig,
-        SiteConfig,
+        BackendsConfig, Config, EcosystemConfig, ScoringConfig, ServerConfig, SiteConfig,
     };
     let config = Config {
         server: ServerConfig {
@@ -125,7 +124,10 @@ async fn cold_cache_triggers_single_check() {
     assert_eq!(resp.status(), StatusCode::OK);
     let bytes = to_bytes(resp.into_body(), 65536).await.unwrap();
     let body = std::str::from_utf8(&bytes).unwrap();
-    assert!(body.contains(">B<"), "cold cache response must contain grade B");
+    assert!(
+        body.contains(">B<"),
+        "cold cache response must contain grade B"
+    );
     assert_eq!(
         counter.load(Ordering::SeqCst),
         1,

@@ -40,7 +40,10 @@ fn make_state(badges_enabled: bool) -> AppState {
             email: None,
         },
         ecosystem: EcosystemConfig::default(),
-        cache: CacheConfig { enabled: false, ttl_seconds: 300 },
+        cache: CacheConfig {
+            enabled: false,
+            ttl_seconds: 300,
+        },
         telemetry: Default::default(),
         rate_limit: RateLimitConfig {
             per_ip_per_minute: 60,

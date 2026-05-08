@@ -124,13 +124,19 @@ mod tests {
     #[test]
     fn flat_svg_has_height_20() {
         let svg = svg_for_grade("lens", "A", BadgeStyle::Flat);
-        assert!(svg.contains("height=\"20\""), "flat badge must have height=20");
+        assert!(
+            svg.contains("height=\"20\""),
+            "flat badge must have height=20"
+        );
     }
 
     #[test]
     fn for_the_badge_svg_has_height_28() {
         let svg = svg_for_grade("lens", "A", BadgeStyle::ForTheBadge);
-        assert!(svg.contains("height=\"28\""), "for-the-badge must have height=28");
+        assert!(
+            svg.contains("height=\"28\""),
+            "for-the-badge must have height=28"
+        );
     }
 
     #[test]
