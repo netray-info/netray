@@ -38,6 +38,9 @@ pub enum AppError {
 
     #[error("invalid label: {0}")]
     InvalidLabel(String),
+
+    #[error("render failed: {0}")]
+    RenderFailed(String),
 }
 
 impl ApiError for AppError {
@@ -51,6 +54,7 @@ impl ApiError for AppError {
             Self::BackendError { .. } => StatusCode::BAD_GATEWAY,
             Self::Timeout => StatusCode::GATEWAY_TIMEOUT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::RenderFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -64,6 +68,7 @@ impl ApiError for AppError {
             Self::BackendError { .. } => "BACKEND_ERROR",
             Self::Timeout => "TIMEOUT",
             Self::Internal(_) => "INTERNAL_ERROR",
+            Self::RenderFailed(_) => "RENDER_FAILED",
         }
     }
 
@@ -101,6 +106,9 @@ impl IntoResponse for AppError {
             }
             Self::InvalidLabel(_) => {
                 tracing::debug!(error = %self, "invalid label");
+            }
+            Self::RenderFailed(_) => {
+                tracing::error!(error = %self, "render failed");
             }
         }
 
