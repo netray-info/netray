@@ -1522,6 +1522,7 @@ async fn create_snapshot(
         &output.score,
         &sections,
         env!("CARGO_PKG_VERSION"),
+        &state.scoring_profile,
     );
     match store.insert(snap).await {
         Ok(id) => Some(id),

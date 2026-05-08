@@ -130,8 +130,8 @@ export default function DomainInput(props: Props) {
           class="share-btn"
           type="button"
           onClick={handleCopyLink}
-          title={linkCopied() ? 'Copied!' : 'Copy shareable link'}
-          aria-label="Copy shareable link"
+          title={linkCopied() ? 'Re-run link copied' : 'Copy re-run link'}
+          aria-label="Copy re-run link"
         >
           <Show when={linkCopied()} fallback={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

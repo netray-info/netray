@@ -32,6 +32,9 @@ http_base_url  = "https://http.netray.info"
 email_base_url = "https://email.netray.info"
 lens_base_url  = "https://lens.netray.info"
 
+[snapshots]
+db_path = "data/snapshots.db"
+
 [cache]
 enabled = true
 

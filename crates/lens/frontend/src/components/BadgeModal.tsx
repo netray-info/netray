@@ -1,6 +1,15 @@
 import { Show, createSignal } from 'solid-js';
 import Modal from '@netray-info/common-frontend/components/Modal';
-import { buildBadgeUrl, buildHtmlSnippet, buildMarkdownSnippet, buildOgUrl, buildOgMetaTag } from '../lib/badge';
+import {
+  buildBadgeUrl,
+  buildHtmlSnippet,
+  buildMarkdownSnippet,
+  buildOgUrl,
+  buildOgMetaTag,
+  buildOgMarkdown,
+  buildRerunUrl,
+  buildRerunMarkdown,
+} from '../lib/badge';
 import { buildSnapshotUrl, buildShareSnippets } from '../lib/snapshot';
 import GradeBadgePreview from './GradeBadgePreview';
 
@@ -15,7 +24,7 @@ function gradeColor(grade: string): string {
   }
 }
 
-type Tab = 'badge' | 'social' | 'share';
+type Tab = 'badge' | 'social' | 'snapshot' | 'rerun';
 
 interface Props {
   domain: string;
@@ -28,10 +37,20 @@ export default function BadgeModal(props: Props) {
   const [copied, setCopied] = createSignal<string | null>(null);
   const [activeTab, setActiveTab] = createSignal<Tab>('badge');
 
+  const modalTitle = () => {
+    switch (activeTab()) {
+      case 'badge':    return 'Embed badge';
+      case 'social':   return 'Social card';
+      case 'snapshot': return 'Snapshot';
+      case 'rerun':    return 'Re-run link';
+    }
+  };
+
   const badgeUrl = () => buildBadgeUrl(window.location.origin, props.domain);
   const ogUrl = () => buildOgUrl(window.location.origin, props.domain);
   const snapshotUrl = () =>
     props.snapshotId ? buildSnapshotUrl(window.location.origin, props.snapshotId) : null;
+  const rerunUrl = () => buildRerunUrl(window.location.origin, props.domain);
 
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
@@ -40,7 +59,7 @@ export default function BadgeModal(props: Props) {
   }
 
   return (
-    <Modal open={true} onClose={props.onClose} title="Get the badge">
+    <Modal open={true} onClose={props.onClose} title={modalTitle()}>
       <div class="badge-modal">
         <div class="badge-modal__tabs" role="tablist">
           <button
@@ -62,13 +81,22 @@ export default function BadgeModal(props: Props) {
             Social card
           </button>
           <button
-            class={`badge-modal__tab${activeTab() === 'share' ? ' badge-modal__tab--active' : ''}`}
+            class={`badge-modal__tab${activeTab() === 'snapshot' ? ' badge-modal__tab--active' : ''}`}
             role="tab"
-            aria-selected={activeTab() === 'share'}
+            aria-selected={activeTab() === 'snapshot'}
             type="button"
-            onClick={() => setActiveTab('share')}
+            onClick={() => setActiveTab('snapshot')}
           >
-            Share link
+            Snapshot
+          </button>
+          <button
+            class={`badge-modal__tab${activeTab() === 'rerun' ? ' badge-modal__tab--active' : ''}`}
+            role="tab"
+            aria-selected={activeTab() === 'rerun'}
+            type="button"
+            onClick={() => setActiveTab('rerun')}
+          >
+            Re-run link
           </button>
         </div>
 
@@ -147,17 +175,24 @@ export default function BadgeModal(props: Props) {
               >
                 {copied() === 'url' ? 'Copied!' : 'Copy URL'}
               </button>
+              <button
+                class="badge-modal__copy-btn"
+                type="button"
+                onClick={() => copy(buildOgMarkdown(window.location.origin, props.domain), 'og-md')}
+              >
+                {copied() === 'og-md' ? 'Copied!' : 'Copy Markdown'}
+              </button>
             </div>
           </div>
         )}
 
-        {activeTab() === 'share' && (
+        {activeTab() === 'snapshot' && (
           <div class="badge-modal__panel">
             <Show
               when={snapshotUrl()}
               fallback={
                 <p class="badge-modal__share-unavailable">
-                  Share link is not available for this check.
+                  Snapshot is not available for this check.
                 </p>
               }
             >
@@ -166,26 +201,28 @@ export default function BadgeModal(props: Props) {
                   buildShareSnippets(props.domain, props.snapshotId!, window.location.origin);
                 return (
                   <>
+                    <p class="badge-modal__share-desc">
+                      Permanent link to this exact result. Anyone visiting sees the same grades and findings.
+                    </p>
                     <div class="badge-modal__field">
-                      <label class="badge-modal__label" for="share-url">Snapshot URL</label>
-                      <input
-                        id="share-url"
-                        class="badge-modal__input"
-                        type="text"
-                        readonly
-                        value={url()}
-                        onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-                      />
-                    </div>
-                    <div class="badge-modal__field">
-                      <a
-                        class="badge-modal__share-preview-link"
-                        href={url()}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        Preview snapshot ↗
-                      </a>
+                      <div class="badge-modal__input-row">
+                        <input
+                          id="share-url"
+                          class="badge-modal__input"
+                          type="text"
+                          readonly
+                          value={url()}
+                          onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+                        />
+                        <a
+                          class="ext-link"
+                          href={url()}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          preview ↗
+                        </a>
+                      </div>
                     </div>
                     <div class="badge-modal__actions">
                       <button
@@ -207,6 +244,42 @@ export default function BadgeModal(props: Props) {
                 );
               }}
             </Show>
+          </div>
+        )}
+
+        {activeTab() === 'rerun' && (
+          <div class="badge-modal__panel">
+            <p class="badge-modal__share-desc">
+              Re-runs the check from scratch. Use for monitoring, bookmarks, or to invite others to verify.
+            </p>
+            <div class="badge-modal__field">
+              <div class="badge-modal__input-row">
+                <input
+                  id="rerun-url"
+                  class="badge-modal__input"
+                  type="text"
+                  readonly
+                  value={rerunUrl()}
+                  onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
+                />
+              </div>
+            </div>
+            <div class="badge-modal__actions">
+              <button
+                class="badge-modal__copy-btn"
+                type="button"
+                onClick={() => copy(rerunUrl(), 'rerun-url')}
+              >
+                {copied() === 'rerun-url' ? 'Copied!' : 'Copy URL'}
+              </button>
+              <button
+                class="badge-modal__copy-btn"
+                type="button"
+                onClick={() => copy(buildRerunMarkdown(window.location.origin, props.domain), 'rerun-md')}
+              >
+                {copied() === 'rerun-md' ? 'Copied!' : 'Copy Markdown'}
+              </button>
+            </div>
           </div>
         )}
       </div>

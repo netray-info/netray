@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { MetaFeatures } from './types';
-import { buildBadgeUrl, buildHtmlSnippet, buildMarkdownSnippet } from './badge';
+import {
+  buildBadgeUrl,
+  buildHtmlSnippet,
+  buildMarkdownSnippet,
+  buildOgMarkdown,
+  buildOgUrl,
+  buildRerunMarkdown,
+  buildRerunUrl,
+} from './badge';
 
 const BASE = 'https://example.com';
 const DOMAIN = 'example.com';
@@ -66,5 +74,33 @@ describe('buildMarkdownSnippet', () => {
     const url = buildBadgeUrl(BASE, DOMAIN);
     const md = buildMarkdownSnippet(url, DOMAIN);
     expect(md).toMatch(/\[!\[.*\]\(.*\)\]\(.*\)/);
+  });
+});
+
+describe('buildRerunUrl', () => {
+  it('points at the apex with ?d=domain', () => {
+    expect(buildRerunUrl(BASE, DOMAIN)).toBe(`${BASE}/?d=${DOMAIN}`);
+  });
+
+  it('percent-encodes the domain', () => {
+    expect(buildRerunUrl(BASE, 'a b.example')).toContain('a%20b.example');
+  });
+});
+
+describe('buildRerunMarkdown', () => {
+  it('is a markdown link wrapping the rerun URL', () => {
+    const md = buildRerunMarkdown(BASE, DOMAIN);
+    expect(md).toMatch(/^\[.*\]\(.*\)$/);
+    expect(md).toContain(buildRerunUrl(BASE, DOMAIN));
+    expect(md).toContain(DOMAIN);
+  });
+});
+
+describe('buildOgMarkdown', () => {
+  it('wraps the OG image in a link to the rerun URL', () => {
+    const md = buildOgMarkdown(BASE, DOMAIN);
+    expect(md).toMatch(/^\[!\[.*\]\(.*\)\]\(.*\)$/);
+    expect(md).toContain(buildOgUrl(BASE, DOMAIN));
+    expect(md).toContain(buildRerunUrl(BASE, DOMAIN));
   });
 });

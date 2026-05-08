@@ -5,7 +5,6 @@ import { GRADE_LEGEND } from '../lib/gradeLegend';
 import VerdictDot from './VerdictDot';
 import ValidationChips from './ValidationChips';
 import BadgeModal from './BadgeModal';
-import GradeBadgePreview from './GradeBadgePreview';
 
 function gradeStyle(grade: string): string {
   switch (grade) {
@@ -126,18 +125,14 @@ export default function Summary(props: Props) {
       <Show when={props.onDownloadJson}>
         <button class="summary-action-btn" type="button" onClick={props.onDownloadJson}>JSON</button>
       </Show>
-      <Show when={showBadgeBtn() && (!!props.onCopyMd || !!props.onDownloadJson)}>
-        <span class="summary-action-sep">|</span>
-      </Show>
       <Show when={showBadgeBtn()}>
         <button
-          class="summary-badge-embed"
+          class="summary-share-btn"
           type="button"
           onClick={() => setShowBadgeModal(true)}
-          aria-label="Get embed code for this grade badge"
-          title="Get embed code"
+          aria-label="Share or embed this result"
         >
-          <GradeBadgePreview grade={s().grade} color={gradeStyle(s().grade)} />
+          share &amp; embed ↗
         </button>
       </Show>
     </div>

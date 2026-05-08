@@ -35,7 +35,7 @@ describe('Summary — grade badge embed button (SDD §10 step 17)', () => {
         badgesEnabled={true}
       />
     ));
-    expect(getByRole('button', { name: /embed code/i })).toBeTruthy();
+    expect(getByRole('button', { name: /share/i })).toBeTruthy();
   });
 
   it('does not show button when done is null (check not yet complete)', () => {
@@ -47,7 +47,7 @@ describe('Summary — grade badge embed button (SDD §10 step 17)', () => {
         badgesEnabled={true}
       />
     ));
-    expect(queryByRole('button', { name: /embed code/i })).toBeNull();
+    expect(queryByRole('button', { name: /share/i })).toBeNull();
   });
 
   it('does not show button when grade is error', () => {
@@ -60,7 +60,7 @@ describe('Summary — grade badge embed button (SDD §10 step 17)', () => {
         badgesEnabled={true}
       />
     ));
-    expect(queryByRole('button', { name: /embed code/i })).toBeNull();
+    expect(queryByRole('button', { name: /share/i })).toBeNull();
   });
 
   it('does not show button when badgesEnabled is false', () => {
@@ -72,7 +72,7 @@ describe('Summary — grade badge embed button (SDD §10 step 17)', () => {
         badgesEnabled={false}
       />
     ));
-    expect(queryByRole('button', { name: /embed code/i })).toBeNull();
+    expect(queryByRole('button', { name: /share/i })).toBeNull();
   });
 
   it('does not show button when domain is empty', () => {
@@ -84,6 +84,6 @@ describe('Summary — grade badge embed button (SDD §10 step 17)', () => {
         badgesEnabled={true}
       />
     ));
-    expect(queryByRole('button', { name: /embed code/i })).toBeNull();
+    expect(queryByRole('button', { name: /share/i })).toBeNull();
   });
 });

@@ -30,6 +30,7 @@ export default defineConfig({
       '/api': 'http://localhost:8085',
       '/badge': 'http://localhost:8085',
       '/og': 'http://localhost:8085',
+      '/r': 'http://localhost:8085',
     },
   },
   build: {

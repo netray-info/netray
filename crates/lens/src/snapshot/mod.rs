@@ -11,4 +11,4 @@ pub use store::{
     SNAPSHOT_POOL_MAX_CONNECTIONS, SNAPSHOT_SWEEP_INTERVAL, SNAPSHOT_TTL_SECS,
 };
 pub use sweep::run_sweep_loop;
-pub use types::{Snapshot, SnapshotFinding, SnapshotSection, SectionResult};
+pub use types::{Snapshot, SnapshotAddress, SnapshotFinding, SnapshotSection, SectionResult};

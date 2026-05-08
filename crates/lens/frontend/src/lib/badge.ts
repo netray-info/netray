@@ -6,6 +6,18 @@ export function buildOgMetaTag(ogUrl: string): string {
   return `<meta property="og:image" content="${escapeHtml(ogUrl)}">`;
 }
 
+export function buildOgMarkdown(baseUrl: string, domain: string): string {
+  return `[![lens domain health card for ${domain}](${buildOgUrl(baseUrl, domain)})](${buildRerunUrl(baseUrl, domain)})`;
+}
+
+export function buildRerunUrl(baseUrl: string, domain: string): string {
+  return `${baseUrl}/?d=${encodeURIComponent(domain)}`;
+}
+
+export function buildRerunMarkdown(baseUrl: string, domain: string): string {
+  return `[Re-run lens domain health check for ${domain}](${buildRerunUrl(baseUrl, domain)})`;
+}
+
 export function buildBadgeUrl(
   baseUrl: string,
   domain: string,

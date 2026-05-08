@@ -1,13 +1,14 @@
 /// Tests for snapshot HTML rendering.
 use chrono::Utc;
 use lens::config::SiteConfig;
-use lens::snapshot::{render_snapshot_html, Snapshot, SnapshotFinding, SnapshotSection};
+use lens::snapshot::{render_snapshot_html, Snapshot, SnapshotAddress, SnapshotFinding, SnapshotSection};
 
 fn make_snapshot() -> Snapshot {
     Snapshot {
         shortid: "ABCD1234".to_string(),
         domain: "example.com".to_string(),
         grade: "A".to_string(),
+        score: 95.0,
         sections: vec![
             SnapshotSection {
                 name: "DNS".to_string(),
@@ -15,11 +16,14 @@ fn make_snapshot() -> Snapshot {
                 passes: 3,
                 warns: 1,
                 fails: 0,
+                skips: 0,
                 findings: vec![
                     SnapshotFinding {
                         check_name: "dnssec".to_string(),
                         verdict: "pass".to_string(),
                         message: "DNSSEC is enabled".to_string(),
+                        earned: 5,
+                        possible: 5,
                         fix_hint: None,
                         fix_owner: None,
                         guide_url: None,
@@ -28,6 +32,8 @@ fn make_snapshot() -> Snapshot {
                         check_name: "caa".to_string(),
                         verdict: "warn".to_string(),
                         message: "CAA record missing".to_string(),
+                        earned: 2,
+                        possible: 5,
                         fix_hint: None,
                         fix_owner: None,
                         guide_url: None,
@@ -40,16 +46,20 @@ fn make_snapshot() -> Snapshot {
                 passes: 4,
                 warns: 0,
                 fails: 1,
+                skips: 0,
                 findings: vec![SnapshotFinding {
                     check_name: "ech_advertised".to_string(),
                     verdict: "fail".to_string(),
                     message: "ECH not advertised".to_string(),
+                    earned: 0,
+                    possible: 3,
                     fix_hint: None,
                     fix_owner: None,
                     guide_url: None,
                 }],
             },
         ],
+        server_addresses: vec![],
         created_at: Utc::now(),
         lens_version: "0.9.1".to_string(),
     }
@@ -94,8 +104,9 @@ fn contains_check_names() {
     let snap = make_snapshot();
     let site = SiteConfig::default();
     let html = render_snapshot_html(&snap, &site);
-    assert!(html.contains("dnssec"), "check name dnssec must appear");
-    assert!(html.contains("caa"), "check name caa must appear");
+    // Check names are rendered as human-readable labels
+    assert!(html.contains("DNSSEC"), "human-readable label DNSSEC must appear");
+    assert!(html.contains("CAA Records"), "human-readable label CAA Records must appear");
 }
 
 #[test]
@@ -131,14 +142,8 @@ fn no_external_fonts() {
     let snap = make_snapshot();
     let site = SiteConfig::default();
     let html = render_snapshot_html(&snap, &site);
-    assert!(
-        !html.contains("fonts.googleapis.com"),
-        "must not load Google Fonts"
-    );
-    assert!(
-        !html.contains("typekit"),
-        "must not load Typekit"
-    );
+    assert!(!html.contains("fonts.googleapis.com"), "must not load Google Fonts");
+    assert!(!html.contains("typekit"), "must not load Typekit");
 }
 
 #[test]
@@ -163,7 +168,6 @@ fn og_description_contains_section_grades() {
     let snap = make_snapshot();
     let site = SiteConfig::default();
     let html = render_snapshot_html(&snap, &site);
-    // The og:description should summarize sections
     assert!(html.contains("DNS: A"), "og:description should include DNS grade");
     assert!(html.contains("TLS: B"), "og:description should include TLS grade");
 }
@@ -189,7 +193,6 @@ fn brand_name_from_site_config() {
 
 #[test]
 fn error_section_gets_synthetic_finding() {
-    use lens::snapshot::SnapshotSection;
     let mut snap = make_snapshot();
     snap.sections.push(SnapshotSection {
         name: "Email".to_string(),
@@ -197,10 +200,13 @@ fn error_section_gets_synthetic_finding() {
         passes: 0,
         warns: 0,
         fails: 0,
+        skips: 0,
         findings: vec![SnapshotFinding {
             check_name: "backend".to_string(),
             verdict: "fail".to_string(),
             message: "Section check failed — no details available".to_string(),
+            earned: 0,
+            possible: 0,
             fix_hint: None,
             fix_owner: None,
             guide_url: None,
@@ -210,4 +216,59 @@ fn error_section_gets_synthetic_finding() {
     let html = render_snapshot_html(&snap, &site);
     assert!(html.contains("Email"), "error section must appear");
     assert!(html.contains("Section check failed"), "synthetic finding must appear");
+}
+
+#[test]
+fn skipped_chip_shown_when_skips_present() {
+    let mut snap = make_snapshot();
+    snap.sections[0].skips = 3;
+    let site = SiteConfig::default();
+    let html = render_snapshot_html(&snap, &site);
+    assert!(html.contains("SKIPPED"), "skipped chip must appear when skips > 0");
+}
+
+#[test]
+fn points_per_check_shown() {
+    let snap = make_snapshot();
+    let site = SiteConfig::default();
+    let html = render_snapshot_html(&snap, &site);
+    assert!(html.contains("5/5"), "earned/possible score must appear");
+    assert!(html.contains("2/5"), "partial earned/possible score must appear");
+}
+
+#[test]
+fn section_order_is_canonical() {
+    let mut snap = make_snapshot();
+    // Add sections out of order
+    snap.sections.push(SnapshotSection {
+        name: "IP".to_string(),
+        grade: "A+".to_string(),
+        passes: 1,
+        warns: 0,
+        fails: 0,
+        skips: 0,
+        findings: vec![],
+    });
+    let site = SiteConfig::default();
+    let html = render_snapshot_html(&snap, &site);
+    // Canonical order: Email, HTTP, TLS, DNS, IP
+    let tls_pos = html.find("section-name\">TLS").unwrap_or(usize::MAX);
+    let dns_pos = html.find("section-name\">DNS").unwrap_or(usize::MAX);
+    let ip_pos  = html.find("section-name\">IP").unwrap_or(usize::MAX);
+    assert!(tls_pos < dns_pos, "TLS must appear before DNS");
+    assert!(dns_pos < ip_pos, "DNS must appear before IP");
+}
+
+#[test]
+fn server_addresses_rendered() {
+    let mut snap = make_snapshot();
+    snap.server_addresses = vec![
+        SnapshotAddress { role: "HTTP".to_string(), ip: "1.2.3.4".to_string(), org: None },
+        SnapshotAddress { role: "IP".to_string(), ip: "5.6.7.8".to_string(), org: Some("Example ISP".to_string()) },
+    ];
+    let site = SiteConfig::default();
+    let html = render_snapshot_html(&snap, &site);
+    assert!(html.contains("1.2.3.4"), "HTTP server IP must appear");
+    assert!(html.contains("5.6.7.8"), "resolved IP must appear");
+    assert!(html.contains("Example ISP"), "org must appear");
 }

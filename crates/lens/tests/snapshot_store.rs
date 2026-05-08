@@ -8,21 +8,26 @@ fn make_snapshot(domain: &str) -> Snapshot {
         shortid: String::new(), // assigned by store.insert
         domain: domain.to_string(),
         grade: "A".to_string(),
+        score: 95.0,
         sections: vec![SnapshotSection {
             name: "DNS".to_string(),
             grade: "A".to_string(),
             passes: 5,
             warns: 0,
             fails: 0,
+            skips: 0,
             findings: vec![SnapshotFinding {
                 check_name: "dnssec".to_string(),
                 verdict: "pass".to_string(),
                 message: String::new(),
+                earned: 5,
+                possible: 5,
                 fix_hint: None,
                 fix_owner: None,
                 guide_url: None,
             }],
         }],
+        server_addresses: vec![],
         created_at: Utc::now(),
         lens_version: "0.9.1".to_string(),
     }

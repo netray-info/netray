@@ -77,12 +77,43 @@ describe('BadgeModal', () => {
   });
 
   it('shows social card panel when Social card tab is clicked', async () => {
-    const { getByText } = render(() => (
+    const { getByText, getAllByText } = render(() => (
       <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
     ));
     fireEvent.click(getByText('Social card'));
     expect(getByText('Copy meta tag')).toBeTruthy();
     expect(getByText('Copy URL')).toBeTruthy();
+    expect(getAllByText('Copy Markdown').length).toBeGreaterThan(0);
+  });
+
+  it('social card Copy Markdown writes an image-in-link snippet', async () => {
+    const { getByText, getAllByText } = render(() => (
+      <BadgeModal domain="example.com" grade="A" onClose={vi.fn()} />
+    ));
+    fireEvent.click(getByText('Social card'));
+    const mdButtons = getAllByText('Copy Markdown');
+    fireEvent.click(mdButtons[mdButtons.length - 1]);
+    const last = (navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    expect(last).toMatch(/^\[!\[.*\]\(.*\/og\/example\.com\.png\)\]\(.*\?d=example\.com\)$/);
+  });
+
+  it('Re-run link tab shows Copy Markdown', async () => {
+    const { getByText, getAllByText } = render(() => (
+      <BadgeModal domain="example.com" grade="A" snapshotId={null} onClose={vi.fn()} />
+    ));
+    fireEvent.click(getByText('Re-run link'));
+    expect(getAllByText('Copy Markdown').length).toBeGreaterThan(0);
+  });
+
+  it('Re-run Copy Markdown writes a markdown link to the rerun URL', async () => {
+    const { getByText, getAllByText } = render(() => (
+      <BadgeModal domain="example.com" grade="A" snapshotId={null} onClose={vi.fn()} />
+    ));
+    fireEvent.click(getByText('Re-run link'));
+    const mdButtons = getAllByText('Copy Markdown');
+    fireEvent.click(mdButtons[mdButtons.length - 1]);
+    const last = (navigator.clipboard.writeText as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
+    expect(last).toMatch(/^\[.*example\.com.*\]\(.*\?d=example\.com\)$/);
   });
 
   it('social card panel shows og image', async () => {
