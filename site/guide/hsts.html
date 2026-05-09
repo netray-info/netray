@@ -155,6 +155,14 @@
     </form>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>HSTS header</h3>
+    <p>Add a <code>Strict-Transport-Security</code> header with <code>max-age=31536000</code> to all HTTPS responses so browsers always use HTTPS for your domain.</p>
+    <h3>HTTPS redirect</h3>
+    <p>Configure your web server to redirect all HTTP requests to HTTPS with a 301 permanent redirect before serving any content.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

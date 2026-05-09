@@ -255,6 +255,11 @@ curl -sI -L http://example.com</code></pre>
     </form>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <p>Remove or anonymise the <code>Server</code> and <code>X-Powered-By</code> response headers to avoid leaking software names and versions to potential attackers.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

@@ -179,6 +179,11 @@ Header always edit Set-Cookie ^(.*)$ "$1; Secure; HttpOnly; SameSite=Lax"</code>
     </form>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <p>Set the <code>Secure</code> and <code>HttpOnly</code> flags on all cookies so they are never sent over plain HTTP and are not accessible to JavaScript.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

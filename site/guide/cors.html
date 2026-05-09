@@ -193,6 +193,11 @@ curl -v https://api.example.com/data \
     </form>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <p>Avoid using <code>Access-Control-Allow-Origin: *</code> on endpoints that use cookies or authentication — enumerate allowed origins explicitly instead.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">
