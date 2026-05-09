@@ -27,6 +27,7 @@ NPM_CI_FLAGS ?=
         test-rust test-frontend \
         fmt fmt-check clippy \
         docker docker-run \
+        hooks \
         help
 
 # ══════════════════════════════════════════════════════════════════
@@ -126,3 +127,11 @@ docker: ## Build Docker image (ghcr.io/netray-info/lens:latest)
 
 docker-run: ## Run Docker image locally (port 8085)
 	docker run --rm -p 8085:8085 -p 9095:9095 $(DOCKER_TAG)
+
+# ══════════════════════════════════════════════════════════════════
+#  Git hooks
+# ══════════════════════════════════════════════════════════════════
+
+hooks: ## Install git hooks from .githooks/ (cargo fmt --check on commit)
+	git config core.hooksPath .githooks
+	@echo "Git hooks installed. Bypass with \`git commit --no-verify\` if needed."

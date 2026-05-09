@@ -94,27 +94,42 @@ jobs:
         run: npm test
         working-directory: frontend
 
-  audit:
-    name: Dependency Audit
+  # Deterministic supply-chain checks only — bans, licenses, sources.
+  # Advisory scans (RUSTSEC, npm audit) live in audit.yml on a daily cron so
+  # a newly-published advisory in an unrelated transitive dep cannot block
+  # an unrelated PR or hotfix merge.
+  deny:
+    name: Cargo Deny (bans/licenses/sources)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          # Kept in sync with deny.toml [advisories].ignore — see comments there.
-          ignore: RUSTSEC-2024-0436,RUSTSEC-2023-0071
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+          command: check bans licenses sources
+
+  # Build the production Docker image on every push/PR (single platform, no
+  # push). Catches Dockerfile drift, .dockerignore mistakes, and the
+  # NODE_AUTH_TOKEN secret path before tag-time, where it would block a
+  # release.
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Build image (no push)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: npm audit
-        run: npm audit --audit-level=high --omit=dev
-        working-directory: frontend
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: false
+          cache-from: type=gha,scope=ci-amd64
+          cache-to: type=gha,mode=max,scope=ci-amd64
+          secrets: |
+            NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}

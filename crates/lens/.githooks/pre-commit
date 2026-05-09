@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Fast local gate: only checks what would otherwise fail CI's fmt job.
+# Install once with `make hooks`. Bypass with `git commit --no-verify`.
+set -euo pipefail
+
+# Only check Rust files actually staged for this commit.
+staged_rs=$(git diff --cached --name-only --diff-filter=ACMR -- '*.rs' || true)
+
+if [ -n "${staged_rs}" ]; then
+  echo "[pre-commit] cargo fmt --check"
+  if ! cargo fmt -- --check; then
+    echo
+    echo "fmt drift detected. Run \`cargo fmt\` and re-stage." >&2
+    exit 1
+  fi
+fi

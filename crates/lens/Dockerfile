@@ -1,17 +1,18 @@
 FROM node:22-alpine AS frontend
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
-RUN --mount=type=secret,id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=secret,id=NODE_AUTH_TOKEN,env=NODE_AUTH_TOKEN \
+    npm ci
 COPY frontend/ .
 RUN npm run build
 
 FROM clux/muslrust:stable AS builder
 WORKDIR /build
-COPY Cargo.toml Cargo.lock ./
-COPY src src/
-COPY assets/ assets/
-COPY profiles/ profiles/
-COPY migrations/ migrations/
+# `.dockerignore` prunes target/, node_modules/, .git/, etc. so adding new
+# top-level resource directories (assets/, migrations/, …) requires no
+# Dockerfile change.
+COPY . .
 COPY --from=frontend /build/frontend/dist frontend/dist/
 RUN cargo build --release --bins && cp $(find /build -xdev -name lens) /
 
