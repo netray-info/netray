@@ -45,15 +45,9 @@ pub struct CheckItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub guide_url: Option<&'static str>,
-    /// Plain-English remediation sentence ("Your SPF record doesn't include
-    /// your MX hosts — external mail from you may be rejected."). Populated
-    /// per-check from `fix_for()`; absent until SDD product-repositioning
-    /// Phase 4 fills the copy in.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub fix_hint: Option<&'static str>,
-    /// Who can fix it ("your DNS provider", "your web server config").
-    /// Populated alongside `fix_hint`. Absent until Phase 4.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub fix_owner: Option<&'static str>,
@@ -63,7 +57,6 @@ pub struct CheckItem {
     pub messages: Vec<String>,
 }
 
-/// Return the guide URL for a check name.
 fn guide_url_for(name: &str) -> Option<&'static str> {
     match name {
         // DNS — DNSSEC
@@ -111,14 +104,69 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
 }
 
 /// Return the `(fix_hint, fix_owner)` pair for a check name.
-///
-/// Plain-English remediation copy. Empty for every check today; SDD
-/// product-repositioning Phase 4 fills entries one-by-one as copy is written.
-/// The mechanism (this lookup + the wire fields on `CheckItem`) ships now so
-/// the frontend can render remediation blocks the moment any entry is added.
-/// Phase 4 PRs convert this to a `match name { ... }` as entries are written.
-fn fix_for(_name: &str) -> (Option<&'static str>, Option<&'static str>) {
-    (None, None)
+fn fix_for(name: &str) -> (Option<&'static str>, Option<&'static str>) {
+    match name {
+        // DNS
+        "dnssec" => (
+            Some("Enable DNSSEC signing for your domain at your registrar or DNS provider."),
+            Some("your DNS provider or registrar"),
+        ),
+        "dnskey_algorithm" => (
+            Some(
+                "Upgrade your DNSSEC signing algorithm to ECDSA P-256 (Algorithm 13) or Ed25519 (Algorithm 15) — older algorithms are no longer considered safe.",
+            ),
+            Some("your DNS provider"),
+        ),
+        "dnssec_rollover" => (
+            Some(
+                "Complete the DNSSEC key rollover: remove the old DNSKEY and ensure only the new key's DS record is published at your registrar.",
+            ),
+            Some("your DNS provider or registrar"),
+        ),
+        "cname_apex" => (
+            Some(
+                "Remove the CNAME at your apex domain and replace it with A/AAAA records, or use ALIAS/ANAME records if your DNS provider supports them.",
+            ),
+            Some("your DNS provider"),
+        ),
+        "https_svcb" => (
+            Some(
+                "Add an HTTPS (type 65) record to enable service discovery that speeds up HTTPS connections and advertises HTTP/2, HTTP/3, and ECH support.",
+            ),
+            Some("your DNS provider"),
+        ),
+        "ns" => (
+            Some(
+                "Ensure your domain has at least two authoritative nameservers in separate networks for redundancy.",
+            ),
+            Some("your DNS provider or registrar"),
+        ),
+        "ttl" => (
+            Some(
+                "Set your DNS TTL to between 300 and 86400 seconds — very low TTLs overload resolvers and very high TTLs slow down propagation of changes.",
+            ),
+            Some("your DNS provider"),
+        ),
+        "caa" => (
+            Some(
+                "Add CAA records to specify which certificate authorities are allowed to issue certificates for your domain, reducing mis-issuance risk.",
+            ),
+            Some("your DNS provider"),
+        ),
+        "ns_lame" => (
+            Some(
+                "Your nameserver is not authoritative for your zone — update your registrar's nameserver list to match the NS records in your zone, or update your zone's NS records to match your registrar.",
+            ),
+            Some("your DNS provider or registrar"),
+        ),
+        "ns_delegation" => (
+            Some(
+                "The nameservers at your registrar don't match the NS records in your zone — synchronise them to prevent resolution failures.",
+            ),
+            Some("your registrar"),
+        ),
+        _ => (None, None),
+    }
 }
 
 /// Validate and split a comma-separated `dkim_selectors` string.
@@ -1999,18 +2047,28 @@ pub mod tests {
     }
 
     #[test]
-    fn fix_for_returns_empty_for_all_known_check_names() {
-        // Phase 1 contract: mechanism plumbed, content empty.
-        // Phase 4 will fill entries; this test then becomes obsolete and is removed.
+    fn fix_for_returns_populated_hints_for_dns_checks() {
         for name in [
-            "hsts",
             "dnssec",
-            "tls_version",
-            "spf_align",
-            "unknown_check",
+            "dnskey_algorithm",
+            "dnssec_rollover",
+            "cname_apex",
+            "https_svcb",
+            "ns",
+            "ttl",
+            "caa",
+            "ns_lame",
+            "ns_delegation",
         ] {
-            assert_eq!(fix_for(name), (None, None), "fix_for({name}) must be empty");
+            let (hint, owner) = fix_for(name);
+            assert!(hint.is_some(), "fix_for({name}) hint must be Some");
+            assert!(owner.is_some(), "fix_for({name}) owner must be Some");
         }
+        let (_, owner) = fix_for("ns_lame");
+        assert!(
+            owner.unwrap().contains("registrar"),
+            "ns_lame owner must mention registrar"
+        );
     }
 
     // --- SDD product-repositioning §3 Requirement 8 / §7.1: /api/meta exposes
