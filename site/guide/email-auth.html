@@ -188,6 +188,18 @@
     <p class="tool-entry__hint">Queries SPF, DKIM, DMARC, MTA-STS, BIMI, and MX records and applies DNS-level lint rules.</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>Email authentication</h3>
+    <p>Publish an SPF record that covers your mail servers, configure DKIM signing with your email provider, and publish a DMARC policy at <code>p=quarantine</code> or <code>p=reject</code>.</p>
+    <h3>Email infrastructure</h3>
+    <p>Ensure your domain has valid MX records pointing to functioning mail servers, and that each pointed hostname resolves to an A or AAAA record.</p>
+    <h3>Email transport security</h3>
+    <p>Publish an MTA-STS policy to enforce encrypted email transport and prevent SMTP downgrade attacks on mail delivered to your domain.</p>
+    <h3>Email brand policy</h3>
+    <p>Publish a BIMI record with a valid SVG Tiny PS logo once your DMARC policy is at <code>p=quarantine</code> or <code>p=reject</code>, to show your brand logo in supporting email clients.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">
