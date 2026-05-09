@@ -449,22 +449,25 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
     );
 
     let rl = &config.rate_limit;
-    Json(LensMetaResponse {
-        base: EcosystemMeta {
-            site_name: "lens — Domain Health Check".to_string(),
-            version: env!("CARGO_PKG_VERSION").to_string(),
-            ecosystem: EcosystemUrls::from(&config.ecosystem),
-            features,
-            limits: Map::new(),
-            rate_limit: RateLimitSummary {
-                per_ip_per_minute: rl.per_ip_per_minute,
-                per_ip_burst: rl.per_ip_burst,
-                global_per_minute: rl.global_per_minute,
-                global_burst: rl.global_burst,
+    (
+        [(axum::http::header::CACHE_CONTROL, "no-store")],
+        Json(LensMetaResponse {
+            base: EcosystemMeta {
+                site_name: "lens — Domain Health Check".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                ecosystem: EcosystemUrls::from(&config.ecosystem),
+                features,
+                limits: Map::new(),
+                rate_limit: RateLimitSummary {
+                    per_ip_per_minute: rl.per_ip_per_minute,
+                    per_ip_burst: rl.per_ip_burst,
+                    global_per_minute: rl.global_per_minute,
+                    global_burst: rl.global_burst,
+                },
             },
-        },
-        site: config.site.clone(),
-    })
+            site: config.site.clone(),
+        }),
+    )
 }
 
 #[utoipa::path(
@@ -1386,9 +1389,12 @@ fn make_sse_stream(events: Vec<Event>, cache_header: &'static str) -> Response {
     let s = stream::iter(events.into_iter().map(Ok::<_, Infallible>));
     let sse = Sse::new(s).keep_alive(KeepAlive::default());
     let mut response = sse.into_response();
-    response
-        .headers_mut()
-        .insert("x-cache", HeaderValue::from_static(cache_header));
+    let headers = response.headers_mut();
+    headers.insert("x-cache", HeaderValue::from_static(cache_header));
+    headers.insert(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store"),
+    );
     response
 }
 
@@ -1459,8 +1465,12 @@ fn build_sync_response(
     };
     let cache_header = if cached { "HIT" } else { "MISS" };
     let mut resp = Json(response).into_response();
-    resp.headers_mut()
-        .insert("x-cache", HeaderValue::from_static(cache_header));
+    let headers = resp.headers_mut();
+    headers.insert("x-cache", HeaderValue::from_static(cache_header));
+    headers.insert(
+        axum::http::header::CACHE_CONTROL,
+        HeaderValue::from_static("no-store"),
+    );
     resp
 }
 

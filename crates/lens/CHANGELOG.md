@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-05-09
+
+### Fixed
+- `/api/check/*` (SSE and sync) and `/api/meta` now emit `Cache-Control: no-store`
+  explicitly. Previously these endpoints relied on an upstream Traefik middleware
+  to set `no-store`, but that same middleware was also overriding the correct
+  `public, max-age=…` headers on `/badge/*`, `/og/*`, and `/r/:shortid`. Removing
+  the Traefik override (see argus-oci) required the API endpoints to become
+  self-declaring.
+
 ## [0.10.0] - 2026-05-09
 
 ### Added
