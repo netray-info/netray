@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compare — netray.info</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="description" content="How lens compares to hardenize, internet.nl, SSL Labs, observatory.mozilla.org, and per-axis specialists. Honest coverage table with admitted depth gaps.">
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://netray.info/compare" />
+  <meta property="og:title" content="Compare — netray.info" />
+  <meta property="og:description" content="How lens compares to hardenize, internet.nl, SSL Labs, observatory.mozilla.org, and per-axis specialists. Honest coverage table with admitted depth gaps." />
+  <meta property="og:image" content="https://netray.info/og/landing.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="netray.info — unified domain health checker" />
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Compare — netray.info" />
+  <meta name="twitter:description" content="How lens compares to hardenize, internet.nl, SSL Labs, observatory.mozilla.org, and per-axis specialists. Honest coverage table with admitted depth gaps." />
+  <meta name="twitter:image" content="https://netray.info/og/landing.png" />
+  <meta name="twitter:image:alt" content="netray.info — unified domain health checker" />
+  <meta name="theme-color" content="#07090f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f6f8fb" media="(prefers-color-scheme: light)" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Light theme (default) ─────────────────── */
+    :root {
+      color-scheme: light;
+      --bg:       #f6f8fb;
+      --surface:  #ffffff;
+      --surface2: #eef1f6;
+      --border:   #dde3ed;
+      --text:     #0d1521;
+      --muted:    #6b7c93;
+    }
+
+    /* ── Dark theme ────────────────────────────── */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg:       #07090f;
+        --surface:  #0d1220;
+        --surface2: #111827;
+        --border:   #1a2438;
+        --text:     #dce6f5;
+        --muted:    #4d6480;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    a { color: inherit; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Suite nav ─────────────────────────────── */
+    .suite-nav {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.25rem 0.5rem;
+      padding: 0.75rem 1.25rem;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+
+    .suite-nav__brand {
+      font-weight: 600;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .suite-nav__sep {
+      color: var(--border);
+      user-select: none;
+    }
+
+    .suite-nav__link {
+      text-decoration: none;
+      color: var(--muted);
+    }
+
+    .suite-nav__link:hover {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    /* ── Page layout ───────────────────────────── */
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 3rem;
+    }
+
+    h1 {
+      font-size: clamp(1.5rem, 4vw, 2.25rem);
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+      line-height: 1.2;
+    }
+
+    h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 2.5rem 0 0.75rem;
+    }
+
+    h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 2rem 0 0.5rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    p { margin-bottom: 1rem; }
+
+    .intro { max-width: 68ch; margin-bottom: 2rem; }
+    .intro p { color: var(--muted); }
+
+    /* ── Legend ────────────────────────────────── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.5rem;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--surface2);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .legend span { white-space: nowrap; }
+
+    /* ── Tables ────────────────────────────────── */
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      margin-bottom: 2rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      min-width: 480px;
+    }
+
+    thead th {
+      background: var(--surface2);
+      padding: 0.6rem 0.75rem;
+      text-align: left;
+      font-weight: 600;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    thead th:not(:first-child) {
+      text-align: center;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: var(--surface2);
+    }
+
+    tbody th {
+      padding: 0;
+      font-weight: 500;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    tbody td {
+      padding: 0.6rem 0.75rem;
+      text-align: center;
+      vertical-align: top;
+      color: var(--text);
+    }
+
+    /* ── details / summary for row expansion ──── */
+    tbody th details {
+      padding: 0;
+    }
+
+    tbody th summary {
+      padding: 0.6rem 0.75rem;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      user-select: none;
+    }
+
+    tbody th summary::-webkit-details-marker { display: none; }
+
+    tbody th summary::before {
+      content: "▶";
+      font-size: 0.6rem;
+      color: var(--muted);
+      transition: transform 0.15s;
+      flex-shrink: 0;
+    }
+
+    tbody th details[open] > summary::before {
+      transform: rotate(90deg);
+    }
+
+    .row-detail {
+      padding: 0.4rem 0.75rem 0.75rem 1.75rem;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* ── Axis section (Table 2) ────────────────── */
+    .axis-section {
+      margin-bottom: 2.5rem;
+    }
+
+    /* ── Symbols ───────────────────────────────── */
+    .sym-yes  { color: #16a34a; font-weight: 600; }
+    .sym-part { color: #b45309; font-weight: 600; }
+    .sym-no   { color: #b91c1c; font-weight: 600; }
+    .sym-oos  { color: var(--muted); }
+
+    @media (prefers-color-scheme: dark) {
+      .sym-yes  { color: #22c55e; }
+      .sym-part { color: #d97706; }
+      .sym-no   { color: #f87171; }
+    }
+
+    /* ── CTA ───────────────────────────────────── */
+    .cta {
+      margin: 3rem 0 1.5rem;
+      padding: 1.25rem 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-align: center;
+      font-size: 1.0625rem;
+    }
+
+    .cta a { font-weight: 600; }
+
+    /* ── Honesty section ───────────────────────── */
+    .honesty-section {
+      margin: 2.5rem 0;
+    }
+
+    .honesty-section p {
+      margin-bottom: 0.75rem;
+      color: var(--muted);
+      max-width: 68ch;
+    }
+
+    /* ── Footer ────────────────────────────────── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 1.5rem 1.25rem;
+      font-size: 0.8125rem;
+      color: var(--muted);
+    }
+
+    .footer-inner {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .footer-meta {
+      margin-bottom: 1rem;
+    }
+
+    .footer-methodology h2 {
+      font-size: 0.875rem;
+      font-weight: 600;
+      margin: 0 0 0.4rem;
+      color: var(--text);
+    }
+
+    .footer-methodology p {
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    /* ── Mobile ────────────────────────────────── */
+    @media (max-width: 480px) {
+      main { padding: 1.25rem 1rem 2rem; }
+      .table-wrap { border-radius: 4px; }
+      h1 { font-size: 1.4rem; }
+      h2 { font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="Suite navigation">
+    <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://netray.info/tools">Tools</a>
+  </nav>
+</header>
+
+<main>
+  <div class="intro">
+    <h1>Compare</h1>
+    <p>
+      <a href="https://netray.info/">lens</a> is a unified domain health checker — one URL, five axes, one grade.
+      This page helps you decide which tool fits your needs: lens for breadth, or a specialist for depth.
+      The depth gaps are admitted, not papered over.
+    </p>
+  </div>
+
+  <!-- ── Table 1: Unified domain checkers ──────────── -->
+  <section aria-labelledby="table1-heading">
+    <h2 id="table1-heading">Table 1 — Unified domain checkers</h2>
+    <p>Tools in this group each aim to give you a broad domain health picture from a single query.</p>
+
+    <div class="legend" aria-label="Legend">
+      <span>&#10003; full coverage</span>
+      <span>~ partial or lower depth</span>
+      <span>&#10007; not done</span>
+      <span>&mdash; out of scope for that tool</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Feature</th>
+            <th scope="col">lens</th>
+            <th scope="col">hardenize</th>
+            <th scope="col">internet.nl</th>
+            <th scope="col">observatory.mozilla.org</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">
+              <details>
+                <summary>DNS checks</summary>
+                <div class="row-detail">
+                  <strong>lens:</strong> MX, SPF, DKIM, DMARC, DNSSEC, NS, SOA via mhost-prism.<br>
+                  <strong>hardenize:</strong> MX, NS, DNSSEC, CAA; strong on DNS security hygiene.<br>
+                  <strong>internet.nl:</strong> DNSSEC validation, IPv6 on name servers; email-DNS records.<br>
+                  <strong>observatory.mozilla.org:</strong> Does not perform DNS record analysis.
+                </div>
+              </details>
+            </th>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-part" title="Partial">~</span></td>
+            <td><span class="sym-no" title="Not done">&#10007;</span></td>
+          </tr>
+          <tr>
+            <th scope="row">
+              <details>
+                <summary>TLS checks</summary>
+                <div class="row-detail">
+                  <strong>lens:</strong> Certificate validity, chain, protocol versions, cipher suite basics, HSTS via tlsight.<br>
+                  <strong>hardenize:</strong> Deep TLS analysis; cipher enumeration, protocol downgrades, certificate monitoring.<br>
+                  <strong>internet.nl:</strong> HTTPS availability, TLS version support, HSTS; moderate depth.<br>
+                  <strong>observatory.mozilla.org:</strong> Checks HTTPS redirect and HSTS header; no TLS handshake analysis.
+                </div>
+              </details>
+            </th>
+            <td><span class="sym-part" title="Partial">~</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-part" title="Partial">~</span></td>
+            <td><span class="sym-part" title="Partial">~</span></td>
+          </tr>
+          <tr>
+            <th scope="row">
+              <details>
+                <summary>HTTP header checks</summary>
+                <div class="row-detail">
+                  <strong>lens:</strong> All major security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) via spectra.<br>
+                  <strong>hardenize:</strong> Security headers included; graded alongside TLS and certificate results.<br>
+                  <strong>internet.nl:</strong> HTTPS and HSTS checked; does not grade the full security-header set.<br>
+                  <strong>observatory.mozilla.org:</strong> Primary focus — detailed security-header grading A+ through F.
+                </div>
+              </details>
+            </th>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-part" title="Partial">~</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+          </tr>
+          <tr>
+            <th scope="row">
+              <details>
+                <summary>Email checks</summary>
+                <div class="row-detail">
+                  <strong>lens:</strong> SPF, DKIM, DMARC, MTA-STS, BIMI via beacon.<br>
+                  <strong>hardenize:</strong> SPF, DKIM, DMARC, MTA-STS, BIMI VMC chain validation, STARTTLS on mail ports.<br>
+                  <strong>internet.nl:</strong> SPF, DKIM, DMARC, STARTTLS, DANE — focused on modern standard compliance.<br>
+                  <strong>observatory.mozilla.org:</strong> Does not check email configuration.
+                </div>
+              </details>
+            </th>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-part" title="Partial">~</span></td>
+            <td><span class="sym-no" title="Not done">&#10007;</span></td>
+          </tr>
+          <tr>
+            <th scope="row">
+              <details>
+                <summary>IP enrichment</summary>
+                <div class="row-detail">
+                  <strong>lens:</strong> ASN lookup, geolocation, reverse DNS, abuse contact via ifconfig-rs.<br>
+                  <strong>hardenize:</strong> Shows hosting provider and geolocation alongside security results.<br>
+                  <strong>internet.nl:</strong> No IP-level enrichment beyond IPv6 connectivity checks.<br>
+                  <strong>observatory.mozilla.org:</strong> Does not provide IP enrichment.
+                </div>
+              </details>
+            </th>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-part" title="Partial">~</span></td>
+            <td><span class="sym-no" title="Not done">&#10007;</span></td>
+            <td><span class="sym-no" title="Not done">&#10007;</span></td>
+          </tr>
+          <tr>
+            <th scope="row">
+              <details>
+                <summary>API access</summary>
+                <div class="row-detail">
+                  <strong>lens:</strong> REST API, SSE streaming, open source — self-hostable. No key required for public instance.<br>
+                  <strong>hardenize:</strong> API available on paid plans; free tier is UI-only.<br>
+                  <strong>internet.nl:</strong> Batch API available; requires registration for bulk queries.<br>
+                  <strong>observatory.mozilla.org:</strong> Public HTTP API; no auth required.
+                </div>
+              </details>
+            </th>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-part" title="Partial">~</span></td>
+            <td><span class="sym-part" title="Partial">~</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+          </tr>
+          <tr>
+            <th scope="row">
+              <details>
+                <summary>No login required</summary>
+                <div class="row-detail">
+                  <strong>lens:</strong> Fully open — no account, no rate-limit wall for normal use.<br>
+                  <strong>hardenize:</strong> Free tier is no-login; advanced reports and API require an account.<br>
+                  <strong>internet.nl:</strong> Single checks need no login; batch API requires registration.<br>
+                  <strong>observatory.mozilla.org:</strong> No login required for any feature.
+                </div>
+              </details>
+            </th>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+            <td><span class="sym-yes" title="Full coverage">&#10003;</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Table 2: Per-axis specialists ─────────────── -->
+  <section aria-labelledby="table2-heading">
+    <h2 id="table2-heading">Table 2 — Per-axis specialists</h2>
+    <p>When you need deep analysis on a single axis, these tools go further than any unified checker.</p>
+
+    <div class="legend" aria-label="Legend">
+      <span>&#10003; full coverage</span>
+      <span>~ partial or lower depth</span>
+      <span>&#10007; not done</span>
+      <span>&mdash; out of scope for that tool</span>
+    </div>
+
+    <!-- DNS axis -->
+    <div class="axis-section">
+      <h3>DNS</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Check</th>
+              <th scope="col">mhost-prism (lens)</th>
+              <th scope="col">dig</th>
+              <th scope="col">dnsviz.net</th>
+              <th scope="col">intodns.com</th>
+              <th scope="col">mxtoolbox (DNS)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>MX records</summary>
+                  <div class="row-detail">
+                    <strong>mhost-prism:</strong> Retrieves and displays MX records with priority.<br>
+                    <strong>dig:</strong> Raw MX query — full control, no interpretation.<br>
+                    <strong>dnsviz.net:</strong> MX visible in zone graph; no semantic analysis.<br>
+                    <strong>intodns.com:</strong> Lists MX records and checks basic configuration.<br>
+                    <strong>mxtoolbox:</strong> Dedicated MX lookup with latency and reverse-DNS check.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-part">~</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>SPF record</summary>
+                  <div class="row-detail">
+                    <strong>mhost-prism:</strong> Retrieves and parses SPF TXT record, flags common policy errors.<br>
+                    <strong>dig:</strong> Raw TXT lookup only; no SPF semantic analysis.<br>
+                    <strong>dnsviz.net:</strong> No SPF-specific analysis; zone data visible as raw TXT.<br>
+                    <strong>intodns.com:</strong> No SPF semantic checking.<br>
+                    <strong>mxtoolbox:</strong> Dedicated SPF record lookup and policy parse.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-part">~</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>DMARC record</summary>
+                  <div class="row-detail">
+                    <strong>mhost-prism:</strong> Retrieves and parses DMARC record including policy and rua/ruf tags.<br>
+                    <strong>dig:</strong> Can query _dmarc TXT record; no parsing.<br>
+                    <strong>dnsviz.net:</strong> No DMARC semantic analysis.<br>
+                    <strong>intodns.com:</strong> No DMARC checking.<br>
+                    <strong>mxtoolbox:</strong> Dedicated DMARC lookup with policy interpretation.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-part">~</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>DKIM lookup</summary>
+                  <div class="row-detail">
+                    <strong>mhost-prism:</strong> Queries common DKIM selectors and displays public key records.<br>
+                    <strong>dig:</strong> Can query any selector directly if known; requires manual selector input.<br>
+                    <strong>dnsviz.net:</strong> No DKIM-specific analysis.<br>
+                    <strong>intodns.com:</strong> No DKIM checking.<br>
+                    <strong>mxtoolbox:</strong> DKIM record lookup given a selector name.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-part">~</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>DNSSEC validation</summary>
+                  <div class="row-detail">
+                    <strong>mhost-prism:</strong> Checks DNSSEC signing status and DS records.<br>
+                    <strong>dig:</strong> +dnssec flag shows RRSIG records; requires expert interpretation.<br>
+                    <strong>dnsviz.net:</strong> Gold standard — visual chain-of-trust graph, delegation analysis, failure diagnosis.<br>
+                    <strong>intodns.com:</strong> No DNSSEC validation.<br>
+                    <strong>mxtoolbox:</strong> Basic DNSSEC check; no chain-of-trust visualisation.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-part">~</span></td>
+              <td><span class="sym-part">~</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-part">~</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>NS records</summary>
+                  <div class="row-detail">
+                    <strong>mhost-prism:</strong> Lists authoritative name servers.<br>
+                    <strong>dig:</strong> Full NS query with any server override.<br>
+                    <strong>dnsviz.net:</strong> NS delegation path is central to its graph.<br>
+                    <strong>intodns.com:</strong> Checks NS records, lame delegation, and consistency.<br>
+                    <strong>mxtoolbox:</strong> NS lookup available.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>SOA record</summary>
+                  <div class="row-detail">
+                    <strong>mhost-prism:</strong> Retrieves SOA record fields (serial, refresh, retry, expire).<br>
+                    <strong>dig:</strong> Full SOA query.<br>
+                    <strong>dnsviz.net:</strong> SOA visible as part of zone graph.<br>
+                    <strong>intodns.com:</strong> Checks SOA and flags configuration issues.<br>
+                    <strong>mxtoolbox:</strong> SOA lookup available.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>DNS propagation</summary>
+                  <div class="row-detail">
+                    <strong>mhost-prism:</strong> Queries from a single vantage point; no multi-PoP propagation view.<br>
+                    <strong>dig:</strong> Single resolver per invocation; scripts can parallelize.<br>
+                    <strong>dnsviz.net:</strong> Queries multiple authoritative servers; not a propagation checker per se.<br>
+                    <strong>intodns.com:</strong> No global propagation check.<br>
+                    <strong>mxtoolbox:</strong> DNS propagation checker queries resolvers in multiple regions.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-part">~</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TLS axis -->
+    <div class="axis-section">
+      <h3>TLS</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Check</th>
+              <th scope="col">tlsight (lens)</th>
+              <th scope="col">ssllabs.com</th>
+              <th scope="col">badssl.com</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Certificate validity</summary>
+                  <div class="row-detail">
+                    <strong>tlsight:</strong> Expiry date, subject, SAN entries, issuer chain.<br>
+                    <strong>ssllabs:</strong> Full certificate details with trust-chain validation across major stores.<br>
+                    <strong>badssl.com:</strong> Reference pages for expired/self-signed certs — not a scanner.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Certificate chain</summary>
+                  <div class="row-detail">
+                    <strong>tlsight:</strong> Verifies chain completeness and flags missing intermediates.<br>
+                    <strong>ssllabs:</strong> Full chain analysis; checks cross-signs and extra certs.<br>
+                    <strong>badssl.com:</strong> Has reference pages for incomplete-chain scenarios; not a scanner.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Protocol versions (deprecated detection)</summary>
+                  <div class="row-detail">
+                    <strong>tlsight:</strong> Flags TLS 1.0 and 1.1 if offered alongside 1.2/1.3.<br>
+                    <strong>ssllabs:</strong> Tests all versions including SSLv2/v3; grades down for deprecated protocols.<br>
+                    <strong>badssl.com:</strong> Reference endpoints for TLS 1.0 and 1.1 — useful for browser testing.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Cipher suites</summary>
+                  <div class="row-detail">
+                    <strong>tlsight:</strong> Lists offered cipher suites; flags known-weak ciphers.<br>
+                    <strong>ssllabs:</strong> Full enumeration with per-cipher grade, forward secrecy flags, and downgrade attack tests (POODLE, BEAST, RC4).
+                    <strong>badssl.com:</strong> Reference pages for RC4 and other weak cipher configurations; not a scanner.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-part">~</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>HSTS</summary>
+                  <div class="row-detail">
+                    <strong>tlsight:</strong> Checks HSTS header presence, max-age, and includeSubDomains flag.<br>
+                    <strong>ssllabs:</strong> HSTS included in full TLS grade; preload list status shown.<br>
+                    <strong>badssl.com:</strong> Has a no-hsts reference page; not an active scanner.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>OCSP stapling</summary>
+                  <div class="row-detail">
+                    <strong>tlsight:</strong> Does not currently check OCSP stapling status.<br>
+                    <strong>ssllabs:</strong> Full OCSP stapling and must-staple extension check.<br>
+                    <strong>badssl.com:</strong> Out of scope — badssl is a reference tool, not a scanner.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>StartTLS (mail ports)</summary>
+                  <div class="row-detail">
+                    <strong>tlsight:</strong> HTTPS (port 443) only; does not test SMTP ports 25, 465, or 587.<br>
+                    <strong>ssllabs:</strong> Tests StartTLS on ports 25, 465, and 587 as part of its mail-server profile.<br>
+                    <strong>badssl.com:</strong> Web-only reference; no mail-port testing.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- HTTP axis -->
+    <div class="axis-section">
+      <h3>HTTP</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Check</th>
+              <th scope="col">spectra (lens)</th>
+              <th scope="col">securityheaders.com</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Content-Security-Policy</summary>
+                  <div class="row-detail">
+                    <strong>spectra:</strong> Detects presence, shows raw and parsed directives, flags unsafe-inline.<br>
+                    <strong>securityheaders.com:</strong> Parses and grades CSP; flags unsafe-* keywords and missing directives with detailed explanation.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Strict-Transport-Security</summary>
+                  <div class="row-detail">
+                    <strong>spectra:</strong> Checks HSTS presence, max-age, and subdomain coverage.<br>
+                    <strong>securityheaders.com:</strong> Same checks plus preload status and explanatory grading.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>X-Frame-Options</summary>
+                  <div class="row-detail">
+                    <strong>spectra:</strong> Checks for DENY or SAMEORIGIN; flags deprecated ALLOWFROM.<br>
+                    <strong>securityheaders.com:</strong> Same checks with notes on CSP frame-ancestors superseding X-Frame-Options.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>X-Content-Type-Options</summary>
+                  <div class="row-detail">
+                    <strong>spectra:</strong> Checks for nosniff value.<br>
+                    <strong>securityheaders.com:</strong> Checks for nosniff; notes browser MIME sniffing mitigations.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Referrer-Policy</summary>
+                  <div class="row-detail">
+                    <strong>spectra:</strong> Detects presence and value; flags overly-permissive policies.<br>
+                    <strong>securityheaders.com:</strong> Grades referrer policy strictness and explains cross-origin implications.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Permissions-Policy</summary>
+                  <div class="row-detail">
+                    <strong>spectra:</strong> Checks for presence and lists declared feature policies.<br>
+                    <strong>securityheaders.com:</strong> Checks presence; notes it as an emerging standard in grades.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Server header disclosure</summary>
+                  <div class="row-detail">
+                    <strong>spectra:</strong> Shows raw Server header value; flags software version disclosure.<br>
+                    <strong>securityheaders.com:</strong> Flags server and X-Powered-By disclosure as informational findings.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Email axis -->
+    <div class="axis-section">
+      <h3>Email</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Check</th>
+              <th scope="col">beacon (lens)</th>
+              <th scope="col">mxtoolbox (mail)</th>
+              <th scope="col">dmarcian</th>
+              <th scope="col">postmark mail-tester</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>SPF record &amp; policy</summary>
+                  <div class="row-detail">
+                    <strong>beacon:</strong> Retrieves and parses SPF record; flags policy permissiveness and syntax errors.<br>
+                    <strong>mxtoolbox:</strong> SPF record lookup with policy interpretation and include-chain expansion.<br>
+                    <strong>dmarcian:</strong> SPF analyser as part of its DMARC-focused suite; checks include limits.<br>
+                    <strong>postmark mail-tester:</strong> SPF verified against a test message you send; requires sending an email to a test address.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>DKIM record lookup</summary>
+                  <div class="row-detail">
+                    <strong>beacon:</strong> Queries common DKIM selectors and displays public key records.<br>
+                    <strong>mxtoolbox:</strong> DKIM lookup given a selector name.<br>
+                    <strong>dmarcian:</strong> DKIM record lookup as part of domain analysis.<br>
+                    <strong>postmark mail-tester:</strong> Validates DKIM signature in a test message you send.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>DMARC record &amp; policy</summary>
+                  <div class="row-detail">
+                    <strong>beacon:</strong> Parses DMARC record including policy, subdomain policy, and reporting addresses.<br>
+                    <strong>mxtoolbox:</strong> DMARC record lookup with policy explanation.<br>
+                    <strong>dmarcian:</strong> Primary focus — deep DMARC record analysis, policy evaluation, alignment guidance.<br>
+                    <strong>postmark mail-tester:</strong> Checks DMARC alignment in the test message.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>MTA-STS</summary>
+                  <div class="row-detail">
+                    <strong>beacon:</strong> Checks MTA-STS DNS record and fetches the policy file.<br>
+                    <strong>mxtoolbox:</strong> Does not check MTA-STS.<br>
+                    <strong>dmarcian:</strong> No MTA-STS checking.<br>
+                    <strong>postmark mail-tester:</strong> Out of scope for mail-tester.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>BIMI record</summary>
+                  <div class="row-detail">
+                    <strong>beacon:</strong> Checks BIMI DNS record and logo URI.<br>
+                    <strong>mxtoolbox:</strong> No BIMI checking.<br>
+                    <strong>dmarcian:</strong> No BIMI checking in the standard tool.<br>
+                    <strong>postmark mail-tester:</strong> Out of scope.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>DANE / TLSA</summary>
+                  <div class="row-detail">
+                    <strong>beacon:</strong> Does not currently check DANE/TLSA records.<br>
+                    <strong>mxtoolbox:</strong> No DANE/TLSA checking.<br>
+                    <strong>dmarcian:</strong> No DANE/TLSA checking.<br>
+                    <strong>postmark mail-tester:</strong> Out of scope.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-oos">&mdash;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Blacklist check</summary>
+                  <div class="row-detail">
+                    <strong>beacon:</strong> Does not include blacklist / reputation checks.<br>
+                    <strong>mxtoolbox:</strong> Checks 100+ blacklists; a flagship feature with 20+ years of list curation.<br>
+                    <strong>dmarcian:</strong> No blacklist checking.<br>
+                    <strong>postmark mail-tester:</strong> Checks blacklist reputation as part of deliverability scoring.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- IP axis -->
+    <div class="axis-section">
+      <h3>IP</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Check</th>
+              <th scope="col">ifconfig-rs (lens)</th>
+              <th scope="col">ifconfig.me</th>
+              <th scope="col">ipapi.co</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>IP address detection</summary>
+                  <div class="row-detail">
+                    <strong>ifconfig-rs:</strong> Detects caller IP; also resolves IPs for a queried domain.<br>
+                    <strong>ifconfig.me:</strong> Returns the caller's public IP; simple, minimal interface.<br>
+                    <strong>ipapi.co:</strong> Returns IP data for any given IP; API-first.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>ASN lookup</summary>
+                  <div class="row-detail">
+                    <strong>ifconfig-rs:</strong> ASN number and organisation name via RDAP.<br>
+                    <strong>ifconfig.me:</strong> No ASN information.<br>
+                    <strong>ipapi.co:</strong> ASN and organisation name included in geolocation response.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Geolocation</summary>
+                  <div class="row-detail">
+                    <strong>ifconfig-rs:</strong> Country, region, city via GeoIP database.<br>
+                    <strong>ifconfig.me:</strong> No geolocation.<br>
+                    <strong>ipapi.co:</strong> Country, city, latitude/longitude, timezone — primary product.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Reverse DNS</summary>
+                  <div class="row-detail">
+                    <strong>ifconfig-rs:</strong> PTR record lookup for the queried IP.<br>
+                    <strong>ifconfig.me:</strong> Shows hostname (reverse DNS) for the caller's IP.<br>
+                    <strong>ipapi.co:</strong> No reverse DNS lookup.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+            </tr>
+            <tr>
+              <th scope="row">
+                <details>
+                  <summary>Abuse contact</summary>
+                  <div class="row-detail">
+                    <strong>ifconfig-rs:</strong> Abuse contact email and RDAP data from the RIR record.<br>
+                    <strong>ifconfig.me:</strong> No abuse contact information.<br>
+                    <strong>ipapi.co:</strong> No abuse contact information.
+                  </div>
+                </details>
+              </th>
+              <td><span class="sym-yes">&#10003;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+              <td><span class="sym-no">&#10007;</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Honesty narrative ──────────────────────────── -->
+  <section class="honesty-section" aria-labelledby="honesty-heading">
+    <h2 id="honesty-heading">Where lens trades depth for breadth</h2>
+    <p>
+      lens covers five axes in one query. Specialists go deeper on each axis. Here are the three gaps that matter most.
+    </p>
+    <p>
+      <strong>SSL Labs</strong> covers StartTLS on SMTP ports 25, 465, and 587, runs full cipher-suite enumeration
+      with downgrade tests (POODLE, BEAST, RC4), and checks a broader set of handshake variants that tlsight does not
+      yet test. For a mail server's TLS posture, SSL Labs gives a more authoritative grade.
+    </p>
+    <p>
+      <strong>hardenize</strong> includes additional email-edge checks such as BIMI VMC chain validation and variant
+      MTA-STS report parsing that beacon does not yet replicate. Its certificate-monitoring subscription tracks expiry
+      across all your domains, not just on-demand checks.
+    </p>
+    <p>
+      <strong>mxtoolbox</strong> carries 20+ years of mail-flow heuristics — blacklist reputation across 100+ lists,
+      live SMTP banner testing, and delivery-path tracing — that beacon does not yet replicate.
+    </p>
+  </section>
+
+  <!-- ── CTA ───────────────────────────────────────── -->
+  <section aria-label="Call to action">
+    <div class="cta">
+      Skeptical? Check your own domain at <a href="https://netray.info/">netray.info</a>.
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <p class="footer-meta">Last reviewed: 2026-05-09</p>
+    <div class="footer-methodology">
+      <h2>How we compiled this</h2>
+      <p>
+        Feature claims about each tool were verified against vendor documentation and hands-on checks
+        using <code>example.com</code> as the test domain. Where documentation was ambiguous, the tool
+        was queried directly and results were observed. This page is reviewed quarterly; the "Last reviewed"
+        date above reflects the most recent verification pass.
+      </p>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
