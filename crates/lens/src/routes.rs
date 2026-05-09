@@ -88,9 +88,10 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
         "ct_logged" => Some("https://netray.info/guide/certificate-transparency"),
         "ocsp_stapled" => Some("https://netray.info/guide/certificate-chain"),
         "hsts" | "https_redirect" => Some("https://netray.info/guide/hsts"),
-        "security_headers" | "cors" | "cookie_secure" | "hygiene" => {
-            Some("https://netray.info/guide/http-security")
-        }
+        "security_headers" => Some("https://netray.info/guide/security-headers"),
+        "cors" => Some("https://netray.info/guide/cors"),
+        "cookie_secure" => Some("https://netray.info/guide/cookie-security"),
+        "hygiene" => Some("https://netray.info/guide/http-redirects"),
         "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
         // Email buckets
         "email_authentication"
@@ -288,6 +289,43 @@ fn fix_for(name: &str) -> (Option<&'static str>, Option<&'static str>) {
                 "Either add the issuing CA to your CAA records, or reissue your certificate from a CA already listed in your CAA records.",
             ),
             Some("your DNS provider or CA"),
+        ),
+        // HTTP
+        "hsts" => (
+            Some(
+                "Add a `Strict-Transport-Security` header with `max-age=31536000` to all HTTPS responses so browsers always use HTTPS for your domain.",
+            ),
+            Some("your web server config"),
+        ),
+        "https_redirect" => (
+            Some(
+                "Configure your web server to redirect all HTTP requests to HTTPS with a 301 permanent redirect before serving any content.",
+            ),
+            Some("your web server config"),
+        ),
+        "security_headers" => (
+            Some(
+                "Add the missing security headers — at minimum `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a `Content-Security-Policy` — to reduce common browser-based attack surface.",
+            ),
+            Some("your web server config"),
+        ),
+        "cors" => (
+            Some(
+                "Avoid using `Access-Control-Allow-Origin: *` on endpoints that use cookies or authentication — enumerate allowed origins explicitly instead.",
+            ),
+            Some("your web server or application config"),
+        ),
+        "cookie_secure" => (
+            Some(
+                "Set the `Secure` and `HttpOnly` flags on all cookies so they are never sent over plain HTTP and are not accessible to JavaScript.",
+            ),
+            Some("your web server or application config"),
+        ),
+        "hygiene" => (
+            Some(
+                "Remove or anonymise the `Server` and `X-Powered-By` response headers to avoid leaking software names and versions to potential attackers.",
+            ),
+            Some("your web server config"),
         ),
         _ => (None, None),
     }
@@ -2245,6 +2283,50 @@ pub mod tests {
         assert_eq!(owner.unwrap(), "your web server config");
         let (_, owner) = fix_for("ech_advertised");
         assert_eq!(owner.unwrap(), "your web server config and DNS provider");
+    }
+
+    #[test]
+    fn fix_for_returns_populated_hints_for_http_checks() {
+        for name in [
+            "hsts",
+            "https_redirect",
+            "security_headers",
+            "cors",
+            "cookie_secure",
+            "hygiene",
+        ] {
+            let (hint, owner) = fix_for(name);
+            assert!(hint.is_some(), "fix_for({name}) hint must be Some");
+            assert!(owner.is_some(), "fix_for({name}) owner must be Some");
+        }
+        let (hint, owner) = fix_for("hsts");
+        assert!(
+            hint.unwrap().contains("Strict-Transport-Security"),
+            "hsts hint must mention Strict-Transport-Security"
+        );
+        assert_eq!(owner.unwrap(), "your web server config");
+        let (_, owner) = fix_for("cors");
+        assert_eq!(owner.unwrap(), "your web server or application config");
+    }
+
+    #[test]
+    fn guide_url_for_http_checks_point_to_correct_pages() {
+        assert_eq!(
+            guide_url_for("security_headers"),
+            Some("https://netray.info/guide/security-headers")
+        );
+        assert_eq!(
+            guide_url_for("cors"),
+            Some("https://netray.info/guide/cors")
+        );
+        assert_eq!(
+            guide_url_for("cookie_secure"),
+            Some("https://netray.info/guide/cookie-security")
+        );
+        assert_eq!(
+            guide_url_for("hygiene"),
+            Some("https://netray.info/guide/http-redirects")
+        );
     }
 
     // --- SDD product-repositioning §3 Requirement 8 / §7.1: /api/meta exposes
