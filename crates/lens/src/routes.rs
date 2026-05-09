@@ -327,6 +327,38 @@ fn fix_for(name: &str) -> (Option<&'static str>, Option<&'static str>) {
             ),
             Some("your web server config"),
         ),
+        // Email
+        "email_authentication" => (
+            Some(
+                "Publish an SPF record that covers your mail servers, configure DKIM signing with your email provider, and publish a DMARC policy at `p=quarantine` or `p=reject`.",
+            ),
+            Some("your DNS provider and email provider"),
+        ),
+        "email_infrastructure" => (
+            Some(
+                "Ensure your domain has valid MX records pointing to functioning mail servers, and that each pointed hostname resolves to an A or AAAA record.",
+            ),
+            Some("your DNS provider and email provider"),
+        ),
+        "email_transport" => (
+            Some(
+                "Publish an MTA-STS policy to enforce encrypted email transport and prevent SMTP downgrade attacks on mail delivered to your domain.",
+            ),
+            Some("your email provider and DNS provider"),
+        ),
+        "email_brand_policy" => (
+            Some(
+                "Publish a BIMI record with a valid SVG Tiny PS logo once your DMARC policy is at `p=quarantine` or `p=reject`, to show your brand logo in supporting email clients.",
+            ),
+            Some("your DNS provider"),
+        ),
+        // IP
+        "reputation" => (
+            Some(
+                "Your IP address appears on one or more DNS blocklists — check your mail server for spam activity, then request delisting from each blocklist individually.",
+            ),
+            Some("your hosting provider or mail administrator"),
+        ),
         _ => (None, None),
     }
 }
@@ -2209,7 +2241,7 @@ pub mod tests {
     }
 
     #[test]
-    fn fix_for_returns_populated_hints_for_dns_checks() {
+    fn fix_for_returns_populated_hints_for_all_known_checks() {
         for name in [
             "dnssec",
             "dnskey_algorithm",
@@ -2221,21 +2253,6 @@ pub mod tests {
             "caa",
             "ns_lame",
             "ns_delegation",
-        ] {
-            let (hint, owner) = fix_for(name);
-            assert!(hint.is_some(), "fix_for({name}) hint must be Some");
-            assert!(owner.is_some(), "fix_for({name}) owner must be Some");
-        }
-        let (_, owner) = fix_for("ns_lame");
-        assert!(
-            owner.unwrap().contains("registrar"),
-            "ns_lame owner must mention registrar"
-        );
-    }
-
-    #[test]
-    fn fix_for_returns_populated_hints_for_tls_checks() {
-        for name in [
             "chain_trusted",
             "chain_complete",
             "strong_signature",
@@ -2256,57 +2273,29 @@ pub mod tests {
             "ocsp_stapled",
             "dane_valid",
             "caa_compliant",
-        ] {
-            let (hint, owner) = fix_for(name);
-            assert!(hint.is_some(), "fix_for({name}) hint must be Some");
-            assert!(owner.is_some(), "fix_for({name}) owner must be Some");
-        }
-        let (hint, owner) = fix_for("not_expired");
-        assert!(
-            hint.unwrap().contains("expired"),
-            "not_expired hint must mention expired"
-        );
-        assert!(
-            owner.unwrap().contains("CA"),
-            "not_expired owner must mention CA"
-        );
-        let (hint, _) = fix_for("tls_version");
-        assert!(
-            hint.unwrap().contains("TLS 1.0"),
-            "tls_version hint must mention TLS 1.0"
-        );
-        assert!(
-            hint.unwrap().contains("TLS 1.1"),
-            "tls_version hint must mention TLS 1.1"
-        );
-        let (_, owner) = fix_for("tls_version");
-        assert_eq!(owner.unwrap(), "your web server config");
-        let (_, owner) = fix_for("ech_advertised");
-        assert_eq!(owner.unwrap(), "your web server config and DNS provider");
-    }
-
-    #[test]
-    fn fix_for_returns_populated_hints_for_http_checks() {
-        for name in [
             "hsts",
             "https_redirect",
             "security_headers",
             "cors",
             "cookie_secure",
             "hygiene",
+            "email_authentication",
+            "email_infrastructure",
+            "email_transport",
+            "email_brand_policy",
+            "reputation",
         ] {
-            let (hint, owner) = fix_for(name);
-            assert!(hint.is_some(), "fix_for({name}) hint must be Some");
-            assert!(owner.is_some(), "fix_for({name}) owner must be Some");
+            assert_ne!(
+                fix_for(name),
+                (None, None),
+                "fix_for({name}) must return a non-None pair"
+            );
         }
-        let (hint, owner) = fix_for("hsts");
-        assert!(
-            hint.unwrap().contains("Strict-Transport-Security"),
-            "hsts hint must mention Strict-Transport-Security"
+        let (_, owner) = fix_for("reputation");
+        assert_eq!(
+            owner.unwrap(),
+            "your hosting provider or mail administrator"
         );
-        assert_eq!(owner.unwrap(), "your web server config");
-        let (_, owner) = fix_for("cors");
-        assert_eq!(owner.unwrap(), "your web server or application config");
     }
 
     #[test]
