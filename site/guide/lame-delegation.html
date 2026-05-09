@@ -141,6 +141,14 @@ dig example.com NS</code></pre>
     <p class="tool-entry__hint">Queries NS records from both parent and child zones and flags lame delegations and consistency issues.</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>Lame nameserver</h3>
+    <p>Your nameserver is not authoritative for your zone — update your registrar's nameserver list to match the NS records in your zone, or update your zone's NS records to match your registrar.</p>
+    <h3>Nameserver delegation</h3>
+    <p>The nameservers at your registrar don't match the NS records in your zone — synchronise them to prevent resolution failures.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

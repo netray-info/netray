@@ -144,6 +144,16 @@
     <p class="tool-entry__hint">Validates the DNSSEC chain of trust for your domain, including DS, DNSKEY, and RRSIG records.</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>DNSSEC signing</h3>
+    <p>Enable DNSSEC signing for your domain at your registrar or DNS provider.</p>
+    <h3>DNSSEC algorithm</h3>
+    <p>Upgrade your DNSSEC signing algorithm to ECDSA P-256 (Algorithm 13) or Ed25519 (Algorithm 15) — older algorithms are no longer considered safe.</p>
+    <h3>DNSSEC key rollover</h3>
+    <p>Complete the DNSSEC key rollover: remove the old DNSKEY and ensure only the new key's DS record is published at your registrar.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

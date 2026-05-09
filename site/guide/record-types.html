@@ -184,6 +184,18 @@ example.com.  300  IN  CAA  0 iodef "mailto:security@example.com"</code></pre>
     <p class="tool-entry__hint">Query any record type across multiple resolvers. Supports dig-like syntax: domain [TYPE...] [@server...] [+flag...]</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>CNAME at apex</h3>
+    <p>Remove the CNAME at your apex domain and replace it with A/AAAA records, or use ALIAS/ANAME records if your DNS provider supports them.</p>
+    <h3>HTTPS SVCB record</h3>
+    <p>Add an HTTPS (type 65) record to enable service discovery that speeds up HTTPS connections and advertises HTTP/2, HTTP/3, and ECH support.</p>
+    <h3>Nameserver redundancy</h3>
+    <p>Ensure your domain has at least two authoritative nameservers in separate networks for redundancy.</p>
+    <h3>DNS TTL</h3>
+    <p>Set your DNS TTL to between 300 and 86400 seconds — very low TTLs overload resolvers and very high TTLs slow down propagation of changes.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">
