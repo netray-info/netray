@@ -11,6 +11,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY src src/
 COPY assets/ assets/
 COPY profiles/ profiles/
+COPY migrations/ migrations/
 COPY --from=frontend /build/frontend/dist frontend/dist/
 RUN cargo build --release --bins && cp $(find /build -xdev -name lens) /
 
