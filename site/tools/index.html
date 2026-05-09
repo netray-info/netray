@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Tools — netray.info</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/suite-nav.css" />
   <meta name="description" content="The raw data behind the grade. Five inspectors for DNS, TLS, HTTP headers, email, and IP — each one standalone, each one queryable from browser, curl, or CI. Open source, self-hostable.">
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://netray.info/tools" />
@@ -182,52 +183,8 @@
     main { position: relative; z-index: 1; }
 
     /* ── Suite nav ─────────────────────────────── */
-    .suite-nav {
-      width: 100%;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0;
-      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-      font-size: 0.8rem;
-      flex-wrap: wrap;
-      row-gap: 0.25rem;
-      position: sticky;
-      top: 0;
-      z-index: 50;
-    }
-
-    .suite-nav__brand {
-      color: var(--muted);
-      padding: 0.2rem 0.5rem 0.2rem 0;
-      letter-spacing: -0.01em;
-      white-space: nowrap;
-      min-height: 44px;
-      display: inline-flex;
-      align-items: center;
-    }
-
-    .suite-nav__sep {
-      color: var(--border);
-      padding: 0 0.5rem;
-      user-select: none;
-    }
-
-    .suite-nav__link {
-      color: var(--muted);
-      text-decoration: none;
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
-      white-space: nowrap;
-      min-height: 44px;
-      display: inline-flex;
-      align-items: center;
-      transition: color .15s;
-    }
-
-    .suite-nav__link:hover { color: var(--text); text-decoration: none; }
+    /* tools: sticky nav override (layout only — colors from /suite-nav.css) */
+    .suite-nav { position: sticky; top: 0; z-index: 50; padding-top: 0; padding-bottom: 0; }
 
     /* ── Theme toggle ──────────────────────────── */
     .theme-toggle {

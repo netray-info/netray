@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Compare — netray.info</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/suite-nav.css" />
   <meta name="description" content="How lens compares to hardenize, internet.nl, SSL Labs, observatory.mozilla.org, and per-axis specialists. Honest coverage table with admitted depth gaps.">
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://netray.info/compare" />
@@ -79,54 +80,6 @@
 
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-
-    /* Suite nav */
-    .suite-nav {
-      width: 100%;
-      background: var(--bg-secondary);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 0.5rem 1.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0;
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      flex-wrap: wrap;
-      row-gap: 0.25rem;
-    }
-
-    .suite-nav__brand {
-      color: var(--text-secondary);
-      text-decoration: none;
-      padding: 0.2rem 0.5rem 0.2rem 0;
-      letter-spacing: -0.01em;
-      white-space: nowrap;
-      min-height: 44px;
-      display: inline-flex;
-      align-items: center;
-    }
-
-    .suite-nav__brand:hover { color: var(--text-primary); text-decoration: none; }
-
-    .suite-nav__sep { color: var(--border); padding: 0 0.5rem; user-select: none; }
-
-    .suite-nav__link {
-      color: var(--text-secondary);
-      text-decoration: none;
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
-      white-space: nowrap;
-      transition: color var(--transition);
-      min-height: 44px;
-      display: inline-flex;
-      align-items: center;
-    }
-
-    .suite-nav__link:hover { color: var(--text-primary); text-decoration: none; }
-
-    @media (max-width: 400px) {
-      .suite-nav { padding: 0.4rem 1rem; font-size: 0.75rem; }
-    }
 
     /* Page layout */
     .page-wrapper {
