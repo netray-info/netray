@@ -476,6 +476,7 @@
       renderIncidents(events);
       updateTimestamp();
     } catch (err) {
+      console.error("[status] fetch failed:", err);
       showError();
     }
   }
