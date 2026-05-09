@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-09
+
+### Added
+- Fill `fix_for` remediation copy for all 41 checks (DNS, TLS, HTTP, email, IP) — every non-pass result now surfaces a plain-English fix hint and fix owner (af7694a, fb988be, df216ed, f31968a)
+- Fix broken `guide_url_for()` mappings for `security_headers`, `cors`, `cookie_secure`, `hygiene` — previously pointed to non-existent `/guide/http-security` (df216ed)
+
 ## [0.10.1] - 2026-05-09
 
 ### Fixed
