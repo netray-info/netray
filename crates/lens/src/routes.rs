@@ -165,6 +165,130 @@ fn fix_for(name: &str) -> (Option<&'static str>, Option<&'static str>) {
             ),
             Some("your registrar"),
         ),
+        // TLS — certificate chain
+        "chain_trusted" => (
+            Some(
+                "Your certificate is not trusted by major browsers — ensure you're using a certificate from a public CA and that the full chain including intermediates is configured.",
+            ),
+            Some("your web server config"),
+        ),
+        "chain_complete" => (
+            Some(
+                "Configure your web server to serve the full certificate chain including all intermediate certificates, not just the leaf certificate.",
+            ),
+            Some("your web server config"),
+        ),
+        "strong_signature" => (
+            Some(
+                "Replace your certificate — SHA-1 signatures are no longer trusted by browsers and must be upgraded to SHA-256 or stronger.",
+            ),
+            Some("your CA or certificate provider"),
+        ),
+        "key_strength" => (
+            Some(
+                "Reissue your certificate with at least a 2048-bit RSA key or a 256-bit ECDSA key — shorter keys are no longer accepted by modern clients.",
+            ),
+            Some("your CA or certificate provider"),
+        ),
+        "not_expired" => (
+            Some(
+                "Your certificate has expired — renew it immediately, as browsers will block all access to your site until it is replaced.",
+            ),
+            Some("your CA or certificate provider"),
+        ),
+        "hostname_match" => (
+            Some(
+                "Your certificate's Subject Alternative Names don't cover this hostname — reissue a certificate that includes all domains you serve on this server.",
+            ),
+            Some("your CA or certificate provider"),
+        ),
+        "expiry_window" => (
+            Some(
+                "Your certificate is expiring soon — renew it now to avoid browsers showing a warning or blocking your site.",
+            ),
+            Some("your CA or certificate provider"),
+        ),
+        "cert_lifetime" => (
+            Some(
+                "Reissue your certificate with a lifetime of 397 days or less — longer lifetimes are no longer accepted by major browsers.",
+            ),
+            Some("your CA or certificate provider"),
+        ),
+        "san_quality" => (
+            Some(
+                "Review your certificate's Subject Alternative Names: replace wildcards with specific names where possible and split certificates that cover unrelated domains.",
+            ),
+            Some("your CA or certificate provider"),
+        ),
+        "aia_reachability" => (
+            Some(
+                "The OCSP or issuer URL in your certificate is unreachable — contact your CA, as this may break certificate revocation checking for your visitors.",
+            ),
+            Some("your CA"),
+        ),
+        // TLS — protocol & ciphers
+        "tls_version" => (
+            Some(
+                "Disable TLS 1.0 and TLS 1.1 in your web server — only TLS 1.2 and TLS 1.3 should be enabled.",
+            ),
+            Some("your web server config"),
+        ),
+        "forward_secrecy" => (
+            Some(
+                "Configure your web server to prefer ECDHE or DHE cipher suites, which provide forward secrecy and protect past sessions if your private key is later compromised.",
+            ),
+            Some("your web server config"),
+        ),
+        "aead_cipher" => (
+            Some(
+                "Remove CBC and RC4 cipher suites from your TLS configuration and use only AEAD ciphers such as AES-GCM and ChaCha20-Poly1305.",
+            ),
+            Some("your web server config"),
+        ),
+        // TLS — multi-IP consistency
+        "consistency" => (
+            Some(
+                "Your TLS configuration varies across your server IPs — ensure all servers behind your domain serve identical certificates and cipher suites.",
+            ),
+            Some("your infrastructure team"),
+        ),
+        "alpn_consistency" => (
+            Some(
+                "Your servers advertise different protocols (HTTP/1.1, HTTP/2) on different IPs — align your web server configuration across all instances.",
+            ),
+            Some("your infrastructure team"),
+        ),
+        // TLS — advanced
+        "ech_advertised" => (
+            Some(
+                "Consider enabling Encrypted Client Hello to hide the SNI from network observers — requires an HTTPS DNS record with ECH keys and web server support (nginx 1.27+ or nginx-quic).",
+            ),
+            Some("your web server config and DNS provider"),
+        ),
+        "ct_logged" => (
+            Some(
+                "Obtain a new certificate from a CA that submits to Certificate Transparency logs — all publicly-trusted CAs are required to do so.",
+            ),
+            Some("your CA or certificate provider"),
+        ),
+        "ocsp_stapled" => (
+            Some(
+                "Enable OCSP stapling in your web server so browsers don't need to make a live round-trip to your CA on every TLS handshake.",
+            ),
+            Some("your web server config"),
+        ),
+        "dane_valid" => (
+            Some(
+                "Update your DANE TLSA record to match your current certificate or key — TLSA records must be updated every time a certificate rotates.",
+            ),
+            Some("your DNS provider"),
+        ),
+        "caa_compliant" => (
+            Some(
+                "Either add the issuing CA to your CAA records, or reissue your certificate from a CA already listed in your CAA records.",
+            ),
+            Some("your DNS provider or CA"),
+        ),
         _ => (None, None),
     }
 }
@@ -2069,6 +2193,58 @@ pub mod tests {
             owner.unwrap().contains("registrar"),
             "ns_lame owner must mention registrar"
         );
+    }
+
+    #[test]
+    fn fix_for_returns_populated_hints_for_tls_checks() {
+        for name in [
+            "chain_trusted",
+            "chain_complete",
+            "strong_signature",
+            "key_strength",
+            "not_expired",
+            "hostname_match",
+            "expiry_window",
+            "cert_lifetime",
+            "san_quality",
+            "aia_reachability",
+            "tls_version",
+            "forward_secrecy",
+            "aead_cipher",
+            "consistency",
+            "alpn_consistency",
+            "ech_advertised",
+            "ct_logged",
+            "ocsp_stapled",
+            "dane_valid",
+            "caa_compliant",
+        ] {
+            let (hint, owner) = fix_for(name);
+            assert!(hint.is_some(), "fix_for({name}) hint must be Some");
+            assert!(owner.is_some(), "fix_for({name}) owner must be Some");
+        }
+        let (hint, owner) = fix_for("not_expired");
+        assert!(
+            hint.unwrap().contains("expired"),
+            "not_expired hint must mention expired"
+        );
+        assert!(
+            owner.unwrap().contains("CA"),
+            "not_expired owner must mention CA"
+        );
+        let (hint, _) = fix_for("tls_version");
+        assert!(
+            hint.unwrap().contains("TLS 1.0"),
+            "tls_version hint must mention TLS 1.0"
+        );
+        assert!(
+            hint.unwrap().contains("TLS 1.1"),
+            "tls_version hint must mention TLS 1.1"
+        );
+        let (_, owner) = fix_for("tls_version");
+        assert_eq!(owner.unwrap(), "your web server config");
+        let (_, owner) = fix_for("ech_advertised");
+        assert_eq!(owner.unwrap(), "your web server config and DNS provider");
     }
 
     // --- SDD product-repositioning §3 Requirement 8 / §7.1: /api/meta exposes
