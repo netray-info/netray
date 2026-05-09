@@ -137,6 +137,24 @@ cat leaf.pem intermediate.pem > fullchain.pem</code></pre>
     <p class="tool-entry__hint">Performs a full TLS handshake and analyzes the certificate chain, expiry, algorithms, OCSP, and CT.</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>Trusted certificate chain</h3>
+    <p>Your certificate is not trusted by major browsers — ensure you're using a certificate from a public CA and that the full chain including intermediates is configured.</p>
+    <h3>Complete certificate chain</h3>
+    <p>Configure your web server to serve the full certificate chain including all intermediate certificates, not just the leaf certificate.</p>
+    <h3>Signature algorithm</h3>
+    <p>Replace your certificate — SHA-1 signatures are no longer trusted by browsers and must be upgraded to SHA-256 or stronger.</p>
+    <h3>Key strength</h3>
+    <p>Reissue your certificate with at least a 2048-bit RSA key or a 256-bit ECDSA key — shorter keys are no longer accepted by modern clients.</p>
+    <h3>Certificate expiry</h3>
+    <p>Your certificate has expired — renew it immediately, as browsers will block all access to your site until it is replaced.</p>
+    <h3>Hostname match</h3>
+    <p>Your certificate's Subject Alternative Names don't cover this hostname — reissue a certificate that includes all domains you serve on this server.</p>
+    <h3>OCSP stapling</h3>
+    <p>Enable OCSP stapling in your web server so browsers don't need to make a live round-trip to your CA on every TLS handshake.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

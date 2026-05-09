@@ -191,6 +191,14 @@ openssl x509 -in cert.pem -noout -pubkey \
     </form>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>DANE TLSA</h3>
+    <p>Update your DANE TLSA record to match your current certificate or key — TLSA records must be updated every time a certificate rotates.</p>
+    <h3>CAA compliance</h3>
+    <p>Either add the issuing CA to your CAA records, or reissue your certificate from a CA already listed in your CAA records.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

@@ -167,6 +167,18 @@ openssl s_client -connect example.com:443 -showcerts 2>/dev/null | \
     <p class="tool-entry__hint">Checks certificate expiry window, lifetime compliance, SAN list, AIA reachability, and chain completeness.</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>Expiry window</h3>
+    <p>Your certificate is expiring soon — renew it now to avoid browsers showing a warning or blocking your site.</p>
+    <h3>Certificate lifetime</h3>
+    <p>Reissue your certificate with a lifetime of 397 days or less — longer lifetimes are no longer accepted by major browsers.</p>
+    <h3>SAN quality</h3>
+    <p>Review your certificate's Subject Alternative Names: replace wildcards with specific names where possible and split certificates that cover unrelated domains.</p>
+    <h3>AIA reachability</h3>
+    <p>The OCSP or issuer URL in your certificate is unreachable — contact your CA, as this may break certificate revocation checking for your visitors.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

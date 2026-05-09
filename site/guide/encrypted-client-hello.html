@@ -176,6 +176,11 @@ dig example.com HTTPS +short
     <p class="tool-entry__hint">Query the HTTPS DNS record to see if ECH is advertised and inspect the ECHConfig parameters.</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <p>Consider enabling Encrypted Client Hello to hide the SNI from network observers — requires an HTTPS DNS record with ECH keys and web server support (nginx 1.27+ or nginx-quic).</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

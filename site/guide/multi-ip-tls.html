@@ -134,6 +134,14 @@
     <p class="tool-entry__hint">Inspects TLS configuration across all resolved IPs and flags inconsistencies in certificates, protocol versions, and ALPN.</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>TLS consistency</h3>
+    <p>Your TLS configuration varies across your server IPs — ensure all servers behind your domain serve identical certificates and cipher suites.</p>
+    <h3>ALPN consistency</h3>
+    <p>Your servers advertise different protocols (HTTP/1.1, HTTP/2) on different IPs — align your web server configuration across all instances.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">

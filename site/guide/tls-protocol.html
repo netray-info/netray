@@ -186,6 +186,16 @@ ssl_prefer_server_ciphers on;</code></pre>
     <p class="tool-entry__hint">Performs a TLS handshake and reports the negotiated protocol version, cipher suite, forward secrecy status, and AEAD compliance.</p>
   </section>
 
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>TLS version</h3>
+    <p>Disable TLS 1.0 and TLS 1.1 in your web server — only TLS 1.2 and TLS 1.3 should be enabled.</p>
+    <h3>Forward secrecy</h3>
+    <p>Configure your web server to prefer ECDHE or DHE cipher suites, which provide forward secrecy and protect past sessions if your private key is later compromised.</p>
+    <h3>AEAD cipher</h3>
+    <p>Remove CBC and RC4 cipher suites from your TLS configuration and use only AEAD ciphers such as AES-GCM and ChaCha20-Poly1305.</p>
+  </section>
+
   <footer class="page-footer">
     <h2 class="page-footer__heading">Related guides</h2>
     <ul class="page-footer__links">
