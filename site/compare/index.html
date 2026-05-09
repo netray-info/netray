@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Compare — netray.info</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/guide/style.css">
   <meta name="description" content="How lens compares to hardenize, internet.nl, SSL Labs, observatory.mozilla.org, and per-axis specialists. Honest coverage table with admitted depth gaps.">
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://netray.info/compare" />
@@ -19,309 +20,203 @@
   <meta name="twitter:description" content="How lens compares to hardenize, internet.nl, SSL Labs, observatory.mozilla.org, and per-axis specialists. Honest coverage table with admitted depth gaps." />
   <meta name="twitter:image" content="https://netray.info/og/landing.png" />
   <meta name="twitter:image:alt" content="netray.info — unified domain health checker" />
-  <meta name="theme-color" content="#07090f" media="(prefers-color-scheme: dark)" />
-  <meta name="theme-color" content="#f6f8fb" media="(prefers-color-scheme: light)" />
 
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    /* ── Light theme (default) ─────────────────── */
-    :root {
-      color-scheme: light;
-      --bg:       #f6f8fb;
-      --surface:  #ffffff;
-      --surface2: #eef1f6;
-      --border:   #dde3ed;
-      --text:     #0d1521;
-      --muted:    #6b7c93;
-    }
-
-    /* ── Dark theme ────────────────────────────── */
-    @media (prefers-color-scheme: dark) {
-      :root {
-        color-scheme: dark;
-        --bg:       #07090f;
-        --surface:  #0d1220;
-        --surface2: #111827;
-        --border:   #1a2438;
-        --text:     #dce6f5;
-        --muted:    #4d6480;
-      }
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    a { color: inherit; }
-    a:hover { text-decoration: underline; }
-
-    /* ── Suite nav ─────────────────────────────── */
-    .suite-nav {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.25rem 0.5rem;
-      padding: 0.75rem 1.25rem;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      font-size: 0.875rem;
-    }
-
-    .suite-nav__brand {
-      font-weight: 600;
-      text-decoration: none;
-      color: var(--text);
-    }
-
-    .suite-nav__sep {
-      color: var(--border);
-      user-select: none;
-    }
-
-    .suite-nav__link {
-      text-decoration: none;
-      color: var(--muted);
-    }
-
-    .suite-nav__link:hover {
-      color: var(--text);
-      text-decoration: none;
-    }
-
-    /* ── Page layout ───────────────────────────── */
-    main {
-      flex: 1;
-      width: 100%;
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 2rem 1.25rem 3rem;
-    }
-
-    h1 {
-      font-size: clamp(1.5rem, 4vw, 2.25rem);
-      font-weight: 700;
-      margin-bottom: 0.75rem;
-      line-height: 1.2;
-    }
-
-    h2 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin: 2.5rem 0 0.75rem;
-    }
-
-    h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin: 2rem 0 0.5rem;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    p { margin-bottom: 1rem; }
-
-    .intro { max-width: 68ch; margin-bottom: 2rem; }
-    .intro p { color: var(--muted); }
-
-    /* ── Legend ────────────────────────────────── */
+    /* ── Legend ──────────────────────────────────────────── */
     .legend {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.5rem 1.5rem;
-      font-size: 0.8125rem;
-      color: var(--muted);
-      margin-bottom: 1rem;
+      gap: 0.4rem 1.5rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 0.875rem;
       padding: 0.5rem 0.75rem;
-      background: var(--surface2);
-      border-radius: 6px;
-      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      border-radius: var(--radius);
+      border: 1px solid var(--border-subtle);
     }
 
     .legend span { white-space: nowrap; }
 
-    /* ── Tables ────────────────────────────────── */
+    /* ── Comparison table ────────────────────────────────── */
     .table-wrap {
       width: 100%;
       overflow-x: auto;
-      margin-bottom: 2rem;
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      -webkit-overflow-scrolling: touch;
+      margin-bottom: 1.5rem;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius);
     }
 
-    table {
+    .ctable {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.875rem;
       min-width: 480px;
     }
 
-    thead th {
-      background: var(--surface2);
-      padding: 0.6rem 0.75rem;
+    .ctable thead th {
+      background: var(--bg-tertiary);
+      padding: 0.5rem 0.75rem;
       text-align: left;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
       font-weight: 600;
-      border-bottom: 1px solid var(--border);
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border-subtle);
       white-space: nowrap;
     }
 
-    thead th:not(:first-child) {
+    .ctable thead th:not(:first-child) {
       text-align: center;
     }
 
-    tbody tr {
-      border-bottom: 1px solid var(--border);
+    .ctable tbody tr {
+      border-bottom: 1px solid var(--border-subtle);
     }
 
-    tbody tr:last-child {
+    .ctable tbody tr:last-child {
       border-bottom: none;
     }
 
-    tbody tr:hover {
-      background: var(--surface2);
+    .ctable tbody tr:hover {
+      background: var(--bg-tertiary);
     }
 
-    tbody th {
+    .ctable tbody th {
       padding: 0;
       font-weight: 500;
       vertical-align: top;
       text-align: left;
+      color: var(--text-primary);
     }
 
-    tbody td {
-      padding: 0.6rem 0.75rem;
+    .ctable tbody td {
+      padding: 0.5rem 0.75rem;
       text-align: center;
       vertical-align: top;
-      color: var(--text);
+      color: var(--text-primary);
     }
 
-    /* ── details / summary for row expansion ──── */
-    tbody th details {
-      padding: 0;
-    }
+    /* ── details / summary ───────────────────────────────── */
+    .ctable tbody th details { padding: 0; }
 
-    tbody th summary {
-      padding: 0.6rem 0.75rem;
+    .ctable tbody th summary {
+      padding: 0.5rem 0.75rem;
       cursor: pointer;
       list-style: none;
       display: flex;
       align-items: center;
       gap: 0.4rem;
       user-select: none;
+      font-family: var(--font-sans);
     }
 
-    tbody th summary::-webkit-details-marker { display: none; }
+    .ctable tbody th summary::-webkit-details-marker { display: none; }
 
-    tbody th summary::before {
+    .ctable tbody th summary::before {
       content: "▶";
-      font-size: 0.6rem;
-      color: var(--muted);
-      transition: transform 0.15s;
+      font-size: 0.55rem;
+      color: var(--text-muted);
+      transition: transform var(--transition);
       flex-shrink: 0;
     }
 
-    tbody th details[open] > summary::before {
+    .ctable tbody th details[open] > summary::before {
       transform: rotate(90deg);
     }
 
     .row-detail {
-      padding: 0.4rem 0.75rem 0.75rem 1.75rem;
+      padding: 0.35rem 0.75rem 0.75rem 1.5rem;
       font-size: 0.8125rem;
-      color: var(--muted);
-      line-height: 1.5;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      background: var(--bg-secondary);
     }
 
-    /* ── Axis section (Table 2) ────────────────── */
-    .axis-section {
-      margin-bottom: 2.5rem;
+    .row-detail strong { color: var(--text-primary); }
+
+    /* ── Axis sections (Table 2) ─────────────────────────── */
+    .axis-section { margin-bottom: 2rem; }
+
+    .axis-section h3 {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent);
+      margin: 1.75rem 0 0.5rem;
     }
 
-    /* ── Symbols ───────────────────────────────── */
-    .sym-yes  { color: #16a34a; font-weight: 600; }
-    .sym-part { color: #b45309; font-weight: 600; }
-    .sym-no   { color: #b91c1c; font-weight: 600; }
-    .sym-oos  { color: var(--muted); }
+    /* ── Symbols ─────────────────────────────────────────── */
+    .sym-yes  { color: var(--success); font-weight: 700; }
+    .sym-part { color: var(--warning); font-weight: 700; }
+    .sym-no   { color: var(--error);   font-weight: 700; }
+    .sym-oos  { color: var(--text-muted); }
 
-    @media (prefers-color-scheme: dark) {
-      .sym-yes  { color: #22c55e; }
-      .sym-part { color: #d97706; }
-      .sym-no   { color: #f87171; }
-    }
-
-    /* ── CTA ───────────────────────────────────── */
-    .cta {
-      margin: 3rem 0 1.5rem;
-      padding: 1.25rem 1.5rem;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      text-align: center;
-      font-size: 1.0625rem;
-    }
-
-    .cta a { font-weight: 600; }
-
-    /* ── Honesty section ───────────────────────── */
-    .honesty-section {
-      margin: 2.5rem 0;
-    }
-
+    /* ── Honesty section ─────────────────────────────────── */
+    .honesty-section { margin: 2.5rem 0; }
     .honesty-section p {
-      margin-bottom: 0.75rem;
-      color: var(--muted);
+      color: var(--text-secondary);
+      margin-bottom: 0.875rem;
       max-width: 68ch;
     }
+    .honesty-section p strong { color: var(--text-primary); }
 
-    /* ── Footer ────────────────────────────────── */
-    footer {
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      padding: 1.5rem 1.25rem;
-      font-size: 0.8125rem;
-      color: var(--muted);
+    /* ── CTA ─────────────────────────────────────────────── */
+    .cta {
+      margin: 2.5rem 0 1.5rem;
+      padding: 1.25rem 1.5rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      text-align: center;
+      font-size: 1.0625rem;
+      color: var(--text-primary);
     }
 
-    .footer-inner {
-      max-width: 960px;
-      margin: 0 auto;
-    }
+    .cta a { color: var(--accent); font-weight: 600; text-decoration: none; }
+    .cta a:hover { text-decoration: underline; }
 
+    /* ── Compare page footer extras ─────────────────────── */
     .footer-meta {
-      margin-bottom: 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
     }
 
-    .footer-methodology h2 {
+    .footer-methodology {
+      max-width: 68ch;
+      color: var(--text-secondary);
       font-size: 0.875rem;
-      font-weight: 600;
-      margin: 0 0 0.4rem;
-      color: var(--text);
+      margin-bottom: 1.5rem;
     }
 
-    .footer-methodology p {
-      margin: 0;
-      line-height: 1.6;
+    .footer-methodology p { margin-bottom: 0; }
+
+    .footer-methodology code {
+      font-family: var(--font-mono);
+      font-size: 0.85em;
+      background: var(--bg-tertiary);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      color: var(--accent);
     }
 
-    /* ── Mobile ────────────────────────────────── */
-    @media (max-width: 480px) {
-      main { padding: 1.25rem 1rem 2rem; }
-      .table-wrap { border-radius: 4px; }
-      h1 { font-size: 1.4rem; }
-      h2 { font-size: 1.1rem; }
+    @media (max-width: 600px) {
+      .ctable { min-width: 360px; }
     }
   </style>
 </head>
 <body>
 
 <header>
-  <nav class="suite-nav" aria-label="Suite navigation">
+  <nav class="suite-nav" aria-label="netray.info suite">
     <a class="suite-nav__brand" href="https://netray.info">netray.info</a>
     <span class="suite-nav__sep" aria-hidden="true">|</span>
     <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
@@ -338,17 +233,15 @@
   </nav>
 </header>
 
-<main>
-  <div class="intro">
-    <h1>Compare</h1>
-    <p>
-      <a href="https://netray.info/">lens</a> is a unified domain health checker — one URL, five axes, one grade.
-      This page helps you decide which tool fits your needs: lens for breadth, or a specialist for depth.
-      The depth gaps are admitted, not papered over.
-    </p>
-  </div>
+<main class="page-wrapper">
+  <h1 class="page-title">Compare</h1>
+  <p class="page-subtitle">
+    <a href="https://netray.info/">lens</a> is a unified domain health checker — one URL, five axes, one grade.
+    This page helps you decide which tool fits your needs: lens for breadth, or a specialist for depth.
+    The depth gaps are admitted, not papered over.
+  </p>
 
-  <!-- ── Table 1: Unified domain checkers ──────────── -->
+  <!-- ── Table 1: Unified domain checkers ──────────────── -->
   <section aria-labelledby="table1-heading">
     <h2 id="table1-heading">Table 1 — Unified domain checkers</h2>
     <p>Tools in this group each aim to give you a broad domain health picture from a single query.</p>
@@ -361,7 +254,7 @@
     </div>
 
     <div class="table-wrap">
-      <table>
+      <table class="ctable">
         <thead>
           <tr>
             <th scope="col">Feature</th>
@@ -496,7 +389,7 @@
     </div>
   </section>
 
-  <!-- ── Table 2: Per-axis specialists ─────────────── -->
+  <!-- ── Table 2: Per-axis specialists ─────────────────── -->
   <section aria-labelledby="table2-heading">
     <h2 id="table2-heading">Table 2 — Per-axis specialists</h2>
     <p>When you need deep analysis on a single axis, these tools go further than any unified checker.</p>
@@ -512,7 +405,7 @@
     <div class="axis-section">
       <h3>DNS</h3>
       <div class="table-wrap">
-        <table>
+        <table class="ctable">
           <thead>
             <tr>
               <th scope="col">Check</th>
@@ -685,7 +578,7 @@
     <div class="axis-section">
       <h3>TLS</h3>
       <div class="table-wrap">
-        <table>
+        <table class="ctable">
           <thead>
             <tr>
               <th scope="col">Check</th>
@@ -809,7 +702,7 @@
     <div class="axis-section">
       <h3>HTTP</h3>
       <div class="table-wrap">
-        <table>
+        <table class="ctable">
           <thead>
             <tr>
               <th scope="col">Check</th>
@@ -918,7 +811,7 @@
     <div class="axis-section">
       <h3>Email</h3>
       <div class="table-wrap">
-        <table>
+        <table class="ctable">
           <thead>
             <tr>
               <th scope="col">Check</th>
@@ -1057,7 +950,7 @@
     <div class="axis-section">
       <h3>IP</h3>
       <div class="table-wrap">
-        <table>
+        <table class="ctable">
           <thead>
             <tr>
               <th scope="col">Check</th>
@@ -1148,7 +1041,7 @@
     </div>
   </section>
 
-  <!-- ── Honesty narrative ──────────────────────────── -->
+  <!-- ── Honesty narrative ──────────────────────────────── -->
   <section class="honesty-section" aria-labelledby="honesty-heading">
     <h2 id="honesty-heading">Where lens trades depth for breadth</h2>
     <p>
@@ -1170,28 +1063,37 @@
     </p>
   </section>
 
-  <!-- ── CTA ───────────────────────────────────────── -->
+  <!-- ── CTA ────────────────────────────────────────────── -->
   <section aria-label="Call to action">
     <div class="cta">
       Skeptical? Check your own domain at <a href="https://netray.info/">netray.info</a>.
     </div>
   </section>
-</main>
 
-<footer>
-  <div class="footer-inner">
-    <p class="footer-meta">Last reviewed: 2026-05-09</p>
+  <!-- ── Page footer ────────────────────────────────────── -->
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">How we compiled this</h2>
     <div class="footer-methodology">
-      <h2>How we compiled this</h2>
+      <p class="footer-meta">Last reviewed: 2026-05-09</p>
       <p>
         Feature claims about each tool were verified against vendor documentation and hands-on checks
         using <code>example.com</code> as the test domain. Where documentation was ambiguous, the tool
-        was queried directly and results were observed. This page is reviewed quarterly; the "Last reviewed"
-        date above reflects the most recent verification pass.
+        was queried directly and results were observed. This page is reviewed quarterly; the date above
+        reflects the most recent verification pass.
       </p>
     </div>
-  </div>
-</footer>
+    <p class="page-footer__suite">
+      <a href="https://netray.info">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="https://netray.info/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a>
+    </p>
+  </footer>
+</main>
 
 </body>
 </html>
