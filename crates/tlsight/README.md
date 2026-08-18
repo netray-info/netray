@@ -268,11 +268,12 @@ Override any value with `TLSIGHT_` env vars (`__` for nested sections): `TLSIGHT
 ### Build targets
 
 ```sh
-make          # frontend + release binary
-make dev      # cargo run with tlsight.dev.toml (port 8081)
-make test     # all tests
-make ci       # full gate: fmt, clippy, test, frontend, audit
-make data     # refresh CAA issuer lookup table (data/caa_domains.tsv)
+just build         # frontend + release binary
+just dev           # cargo run with tlsight.dev.toml (port 8081)
+just test          # all tests
+just check         # full gate: fmt, clippy, test, frontend build
+just adlc-verify   # the fast, offline subset the ADLC runs before a push
+just data          # refresh CAA issuer lookup table (data/caa_domains.tsv)
 ```
 
 ---

@@ -27,38 +27,40 @@ See `HostInput.tsx` for the reference input pattern implementation.
 ```sh
 # Prerequisites: Node.js (for frontend), Rust toolchain
 
-make help                             # list all targets with descriptions
+just --list                           # list all recipes with descriptions
+
+# The gate (pdt-adlc ADR 0008) — offline, run it before every commit
+just adlc-verify                      # fmt-check + clippy + cargo test
 
 # Full production build (frontend + backend)
-make                                  # or: make all
-make run                              # build + run release binary
+just build
+just run                              # build + run release binary
 
 # Rust
-make check                            # cargo check (fast compile check)
-make test-rust                        # cargo test
-make clippy                           # cargo clippy -- -D warnings
-make fmt                              # cargo fmt
-make fmt-check                        # cargo fmt -- --check
+just test-rust                        # cargo test
+just clippy                           # cargo clippy -- -D warnings
+just fmt                              # cargo fmt
+just fmt-check                        # cargo fmt -- --check
 
 # Frontend
-make frontend-install                 # npm ci (deps only, no build)
-make frontend                         # npm ci + npm run build
-make frontend-test                    # npm ci + vitest run
+just frontend-install                 # npm ci (deps only, no build)
+just frontend                         # npm ci + npm run build
+just frontend-test                    # npm ci + vitest run
 
 # Combined
-make test                             # test-rust + test-frontend
-make lint                             # clippy + fmt-check
-make ci                               # lint + test + frontend (run before pushing)
+just test                             # test-rust + frontend-test
+just lint                             # clippy + fmt-check
+just check                            # lint + test + frontend (everything)
 
 # Development (two terminals)
-make frontend-dev                     # Vite dev server :5174 (proxies /api/* to :8081)
-make dev                              # cargo run with tlsight.dev.toml
+just frontend-dev                     # Vite dev server :5174 (proxies /api/* to :8081)
+just dev                              # cargo run with tlsight.dev.toml
 
 # CA/CAA data (refreshes data/caa_domains.tsv — commit the result)
-make data                             # fetch SSLMate + CCADB sources and regenerate TSV
+just data                             # fetch SSLMate + CCADB sources and regenerate TSV
 
 # Cleanup
-make clean                            # remove target/ + frontend/dist/ + node_modules/
+just clean                            # remove target/ + frontend/dist/ + node_modules/
 ```
 
 ### Test Guidelines
