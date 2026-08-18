@@ -23,23 +23,25 @@ Use `make` targets for all build and test operations.
 ```sh
 # Prerequisites: Node.js (for frontend), Rust toolchain
 
-# Full production build (frontend + backend)
-make                                  # or: make all
+# The gate (pdt-adlc ADR 0008) — offline, run it before every commit
+just adlc-verify                      # fmt-check + clippy + cargo test
 
-# Individual targets
-make check                            # cargo check (fast compile check)
-make test                             # cargo test
-make clippy                           # cargo clippy -- -D warnings
-make fmt                              # cargo fmt
-make fmt-check                        # cargo fmt -- --check
-make lint                             # clippy + fmt-check
-make frontend                         # cd frontend && npm ci && npm run build
-make clean                            # remove target/ + frontend/dist/ + node_modules/
-make ci                               # lint + test + frontend (CI pipeline; also use before pushing)
+# Full production build (frontend + backend)
+just build
+
+# Individual recipes
+just test-rust                        # cargo test
+just clippy                           # cargo clippy -- -D warnings
+just fmt                              # cargo fmt
+just fmt-check                        # cargo fmt -- --check
+just lint                             # clippy + fmt-check
+just frontend                         # cd frontend && npm ci && npm run build
+just clean                            # remove target/ + frontend/dist/ + node_modules/
+just check                            # lint + test + frontend (everything)
 
 # Development (two terminals)
-make frontend-dev                     # Vite dev server :5173 (proxies /api/* to :8080)
-make dev                              # cargo run (axum server :8080)
+just frontend-dev                     # Vite dev server :5173 (proxies /api/* to :8080)
+just dev                              # cargo run (axum server :8080)
 ```
 
 ### Test Guidelines

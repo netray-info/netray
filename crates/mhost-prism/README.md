@@ -284,10 +284,11 @@ Override any value with `PRISM_` env vars (`__` for nested sections): `PRISM_SER
 ### Build targets
 
 ```sh
-make          # frontend + release binary
-make dev      # cargo run (port 8080)
-make test     # all tests
-make ci       # full gate: fmt, clippy, test, frontend, audit
+just build         # frontend + release binary
+just dev           # cargo run (port 8080)
+just test          # all tests
+just check         # full gate: fmt, clippy, test, frontend build
+just adlc-verify   # the fast, offline subset the ADLC runs before a push
 ```
 
 ---
