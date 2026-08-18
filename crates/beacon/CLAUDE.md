@@ -34,14 +34,20 @@ TOML file `beacon.toml` + env overrides with `BEACON_` prefix (`__` for nesting)
 
 ## Development
 
+Everything runs through `just` (pdt-adlc ADR 0008; `make` until 2026-08-18).
+
 ```sh
-cargo check                          # fast compile check
-cargo test                           # run all tests
-cargo clippy -- -D warnings          # lint
-cd frontend && npm install           # install frontend deps (needs NODE_AUTH_TOKEN)
-cd frontend && npm run dev           # Vite dev server on :5176
-cd frontend && npm run build         # production build into dist/
+just adlc-verify                     # the gate: fmt-check + clippy + cargo test, offline
+just test-rust                       # cargo test
+just lint                            # clippy + fmt-check
+just check                           # everything, including the frontend build
+just frontend-install                # npm ci (needs NODE_AUTH_TOKEN)
+just frontend-dev                    # Vite dev server on :5176
+just frontend                        # production build into frontend/dist/
 ```
+
+The Rust build embeds `frontend/dist` via RustEmbed and does not compile without
+it; `dist` is gitignored, so `just frontend` has to run once after a clone.
 
 ## Specs
 

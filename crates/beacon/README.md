@@ -68,9 +68,10 @@ Common tasks are exposed via the Makefile:
 
 ```sh
 make           # default build (cargo + frontend)
-make test      # run Rust and frontend tests
-make dev       # run backend + frontend with dev configs
-make pre-push  # full lint + test gate run before pushing
+just test          # run Rust and frontend tests
+just dev           # run backend + frontend with dev configs
+just adlc-verify   # the offline gate: fmt-check + clippy + cargo test
+just check         # everything: lint + test + frontend build
 ```
 
 ## Architecture
