@@ -42,7 +42,7 @@ cp spectra.example.toml spectra.dev.toml   # create local config (gitignored)
 ### Running locally
 
 ```sh
-make run                                     # starts the service (reads spectra.dev.toml or falls back to defaults)
+just run                                     # starts the service (reads spectra.dev.toml or falls back to defaults)
 SPECTRA_CONFIG=my.toml cargo run             # use a custom config file path
 ```
 

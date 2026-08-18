@@ -113,16 +113,16 @@ Prerequisites: Rust toolchain, Node.js (for the frontend).
 make
 
 # Build release binary + run it (reads spectra.dev.toml)
-make run
+just run
 
 # Development (two terminals)
-make frontend-dev   # Vite dev server on :5175, proxies /api/* to :3000
-make dev            # cargo run (debug build, reads spectra.dev.toml)
+just frontend-dev   # Vite dev server on :5175, proxies /api/* to :3000
+just dev            # cargo run (debug build, reads spectra.dev.toml)
 
 # Tests and lints
-make test           # Rust tests
-make lint           # clippy + fmt check
-make ci             # Full CI: lint + test + frontend build
+just test           # Rust tests
+just lint           # clippy + fmt check
+just check             # Full CI: lint + test + frontend build
 ```
 
 The release binary embeds the compiled frontend. No separate static file hosting required.
