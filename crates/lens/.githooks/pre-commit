@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fast local gate: only checks what would otherwise fail CI's fmt job.
-# Install once with `make hooks`. Bypass with `git commit --no-verify`.
+# Install once with `just hooks`. Bypass with `git commit --no-verify`.
 set -euo pipefail
 
 # Only check Rust files actually staged for this commit.

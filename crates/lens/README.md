@@ -461,13 +461,14 @@ Prerequisites: Rust toolchain, Node.js (for the frontend).
 
 ```sh
 make          # frontend + release binary
-make dev      # cargo run (hot-reloads nothing, but starts quickly)
-make test     # Rust unit + integration tests + frontend tests
-make ci       # full gate: fmt, clippy, test, frontend build, audit
+just adlc-verify   # the ADLC gate: fmt-check + clippy + cargo test (offline)
+just dev      # cargo run (hot-reloads nothing, but starts quickly)
+just test     # Rust unit + integration tests + frontend tests
+just check    # full gate: fmt, clippy, deny, test, frontend build
 
 # Two-terminal dev workflow
-make frontend-dev   # Vite dev server on :5174 (proxies /api/* to :8082)
-make dev            # cargo run on :8082
+just frontend-dev   # Vite dev server on :5174 (proxies /api/* to :8082)
+just dev            # cargo run on :8082
 ```
 
 The release binary embeds the compiled frontend — no separate static file hosting required.

@@ -6,7 +6,7 @@ use rust_embed::RustEmbed;
 use crate::config::SiteConfig;
 use crate::state::AppState;
 
-/// Embedded Vite build output (`frontend/dist`). Populated by `make frontend`
+/// Embedded Vite build output (`frontend/dist`). Populated by `just frontend`
 /// or the Docker build; empty in test builds (only `.gitkeep` is checked in).
 #[derive(RustEmbed)]
 #[folder = "frontend/dist"]

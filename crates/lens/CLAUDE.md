@@ -110,9 +110,10 @@ Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, audit), `release.yml`
 
 ```sh
 make          # frontend + release binary
-make dev      # cargo run (dev mode)
-make test     # Rust + frontend tests
-make ci       # lint + test + frontend
+just adlc-verify   # the ADLC gate: fmt-check + clippy + cargo test (offline)
+just dev           # cargo run (dev mode)
+just test          # Rust + frontend tests
+just check         # lint + deny + test + frontend
 ```
 
 Live reference domain tests are gated behind `#[ignore]` and `LENS_LIVE_TESTS=1`.
