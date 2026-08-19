@@ -144,6 +144,11 @@ mod tests {
 
     #[test]
     fn cors_layer_builds_without_panic() {
-        let _ = cors_layer();
+        // The contract is "this does not panic"; the assertion makes that
+        // visible to a reader and to the assertion lint, which cannot tell a
+        // test that checks nothing from one whose check is the absence of a
+        // panic.
+        let built = std::panic::catch_unwind(cors_layer);
+        assert!(built.is_ok(), "cors_layer panicked");
     }
 }

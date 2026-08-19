@@ -236,7 +236,8 @@ mod tests {
         ensure_crypto_provider();
         let config = default_config();
         let state = AppState::new(&config);
-        let _cloned = state.clone();
+        let cloned = state.clone();
+        assert!(Arc::ptr_eq(&state.trust_store, &cloned.trust_store));
     }
 
     #[test]
