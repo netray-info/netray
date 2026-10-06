@@ -1,6 +1,7 @@
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default = "default_server")]
     pub server: ServerConfig,
@@ -16,13 +17,14 @@ pub struct Config {
     pub dkim: DkimConfig,
     #[serde(default)]
     pub telemetry: TelemetryConfig,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_ecosystem")]
     pub ecosystem: EcosystemConfig,
     #[serde(default)]
     pub backends: BackendsConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ServerConfig {
     #[serde(default = "default_bind")]
     pub bind: String,
@@ -35,6 +37,7 @@ pub struct ServerConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DnsConfig {
     #[serde(default = "default_resolvers")]
     pub resolvers: Vec<String>,
@@ -43,6 +46,7 @@ pub struct DnsConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DnsblConfig {
     #[serde(default = "default_dnsbl_zones")]
     pub zones: Vec<String>,
@@ -56,24 +60,28 @@ pub struct DnsblConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HttpConfig {
     #[serde(default = "default_http_timeout")]
     pub timeout_ms: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RateLimitConfig {
     #[serde(default = "default_per_ip")]
     pub per_ip: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DkimConfig {
     #[serde(default = "default_max_user_selectors")]
     pub max_user_selectors: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TelemetryConfig {
     #[serde(default = "default_log_format")]
     pub log_format: String,
@@ -86,7 +94,38 @@ pub struct TelemetryConfig {
 
 pub use netray_common::ecosystem::EcosystemConfig;
 
+/// Strict mirror of [`EcosystemConfig`]: the upstream struct lives in
+/// netray-common and accepts unknown keys, so `[ecosystem]` is parsed through
+/// this type to reject typos like the other sections do. The exhaustive
+/// struct literal below stops compiling if upstream adds a field.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StrictEcosystemConfig {
+    ip_base_url: Option<String>,
+    dns_base_url: Option<String>,
+    tls_base_url: Option<String>,
+    http_base_url: Option<String>,
+    email_base_url: Option<String>,
+    lens_base_url: Option<String>,
+}
+
+fn deserialize_ecosystem<'de, D>(deserializer: D) -> Result<EcosystemConfig, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s = StrictEcosystemConfig::deserialize(deserializer)?;
+    Ok(EcosystemConfig {
+        ip_base_url: s.ip_base_url,
+        dns_base_url: s.dns_base_url,
+        tls_base_url: s.tls_base_url,
+        http_base_url: s.http_base_url,
+        email_base_url: s.email_base_url,
+        lens_base_url: s.lens_base_url,
+    })
+}
+
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackendsConfig {
     /// IP enrichment service base URL. Empty string disables enrichment.
     #[serde(default)]
@@ -134,6 +173,15 @@ pub fn resolve_path(arg: Option<String>, env: Option<String>) -> (String, Config
 
 impl Config {
     pub fn load(path: Option<&str>) -> Result<Self, config::ConfigError> {
+        Self::load_with_env(path, None)
+    }
+
+    /// `env` replaces the process environment as the override source when set
+    /// (tests); `None` reads the process environment.
+    fn load_with_env(
+        path: Option<&str>,
+        env: Option<config::Map<String, String>>,
+    ) -> Result<Self, config::ConfigError> {
         let mut builder = config::Config::builder();
 
         if let Some(path) = path {
@@ -143,7 +191,8 @@ impl Config {
         builder = builder.add_source(
             config::Environment::with_prefix("BEACON")
                 .separator("__")
-                .try_parsing(true),
+                .try_parsing(true)
+                .source(env),
         );
 
         builder.build()?.try_deserialize()
@@ -311,5 +360,135 @@ mod tests {
         let (path, source) = resolve_path(None, None);
         assert_eq!(path, DEFAULT_CONFIG_PATH);
         assert_eq!(source, ConfigSource::Default);
+    }
+
+    fn repo_file(rel: &str) -> String {
+        format!("{}/{rel}", env!("CARGO_MANIFEST_DIR"))
+    }
+
+    /// Writes `body` to a per-test temp file and loads it with no env overrides.
+    fn load_str(name: &str, body: &str) -> Result<Config, config::ConfigError> {
+        let path = std::env::temp_dir().join(format!(
+            "beacon-config-test-{name}-{}.toml",
+            std::process::id()
+        ));
+        std::fs::write(&path, body).unwrap();
+        let result = Config::load_with_env(path.to_str(), Some(config::Map::new()));
+        std::fs::remove_file(&path).ok();
+        result
+    }
+
+    fn assert_unknown_field(result: Result<Config, config::ConfigError>, field: &str) {
+        let err = result
+            .expect_err("unknown key must be rejected")
+            .to_string();
+        assert!(
+            err.contains(&format!("unknown field `{field}`")),
+            "error should name the unknown field `{field}`: {err}"
+        );
+    }
+
+    #[test]
+    fn unknown_key_in_section_is_rejected() {
+        assert_unknown_field(
+            load_str("section", "[server]\nbnd = \"0.0.0.0:8084\"\n"),
+            "bnd",
+        );
+    }
+
+    #[test]
+    fn unknown_top_level_section_is_rejected() {
+        assert_unknown_field(load_str("toplevel", "[servr]\nbind = \"x\"\n"), "servr");
+    }
+
+    #[test]
+    fn unknown_key_in_ecosystem_is_rejected() {
+        assert_unknown_field(
+            load_str(
+                "ecosystem",
+                "[ecosystem]\nip_url = \"https://ip.example.com\"\n",
+            ),
+            "ip_url",
+        );
+    }
+
+    #[test]
+    fn nested_backends_ip_table_is_rejected() {
+        // The shape argus-oci's template wrote before 2026-10: beacon reads
+        // `[backends] ip_url`, not `[backends.ip] url`.
+        assert_unknown_field(
+            load_str(
+                "backends",
+                "[backends.ip]\nurl = \"http://ifconfig-rs:8000\"\n",
+            ),
+            "ip",
+        );
+    }
+
+    #[test]
+    fn repo_configs_load() {
+        for rel in ["beacon.toml", "beacon.dev.toml"] {
+            Config::load_with_env(Some(&repo_file(rel)), Some(config::Map::new()))
+                .unwrap_or_else(|e| panic!("{rel} must load: {e}"));
+        }
+        // `.example` is no format the loader recognises; load it as TOML.
+        let example = std::fs::read_to_string(repo_file("beacon.toml.example")).unwrap();
+        load_str("example", &example).expect("beacon.toml.example must load");
+    }
+
+    #[test]
+    fn production_shaped_config_loads() {
+        let cfg = Config::load_with_env(
+            Some(&repo_file("tests/fixtures/beacon.production.toml")),
+            Some(config::Map::new()),
+        )
+        .expect("production-shaped config must load");
+        assert_eq!(cfg.server.metrics_bind, "0.0.0.0:9090");
+        assert_eq!(cfg.server.trusted_proxies.len(), 2);
+        assert_eq!(cfg.rate_limit.per_ip, "30/min");
+        assert_eq!(
+            cfg.ecosystem.lens_base_url.as_deref(),
+            Some("https://lens.example.com")
+        );
+        assert_eq!(cfg.backends.ip_url, "http://ifconfig-rs:8000");
+        assert_eq!(cfg.backends.timeout_ms, 500);
+    }
+
+    #[test]
+    fn env_overrides_still_apply() {
+        let env = config::Map::from([
+            (
+                "BEACON__SERVER__BIND".to_string(),
+                "0.0.0.0:8084".to_string(),
+            ),
+            (
+                "BEACON__BACKENDS__IP_URL".to_string(),
+                "http://ip.example.com".to_string(),
+            ),
+            (
+                "BEACON__DKIM__MAX_USER_SELECTORS".to_string(),
+                "7".to_string(),
+            ),
+            // Single underscore: not under the `BEACON__` prefix, so it must
+            // not reach the strict deserializer as a `config` key.
+            (
+                "BEACON_CONFIG".to_string(),
+                "/etc/beacon/beacon.toml".to_string(),
+            ),
+        ]);
+        let cfg = Config::load_with_env(Some(&repo_file("beacon.toml")), Some(env))
+            .expect("env overrides must load");
+        assert_eq!(cfg.server.bind, "0.0.0.0:8084");
+        assert_eq!(cfg.backends.ip_url, "http://ip.example.com");
+        assert_eq!(cfg.dkim.max_user_selectors, 7);
+    }
+
+    #[test]
+    fn unknown_env_override_is_rejected() {
+        let env = config::Map::from([("BEACON__SERVER__BINDD".to_string(), "x".to_string())]);
+        assert_unknown_field(
+            Config::load_with_env(Some(&repo_file("beacon.toml")), Some(env)),
+            "bindd",
+        );
     }
 }

@@ -36,6 +36,12 @@ TOML file + env overrides with `BEACON__` prefix (`__` for nesting, e.g.
 the path and source. The Dockerfile `CMD` passes no argument, so the deployed
 `BEACON_CONFIG` wins over the baked `beacon.toml`.
 
+Every config struct is `#[serde(deny_unknown_fields)]`: an unknown key in the
+file or a `BEACON__*` env var fails startup instead of silently disabling a
+feature. `[ecosystem]` goes through a local strict mirror of netray-common's
+`EcosystemConfig`. `tests/fixtures/beacon.production.toml` pins the shape the
+argus-oci template must render.
+
 ## Development
 
 Everything runs through `just` (pdt-adlc ADR 0008; `make` until 2026-08-18).

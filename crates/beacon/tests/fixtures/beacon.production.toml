@@ -1,0 +1,49 @@
+# Shape of the production config rendered by argus-oci
+# (ansible/roles/beacon/templates/beacon.toml.j2), with the Jinja variables
+# filled in. Keys must match src/config.rs exactly: every config struct denies
+# unknown fields, so a key the code does not read fails startup.
+
+[server]
+bind = "0.0.0.0:8084"
+metrics_bind = "0.0.0.0:9090"
+trusted_proxies = ["172.16.0.0/12", "10.0.0.0/8"]
+
+[dns]
+resolvers = ["cloudflare"]
+timeout_ms = 5000
+
+[dnsbl]
+zones = [
+  "zen.spamhaus.org",
+  "b.barracudacentral.org",
+  "bl.spamcop.net",
+  "dbl.spamhaus.org",
+]
+resolvers = ["system"]
+timeout_ms = 2000
+
+[http]
+timeout_ms = 10000
+
+[rate_limit]
+per_ip = "30/min"
+
+[dkim]
+max_user_selectors = 5
+
+[ecosystem]
+ip_base_url = "https://ip.example.com"
+dns_base_url = "https://dns.example.com"
+tls_base_url = "https://tls.example.com"
+http_base_url = "https://http.example.com"
+email_base_url = "https://email.example.com"
+lens_base_url = "https://lens.example.com"
+
+[backends]
+ip_url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+
+[telemetry]
+log_format = "json"
+service_name = "beacon"
+sample_rate = 1.0

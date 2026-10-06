@@ -34,8 +34,8 @@ per_ip = "10/min"
 [dkim]
 max_user_selectors = 5
 
-# [backends.ip]
-# url = "https://ip.netray.info"
+# [backends]
+# ip_url = "https://ip.netray.info"
 # timeout_ms = 5000
 
 # [ecosystem]
@@ -51,13 +51,11 @@ max_user_selectors = 5
 # Log output format.
 #   "text" -- human-readable, colour-coded (default; best for terminals)
 #   "json" -- structured JSON lines (best for log aggregators: Loki, Dozzle, etc.)
-# Also configurable via: BEACON_TELEMETRY__LOG_FORMAT=json
+# Also configurable via: BEACON__TELEMETRY__LOG_FORMAT=json
 #log_format = "text"
 
-# Enable OpenTelemetry distributed tracing (OTLP/HTTP export).
-#enabled = false
-
-# OTLP HTTP endpoint to export spans to.
+# OTLP HTTP endpoint to export spans to. Setting it enables OpenTelemetry
+# tracing (OTLP/HTTP export); leaving it unset disables tracing.
 #otlp_endpoint = "http://localhost:4318"
 
 # Service name reported in spans and logs.
