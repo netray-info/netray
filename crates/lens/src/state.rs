@@ -8,6 +8,7 @@ use fontdb::Database;
 
 use governor::{Quota, RateLimiter};
 use moka::future::Cache;
+use netray_common::ip_extract::IpExtractor;
 use netray_common::rate_limit::KeyedLimiter;
 
 use crate::backends::Backend;
@@ -37,6 +38,9 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub per_ip_limiter: Arc<PerIpRateLimiter>,
     pub global_limiter: Arc<GlobalRateLimiter>,
+    /// Resolves the client IP from the TCP peer and, when the peer is a
+    /// trusted proxy, from the forwarding headers.
+    pub ip_extractor: Arc<IpExtractor>,
     pub badge_recompute_limiter: Arc<BadgeRecomputeLimiter>,
     pub http_client: reqwest::Client,
     pub cache: Option<Arc<Cache<String, Arc<CachedResult>>>>,
@@ -65,6 +69,7 @@ impl AppState {
 
         let per_ip_limiter = Arc::new(PerIpRateLimiter::new(&config.rate_limit));
         let global_limiter = Arc::new(GlobalRateLimiter::new(&config.rate_limit));
+        let ip_extractor = Arc::new(IpExtractor::new(&config.server.trusted_proxies));
 
         let badge_quota = Quota::with_period(Duration::from_secs(config.badges.ttl_seconds))
             .expect("badge ttl_seconds must be non-zero")
@@ -138,6 +143,7 @@ impl AppState {
             config: Arc::new(config),
             per_ip_limiter,
             global_limiter,
+            ip_extractor,
             badge_recompute_limiter,
             http_client,
             cache,

@@ -21,7 +21,7 @@ use crate::cache::{CachedResult, cache_key, is_fresh};
 use crate::check::{CheckInput, CheckOutput, SectionError, run_check, run_check_with_input};
 use crate::input::validate_domain;
 use crate::scoring::engine::{CheckResult, CheckVerdict, OverallScore};
-use crate::security::{check_rate_limit, extract_client_ip};
+use crate::security::check_rate_limit;
 use crate::state::AppState;
 
 /// Calls `state.badge_check_fn` when set (tests), otherwise the real `run_check`.
@@ -987,8 +987,7 @@ pub async fn check_get_handler(
     Path(domain): Path<String>,
     Query(query): Query<CheckGetQuery>,
 ) -> Response {
-    let client_ip =
-        extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
+    let client_ip = state.ip_extractor.extract(&headers, peer);
     let sync = is_sync_mode(&headers, query.stream);
     let dkim_selectors = match validate_dkim_selectors(query.dkim_selectors.as_deref()) {
         Ok(s) => s,
@@ -1016,8 +1015,7 @@ pub async fn check_post_handler(
     headers: axum::http::HeaderMap,
     Json(body): Json<CheckPostBody>,
 ) -> Response {
-    let client_ip =
-        extract_client_ip_from_peer(&headers, &state.config.server.trusted_proxies, peer.ip());
+    let client_ip = state.ip_extractor.extract(&headers, peer);
     let sync = is_sync_mode(&headers, body.stream);
     let dkim_selectors = match validate_dkim_selectors(body.dkim_selectors.as_deref()) {
         Ok(s) => s,
@@ -1026,17 +1024,6 @@ pub async fn check_post_handler(
         }
     };
     run_check_handler(state, client_ip, body.domain, sync, dkim_selectors).await
-}
-
-fn extract_client_ip_from_peer(
-    headers: &axum::http::HeaderMap,
-    trusted_proxies: &[String],
-    peer_ip: IpAddr,
-) -> IpAddr {
-    if trusted_proxies.is_empty() {
-        return peer_ip;
-    }
-    extract_client_ip(headers, trusted_proxies)
 }
 
 /// Returns true when the request should be answered with a single JSON response
@@ -2621,6 +2608,84 @@ pub mod tests {
         let bytes = to_bytes(resp2.into_body(), 4096).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(json["error"]["code"], "RATE_LIMITED");
+    }
+
+    // --- Per-IP rate limiting keys on the real client IP (ConnectInfo peer) ---
+
+    fn app_with_real_handler(trusted_proxies: &[&str]) -> Router {
+        let mut config = test_config_with_rate_limit(1, 1);
+        config.server.trusted_proxies = trusted_proxies.iter().map(|s| s.to_string()).collect();
+        let state = AppState::new(config).unwrap();
+        Router::new()
+            .route("/api/check/{domain}", get(check_get_handler))
+            .with_state(state)
+    }
+
+    fn req_from(peer: &str, xff: Option<&str>) -> Request<Body> {
+        let mut req = Request::builder()
+            .uri("/api/check/example.com")
+            .header("accept", "application/json");
+        if let Some(xff) = xff {
+            req = req.header("x-forwarded-for", xff);
+        }
+        let mut req = req.body(Body::empty()).unwrap();
+        let peer: std::net::SocketAddr = peer.parse().unwrap();
+        req.extensions_mut()
+            .insert(axum::extract::ConnectInfo(peer));
+        req
+    }
+
+    #[tokio::test]
+    async fn rate_limit_buckets_per_forwarded_client_behind_trusted_proxy() {
+        let app = app_with_real_handler(&["172.31.0.0/24"]);
+
+        let a1 = app
+            .clone()
+            .oneshot(req_from("172.31.0.5:40000", Some("203.0.113.1")))
+            .await
+            .unwrap();
+        assert_ne!(a1.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        // A different client behind the same proxy has its own bucket.
+        let b1 = app
+            .clone()
+            .oneshot(req_from("172.31.0.5:40001", Some("203.0.113.2")))
+            .await
+            .unwrap();
+        assert_ne!(b1.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        // The first client's bucket is exhausted.
+        let a2 = app
+            .oneshot(req_from("172.31.0.5:40002", Some("203.0.113.1")))
+            .await
+            .unwrap();
+        assert_eq!(a2.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn rate_limit_uses_peer_ip_without_trusted_proxies() {
+        let app = app_with_real_handler(&[]);
+
+        let p1 = app
+            .clone()
+            .oneshot(req_from("198.51.100.1:40000", None))
+            .await
+            .unwrap();
+        assert_ne!(p1.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        let p2 = app
+            .clone()
+            .oneshot(req_from("198.51.100.2:40000", None))
+            .await
+            .unwrap();
+        assert_ne!(p2.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        // A spoofed XFF from an untrusted peer does not escape the peer's bucket.
+        let p1_spoofed = app
+            .oneshot(req_from("198.51.100.1:40001", Some("203.0.113.9")))
+            .await
+            .unwrap();
+        assert_eq!(p1_spoofed.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
     // --- AC-10: X-Cache: HIT in sync mode on second request

@@ -54,7 +54,6 @@ lens/
     security/
       mod.rs
       rate_limit.rs       # GCRA per-IP + global
-      ip_extract.rs       # Client IP from proxy headers
       target_policy.rs    # No RFC1918, no IPs, domain-only
     snapshot/
       mod.rs
