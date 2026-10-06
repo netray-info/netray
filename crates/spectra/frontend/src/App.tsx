@@ -322,13 +322,15 @@ export default function App() {
                           <span class="overview__value">{data.enrichment.role}</span>
                         </div>
                       </Show>
-                      <a
-                        href={data.enrichment.detail_url}
-                        class="overview__ip-link"
-                        target="_blank"
-                        rel="noopener"
-                        title="View IP details"
-                      >IP ↗</a>
+                      <Show when={data.enrichment.detail_url}>
+                        <a
+                          href={data.enrichment.detail_url}
+                          class="overview__ip-link"
+                          target="_blank"
+                          rel="noopener"
+                          title="View IP details"
+                        >IP ↗</a>
+                      </Show>
                     </div>
                   </div>
 

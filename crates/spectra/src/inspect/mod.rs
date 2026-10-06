@@ -143,7 +143,7 @@ pub fn assemble_response(
     resolved_addr: SocketAddr,
     result: InspectResult,
     enrichment: EnrichmentData,
-    enrichment_base_url: &str,
+    ip_base_url: Option<&str>,
     duration_ms: u64,
 ) -> InspectResponse {
     let https = &result.https;
@@ -206,7 +206,9 @@ pub fn assemble_response(
     };
 
     let ip_str = resolved_addr.ip().to_string();
-    let detail_url = format!("{}/{}", enrichment_base_url.trim_end_matches('/'), ip_str);
+    let detail_url = ip_base_url
+        .filter(|base| !base.is_empty())
+        .map(|base| format!("{}/{}", base.trim_end_matches('/'), ip_str));
 
     let mut resp = InspectResponse {
         url: original_url.to_string(),
@@ -278,6 +280,52 @@ mod tests {
             total_timeout_secs: 10,
             max_redirects: 10,
             user_agent: "test-agent".to_string(),
+        }
+    }
+
+    fn empty_task() -> TaskResult {
+        TaskResult {
+            final_url: "https://example.com/".to_string(),
+            status: 200,
+            http_version: "HTTP/1.1".to_string(),
+            headers: reqwest::header::HeaderMap::new(),
+            redirects: vec![],
+            redirect_limit_reached: false,
+            error: None,
+        }
+    }
+
+    fn assemble_with_ip_base(ip_base_url: Option<&str>) -> InspectResponse {
+        assemble_response(
+            &Url::parse("https://example.com/").unwrap(),
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)), 443),
+            InspectResult {
+                https: empty_task(),
+                http_upgrade: None,
+                cors: empty_task(),
+            },
+            EnrichmentData::default(),
+            ip_base_url,
+            1,
+        )
+    }
+
+    #[test]
+    fn detail_url_uses_public_ip_base_url() {
+        let resp = assemble_with_ip_base(Some("https://ip.example.com/"));
+        assert_eq!(
+            resp.enrichment.detail_url.as_deref(),
+            Some("https://ip.example.com/192.0.2.1")
+        );
+    }
+
+    #[test]
+    fn detail_url_omitted_without_ip_base_url() {
+        for base in [None, Some("")] {
+            let resp = assemble_with_ip_base(base);
+            assert_eq!(resp.enrichment.detail_url, None, "{base:?}");
+            let json = serde_json::to_value(&resp).unwrap();
+            assert!(json["enrichment"].get("detail_url").is_none(), "{base:?}");
         }
     }
 

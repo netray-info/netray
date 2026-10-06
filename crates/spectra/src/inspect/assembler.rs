@@ -182,7 +182,9 @@ pub struct EnrichmentInfo {
     pub ip: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub org: Option<String>,
-    pub detail_url: String,
+    /// Public IP-tool page for `ip`; absent when no `[meta] ip_base_url` is configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail_url: Option<String>,
     /// IP classification: "cloud", "datacenter", "residential", "vpn", "cdn", "isp", etc.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ip_type: Option<String>,

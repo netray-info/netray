@@ -379,13 +379,6 @@ async fn do_inspect_inner(
         inspect::EnrichmentData::default()
     };
 
-    let enrichment_base_url = state
-        .config
-        .enrichment
-        .ip_url
-        .as_deref()
-        .unwrap_or("https://ip.netray.info");
-
     let duration_ms = start.elapsed().as_millis() as u64;
     metrics::histogram!("spectra_inspect_duration_ms").record(duration_ms as f64);
 
@@ -395,11 +388,17 @@ async fn do_inspect_inner(
         resolved_addr,
         result,
         enrichment,
-        enrichment_base_url,
+        ip_detail_base(&state.config),
         duration_ms,
     );
 
     Ok(Json(response))
+}
+
+/// Base of the public IP-detail link. Always the public `[meta] ip_base_url`,
+/// never `[enrichment] ip_url`, which is an internal backend address.
+fn ip_detail_base(config: &crate::config::Config) -> Option<&str> {
+    config.meta.ip_base_url.as_deref()
 }
 
 async fn openapi_handler() -> impl IntoResponse {
@@ -493,6 +492,17 @@ mod tests {
             "https://email.example.com"
         );
         assert_eq!(body["ecosystem"]["dns_base_url"], "https://dns.example.com");
+    }
+
+    #[test]
+    fn ip_detail_base_is_public_meta_url_not_internal_enrichment_url() {
+        let mut config = test_config();
+        config.enrichment.ip_url = Some("http://ifconfig-rs:8000".into());
+        config.meta.ip_base_url = Some("https://ip.example.com".into());
+        assert_eq!(ip_detail_base(&config), Some("https://ip.example.com"));
+
+        config.meta.ip_base_url = None;
+        assert_eq!(ip_detail_base(&config), None);
     }
 
     #[tokio::test]

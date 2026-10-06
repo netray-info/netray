@@ -119,7 +119,7 @@ export interface ReportingReport {
 export interface EnrichmentInfo {
   ip: string;
   org?: string;
-  detail_url: string;
+  detail_url?: string;
   ip_type?: string;
   threat?: string;
   role?: string;
