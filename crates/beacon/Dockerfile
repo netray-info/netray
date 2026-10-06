@@ -23,4 +23,4 @@ RUN chown -R beacon:beacon /beacon
 USER beacon
 EXPOSE 8084 9094
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 CMD wget -qO- http://127.0.0.1:8084/ready || exit 1
-CMD ["./beacon", "beacon.toml"]
+CMD ["./beacon"]

@@ -1,6 +1,6 @@
 //! Binary entrypoint for the beacon email-security inspector service.
 //!
-//! Loads configuration (from `beacon.toml` or `$BEACON_CONFIG`, with
+//! Loads configuration (argv[1], else `$BEACON_CONFIG`, else `beacon.toml`, with
 //! `BEACON_*` environment overrides), initialises tracing and Prometheus
 //! metrics, constructs the shared [`AppState`], and serves the Axum router
 //! for public endpoints (`/inspect`, `/api/meta`, `/health`, `/ready`,
@@ -37,11 +37,10 @@ struct Assets;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Load config
-    let config_path = std::env::args()
-        .nth(1)
-        .or_else(|| std::env::var("BEACON_CONFIG").ok());
+    let (config_path, config_source) =
+        config::resolve_path(std::env::args().nth(1), std::env::var("BEACON_CONFIG").ok());
 
-    let config = config::Config::load(config_path.as_deref()).expect("failed to load config");
+    let config = config::Config::load(Some(&config_path)).expect("failed to load config");
 
     // Init telemetry
     let telemetry_config = netray_common::telemetry::TelemetryConfig::from(&config.telemetry);
@@ -53,6 +52,8 @@ async fn main() -> anyhow::Result<()> {
     metrics::describe_gauge!("beacon_sse_clients_active", "Active SSE inspection streams");
 
     tracing::info!(
+        config_path = %config_path,
+        config_source = config_source.as_str(),
         bind = %config.server.bind,
         metrics_bind = %config.server.metrics_bind,
         dns_resolvers = ?config.dns.resolvers,

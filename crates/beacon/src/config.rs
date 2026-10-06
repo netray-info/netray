@@ -100,6 +100,38 @@ fn default_backends_timeout_ms() -> u64 {
     5000
 }
 
+/// Config file loaded when neither argv nor `BEACON_CONFIG` names one;
+/// relative to the working directory (the container's `WORKDIR`).
+pub const DEFAULT_CONFIG_PATH: &str = "beacon.toml";
+
+/// Where the config file path came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfigSource {
+    Argv,
+    Env,
+    Default,
+}
+
+impl ConfigSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ConfigSource::Argv => "argv",
+            ConfigSource::Env => "BEACON_CONFIG",
+            ConfigSource::Default => "default",
+        }
+    }
+}
+
+/// Picks the config file path: first CLI argument, then `BEACON_CONFIG`,
+/// then [`DEFAULT_CONFIG_PATH`].
+pub fn resolve_path(arg: Option<String>, env: Option<String>) -> (String, ConfigSource) {
+    match (arg, env) {
+        (Some(path), _) => (path, ConfigSource::Argv),
+        (None, Some(path)) => (path, ConfigSource::Env),
+        (None, None) => (DEFAULT_CONFIG_PATH.to_string(), ConfigSource::Default),
+    }
+}
+
 impl Config {
     pub fn load(path: Option<&str>) -> Result<Self, config::ConfigError> {
         let mut builder = config::Config::builder();
@@ -250,5 +282,34 @@ impl Default for TelemetryConfig {
             service_name: default_service_name(),
             sample_rate: default_sample_rate(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_path_prefers_argv_over_env() {
+        let (path, source) = resolve_path(
+            Some("a.toml".to_string()),
+            Some("/etc/beacon/b.toml".to_string()),
+        );
+        assert_eq!(path, "a.toml");
+        assert_eq!(source, ConfigSource::Argv);
+    }
+
+    #[test]
+    fn resolve_path_uses_env_without_argv() {
+        let (path, source) = resolve_path(None, Some("/etc/beacon/b.toml".to_string()));
+        assert_eq!(path, "/etc/beacon/b.toml");
+        assert_eq!(source, ConfigSource::Env);
+    }
+
+    #[test]
+    fn resolve_path_falls_back_to_baked_default() {
+        let (path, source) = resolve_path(None, None);
+        assert_eq!(path, DEFAULT_CONFIG_PATH);
+        assert_eq!(source, ConfigSource::Default);
     }
 }
