@@ -5,6 +5,7 @@ use serde::Deserialize;
 pub use config::ConfigError;
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default = "default_server")]
     pub server: ServerConfig,
@@ -21,6 +22,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ServerConfig {
     #[serde(default = "default_bind")]
     pub bind: SocketAddr,
@@ -31,6 +33,7 @@ pub struct ServerConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct InspectConfig {
     #[serde(default = "default_request_timeout_secs")]
     pub request_timeout_secs: u64,
@@ -43,6 +46,7 @@ pub struct InspectConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LimitsConfig {
     #[serde(default = "default_per_ip_per_minute")]
     pub per_ip_per_minute: u32,
@@ -57,6 +61,7 @@ pub struct LimitsConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct EnrichmentConfig {
     #[serde(default)]
     pub ip_url: Option<String>,
@@ -65,6 +70,7 @@ pub struct EnrichmentConfig {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct MetaConfig {
     #[serde(default)]
     pub ip_base_url: Option<String>,
@@ -79,6 +85,7 @@ pub struct MetaConfig {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TelemetryConfig {
     #[serde(default)]
     pub log_format: Option<String>,
@@ -93,20 +100,25 @@ pub struct TelemetryConfig {
 }
 
 impl Config {
+    /// Loads the TOML file at `path` (if any), then `SPECTRA__<SECTION>__<KEY>`
+    /// env overrides. Unknown keys in either source are a load error.
     pub fn load(path: Option<&str>) -> Result<Self, ConfigError> {
+        Self::load_with_env(
+            path,
+            config::Environment::with_prefix("SPECTRA")
+                .separator("__")
+                .try_parsing(true),
+        )
+    }
+
+    fn load_with_env(path: Option<&str>, env: config::Environment) -> Result<Self, ConfigError> {
         let mut builder = config::Config::builder();
 
         if let Some(p) = path {
             builder = builder.add_source(config::File::with_name(p).required(true));
         }
 
-        builder = builder.add_source(
-            config::Environment::with_prefix("SPECTRA")
-                .separator("__")
-                .try_parsing(true),
-        );
-
-        let cfg: Config = builder.build()?.try_deserialize()?;
+        let cfg: Config = builder.add_source(env).build()?.try_deserialize()?;
         Ok(cfg)
     }
 }
@@ -228,6 +240,99 @@ mod tests {
         assert_eq!(cfg.inspect.max_redirects, 10);
         assert_eq!(cfg.limits.per_ip_per_minute, 10);
         // body_read_limit_bytes removed (YAGNI — re-add when body sniffing is implemented)
+    }
+
+    fn load_toml(name: &str, toml: &str) -> Result<Config, ConfigError> {
+        let path = std::env::temp_dir().join(format!("spectra-{}-{name}.toml", std::process::id()));
+        std::fs::write(&path, toml).unwrap();
+        let result = Config::load(Some(path.to_str().unwrap()));
+        let _ = std::fs::remove_file(&path);
+        result
+    }
+
+    #[test]
+    fn unknown_top_level_section_is_rejected() {
+        let err = load_toml(
+            "unknown-section",
+            "[ecosystem]\nip_base_url = \"https://ip.example.com\"\n",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("unknown field `ecosystem`"), "{err}");
+    }
+
+    #[test]
+    fn unknown_nested_key_is_rejected() {
+        for (section, key) in [
+            ("server", "bnid"),
+            ("inspect", "body_read_limit_bytes"),
+            ("limits", "per_ip_per_hour"),
+            ("enrichment", "url"),
+            ("telemetry", "endpoint"),
+            ("meta", "ip_url"),
+        ] {
+            let err = load_toml(
+                &format!("unknown-{section}"),
+                &format!("[{section}]\n{key} = 1\n"),
+            )
+            .unwrap_err()
+            .to_string();
+            assert!(
+                err.contains(&format!("unknown field `{key}`")),
+                "[{section}] {key}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn repo_config_files_load() {
+        for file in ["spectra.example.toml", "spectra.dev.toml"] {
+            let path = format!("{}/{file}", env!("CARGO_MANIFEST_DIR"));
+            Config::load(Some(&path)).unwrap_or_else(|e| panic!("{file}: {e}"));
+        }
+    }
+
+    #[test]
+    fn env_overrides_apply() {
+        let env = config::Environment::with_prefix("SPECTRA")
+            .separator("__")
+            .try_parsing(true)
+            .source(Some(
+                [
+                    ("SPECTRA__ENRICHMENT__IP_URL", "http://ip.example.com"),
+                    ("SPECTRA__LIMITS__PER_IP_BURST", "7"),
+                    ("SPECTRA__META__LENS_BASE_URL", "https://lens.example.com"),
+                ]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            ));
+        let cfg = Config::load_with_env(None, env).unwrap();
+        assert_eq!(
+            cfg.enrichment.ip_url.as_deref(),
+            Some("http://ip.example.com")
+        );
+        assert_eq!(cfg.limits.per_ip_burst, 7);
+        assert_eq!(
+            cfg.meta.lens_base_url.as_deref(),
+            Some("https://lens.example.com")
+        );
+    }
+
+    #[test]
+    fn unknown_env_key_is_rejected() {
+        let env = config::Environment::with_prefix("SPECTRA")
+            .separator("__")
+            .source(Some(
+                [(
+                    "SPECTRA__BACKENDS__IP__URL".to_string(),
+                    "http://ip.example.com".to_string(),
+                )]
+                .into_iter()
+                .collect(),
+            ));
+        let err = Config::load_with_env(None, env).unwrap_err().to_string();
+        assert!(err.contains("unknown field `backends`"), "{err}");
     }
 
     #[test]

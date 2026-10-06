@@ -8,7 +8,6 @@ metrics_bind = "127.0.0.1:9093"
 request_timeout_secs = 10
 total_timeout_secs = 30
 max_redirects = 10
-body_read_limit_bytes = 1024
 user_agent = "netray-spectra"
 
 [limits]

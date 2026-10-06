@@ -21,7 +21,7 @@ Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows the same patterns a
 
 ## Config
 
-TOML file (default: `spectra.dev.toml` for local dev) + env overrides with `SPECTRA_` prefix (`__` for nesting). Set `SPECTRA_CONFIG` to override the config file path.
+TOML file (default: `spectra.dev.toml` for local dev) + env overrides as `SPECTRA__<SECTION>__<KEY>` (double underscore after the prefix too). Set `SPECTRA_CONFIG` to override the config file path. Every config struct is `deny_unknown_fields`: an unknown section or key, in the file or the env, fails the load.
 
 ## Key conventions
 
