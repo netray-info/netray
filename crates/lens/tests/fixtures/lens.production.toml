@@ -1,0 +1,59 @@
+# Shape of the production lens config (argus-oci roles/lens/templates/lens.toml.j2)
+# rendered with domain = example.com. Keep in sync with that template; the
+# config tests load this file to catch keys lens no longer accepts.
+
+[server]
+bind = "0.0.0.0:8082"
+metrics_bind = "0.0.0.0:9090"
+trusted_proxies = ["172.31.0.0/24", "172.30.0.0/24"]
+
+[backends]
+dns_servers = ["google"]
+
+[backends.dns]
+url = "http://prism:8080"
+timeout_ms = 20000
+
+[backends.tls]
+url = "http://tlsight:8081"
+timeout_ms = 20000
+
+[backends.ip]
+url = "http://ifconfig-rs:8000"
+timeout_ms = 2000
+
+[backends.http]
+url = "http://spectra:8082"
+timeout_ms = 20000
+
+[backends.email]
+url = "http://beacon:8084"
+timeout_ms = 20000
+
+[ecosystem]
+ip_base_url = "https://ip.example.com"
+dns_base_url = "https://dns.example.com"
+tls_base_url = "https://tls.example.com"
+http_base_url = "https://http.example.com"
+email_base_url = "https://email.example.com"
+lens_base_url = "https://lens.example.com"
+
+[cache]
+enabled = true
+ttl_seconds = 300
+
+[rate_limit]
+per_ip_per_minute = 10
+per_ip_burst = 3
+global_per_minute = 100
+global_burst = 20
+
+[scoring]
+# Uses embedded default profile
+
+[telemetry]
+log_format = "json"
+service_name = "lens"
+
+[site]
+og_image = "https://example.com/og/landing.png"

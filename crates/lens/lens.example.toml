@@ -11,24 +11,18 @@ metrics_bind = "127.0.0.1:9095"
 [backends.dns]
 url = "https://dns.netray.info"
 timeout_ms = 20000
-# max_concurrent = 10
 
 [backends.tls]
 url = "https://tls.netray.info"
 timeout_ms = 20000
-# max_concurrent = 10
 
 [backends.ip]
 url = "https://ip.netray.info"
 timeout_ms = 2000
-# max_concurrent = 20
-# cache_ttl_secs = 300
-# cache_capacity = 1024
 
 # [backends.http]
 # url = "https://http.netray.info"   # optional; omit to disable HTTP section
 # timeout_ms = 20000
-# max_concurrent = 10
 
 # [backends.email]
 # url = "http://beacon:8085"         # optional; omit to disable email section

@@ -28,18 +28,18 @@ fn base_config() -> Config {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
-            dns: netray_common::backend::BackendConfig {
+            dns: lens::config::BackendConfig {
                 url: Some("http://127.0.0.1:19999".to_string()),
                 timeout_ms: 100,
                 ..Default::default()
             },
             dns_servers: Vec::new(),
-            tls: netray_common::backend::BackendConfig {
+            tls: lens::config::BackendConfig {
                 url: Some("http://127.0.0.1:19998".to_string()),
                 timeout_ms: 100,
                 ..Default::default()
             },
-            ip: netray_common::backend::BackendConfig {
+            ip: lens::config::BackendConfig {
                 url: Some("http://127.0.0.1:19997".to_string()),
                 timeout_ms: 100,
                 ..Default::default()

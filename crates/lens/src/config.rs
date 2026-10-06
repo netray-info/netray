@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub use config::ConfigError;
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default = "default_server")]
     pub server: ServerConfig,
@@ -31,6 +32,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BadgesConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -66,6 +68,7 @@ impl Default for BadgesConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ServerConfig {
     #[serde(default = "default_bind")]
     pub bind: SocketAddr,
@@ -78,24 +81,52 @@ pub struct ServerConfig {
 pub use netray_common::ecosystem::EcosystemConfig;
 
 #[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct BackendsConfig {
     #[serde(default)]
-    pub dns: netray_common::backend::BackendConfig,
+    pub dns: BackendConfig,
     /// DNS server names to pass to mhost-prism (e.g. `["cloudflare"]`).
     /// When non-empty, sent as the `servers` field in the CheckRequest body.
     #[serde(default)]
     pub dns_servers: Vec<String>,
     #[serde(default)]
-    pub tls: netray_common::backend::BackendConfig,
+    pub tls: BackendConfig,
     #[serde(default)]
-    pub ip: netray_common::backend::BackendConfig,
+    pub ip: BackendConfig,
     #[serde(default)]
-    pub http: Option<netray_common::backend::BackendConfig>,
+    pub http: Option<BackendConfig>,
     #[serde(default)]
-    pub email: Option<netray_common::backend::BackendConfig>,
+    pub email: Option<BackendConfig>,
+}
+
+/// One backend service. lens calls backends with its own reqwest client, so
+/// only `url` and `timeout_ms` are read — not the concurrency and cache keys of
+/// `crate::config::BackendConfig`, which lens deliberately rejects.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BackendConfig {
+    /// Base URL of the backend service. `None` disables this backend.
+    pub url: Option<String>,
+    /// Per-call timeout in milliseconds. The email backend ignores it (fixed 15 s).
+    #[serde(default = "default_backend_timeout_ms")]
+    pub timeout_ms: u64,
+}
+
+impl Default for BackendConfig {
+    fn default() -> Self {
+        Self {
+            url: None,
+            timeout_ms: default_backend_timeout_ms(),
+        }
+    }
+}
+
+fn default_backend_timeout_ms() -> u64 {
+    2000
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CacheConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -104,6 +135,7 @@ pub struct CacheConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RateLimitConfig {
     #[serde(default = "default_per_ip_per_minute")]
     pub per_ip_per_minute: u32,
@@ -116,6 +148,7 @@ pub struct RateLimitConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ScoringConfig {
     pub profile_path: Option<String>,
 }
@@ -135,6 +168,7 @@ pub struct ScoringConfig {
 /// `Option::default()` = `None` for every other field — visibly breaking
 /// the apex `<head>`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct SiteConfig {
     #[serde(default = "default_site_title")]
     pub title: Option<String>,
@@ -168,6 +202,7 @@ pub struct SiteConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct FooterLink {
     pub label: String,
     pub href: String,
@@ -339,6 +374,7 @@ fn default_global_burst() -> u32 {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OgCardsConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -351,6 +387,7 @@ impl Default for OgCardsConfig {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SnapshotsConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -392,7 +429,8 @@ impl Config {
             config::Environment::with_prefix("LENS")
                 .prefix_separator("_")
                 .separator("__")
-                .try_parsing(true),
+                .try_parsing(true)
+                .source(Some(config_env(std::env::vars()))),
         );
 
         let raw = builder.build()?;
@@ -421,6 +459,15 @@ impl Config {
     }
 }
 
+/// `LENS_*` variables that are not config keys. Every config struct denies
+/// unknown fields, so these would otherwise fail the load.
+const NON_CONFIG_ENV: &[&str] = &["LENS_CONFIG", "LENS_LIVE_TESTS"];
+
+fn config_env(vars: impl Iterator<Item = (String, String)>) -> config::Map<String, String> {
+    vars.filter(|(k, _)| !NON_CONFIG_ENV.contains(&k.as_str()))
+        .collect()
+}
+
 fn reject_zero<T: PartialEq + From<u8>>(name: &str, value: T) -> Result<(), ConfigError> {
     if value == T::from(0) {
         return Err(ConfigError::Message(format!(
@@ -438,16 +485,16 @@ mod tests {
         Config {
             server: default_server(),
             backends: BackendsConfig {
-                dns: netray_common::backend::BackendConfig {
+                dns: crate::config::BackendConfig {
                     url: Some("http://localhost:8080".to_string()),
                     ..Default::default()
                 },
                 dns_servers: Vec::new(),
-                tls: netray_common::backend::BackendConfig {
+                tls: crate::config::BackendConfig {
                     url: Some("http://localhost:8081".to_string()),
                     ..Default::default()
                 },
-                ip: netray_common::backend::BackendConfig {
+                ip: crate::config::BackendConfig {
                     url: Some("http://localhost:8082".to_string()),
                     ..Default::default()
                 },
@@ -591,6 +638,87 @@ mod tests {
             "example_domains must inherit default"
         );
         assert!(s.trust_strip.is_some(), "trust_strip must inherit default");
+    }
+
+    // --- Unknown keys are load errors; shipped configs load ---
+
+    fn load_toml(contents: &str) -> Result<Config, ConfigError> {
+        let mut file = tempfile::Builder::new().suffix(".toml").tempfile().unwrap();
+        std::io::Write::write_all(&mut file, contents.as_bytes()).unwrap();
+        Config::load(Some(file.path().to_str().unwrap()))
+    }
+
+    #[test]
+    fn unknown_top_level_section_is_rejected() {
+        let err = load_toml("[serverr]\nbind = \"0.0.0.0:8082\"\n").unwrap_err();
+        assert!(err.to_string().contains("serverr"), "got: {err}");
+    }
+
+    #[test]
+    fn unknown_key_in_section_is_rejected() {
+        let err = load_toml("[rate_limit]\nper_ip_per_minut = 10\n").unwrap_err();
+        assert!(err.to_string().contains("per_ip_per_minut"), "got: {err}");
+    }
+
+    #[test]
+    fn unread_backend_keys_are_rejected() {
+        for key in [
+            "max_concurrent = 10",
+            "cache_ttl_secs = 300",
+            "cache_capacity = 1024",
+        ] {
+            let toml = format!("[backends.ip]\nurl = \"http://ip.example.com\"\n{key}\n");
+            assert!(load_toml(&toml).is_err(), "{key} must be rejected");
+        }
+    }
+
+    #[test]
+    fn unknown_key_in_footer_link_is_rejected() {
+        let toml =
+            "[site]\nfooter_links = [{ label = \"a\", href = \"/\", external = false, x = 1 }]\n";
+        assert!(load_toml(toml).is_err());
+    }
+
+    #[test]
+    fn non_config_env_vars_are_not_config_keys() {
+        let vars = [
+            ("LENS_CONFIG", "lens.toml"),
+            ("LENS_LIVE_TESTS", "1"),
+            ("LENS_SERVER__BIND", "0.0.0.0:8082"),
+        ]
+        .map(|(k, v)| (k.to_string(), v.to_string()));
+        let env = config_env(vars.into_iter());
+        assert_eq!(env.len(), 1);
+        assert!(env.contains_key("LENS_SERVER__BIND"));
+    }
+
+    #[test]
+    fn repo_config_files_load() {
+        for name in [
+            "lens.example.toml",
+            "lens.dev.toml",
+            "tests/fixtures/lens.production.toml",
+        ] {
+            let path = format!("{}/{name}", env!("CARGO_MANIFEST_DIR"));
+            if let Err(e) = Config::load(Some(&path)) {
+                panic!("{name} must load: {e}");
+            }
+        }
+    }
+
+    #[test]
+    fn production_fixture_values() {
+        let path = format!(
+            "{}/tests/fixtures/lens.production.toml",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let cfg = Config::load(Some(&path)).unwrap();
+        assert_eq!(cfg.server.trusted_proxies.len(), 2);
+        assert_eq!(cfg.backends.ip.timeout_ms, 2000);
+        assert_eq!(
+            cfg.backends.email.as_ref().and_then(|e| e.url.as_deref()),
+            Some("http://beacon:8084")
+        );
     }
 
     // --- Zero-value rejection ---

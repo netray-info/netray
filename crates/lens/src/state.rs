@@ -185,16 +185,16 @@ mod tests {
                 trusted_proxies: Vec::new(),
             },
             backends: BackendsConfig {
-                dns: netray_common::backend::BackendConfig {
+                dns: crate::config::BackendConfig {
                     url: Some("http://localhost:8080".to_string()),
                     ..Default::default()
                 },
                 dns_servers: Vec::new(),
-                tls: netray_common::backend::BackendConfig {
+                tls: crate::config::BackendConfig {
                     url: Some("http://localhost:8081".to_string()),
                     ..Default::default()
                 },
-                ip: netray_common::backend::BackendConfig {
+                ip: crate::config::BackendConfig {
                     url: Some("http://localhost:8082".to_string()),
                     ..Default::default()
                 },
@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn http_backend_registered_when_url_set() {
         let mut config = test_config();
-        config.backends.http = Some(netray_common::backend::BackendConfig {
+        config.backends.http = Some(crate::config::BackendConfig {
             url: Some("http://localhost:8083".to_string()),
             ..Default::default()
         });

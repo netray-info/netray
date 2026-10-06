@@ -29,18 +29,18 @@ fn live_state() -> AppState {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
-            dns: netray_common::backend::BackendConfig {
+            dns: lens::config::BackendConfig {
                 url: Some("https://dns.netray.info".to_string()),
                 timeout_ms: 20000,
                 ..Default::default()
             },
             dns_servers: Vec::new(),
-            tls: netray_common::backend::BackendConfig {
+            tls: lens::config::BackendConfig {
                 url: Some("https://tls.netray.info".to_string()),
                 timeout_ms: 20000,
                 ..Default::default()
             },
-            ip: netray_common::backend::BackendConfig {
+            ip: lens::config::BackendConfig {
                 url: Some("https://ip.netray.info".to_string()),
                 timeout_ms: 20000,
                 ..Default::default()

@@ -1903,18 +1903,18 @@ pub mod tests {
                 trusted_proxies: Vec::new(),
             },
             backends: BackendsConfig {
-                dns: netray_common::backend::BackendConfig {
+                dns: crate::config::BackendConfig {
                     url: Some("http://127.0.0.1:19999".to_string()),
                     timeout_ms: 1000,
                     ..Default::default()
                 },
                 dns_servers: Vec::new(),
-                tls: netray_common::backend::BackendConfig {
+                tls: crate::config::BackendConfig {
                     url: Some("http://127.0.0.1:19998".to_string()),
                     timeout_ms: 1000,
                     ..Default::default()
                 },
-                ip: netray_common::backend::BackendConfig {
+                ip: crate::config::BackendConfig {
                     url: Some("http://127.0.0.1:19997".to_string()),
                     timeout_ms: 1000,
                     ..Default::default()
@@ -2729,12 +2729,12 @@ pub mod tests {
         config.backends.dns.url = Some(base.clone());
         config.backends.tls.url = Some(base.clone());
         config.backends.ip.url = Some(base.clone());
-        config.backends.http = Some(netray_common::backend::BackendConfig {
+        config.backends.http = Some(crate::config::BackendConfig {
             url: Some(base.clone()),
             timeout_ms: 1000,
             ..Default::default()
         });
-        config.backends.email = Some(netray_common::backend::BackendConfig {
+        config.backends.email = Some(crate::config::BackendConfig {
             url: Some(base.clone()),
             timeout_ms: 1000,
             ..Default::default()
@@ -2998,7 +2998,7 @@ pub mod tests {
             ..Default::default()
         };
         // Set backend to internal URL
-        config.backends.ip = netray_common::backend::BackendConfig {
+        config.backends.ip = crate::config::BackendConfig {
             url: Some("http://127.0.0.1:19997".to_string()),
             timeout_ms: 1000,
             ..Default::default()
