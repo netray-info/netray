@@ -112,7 +112,7 @@ impl Backend for HttpBackend {
     fn run(
         &self,
         domain: &str,
-        _context: &BackendContext,
+        context: &BackendContext,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
     > {
@@ -121,8 +121,9 @@ impl Backend for HttpBackend {
         let http_url = self.http_url.clone();
         let public_url = self.public_url.clone();
         let timeout = self.timeout;
+        let fwd = context.forward_headers.clone();
         Box::pin(async move {
-            let mut result = check_http(&client, &http_url, &domain, timeout)
+            let mut result = check_http(&client, &http_url, &domain, timeout, &fwd)
                 .await
                 .map_err(|e| match e {
                     AppError::Timeout => SectionError::Timeout,
@@ -152,6 +153,7 @@ pub async fn check_http(
     http_url: &str,
     domain: &str,
     timeout: Duration,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<BackendResult, AppError> {
     let encoded_domain = percent_encode(domain);
     let url = format!(
@@ -161,7 +163,7 @@ pub async fn check_http(
     );
 
     let span = tracing::info_span!("backend_call", service = "spectra", url = %url);
-    check_http_inner(client, &url, http_url, timeout, &encoded_domain)
+    check_http_inner(client, &url, http_url, timeout, &encoded_domain, fwd)
         .instrument(span)
         .await
 }
@@ -172,8 +174,9 @@ async fn check_http_inner(
     http_url: &str,
     timeout: Duration,
     encoded_domain: &str,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<BackendResult, AppError> {
-    let resp = tokio::time::timeout(timeout, client.get(url).send())
+    let resp = tokio::time::timeout(timeout, client.get(url).headers(fwd.clone()).send())
         .await
         .map_err(|_| {
             tracing::warn!(service = "spectra", url = %url, error = "timeout", "backend call failed");

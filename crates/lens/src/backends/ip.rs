@@ -85,14 +85,14 @@ impl Backend for IpBackend {
         let ip_url = self.ip_url.clone();
         let public_url = self.public_url.clone();
         let timeout = self.timeout;
+        let fwd = context.forward_headers.clone();
         Box::pin(async move {
-            let mut result =
-                check_ip(&client, &ip_url, &ips, timeout)
-                    .await
-                    .map_err(|e| match e {
-                        AppError::Timeout => SectionError::Timeout,
-                        other => SectionError::BackendError(other.to_string()),
-                    })?;
+            let mut result = check_ip(&client, &ip_url, &ips, timeout, &fwd)
+                .await
+                .map_err(|e| match e {
+                    AppError::Timeout => SectionError::Timeout,
+                    other => SectionError::BackendError(other.to_string()),
+                })?;
             result.detail_url = public_url;
             Ok(BackendResult {
                 checks: result.checks,
@@ -118,6 +118,7 @@ pub async fn check_ip(
     ip_url: &str,
     ips: &[IpAddr],
     timeout: Duration,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<IpBackendResult, AppError> {
     if ips.is_empty() {
         return Ok(IpBackendResult {
@@ -132,7 +133,7 @@ pub async fn check_ip(
     let base = ip_url.trim_end_matches('/');
 
     let span = tracing::info_span!("backend_call", service = "ifconfig", url = %base, ip_count = capped.len());
-    check_ip_inner(client, base, &capped, timeout)
+    check_ip_inner(client, base, &capped, timeout, fwd)
         .instrument(span)
         .await
 }
@@ -142,6 +143,7 @@ async fn check_ip_inner(
     base: &str,
     capped: &[IpAddr],
     timeout: Duration,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<IpBackendResult, AppError> {
     // Fire off concurrent requests for each IP.
     let futures: Vec<_> = capped
@@ -149,8 +151,9 @@ async fn check_ip_inner(
         .map(|ip| {
             let url = format!("{base}/network/json?ip={ip}");
             let client = client.clone();
+            let fwd = fwd.clone();
             async move {
-                let result = tokio::time::timeout(timeout, client.get(&url).send())
+                let result = tokio::time::timeout(timeout, client.get(&url).headers(fwd).send())
                     .await
                     .ok()
                     .and_then(|r| r.ok());
@@ -326,6 +329,7 @@ mod tests {
         let context = BackendContext {
             resolved_ips: vec![],
             dkim_selectors: None,
+            forward_headers: Default::default(),
         };
         let result = backend.run("example.com", &context).await;
         assert!(

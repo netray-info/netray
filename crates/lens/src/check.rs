@@ -13,6 +13,10 @@ use crate::state::AppState;
 pub struct CheckInput {
     pub domain: String,
     pub dkim_selectors: Option<Vec<String>>,
+    /// Resolved client IP, forwarded to backends as `X-Forwarded-For`.
+    pub client_ip: Option<IpAddr>,
+    /// Inbound request ID, forwarded to backends as `X-Request-Id`.
+    pub request_id: Option<String>,
 }
 
 /// Error that can occur for a single backend section.
@@ -60,6 +64,8 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
         CheckInput {
             domain: domain.to_string(),
             dkim_selectors: None,
+            client_ip: None,
+            request_id: None,
         },
     )
     .await
@@ -96,10 +102,14 @@ async fn run_backends_with_input(state: &AppState, input: &CheckInput) -> CheckO
     let start = Instant::now();
     let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
 
+    let forward_headers =
+        crate::backends::forward_headers(input.client_ip, input.request_id.as_deref());
+
     // Wave 1: run concurrently.
     let wave1_context = BackendContext {
         resolved_ips: vec![],
         dkim_selectors: input.dkim_selectors.clone(),
+        forward_headers: forward_headers.clone(),
     };
     let wave1_futures: Vec<_> = state
         .backends
@@ -136,6 +146,7 @@ async fn run_backends_with_input(state: &AppState, input: &CheckInput) -> CheckO
     let wave2_context = BackendContext {
         resolved_ips,
         dkim_selectors: None,
+        forward_headers,
     };
     for backend in state.backends.iter() {
         if WAVE2_SECTIONS.contains(&backend.section()) {

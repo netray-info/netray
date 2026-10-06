@@ -59,6 +59,29 @@ pub struct BackendContext {
     pub resolved_ips: Vec<IpAddr>,
     /// Validated DKIM selectors forwarded to the email backend.
     pub dkim_selectors: Option<Vec<String>>,
+    /// Sent on every backend request: `X-Forwarded-For` (resolved client IP)
+    /// and `X-Request-Id`, so backends rate-limit and log per visitor.
+    pub forward_headers: reqwest::header::HeaderMap,
+}
+
+/// Build the headers forwarded to every backend for one check.
+pub fn forward_headers(
+    client_ip: Option<IpAddr>,
+    request_id: Option<&str>,
+) -> reqwest::header::HeaderMap {
+    use reqwest::header::HeaderValue;
+    let mut headers = reqwest::header::HeaderMap::new();
+    if let Some(ip) = client_ip
+        && let Ok(v) = HeaderValue::from_str(&ip.to_string())
+    {
+        headers.insert("x-forwarded-for", v);
+    }
+    if let Some(id) = request_id
+        && let Ok(v) = HeaderValue::from_str(id)
+    {
+        headers.insert("x-request-id", v);
+    }
+    headers
 }
 
 /// Minimal percent-encoding for query string values (RFC 3986 unreserved set).

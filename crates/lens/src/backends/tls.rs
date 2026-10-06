@@ -95,7 +95,7 @@ impl Backend for TlsBackend {
     fn run(
         &self,
         domain: &str,
-        _context: &BackendContext,
+        context: &BackendContext,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
     > {
@@ -104,8 +104,9 @@ impl Backend for TlsBackend {
         let tls_url = self.tls_url.clone();
         let public_url = self.public_url.clone();
         let timeout = self.timeout;
+        let fwd = context.forward_headers.clone();
         Box::pin(async move {
-            let mut result = check_tls(&client, &tls_url, &domain, timeout)
+            let mut result = check_tls(&client, &tls_url, &domain, timeout, &fwd)
                 .await
                 .map_err(|e| match e {
                     AppError::Timeout => SectionError::Timeout,
@@ -136,6 +137,7 @@ pub async fn check_tls(
     tls_url: &str,
     domain: &str,
     timeout: Duration,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<TlsBackendResult, AppError> {
     let url = format!(
         "{}/api/inspect?h={}",
@@ -144,7 +146,7 @@ pub async fn check_tls(
     );
 
     let span = tracing::info_span!("backend_call", service = "tlsight", url = %url);
-    check_tls_inner(client, &url, domain, tls_url, timeout)
+    check_tls_inner(client, &url, domain, tls_url, timeout, fwd)
         .instrument(span)
         .await
 }
@@ -155,8 +157,9 @@ async fn check_tls_inner(
     domain: &str,
     tls_url: &str,
     timeout: Duration,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<TlsBackendResult, AppError> {
-    let resp = tokio::time::timeout(timeout, client.get(url).send())
+    let resp = tokio::time::timeout(timeout, client.get(url).headers(fwd.clone()).send())
         .await
         .map_err(|_| {
             tracing::warn!(service = "tlsight", url = %url, error = "timeout", "backend call failed");

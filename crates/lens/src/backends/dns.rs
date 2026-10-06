@@ -42,7 +42,7 @@ impl Backend for DnsBackend {
     fn run(
         &self,
         domain: &str,
-        _context: &BackendContext,
+        context: &BackendContext,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = Result<BackendResult, SectionError>> + Send + '_>,
     > {
@@ -52,8 +52,9 @@ impl Backend for DnsBackend {
         let public_url = self.public_url.clone();
         let timeout = self.timeout;
         let dns_servers = self.dns_servers.clone();
+        let fwd = context.forward_headers.clone();
         Box::pin(async move {
-            let mut result = check_dns(&client, &dns_url, &domain, &dns_servers, timeout)
+            let mut result = check_dns(&client, &dns_url, &domain, &dns_servers, timeout, &fwd)
                 .await
                 .map_err(|e| match e {
                     AppError::Timeout => SectionError::Timeout,
@@ -86,10 +87,11 @@ pub async fn check_dns(
     domain: &str,
     dns_servers: &[String],
     timeout: Duration,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<DnsBackendResult, AppError> {
     let url = format!("{}/api/check", dns_url.trim_end_matches('/'),);
     let span = tracing::info_span!("backend_call", service = "prism", url = %url);
-    check_dns_inner(client, &url, domain, dns_url, dns_servers, timeout)
+    check_dns_inner(client, &url, domain, dns_url, dns_servers, timeout, fwd)
         .instrument(span)
         .await
 }
@@ -101,6 +103,7 @@ async fn check_dns_inner(
     dns_url: &str,
     dns_servers: &[String],
     timeout: Duration,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<DnsBackendResult, AppError> {
     let mut body = serde_json::json!({ "domain": domain });
     if !dns_servers.is_empty() {
@@ -112,6 +115,7 @@ async fn check_dns_inner(
         timeout,
         client
             .post(url)
+            .headers(fwd.clone())
             .header("Accept", "text/event-stream")
             .json(&body)
             .send(),

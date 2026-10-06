@@ -37,13 +37,22 @@ impl Backend for EmailBackend {
         let public_url = self.public_url.clone();
         let timeout = self.timeout;
         let selectors = context.dkim_selectors.clone();
+        let fwd = context.forward_headers.clone();
 
         Box::pin(async move {
             let url = format!("{}/inspect", email_url.trim_end_matches('/'));
             let span = tracing::info_span!("backend_call", service = "beacon", url = %url);
-            check_email(&client, &url, &domain, &public_url, selectors, timeout)
-                .instrument(span)
-                .await
+            check_email(
+                &client,
+                &url,
+                &domain,
+                &public_url,
+                selectors,
+                timeout,
+                &fwd,
+            )
+            .instrument(span)
+            .await
         })
     }
 }
@@ -59,6 +68,7 @@ async fn check_email(
     public_url: &str,
     selectors: Option<Vec<String>>,
     timeout: Duration,
+    fwd: &reqwest::header::HeaderMap,
 ) -> Result<BackendResult, SectionError> {
     let mut body = serde_json::json!({ "domain": domain });
     if let Some(ref sels) = selectors
@@ -69,6 +79,7 @@ async fn check_email(
 
     let send_fut = client
         .post(url)
+        .headers(fwd.clone())
         .header("Accept", "text/event-stream")
         .json(&body)
         .send();
