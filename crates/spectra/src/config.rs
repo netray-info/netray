@@ -81,6 +81,8 @@ pub struct MetaConfig {
     #[serde(default)]
     pub http_base_url: Option<String>,
     #[serde(default)]
+    pub email_base_url: Option<String>,
+    #[serde(default)]
     pub lens_base_url: Option<String>,
 }
 
@@ -333,6 +335,74 @@ mod tests {
             ));
         let err = Config::load_with_env(None, env).unwrap_err().to_string();
         assert!(err.contains("unknown field `backends`"), "{err}");
+    }
+
+    /// The production template (argus-oci `spectra.toml.j2`) rendered in the
+    /// key layout this code reads: every key the template sets must load.
+    #[test]
+    fn production_shaped_config_loads() {
+        let cfg = load_toml(
+            "production",
+            r#"
+[server]
+bind = "0.0.0.0:8082"
+metrics_bind = "0.0.0.0:9090"
+trusted_proxies = ["10.0.0.0/8", "172.16.0.0/12"]
+
+[inspect]
+request_timeout_secs = 10
+total_timeout_secs = 30
+max_redirects = 10
+user_agent = "netray-spectra"
+
+[limits]
+per_ip_per_minute = 20
+per_ip_burst = 8
+per_target_per_minute = 40
+per_target_burst = 12
+max_concurrent_connections = 256
+
+[enrichment]
+ip_url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+
+[meta]
+ip_base_url = "https://ip.example.com"
+dns_base_url = "https://dns.example.com"
+tls_base_url = "https://tls.example.com"
+http_base_url = "https://http.example.com"
+email_base_url = "https://email.example.com"
+lens_base_url = "https://lens.example.com"
+
+[telemetry]
+log_format = "json"
+service_name = "spectra"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            cfg.server.metrics_bind,
+            SocketAddr::from(([0, 0, 0, 0], 9090))
+        );
+        assert_eq!(cfg.server.trusted_proxies, ["10.0.0.0/8", "172.16.0.0/12"]);
+        assert_eq!(cfg.limits.per_ip_per_minute, 20);
+        assert_eq!(cfg.limits.per_target_burst, 12);
+        assert_eq!(
+            cfg.enrichment.ip_url.as_deref(),
+            Some("http://ifconfig-rs:8000")
+        );
+        assert_eq!(
+            cfg.meta.ip_base_url.as_deref(),
+            Some("https://ip.example.com")
+        );
+        assert_eq!(
+            cfg.meta.email_base_url.as_deref(),
+            Some("https://email.example.com")
+        );
+        assert_eq!(
+            cfg.meta.lens_base_url.as_deref(),
+            Some("https://lens.example.com")
+        );
     }
 
     #[test]

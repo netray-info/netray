@@ -34,4 +34,5 @@ sample_rate = 1.0
 # dns_base_url = "https://dns.netray.info"
 # tls_base_url = "https://tls.netray.info"
 # http_base_url = "https://http.netray.info"
+# email_base_url = "https://email.netray.info"
 # lens_base_url = "https://lens.netray.info"

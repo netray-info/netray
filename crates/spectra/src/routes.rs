@@ -224,7 +224,7 @@ async fn meta_handler(
             dns_base_url: meta.dns_base_url.clone().unwrap_or_default(),
             tls_base_url: meta.tls_base_url.clone().unwrap_or_default(),
             http_base_url: meta.http_base_url.clone().unwrap_or_default(),
-            email_base_url: String::new(),
+            email_base_url: meta.email_base_url.clone().unwrap_or_default(),
             lens_base_url: meta.lens_base_url.clone().unwrap_or_default(),
         },
         features,
@@ -477,6 +477,22 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert!(body["version"].is_string());
         assert_eq!(body["site_name"], "spectra");
+    }
+
+    #[tokio::test]
+    async fn meta_returns_configured_ecosystem_urls() {
+        let mut config = test_config();
+        config.meta.email_base_url = Some("https://email.example.com".into());
+        config.meta.dns_base_url = Some("https://dns.example.com".into());
+        let state = AppState::new(&config);
+        let app = health_router(state.clone()).merge(api_router(state));
+        let (status, body) = get(&app, "/api/meta").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            body["ecosystem"]["email_base_url"],
+            "https://email.example.com"
+        );
+        assert_eq!(body["ecosystem"]["dns_base_url"], "https://dns.example.com");
     }
 
     #[tokio::test]
