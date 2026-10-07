@@ -1,0 +1,214 @@
+export interface InspectResponse {
+  request_id: string;
+  hostname: string;
+  input_mode: 'hostname' | 'ip';
+  summary: Summary;
+  ports: PortResult[];
+  dns: DnsContext | null;
+  quality?: QualityResult;
+  warnings?: string[];
+  skipped_ips?: string[];
+  duration_ms: number;
+}
+
+export type CheckStatus = 'pass' | 'warn' | 'fail' | 'skip';
+
+export interface Summary {
+  verdict: CheckStatus;
+  checks: {
+    chain_trusted: CheckStatus;
+    not_expired: CheckStatus;
+    hostname_match: CheckStatus;
+    caa_compliant: CheckStatus;
+    dane_valid: CheckStatus;
+    ct_logged: CheckStatus;
+    ocsp_stapled: CheckStatus;
+    consistency: CheckStatus;
+  };
+}
+
+export interface PortResult {
+  port: number;
+  ips: IpResult[];
+  consistency?: ConsistencyInfo;
+  validation?: ValidationInfo;
+  tlsa?: TlsaInfo;
+  quality?: PortQualityResult;
+  error?: ErrorInfo;
+}
+
+export interface IpResult {
+  ip: string;
+  ip_version: 'v4' | 'v6';
+  tls?: TlsInfo;
+  chain?: CertInfo[];
+  validation?: ValidationInfo;
+  ct?: CtInfo;
+  enrichment?: IpEnrichment;
+  error?: ErrorInfo;
+}
+
+export interface IpEnrichment {
+  network_type?: string;
+  asn?: number;
+  org?: string;
+  cloud?: { provider?: string; region?: string; service?: string };
+  is_tor: boolean;
+  is_vpn: boolean;
+  is_datacenter: boolean;
+  is_spamhaus: boolean;
+  is_c2: boolean;
+}
+
+export interface CtInfo {
+  sct_count: number;
+  scts: SctEntry[];
+}
+
+export interface SctEntry {
+  version: number;
+  log_id: string;
+  timestamp: string;
+}
+
+export interface OcspRevocationResult {
+  status: 'good' | 'revoked' | 'unknown';
+  reason?: string;
+  revoked_at?: string;
+  checked_at: string;
+}
+
+export interface TlsInfo {
+  version: string;
+  cipher_suite: string;
+  alpn: string | null;
+  sni: string | null;
+  key_exchange_group?: string;
+  ocsp: OcspInfo;
+  ocsp_live?: OcspRevocationResult;
+  handshake_ms: number;
+  starttls?: string;
+  ech_advertised?: boolean;
+}
+
+export interface OcspInfo {
+  stapled: boolean;
+  status: 'good' | 'revoked' | 'unknown' | 'malformed' | null;
+  this_update: string | null;
+  next_update: string | null;
+}
+
+export interface CertInfo {
+  position: 'leaf' | 'intermediate' | 'root' | 'self_signed' | 'leaf_self_signed';
+  subject: string;
+  issuer: string;
+  sans: string[];
+  serial: string;
+  not_before: string;
+  not_after: string;
+  days_remaining: number;
+  key_type: string;
+  key_size: number;
+  signature_algorithm: string;
+  fingerprint_sha256: string;
+  fingerprint_sha1: string;
+  lifetime_days: number;
+  is_expired: boolean;
+  is_self_signed: boolean;
+  cert_policy: string;
+  ocsp_url?: string;
+  ca_issuers_url?: string;
+}
+
+export interface ValidationInfo {
+  chain_trusted: boolean;
+  chain_trust_reason?: string;
+  terminates_at_self_signed: boolean;
+  chain_order_correct: boolean;
+  leaf_covers_hostname: boolean;
+  any_expired: boolean;
+  any_not_yet_valid: boolean;
+  weakest_signature: string;
+  earliest_expiry: string;
+  earliest_expiry_days: number;
+}
+
+export interface TlsaInfo {
+  records: string[];
+  dnssec_signed: boolean;
+  dane_valid: boolean | null;
+}
+
+export interface ConsistencyInfo {
+  certificates_match: boolean;
+  tls_versions_match: boolean;
+  cipher_suites_match: boolean;
+  mismatches: ConsistencyMismatch[];
+}
+
+export interface ConsistencyMismatch {
+  field: string;
+  values: Record<string, string>;
+}
+
+export interface DnsContext {
+  caa: CaaInfo | null;
+  resolved_ips: string[];
+}
+
+export interface CaaInfo {
+  records: string[];
+  issuer_allowed: boolean | null;
+  issuewild_present: boolean;
+}
+
+export interface ErrorInfo {
+  code: string;
+  message: string;
+}
+
+export type QualityCategory = 'certificate' | 'protocol' | 'configuration';
+
+export interface HealthCheck {
+  id: string;
+  category: QualityCategory;
+  status: CheckStatus;
+  label: string;
+  detail: string;
+}
+
+export interface QualityResult {
+  verdict: CheckStatus;
+  checks: HealthCheck[];
+  hsts?: HstsInfo;
+  https_redirect?: RedirectCheckInfo;
+}
+
+export interface PortQualityResult {
+  verdict: CheckStatus;
+  checks: HealthCheck[];
+}
+
+export interface HstsInfo {
+  present: boolean;
+  max_age: number;
+  include_sub_domains: boolean;
+  preload: boolean;
+}
+
+export interface RedirectCheckInfo {
+  status: CheckStatus;
+  redirect_url?: string;
+}
+
+export interface MetaResponse {
+  site_name: string;
+  version: string;
+  features: Record<string, boolean>;
+  limits: Record<string, number>;
+  custom_ca_count: number;
+  ecosystem?: {
+    dns_base_url?: string;
+    ip_base_url?: string;
+  };
+}

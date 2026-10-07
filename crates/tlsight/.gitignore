@@ -1,0 +1,30 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment / secrets
+.env
+.env.*
+tlsight.toml
+
+# Claude Code
+.claude/settings.local.json
+.claude/worktrees/
+
+custom_cas/
+
+# CA data — raw fetched files (caa_domains.tsv is committed)
+data/sslmate_issuers.json
+data/ccadb_caa_identifiers.csv
