@@ -1,0 +1,12 @@
+/target/
+**/*.rs.bk
+.idea/
+ifconfig-rs.iml
+node_modules/
+frontend/dist/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.claude/settings.local.json
+ifconfig.private.toml

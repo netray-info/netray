@@ -1,0 +1,105 @@
+[package]
+name = "ifconfig-rs"
+version = "0.21.2"
+authors = ["Lukas Pustina <lukas@pustina.net>"]
+
+description = "IP address and network information service"
+repository = "https://github.com/lukaspustina/ifconfig-rs"
+readme = "Readme.md"
+license = "MIT"
+keywords = ["ifconfig", "ip", "network", "webservice"]
+include = [
+  "Readme.md",
+  "LICENSE",
+  "**/*.rs",
+  "Cargo.toml",
+  "build.rs",
+  "ifconfig.example.toml",
+  "ifconfig.dev.toml",
+  "frontend/dist/**",
+]
+edition = "2024"
+
+[[bin]]
+name = "ifconfig-rs"
+path = "src/main.rs"
+
+[dependencies]
+arc-swap = "1"
+axum = { version = "0.8", features = ["json"] }
+axum-extra = { version = "0.12", features = ["typed-header"] }
+metrics = "0.24"
+metrics-exporter-prometheus = "0.18"
+config = "0.15"
+mhost = { version = "0.11", default-features = false }
+governor = "0.10"
+netray-common = { version = "0.8", features = ["schema", "middleware", "server", "spa", "otel"] }
+httpdate = "1"
+ip_network = "0.4"
+ip_network_table = "0.2"
+lru = "0.16"
+moka = { version = "0.12", features = ["future"] }
+maxminddb = "0.27"
+notify = "8"
+metrics-process = "2.3"
+mime_guess = "2"
+regex = "1"
+rust-embed = "8"
+serde = { version = "1", features = ["derive"] }
+subtle = "2"
+serde_json = "1.0"
+serde_yaml = { package = "serde_yaml_ng", version = "0.10" }
+thiserror = "2"
+tokio = { version = "1", features = [
+  "fs",
+  "macros",
+  "net",
+  "rt-multi-thread",
+  "signal",
+  "sync",
+  "time",
+] }
+toml = "1"
+tower = "0.5"
+tower-http = { version = "0.6", features = [
+  "cors",
+  "set-header",
+  "trace",
+  "compression-gzip",
+] }
+tracing = "0.1"
+uaparser = "0.6"
+utoipa = { version = "5", features = ["axum_extras"] }
+
+[dev-dependencies]
+criterion = { version = "0.8", features = ["html_reports"] }
+http-body-util = "0.1"
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+insta = { version = "1", features = ["json", "yaml", "toml"] }
+pretty_assertions = "1.4.0"
+tower = { version = "0.5", features = ["util"] }
+
+# Explicit test binary so admin tests always run in their own process.
+# The Prometheus metrics recorder is a global singleton; declaring admin as a
+# separate [[test]] binary guarantees it gets exactly one installation attempt,
+# regardless of how many other test binaries cargo runs in parallel.
+[[test]]
+name = "admin"
+path = "tests/admin.rs"
+
+[[bench]]
+name = "negotiation"
+harness = false
+
+[[bench]]
+name = "asn_heuristic"
+harness = false
+
+[[bench]]
+name = "serialization"
+harness = false
+
+[[bench]]
+name = "cloud_lookup"
+harness = false
+

@@ -1,0 +1,184 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.21.2] - 2026-05-01
+
+### Security
+- Bump frontend lockfile for postcss XSS (GHSA-qx2v-qp2m-jg93)
+
+### Fixed
+- Use `std::hint::black_box` in benches (criterion deprecation)
+
+### Changed
+- Bump @netray-info/common-frontend to 0.5.2
+- Bump netray-common to 0.8.1
+- Add CONTRIBUTING.md and DCO sign-off CI
+- Drop monitoring-service example from licensing section
+
+## [0.21.0] - 2026-04-11
+
+### Added
+- Frontend: align layout with suite blueprint, add keyboard navigation (58832d9)
+- Rewrite help modal, add keyboard shortcuts (a670460)
+
+### Changed
+- Frontend: use CrossLink component for DNS/TLS links in IpDisplay (679c7b9)
+- Add SDD for rename ifconfig-rs to iris (7ac7700)
+- Bump netray-common to 0.6.0 (9227ca1)
+
+## [0.20.4] - 2026-04-09
+
+### Fixed
+- Remove NODE_AUTH_TOKEN from .npmrc, use global auth (d54b52b)
+
+### Changed
+- Bump common-frontend to ^0.5.0 (968ffeb)
+- Bump common-frontend to ^0.4.0 (ac7dd3a)
+
+## [0.20.3] - 2026-04-09
+
+### Changed
+- Add architecture-rules reference to CLAUDE.md (b8621f5)
+- Condense CLAUDE.md rules and principles to avoid global duplication (edc3d6c)
+- Deduplicate frontend-rules and update spec paths in CLAUDE.md (6b73098)
+
+## [0.20.2] - 2026-04-09
+
+### Fixed
+- Add specific rejection logging and use build_error_response() (73941de)
+
+## [0.20.1] - 2026-04-08
+
+### Added
+- Standardize default log filter, document [telemetry] config (3c75189)
+
+### Fixed
+- Add rejection logging and admin_bind default per logging-rules spec (8d0cbfe)
+
+## [0.20.0] - 2026-04-08
+
+### Fixed
+- Frontend: reduce IPv6 address font size to fit on one line (8e2865c)
+- Frontend: a11y and CSS correctness fixes (be62408)
+- CI: use docker cp /data/. to extract into existing data/ dir (a336109)
+- CI: add dummy command to docker create for scratch data image (b148b84)
+- CI: use netray-info/ifconfig-rs-data image (c527010)
+
+### Changed
+- CI: add integration-test job (16a3827)
+- CI: remove integration-test and e2e-test jobs from CI (2cde1a0)
+- CI: restore --lib in test job (a06d327)
+- CI: add frontend lint script with tsc --noEmit (05b9225)
+- CI: fix cargo test scope and normalize npm working-directory (397ff1b)
+- CI: align workflows with netray.info workflow-rules spec (a582dcb)
+
+## [0.19.0] - 2026-04-08
+
+### Added
+- Primary button uses shared `.btn-primary` from common-frontend; fix theme localStorage key to `ifconfig_theme`; add `?` help modal (e5bd311)
+
+## [0.18.1] - 2026-04-08
+
+### Changed
+- Bump toml 0.9→1, typescript 5→6, vite 7→8 (241e829, e5a7e47)
+- Fix TypeScript 6 compatibility: add vite/client types to tsconfig (241e829)
+
+## [0.18.0] - 2026-04-07
+
+### Added
+- DNS/TLS deep links, mobile UX, bump netray-common to 0.5 (f7d05bd)
+
+### Changed
+- Frontend: use shared SuiteNav and fetchWithTimeout from common-frontend (46d006b, 3c06e2d)
+- Frontend: bump @netray-info/common-frontend to ^0.3.0 (3c06e2d)
+- Add human-readable docs link to OpenAPI description; CI integration examples in README (94ed68b)
+
+## [0.17.6] - 2026-04-07
+
+### Fixed
+- Use shared --bg-card-hover token from common-frontend (7d95a65)
+
+## [0.17.5] - 2026-04-07
+
+### Fixed
+- Update Cargo.lock to v0.17.4 (689a9b6)
+- Relax common-frontend version to ^0.2.1 (a4de9a0)
+- Upgrade vite 7.3.1 → 7.3.2 (CVE dev-server vulns) (be5e52a)
+
+## [0.17.4] - 2026-04-06
+
+### Added
+- Default theme to system preference (2cc46e6)
+
+### Changed
+- Align global.css with shared suite theme (079423f)
+- Bump @netray-info/common-frontend to 0.2.2 (3846a7b)
+- Omit dev deps from npm audit (7318299)
+
+## [0.17.3] - 2026-04-06
+
+### Changed
+- Suite branding — SuiteNav, meta tags, aligned palette, robots.txt (cce94f9)
+
+### Fixed
+- Increase e2e expect timeout to 15s to reduce flakiness (641af67)
+- Fix picomatch and brace-expansion vulnerabilities in frontend (94e4e94)
+
+## [0.17.0] - 2026-03-14
+
+### Added
+
+#### API Endpoints
+- `GET /asn/{number}` — ASN lookup by number, returning org name, ASN category, network role, and anycast flag.
+- `GET /range?cidr=<prefix>` — Network classification for an arbitrary CIDR prefix.
+- `POST /diff` — Side-by-side enrichment comparison for two IPs; body: `{"a":"<ip>","b":"<ip>"}`.
+- `GET /host` — Dedicated reverse-DNS hostname endpoint (previously only available via `/all`).
+- `GET /isp` — Dedicated ISP/ASN endpoint (previously only available via `/all`).
+
+#### Query Parameters
+- `?format=<json|yaml|toml|csv>` — Format alias equivalent to a path suffix; works on all endpoints.
+- `?lang=<BCP-47>` — Locale-aware city and country names (e.g. `?lang=de`).
+
+#### Network Classification
+- `is_anycast: bool` — Anycast detection via ASN heuristics; present in `network` object and `/asn/{number}` response.
+- `is_cins: bool` — CINS Army bad-actor IP list detection; new `cins_army_ips` data file config key.
+- `iana_label: string|null` — IANA special-purpose registry label for the address (e.g. "Shared Address Space").
+
+#### Data Enrichment Modules
+- `src/backend/cins.rs` — CINS Army IP list loader and matcher.
+- `src/backend/iana.rs` — IANA special-purpose registry table lookup.
+
+#### Response Headers / `/headers` Endpoint
+- `x_forwarded_for_chain` field added to `/headers` JSON response, exposing the parsed XFF hop list.
+
+#### CLI
+- `--check` flag — validates all configured data files and exits with code 0 (all ok) or 1 (any failure). Useful in deploy scripts and container startup checks.
+
+#### Frontend
+- Share button — uses `navigator.share` when available; falls back to clipboard copy of the `?ip=` URL.
+- Collapsible raw JSON per info card — `{·}` toggle on Network, Location, and User Agent cards.
+- `?ip=` LRU response cache — in-memory cache for repeated arbitrary IP lookups (default: 5 min TTL, 1024 entries, configurable via `[cache]` section).
+
+#### Configuration
+- `[cache]` section with `enabled`, `ttl_secs`, and `max_entries` keys.
+- `cins_army_ips` data file config key.
+
+#### Observability
+- `data_file_age_seconds` Prometheus gauge emitted for each loaded enrichment source.
+- Tracing instrumentation added to backend hot-paths.
+
+### Changed
+
+- CLI auto-detection extended to `python-httpx` and `python-requests` (in addition to `curl`, `wget`, `httpie`).
+- `/meta` `data_sources` entries now include a per-source `_updated` ISO-8601 timestamp sourced from file mtime; `null` when not loaded or mtime unavailable.
+- Migrated to `netray-common` telemetry and static handler modules.
+- CI: pinned action SHAs, switched from `cargo-audit` to `cargo-deny`, fixed SBOM toolchain step.
+- Dev tooling: added `rust-toolchain.toml`, `Dockerfile.dev`, and frontend ESLint config.
+
+## [0.16.0] - 2026-03-14
+
+Initial tracked release.
