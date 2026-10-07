@@ -73,6 +73,8 @@ elsif rel
   # Two runs for one tag must not both pass the existence check: queue them per ref.
   rconc = rel["concurrency"]
   fails << "release.yml: no per-ref concurrency group that queues (cancel-in-progress: false)" unless rconc.is_a?(Hash) && rconc["group"].to_s.include?("github.ref") && rconc["cancel-in-progress"] == false
+  # A branch named like a tag must not publish: the run refuses any ref that is not a tag.
+  fails << "release.yml: does not refuse non-tag refs (GITHUB_REF_TYPE)" unless raw.include?("GITHUB_REF_TYPE")
   jobs = (rel["jobs"] || {}).values.select { |j| j.is_a?(Hash) }
   fails << "release.yml: no job runs-on ubuntu-24.04-arm" unless jobs.any? { |j| Array(j["runs-on"]).include?("ubuntu-24.04-arm") }
   fails << "release.yml: linux/arm64 not present" unless raw.include?("linux/arm64")
