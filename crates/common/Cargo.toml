@@ -1,0 +1,89 @@
+[package]
+name = "netray-common"
+version = "0.8.1"
+edition = "2024"
+license = "MIT"
+description = "Shared utilities for the netray.info service ecosystem"
+repository = "https://github.com/netray-info/netray-common"
+homepage = "https://netray.info"
+keywords = ["networking", "security", "middleware", "axum"]
+categories = ["web-programming::http-server"]
+rust-version = "1.85"
+
+[features]
+schema = ["dep:utoipa"]
+middleware = ["dep:uuid"]
+telemetry = ["dep:tracing-subscriber", "dep:tracing-log"]
+otel = ["telemetry", "dep:opentelemetry", "dep:opentelemetry_sdk", "dep:opentelemetry-otlp", "dep:tracing-opentelemetry"]
+cors = ["dep:tower-http"]
+server = ["dep:tokio"]
+prometheus = ["server", "dep:metrics-exporter-prometheus"]
+spa = ["server", "dep:rust-embed", "dep:mime_guess"]
+enrichment = ["dep:reqwest", "dep:futures"]
+enrichment-cache = ["enrichment", "dep:moka"]
+backend = ["dep:reqwest", "dep:moka", "dep:tokio", "dep:bytes", "dep:thiserror"]
+
+[dependencies]
+# HTTP framework (for HeaderMap, StatusCode, IntoResponse)
+axum = { version = "0.8", features = ["json"] }
+
+# Optional: ToSchema derives for ErrorResponse / ErrorInfo
+utoipa = { version = "5", optional = true }
+
+# Optional: UUID v7 for request ID generation (used by middleware feature)
+uuid = { version = "1", features = ["v7"], optional = true }
+
+# Rate limiting
+governor = "0.10"
+
+# CIDR support for trusted proxy matching
+ip_network = "0.4"
+
+# Metrics
+metrics = "0.24"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+
+# Optional: tracing-subscriber (telemetry feature)
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "registry"], optional = true }
+tracing-log = { version = "0.2", optional = true }
+
+# Optional: tower-http (cors feature)
+tower-http = { version = "0.6", features = ["cors"], optional = true }
+
+# Optional: OpenTelemetry (otel feature)
+opentelemetry = { version = "0.31", optional = true }
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.31", features = ["http-proto"], optional = true }
+tracing-opentelemetry = { version = "0.32", optional = true }
+
+# Optional: tokio (server feature)
+tokio = { version = "1", features = ["signal", "net", "sync"], optional = true }
+
+# Optional: Prometheus metrics server (prometheus feature)
+metrics-exporter-prometheus = { version = "0.18", optional = true }
+
+# Optional: embedded SPA serving (spa feature)
+rust-embed = { version = "8", optional = true }
+mime_guess = { version = "2", optional = true }
+
+# JSON value type for EcosystemMeta features/limits maps
+serde_json = "1"
+
+# Optional: IP enrichment client (enrichment / enrichment-cache features)
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "webpki-roots"], optional = true }
+futures = { version = "0.3", optional = true }
+moka = { version = "0.12", features = ["future"], optional = true }
+
+# Optional: backend client (backend feature)
+bytes = { version = "1", optional = true }
+thiserror = { version = "2", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time"] }
+tower = { version = "0.5", features = ["util"] }
+futures = "0.3"
