@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.." || exit 1
 
 fail() { echo "FAIL: $1"; exit 1; }
 
-hits=$(git grep -ilE 'self[- ]?host' -- . \
+hits=$(git grep -ilE 'self[- ]?host|run (my|your) own instance' -- . \
   ':(exclude,glob)**/specs/**' \
   ':(exclude)specs' \
   ':(exclude,glob)**/docs/done/**' \
