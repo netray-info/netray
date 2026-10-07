@@ -422,32 +422,26 @@ Override any value with environment variables: `LENS_` prefix, `__` for nesting 
 
 ### Customizing the apex landing
 
-The apex page (hero copy, brand, example chips, footer, OG metadata) is driven by a `[site]` config section. Twelve fields cover every visible apex string:
+The apex page (hero copy, brand, example chips, footer, OG metadata) is driven by a `[site]` config section. Thirteen fields cover every visible apex string; the values below are the built-in defaults:
 
 ```toml
 [site]
-title          = "yourdomain.example — domain health, in seconds"
-description    = "Run a free DNS, TLS, HTTP, and email health check on any domain."
-brand_name     = "yourdomain"
-brand_tagline  = "domain health, in seconds"
+title          = "netray.info — your domain's health grade, in under a second"
+description    = "Type a domain, get an A+ to F grade across DNS, TLS, HTTP, and email security. No account, no ads, open source."
+brand_name     = "lens"
+brand_tagline  = "your domain's health grade, in under a second"
 hero_heading   = "How healthy is your domain?"
-hero_subheading = "DNS, TLS, HTTP, and email — checked in parallel, one grade, usually under a second."
-status_pill    = "open source · self-hosted · built in Rust"
-example_domains = ["yourdomain.example", "github.com", "cloudflare.com"]
-trust_strip    = "No account · No ads · Open source · Self-hostable"
-og_site_name   = "yourdomain.example"
-# og_image     = "https://yourdomain.example/og-card.png"
+hero_subheading = "DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second."
+status_pill    = "open source · built in Rust"
+example_domains = ["netray.info", "example.com", "github.com", "cloudflare.com"]
+trust_strip    = "No account · No ads · Open source"
+og_site_name   = "netray.info"
+# og_image     = "https://netray.info/og/landing.png"
 # footer_about = "..."
 # footer_links = [{ label = "Tools", href = "/tools", external = false }]
 ```
 
-Every field also takes a `LENS_SITE__*` env override, so an operator can rebrand without editing files:
-
-```sh
-LENS_SITE__HERO_HEADING="Is your domain healthy?" \
-LENS_SITE__BRAND_NAME="acme" \
-docker compose restart lens
-```
+The `[site]` keys override these texts; the scalar ones also via `LENS_SITE__*` env vars (the list fields `example_domains` and `footer_links` only in the file).
 
 What is **not** configurable: the six grade descriptors (`A+ excellent — ahead of most domains` etc.), per-check `fix_hint` / `fix_owner` copy, check labels and weights, and scoring thresholds. These are product semantics — see `specs/sdd/product-repositioning.md` §11 for the rationale.
 

@@ -22,16 +22,10 @@ function buildFaqItems(siteName: string): FaqItem[] {
       suffix: " with your ASN number and the classification you expected.",
     },
     {
-      q: "Can I run my own instance?",
-      a: "Absolutely. Just clone or fork the",
-      link: { text: "GitHub repository", url: "https://github.com/lukaspustina/ifconfig-rs" },
-      suffix: ". See the project's README for details on configuration and deployment.",
-    },
-    {
       q: "Can you add a feature?",
-      a: "Sure, open an issue or send a pull request on",
-      link: { text: "GitHub", url: "https://github.com/lukaspustina/ifconfig-rs" },
-      suffix: ".",
+      a: "Open an issue on",
+      link: { text: "GitHub", url: "https://github.com/lukaspustina/ifconfig-rs/issues" },
+      suffix: " and describe what you need.",
     },
   ];
 }

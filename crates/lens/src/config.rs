@@ -238,7 +238,7 @@ fn default_site_brand_tagline() -> Option<String> {
 }
 
 fn default_site_status_pill() -> Option<String> {
-    Some("open source · self-hosted · built in Rust".into())
+    Some("open source · built in Rust".into())
 }
 
 fn default_site_hero_heading() -> Option<String> {
@@ -254,7 +254,7 @@ fn default_site_hero_subheading() -> Option<String> {
 // netray.info leads as a self-demonstration ("eat your own dog food"); SDD §3
 // Requirement 24 listed only the three external examples, but for the
 // netray.info-flavored lens build it makes sense to surface our own apex
-// first. Self-hosters override.
+// first. Override via [site] in the config file.
 fn default_site_example_domains() -> Option<Vec<String>> {
     Some(vec![
         "netray.info".into(),
@@ -265,7 +265,7 @@ fn default_site_example_domains() -> Option<Vec<String>> {
 }
 
 fn default_site_trust_strip() -> Option<String> {
-    Some("No account · No ads · Open source · Self-hostable".into())
+    Some("No account · No ads · Open source".into())
 }
 
 fn default_site_footer_about() -> Option<String> {
@@ -580,7 +580,7 @@ mod tests {
     fn default_example_domains_lead_with_netray_info() {
         // SDD §3 Requirement 24 specified the three external examples;
         // for the netray.info-flavored build we prepend netray.info as a
-        // self-demonstration. Self-hosters override via [site] / env.
+        // self-demonstration. [site] / env overrides replace it.
         let s = SiteConfig::default();
         assert_eq!(
             s.example_domains.as_deref(),

@@ -232,7 +232,7 @@ export default function App() {
             powered by <a href="https://github.com/lukaspustina/ifconfig-rs" target="_blank" rel="noopener noreferrer">ifconfig-rs</a>.
             Geolocation data by{" "}
             <a href="https://www.maxmind.com" target="_blank" rel="noopener noreferrer">MaxMind</a> GeoLite2.
-            Open to use and self-host — rate limiting applies.
+            Open to use — rate limiting applies.
           </>}
           links={[
             { href: "https://github.com/lukaspustina/ifconfig-rs", label: "GitHub", external: true },

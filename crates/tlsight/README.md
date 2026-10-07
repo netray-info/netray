@@ -224,17 +224,7 @@ curl -s 'https://tls.netray.info/api/inspect?h=example.com' \
 
 ---
 
-## Deployment
-
-### From source
-
-```sh
-git clone https://github.com/lukaspustina/tlsight
-cd tlsight
-make
-./target/release/tlsight tlsight.example.toml
-# http://localhost:8081
-```
+## Configuration and build
 
 ### Configuration
 

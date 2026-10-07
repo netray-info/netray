@@ -50,3 +50,15 @@
 - `crates/netray/src/main.rs`: clap `netray {lens,dns,tls,http,email} [config]`, `ip [config] [--check] [--print-config]`, `site [--bind] [--root]`.
 - Root `justfile` `build` → `cargo build --release -p netray`; root `Dockerfile` builds and ships `netray` (+ `site/`), `ENTRYPOINT ["netray"]`.
 - Per-crate Dockerfiles/`Dockerfile.dev` stay for the CI/image spec (DEFERRED).
+
+## Phase 3 — One repository's documents
+
+## Groups
+
+- G1: C1, C3 — root `CONTRIBUTING.md`; delete the eight per-crate `CONTRIBUTING.md` and `dco.yml`.
+- G2: C4 (+ copy half of C2) — remove self-host promises from lens (config defaults, Landing fallbacks + test, example toml, README incl. the rebrand/deploy snippet), ifconfig-rs (footer, README Self-Hosting section, stale `make -C data`), tlsight (ValueProp, README "From source"), prism (README "From source"), site/tools, site/compare (one detail cell), the ECH guide wording; packages/common-frontend README drops GitHub Packages install; regenerate site/sitemap.xml in its own commit.
+- G3: C5 (+ build-input half of C2) — delete the six per-crate `Dockerfile`s, three `Dockerfile.dev`, three crate `.dockerignore`, `crates/ifconfig-rs/docker-compose.yml`; keep `crates/ifconfig-rs/data/Dockerfile`; fix the lens and beacon CLAUDE.md lines that referenced them.
+
+## Plan
+
+As returned by the planner (exact lines in the phase-3 planner output, recorded in report.md under Runs): lens defaults `status_pill` → "open source · built in Rust", `trust_strip` → "No account · No ads · Open source" (backend `config.rs` and frontend `Landing.tsx` fallbacks stay identical; `Landing.test.tsx` follows with an `ADLC-Test-Change` trailer); tlsight headline "Like SSL Labs, but open source.", drop "Self-hostable single binary"; ifconfig-rs footer "Open to use — rate limiting applies."; site pages keep their facts and drop "self-hostable"; the ECH guide says "servers you run yourself".

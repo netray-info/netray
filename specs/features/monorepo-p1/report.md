@@ -134,3 +134,52 @@ mx: smtp.google.com
 max_age: 86400
 ```
 The six service subcommands are exercised by `tests/repo/test_smoke_services.sh` (all green: `/`, `/health`, SPA fallback) and `test_service_config_and_metrics.sh` (argument beats `*_CONFIG`; `spectra_http_requests_total`, `prism_http_requests_total` unchanged).
+
+## Phase 3 — One repository's documents
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | Req 10: one root `CONTRIBUTING.md` (maintainer-led, issues welcome, PRs by arrangement, no self-host support); no crate/package `CONTRIBUTING.md`, `AGENTS.md` or DCO workflow | green | tests/repo/test_contributing.sh |
+| C2 | Req 11: no copy or document promises self-hosting (lens landing/config defaults, tlsight value proposition, `site/tools`, compare page, READMEs); no build input references crates.io publishing, GitHub Packages, `make -C`, or a sibling repository path | green | tests/repo/test_no_self_host.sh, test_build_inputs.sh |
+| C3 | GIVEN the tree THEN exactly one `CONTRIBUTING.md` and one `AGENTS.md` (root), no `dco.yml` | green | tests/repo/test_contributing.sh |
+| C4 | GIVEN the tree outside `specs/` and `CHANGELOG.md` WHEN searched case-insensitively for `self-host` THEN nothing | green | tests/repo/test_no_self_host.sh |
+| C5 | GIVEN the build inputs WHEN searched for `cargo publish`, `npm.pkg.github.com`, `make -C`, `../netray-common` THEN nothing | green | tests/repo/test_build_inputs.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1+G3 CONTRIBUTING, DCO, Dockerfiles | 2 | sonnet | 27,596 | 22 |
+| G2 self-host copy | 1 | sonnet | 34,076 | 44 |
+
+### Review
+
+First pass: 1 BLOCKER, 8 AMENDMENT, 2 DEFERRED, 3 NIT.
+
+| finding | class | resolution |
+|---|---|---|
+| ip.netray.info FAQ "Can I run my own instance? Absolutely…" pointing at the deleted README section; the test only grepped `self-host` | BLOCKER | test widened first (`run (my\|your) own instance`), entry removed; "send a pull request" entry now says "open an issue" (requirement 10) |
+| lens README apex section was a rebrand recipe (`yourdomain.example`) | AMENDMENT | kept as config reference, values replaced by lens's real defaults (repaired) |
+| tlsight README `custom_ca_dir` | AMENDMENT | no change: documents a config key, promises no self-hosting |
+| sitemap `lastmod` after committing site pages | AMENDMENT | regenerated in its own commit, as in phase 1 |
+| spec scenario contradicted requirement 10 (CONTRIBUTING must say "self-host") | AMENDMENT | scenario amended to exempt CONTRIBUTING.md and `docs/done/` (repaired) |
+| stale `make` / per-crate `just` verbs / `make -C data` / GitHub Packages token in crate READMEs and CLAUDE.md files | AMENDMENT/DEFERRED | the closing prose commit of this spec (step 8.5) |
+| FAQ invites pull requests; ifconfig `internal_mode` comment; prism roadmap names a per-crate CONTRIBUTING | NIT | the first fixed with the blocker; the others listed |
+
+Second pass (over the fixes): 0 BLOCKER.
+- AMENDMENT: README `example_domains` listed 2 of the 4 defaults. Repaired.
+- AMENDMENT: FAQ links pointed at the not-yet-existing `netray-info/netray` (404). Reverted to the current tracker; repointing all product links is part of archiving the old repos.
+- NIT: "Twelve fields" corrected to thirteen.
+- NIT: `LENS_SITE__*` cannot set the list fields; README and comment now say so.
+- DEFERRED: the FAQ has no render test. Listed.
+
+### Behavioural verification
+
+```
+$ netray lens lens.dev.toml; curl /api/meta | .site
+status_pill: open source · built in Rust
+trust_strip: No account · No ads · Open source
+example_domains: ['netray.info', 'example.com', 'github.com', 'cloudflare.com']
+```

@@ -11,7 +11,7 @@ afterEach(cleanup);
 // drift between backend and frontend surfaces here rather than in production.
 
 const FALLBACK_HEADING = 'How healthy is your domain?';
-const FALLBACK_TRUST = 'No account · No ads · Open source · Self-hostable';
+const FALLBACK_TRUST = 'No account · No ads · Open source';
 
 describe('Landing', () => {
   it('renders meta.site values when present', () => {
@@ -20,7 +20,7 @@ describe('Landing', () => {
         site={{
           hero_heading: 'Is your domain healthy?',
           hero_subheading: 'Custom subheading.',
-          status_pill: 'self-hosted build',
+          status_pill: 'custom status pill',
           example_domains: ['example.com', 'github.com'],
           trust_strip: 'Custom trust line.',
         }}
@@ -30,7 +30,7 @@ describe('Landing', () => {
 
     expect(getByText('Is your domain healthy?')).toBeTruthy();
     expect(getByText('Custom subheading.')).toBeTruthy();
-    expect(getByText('self-hosted build')).toBeTruthy();
+    expect(getByText('custom status pill')).toBeTruthy();
     expect(getByText('example.com')).toBeTruthy();
     expect(getByText('github.com')).toBeTruthy();
     expect(getByText('Custom trust line.')).toBeTruthy();

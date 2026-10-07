@@ -108,7 +108,7 @@
       <li><strong>Firefox</strong> -- supports ECH by default (enabled since Firefox 118). Firefox uses DNS-over-HTTPS by default in many regions, providing the encrypted DNS layer ECH needs.</li>
       <li><strong>Chrome</strong> -- supports ECH (enabled in Chrome 117+). Requires the system or configured DNS resolver to support DNS-over-HTTPS.</li>
       <li><strong>Safari</strong> -- does not yet support ECH as of early 2025.</li>
-      <li><strong>Self-hosted servers</strong> -- limited support. Some reverse proxies and TLS libraries are adding ECH, but it requires careful key management and DNS coordination.</li>
+      <li><strong>Servers you run yourself</strong> -- limited support. Some reverse proxies and TLS libraries are adding ECH, but it requires careful key management and DNS coordination.</li>
     </ul>
 
     <h2>How to enable ECH</h2>
@@ -117,8 +117,8 @@
     <h3>Behind a CDN (Cloudflare, etc.)</h3>
     <p>If your domain is proxied through Cloudflare, ECH is typically enabled automatically. Verify by checking for the HTTPS DNS record with an <code>ech</code> parameter. If the record is present and contains an ECH configuration, ECH is active.</p>
 
-    <h3>Self-hosted</h3>
-    <p>Self-hosting ECH is more involved:</p>
+    <h3>On your own servers</h3>
+    <p>Running ECH on your own servers is more involved:</p>
     <ol>
       <li>Generate an HPKE key pair for ECH.</li>
       <li>Configure your TLS server to use the ECH private key and public name.</li>

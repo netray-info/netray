@@ -34,7 +34,6 @@ the compiler.
 - `cargo test --lib` is the fast reliable check — no network or external services needed (~168 unit tests).
 - `cargo test` also runs integration tests in `tests/ok_handlers.rs` (~124 tests covering all endpoints, content types, `?ip=` lookups, `?fields=` filtering, batch, `/ipv6`, security headers, OpenAPI, and `/docs`), `tests/error_handler.rs`, `tests/rate_limit.rs` (5 tests covering rate limit headers, 429 behavior, and probe exemptions), and `tests/admin.rs` (admin port bearer auth). Total: ~300 tests.
 - Integration tests spawn real TCP listeners with hyper_util for each test case.
-- Docker integration tests (`just integration`) build and test inside a container via `tests/Dockerfile.tests`.
 - Playwright E2E tests (`just acceptance`) use configurable `baseURL` (default `http://127.0.0.1:8000`, override via `BASE_URL` env var) across Chromium, Firefox, and WebKit.
 
 ## Architecture

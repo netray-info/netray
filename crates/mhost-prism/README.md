@@ -243,17 +243,7 @@ curl -s 'https://dns.netray.info/api/query?q=netray.info+A&stream=false'
 
 ---
 
-## Deployment
-
-### From source
-
-```sh
-git clone https://github.com/lukaspustina/mhost-prism
-cd mhost-prism
-make
-./target/release/prism prism.example.toml
-# http://localhost:8080
-```
+## Configuration and build
 
 ### Configuration
 

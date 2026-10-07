@@ -33,8 +33,8 @@ Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows suite patterns.
 TOML file + env overrides with `BEACON__` prefix (`__` for nesting, e.g.
 `BEACON__SERVER__BIND`). The file is argv[1], else `$BEACON_CONFIG`, else
 `beacon.toml` in the working directory; the `starting beacon` log line names
-the path and source. The Dockerfile `CMD` passes no argument, so the deployed
-`BEACON_CONFIG` wins over the baked `beacon.toml`.
+the path and source. A deployment that passes no argument lets
+`BEACON_CONFIG` win over `beacon.toml` in the working directory.
 
 Every config struct is `#[serde(deny_unknown_fields)]`: an unknown key in the
 file or a `BEACON__*` env var fails startup instead of silently disabling a

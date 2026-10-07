@@ -4,16 +4,7 @@ Shared SolidJS utilities, primitives, and CSS design tokens for the [netray.info
 
 ## Install
 
-```sh
-npm install @netray-info/common-frontend
-```
-
-The package is published to the GitHub Packages registry:
-
-```sh
-# .npmrc
-@netray-info:registry=https://npm.pkg.github.com
-```
+The package is a workspace member of this repository, consumed by the service frontends through npm workspaces, not published.
 
 ## Exports
 

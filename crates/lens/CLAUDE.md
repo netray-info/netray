@@ -28,8 +28,6 @@ letter-graded health score.
 ```
 lens/
   Cargo.toml
-  Makefile
-  Dockerfile
   lens.example.toml
   profiles/
     default.toml          # Default scoring profile (embedded at compile time)

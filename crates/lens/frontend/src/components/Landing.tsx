@@ -29,13 +29,13 @@ export default function Landing(props: Props) {
     'DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second.';
 
   const statusPill = () =>
-    props.site?.status_pill ?? 'open source · self-hosted · built in Rust';
+    props.site?.status_pill ?? 'open source · built in Rust';
 
   const exampleDomains = () =>
     props.site?.example_domains ?? ['netray.info', 'example.com', 'github.com', 'cloudflare.com'];
 
   const trustStrip = () =>
-    props.site?.trust_strip ?? 'No account · No ads · Open source · Self-hostable';
+    props.site?.trust_strip ?? 'No account · No ads · Open source';
 
   return (
     <div class="landing">

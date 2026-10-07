@@ -214,28 +214,6 @@ jq -Rn '[inputs]' ips.txt | curl -s -X POST ip.netray.info/batch \
 
 ---
 
-## Self-Hosting
-
-### Docker (quickest)
-
-```sh
-docker run -p 8080:8080 \
-  -v $(pwd)/data:/data \
-  -v $(pwd)/ifconfig.toml:/etc/ifconfig.toml \
-  ghcr.io/lukaspustina/ifconfig-rs
-```
-
-### From source
-
-```sh
-git clone https://github.com/lukaspustina/ifconfig-rs
-cd ifconfig-rs
-make            # frontend + release binary
-./target/release/ifconfig-rs ifconfig.example.toml
-```
-
----
-
 ## Configuration
 
 Copy `ifconfig.example.toml` and adjust:
@@ -272,7 +250,7 @@ ttl_secs = 300
 
 Override any value with `IFCONFIG_` env vars (`__` for nested sections): `IFCONFIG_SERVER__BIND=0.0.0.0:8080`.
 
-Data files live in `data/`. Acquire them with `make -C data get_all` (requires a free MaxMind license for GeoLite2).
+Data files live in `data/`. Acquire them with `just ifconfig-data` (requires a free MaxMind license for GeoLite2).
 
 ---
 

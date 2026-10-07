@@ -87,7 +87,7 @@ release workflow and the image published to GHCR are a later spec; the per-crate
 ### Test Scenarios
 
 - GIVEN the tree WHEN searched THEN exactly one `CONTRIBUTING.md` and one `AGENTS.md` exist (both at the root), and no `dco.yml`.
-- GIVEN the tree outside `specs/` and `CHANGELOG.md` files WHEN searched case-insensitively for `self-host` THEN nothing is found.
+- GIVEN the tree outside historical records (`specs/`, `docs/done/`, `CHANGELOG.md` files) and the root `CONTRIBUTING.md` (which states that self-hosting is unsupported) WHEN searched case-insensitively for `self-host` or "run your own instance" THEN nothing is found.
 - GIVEN the build inputs WHEN searched for `cargo publish`, `npm.pkg.github.com`, `make -C`, and `../netray-common` THEN nothing is found.
 
 ## Open decisions
