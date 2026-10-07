@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::release runs only from a tag ref, not from $GITHUB_REF_TYPE $GITHUB_REF_NAME"
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::ref '$GITHUB_REF_NAME' is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if the image tag exists
+        run: |
+          ref="ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}"
+          if out=$(docker manifest inspect "$ref" 2>&1); then
+            echo "::error::$ref already exists; tags are never overwritten"
+            exit 1
+          fi
+          if ! grep -qiE 'manifest unknown|not found|no such manifest' <<<"$out"; then
+            echo "::error::cannot tell whether $ref exists: $out"
+            exit 1
+          fi
+
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: .
+          platforms: linux/arm64
+          load: true
+          push: false
+          tags: ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}
+
+      - name: Smoke-test every subcommand
+        run: |
+          image="ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}"
+          cas="$RUNNER_TEMP/custom_cas"
+          mkdir -p "$cas"
+          failed=0
+
+          # sub | config | env prefix for the bind overrides | extra docker run args
+          rows=(
+            "lens|lens.example.toml|LENS_SERVER__|-e LENS_SNAPSHOTS__DB_PATH=/tmp/snapshots.db"
+            "dns|prism.example.toml|PRISM_SERVER__|"
+            "tls|tlsight.example.toml|TLSIGHT_SERVER__|-e TLSIGHT_VALIDATION__CUSTOM_CA_DIR=/tmp/custom_cas -v $cas:/tmp/custom_cas:ro"
+            "http|spectra.example.toml|SPECTRA__SERVER__|"
+            "email|beacon.toml|BEACON__SERVER__|"
+            "ip|ifconfig.example.toml|IFCONFIG_SERVER__|-e IFCONFIG_GEOIP_CITY_DB=data/GeoLite2-City.mmdb -e IFCONFIG_GEOIP_ASN_DB=data/GeoLite2-ASN.mmdb"
+          )
+
+          check() {
+            local name="$1" path="$2" i
+            for i in $(seq 1 30); do
+              if docker exec "$name" wget -qO- "http://127.0.0.1:8080$path" >/dev/null 2>&1; then
+                echo "ok: $name $path"
+                return 0
+              fi
+              sleep 1
+            done
+            echo "::error::$name did not answer $path within 30 s"
+            docker logs "$name" 2>&1 | tail -n 20
+            return 1
+          }
+
+          for row in "${rows[@]}"; do
+            IFS='|' read -r sub cfg prefix extra <<<"$row"
+            admin=METRICS_BIND
+            [ "$sub" = ip ] && admin=ADMIN_BIND
+            # shellcheck disable=SC2086
+            docker run -d --name "smoke-$sub" \
+              -e "${prefix}BIND=127.0.0.1:8080" -e "${prefix}${admin}=127.0.0.1:9090" $extra \
+              "$image" "$sub" "$cfg" >/dev/null
+            check "smoke-$sub" /health || failed=1
+            docker rm -f "smoke-$sub" >/dev/null
+          done
+
+          docker run -d --name smoke-site "$image" site --bind 127.0.0.1:8080 >/dev/null
+          check smoke-site /guide/ || failed=1
+          docker rm -f smoke-site >/dev/null
+
+          exit "$failed"
+
+      - name: Publish the image
+        run: docker push "ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}"

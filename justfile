@@ -10,7 +10,11 @@ default: adlc-verify
 adlc-verify: test-repo check-frontend-dist fmt-check clippy test-rust-offline test-frontend validate-site check-sitemap
 
 # Everything the gate runs, plus the full Rust suite (ifconfig-rs integration tests need `just ifconfig-data`).
-check: adlc-verify test-rust
+check: adlc-verify deny test-rust
+
+# Deterministic supply-chain checks; advisories run on a schedule elsewhere (workflow-rules R-J6).
+deny:
+    cargo deny check bans licenses sources
 
 # Repository structure checks: one test per file, each exits non-zero on failure.
 test-repo:
@@ -134,6 +138,7 @@ release version:
 # What makes a fresh checkout able to run the contract: the tools, the dependencies, the frontend builds.
 adlc-setup:
     @for t in cargo node npm bash; do command -v "$t" >/dev/null || { echo "$t is not on PATH" >&2; exit 1; }; done
+    @command -v cargo-deny >/dev/null || cargo install cargo-deny --locked
     npm ci
     npm run build:types -w @netray-info/common-frontend
     npm run build --workspaces --if-present

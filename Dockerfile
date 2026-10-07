@@ -19,6 +19,8 @@ RUN cargo build --release -p netray \
  && mkdir /out \
  && cp "$(find /build/target -xdev -type f -path '*/release/*' -name netray | head -n1)" /out/
 
+FROM ghcr.io/netray-info/ifconfig-rs-data:latest AS data
+
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates wget \
  && addgroup -S netray && adduser -S netray -G netray
@@ -28,6 +30,7 @@ COPY crates/beacon/beacon.toml crates/ifconfig-rs/ifconfig.example.toml crates/l
      crates/mhost-prism/prism.example.toml crates/spectra/spectra.example.toml \
      crates/tlsight/tlsight.example.toml ./
 COPY site ./site
+COPY --from=data /data /netray/data
 RUN chown -R netray:netray /netray
 USER netray
 # One image, one binary; the subcommand picks the service:
