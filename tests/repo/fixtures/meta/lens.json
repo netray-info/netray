@@ -1,0 +1,114 @@
+{
+  "site_name": "lens — Domain Health Check",
+  "version": "0.12.0",
+  "ecosystem": {
+    "ip_base_url": "https://ip.netray.info",
+    "dns_base_url": "https://dns.netray.info",
+    "tls_base_url": "https://tls.netray.info",
+    "http_base_url": "https://http.netray.info",
+    "email_base_url": "https://email.netray.info",
+    "lens_base_url": "https://lens.netray.info"
+  },
+  "features": {
+    "badges": true,
+    "profile": {
+      "checks": {
+        "aead_cipher": 5,
+        "aia_reachability": 2,
+        "alpn_consistency": 2,
+        "caa": 5,
+        "caa_compliant": 5,
+        "cert_lifetime": 3,
+        "chain_complete": 5,
+        "chain_trusted": 10,
+        "cname_apex": 5,
+        "consistency": 3,
+        "cookie_secure": 2,
+        "cors": 3,
+        "ct_logged": 3,
+        "dane_valid": 3,
+        "dnskey_algorithm": 3,
+        "dnssec": 5,
+        "dnssec_rollover": 2,
+        "ech_advertised": 2,
+        "email_authentication": 10,
+        "email_brand_policy": 2,
+        "email_infrastructure": 5,
+        "email_transport": 5,
+        "expiry_window": 5,
+        "forward_secrecy": 5,
+        "hostname_match": 10,
+        "hsts": 5,
+        "https_redirect": 5,
+        "https_svcb": 2,
+        "hygiene": 2,
+        "key_strength": 5,
+        "not_expired": 10,
+        "ns": 3,
+        "ns_delegation": 3,
+        "ns_lame": 5,
+        "ocsp_stapled": 3,
+        "reputation": 5,
+        "san_quality": 2,
+        "security_headers": 5,
+        "strong_signature": 5,
+        "tls_version": 5,
+        "ttl": 2
+      },
+      "hard_fail": {
+        "dns": [],
+        "email": [],
+        "http": [],
+        "ip": [],
+        "tls": [
+          "chain_trusted",
+          "not_expired"
+        ]
+      },
+      "name": "default",
+      "section_weights": {
+        "dns": 20,
+        "email": 15,
+        "http": 20,
+        "ip": 10,
+        "tls": 35
+      },
+      "thresholds": {
+        "A": 90,
+        "A+": 97,
+        "B": 75,
+        "C": 60,
+        "D": 40,
+        "F": 0
+      },
+      "version": 2
+    }
+  },
+  "limits": {},
+  "rate_limit": {
+    "per_ip_per_minute": 10,
+    "per_ip_burst": 3,
+    "global_per_minute": 100,
+    "global_burst": 20
+  },
+  "site": {
+    "title": "netray.info — your domain's health grade, in under a second",
+    "description": "Type a domain, get an A+ to F grade across DNS, TLS, HTTP, and email security. No account, no ads, open source.",
+    "og_image": "https://netray.info/og/landing.png",
+    "og_site_name": "netray.info",
+    "brand_name": "lens",
+    "brand_tagline": "your domain's health grade, in under a second",
+    "status_pill": "open source · self-hosted · built in Rust",
+    "hero_heading": "How healthy is your domain?",
+    "hero_subheading": "DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second.",
+    "example_domains": [
+      "netray.info",
+      "example.com",
+      "github.com",
+      "cloudflare.com"
+    ],
+    "trust_strip": "No account · No ads · Open source · Self-hostable",
+    "footer_about": null,
+    "footer_links": null
+  }
+}

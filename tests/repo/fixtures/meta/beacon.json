@@ -1,0 +1,27 @@
+{
+  "site_name": "beacon",
+  "version": "0.4.0",
+  "ecosystem": {
+    "ip_base_url": "https://ip.netray.info",
+    "dns_base_url": "https://dns.netray.info",
+    "tls_base_url": "https://tls.netray.info",
+    "http_base_url": "https://http.netray.info",
+    "email_base_url": "https://email.netray.info",
+    "lens_base_url": "https://lens.netray.info"
+  },
+  "features": {
+    "dnsbl_zones_count": 4,
+    "ip_enrichment": true
+  },
+  "limits": {
+    "dns_timeout_ms": 5000,
+    "max_concurrent_inspections": 16,
+    "max_user_dkim_selectors": 5
+  },
+  "rate_limit": {
+    "per_ip_per_minute": 10,
+    "per_ip_burst": 0,
+    "global_per_minute": 0,
+    "global_burst": 0
+  }
+}
