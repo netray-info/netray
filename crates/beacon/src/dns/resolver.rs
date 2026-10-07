@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use mhost::RecordType;
-use mhost::nameserver::NameServerConfig;
 use mhost::nameserver::predefined::PredefinedProvider;
+use mhost::nameserver::{NameServerConfig, Protocol};
 use mhost::resolver::{
     Error as ResolverError, MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder,
 };
@@ -53,9 +53,13 @@ impl DnsResolver {
                 builder = builder.nameserver(NameServerConfig::udp(sock));
             } else if let Ok(provider) = PredefinedProvider::from_str(entry) {
                 // Predefined provider: add IPv4-only configs (IPv6 times out on
-                // machines where IPv6 is unavailable, causing 10 s stalls per query)
+                // machines where IPv6 is unavailable, causing 10 s stalls per query),
+                // UDP/TCP only: in the one `netray` binary prism enables mhost's
+                // DoH/DoT, which would otherwise join beacon's rotation.
                 for ns_config in provider.configs() {
-                    if ns_config.ip_addr().is_ipv4() {
+                    if ns_config.ip_addr().is_ipv4()
+                        && matches!(ns_config.protocol(), Protocol::Udp | Protocol::Tcp)
+                    {
                         builder = builder.nameserver(ns_config);
                     }
                 }
