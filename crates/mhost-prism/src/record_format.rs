@@ -680,7 +680,7 @@ pub fn format_ds_human(obj: &serde_json::Value) -> Option<String> {
     let digest = obj.get("digest").and_then(|v| v.as_str()).unwrap_or("");
 
     let mut lines = vec![
-        format!("Delegation Signer"),
+        "Delegation Signer".to_string(),
         format!("DNSKEY tag: {key_tag}"),
         format!("{algo}, {dt}"),
     ];
