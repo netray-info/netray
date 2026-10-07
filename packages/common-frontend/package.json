@@ -1,6 +1,7 @@
 {
   "name": "@netray-info/common-frontend",
   "version": "0.5.2",
+  "private": true,
   "license": "MIT",
   "type": "module",
   "files": [
@@ -62,16 +63,12 @@
       "import": "./src/api.ts"
     }
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/netray-info/netray-common-frontend.git"
   },
   "scripts": {
     "build:types": "tsc --project tsconfig.build.json",
-    "prepublishOnly": "npm run build:types",
     "test": "vitest run"
   },
   "devDependencies": {

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use crate::config::Config;
 use crate::security::{IpExtractor, RateLimitState};
-use netray_common::enrichment::EnrichmentClient;
+use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -22,6 +22,7 @@ impl AppState {
                 Duration::from_millis(config.enrichment.timeout_ms),
                 "spectra",
                 None,
+                EnrichmentMode::Plain,
             ))
         });
 

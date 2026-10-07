@@ -16,7 +16,7 @@
 
 use std::time::Duration;
 
-use netray_common::enrichment::EnrichmentClient;
+use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -49,7 +49,13 @@ async fn enrichment_client_calls_backend_when_url_set() {
 
     // Same construction beacon uses in AppState::new() once
     // BEACON_BACKENDS__IP_URL is set.
-    let client = EnrichmentClient::new(&backend_url, Duration::from_millis(5000), "beacon", None);
+    let client = EnrichmentClient::new(
+        &backend_url,
+        Duration::from_millis(5000),
+        "beacon",
+        None,
+        EnrichmentMode::Backend { cache_ttl_secs: 0 },
+    );
 
     // Use a public IP. Reserved ranges (RFC 1918, RFC 5737 doc-prefix, etc.)
     // are short-circuited by `is_allowed_target` before the backend is hit.

@@ -6,7 +6,7 @@ use tokio::sync::Semaphore;
 use crate::config::Config;
 use crate::dns::DnsResolver;
 use crate::security::{IpExtractor, RateLimitState};
-use netray_common::enrichment::EnrichmentClient;
+use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -39,6 +39,7 @@ impl AppState {
                 Duration::from_millis(config.backends.timeout_ms),
                 "beacon",
                 None,
+                EnrichmentMode::Backend { cache_ttl_secs: 0 },
             )))
         };
 

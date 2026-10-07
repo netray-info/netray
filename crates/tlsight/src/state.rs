@@ -7,7 +7,7 @@ use arc_swap::ArcSwap;
 use crate::config::Config;
 use crate::dns::DnsResolver;
 use crate::security::{IpExtractor, RateLimitState};
-use netray_common::enrichment::EnrichmentClient;
+use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
 use rustls::client::danger::ServerCertVerifier;
 use tokio::sync::Semaphore;
 
@@ -57,6 +57,7 @@ impl AppState {
                     Duration::from_millis(ip_cfg.timeout_ms),
                     "tlsight",
                     None,
+                    EnrichmentMode::Backend { cache_ttl_secs: 0 },
                 ))
             })
         });

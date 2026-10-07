@@ -63,7 +63,7 @@ impl AppState {
     /// Build `AppState` from a validated `Config`.
     pub fn new(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
         let http_client = reqwest::Client::builder()
-            .use_rustls_tls()
+            .tls_backend_rustls()
             .user_agent(concat!("lens/", env!("CARGO_PKG_VERSION")))
             .build()?;
 

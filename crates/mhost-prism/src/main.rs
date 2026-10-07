@@ -84,6 +84,9 @@ async fn main() {
                 std::time::Duration::from_millis(timeout_ms),
                 "prism",
                 Some("prism"),
+                netray_common::enrichment::EnrichmentMode::Backend {
+                    cache_ttl_secs: 300,
+                },
             ))
         })
     });

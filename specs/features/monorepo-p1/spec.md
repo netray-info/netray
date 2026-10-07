@@ -25,7 +25,7 @@ release workflow and the image published to GHCR are a later spec; the per-crate
 
 ## Requirements
 
-1. The root `Cargo.toml` is a workspace whose members are every crate under `crates/`. Every crate depends on `crates/common` by path. Versions shared by two or more crates live in `[workspace.dependencies]`. There is exactly one `Cargo.lock` (root) and one `rust-toolchain.toml` (root); no crate keeps its own. Edition 2024.
+1. The root `Cargo.toml` is a workspace whose members are every crate under `crates/`. Every crate depends on `crates/common` by path. Versions shared by two or more crates live in `[workspace.dependencies]`. There is exactly one `Cargo.lock` (root) and one `rust-toolchain.toml` (root); no crate keeps its own. Edition 2024. Every crate inherits `[workspace.package] version`, so every service reports the one suite version (in `/api/meta`, OpenAPI `info.version`, User-Agents, ETags); it starts at `0.22.0`, above every per-service version released so far.
 2. The workspace resolves one version of `reqwest` and one of `axum-extra`.
 3. The root `package.json` declares npm workspaces for the six service frontends (`crates/*/frontend`) and `packages/common-frontend`. Each frontend depends on `@netray-info/common-frontend` through the workspace. No `.npmrc` names `npm.pkg.github.com` or an `_authToken`. There is exactly one `package-lock.json` for the workspaces (root); `tests/acceptance/` keeps its own. All workspace packages use one major version of `vite` and one of `typescript`.
 4. Each service crate is a library with an async entry point that takes the config path and runs the service until shutdown. No service crate defines a binary target or a `main.rs`.

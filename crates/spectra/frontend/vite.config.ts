@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 function cargoVersion(): string {
   try {
-    const cargo = readFileSync('../Cargo.toml', 'utf-8');
+    const cargo = readFileSync('../../../Cargo.toml', 'utf-8');
     const m = cargo.match(/^version\s*=\s*"([^"]+)"/m);
     return m ? m[1] : '0.0.0';
   } catch {

@@ -5,10 +5,12 @@
 //! active — zero OTel overhead.
 
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use opentelemetry::global;
 use opentelemetry::trace::TracerProvider;
-use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_http::{Bytes, HttpClient, HttpError, Request, Response};
+use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::trace::{Sampler, SdkTracerProvider};
 use serde::Deserialize;
@@ -16,6 +18,55 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 static TRACER_PROVIDER: OnceLock<SdkTracerProvider> = OnceLock::new();
+
+/// OTLP transport over reqwest 0.13's blocking client.
+///
+/// `opentelemetry-http` 0.31 implements `HttpClient` only for reqwest 0.12; this
+/// mirrors its blocking impl so the workspace resolves a single reqwest.
+#[derive(Debug)]
+struct BlockingReqwestClient(reqwest::blocking::Client);
+
+#[async_trait::async_trait]
+impl HttpClient for BlockingReqwestClient {
+    async fn send_bytes(&self, request: Request<Bytes>) -> Result<Response<Bytes>, HttpError> {
+        let request = request.try_into()?;
+        let mut response = self.0.execute(request)?.error_for_status()?;
+        let headers = std::mem::take(response.headers_mut());
+        let mut http_response = Response::builder()
+            .status(response.status())
+            .body(response.bytes()?)?;
+        *http_response.headers_mut() = headers;
+        Ok(http_response)
+    }
+}
+
+/// Build the blocking client on its own thread: `reqwest::blocking` panics when
+/// created or dropped inside an async runtime.
+fn build_http_client() -> Result<BlockingReqwestClient, Box<dyn std::error::Error + Send + Sync>> {
+    let timeout = otlp_export_timeout(|k| std::env::var(k).ok());
+    let client = std::thread::spawn(move || {
+        reqwest::blocking::Client::builder()
+            .timeout(timeout)
+            .build()
+    })
+    .join()
+    .map_err(|_| "OTLP HTTP client thread panicked")??;
+    Ok(BlockingReqwestClient(client))
+}
+
+/// Export timeout as opentelemetry-otlp 0.31.1 resolves it: the traces
+/// variable, then the generic one (milliseconds; unparsable counts as unset),
+/// then 10 s.
+fn otlp_export_timeout(var: impl Fn(&str) -> Option<String>) -> Duration {
+    [
+        "OTEL_EXPORTER_OTLP_TRACES_TIMEOUT",
+        "OTEL_EXPORTER_OTLP_TIMEOUT",
+    ]
+    .iter()
+    .find_map(|name| var(name).and_then(|v| v.parse::<u64>().ok()))
+    .map(Duration::from_millis)
+    .unwrap_or(Duration::from_secs(10))
+}
 
 /// Log output format.
 ///
@@ -159,6 +210,7 @@ fn init_otel_layer(
 
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_http()
+        .with_http_client(build_http_client()?)
         .with_endpoint(&config.otlp_endpoint)
         .build()?;
 

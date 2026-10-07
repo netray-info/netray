@@ -95,11 +95,11 @@ function urlEntry({ loc, lastmod, changefreq, priority }) {
 
 const entries = [];
 
-// Landing page first.
+// Landing page first. lens serves the apex, so its frontend dates the landing page.
 const landing = join(SITE_ROOT, 'index.html');
 entries.push({
   loc: urlFor(landing),
-  lastmod: gitLastmod(landing),
+  lastmod: gitLastmod(join(REPO_ROOT, 'crates', 'lens', 'frontend', 'index.html')),
   changefreq: 'monthly',
   priority: '1.0',
 });

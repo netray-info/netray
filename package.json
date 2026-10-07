@@ -1,0 +1,8 @@
+{
+  "name": "netray",
+  "private": true,
+  "workspaces": [
+    "crates/*/frontend",
+    "packages/common-frontend"
+  ]
+}

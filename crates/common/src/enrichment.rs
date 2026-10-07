@@ -1,9 +1,9 @@
 //! IP enrichment client for the netray.info service ecosystem.
 //!
 //! Provides a shared client for fetching ASN, cloud provider, and threat-flag
-//! metadata from an ifconfig-rs compatible API. When the `backend` feature is
-//! enabled, delegates HTTP transport, concurrency limiting, caching, and metrics
-//! to [`crate::backend::BackendClient`].
+//! metadata from an ifconfig-rs compatible API. [`EnrichmentMode::Backend`]
+//! delegates HTTP transport, concurrency limiting, caching, and metrics to
+//! [`crate::backend::BackendClient`].
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -61,22 +61,31 @@ pub fn is_private_ip(ip: IpAddr) -> bool {
     !crate::target_policy::is_allowed_target(ip)
 }
 
+/// Transport an [`EnrichmentClient`] uses, chosen by the caller at runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnrichmentMode {
+    /// Standalone `reqwest::Client` with the caller's `User-Agent`, no cache.
+    Plain,
+    /// [`crate::backend::BackendClient`] with concurrency limiting and metrics;
+    /// a `cache_ttl_secs` of 0 disables the cache. Requires the `backend` feature.
+    Backend { cache_ttl_secs: u64 },
+}
+
+enum Transport {
+    Plain {
+        client: reqwest::Client,
+        metrics_label: Option<&'static str>,
+    },
+    #[cfg(feature = "backend")]
+    Backend(crate::backend::BackendClient),
+}
+
 /// HTTP client for IP enrichment lookups against an ifconfig-rs compatible API.
 ///
-/// When built with the `backend` feature, delegates transport to
-/// [`crate::backend::BackendClient`] for semaphore-based concurrency limiting,
-/// caching, and metrics. Otherwise uses a standalone `reqwest::Client` with
-/// optional `moka` cache (behind `enrichment-cache`).
+/// The transport is selected by [`EnrichmentMode`] at construction time.
 pub struct EnrichmentClient {
-    #[cfg(feature = "backend")]
-    backend: crate::backend::BackendClient,
-    #[cfg(not(feature = "backend"))]
-    client: reqwest::Client,
+    transport: Transport,
     base_url: String,
-    #[cfg(not(feature = "backend"))]
-    metrics_label: Option<&'static str>,
-    #[cfg(all(feature = "enrichment-cache", not(feature = "backend")))]
-    cache: moka::future::Cache<IpAddr, Option<IpInfo>>,
 }
 
 impl EnrichmentClient {
@@ -89,63 +98,63 @@ impl EnrichmentClient {
     ///
     /// - `base_url` -- ifconfig API base URL (e.g. `https://ip.netray.info`)
     /// - `timeout` -- per-request HTTP timeout
-    /// - `user_agent` -- `User-Agent` header value sent to the enrichment API
+    /// - `user_agent` -- `User-Agent` header value sent in [`EnrichmentMode::Plain`]
     /// - `metrics_label` -- when `Some`, emit Prometheus counters tagged with
     ///   `service = <label>`. Pass `None` to skip metrics.
+    /// - `mode` -- transport and cache selection
+    ///
+    /// # Panics
+    ///
+    /// On [`EnrichmentMode::Backend`] when built without the `backend` feature.
     pub fn new(
         base_url: &str,
         timeout: Duration,
         user_agent: &'static str,
         metrics_label: Option<&'static str>,
+        mode: EnrichmentMode,
     ) -> Self {
         let trimmed = base_url.trim_end_matches('/').to_owned();
 
-        #[cfg(feature = "backend")]
-        {
-            let config = crate::backend::BackendConfig {
-                url: Some(trimmed.clone()),
-                timeout_ms: timeout.as_millis() as u64,
-                max_concurrent: 20,
-                cache_ttl_secs: if cfg!(feature = "enrichment-cache") {
-                    300
-                } else {
-                    0
-                },
-                cache_capacity: 1024,
-            };
-            let backend = crate::backend::BackendClient::new(
-                &config,
-                "ifconfig",
-                metrics_label.unwrap_or(""),
-            )
-            .expect("BackendClient::new returned None with Some(url)");
-            let _ = user_agent; // user_agent is baked into BackendClient's reqwest::Client
-            Self {
-                backend,
-                base_url: trimmed,
+        let transport = match mode {
+            EnrichmentMode::Plain => {
+                let client = reqwest::Client::builder()
+                    .timeout(timeout)
+                    .user_agent(user_agent)
+                    .pool_max_idle_per_host(5)
+                    .pool_idle_timeout(Duration::from_secs(90))
+                    .build()
+                    .expect("failed to build enrichment HTTP client");
+                Transport::Plain {
+                    client,
+                    metrics_label,
+                }
             }
-        }
-
-        #[cfg(not(feature = "backend"))]
-        {
-            let client = reqwest::Client::builder()
-                .timeout(timeout)
-                .user_agent(user_agent)
-                .pool_max_idle_per_host(5)
-                .pool_idle_timeout(std::time::Duration::from_secs(90))
-                .build()
-                .expect("failed to build enrichment HTTP client");
-
-            Self {
-                client,
-                base_url: trimmed,
-                metrics_label,
-                #[cfg(feature = "enrichment-cache")]
-                cache: moka::future::Cache::builder()
-                    .max_capacity(1024)
-                    .time_to_live(Duration::from_secs(300))
-                    .build(),
+            #[cfg(feature = "backend")]
+            EnrichmentMode::Backend { cache_ttl_secs } => {
+                let config = crate::backend::BackendConfig {
+                    url: Some(trimmed.clone()),
+                    timeout_ms: timeout.as_millis() as u64,
+                    max_concurrent: 20,
+                    cache_ttl_secs,
+                    cache_capacity: 1024,
+                };
+                let backend = crate::backend::BackendClient::new(
+                    &config,
+                    "ifconfig",
+                    metrics_label.unwrap_or(""),
+                )
+                .expect("BackendClient::new returned None with Some(url)");
+                Transport::Backend(backend)
             }
+            #[cfg(not(feature = "backend"))]
+            EnrichmentMode::Backend { .. } => {
+                panic!("EnrichmentMode::Backend requires the netray-common `backend` feature")
+            }
+        };
+
+        Self {
+            transport,
+            base_url: trimmed,
         }
     }
 
@@ -154,30 +163,28 @@ impl EnrichmentClient {
     /// Returns `true` if the service responds with an HTTP status below 500.
     /// Non-fatal: network errors and timeouts return `false`.
     pub async fn is_reachable(&self) -> bool {
-        #[cfg(feature = "backend")]
-        {
-            self.backend
+        match &self.transport {
+            #[cfg(feature = "backend")]
+            Transport::Backend(backend) => backend
                 .head("/")
                 .await
                 .map(|s| s.as_u16() < 500)
-                .unwrap_or(false)
-        }
-
-        #[cfg(not(feature = "backend"))]
-        {
-            let client = match reqwest::Client::builder()
-                .timeout(Duration::from_secs(2))
-                .build()
-            {
-                Ok(c) => c,
-                Err(_) => return false,
-            };
-            client
-                .head(&self.base_url)
-                .send()
-                .await
-                .map(|r| r.status().as_u16() < 500)
-                .unwrap_or(false)
+                .unwrap_or(false),
+            Transport::Plain { .. } => {
+                let client = match reqwest::Client::builder()
+                    .timeout(Duration::from_secs(2))
+                    .build()
+                {
+                    Ok(c) => c,
+                    Err(_) => return false,
+                };
+                client
+                    .head(&self.base_url)
+                    .send()
+                    .await
+                    .map(|r| r.status().as_u16() < 500)
+                    .unwrap_or(false)
+            }
         }
     }
 
@@ -190,59 +197,49 @@ impl EnrichmentClient {
             return None;
         }
 
-        #[cfg(feature = "backend")]
-        {
-            let path = format!("/network/json?ip={}", ip);
-            match self.backend.get(&path, request_id).await {
-                Ok((_status, body)) => {
-                    tracing::debug!(ip = %ip, service = "ifconfig", "enrichment lookup succeeded");
-                    serde_json::from_slice::<IpInfo>(&body).ok()
-                }
-                Err(e) => {
-                    tracing::warn!(ip = %ip, service = "ifconfig", error = %e, "enrichment lookup error");
-                    None
+        match &self.transport {
+            #[cfg(feature = "backend")]
+            Transport::Backend(backend) => {
+                let path = format!("/network/json?ip={}", ip);
+                match backend.get(&path, request_id).await {
+                    Ok((_status, body)) => {
+                        tracing::debug!(ip = %ip, service = "ifconfig", "enrichment lookup succeeded");
+                        serde_json::from_slice::<IpInfo>(&body).ok()
+                    }
+                    Err(e) => {
+                        tracing::warn!(ip = %ip, service = "ifconfig", error = %e, "enrichment lookup error");
+                        None
+                    }
                 }
             }
-        }
-
-        #[cfg(not(feature = "backend"))]
-        {
-            #[cfg(feature = "enrichment-cache")]
-            if let Some(cached) = self.cache.get(&ip).await {
-                if let Some(svc) = self.metrics_label {
-                    metrics::counter!("enrichment_cache_hits_total", "service" => svc).increment(1);
+            Transport::Plain {
+                client,
+                metrics_label,
+            } => {
+                if let Some(svc) = *metrics_label {
+                    metrics::counter!("enrichment_requests_total", "service" => svc).increment(1);
                 }
-                return cached;
+
+                let url = format!("{}/network/json?ip={}", self.base_url, ip);
+                let mut req = client.get(&url);
+                if let Some(rid) = request_id {
+                    req = req.header("X-Request-Id", rid);
+                }
+                match req.send().await {
+                    Ok(resp) if resp.status().is_success() => {
+                        tracing::debug!(ip = %ip, service = "ifconfig", url = %url, "enrichment lookup succeeded");
+                        resp.json::<IpInfo>().await.ok()
+                    }
+                    Ok(resp) => {
+                        tracing::warn!(ip = %ip, service = "ifconfig", url = %url, status = %resp.status(), "enrichment lookup failed");
+                        None
+                    }
+                    Err(e) => {
+                        tracing::warn!(ip = %ip, service = "ifconfig", url = %url, error = %e, "enrichment lookup error");
+                        None
+                    }
+                }
             }
-
-            if let Some(svc) = self.metrics_label {
-                metrics::counter!("enrichment_requests_total", "service" => svc).increment(1);
-            }
-
-            let url = format!("{}/network/json?ip={}", self.base_url, ip);
-            let mut req = self.client.get(&url);
-            if let Some(rid) = request_id {
-                req = req.header("X-Request-Id", rid);
-            }
-            let result = match req.send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    tracing::debug!(ip = %ip, service = "ifconfig", url = %url, "enrichment lookup succeeded");
-                    resp.json::<IpInfo>().await.ok()
-                }
-                Ok(resp) => {
-                    tracing::warn!(ip = %ip, service = "ifconfig", url = %url, status = %resp.status(), "enrichment lookup failed");
-                    None
-                }
-                Err(e) => {
-                    tracing::warn!(ip = %ip, service = "ifconfig", url = %url, error = %e, "enrichment lookup error");
-                    None
-                }
-            };
-
-            #[cfg(feature = "enrichment-cache")]
-            self.cache.insert(ip, result.clone()).await;
-
-            result
         }
     }
 
@@ -394,6 +391,7 @@ mod tests {
             Duration::from_secs(5),
             "test",
             None,
+            EnrichmentMode::Backend { cache_ttl_secs: 0 },
         );
 
         let result = client
@@ -413,8 +411,8 @@ mod tests {
     // B3: behaviour is chosen at runtime by EnrichmentMode, not by Cargo features.
     #[tokio::test]
     async fn enrichment_mode_selects_user_agent_and_cache_at_runtime() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
 
         // (mode, expected requests for two lookups of the same IP, expected User-Agent)
         let cases: Vec<(&str, EnrichmentMode, usize, Option<&str>)> = vec![
@@ -427,7 +425,9 @@ mod tests {
             ),
             (
                 "backend ttl 300",
-                EnrichmentMode::Backend { cache_ttl_secs: 300 },
+                EnrichmentMode::Backend {
+                    cache_ttl_secs: 300,
+                },
                 1,
                 None,
             ),
@@ -471,8 +471,14 @@ mod tests {
                 mode,
             );
             let ip: IpAddr = "8.8.8.8".parse().unwrap();
-            assert!(client.lookup(ip, None).await.is_some(), "{name}: first lookup");
-            assert!(client.lookup(ip, None).await.is_some(), "{name}: second lookup");
+            assert!(
+                client.lookup(ip, None).await.is_some(),
+                "{name}: first lookup"
+            );
+            assert!(
+                client.lookup(ip, None).await.is_some(),
+                "{name}: second lookup"
+            );
 
             assert_eq!(
                 count.load(Ordering::SeqCst),

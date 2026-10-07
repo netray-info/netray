@@ -28,8 +28,9 @@ fn generate_caa_issuers() {
     println!("cargo::rerun-if-changed=data/caa_domains.tsv");
 
     let tsv_path = std::path::Path::new("data/caa_domains.tsv");
-    let content = std::fs::read_to_string(tsv_path)
-        .expect("data/caa_domains.tsv not found; run 'make data' to fetch and process CA data");
+    let content = std::fs::read_to_string(tsv_path).expect(
+        "data/caa_domains.tsv not found; run 'just tlsight-data' to fetch and process CA data",
+    );
 
     let mut entries: Vec<(&str, &str)> = content
         .lines()
@@ -53,7 +54,7 @@ fn generate_caa_issuers() {
 
     let mut code = String::from(
         "// Auto-generated from data/caa_domains.tsv — do not edit.\n\
-         // Regenerate with: make data\n\n\
+         // Regenerate with: just tlsight-data\n\n\
          pub static CAA_ISSUERS: &[(&str, &str)] = &[\n",
     );
     for (domain, name) in &entries {

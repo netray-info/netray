@@ -1,6 +1,6 @@
 [package]
 name = "ifconfig-rs"
-version = "0.21.2"
+version.workspace = true
 authors = ["Lukas Pustina <lukas@pustina.net>"]
 
 description = "IP address and network information service"
@@ -8,76 +8,54 @@ repository = "https://github.com/lukaspustina/ifconfig-rs"
 readme = "Readme.md"
 license = "MIT"
 keywords = ["ifconfig", "ip", "network", "webservice"]
-include = [
-  "Readme.md",
-  "LICENSE",
-  "**/*.rs",
-  "Cargo.toml",
-  "build.rs",
-  "ifconfig.example.toml",
-  "ifconfig.dev.toml",
-  "frontend/dist/**",
-]
-edition = "2024"
+include = ["Readme.md", "LICENSE", "**/*.rs", "Cargo.toml", "build.rs", "ifconfig.example.toml", "ifconfig.dev.toml", "frontend/dist/**"]
+edition.workspace = true
 
 [[bin]]
 name = "ifconfig-rs"
 path = "src/main.rs"
 
 [dependencies]
-arc-swap = "1"
-axum = { version = "0.8", features = ["json"] }
-axum-extra = { version = "0.12", features = ["typed-header"] }
-metrics = "0.24"
-metrics-exporter-prometheus = "0.18"
-config = "0.15"
-mhost = { version = "0.11", default-features = false }
-governor = "0.10"
-netray-common = { version = "0.8", features = ["schema", "middleware", "server", "spa", "otel"] }
+arc-swap = { workspace = true }
+axum = { workspace = true, features = ["json"] }
+axum-extra = { workspace = true, features = ["typed-header"] }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+config = { workspace = true }
+mhost = { workspace = true }
+governor = { workspace = true }
+netray-common = { workspace = true, features = ["schema", "middleware", "server", "spa", "otel"] }
 httpdate = "1"
-ip_network = "0.4"
+ip_network = { workspace = true }
 ip_network_table = "0.2"
 lru = "0.16"
-moka = { version = "0.12", features = ["future"] }
+moka = { workspace = true, features = ["future"] }
 maxminddb = "0.27"
 notify = "8"
 metrics-process = "2.3"
-mime_guess = "2"
-regex = "1"
-rust-embed = "8"
-serde = { version = "1", features = ["derive"] }
+mime_guess = { workspace = true }
+regex = { workspace = true }
+rust-embed = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 subtle = "2"
-serde_json = "1.0"
+serde_json = { workspace = true }
 serde_yaml = { package = "serde_yaml_ng", version = "0.10" }
-thiserror = "2"
-tokio = { version = "1", features = [
-  "fs",
-  "macros",
-  "net",
-  "rt-multi-thread",
-  "signal",
-  "sync",
-  "time",
-] }
-toml = "1"
-tower = "0.5"
-tower-http = { version = "0.6", features = [
-  "cors",
-  "set-header",
-  "trace",
-  "compression-gzip",
-] }
-tracing = "0.1"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+toml = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["cors", "set-header", "trace", "compression-gzip"] }
+tracing = { workspace = true }
 uaparser = "0.6"
-utoipa = { version = "5", features = ["axum_extras"] }
+utoipa = { workspace = true, features = ["axum_extras"] }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
-http-body-util = "0.1"
+http-body-util = { workspace = true }
 hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 insta = { version = "1", features = ["json", "yaml", "toml"] }
 pretty_assertions = "1.4.0"
-tower = { version = "0.5", features = ["util"] }
+tower = { workspace = true, features = ["util"] }
 
 # Explicit test binary so admin tests always run in their own process.
 # The Prometheus metrics recorder is a global singleton; declaring admin as a
