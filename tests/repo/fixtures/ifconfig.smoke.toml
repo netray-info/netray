@@ -1,0 +1,8 @@
+# Minimal ifconfig-rs config for the subcommand smoke test: no GeoIP databases
+# or other data files, so the service starts offline in a clean checkout.
+base_url = "localhost"
+project_name = "ifconfig-rs"
+
+[server]
+bind = "127.0.0.1:8080"
+admin_bind = "127.0.0.1:9090"
