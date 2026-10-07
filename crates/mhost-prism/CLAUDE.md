@@ -172,7 +172,7 @@ Default filter: `info,prism=debug,hyper=warn,h2=warn`. Telemetry config via `[te
 
 Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
 
-Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
+Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, deny), `audit.yml` (daily advisory scans: RUSTSEC, npm audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
 
 GitHub Packages auth (`NODE_AUTH_TOKEN`) requirement: see workflow-rules R-J3.
 
