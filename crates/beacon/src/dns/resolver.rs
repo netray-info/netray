@@ -399,3 +399,26 @@ fn matching_to_u8(m: mhost::resources::rdata::Matching) -> u8 {
         Matching::Unassigned(v) => v,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // In the one `netray` binary, prism turns on mhost's `dot`/`doh` features for
+    // every crate. beacon must still resolve over plain UDP/TCP only, as the
+    // separate beacon binary did.
+    #[tokio::test]
+    async fn predefined_provider_uses_only_udp_and_tcp() {
+        let resolver = DnsResolver::new(&["cloudflare".to_string()], 1000)
+            .await
+            .expect("resolver group builds");
+        let names: Vec<String> = resolver.resolvers.iter().map(|r| r.name()).collect();
+        assert!(!names.is_empty(), "no resolvers built");
+        for name in &names {
+            assert!(
+                name.starts_with("udp:") || name.starts_with("tcp:"),
+                "unexpected transport in {name}; all: {names:?}"
+            );
+        }
+    }
+}
