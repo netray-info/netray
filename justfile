@@ -82,7 +82,7 @@ check-sitemap:
 build:
     npm run build:types -w @netray-info/common-frontend
     npm run build --workspaces --if-present
-    cargo build --release --workspace
+    cargo build --release -p netray
 
 image:
     docker build -t netray:local .

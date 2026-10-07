@@ -15,11 +15,9 @@ COPY --from=frontend /build/crates/lens/frontend/dist crates/lens/frontend/dist/
 COPY --from=frontend /build/crates/mhost-prism/frontend/dist crates/mhost-prism/frontend/dist/
 COPY --from=frontend /build/crates/spectra/frontend/dist crates/spectra/frontend/dist/
 COPY --from=frontend /build/crates/tlsight/frontend/dist crates/tlsight/frontend/dist/
-RUN cargo build --release --workspace --bins \
+RUN cargo build --release -p netray \
  && mkdir /out \
- && for b in beacon ifconfig-rs lens prism spectra tlsight; do \
-      cp "$(find /build/target -xdev -type f -path '*/release/*' -name "$b" | head -n1)" /out/; \
-    done
+ && cp "$(find /build/target -xdev -type f -path '*/release/*' -name netray | head -n1)" /out/
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates wget \
@@ -29,7 +27,10 @@ COPY --from=builder /out/ /usr/local/bin/
 COPY crates/beacon/beacon.toml crates/ifconfig-rs/ifconfig.example.toml crates/lens/lens.example.toml \
      crates/mhost-prism/prism.example.toml crates/spectra/spectra.example.toml \
      crates/tlsight/tlsight.example.toml ./
+COPY site ./site
 RUN chown -R netray:netray /netray
 USER netray
-# One image, several binaries until the single `netray` binary replaces them:
+# One image, one binary; the subcommand picks the service:
 #   docker run netray:local lens lens.example.toml
+#   docker run netray:local site --bind 0.0.0.0:8080
+ENTRYPOINT ["netray"]

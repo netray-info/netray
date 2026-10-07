@@ -11,10 +11,6 @@ keywords = ["ifconfig", "ip", "network", "webservice"]
 include = ["Readme.md", "LICENSE", "**/*.rs", "Cargo.toml", "build.rs", "ifconfig.example.toml", "ifconfig.dev.toml", "frontend/dist/**"]
 edition.workspace = true
 
-[[bin]]
-name = "ifconfig-rs"
-path = "src/main.rs"
-
 [dependencies]
 arc-swap = { workspace = true }
 axum = { workspace = true, features = ["json"] }

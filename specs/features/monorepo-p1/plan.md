@@ -30,3 +30,23 @@
 2. `crates/ifconfig-rs/data/fetch.sh` porting the data Makefile; `crates/tlsight/build.rs` messages point at `just tlsight-data`.
 3. Delete every per-crate `justfile` and the six Makefiles.
 4. Root `Dockerfile` (node stage builds the workspaces, muslrust stage builds the workspace, alpine runtime; no `NODE_AUTH_TOKEN` mount), `.dockerignore`, root `CHANGELOG.md` with `## [Unreleased]`.
+
+## Phase 2 — One binary
+
+## Groups
+
+- G1: C1, C5 — each service crate becomes a library with `run(...)` at the root of `src/lib.rs` (log target unchanged); `src/main.rs` deleted; ifconfig-rs loses its `[[bin]]`. Split by crate: G1a beacon, spectra, lens; G1b prism, tlsight, ifconfig-rs (no shared files).
+- G2: C2–C4, C6–C12 — `crates/netray` (clap dispatch to the six `run`s, `site` module), root `build` recipe and `Dockerfile` ship the one binary. Depends on G1.
+
+## Plan
+
+### G1
+- Move each `main()` body unchanged into `pub async fn run(config_arg: Option<String>)` at the root of `src/lib.rs` with its private helpers and the `RustEmbed` `Assets`; only `std::env::args().nth(1)` becomes the parameter; the `*_CONFIG` fallback and defaults stay in the service (beacon keeps logging `argv` vs `BEACON_CONFIG`). tlsight keeps the rustls provider install first; prism passes the resolved path to the reload watcher; lens moves `security_headers_mw` and keeps its embed in `spa.rs`; ifconfig-rs `run(config_path, print_config, check)` keeps `--check`/`--print-config`, no env fallback (as before).
+- `git rm` every `crates/<svc>/src/main.rs`; remove ifconfig-rs `[[bin]]`.
+
+### G2
+- `crates/netray/Cargo.toml` (workspace version/edition, path deps on the six crates, netray-common `server`, axum/tokio/mime_guess/percent-encoding from the workspace, clap 4 derive, anyhow).
+- `crates/netray/src/site.rs`: `run(bind, root)` — one fallback handler + response mapper for the requirement-7 headers; 404.html read at start; percent-decoded path, hidden segments 404 except `/.well-known/mta-sts.txt`; `mta-sts.*` host serves only the policy; try `p`, `p.html`, `p/index.html`; mime by file; cache-control by resolved extension, policy `no-cache`.
+- `crates/netray/src/main.rs`: clap `netray {lens,dns,tls,http,email} [config]`, `ip [config] [--check] [--print-config]`, `site [--bind] [--root]`.
+- Root `justfile` `build` → `cargo build --release -p netray`; root `Dockerfile` builds and ships `netray` (+ `site/`), `ENTRYPOINT ["netray"]`.
+- Per-crate Dockerfiles/`Dockerfile.dev` stay for the CI/image spec (DEFERRED).

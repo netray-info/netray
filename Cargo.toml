@@ -36,6 +36,7 @@ toml = "1"
 
 # Errors, logging, metrics
 thiserror = "2"
+anyhow = "1"
 tracing = "0.1"
 metrics = "0.24"
 metrics-exporter-prometheus = "0.18"

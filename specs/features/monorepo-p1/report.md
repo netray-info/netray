@@ -61,3 +61,76 @@ $ bash tests/repo/test_release_guard.sh
 PASS: release refused on dirty tree
 ```
 `just image` not run: no Docker daemon on this machine.
+
+## Phase 2 — One binary
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | Req 4: each service crate is a library with an async entry point taking the config path; no `[[bin]]` or `main.rs` in a service crate | green | tests/repo/test_service_libs.sh |
+| C2 | Req 5: `crates/netray` builds `netray`; `netray <service> [config-path]` starts that service with unchanged config resolution, env prefix, telemetry defaults, metrics names, log target; `--help` lists seven subcommands | green | tests/repo/test_cli.sh, test_service_config_and_metrics.sh |
+| C3 | Req 6: every service subcommand answers `/` and `/health` with 200, unknown path with the SPA `index.html` and 200 | green | tests/repo/test_smoke_services.sh |
+| C4 | Req 7: `netray site` routing, MTA-STS host, headers, cache-control | green | tests/repo/test_site.sh |
+| C5 | GIVEN service crates WHEN read THEN no `[[bin]]`/`src/main.rs` | green | tests/repo/test_service_libs.sh |
+| C6 | GIVEN built `netray` WHEN `--help` THEN lists `lens dns tls http email ip site` | green | tests/repo/test_cli.sh |
+| C7 | GIVEN each dev config on a free port WHEN `netray <service>` THEN `/`, `/health` 200, `/does-not-exist` 200 with `index.html` | green | tests/repo/test_smoke_services.sh |
+| C8 | GIVEN config path argument and a different `*_CONFIG` WHEN started THEN the argument wins | green | tests/repo/test_service_config_and_metrics.sh |
+| C9 | GIVEN metrics address WHEN scraped after one request THEN metric names carry the old prefix | green | tests/repo/test_service_config_and_metrics.sh |
+| C10 | GIVEN `netray site` WHEN `/guide/`, `/guide/dnssec` THEN 200; `/`, `/does-not-exist` 404 with `404.html` body; `/.git/config` 404 | green | tests/repo/test_site.sh |
+| C11 | GIVEN `netray site` WHEN `/.well-known/mta-sts.txt` with `Host: mta-sts.example.com` THEN 200 `text/plain` `no-cache` body equal to the file; `/guide/` on that host 404 | green | tests/repo/test_site.sh |
+| C12 | GIVEN `netray site` WHEN any response THEN every Req-7 header with its value | green | tests/repo/test_site.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1a beacon, spectra, lens | 3 | sonnet (its own group command added `--all-targets`, which trips pre-existing lens test lints; green under the gate's clippy) | 39,871 | 100 |
+| G1b prism, tlsight, ifconfig-rs | 1 | sonnet | 41,270 | 72 |
+| G2 netray binary + site | 2 | sonnet; two test defects fixed by the orchestrator (`env … start_bg` cannot call a shell function; ANSI codes in the text log broke the `config_source` grep) | 64,007 | 231 |
+
+Note: `cargo test --workspace` now reports fewer passed tests (≈1,560 vs. 2,419 before) because each service's `src/main.rs` re-declared its modules, so their unit tests ran twice (bin and lib). The test functions are unchanged: 1,656 `#[test]` attributes, every `src/*.rs` still declared as a module.
+
+### Review
+
+First pass (reader over 786b68e..working tree): 1 BLOCKER, 3 AMENDMENT, 1 DEFERRED, 2 NIT. All six `run` bodies match the old `main.rs` apart from where the config path comes from; startup logs, log targets, `ip --check`/`--print-config` identical to the old binaries; path traversal safe; every requirement-7 header byte-exact.
+
+| finding | class | resolution |
+|---|---|---|
+| `resolve` trimmed the trailing slash, so `/guide/dnssec/` served the file (relative CSS then broke) | BLOCKER | trailing-slash paths only try `<path>/index.html` (nginx `try_files $uri $uri.html $uri/`); test-first in `test_site.sh` |
+| MTA-STS policy `no-cache` on every host | AMENDMENT | kept; requirement 7 now says so (repaired) |
+| 404 responses carry no `Cache-Control` | AMENDMENT | kept (nginx parity); requirement 7 now says so (repaired) |
+| `/404.html`, `/50x.html` directly reachable (nginx: `internal`) | AMENDMENT | now 404, requirement 7 amended, test-first (repaired) |
+| per-crate Dockerfiles build `--bins` that no longer exist | DEFERRED | later CI/image spec |
+| non-GET methods get 405 without the 404 body | NIT | listed |
+| index alone did not build at review time | NIT | moot after the commit |
+
+Second pass (reader over the `resolve` fix): 0 BLOCKER. Matches nginx on every listed case, incl. percent-encoded and dot-segment variants; `/404`, `/50x` serve the page as nginx did (spec names only the `.html` paths).
+- NIT: no test pins the policy's `no-cache` off the mta-sts host. Listed.
+- NIT: no test pins "404 carries no Cache-Control". Listed.
+- DEFERRED: `site/api/index.html` names `/api` as canonical but links relatively, so links break at `/api` (pre-existing site content, routing correct). Listed.
+
+### Behavioural verification
+
+```
+$ target/debug/netray --help
+Commands:
+  lens   Domain health checker (netray.info)
+  dns    DNS inspector (dns.netray.info)
+  tls    TLS certificate inspector (tls.netray.info)
+  http   HTTP header inspector (http.netray.info)
+  email  Email security inspector (email.netray.info)
+  ip     IP enrichment API (ip.netray.info)
+  site   Static site (guide, API docs, tools, compare)
+$ netray site --bind 127.0.0.1:$p --root site; curl …
+/guide/          200 text/html; charset=utf-8
+/guide/dnssec    200 text/html; charset=utf-8
+/                404 text/html; charset=utf-8
+/.git/config     404 text/html; charset=utf-8
+$ curl -H 'Host: mta-sts.example.com' …/.well-known/mta-sts.txt
+version: STSv1
+mode: enforce
+mx: smtp.google.com
+max_age: 86400
+```
+The six service subcommands are exercised by `tests/repo/test_smoke_services.sh` (all green: `/`, `/health`, SPA fallback) and `test_service_config_and_metrics.sh` (argument beats `*_CONFIG`; `spectra_http_requests_total`, `prism_http_requests_total` unchanged).

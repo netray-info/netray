@@ -1,0 +1,23 @@
+[package]
+name = "netray"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+description = "The netray.info suite as one binary: six services and the static site"
+
+[dependencies]
+netray-common = { workspace = true, features = ["server"] }
+
+beacon = { path = "../beacon" }
+ifconfig-rs = { path = "../ifconfig-rs" }
+lens = { path = "../lens" }
+prism = { path = "../mhost-prism" }
+spectra = { path = "../spectra" }
+tlsight = { path = "../tlsight" }
+
+axum = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs"] }
+mime_guess = { workspace = true }
+percent-encoding = { workspace = true }
+anyhow = { workspace = true }
+clap = { version = "4", features = ["derive"] }
