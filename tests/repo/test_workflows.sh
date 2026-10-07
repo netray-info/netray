@@ -57,6 +57,9 @@ elsif ci
   fails << "ci.yml: no step runs `just check`" unless runs.include?("just check")
   conc = ci["concurrency"]
   fails << "ci.yml: top-level concurrency.cancel-in-progress is not true" unless conc.is_a?(Hash) && conc["cancel-in-progress"] == true
+  # check-sitemap dates pages by git history: a shallow checkout breaks it.
+  co = (ci["jobs"] || {}).values.flat_map { |j| Array(j["steps"]) }.find { |s| s["uses"].to_s.start_with?("actions/checkout@") }
+  fails << "ci.yml: checkout does not fetch the full history (fetch-depth: 0)" unless co && co.dig("with", "fetch-depth").to_s == "0"
 end
 
 # C9 / C2: release.yml
@@ -67,6 +70,9 @@ elsif rel
   tags = on["push"].is_a?(Hash) ? Array(on["push"]["tags"]) : []
   fails << "release.yml: on.push.tags has no pattern starting with v" unless tags.any? { |t| t.to_s.start_with?("v") }
   fails << "release.yml: on has no workflow_dispatch" unless on.key?("workflow_dispatch")
+  # Two runs for one tag must not both pass the existence check: queue them per ref.
+  rconc = rel["concurrency"]
+  fails << "release.yml: no per-ref concurrency group that queues (cancel-in-progress: false)" unless rconc.is_a?(Hash) && rconc["group"].to_s.include?("github.ref") && rconc["cancel-in-progress"] == false
   jobs = (rel["jobs"] || {}).values.select { |j| j.is_a?(Hash) }
   fails << "release.yml: no job runs-on ubuntu-24.04-arm" unless jobs.any? { |j| Array(j["runs-on"]).include?("ubuntu-24.04-arm") }
   fails << "release.yml: linux/arm64 not present" unless raw.include?("linux/arm64")
