@@ -107,3 +107,9 @@ Requirements:
 - Prometheus `/metrics` on the admin port (9090 by default, separate from the public port).
 - OpenTelemetry is optional per tool; configured through `[telemetry]` in the TOML config.
 - See `logging-rules.md` for tracing init, log filters, and field conventions.
+
+---
+
+## Cargo Features
+
+- Shared crates (`netray-common`, and any dependency two services use) must not switch behaviour on a Cargo feature: in the one `netray` binary features unify, so one service's feature changes every other service. Expose the choice at runtime instead (e.g. `EnrichmentMode`, beacon's UDP/TCP resolver filter). unenforced

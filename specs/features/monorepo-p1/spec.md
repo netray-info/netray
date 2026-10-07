@@ -1,5 +1,9 @@
 # Spec: one workspace, one binary
 
+Status: Done
+Created: 2026-10-07
+Finished: 2026-10-07
+
 The netray.info suite — six services (ifconfig-rs, mhost-prism, tlsight, spectra,
 beacon, lens), the shared crate and the shared frontend package — now lives in this
 repository with its full history (`crates/`, `packages/common-frontend/`), together

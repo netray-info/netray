@@ -29,6 +29,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - `just adlc-verify` is the gate: offline, no browser. `just check` adds the full Rust suite.
 - `just build`, `just image`, `just acceptance` (network + browser), `just release X.Y.Z` (never pushes).
 - Data: `just ifconfig-data` / `just test-ifconfig-data` (GeoIP), `just tlsight-data` (CAA table, committed).
+- Run tests that depend on feature unification with `--workspace`; `cargo test -p <crate>` resolves features for that crate alone and passes where the binary is wrong.
+- `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
 
 The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
 
@@ -38,6 +40,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Services are libraries.** Each service crate exposes an async `run(config)` and has no `main.rs` or `[[bin]]`; `crates/netray` only parses arguments and dispatches.
 - **Config stays per service.** Config keys, the `*_CONFIG` variable and the env prefix (`LENS_`, `PRISM_`, `TLSIGHT_`, `IFCONFIG_`; `SPECTRA__` and `BEACON__` with a double underscore), metrics names and log targets are unchanged by the merge; do not unify them.
 - **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
+- **Features unify.** A dependency feature one crate enables reaches every service in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
 - **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
 
