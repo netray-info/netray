@@ -2683,6 +2683,27 @@ pub mod tests {
         assert_eq!(a2.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
+    #[tokio::test]
+    async fn rate_limit_ignores_client_supplied_cf_connecting_ip_behind_trusted_proxy() {
+        let app = app_with_real_handler(&["172.31.0.0/24"]);
+
+        // No Cloudflare in front: a client rotating CF-Connecting-IP must not
+        // get a fresh bucket per request.
+        let mut first = req_from("172.31.0.5:40000", Some("203.0.113.1"));
+        first
+            .headers_mut()
+            .insert("cf-connecting-ip", "198.51.100.1".parse().unwrap());
+        let r1 = app.clone().oneshot(first).await.unwrap();
+        assert_ne!(r1.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        let mut second = req_from("172.31.0.5:40001", Some("203.0.113.1"));
+        second
+            .headers_mut()
+            .insert("cf-connecting-ip", "198.51.100.2".parse().unwrap());
+        let r2 = app.oneshot(second).await.unwrap();
+        assert_eq!(r2.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
     // --- Backend calls carry the client IP and request ID ---
 
     #[tokio::test]
