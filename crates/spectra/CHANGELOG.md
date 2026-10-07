@@ -3,6 +3,19 @@
 All notable changes to spectra are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-10-07
+
+### Changed (BREAKING)
+- Every config struct rejects unknown keys (`deny_unknown_fields`): a typo or stale key in `spectra.toml` or a `SPECTRA__*` variable now fails the load instead of being ignored (11a8867)
+
+### Fixed
+- `/api/meta` serves `email_base_url` from the `[meta]` config instead of an empty string (e511570)
+- `detail_url` in inspect results is built from the public `meta.ip_base_url`, not the internal backend URL (925b5f3)
+
+### Changed
+- CI: advisory scans (RUSTSEC, npm audit) moved from the PR gate to a daily scheduled `audit.yml`, which may open issues (c5b5ccf, c585b25)
+- `justfile` replaces the Makefile (8701f37); CONTRIBUTING.md and DCO sign-off CI added (9ff5c81, 16d615a)
+
 ## [0.2.3] - 2026-05-01
 
 Note: v0.2.1 and v0.2.2 were never released; v0.2.2 exists as a dangling
