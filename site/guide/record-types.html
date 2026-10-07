@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DNS Record Types Explained: A Complete Reference | netray.info</title>
+  <meta name="description" content="A complete reference of DNS record types: A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, TLSA, and more. Learn what each record does, when to use it, and common pitfalls.">
+  <link rel="canonical" href="https://netray.info/guide/record-types">
+  <link rel="stylesheet" href="style.css">
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="DNS Record Types Explained: A Complete Reference">
+  <meta property="og:description" content="A complete reference of DNS record types: A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, TLSA, and more.">
+  <meta property="og:url" content="https://netray.info/guide/record-types">
+  <meta property="og:site_name" content="netray.info">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DNS Record Types Explained: A Complete Reference">
+  <meta name="twitter:description" content="A complete reference of DNS record types: A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, TLSA, and more.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "DNS Record Types Explained: A Complete Reference",
+    "description": "A complete reference of DNS record types: A, AAAA, CNAME, MX, TXT, NS, SOA, SRV, CAA, TLSA, and more. Learn what each record does and common pitfalls.",
+    "url": "https://netray.info/guide/record-types",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/record-types"
+  }
+  </script>
+  <meta property="og:image" content="/og/dns.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">DNS Record Types Explained</h1>
+  <p class="page-subtitle">A reference guide to the most important DNS record types, what they do, and when to use them.</p>
+
+  <article>
+    <h2>What are DNS records?</h2>
+    <p>The Domain Name System (DNS) is a distributed database that maps human-readable domain names to machine-readable values. Each mapping is stored as a <strong>resource record</strong> with a specific type that determines how the data is interpreted. Understanding record types is fundamental to configuring domains, debugging connectivity issues, and securing internet services.</p>
+
+    <h2>Address records</h2>
+
+    <h3>A (IPv4 address)</h3>
+    <p>Maps a hostname to an IPv4 address. This is the most basic and most queried record type. A domain can have multiple A records for load balancing or redundancy.</p>
+    <pre><code>example.com.    300   IN  A   198.51.100.42</code></pre>
+
+    <h3>AAAA (IPv6 address)</h3>
+    <p>Maps a hostname to an IPv6 address. Functionally identical to A records but for the IPv6 address family. As IPv6 adoption grows, publishing AAAA records alongside A records is increasingly important.</p>
+    <pre><code>example.com.    300   IN  AAAA  2001:db8::1</code></pre>
+
+    <h2>Delegation and aliasing</h2>
+
+    <h3>CNAME (canonical name)</h3>
+    <p>Creates an alias from one name to another. When a resolver encounters a CNAME, it restarts the lookup using the target name. A CNAME must not coexist with other record types at the same name (the "CNAME exclusivity" rule). This means you cannot place a CNAME at the zone apex alongside NS or SOA records.</p>
+    <pre><code>www.example.com.  300  IN  CNAME  example.com.</code></pre>
+
+    <h3>NS (name server)</h3>
+    <p>Delegates a zone (or subdomain) to a set of authoritative name servers. NS records at the zone apex define which servers are authoritative for the entire domain. NS records at a subdomain create a delegation point.</p>
+    <pre><code>example.com.    86400  IN  NS  ns1.example.com.
+example.com.    86400  IN  NS  ns2.example.com.</code></pre>
+
+    <h2>Mail records</h2>
+
+    <h3>MX (mail exchanger)</h3>
+    <p>Specifies which servers accept email for a domain and in what priority. Lower preference values indicate higher priority. If the highest-priority server is unreachable, the sender tries the next.</p>
+    <pre><code>example.com.    300  IN  MX  10  mail1.example.com.
+example.com.    300  IN  MX  20  mail2.example.com.</code></pre>
+
+    <h3>TXT (text)</h3>
+    <p>A general-purpose record that holds arbitrary text data. In practice, TXT records are used extensively for email authentication (SPF, DKIM, DMARC), domain ownership verification, and service-specific configuration. A domain can have multiple TXT records, but certain protocols (like SPF) require exactly one.</p>
+    <pre><code>example.com.    300  IN  TXT  "v=spf1 include:_spf.google.com -all"</code></pre>
+
+    <h2>Infrastructure records</h2>
+
+    <h3>SOA (start of authority)</h3>
+    <p>Every DNS zone has exactly one SOA record. It declares the primary name server, the responsible party's email address, and timing parameters that control zone transfers and caching: serial number, refresh interval, retry interval, expire time, and negative caching TTL (minimum TTL).</p>
+    <pre><code>example.com.  86400  IN  SOA  ns1.example.com. admin.example.com. (
+                              2024010101  ; serial
+                              3600        ; refresh
+                              900         ; retry
+                              604800      ; expire
+                              86400 )     ; minimum TTL</code></pre>
+
+    <h3>PTR (pointer)</h3>
+    <p>Maps an IP address back to a hostname (reverse DNS). PTR records live in the <code>in-addr.arpa</code> (IPv4) or <code>ip6.arpa</code> (IPv6) zones, managed by whoever controls the IP address block. Reverse DNS is used for logging, email server verification (many mail servers reject connections without valid PTR records), and diagnostic tools.</p>
+
+    <h2>Service records</h2>
+
+    <h3>SRV (service locator)</h3>
+    <p>Specifies the hostname and port for a specific service. Used by protocols like XMPP, SIP, LDAP, and Minecraft. The record format includes priority, weight (for load balancing among equal-priority targets), port, and target hostname.</p>
+    <pre><code>_sip._tcp.example.com.  300  IN  SRV  10 60 5060 sip.example.com.</code></pre>
+
+    <h3>CAA (certification authority authorization)</h3>
+    <p>Specifies which Certificate Authorities are permitted to issue certificates for a domain. CAs are required to check CAA records before issuance. If no CAA record exists, any CA may issue. CAA records are a lightweight defense against mis-issuance.</p>
+    <pre><code>example.com.  300  IN  CAA  0 issue "letsencrypt.org"
+example.com.  300  IN  CAA  0 iodef "mailto:security@example.com"</code></pre>
+
+    <h2>Security records</h2>
+
+    <h3>TLSA (DANE)</h3>
+    <p>Binds a TLS certificate (or public key) to a specific service port via DNS, secured by DNSSEC. This is the foundation of DANE (DNS-Based Authentication of Named Entities), which allows domain operators to pin certificates without relying solely on the CA ecosystem. See the <a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a> for details.</p>
+    <pre><code>_443._tcp.example.com.  300  IN  TLSA  3 1 1 abc123...</code></pre>
+
+    <h3>DNSKEY / DS / RRSIG (DNSSEC)</h3>
+    <p>These record types form the DNSSEC chain of trust. <strong>DNSKEY</strong> holds the zone's public signing keys. <strong>DS</strong> (Delegation Signer) records in the parent zone point to the child's DNSKEY. <strong>RRSIG</strong> records contain cryptographic signatures over other record sets. Together, they allow resolvers to verify that DNS responses have not been tampered with.</p>
+
+    <h2>Less common but useful</h2>
+
+    <h3>SSHFP (SSH fingerprint)</h3>
+    <p>Publishes the fingerprint of an SSH host key in DNS, allowing clients to verify server identity without TOFU (trust on first use). Requires DNSSEC to be meaningful.</p>
+
+    <h3>NAPTR (naming authority pointer)</h3>
+    <p>Used in ENUM (telephone number to URI mapping) and SIP routing. Provides rewriting rules that transform one string into another, often used in conjunction with SRV records.</p>
+
+    <h3>HTTPS / SVCB (service binding)</h3>
+    <p>Newer record types (RFC 9460) that allow a domain to advertise HTTPS capabilities, supported protocols (HTTP/2, HTTP/3), and alternative endpoints in a single DNS lookup. These records can eliminate the need for separate A/AAAA lookups and HTTP redirects from port 80 to 443.</p>
+
+    <h2>TTL consistency</h2>
+    <p>The Time-to-Live (TTL) value on a DNS record tells resolvers how long to cache the response. When different record types for the same domain have wildly different TTLs, it creates operational problems that are hard to diagnose.</p>
+    <p>Consider a domain with A records at TTL 300 (5 minutes) and MX records at TTL 86400 (1 day). If you migrate to a new server and update both records simultaneously, the A record propagates in minutes while the MX record takes up to a day. During that window, web traffic reaches the new server but email still routes to the old one. If the old server is decommissioned, email bounces for up to 24 hours.</p>
+    <p>Common TTL consistency issues:</p>
+    <ul>
+      <li><strong>Mixed TTLs on related records</strong> -- A and AAAA records for the same hostname should have the same TTL. If A is 300 and AAAA is 3600, a DNS change propagates at different speeds for IPv4 and IPv6 clients.</li>
+      <li><strong>High TTL on records that change</strong> -- MX, A, and CNAME records involved in migrations should have their TTLs lowered well before the change (at least one full TTL cycle before). A 86400 TTL means you need to lower it at least 24 hours before the actual migration.</li>
+      <li><strong>Very low TTLs without reason</strong> -- TTLs under 60 seconds increase DNS query volume significantly. This is appropriate during active migrations or for DNS-based failover, but should not be the permanent state. Low TTLs increase latency (more cache misses) and load on authoritative servers.</li>
+      <li><strong>Inconsistent TTLs in an RRset</strong> -- all records of the same type at the same name must have the same TTL (RFC 2181 Section 5.2). A records at the same name with TTLs of 300 and 3600 violate the standard and cause unpredictable resolver behavior.</li>
+    </ul>
+    <p>A reasonable default is 300-3600 seconds for records that may change (A, AAAA, MX, CNAME) and 86400 for stable records (NS, SOA, DNSKEY). The key is consistency within related record groups and intentional lowering before planned changes.</p>
+
+    <h2>Common mistakes</h2>
+    <ul>
+      <li><strong>CNAME at the apex</strong>: You cannot put a CNAME at the zone root because it conflicts with the required SOA and NS records. Use an A/AAAA record, or if your DNS provider supports it, a provider-specific alias record (ALIAS, ANAME).</li>
+      <li><strong>Multiple SPF TXT records</strong>: SPF requires exactly one TXT record starting with <code>v=spf1</code>. Multiple records cause evaluation to fail.</li>
+      <li><strong>TTL too high during migrations</strong>: Lower your TTL well before changing records. A 86400-second (1-day) TTL means some resolvers will serve stale data for up to 24 hours after a change.</li>
+      <li><strong>Missing trailing dot in zone files</strong>: In zone file syntax, <code>example.com</code> without a trailing dot is relative to the zone origin. Write <code>example.com.</code> (with the dot) for fully qualified names.</li>
+      <li><strong>No CAA records</strong>: Without CAA, any CA can issue a certificate for your domain. Publishing CAA records is a simple, effective measure against unauthorized certificate issuance.</li>
+    </ul>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Look up DNS records</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com A AAAA MX TXT"
+        aria-label="Domain and record types to query"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Query</button>
+    </form>
+    <p class="tool-entry__hint">Query any record type across multiple resolvers. Supports dig-like syntax: domain [TYPE...] [@server...] [+flag...]</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>CNAME at apex</h3>
+    <p>Remove the CNAME at your apex domain and replace it with A/AAAA records, or use ALIAS/ANAME records if your DNS provider supports them.</p>
+    <h3>HTTPS SVCB record</h3>
+    <p>Add an HTTPS (type 65) record to enable service discovery that speeds up HTTPS connections and advertises HTTP/2, HTTP/3, and ECH support.</p>
+    <h3>Nameserver redundancy</h3>
+    <p>Ensure your domain has at least two authoritative nameservers in separate networks for redundancy.</p>
+    <h3>DNS TTL</h3>
+    <p>Set your DNS TTL to between 300 and 86400 seconds — very low TTLs overload resolvers and very high TTLs slow down propagation of changes.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/email-auth">Email Authentication Guide</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

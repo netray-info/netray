@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DANE/TLSA Setup Guide: DNS-Based Certificate Authentication | netray.info</title>
+  <meta name="description" content="Learn how to configure DANE and TLSA records for DNS-based certificate authentication. Understand certificate usage, selector, and matching type fields, and avoid common setup mistakes.">
+  <link rel="canonical" href="https://netray.info/guide/dane-tlsa">
+  <link rel="stylesheet" href="style.css">
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="DANE/TLSA Setup Guide: DNS-Based Certificate Authentication">
+  <meta property="og:description" content="Learn how to configure DANE and TLSA records for DNS-based certificate authentication. Understand the TLSA record fields and avoid common mistakes.">
+  <meta property="og:url" content="https://netray.info/guide/dane-tlsa">
+  <meta property="og:site_name" content="netray.info">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DANE/TLSA Setup Guide: DNS-Based Certificate Authentication">
+  <meta name="twitter:description" content="Learn how to configure DANE and TLSA records for DNS-based certificate authentication.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "DANE/TLSA Setup Guide: DNS-Based Certificate Authentication",
+    "description": "Learn how to configure DANE and TLSA records for DNS-based certificate authentication. Understand certificate usage, selector, and matching type fields.",
+    "url": "https://netray.info/guide/dane-tlsa",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/dane-tlsa"
+  }
+  </script>
+  <meta property="og:image" content="/og/dns.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">DANE/TLSA Setup Guide</h1>
+  <p class="page-subtitle">How to use DNS to authenticate TLS certificates and reduce dependence on Certificate Authorities.</p>
+
+  <article>
+    <h2>What is DANE?</h2>
+    <p>DANE (DNS-Based Authentication of Named Entities) is a protocol defined in RFC 6698 that uses DNS to associate TLS certificates or public keys with domain names. Instead of relying solely on the Certificate Authority (CA) system to validate a server's identity, DANE lets the domain operator publish the expected certificate data directly in DNS, secured by DNSSEC.</p>
+    <p>The mechanism is simple: a TLSA record in DNS states what certificate or key a client should expect when connecting to a service on a specific port and protocol. If the certificate presented during the TLS handshake matches the TLSA record, the connection is authenticated.</p>
+
+    <h2>Why DANE matters</h2>
+    <p>The traditional CA model has a structural weakness: any of the hundreds of trusted CAs can issue a certificate for any domain. A compromised or coerced CA can issue fraudulent certificates that browsers and clients will accept. CAA records mitigate this by restricting which CAs may issue, but compliance is voluntary and only checked at issuance time.</p>
+    <p>DANE provides a stronger guarantee. Because TLSA records are signed with DNSSEC, an attacker would need to compromise both the CA system and the domain's DNSSEC chain to mount a successful man-in-the-middle attack. For SMTP (email transport), DANE is particularly valuable because it enables opportunistic encryption to be upgraded to authenticated encryption without requiring a pre-existing trust relationship.</p>
+
+    <h2>The TLSA record format</h2>
+    <p>A TLSA record has four fields:</p>
+    <pre><code>_port._protocol.hostname.  TTL  IN  TLSA  usage selector matching-type  data</code></pre>
+    <p>For example:</p>
+    <pre><code>_443._tcp.example.com.  300  IN  TLSA  3 1 1 a0b1c2d3e4f5...</code></pre>
+
+    <h3>Certificate usage (field 0)</h3>
+    <table>
+      <thead><tr><th>Value</th><th>Name</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>PKIX-TA</td><td>CA constraint: the certificate must chain to the specified CA and pass PKIX validation.</td></tr>
+        <tr><td>1</td><td>PKIX-EE</td><td>Service certificate constraint: the leaf certificate must match and pass PKIX validation.</td></tr>
+        <tr><td>2</td><td>DANE-TA</td><td>Trust anchor assertion: the specified CA is trusted for this service, even if not in the client's trust store. PKIX validation is not required.</td></tr>
+        <tr><td>3</td><td>DANE-EE</td><td>Domain-issued certificate: the leaf certificate must match. No PKIX chain validation required. This is the most commonly used mode.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Selector (field 1)</h3>
+    <table>
+      <thead><tr><th>Value</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>Full certificate (DER-encoded)</td></tr>
+        <tr><td>1</td><td>SubjectPublicKeyInfo only (the public key structure)</td></tr>
+      </tbody>
+    </table>
+    <p>Selector 1 (public key) is preferred because it survives certificate renewal as long as the key pair remains the same. Selector 0 (full certificate) requires updating the TLSA record every time the certificate is renewed.</p>
+
+    <h3>Matching type (field 2)</h3>
+    <table>
+      <thead><tr><th>Value</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>0</td><td>Exact match (full data in the record)</td></tr>
+        <tr><td>1</td><td>SHA-256 hash</td></tr>
+        <tr><td>2</td><td>SHA-512 hash</td></tr>
+      </tbody>
+    </table>
+    <p>Matching type 1 (SHA-256) is the standard choice. It keeps the DNS record compact while providing strong integrity verification.</p>
+
+    <h2>Generating a TLSA record</h2>
+    <p>The most common configuration is <code>3 1 1</code> (DANE-EE, public key, SHA-256). To generate the hash from your certificate:</p>
+    <pre><code># Extract the SubjectPublicKeyInfo and hash it
+openssl x509 -in cert.pem -noout -pubkey \
+  | openssl pkey -pubin -outform DER \
+  | openssl dgst -sha256 -hex \
+  | awk '{print $NF}'</code></pre>
+    <p>This produces the hex string you publish in the TLSA record's data field.</p>
+
+    <h2>DANE for SMTP</h2>
+    <p>DANE's most widespread deployment is in email. When an MTA (Mail Transfer Agent) sends mail to a domain, it looks up the MX records, then checks for TLSA records on the MX hostnames. If valid TLSA records exist and DNSSEC validates, the sending MTA can authenticate the receiving server's certificate without any prior configuration.</p>
+    <p>For SMTP, the TLSA record is placed at the MX hostname, not the email domain:</p>
+    <pre><code>_25._tcp.mail.example.com. IN TLSA 3 1 1 abc123...def456</code></pre>
+    <p>Major email providers including Gmail, Outlook, and Comcast support DANE verification for outbound SMTP. Publishing TLSA records for your mail servers protects your inbound mail from interception.</p>
+    <p>A critical requirement for DANE verification is that the DNS response carrying the TLSA record must have the <strong>DNSSEC AD (Authenticated Data) flag</strong> set. Without the AD flag, the validating MTA cannot confirm the TLSA record is genuine, and DANE verification fails. This means the entire chain -- from the root zone through your domain's zone to the TLSA record itself -- must be DNSSEC-signed and valid.</p>
+    <p>DANE and MTA-STS can coexist on the same domain. They serve complementary roles: DANE provides mandatory enforcement backed by DNSSEC without any negotiation or TOFU (Trust on First Use), while MTA-STS uses HTTPS-based policy discovery with an initial trust-on-first-use fetch. If both are deployed, a sending MTA that supports DANE will prefer it over MTA-STS because DANE provides a stronger authentication guarantee. Deploying both ensures coverage for senders that support only one of the two mechanisms.</p>
+
+    <h2>Prerequisites</h2>
+    <p>DANE requires <strong>DNSSEC</strong>. Without DNSSEC, TLSA records provide no security because an attacker who can tamper with DNS responses can simply remove or replace the TLSA record. Before deploying DANE:</p>
+    <ol>
+      <li>Ensure your domain has a complete DNSSEC chain from the root to your zone.</li>
+      <li>Verify DNSSEC validation using a DNS inspection tool (check for RRSIG, DNSKEY, and DS records).</li>
+      <li>Confirm your DNS provider supports TLSA record types.</li>
+    </ol>
+
+    <h2>Common mistakes</h2>
+    <ul>
+      <li><strong>No DNSSEC</strong>: Publishing TLSA records without DNSSEC is meaningless. Validators will ignore TLSA records in unsigned zones.</li>
+      <li><strong>Stale records after certificate renewal</strong>: If you use selector 0 (full certificate) or change your key pair during renewal, the TLSA record must be updated before the new certificate is deployed. The safest approach: publish the new TLSA record, wait for the old TTL to expire, then deploy the new certificate.</li>
+      <li><strong>Wrong port or protocol</strong>: The TLSA record name includes the port and protocol (<code>_443._tcp</code> for HTTPS, <code>_25._tcp</code> for SMTP). A record at the wrong port is invisible to validators.</li>
+      <li><strong>CNAME on the TLSA name</strong>: TLSA lookups follow CNAMEs, but the interaction with DNSSEC can be subtle. If the CNAME target is in a different zone, that zone must also be DNSSEC-signed.</li>
+      <li><strong>Using DANE-TA (usage 2) with Let's Encrypt</strong>: Let's Encrypt rotates intermediates. If you pin a specific intermediate with usage 2, the TLSA record breaks when Let's Encrypt switches to a new intermediate. Usage 3 (DANE-EE) with selector 1 (public key) is more resilient because you control the key pair.</li>
+      <li><strong>Missing rollover procedure</strong>: Always publish both the current and upcoming TLSA records during a key rollover. DNS propagation delays mean some validators will see the old record while others see the new one.</li>
+    </ul>
+
+    <h2>Verifying your DANE configuration</h2>
+    <p>After publishing TLSA records, verify them by querying the TLSA record in DNS and comparing it against the certificate the server actually presents during a TLS handshake. Both checks are needed: the DNS record must exist and the certificate must match.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check DANE/TLSA configuration</h2>
+    <form class="tool-entry__form" action="https://tls.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="h"
+        placeholder="example.com"
+        aria-label="Hostname to check DANE/TLSA for"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect TLS</button>
+    </form>
+    <p class="tool-entry__hint">Performs a TLS handshake and checks TLSA/DANE records, certificate chain, and DNSSEC status.</p>
+  </section>
+
+  <section class="tool-entry" style="margin-top: 1rem;">
+    <h2 class="tool-entry__heading">Look up TLSA records in DNS</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="_443._tcp.example.com TLSA"
+        aria-label="TLSA record to query"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Query DNS</button>
+    </form>
+    <p class="tool-entry__hint">Query TLSA records directly to verify your DNS publication.</p>
+  </section>
+
+  <section class="tool-entry">
+    <h2>Check your domain's DANE and DNSSEC with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input type="text" name="domain" placeholder="example.com" required>
+      <button type="submit">Check Email Security</button>
+    </form>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>DANE TLSA</h3>
+    <p>Update your DANE TLSA record to match your current certificate or key — TLSA records must be updated every time a certificate rotates.</p>
+    <h3>CAA compliance</h3>
+    <p>Either add the issuing CA to your CAA records, or reissue your certificate from a CA already listed in your CAA records.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/tls-rpt">SMTP TLS Reporting (TLSRPT)</a></li>
+      <li><a href="/guide/email-auth">Email Authentication Guide</a></li>
+      <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HTTP API Reference - netray.info</title>
+  <meta name="description" content="HTTP header inspection API reference for http.netray.info. CSP analysis, HSTS validation, CORS probing, cookie audit, and security header scoring.">
+  <link rel="canonical" href="https://netray.info/api/http">
+  <meta property="og:title" content="HTTP API Reference - netray.info">
+  <meta property="og:description" content="HTTP header inspection API: CSP, HSTS, CORS, cookies, security headers via curl.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://netray.info/api/http">
+  <meta property="og:site_name" content="netray.info">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../guide/style.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "HTTP Inspector API Reference",
+    "description": "HTTP header inspection API reference for http.netray.info. CSP analysis, HSTS validation, CORS probing, cookie audit, and security header scoring.",
+    "url": "https://netray.info/api/http",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/api/http"
+  }
+  </script>
+  <meta property="og:image" content="/og/http.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">HTTP Inspector API</h1>
+  <p class="page-subtitle">Base URL: <code>https://http.netray.info</code></p>
+
+  <article>
+
+      <p>
+        HTTP header inspection and security audit. Three concurrent probes &mdash; HTTPS
+        chain, HTTP port-80 upgrade, and CORS with an evil origin &mdash; analyse CSP,
+        HSTS, security headers, cookies, and redirect behaviour.
+      </p>
+
+      <p>
+        See also: <a href="https://http.netray.info/docs">interactive API reference</a>
+        (auto-generated OpenAPI)
+      </p>
+
+      <h2>Endpoints</h2>
+
+      <h3><code>GET /api/inspect?url=</code></h3>
+      <p>Inspect a URL's HTTP headers and security posture. Returns a synchronous JSON response.</p>
+<pre><code>curl -s 'https://http.netray.info/api/inspect?url=https%3A%2F%2Fexample.com' | jq .</code></pre>
+
+      <h3><code>POST /api/inspect</code></h3>
+      <p>Same inspection via POST body.</p>
+<pre><code>curl -s -X POST https://http.netray.info/api/inspect \
+  -H 'Content-Type: application/json' \
+  -d '{"url": "https://example.com"}' | jq .</code></pre>
+
+      <h2>Response Structure</h2>
+
+      <p>The response contains several top-level sections:</p>
+
+<pre><code>{
+  "url": "https://example.com",
+  "probes": [
+    {
+      "type": "https",
+      "status": 200,
+      "headers": { ... },
+      "csp": { ... },
+      "hsts": { "max_age": 31536000, "include_subdomains": true, "preload": false },
+      "cookies": [ ... ],
+      "cdn": "cloudflare"
+    },
+    {
+      "type": "http_upgrade",
+      "status": 301,
+      "redirect_target": "https://example.com/"
+    },
+    {
+      "type": "cors",
+      "origin_reflected": false,
+      "allows_credentials": false,
+      "allowed_methods": ["GET"]
+    }
+  ],
+  "redirects": [
+    { "url": "http://example.com", "status": 301, "location": "https://example.com/" }
+  ],
+  "quality": {
+    "verdict": "Pass",
+    "checks": [
+      { "name": "hsts", "label": "HSTS", "status": "pass", "message": "HSTS enabled with adequate max-age" },
+      { "name": "csp", "label": "Content Security Policy", "status": "warn", "message": "CSP present but uses unsafe-inline" },
+      ...
+    ]
+  }
+}</code></pre>
+
+      <h2>Quality Checks</h2>
+
+      <p>
+        The <code>quality.checks</code> array contains up to 11 checks.
+        Each check has a <code>status</code> of <code>pass</code>, <code>skip</code>,
+        <code>warn</code>, or <code>fail</code>:
+      </p>
+
+      <table>
+        <thead>
+          <tr><th>Check</th><th>What It Tests</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>hsts</code></td><td>HSTS header present with adequate max-age</td></tr>
+          <tr><td><code>csp</code></td><td>Content Security Policy present and effective</td></tr>
+          <tr><td><code>cors</code></td><td>CORS configuration is not overly permissive</td></tr>
+          <tr><td><code>x_frame_options</code></td><td>X-Frame-Options set to DENY or SAMEORIGIN</td></tr>
+          <tr><td><code>x_content_type_options</code></td><td>X-Content-Type-Options: nosniff is present</td></tr>
+          <tr><td><code>referrer_policy</code></td><td>Referrer-Policy is set and not unsafe</td></tr>
+          <tr><td><code>permissions_policy</code></td><td>Permissions-Policy restricts sensitive features</td></tr>
+          <tr><td><code>cookies</code></td><td>Session cookies have Secure, HttpOnly, SameSite</td></tr>
+          <tr><td><code>redirect_chain</code></td><td>HTTP-to-HTTPS redirect is present and correct</td></tr>
+          <tr><td><code>content_type</code></td><td>Content-Type header includes charset</td></tr>
+          <tr><td><code>redirect_limit</code></td><td>Redirect chain is not excessively long</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Useful One-Liners</h2>
+
+<pre><code># Get the overall verdict
+curl -s 'https://http.netray.info/api/inspect?url=https%3A%2F%2Fexample.com' \
+  | jq '.quality.verdict'
+
+# List all failing checks
+curl -s 'https://http.netray.info/api/inspect?url=https%3A%2F%2Fexample.com' \
+  | jq '[.quality.checks[] | select(.status == "fail")]'
+
+# Check HSTS max-age
+curl -s 'https://http.netray.info/api/inspect?url=https%3A%2F%2Fexample.com' \
+  | jq '.probes[] | select(.type == "https") | .hsts'
+
+# CI gate: fail if verdict is not Pass
+curl -sf 'https://http.netray.info/api/inspect?url=https%3A%2F%2Fexample.com' \
+  | jq -e '.quality.verdict == "Pass"'</code></pre>
+
+      <h2>Rate Limits</h2>
+
+      <p>
+        Per-IP GCRA rate limiting. Each request triggers up to three outbound probes
+        (HTTPS, HTTP upgrade, CORS), so the effective cost is higher than a simple
+        GET request.
+      </p>
+
+      <p>
+        When rate-limited, you receive a <code>429</code> response with a
+        <code>Retry-After</code> header.
+      </p>
+
+      <h2>Errors</h2>
+
+<pre><code>{
+  "error": {
+    "code": "bad_request",
+    "message": "Missing required parameter: url"
+  }
+}</code></pre>
+
+      <p>Common error codes:</p>
+      <table>
+        <thead>
+          <tr><th>Code</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>bad_request</code></td><td>Missing or invalid <code>url</code> parameter</td></tr>
+          <tr><td><code>rate_limited</code></td><td>Too many requests; check <code>Retry-After</code></td></tr>
+          <tr><td><code>target_not_allowed</code></td><td>Target URL is in a disallowed range (private IP, localhost)</td></tr>
+          <tr><td><code>internal_error</code></td><td>Server error; include <code>X-Request-Id</code> in reports</td></tr>
+        </tbody>
+      </table>
+  </article>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related</h2>
+    <ul class="page-footer__links">
+      <li><a href="email.html">Email API</a></li>
+      <li><a href="/guide/security-headers">Security Headers Guide</a></li>
+      <li><a href="/guide/csp">CSP Guide</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

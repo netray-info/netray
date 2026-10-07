@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Content Security Policy (CSP): A Complete Guide | netray.info</title>
+  <meta name="description" content="A comprehensive guide to Content Security Policy: directives, common mistakes, report-only mode, and practical examples for tightening your CSP.">
+  <link rel="canonical" href="https://netray.info/guide/csp">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Content Security Policy (CSP): A Complete Guide">
+  <meta property="og:description" content="A comprehensive guide to Content Security Policy: directives, common mistakes, report-only mode, and practical examples for tightening your CSP.">
+  <meta property="og:url" content="https://netray.info/guide/csp">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Content Security Policy (CSP): A Complete Guide">
+  <meta name="twitter:description" content="Directives reference, common mistakes, report-only mode, and practical examples for tightening your Content Security Policy.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Content Security Policy (CSP): A Complete Guide",
+    "description": "A comprehensive guide to Content Security Policy: directives, common mistakes, report-only mode, and practical examples for tightening your CSP.",
+    "url": "https://netray.info/guide/csp",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/csp"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "Content Security Policy (CSP): A Complete Guide" }
+    ]
+  }
+  </script>
+  <meta property="og:image" content="/og/http.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Content Security Policy (CSP): A Complete Guide</h1>
+  <p class="page-subtitle">How CSP prevents cross-site scripting, data injection, and clickjacking -- and how to deploy it without breaking your site.</p>
+
+  <article>
+    <h2>What CSP does and why it matters</h2>
+    <p>Content Security Policy is a browser security mechanism that restricts which resources a page can load and execute. It is delivered as an HTTP response header (<code>Content-Security-Policy</code>) and acts as a whitelist: the browser blocks anything not explicitly allowed.</p>
+    <p>Without CSP, any script injected into your page (via XSS, a compromised third-party library, or a man-in-the-middle attack) executes with the full privileges of your origin. CSP limits the blast radius of injection attacks by preventing the browser from executing inline scripts, loading scripts from unauthorized origins, or submitting form data to attacker-controlled endpoints.</p>
+    <p>CSP also mitigates clickjacking (via <code>frame-ancestors</code>), mixed content (by upgrading insecure requests), and data exfiltration (by restricting <code>connect-src</code> and <code>form-action</code>).</p>
+
+    <h2>Directives reference</h2>
+    <p>Each directive controls a specific resource type. If a directive is not set, the browser falls back to <code>default-src</code>. If <code>default-src</code> is also absent, the resource is allowed from any origin.</p>
+    <ul>
+      <li><strong><code>default-src</code></strong>: Fallback for all fetch directives not explicitly listed. Set this to <code>'self'</code> as a baseline, then open up specific directives as needed.</li>
+      <li><strong><code>script-src</code></strong>: Controls JavaScript execution. This is the most security-critical directive. Avoid <code>'unsafe-inline'</code> and <code>'unsafe-eval'</code> if at all possible; use nonces or hashes instead.</li>
+      <li><strong><code>style-src</code></strong>: Controls CSS loading and inline styles. <code>'unsafe-inline'</code> is often needed for legacy CSS but should be replaced with hashes or nonces over time.</li>
+      <li><strong><code>img-src</code></strong>: Controls image sources. Often needs <code>data:</code> for inline images and specific CDN origins.</li>
+      <li><strong><code>connect-src</code></strong>: Controls fetch, XMLHttpRequest, WebSocket, and EventSource destinations. Critical for preventing data exfiltration -- restrict to your own API origins.</li>
+      <li><strong><code>frame-ancestors</code></strong>: Controls which origins can embed this page in an iframe. Replaces <code>X-Frame-Options</code>. Does not fall back to <code>default-src</code>.</li>
+      <li><strong><code>object-src</code></strong>: Controls Flash, Java applets, and other plugin content. Set to <code>'none'</code> on all modern sites.</li>
+      <li><strong><code>base-uri</code></strong>: Restricts which URLs can appear in the <code>&lt;base&gt;</code> element. Set to <code>'self'</code> or <code>'none'</code> to prevent base-tag hijacking attacks.</li>
+      <li><strong><code>form-action</code></strong>: Restricts where forms can submit data. Does not fall back to <code>default-src</code>.</li>
+      <li><strong><code>font-src</code></strong>: Controls web font loading. Typically needs your own origin plus any font CDNs.</li>
+      <li><strong><code>media-src</code></strong>: Controls audio and video sources.</li>
+      <li><strong><code>worker-src</code></strong>: Controls Web Workers and Service Workers. Falls back to <code>script-src</code>, then <code>default-src</code>.</li>
+    </ul>
+
+    <h2>Common mistakes</h2>
+    <h3><code>'unsafe-inline'</code></h3>
+    <p>Adding <code>'unsafe-inline'</code> to <code>script-src</code> disables the primary XSS protection that CSP provides. Any injected <code>&lt;script&gt;</code> tag will execute. If you need inline scripts, use a per-request nonce:</p>
+    <pre><code>Content-Security-Policy: script-src 'nonce-abc123def456'
+
+&lt;script nonce="abc123def456"&gt;
+  // This script runs. Injected scripts without the nonce do not.
+&lt;/script&gt;</code></pre>
+    <p>The nonce must be cryptographically random and regenerated on every response. A static nonce is equivalent to <code>'unsafe-inline'</code>.</p>
+
+    <h3><code>'unsafe-eval'</code></h3>
+    <p>Permits <code>eval()</code>, <code>Function()</code>, <code>setTimeout('string')</code>, and similar dynamic code execution. This is often required by older template engines and some frameworks. Audit your dependencies and replace <code>eval</code> usage where possible. CSP Level 3 introduces <code>'unsafe-eval'</code> alternatives like <code>'wasm-unsafe-eval'</code> for WebAssembly without opening the door to full eval.</p>
+
+    <h3>Overly broad sources</h3>
+    <p>Whitelisting an entire CDN origin like <code>https://cdn.example.com</code> means any file on that CDN can be loaded as a script. If the CDN hosts user-uploaded content, an attacker can upload a malicious JS file and exploit your whitelist. Prefer specific paths or use <code>strict-dynamic</code> with nonces.</p>
+
+    <h2>report-uri vs report-to</h2>
+    <p>CSP can send violation reports to a URL you control, which is invaluable for debugging and monitoring.</p>
+    <p><code>report-uri</code> (CSP Level 2) sends a JSON POST to a specified endpoint when a violation occurs:</p>
+    <pre><code>Content-Security-Policy: default-src 'self'; report-uri /csp-report</code></pre>
+    <p><code>report-to</code> (CSP Level 3) uses the Reporting API, which is more flexible and supports batching:</p>
+    <pre><code>Report-To: {"group":"csp","max_age":86400,"endpoints":[{"url":"/csp-report"}]}
+Content-Security-Policy: default-src 'self'; report-to csp</code></pre>
+    <p>Browser support for <code>report-to</code> is still inconsistent. For maximum coverage, include both directives. They do not conflict.</p>
+
+    <h2>CSP Levels: 1, 2, and 3</h2>
+    <p><strong>CSP Level 1</strong> introduced the basic directive model and source lists. Still widely supported.</p>
+    <p><strong>CSP Level 2</strong> added nonces, hashes, <code>base-uri</code>, <code>form-action</code>, <code>frame-ancestors</code>, and <code>report-uri</code>. This is the baseline you should target.</p>
+    <p><strong>CSP Level 3</strong> added <code>strict-dynamic</code> (trust propagation from nonced scripts to scripts they load), <code>report-to</code>, <code>worker-src</code>, and <code>navigate-to</code>. <code>strict-dynamic</code> is the recommended approach for complex applications because it reduces whitelist maintenance -- you only need to nonce the entry-point scripts, and they can dynamically load additional scripts.</p>
+
+    <h2>Practical examples</h2>
+    <h3>Starter policy</h3>
+    <p>Begin with a restrictive baseline in report-only mode to discover what your site actually needs:</p>
+    <pre><code>Content-Security-Policy-Report-Only:
+  default-src 'self';
+  script-src 'self';
+  style-src 'self';
+  img-src 'self';
+  font-src 'self';
+  connect-src 'self';
+  frame-ancestors 'none';
+  object-src 'none';
+  base-uri 'self';
+  report-uri /csp-report</code></pre>
+    <p>Deploy this header and monitor your report endpoint. Every blocked resource generates a report with the violated directive, the blocked URI, and the document URL. This tells you exactly what to whitelist.</p>
+
+    <h3>Iterative tightening</h3>
+    <p>After reviewing reports, add the specific origins your site needs:</p>
+    <pre><code>Content-Security-Policy:
+  default-src 'self';
+  script-src 'self' 'nonce-{random}';
+  style-src 'self' 'nonce-{random}';
+  img-src 'self' data:;
+  font-src 'self';
+  connect-src 'self' https://api.example.com;
+  frame-ancestors 'none';
+  object-src 'none';
+  base-uri 'self';
+  form-action 'self';
+  upgrade-insecure-requests;
+  report-uri /csp-report</code></pre>
+    <p>Key points: each inline script and style tag gets a server-generated nonce. <code>upgrade-insecure-requests</code> rewrites HTTP subresource URLs to HTTPS automatically. <code>form-action</code> prevents form submissions to third-party origins.</p>
+
+    <h3>Nginx configuration</h3>
+    <pre><code># /etc/nginx/snippets/csp.conf
+add_header Content-Security-Policy
+  "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+  always;</code></pre>
+
+    <h3>Apache configuration</h3>
+    <pre><code># .htaccess or httpd.conf
+Header always set Content-Security-Policy \
+  "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"</code></pre>
+
+    <h3>Traefik middleware</h3>
+    <pre><code># traefik dynamic config
+http:
+  middlewares:
+    csp:
+      headers:
+        contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"</code></pre>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your site's HTTP headers with spectra</h2>
+    <form class="tool-entry__form" action="https://http.netray.info/" method="get">
+      <input type="url" name="url" placeholder="https://example.com" required>
+      <button type="submit">Inspect Headers</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/security-headers">Security Headers Overview</a></li>
+      <li><a href="/guide/cors">Cross-Origin Resource Sharing (CORS)</a></li>
+      <li><a href="/guide/hsts">HSTS Preloading</a></li>
+      <li><a href="/guide/cookie-security">Cookie Security</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Email API Reference - netray.info</title>
+  <meta name="description" content="Email security inspection API reference for email.netray.info. SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, DNSSEC, and DNSBL checks with aggregate grading.">
+  <link rel="canonical" href="https://netray.info/api/email">
+  <meta property="og:title" content="Email API Reference - netray.info">
+  <meta property="og:description" content="Email security API: SPF, DKIM, DMARC, MTA-STS, DANE, BIMI checks with A-F grading via curl.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://netray.info/api/email">
+  <meta property="og:site_name" content="netray.info">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../guide/style.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Email Security Inspector API Reference",
+    "description": "Email security inspection API reference for email.netray.info. SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, DNSSEC, and DNSBL checks with aggregate grading.",
+    "url": "https://netray.info/api/email",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/api/email"
+  }
+  </script>
+  <meta property="og:image" content="/og/email.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Email Security Inspector API</h1>
+  <p class="page-subtitle">Base URL: <code>https://email.netray.info</code></p>
+
+  <article>
+
+      <p>
+        DNS-only email security posture analysis. Checks 12 categories &mdash; SPF, DKIM,
+        DMARC, MTA-STS, TLS-RPT, DANE, DNSSEC, BIMI, FCrDNS, DNSBL, MX, and
+        cross-validation &mdash; and streams results as Server-Sent Events with an
+        aggregate A&ndash;F grade.
+      </p>
+
+      <p>
+        See also: <a href="https://email.netray.info/docs">interactive API reference</a>
+        (auto-generated OpenAPI)
+      </p>
+
+      <h2>Endpoints</h2>
+
+      <h3><code>GET /inspect/{domain}</code></h3>
+      <p>Inspect a domain's email security configuration. Returns an SSE stream.</p>
+<pre><code>curl -N https://email.netray.info/inspect/example.com</code></pre>
+
+      <h3><code>POST /inspect</code></h3>
+      <p>Same inspection via POST body. Omit <code>dkim_selectors</code> to use default provider-mapped selector lookup.</p>
+<pre><code>curl -N -X POST https://email.netray.info/inspect \
+  -H 'Content-Type: application/json' \
+  -d '{"domain": "example.com"}'</code></pre>
+
+      <p>With explicit DKIM selectors:</p>
+<pre><code>curl -N -X POST https://email.netray.info/inspect \
+  -H 'Content-Type: application/json' \
+  -d '{"domain": "example.com", "dkim_selectors": ["selector1", "google"]}'</code></pre>
+
+      <h2>Response Format (SSE)</h2>
+
+      <p>
+        Results stream as Server-Sent Events. Each event has a <code>data</code> field
+        containing a JSON object. Three event types arrive in sequence:
+      </p>
+
+      <h3><code>category</code> events</h3>
+      <p>One per check category (up to 11), streamed as each check completes:</p>
+<pre><code>data: {"type": "category", "name": "spf", "verdict": "pass", "checks": [
+  {"name": "spf_record_exists", "status": "pass", "message": "SPF record found"},
+  {"name": "spf_mechanism_count", "status": "pass", "message": "6 mechanisms (under limit of 10)"},
+  ...
+]}</code></pre>
+
+      <h3><code>cross_validation</code> event</h3>
+      <p>Arrives after all categories, containing cross-category consistency checks:</p>
+<pre><code>data: {"type": "cross_validation", "checks": [
+  {"name": "dmarc_alignment", "status": "pass", "message": "DMARC alignment matches SPF and DKIM"},
+  ...
+]}</code></pre>
+
+      <h3><code>summary</code> event</h3>
+      <p>Final event with the aggregate grade:</p>
+<pre><code>data: {"type": "summary", "grade": "B", "categories": {
+  "mx": "pass", "spf": "pass", "dkim": "warn", "dmarc": "pass",
+  "mta_sts": "fail", "tls_rpt": "fail", "dane": "skip",
+  "dnssec": "pass", "bimi": "skip", "fcrdns": "pass", "dnsbl": "pass"
+}}</code></pre>
+
+      <h2>Check Categories</h2>
+
+      <table>
+        <thead>
+          <tr><th>Category</th><th>What It Checks</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>mx</code></td><td>MX records exist and are valid hostnames</td></tr>
+          <tr><td><code>spf</code></td><td>SPF record syntax, mechanism count, lookup limits</td></tr>
+          <tr><td><code>dkim</code></td><td>DKIM key records for known and specified selectors</td></tr>
+          <tr><td><code>dmarc</code></td><td>DMARC policy, alignment mode, reporting URIs</td></tr>
+          <tr><td><code>mta_sts</code></td><td>MTA-STS DNS record and policy file</td></tr>
+          <tr><td><code>tls_rpt</code></td><td>TLS-RPT DNS record for SMTP TLS reporting</td></tr>
+          <tr><td><code>dane</code></td><td>DANE/TLSA records for MX hosts</td></tr>
+          <tr><td><code>dnssec</code></td><td>DNSSEC validation for the domain</td></tr>
+          <tr><td><code>bimi</code></td><td>BIMI DNS record and logo URL</td></tr>
+          <tr><td><code>fcrdns</code></td><td>Forward-confirmed reverse DNS for MX IPs</td></tr>
+          <tr><td><code>dnsbl</code></td><td>MX IPs checked against DNS blocklists</td></tr>
+          <tr><td><code>cross_validation</code></td><td>Cross-category consistency (DMARC alignment, etc.)</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Grade Values</h2>
+
+      <p>The aggregate grade reflects overall email security posture:</p>
+
+      <table>
+        <thead>
+          <tr><th>Grade</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>A</strong></td><td>Excellent &mdash; all critical checks pass</td></tr>
+          <tr><td><strong>B</strong></td><td>Good &mdash; minor issues or missing optional records</td></tr>
+          <tr><td><strong>C</strong></td><td>Fair &mdash; some important checks warn or fail</td></tr>
+          <tr><td><strong>D</strong></td><td>Poor &mdash; significant security gaps</td></tr>
+          <tr><td><strong>F</strong></td><td>Failing &mdash; critical authentication missing</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Useful One-Liners</h2>
+
+<pre><code># Stream all results (SSE)
+curl -N https://email.netray.info/inspect/example.com
+
+# Get just the summary grade (wait for stream to complete)
+curl -N -s https://email.netray.info/inspect/example.com \
+  | grep '"type":"summary"' | sed 's/^data: //' | jq '.grade'
+
+# CI gate: check email security for a domain
+curl -N -s https://email.netray.info/inspect/example.com \
+  | grep '"type":"summary"' | sed 's/^data: //' \
+  | jq -e '.grade == "A" or .grade == "B"'</code></pre>
+
+      <h2>Rate Limits</h2>
+
+      <p>
+        Per-IP GCRA rate limiting. Each inspection triggers multiple DNS lookups
+        across all 12 check categories, so the effective cost per request is high.
+      </p>
+
+      <p>
+        When rate-limited, you receive a <code>429</code> response with a
+        <code>Retry-After</code> header.
+      </p>
+
+      <h2>Errors</h2>
+
+<pre><code>{
+  "error": {
+    "code": "bad_request",
+    "message": "Missing required parameter: domain"
+  }
+}</code></pre>
+
+      <p>Common error codes:</p>
+      <table>
+        <thead>
+          <tr><th>Code</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>bad_request</code></td><td>Missing or invalid <code>domain</code> parameter</td></tr>
+          <tr><td><code>rate_limited</code></td><td>Too many requests; check <code>Retry-After</code></td></tr>
+          <tr><td><code>internal_error</code></td><td>Server error; include <code>X-Request-Id</code> in reports</td></tr>
+        </tbody>
+      </table>
+  </article>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related</h2>
+    <ul class="page-footer__links">
+      <li><a href="http.html">HTTP API</a></li>
+      <li><a href="/guide/dkim">DKIM Guide</a></li>
+      <li><a href="/guide/dnsbl">DNSBL Guide</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

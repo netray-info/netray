@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Certificate Management: Expiry, Lifetime, SAN Quality, and AIA | netray.info</title>
+  <meta name="description" content="Practical guide to TLS certificate management: monitoring expiry windows, understanding lifetime limits, validating SAN lists, and checking AIA reachability for robust HTTPS deployments.">
+  <link rel="canonical" href="https://netray.info/guide/certificate-management">
+  <link rel="stylesheet" href="style.css">
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Certificate Management: Expiry, Lifetime, SAN Quality, and AIA">
+  <meta property="og:description" content="Practical guide to TLS certificate management: monitoring expiry windows, understanding lifetime limits, validating SAN lists, and checking AIA reachability.">
+  <meta property="og:url" content="https://netray.info/guide/certificate-management">
+  <meta property="og:site_name" content="netray.info">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Certificate Management: Expiry, Lifetime, SAN Quality, and AIA">
+  <meta name="twitter:description" content="Monitor expiry windows, understand lifetime limits, validate SAN lists, and check AIA reachability.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Certificate Management: Expiry, Lifetime, SAN Quality, and AIA",
+    "description": "Practical guide to TLS certificate management: monitoring expiry windows, understanding lifetime limits, validating SAN lists, and checking AIA reachability for robust HTTPS deployments.",
+    "url": "https://netray.info/guide/certificate-management",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/certificate-management"
+  }
+  </script>
+  <meta property="og:image" content="/og/tls.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Certificate Management</h1>
+  <p class="page-subtitle">Monitoring expiry windows, understanding lifetime limits, validating SAN lists, and checking AIA reachability.</p>
+
+  <article>
+    <h2>Certificate expiry and the renewal window</h2>
+    <p>Every TLS certificate has a <code>notBefore</code> and <code>notAfter</code> date. Once the current time passes <code>notAfter</code>, the certificate is expired and clients will reject it with a hard error -- no warning, no bypass in most automated clients. An expired certificate is one of the most common causes of production outages, and it is entirely preventable.</p>
+    <p>The <strong>expiry window</strong> check measures how much time remains before the certificate expires and flags certificates that are approaching their expiry date:</p>
+    <ul>
+      <li><strong>More than 30 days remaining</strong> -- pass. The certificate is healthy and renewal is not yet urgent.</li>
+      <li><strong>7 to 30 days remaining</strong> -- warning. Renewal should happen soon. If automated renewal is configured, this window gives time to detect and fix failures before the certificate actually expires.</li>
+      <li><strong>Less than 7 days remaining</strong> -- failure. The certificate is critically close to expiry. If renewal has not happened by now, something is broken in the renewal pipeline.</li>
+    </ul>
+
+    <h3>Why certificates expire unexpectedly</h3>
+    <p>Automated renewal (via ACME/Let's Encrypt, cloud provider auto-renewal, or configuration management) is supposed to prevent expiry. When it fails, the cause is usually one of:</p>
+    <ul>
+      <li><strong>DNS validation failure</strong> -- ACME DNS-01 challenges fail because the DNS provider's API credentials expired, the zone was moved, or a firewall blocks the ACME client's API call.</li>
+      <li><strong>HTTP validation failure</strong> -- ACME HTTP-01 challenges fail because a reverse proxy, CDN, or WAF blocks the <code>/.well-known/acme-challenge/</code> path.</li>
+      <li><strong>Credential rotation</strong> -- the API key or service account used by the ACME client was rotated without updating the renewal configuration.</li>
+      <li><strong>Deployment not restarted</strong> -- the certificate was renewed on disk but the web server was not reloaded, so it continues serving the old (now expired) certificate from memory.</li>
+      <li><strong>Monitoring gap</strong> -- the team monitors the website's HTTP response but not the certificate's expiry date. The site works fine until the exact moment of expiry, then fails with no advance warning.</li>
+    </ul>
+
+    <h3>Best practices for expiry monitoring</h3>
+    <p>Monitor certificate expiry across all endpoints, not just the primary domain. Load balancers, API gateways, internal services with TLS, and CDN origin certificates all have independent expiry dates. Check the actual certificate served over the network, not the file on disk -- these can diverge if the server was not reloaded after renewal.</p>
+    <p>Set alert thresholds at 30 days (warning) and 7 days (critical). For Let's Encrypt certificates (90-day lifetime, renewed at 60 days), a 30-day warning means the renewal has already failed at least once.</p>
+
+    <h2>Certificate lifetime limits</h2>
+    <p>The CA/Browser Forum, the industry body that governs certificate issuance rules, has progressively shortened the maximum allowed lifetime for publicly trusted certificates:</p>
+    <ul>
+      <li><strong>Before 2015</strong> -- certificates could be valid for up to 5 years.</li>
+      <li><strong>2015-2018</strong> -- reduced to 3 years (39 months).</li>
+      <li><strong>2018-2020</strong> -- reduced to 2 years (825 days).</li>
+      <li><strong>2020-present</strong> -- reduced to 398 days (approximately 13 months).</li>
+      <li><strong>Future</strong> -- Apple has proposed reducing to 45 days by 2028, with the CA/Browser Forum ballot approved in 2025. This will make automation mandatory for all certificate management.</li>
+    </ul>
+    <p>The <strong>certificate lifetime</strong> check verifies that the certificate's validity period (the span from <code>notBefore</code> to <code>notAfter</code>) does not exceed the current maximum of 398 days. A certificate with a longer lifetime was either issued before the rule change (and will not be renewed with such a long lifetime) or was issued by a CA that is not complying with industry standards.</p>
+
+    <h3>Why shorter lifetimes are better</h3>
+    <p>Shorter certificate lifetimes reduce the window during which a compromised key can be abused. If a private key is stolen, the damage is limited to the certificate's remaining validity period. Revocation mechanisms (CRL, OCSP) are supposed to address this, but in practice they are unreliable: browsers soft-fail on OCSP errors, and CRL checking has been mostly abandoned by browsers due to performance and privacy concerns.</p>
+    <p>Shorter lifetimes also force automation. Manual certificate management does not scale to 90-day or 45-day renewal cycles. Organizations that automate renewal early avoid the scramble when lifetime limits decrease further.</p>
+
+    <h2>SAN quality</h2>
+    <p>The Subject Alternative Name (SAN) extension lists the hostnames (and sometimes IP addresses) that a certificate is valid for. When a client connects to <code>example.com</code>, it checks whether <code>example.com</code> appears in the certificate's SAN list. If it does not, the connection fails with a hostname mismatch error.</p>
+    <p>The <strong>SAN quality</strong> check evaluates the SAN list for issues that indicate misconfiguration or security concerns:</p>
+    <ul>
+      <li><strong>Excessive SANs</strong> -- a certificate covering hundreds of unrelated domains is a shared hosting or CDN certificate. This is not inherently wrong, but it means that a compromise of any one domain's private key affects all domains on the certificate. For security-sensitive deployments, dedicated certificates are preferred.</li>
+      <li><strong>Wildcard scope</strong> -- a wildcard certificate (<code>*.example.com</code>) covers all single-level subdomains. This is convenient but means the certificate is valid for any subdomain, including ones that do not exist yet. A compromised wildcard certificate key gives an attacker a valid certificate for every subdomain.</li>
+      <li><strong>Internal names in public certificates</strong> -- SANs containing internal hostnames (like <code>mail.internal</code> or <code>server1.corp</code>) in a publicly trusted certificate are a policy violation. CAs are prohibited from issuing certificates for non-public names.</li>
+      <li><strong>Missing www variant</strong> -- if the certificate covers <code>example.com</code> but not <code>www.example.com</code> (or vice versa), users accessing the uncovered variant will see a certificate error. Most CAs include both by default, but manual CSR generation can miss this.</li>
+    </ul>
+
+    <h2>AIA reachability</h2>
+    <p>The Authority Information Access (AIA) extension in a certificate contains URLs that clients can use to fetch missing information about the certificate chain:</p>
+    <ul>
+      <li><strong>CA Issuers</strong> -- a URL pointing to the issuing CA's intermediate certificate. If the server does not send the full chain (a common misconfiguration), the client can use this URL to download the missing intermediate and complete the chain.</li>
+      <li><strong>OCSP responder</strong> -- a URL for checking whether the certificate has been revoked via the Online Certificate Status Protocol.</li>
+    </ul>
+    <p>The <strong>AIA reachability</strong> check verifies that the CA Issuers URL in the certificate is actually reachable and returns a valid certificate. This matters because:</p>
+
+    <h3>When AIA matters</h3>
+    <p>If your server sends the complete certificate chain (leaf + all intermediates), AIA reachability is less critical -- clients do not need to fetch intermediates because they already have them. The AIA URL is a fallback.</p>
+    <p>But if your server sends only the leaf certificate (a common misconfiguration, especially after server migrations or certificate renewals), AIA becomes the only way for clients to obtain the intermediate. In this scenario:</p>
+    <ul>
+      <li><strong>Browsers</strong> often have AIA fetching enabled and can recover from a missing intermediate by downloading it. This is why the site "works in the browser" but fails elsewhere.</li>
+      <li><strong>Command-line tools</strong> (curl, wget, openssl) typically do not fetch AIA URLs and will fail with "unable to verify the first certificate" or "certificate verify failed."</li>
+      <li><strong>Mobile apps</strong> and embedded clients usually do not implement AIA fetching.</li>
+      <li><strong>Internal network clients</strong> behind firewalls may be unable to reach the AIA URL even if they support fetching.</li>
+    </ul>
+    <p>If the AIA URL is unreachable (the CA's server is down, the URL has changed, or the certificate is very old and the URL is no longer maintained), the fallback does not work and the incomplete chain causes hard failures for all non-browser clients.</p>
+
+    <h3>Best practice</h3>
+    <p>Always configure your server to send the complete certificate chain, regardless of AIA availability. Treat AIA as a safety net, not a primary mechanism. Verify chain completeness by connecting with <code>openssl s_client</code>, which does not fetch AIA URLs and will show you exactly what the server sends.</p>
+    <pre><code># Check what the server actually sends (no AIA fetching)
+openssl s_client -connect example.com:443 -showcerts 2>/dev/null | \
+  grep -c "BEGIN CERTIFICATE"
+# Should be 2+ (leaf + intermediates). If 1, the chain is incomplete.</code></pre>
+
+    <h2>Putting it together: a certificate health checklist</h2>
+    <ol>
+      <li><strong>Expiry window</strong> -- is the certificate more than 30 days from expiry? Is automated renewal working?</li>
+      <li><strong>Lifetime</strong> -- is the certificate's total validity period under 398 days? Older, longer-lived certificates should be replaced.</li>
+      <li><strong>SAN coverage</strong> -- does the SAN list cover all hostnames that resolve to this server? Are there unnecessary wildcards or excessive domains?</li>
+      <li><strong>AIA URLs</strong> -- are the CA Issuers and OCSP URLs reachable? Even if you serve the full chain, unreachable AIA is a signal that the CA's infrastructure may have issues.</li>
+      <li><strong>Chain completeness</strong> -- does the server send all intermediates, or is it relying on AIA as a crutch?</li>
+      <li><strong>Renewal automation</strong> -- is ACME or another renewal mechanism configured, tested, and monitored? Can you prove the last renewal succeeded?</li>
+    </ol>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect certificate expiry, lifetime, and SAN quality</h2>
+    <form class="tool-entry__form" action="https://tls.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="h"
+        placeholder="example.com"
+        aria-label="Hostname to inspect"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect</button>
+    </form>
+    <p class="tool-entry__hint">Checks certificate expiry window, lifetime compliance, SAN list, AIA reachability, and chain completeness.</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>Expiry window</h3>
+    <p>Your certificate is expiring soon — renew it now to avoid browsers showing a warning or blocking your site.</p>
+    <h3>Certificate lifetime</h3>
+    <p>Reissue your certificate with a lifetime of 397 days or less — longer lifetimes are no longer accepted by major browsers.</p>
+    <h3>SAN quality</h3>
+    <p>Review your certificate's Subject Alternative Names: replace wildcards with specific names where possible and split certificates that cover unrelated domains.</p>
+    <h3>AIA reachability</h3>
+    <p>The OCSP or issuer URL in your certificate is unreachable — contact your CA, as this may break certificate revocation checking for your visitors.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/tls-protocol">TLS Protocol and Cipher Suite Guide</a></li>
+      <li><a href="/guide/certificate-transparency">Understanding Certificate Transparency</a></li>
+      <li><a href="/guide/letsencrypt-vs-commercial">Let's Encrypt vs Commercial CAs</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

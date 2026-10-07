@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAA Records: Locking Down Certificate Issuance | netray.info</title>
+  <meta name="description" content="How Certification Authority Authorization DNS records work, how to set them up to restrict which CAs can issue certificates for your domain, and how to check them.">
+  <link rel="canonical" href="https://netray.info/guide/caa-records">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="CAA Records: Locking Down Certificate Issuance">
+  <meta property="og:description" content="How Certification Authority Authorization DNS records work, how to set them up to restrict which CAs can issue certificates for your domain, and how to check them.">
+  <meta property="og:url" content="https://netray.info/guide/caa-records">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CAA Records: Locking Down Certificate Issuance">
+  <meta name="twitter:description" content="How to use DNS to control which certificate authorities are allowed to issue certificates for your domain.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "CAA Records: Locking Down Certificate Issuance",
+    "description": "How Certification Authority Authorization DNS records work, how to set them up to restrict which CAs can issue certificates for your domain, and how to check them.",
+    "url": "https://netray.info/guide/caa-records",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/caa-records"
+  }
+  </script>
+  <meta property="og:image" content="/og/dns.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">CAA Records: Locking Down Certificate Issuance</h1>
+  <p class="page-subtitle">How to use DNS to control which certificate authorities are allowed to issue certificates for your domain.</p>
+
+  <article>
+    <h2>What CAA records do</h2>
+    <p>A Certification Authority Authorization (CAA) record is a DNS record type (RFC 8659) that specifies which certificate authorities are permitted to issue TLS certificates for a domain. Before issuing a certificate, CAs are required by the CA/Browser Forum Baseline Requirements to check the CAA records for the requested domain and refuse to issue if the CA is not listed.</p>
+    <p>Without any CAA records, <em>any</em> trusted CA can issue a certificate for your domain. There are over 100 CAs trusted by major browsers. A misconfigured or compromised CA — or one that was deceived by a convincing domain validation request — could issue a certificate for your domain that your organization did not request. CAA records reduce this attack surface to only the CAs you explicitly authorize.</p>
+    <p>Certificate misissuance has happened in practice: CAs have issued certificates for domains they should not have (DV validation mistakes, organizational errors, BGP-based domain validation attacks). CAA is one layer of defense against misissuance reaching production use.</p>
+
+    <h2>Record syntax</h2>
+    <p>A CAA record has three fields: a flag, a tag, and a value.</p>
+    <pre><code>example.com. 3600 IN CAA 0 issue "letsencrypt.org"</code></pre>
+    <ul>
+      <li><strong>Flag (0 or 128)</strong>: Flag 0 means "non-critical" — a CA that does not understand this tag should ignore it. Flag 128 marks the record as critical — a CA that does not understand the tag must refuse to issue. In practice, use 0 for all standard tags.</li>
+      <li><strong><code>issue</code> tag</strong>: Authorizes the named CA to issue regular (non-wildcard) certificates. The value is the CA's policy domain, not a URL — it is the domain that appears in the CA's Certificate Policy.</li>
+      <li><strong><code>issuewild</code> tag</strong>: Controls wildcard certificate issuance specifically. If you have an <code>issue</code> record but no <code>issuewild</code> record, the <code>issue</code> record governs wildcards too. If you have both, <code>issuewild</code> takes precedence for wildcards.</li>
+      <li><strong><code>iodef</code> tag</strong>: Specifies a URI where CAs should send violation reports if they receive a request for a certificate that CAA would deny. Accepts <code>mailto:</code> and <code>https:</code> URIs. Not all CAs implement this.</li>
+    </ul>
+
+    <h2>Multiple CAA records</h2>
+    <p>You can authorize multiple CAs by publishing multiple CAA records with the <code>issue</code> tag — one record per CA. All authorized CAs form an allowlist:</p>
+    <pre><code>example.com. CAA 0 issue "letsencrypt.org"
+example.com. CAA 0 issue "digicert.com"
+example.com. CAA 0 iodef "mailto:security@example.com"</code></pre>
+    <p>To block all issuance (effectively making your domain un-certifiable by any CA), publish a single <code>issue</code> record with an empty string value:</p>
+    <pre><code>example.com. CAA 0 issue ";"</code></pre>
+    <p>This is useful for domains that should never have certificates issued — internal-only domains, parked domains, or domains where you manage certificates entirely out-of-band. Be cautious: this will block Let's Encrypt auto-renewal as well.</p>
+    <p>To allow regular certificates from a CA but block wildcard issuance entirely:</p>
+    <pre><code>example.com. CAA 0 issue "letsencrypt.org"
+example.com. CAA 0 issuewild ";"</code></pre>
+
+    <h2>Common setups</h2>
+    <ul>
+      <li><strong>Let's Encrypt only</strong>: <code>CAA 0 issue "letsencrypt.org"</code>. This is appropriate for any domain using certbot, acme.sh, or ACME protocol automation. Let's Encrypt's policy domain is <code>letsencrypt.org</code>.</li>
+      <li><strong>Let's Encrypt plus a paid CA</strong>: Add a second <code>issue</code> record. Common in organizations that use Let's Encrypt for automation but DigiCert or Sectigo for EV or OV certificates.</li>
+      <li><strong>Blocking all issuance</strong>: <code>CAA 0 issue ";"</code> combined with <code>CAA 0 issuewild ";"</code>. Use for domains where TLS should never be needed, to prevent any issuance mistakes.</li>
+      <li><strong>Cloudflare-proxied domains</strong>: Cloudflare issues certificates using DigiCert or Let's Encrypt depending on the plan. Check your Cloudflare plan and set CAA accordingly if you also issue your own certificates for non-proxied hostnames on the same domain.</li>
+    </ul>
+    <p>When in doubt, query your existing certificates to find which CA issued them (visible in the certificate's issuer field), then look up that CA's CAA policy domain from their Certificate Policy document or their public documentation.</p>
+
+    <h2>CAA and DNSSEC</h2>
+    <p>CAA records are DNS records and inherit all of DNS's weaknesses. Without DNSSEC, an attacker who can manipulate DNS responses between the CA and your authoritative server can substitute their own CAA records (or return NXDOMAIN to imply no restriction). CAs are required to check CAA but the check is only as trustworthy as the DNS infrastructure.</p>
+    <p>DNSSEC signs CAA records cryptographically. A CA performing DNSSEC-aware validation can verify that the CAA response is authentic and unmodified. Some CAs (particularly those performing Multi-Perspective Issuance Corroboration) query from multiple vantage points, making BGP-based DNS poisoning harder — but DNSSEC eliminates the attack entirely.</p>
+    <p>If you are publishing CAA records for security purposes (not just compliance), DNSSEC on your zone is the necessary complement.</p>
+
+    <h2>How to verify</h2>
+    <p>Query your CAA records directly:</p>
+    <pre><code>example.com CAA</code></pre>
+    <p>Verify:</p>
+    <ul>
+      <li>The CA name in the record matches exactly what your CA expects (check their documentation — not all CAs use their main domain as the policy domain)</li>
+      <li>If you use <code>issuewild</code>, it covers the CAs that issue your wildcard certificates</li>
+      <li>The <code>iodef</code> address is a monitored mailbox</li>
+      <li>No unexpected CAs are listed</li>
+    </ul>
+    <p>A common mistake is CAA records that look correct but block auto-renewal: if your ACME client is Let's Encrypt and your CAA record says <code>issue "digicert.com"</code> with no Let's Encrypt entry, your next certificate renewal will fail silently until the certificate expires. Check that the CA name in your CAA record matches the issuer in your currently active certificate.</p>
+
+    <h2>Relationship to DANE</h2>
+    <p>CAA and DANE (TLSA records) are complementary but operate at different layers. CAA restricts <em>who can issue</em> a certificate — it is a pre-issuance control. DANE pins <em>which specific certificate or key</em> is valid for a hostname — it is a post-issuance control enforced by clients at connection time. A domain with both CAA and DANE provides defense in depth: CAA reduces the chance of a rogue certificate being issued, and DANE ensures that even if one is issued, clients that support DANE will not accept it. DANE requires DNSSEC to be meaningful.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check your domain's CAA records</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com CAA"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Queries CAA records and cross-checks against the certificate issuer.</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <p>Add CAA records to specify which certificate authorities are allowed to issue certificates for your domain, reducing mis-issuance risk.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/dnssec">DNSSEC: How to Enable and Verify It</a></li>
+      <li><a href="/guide/certificate-transparency">Certificate Transparency</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

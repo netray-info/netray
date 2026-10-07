@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Understanding Certificate Transparency | netray.info</title>
+  <meta name="description" content="How Certificate Transparency logs work, what SCTs are, how browsers enforce CT, and how to check whether your certificate is properly logged.">
+  <link rel="canonical" href="https://netray.info/guide/certificate-transparency">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Understanding Certificate Transparency">
+  <meta property="og:description" content="How Certificate Transparency logs work, what SCTs are, how browsers enforce CT, and how to check whether your certificate is properly logged.">
+  <meta property="og:url" content="https://netray.info/guide/certificate-transparency">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Understanding Certificate Transparency">
+  <meta name="twitter:description" content="How Certificate Transparency logs work, what SCTs are, how browsers enforce CT, and how to check whether your certificate is properly logged.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Understanding Certificate Transparency",
+    "description": "How Certificate Transparency logs work, what SCTs are, how browsers enforce CT, and how to check whether your certificate is properly logged.",
+    "url": "https://netray.info/guide/certificate-transparency",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/certificate-transparency"
+  }
+  </script>
+  <meta property="og:image" content="/og/tls.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Understanding Certificate Transparency</h1>
+  <p class="page-subtitle">How public certificate logs make mis-issuance detectable and how to verify your certificate is properly logged.</p>
+
+  <article>
+    <h2>The problem CT solves</h2>
+    <p>Before Certificate Transparency existed, a certificate authority could issue a certificate for any domain without the domain owner knowing. Browsers had no mechanism to detect this. The only check was whether a CA in the browser's trust store had signed the certificate — and there were hundreds of trusted CAs globally, each with the technical ability to sign for any domain.</p>
+    <p>The DigiNotar incident in 2011 made the consequences concrete. A Dutch CA was compromised and issued fraudulent wildcard certificates for <code>*.google.com</code> and hundreds of other domains. These certificates were used in active man-in-the-middle attacks against Iranian users. The certificates were valid — signed by a trusted CA — and browsers had no way to detect the fraud until users reported anomalies. DigiNotar was removed from all trust stores and went bankrupt within weeks.</p>
+    <p>The underlying problem remained: the CA ecosystem gave any trusted CA unilateral power over any domain. Certificate Transparency was designed to make mis-issuance detectable, not to prevent it directly, but to ensure that any fraudulently issued certificate would leave a permanent, public, auditable record.</p>
+
+    <h2>How CT logs work</h2>
+    <p>A CT log is an append-only, cryptographically verifiable record of certificates. It is structured as a <strong>Merkle hash tree</strong>: each leaf node contains a certificate (or pre-certificate), and each internal node is a hash of its children. The root hash — called the <em>tree head</em> — is signed by the log operator and published periodically. Because the tree is append-only and each root hash commits to all previous entries, it is mathematically impossible to silently remove or alter a certificate once logged.</p>
+    <p>When a CA issues a certificate, it can submit either a <strong>pre-certificate</strong> (a certificate with a special poison extension, submitted before the final cert is signed) or the final certificate itself to one or more CT logs. The log returns a <strong>Signed Certificate Timestamp (SCT)</strong> as proof of inclusion. The CA embeds SCTs from multiple logs into the final certificate before delivering it to the domain owner.</p>
+    <p>Multiple independent log operators exist — Google, Cloudflare, DigiCert, and others run logs. Requiring SCTs from multiple logs means there is no single point of failure: even if one log is compromised or goes offline, other logs maintain the record.</p>
+
+    <h2>SCTs explained</h2>
+    <p>An SCT is a signed promise from a log operator that a certificate has been (or will be within a defined time, called the Maximum Merge Delay or MMD) added to the log. The SCT contains the log's ID, a timestamp, and a cryptographic signature over the submitted data.</p>
+    <p>This is described as a "promise of logging" model: the SCT proves the log has accepted the certificate, not necessarily that it is already visible in the public tree. Logs commit to merging accepted certificates within their MMD, typically 24 hours. Monitors watching the logs can therefore detect any certificate within a day of issuance.</p>
+    <p>SCTs can be delivered to browsers via three channels:</p>
+    <ul>
+      <li><strong>Embedded in the certificate</strong> — the CA includes SCTs directly in the TLS certificate as an X.509 extension. No TLS extension or OCSP required; works with any server.</li>
+      <li><strong>TLS extension</strong> — the server sends SCTs in the <code>signed_certificate_timestamp</code> TLS extension during the handshake. Requires server-side support but does not increase certificate size.</li>
+      <li><strong>OCSP staple</strong> — SCTs are embedded in an OCSP response that the server staples to the TLS handshake. Requires both OCSP stapling and CT-aware CAs.</li>
+    </ul>
+    <p>Embedded SCTs are the most common delivery method for public CAs, including Let's Encrypt, because they require no server configuration and work transparently.</p>
+
+    <h2>Browser enforcement</h2>
+    <p>Chrome enforces CT for all publicly trusted certificates issued after April 2018. A certificate must carry SCTs from at least two independent logs that are currently trusted by Chrome's CT policy. If a certificate lacks sufficient SCTs, Chrome displays a hard error — the connection is blocked, not just flagged.</p>
+    <p>The specific requirements depend on certificate lifetime. For certificates with validity of 180 days or less, two SCTs are required. Longer-lived certificates require additional SCTs. Chrome's CT log list is maintained as part of the browser's update mechanism, and logs can be disqualified if they fail to uphold their commitments.</p>
+    <p>Safari (Apple) implements CT enforcement through its own policy. Apple requires CT for certificates issued after October 2018, with similar two-SCT requirements. Apple also maintains its own trusted log list independently of Google's.</p>
+    <p>Firefox does not currently enforce CT independently but relies on the operating system or Mozilla's own mechanisms. This means CT enforcement is primarily driven by Chrome and Safari's combined market share.</p>
+
+    <h2>Let's Encrypt and CT</h2>
+    <p>Let's Encrypt automatically submits all issued certificates to multiple CT logs before delivery. Every LE certificate includes embedded SCTs from at least two logs. This happens transparently — there is nothing to configure and no extra steps required.</p>
+    <p>LE submits to logs operated by Google (Argon, Xenon), Cloudflare (Nimbus), and others. Because LE uses pre-certificate submission, the SCTs are embedded directly in the certificate. The result is that all LE-issued certificates fully satisfy Chrome's and Safari's CT policies out of the box.</p>
+    <p>This is one reason CT compliance is often taken for granted in modern deployments: if you are using any major public CA with ACME automation, CT is handled for you. The cases where CT becomes a hands-on concern are older deployments, internal CAs, or certificates issued by smaller CAs that do not submit to logs automatically.</p>
+
+    <h2>How to check CT compliance</h2>
+    <p>The most direct check is inspecting the certificate itself for embedded SCTs. A TLS inspection tool will report the SCT count and, for each SCT, the log ID and timestamp. Two or more SCTs from logs on the browser trust lists is the passing bar.</p>
+    <p>For historical issuance monitoring — checking whether any unexpected certificates have been issued for your domain — <a href="https://crt.sh">crt.sh</a> indexes CT log data and allows searching by domain name. Querying <code>%.example.com</code> returns all certificates logged for any subdomain. This is valuable for detecting shadow IT, misconfigured staging environments, or fraudulent certificates.</p>
+    <p>Regular CT monitoring is a low-cost security control. RSS feeds and automated queries against crt.sh can alert you within hours of unexpected issuance. Several commercial tools offer this as a service, but crt.sh query automation via cron or CI is sufficient for most organizations.</p>
+
+    <h2>CT and CAA records</h2>
+    <p>CT and CAA records are complementary controls that operate at different points in the issuance lifecycle. <strong>CAA records</strong> (Certification Authority Authorization) tell CAs which authorities are permitted to issue for a domain — they are checked before issuance and act as a preventive control. <strong>CT logs</strong> record what was actually issued — they are a detective control, providing an audit trail after the fact.</p>
+    <p>Neither is sufficient alone. CAA restricts which CAs may issue but relies on CAs honoring the record; a compromised or rogue CA might ignore it. CT cannot prevent mis-issuance but ensures any violation is publicly visible. Together, they form a practical defense: CAA raises the bar for mis-issuance, CT ensures any violation leaves a permanent record that domain owners and auditors can find.</p>
+    <p>For high-value domains, configure both: a CAA record allowing only your chosen CA, and automated monitoring of CT logs for your domain. The combination makes unauthorized issuance both harder to execute and impossible to hide.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect your certificate's CT records</h2>
+    <form class="tool-entry__form" action="https://tls.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="h"
+        placeholder="example.com"
+        aria-label="Domain to inspect"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect</button>
+    </form>
+    <p class="tool-entry__hint">Shows SCT count, certificate chain, and full TLS inspection for your domain.</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <p>Obtain a new certificate from a CA that submits to Certificate Transparency logs — all publicly-trusted CAs are required to do so.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/caa-records">CAA Records: Restricting Certificate Issuance</a></li>
+      <li><a href="/guide/hsts">HTTP Strict Transport Security (HSTS)</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

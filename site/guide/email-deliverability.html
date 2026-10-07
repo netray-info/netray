@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to Diagnose Email Deliverability Problems | netray.info</title>
+  <meta name="description" content="Step-by-step guide to diagnosing why emails land in spam or get rejected. Covers SPF failures, DMARC policy, DKIM misalignment, blacklists, and how to check each.">
+  <link rel="canonical" href="https://netray.info/guide/email-deliverability">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="How to Diagnose Email Deliverability Problems">
+  <meta property="og:description" content="Step-by-step guide to diagnosing why emails land in spam or get rejected. Covers SPF failures, DMARC policy, DKIM misalignment, and blacklists.">
+  <meta property="og:url" content="https://netray.info/guide/email-deliverability">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="How to Diagnose Email Deliverability Problems">
+  <meta name="twitter:description" content="Step-by-step guide to diagnosing why emails land in spam or get rejected. Covers SPF failures, DMARC policy, DKIM misalignment, and blacklists.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "How to Diagnose Email Deliverability Problems",
+    "description": "Step-by-step guide to diagnosing why emails land in spam or get rejected. Covers SPF failures, DMARC policy, DKIM misalignment, blacklists, and how to check each.",
+    "url": "https://netray.info/guide/email-deliverability",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/email-deliverability"
+  }
+  </script>
+  <meta property="og:image" content="/og/email.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">How to Diagnose Email Deliverability Problems</h1>
+  <p class="page-subtitle">A systematic approach to finding why your emails are going to spam or getting rejected.</p>
+
+  <article>
+    <h2>Start with the bounce or spam report</h2>
+    <p>The fastest path to a diagnosis is the delivery status notification (DSN) or the full message headers from a message that landed in spam. Both contain machine-readable clues about exactly what failed.</p>
+    <p>A <strong>bounce message</strong> (NDR) includes an SMTP status code. The most important ones for authentication failures are:</p>
+    <ul>
+      <li><code>550 5.7.1</code> — the receiving server refused the message, often due to SPF hardfail or DMARC reject policy</li>
+      <li><code>550 5.7.26</code> — Google's specific code for "does not meet DMARC requirements"</li>
+      <li><code>421 4.7.0</code> — temporary rejection, often rate limiting or reputation-based; the sending server will retry</li>
+    </ul>
+    <p>For messages that arrived but went to spam, open the full headers. Look for three fields injected by the receiving server:</p>
+    <ul>
+      <li><code>Authentication-Results:</code> — shows SPF, DKIM, and DMARC outcomes in a single header</li>
+      <li><code>Received-SPF:</code> — the SPF verdict with the specific IP and mechanism that matched (or failed)</li>
+      <li><code>DKIM-Signature:</code> — present if the sender signed; absence here means no DKIM signing is happening</li>
+    </ul>
+    <p>A typical <code>Authentication-Results</code> header might read: <code>spf=pass; dkim=fail (signature did not verify); dmarc=fail (p=reject)</code>. That tells you SPF passed but DKIM verification failed, causing DMARC to fail and the policy to be applied.</p>
+
+    <h2>Check SPF first</h2>
+    <p>SPF is the simplest mechanism to break and the most common culprit in deliverability incidents. Start here.</p>
+    <p>Query the TXT records on your root domain and look for the <code>v=spf1</code> record. Common failure modes:</p>
+    <ul>
+      <li><strong>Multiple SPF records</strong>: RFC 7208 requires exactly one. Two records cause a <code>permerror</code>, which many receivers treat identically to a hardfail.</li>
+      <li><strong>Too many DNS lookups</strong>: SPF evaluation is capped at 10 recursive DNS lookups. Each <code>include:</code>, <code>a:</code>, <code>mx:</code>, and <code>redirect=</code> mechanism counts toward the limit. Exceeding it produces a <code>permerror</code>. This is especially common for organizations using four or more SaaS senders (transactional, marketing, CRM, HR).</li>
+      <li><strong>Softfail vs hardfail</strong>: <code>~all</code> (softfail) asks receivers to accept but mark the message; <code>-all</code> (hardfail) requests rejection. If you are using <code>?all</code> (neutral), SPF is providing no protection at all.</li>
+      <li><strong>Sending from an IP not in SPF</strong>: A new sending service was added without updating the SPF record. Check the IP in the <code>Received-SPF</code> header against your current SPF record.</li>
+    </ul>
+    <p>To verify your SPF record, query: <code>example.com TXT</code> and check that exactly one record starts with <code>v=spf1</code>.</p>
+
+    <h2>Verify DKIM signing</h2>
+    <p>DKIM failures are often invisible until DMARC is enforced, because many receivers accept DKIM-unsigned mail if SPF passes. Once you move DMARC to <code>p=reject</code>, a DKIM gap surfaces immediately.</p>
+    <p>To check DKIM, you need the selector your sending provider is using. Find it in the <code>DKIM-Signature:</code> header of a sent message — look for the <code>s=</code> tag. Then query the public key: <code>&lt;selector&gt;._domainkey.example.com TXT</code>.</p>
+    <p>If the DNS query returns <code>NXDOMAIN</code>, the key was never published or has been removed. If it returns a record but DKIM is still failing, check:</p>
+    <ul>
+      <li>The key length — 512-bit RSA keys are rejected by some receivers; use 2048-bit minimum</li>
+      <li>Whether your sending platform is actually signing — some require explicit activation per domain</li>
+      <li>Body canonicalization — if your mail gateway modifies the message body after signing (e.g., appending a disclaimer), the signature breaks</li>
+    </ul>
+
+    <h2>Inspect your DMARC policy</h2>
+    <p>DMARC is the enforcement layer that ties SPF and DKIM together. A DMARC record at <code>_dmarc.example.com</code> with <code>p=none</code> is monitoring-only: it generates aggregate reports but does not protect your domain. Many organizations deploy DMARC and forget to graduate past <code>p=none</code>.</p>
+    <p>The two most common DMARC alignment failures are:</p>
+    <ul>
+      <li><strong>SPF misalignment</strong>: SPF passes for the envelope sender (the <code>Return-Path</code> domain), but that domain does not align with the <code>From:</code> header. This happens when a third-party platform sends on your behalf using its own envelope domain.</li>
+      <li><strong>DKIM misalignment</strong>: The DKIM signature is valid but signed under a different domain (e.g., <code>sendgrid.net</code> instead of <code>example.com</code>). The platform must be configured to sign with your domain's key, not its own.</li>
+    </ul>
+    <p>Read your aggregate reports (<code>rua</code> destination) to identify which sources are failing alignment. Tools that parse DMARC XML reports are available, but the raw structure is readable: look for <code>&lt;source_ip&gt;</code>, <code>&lt;count&gt;</code>, and <code>&lt;disposition&gt;</code>.</p>
+
+    <h2>Check MTA-STS</h2>
+    <p>MTA-STS does not affect whether your outbound mail is delivered, but it affects inbound delivery security and can cause receiving failures if misconfigured. If you publish an MTA-STS policy in <code>enforce</code> mode, sending MTAs must be able to establish a TLS connection with a valid certificate matching your MX hostnames. If your MX server's certificate is expired or mismatched, legitimate mail will be deferred or bounced by senders that honor MTA-STS.</p>
+    <p>Check: <code>_mta-sts.example.com TXT</code> for the policy record, then fetch <code>https://mta-sts.example.com/.well-known/mta-sts.txt</code> to confirm the policy file is reachable and the MX hostnames listed match your actual MX records.</p>
+
+    <h2>IP reputation</h2>
+    <p>Authentication passing does not guarantee deliverability if your sending IP has a poor reputation. Blacklisting is a separate layer from SPF/DKIM/DMARC.</p>
+    <p>Key things to check:</p>
+    <ul>
+      <li><strong>DNS blocklists (DNSBLs)</strong>: Spamhaus SBL/XBL/PBL are the most influential. An IP listed in the PBL is considered a residential or dynamic IP not meant for direct mail sending.</li>
+      <li><strong>Shared vs dedicated IP</strong>: Shared IPs on major ESPs accumulate reputation from all senders on the pool. A dedicated IP starts with no reputation — which can be worse than a good shared pool for low-volume senders.</li>
+      <li><strong>Cloud provider IPs</strong>: AWS, GCP, and Azure IP ranges are listed in the Spamhaus PBL and treated with elevated suspicion by many receivers. Sending transactional email directly from a cloud VM (rather than through an ESP or relay) is a common mistake that immediately triggers filters.</li>
+    </ul>
+
+    <h2>Common causes and fixes</h2>
+    <table>
+      <thead>
+        <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>550 5.7.26 from Gmail</td><td>DMARC reject, no DKIM alignment</td><td>Configure DKIM signing with your domain's key on your ESP</td></tr>
+        <tr><td>SPF permerror</td><td>Multiple SPF records or &gt;10 lookups</td><td>Merge records; use ip4:/ip6: mechanisms or SPF flattening</td></tr>
+        <tr><td>Goes to spam despite SPF pass</td><td>DMARC p=none, IP reputation, or content</td><td>Check DMARC aggregate reports; verify IP against DNSBLs</td></tr>
+        <tr><td>DKIM fail after signing enabled</td><td>Body modified post-signature</td><td>Disable footer injection at the gateway, or sign after footer</td></tr>
+        <tr><td>Inbound mail deferred</td><td>MTA-STS enforce with expired cert</td><td>Renew TLS cert on MX server; temporarily lower to testing mode</td></tr>
+      </tbody>
+    </table>
+
+    <h2>How to check everything at once</h2>
+    <p>Rather than querying each record individually, use the <code>+check</code> mode in the DNS inspector to run a full email authentication audit in one step. It queries SPF, DKIM (common selectors), DMARC, MX, MTA-STS, TLSRPT, and BIMI in parallel and applies lint rules to each result — flagging issues like the 10-lookup limit, missing alignment identifiers, and policy mode regressions.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check your domain's email deliverability</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="why are my emails going to spam"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Runs SPF, DKIM, DMARC, MTA-STS, TLSRPT, and BIMI checks on your domain in a single pass.</p>
+  </section>
+
+  <section class="tool-entry">
+    <h2>Check your domain's email authentication with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input type="text" name="domain" placeholder="example.com" required>
+      <button type="submit">Check Email Security</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+      <li><a href="/guide/mta-sts">MTA-STS: Enforcing Encrypted Email Transport</a></li>
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/dnsbl">DNS Blocklists (DNSBL)</a></li>
+      <li><a href="/guide/tls-rpt">SMTP TLS Reporting (TLSRPT)</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

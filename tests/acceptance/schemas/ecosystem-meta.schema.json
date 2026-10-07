@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://netray.info/schemas/ecosystem-meta.json",
+  "title": "EcosystemMeta",
+  "description": "Canonical /api/meta response shape returned by every netray.info service. Hand-authored — keep in sync with netray_common::ecosystem::EcosystemMeta.",
+  "type": "object",
+  "required": ["site_name", "version", "ecosystem", "features", "limits", "rate_limit"],
+  "additionalProperties": false,
+  "properties": {
+    "site_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Canonical service identifier (e.g. \"ifconfig-rs\", \"beacon\"). Replaces the legacy `service` key."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+"
+    },
+    "ecosystem": {
+      "type": "object",
+      "required": [
+        "ip_base_url",
+        "dns_base_url",
+        "tls_base_url",
+        "http_base_url",
+        "email_base_url",
+        "lens_base_url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ip_base_url":    { "type": "string" },
+        "dns_base_url":   { "type": "string" },
+        "tls_base_url":   { "type": "string" },
+        "http_base_url":  { "type": "string" },
+        "email_base_url": { "type": "string" },
+        "lens_base_url":  { "type": "string" }
+      }
+    },
+    "features": { "type": "object" },
+    "limits":   { "type": "object" },
+    "rate_limit": {
+      "type": "object",
+      "required": ["per_ip_per_minute", "per_ip_burst", "global_per_minute", "global_burst"],
+      "additionalProperties": false,
+      "properties": {
+        "per_ip_per_minute": { "type": "integer", "minimum": 0 },
+        "per_ip_burst":      { "type": "integer", "minimum": 0 },
+        "global_per_minute": { "type": "integer", "minimum": 0 },
+        "global_burst":      { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

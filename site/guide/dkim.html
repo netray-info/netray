@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DKIM Deep Dive: Keys, Selectors, and Rotation | netray.info</title>
+  <meta name="description" content="Understand how DKIM signing works, choose between RSA and Ed25519 keys, manage selectors, and rotate keys safely without breaking email delivery.">
+  <link rel="canonical" href="https://netray.info/guide/dkim">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="DKIM Deep Dive: Keys, Selectors, and Rotation">
+  <meta property="og:description" content="Understand how DKIM signing works, choose between RSA and Ed25519 keys, manage selectors, and rotate keys safely.">
+  <meta property="og:url" content="https://netray.info/guide/dkim">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DKIM Deep Dive: Keys, Selectors, and Rotation">
+  <meta name="twitter:description" content="Understand how DKIM signing works, choose between RSA and Ed25519 keys, manage selectors, and rotate keys safely.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "DKIM Deep Dive: Keys, Selectors, and Rotation",
+    "description": "Understand how DKIM signing works, choose between RSA and Ed25519 keys, manage selectors, and rotate keys safely without breaking email delivery.",
+    "url": "https://netray.info/guide/dkim",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/dkim"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "DKIM Deep Dive: Keys, Selectors, and Rotation" }
+    ]
+  }
+  </script>
+  <meta property="og:image" content="/og/email.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">DKIM Deep Dive: Keys, Selectors, and Rotation</h1>
+  <p class="page-subtitle">How DKIM cryptographic signing works, which key type to choose, and how to rotate keys without disrupting mail delivery.</p>
+
+  <article>
+    <h2>What DKIM signs and what it does not protect</h2>
+    <p>DomainKeys Identified Mail (DKIM) lets a sending mail server attach a cryptographic signature to outgoing messages. The signature covers a defined set of message headers and the body, allowing the receiving server to verify that the signed content was not altered in transit.</p>
+    <p>A DKIM signature typically covers these headers: <code>From</code>, <code>To</code>, <code>Subject</code>, <code>Date</code>, <code>MIME-Version</code>, and <code>Content-Type</code>. The <code>DKIM-Signature</code> header itself specifies which headers were signed in its <code>h=</code> tag. The body is hashed and included in the <code>bh=</code> tag.</p>
+    <p>DKIM does <strong>not</strong> protect:</p>
+    <ul>
+      <li><strong>Envelope sender</strong> -- the SMTP <code>MAIL FROM</code> address is outside the DKIM scope. SPF covers that.</li>
+      <li><strong>Unsigned headers</strong> -- any header not listed in the <code>h=</code> tag can be modified or added by intermediaries without breaking the signature.</li>
+      <li><strong>Message confidentiality</strong> -- DKIM provides integrity and authentication, not encryption. The message content is still visible to any relay.</li>
+      <li><strong>Replay attacks</strong> -- a valid DKIM-signed message can be resent by anyone. DKIM proves the original domain signed it, but not that the current sender is authorized.</li>
+    </ul>
+    <p>DKIM's primary value is in combination with DMARC: it provides a forwarding-resistant authentication mechanism. Unlike SPF, which breaks when messages are forwarded through intermediate servers, DKIM signatures travel with the message and remain valid as long as the signed content is unchanged.</p>
+
+    <h2>Key types: RSA vs Ed25519</h2>
+    <p>DKIM supports two key algorithms: RSA and Ed25519 (RFC 8463). The choice affects key size, DNS record length, and security margin.</p>
+
+    <h3>RSA keys</h3>
+    <p>RSA is the original and most widely supported DKIM key type. Three key sizes are in common use:</p>
+    <ul>
+      <li><strong>1024-bit RSA</strong> -- the historical default. Still accepted by most receivers, but considered weak by modern standards. NIST deprecated 1024-bit RSA in 2013. Some DKIM validators will flag it as a warning.</li>
+      <li><strong>2048-bit RSA</strong> -- the current recommended minimum. Provides adequate security margin for the foreseeable future and is supported by all major email providers. This is what you should use if you only deploy one key type.</li>
+      <li><strong>4096-bit RSA</strong> -- offers a larger security margin but creates DNS TXT records that exceed 255 bytes, requiring the record to be split into multiple strings. Some DNS providers and resolvers mishandle multi-string TXT records, which can cause verification failures. Avoid 4096-bit unless you have confirmed your DNS infrastructure handles it correctly.</li>
+    </ul>
+
+    <h3>Ed25519 keys</h3>
+    <p>Ed25519 (Edwards-curve Digital Signature Algorithm) uses elliptic-curve cryptography. The public key is only 44 bytes in base64, making the DNS record trivially small. Ed25519 is faster to sign and verify than RSA, and 256-bit Ed25519 provides security roughly equivalent to 3072-bit RSA.</p>
+    <p>The downside is compatibility: not all mail servers and validators support Ed25519 yet. If you deploy Ed25519 as your only DKIM key, some receivers will fail to validate the signature. The recommended approach is to <strong>dual-sign</strong>: configure your mail server to produce both an RSA and an Ed25519 signature on each message. Receivers that support Ed25519 will verify the stronger key; others will fall back to RSA.</p>
+
+    <h3>Recommendation</h3>
+    <p>Deploy 2048-bit RSA as your baseline. If your mail server supports dual-signing (Postfix 3.6+, Stalwart, some hosted providers), add Ed25519 as a second selector. Do not deploy Ed25519 as the sole key unless you have confirmed all your recipients' mail servers support it.</p>
+
+    <h2>Selector naming conventions</h2>
+    <p>A DKIM selector is the label used to locate the public key in DNS. The full DNS name is <code>&lt;selector&gt;._domainkey.&lt;domain&gt;</code>. Selectors are arbitrary strings, but consistent naming conventions make key management significantly easier.</p>
+    <p>Common naming strategies:</p>
+    <ul>
+      <li><strong>Date-based</strong>: <code>202604</code>, <code>2026q2</code> -- encode the deployment date or quarter. Makes it obvious when a key was created and when it should be rotated.</li>
+      <li><strong>Provider-based</strong>: <code>google</code>, <code>sendgrid</code>, <code>mailchimp</code> -- identify which system uses this key. Useful for organizations with multiple sending services, each needing its own DKIM key.</li>
+      <li><strong>Combined</strong>: <code>google-202604</code>, <code>ses-2026q2</code> -- both provider and date. This is the most informative convention and scales well as the number of senders and rotation cycles grows.</li>
+      <li><strong>Sequential</strong>: <code>s1</code>, <code>s2</code>, <code>selector1</code>, <code>selector2</code> -- simple but provides no context about age or purpose. Microsoft 365 uses <code>selector1</code>/<code>selector2</code> by convention.</li>
+    </ul>
+    <p>Avoid selectors that contain sensitive information (internal hostnames, environment names). Selectors are publicly visible in DNS and in every message's <code>DKIM-Signature</code> header.</p>
+
+    <h2>Key rotation strategy</h2>
+    <p>DKIM keys should be rotated periodically to limit the impact of key compromise. A compromised private key allows an attacker to sign messages as your domain until the key is revoked. Rotation every 6-12 months is a reasonable cadence for most organizations.</p>
+    <p>The rotation process must be phased to avoid breaking signature validation during the transition:</p>
+    <ol>
+      <li><strong>Generate a new key pair</strong> and choose a new selector name (e.g., <code>202610</code> to replace <code>202604</code>).</li>
+      <li><strong>Publish the new public key in DNS</strong> under the new selector. Verify that the DNS record is resolvable from external resolvers before proceeding. Allow at least 24-48 hours for DNS propagation if your TTL is high.</li>
+      <li><strong>Configure the mail server to sign with the new selector</strong>. At this point, outgoing messages use the new key. Both old and new public keys should remain in DNS.</li>
+      <li><strong>Wait for the old key's message lifetime to expire</strong>. Messages signed with the old key may still be in transit or queued. Wait at least 7 days (longer if your retry window is extended) before removing the old key.</li>
+      <li><strong>Revoke the old key</strong> by publishing an empty key record: <code>old-selector._domainkey.example.com. IN TXT "v=DKIM1; p="</code>. This explicitly tells validators that the key is revoked, rather than leaving them to guess whether a missing record is a DNS error.</li>
+    </ol>
+    <p>If you use DMARC forensic reporting (<code>ruf=</code>), update the reporting address before revoking the old key so you can monitor for any lingering failures.</p>
+
+    <h2>Practical examples</h2>
+
+    <h3>Generate a 2048-bit RSA key pair</h3>
+    <pre><code># Generate private key
+openssl genrsa -out dkim-202604.private 2048
+
+# Extract public key in DNS-compatible format
+openssl rsa -in dkim-202604.private -pubout -outform PEM \
+  | grep -v '^-' | tr -d '\n'</code></pre>
+    <p>The output is a base64-encoded public key. This value goes into the <code>p=</code> tag of the DNS record.</p>
+
+    <h3>Generate an Ed25519 key pair</h3>
+    <pre><code># Generate Ed25519 private key
+openssl genpkey -algorithm ed25519 -out dkim-ed25519.private
+
+# Extract public key
+openssl pkey -in dkim-ed25519.private -pubout -outform PEM \
+  | grep -v '^-' | tr -d '\n'</code></pre>
+
+    <h3>DNS TXT record format</h3>
+    <p>Publish the public key under the selector subdomain. For selector <code>202604</code> on <code>example.com</code>:</p>
+    <pre><code>202604._domainkey.example.com. IN TXT "v=DKIM1; k=rsa; p=MIIBIjANBgkqhki..."</code></pre>
+    <p>For Ed25519:</p>
+    <pre><code>ed202604._domainkey.example.com. IN TXT "v=DKIM1; k=ed25519; p=MCowBQYDK2Vw..."</code></pre>
+    <p>Tags in the DKIM DNS record:</p>
+    <ul>
+      <li><code>v=DKIM1</code> -- version (required)</li>
+      <li><code>k=rsa</code> or <code>k=ed25519</code> -- key type (default is <code>rsa</code> if omitted)</li>
+      <li><code>p=</code> -- base64-encoded public key (required; empty value means revoked)</li>
+      <li><code>t=s</code> -- optional; strict mode, requires exact domain match (no subdomain signing)</li>
+      <li><code>t=y</code> -- optional; testing mode, receivers should not treat failures as definitive</li>
+    </ul>
+
+    <h3>Test a DKIM record with dig</h3>
+    <pre><code># Look up the DKIM public key for selector "202604" on example.com
+dig +short TXT 202604._domainkey.example.com
+
+# Expected output (truncated):
+# "v=DKIM1; k=rsa; p=MIIBIjANBgkqhki..."</code></pre>
+    <p>If the query returns no result, the selector may be wrong, the record may not have propagated, or the domain may not have DKIM configured for that selector. Try common selectors like <code>google</code>, <code>selector1</code>, <code>selector2</code>, <code>s1</code>, or <code>default</code>.</p>
+
+    <h3>Verify the DKIM-Signature header</h3>
+    <p>When you receive a message, the <code>DKIM-Signature</code> header shows the selector and domain used:</p>
+    <pre><code>DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+  d=example.com; s=202604; t=1712678400;
+  h=from:to:subject:date:mime-version:content-type;
+  bh=abc123...=;
+  b=xyz789...=</code></pre>
+    <p>Key fields: <code>d=</code> is the signing domain, <code>s=</code> is the selector, <code>a=</code> is the algorithm, <code>h=</code> lists signed headers, <code>bh=</code> is the body hash, and <code>b=</code> is the signature.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your domain's email security with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="domain"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check Email Security</button>
+    </form>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+      <li><a href="/guide/bimi">BIMI: Brand Indicators for Message Identification</a></li>
+      <li><a href="/guide/dnsbl">DNS Blocklists (DNSBL): How They Work</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

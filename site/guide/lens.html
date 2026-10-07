@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How Lens Scores a Domain — netray.info</title>
+  <meta name="description" content="How lens produces an A+–F domain health grade: scoring algorithm, section weights, email security for sending vs. receiving domains, and the dkim_selectors parameter.">
+  <link rel="canonical" href="https://netray.info/guide/lens">
+  <meta property="og:title" content="How Lens Scores a Domain — netray.info">
+  <meta property="og:description" content="How lens produces an A+–F domain health grade: scoring algorithm, section weights, email security for sending vs. receiving domains, and dkim_selectors.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://netray.info/guide/lens">
+  <meta property="og:site_name" content="netray.info">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="style.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "How Lens Scores a Domain",
+    "description": "How lens produces an A+–F domain health grade: scoring algorithm, section weights, email security for sending vs. receiving domains, and the dkim_selectors parameter.",
+    "url": "https://netray.info/guide/lens",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/lens"
+  }
+  </script>
+  <meta property="og:image" content="/og/lens.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">How Lens Scores a Domain</h1>
+  <p class="page-subtitle">
+    Lens runs five checks in parallel and produces a single A+&ndash;F grade.
+    This guide explains the scoring model, how email security is split between
+    sending and receiving domains, and how to test specific DKIM selectors.
+  </p>
+
+  <article>
+
+    <h2>What lens checks</h2>
+
+    <p>
+      For any domain, lens calls five backends in parallel and aggregates the results:
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Section</th><th>Tool</th><th>What it measures</th><th>Weight</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>IP</td><td><a href="https://ip.netray.info">ifconfig-rs</a></td><td>Network type, hosting reputation, geolocation</td><td>10%</td></tr>
+        <tr><td>DNS</td><td><a href="https://dns.netray.info">prism</a></td><td>DNSSEC, CAA records, NS delegation, HTTPS records</td><td>20%</td></tr>
+        <tr><td>TLS</td><td><a href="https://tls.netray.info">tlsight</a></td><td>Certificate chain, protocol version, cipher strength</td><td>35%</td></tr>
+        <tr><td>HTTP</td><td><a href="https://http.netray.info">spectra</a></td><td>Security headers, HSTS, CORS, cookie attributes</td><td>20%</td></tr>
+        <tr><td>Email</td><td><a href="https://email.netray.info">beacon</a></td><td>SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, DNSBL</td><td>15%</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      HTTP and Email sections are optional. When a backend is not configured,
+      the remaining weights are rebalanced proportionally — a missing section
+      does not penalise the grade.
+    </p>
+
+    <h2>Scoring algorithm</h2>
+
+    <p>Each check has a verdict and a weight:</p>
+    <ul>
+      <li><strong>pass</strong> &rarr; earns full weight</li>
+      <li><strong>warn</strong> &rarr; earns half weight (rounded down)</li>
+      <li><strong>fail</strong> / <strong>not found</strong> &rarr; earns zero</li>
+      <li><strong>skip</strong> &rarr; excluded from both earned and possible totals (not a penalty)</li>
+    </ul>
+
+    <p>
+      A section score is <code>earned / possible &times; 100%</code>.
+      The overall score is the weighted average of active section scores.
+      The letter grade is determined by comparing the overall percentage to
+      fixed thresholds:
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Grade</th><th>Score</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>A+</strong></td><td>&ge; 97%</td><td>Exemplary — all checks pass</td></tr>
+        <tr><td><strong>A</strong></td><td>&ge; 90%</td><td>Excellent — minor gaps only</td></tr>
+        <tr><td><strong>B</strong></td><td>&ge; 75%</td><td>Good — some non-critical findings</td></tr>
+        <tr><td><strong>C</strong></td><td>&ge; 60%</td><td>Fair — notable gaps, action recommended</td></tr>
+        <tr><td><strong>D</strong></td><td>&ge; 40%</td><td>Poor — significant issues present</td></tr>
+        <tr><td><strong>F</strong></td><td>&lt; 40% or hard-fail</td><td>Failing</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Hard failures</h2>
+
+    <p>
+      Two TLS conditions force the grade to <strong>F</strong> regardless of the
+      numeric score:
+    </p>
+    <ul>
+      <li><strong>Untrusted chain</strong> — the certificate is not signed by a
+          trusted CA. Browsers will show a security warning.</li>
+      <li><strong>Expired certificate</strong> — any certificate in the chain
+          is past its validity period.</li>
+    </ul>
+
+    <p>
+      These conditions indicate an immediately broken service, so the score is
+      irrelevant. All other findings contribute to the numeric score rather than
+      triggering a hard override.
+    </p>
+
+    <h2>Email security: sending vs. receiving</h2>
+
+    <p>
+      Email security has two distinct concerns that apply to different domains:
+    </p>
+
+    <ul>
+      <li>
+        <strong>Sending identity</strong> — SPF, DKIM, and DMARC.
+        These apply to <em>every</em> domain, because any domain can be spoofed in
+        the <code>From:</code> header of an email, even domains that never send mail.
+        A parked domain with no MX records still needs SPF and DMARC to prevent
+        impersonation.
+      </li>
+      <li>
+        <strong>Receiving infrastructure</strong> — MX records, MTA-STS, DANE/TLSA,
+        TLS-RPT, BIMI, FCrDNS, and DNSBL reputation.
+        These only apply to domains that actively receive email. A parked or
+        web-only domain with no MX records has no receiving infrastructure to check.
+      </li>
+    </ul>
+
+    <p>
+      Lens reflects this split in four scored buckets within the Email section:
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Bucket</th><th>Checks</th><th>Applies to</th><th>Weight</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Authentication</strong></td>
+          <td>SPF, DKIM, DMARC</td>
+          <td>All domains</td>
+          <td>10</td>
+        </tr>
+        <tr>
+          <td><strong>Infrastructure</strong></td>
+          <td>MX, FCrDNS, DNSBL</td>
+          <td>Domains with MX records</td>
+          <td>5</td>
+        </tr>
+        <tr>
+          <td><strong>Transport</strong></td>
+          <td>MTA-STS, TLS-RPT, DANE</td>
+          <td>Domains with MX records</td>
+          <td>5</td>
+        </tr>
+        <tr>
+          <td><strong>Brand Policy</strong></td>
+          <td>BIMI, DMARC enforcement</td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      When lens detects no MX records, the three receiving buckets are marked
+      <strong>not applicable</strong> and use a <code>skip</code> verdict.
+      Skip verdicts are excluded from both earned and possible totals, so a
+      parked domain is not penalised for missing receiving infrastructure.
+      Only the Authentication bucket (weight 10) is scored.
+    </p>
+
+    <h2>Worked example: mail domain vs. parked domain</h2>
+
+    <h3>Mail domain (MX records present)</h3>
+    <p>
+      <code>example.com</code> runs email. All four buckets are scored.
+      SPF, DKIM, and DMARC pass; MTA-STS is missing (warn); everything else passes.
+    </p>
+    <ul>
+      <li>Authentication: 10/10 (SPF, DKIM, DMARC all pass)</li>
+      <li>Infrastructure: 5/5 (MX, FCrDNS, DNSBL all pass)</li>
+      <li>Transport: 2.5/5 (MTA-STS warns, others pass)</li>
+      <li>Brand Policy: 2/2</li>
+      <li>Email section: 19.5/22 = 88.6% &rarr; grade B</li>
+    </ul>
+
+    <h3>Parked domain (no MX records)</h3>
+    <p>
+      <code>parked.example.com</code> is used only for web. No MX records exist.
+      Infrastructure, Transport, and Brand Policy are skipped automatically.
+    </p>
+    <ul>
+      <li>Authentication: 10/10 (SPF and DMARC both pass — mandatory even for parked domains)</li>
+      <li>Infrastructure: skipped (no MX)</li>
+      <li>Transport: skipped (no MX)</li>
+      <li>Brand Policy: skipped (no MX)</li>
+      <li>Email section: 10/10 = 100% &rarr; grade A+</li>
+    </ul>
+    <p>
+      A parked domain with correct SPF and DMARC records scores A+ on the email
+      section — the absence of receiving infrastructure is not a deficiency.
+    </p>
+
+    <h2>Testing DKIM selectors</h2>
+
+    <p>
+      By default, beacon uses a built-in map of known DKIM selectors for major
+      email providers (Google Workspace, Microsoft 365, etc.). For custom selectors,
+      pass them via the <code>dkim_selectors</code> parameter:
+    </p>
+
+<pre><code># Via URL parameter
+https://lens.netray.info/?d=example.com&dkim_selectors=google,selector1
+
+# Via curl
+curl -s 'https://lens.netray.info/api/check/example.com?stream=false&dkim_selectors=default,s1' \
+  | jq '.email.checks[] | select(.name == "email_authentication")'</code></pre>
+
+    <p>Selector validation rules:</p>
+    <ul>
+      <li>Characters: <code>[a-zA-Z0-9-]</code> only</li>
+      <li>Length: 1&ndash;63 characters per selector</li>
+      <li>Count: 1&ndash;10 selectors per request</li>
+      <li>Separator: comma (whitespace around commas is trimmed)</li>
+    </ul>
+
+    <p>
+      Invalid selectors return HTTP 400 before any backend call.
+      Absent <code>dkim_selectors</code> parameter: beacon uses its built-in provider map.
+    </p>
+
+    <h2>Section states</h2>
+
+    <p>A section can be in one of three states:</p>
+
+    <table>
+      <thead>
+        <tr><th>State</th><th>Effect on scoring</th><th>When it occurs</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Scored</strong></td>
+          <td>Contributes to the overall weighted average</td>
+          <td>Backend responded successfully</td>
+        </tr>
+        <tr>
+          <td><strong>Errored</strong></td>
+          <td>Excluded from scoring silently</td>
+          <td>Backend unreachable or timed out</td>
+        </tr>
+        <tr>
+          <td><strong>Not applicable</strong></td>
+          <td>Excluded from scoring; reason recorded in <code>summary.not_applicable</code></td>
+          <td>Email backend timed out internally (grade: "Skipped")</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      An errored section does not lower the grade — the overall score is computed
+      from whatever sections are available. A footnote appears in the UI when
+      <code>not_applicable</code> is non-empty.
+    </p>
+
+    <h2>Cache behaviour</h2>
+
+    <p>
+      Results are cached per domain for 5 minutes. The <code>X-Cache</code> response
+      header indicates <code>HIT</code> or <code>MISS</code>.
+      Requests with <code>dkim_selectors</code> always bypass the cache, since
+      selector-specific results cannot be shared.
+    </p>
+
+  </article>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related</h2>
+    <ul class="page-footer__links">
+      <li><a href="/api/lens">Lens API reference</a></li>
+      <li><a href="email-auth">Email Authentication: SPF, DKIM, DMARC</a></li>
+      <li><a href="mta-sts">MTA-STS: Enforced encrypted delivery</a></li>
+      <li><a href="domain-security-audit">Domain security audit walkthrough</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

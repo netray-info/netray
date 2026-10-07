@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MTA-STS: Enforcing Encrypted Email Transport | netray.info</title>
+  <meta name="description" content="How MTA-STS prevents downgrade attacks on email transport, how to publish the policy file and DNS record, and how to verify your setup.">
+  <link rel="canonical" href="https://netray.info/guide/mta-sts">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="MTA-STS: Enforcing Encrypted Email Transport">
+  <meta property="og:description" content="How MTA-STS prevents downgrade attacks on email transport, how to publish the policy file and DNS record, and how to verify your setup.">
+  <meta property="og:url" content="https://netray.info/guide/mta-sts">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MTA-STS: Enforcing Encrypted Email Transport">
+  <meta name="twitter:description" content="How to use MTA-STS to enforce TLS encryption for inbound email delivery and prevent downgrade attacks.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "MTA-STS: Enforcing Encrypted Email Transport",
+    "description": "How MTA-STS prevents downgrade attacks on email transport, how to publish the policy file and DNS record, and how to verify your setup.",
+    "url": "https://netray.info/guide/mta-sts",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/mta-sts"
+  }
+  </script>
+  <meta property="og:image" content="/og/email.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">MTA-STS: Enforcing Encrypted Email Transport</h1>
+  <p class="page-subtitle">How to use MTA-STS to enforce TLS encryption for inbound email delivery and prevent downgrade attacks.</p>
+
+  <article>
+    <h2>The problem: STARTTLS downgrade attacks</h2>
+    <p>Most SMTP traffic today is encrypted using STARTTLS — an opportunistic upgrade mechanism where the sending MTA announces TLS support, and both parties negotiate a TLS session before transferring the message. "Opportunistic" is the key word: if TLS negotiation fails for any reason, SMTP falls back to plaintext delivery. This fallback exists for compatibility but creates a critical vulnerability.</p>
+    <p>An attacker with a network position between two mail servers (on-path, e.g., a compromised router or a BGP hijack) can intercept the EHLO response from the receiving server and strip the <code>STARTTLS</code> capability announcement. The sending server, seeing no TLS support advertised, delivers the message in plaintext — and the attacker reads or modifies it in transit. This is a STARTTLS downgrade attack, and it has been observed in the wild.</p>
+    <p>The alternative, SMTP over TLS on port 465 (SMTPS), establishes TLS before any SMTP dialog and cannot be stripped in the same way. However, port 465 is used for mail submission (client to server), not for server-to-server relay (MX delivery). Server-to-server relay uses port 25, where STARTTLS is the standard and downgrade attacks apply.</p>
+
+    <h2>What MTA-STS does</h2>
+    <p>MTA-STS (SMTP MTA Strict Transport Security, RFC 8461) allows a domain to publish a policy stating that inbound mail delivery must use TLS with a valid certificate matching the receiving MX hostnames. Sending MTAs that support MTA-STS fetch and cache this policy; when delivering mail to that domain, they refuse to fall back to plaintext or accept an invalid certificate.</p>
+    <p>The mechanism is Trust-on-First-Use (TOFU): the first time a sending MTA fetches the policy, it must do so over HTTPS (authenticated by the web PKI). After that, it caches the policy for the duration specified and re-fetches it when the cache expires. During the cached period, policy enforcement does not require a live HTTPS fetch — the cached copy is used.</p>
+    <p>MTA-STS is typically deployed alongside <strong>TLSRPT (TLS Reporting)</strong>, which provides a mechanism for sending MTAs to report delivery failures and TLS policy violations back to the domain owner. Without TLSRPT you have no visibility into whether senders are enforcing MTA-STS and whether your MX server's TLS configuration is causing delivery failures.</p>
+
+    <h2>How it works</h2>
+    <p>MTA-STS requires two published components:</p>
+    <p><strong>1. DNS TXT record at <code>_mta-sts.example.com</code>:</strong></p>
+    <pre><code>v=STSv1; id=20240101120000Z</code></pre>
+    <p>The <code>id</code> field is an arbitrary string (commonly a timestamp) that identifies the current policy version. When a sending MTA checks whether its cached policy is still current, it compares the <code>id</code> in DNS against the <code>id</code> in its cached policy file. If they differ, it re-fetches the policy. This is the mechanism for signaling a policy update — increment the <code>id</code> whenever you update the policy file.</p>
+    <p><strong>2. HTTPS policy file at <code>https://mta-sts.example.com/.well-known/mta-sts.txt</code>:</strong></p>
+    <pre><code>version: STSv1
+mode: enforce
+mx: mail.example.com
+mx: mail2.example.com
+max_age: 604800</code></pre>
+    <p>The <code>mx</code> lines must match your actual MX hostnames exactly (wildcards like <code>*.example.com</code> are allowed). The <code>max_age</code> is in seconds. The policy file must be served over HTTPS with a valid certificate — not self-signed, not expired.</p>
+
+    <h2>Policy modes</h2>
+    <ul>
+      <li><strong><code>enforce</code></strong>: Sending MTAs must establish a TLS connection with a valid certificate matching the listed MX hostnames. If TLS cannot be established or the certificate does not validate, the sending MTA must not deliver the message and should queue it for retry. This is the target state — it provides real security.</li>
+      <li><strong><code>testing</code></strong>: The policy is evaluated and violations are reported via TLSRPT, but delivery is not blocked. Use this mode to verify your MX server's TLS configuration before moving to enforce. Failures show up in TLSRPT reports without impacting mail flow.</li>
+      <li><strong><code>none</code></strong>: The policy effectively disables MTA-STS. Used to gracefully disable a previously published policy without abrupt removal. Senders that have cached your old policy will see the <code>none</code> mode and stop enforcing.</li>
+    </ul>
+
+    <h2>Setup procedure</h2>
+    <ol>
+      <li><strong>Verify your MX servers have valid TLS certificates</strong> that match the MX hostnames (not just the A record — the certificate must cover the actual MX hostname, e.g., <code>mail.example.com</code>). Check that certificates are auto-renewing.</li>
+      <li><strong>Create the policy file</strong> at <code>https://mta-sts.example.com/.well-known/mta-sts.txt</code>. The <code>mta-sts</code> subdomain must resolve and serve HTTPS. Set <code>mode: testing</code> initially.</li>
+      <li><strong>Publish the DNS TXT record</strong> at <code>_mta-sts.example.com</code> with a new <code>id</code> value.</li>
+      <li><strong>Set up TLSRPT</strong> (see below) so you receive reports.</li>
+      <li><strong>Monitor TLSRPT reports</strong> for one to two weeks in testing mode. Any TLS failures from sending MTAs will appear here.</li>
+      <li><strong>Switch to <code>enforce</code> mode</strong> once no failures are reported. Update the policy file and increment the <code>id</code> in the DNS record simultaneously.</li>
+    </ol>
+
+    <h2>TLSRPT</h2>
+    <p>TLSRPT (TLS Reporting, RFC 8460) is MTA-STS's companion reporting protocol. It works similarly to DMARC aggregate reports: sending MTAs that support TLSRPT send daily JSON reports about TLS delivery successes and failures to the address you specify.</p>
+    <p>Publish a TXT record at <code>_smtp._tls.example.com</code>:</p>
+    <pre><code>v=TLSRPTv1; rua=mailto:tlsrpt@example.com</code></pre>
+    <p>Reports are sent as gzip-compressed JSON files via email or HTTPS POST. They include: the policy type (MTA-STS or DANE-SMTP), the number of successful TLS sessions, and details on any failures — including the failure reason (expired certificate, hostname mismatch, TLS handshake failure). In testing mode, these reports are your only visibility into whether the configuration is working correctly before you enforce.</p>
+    <p>The <code>rua</code> address must be a monitored inbox. Reports sent to an unmonitored address give a false sense of security — you will not know when things break.</p>
+
+    <h2>Common mistakes</h2>
+    <ul>
+      <li><strong>Policy file not served over HTTPS</strong>: The entire point of the HTTPS fetch is to authenticate the policy using the web PKI. If <code>https://mta-sts.example.com/.well-known/mta-sts.txt</code> returns an error, cannot be fetched, or redirects to HTTP, sending MTAs will be unable to fetch the policy and may treat this as a policy fetch failure — which in enforce mode means delivery delay, not bypass.</li>
+      <li><strong>id field not updated after policy change</strong>: If you update the policy file but forget to change the <code>id</code> in the DNS TXT record, sending MTAs with cached copies will not know there is a new policy to fetch. The cache expires eventually, but a change to <code>mode: enforce</code> or a new MX hostname will take up to <code>max_age</code> seconds to propagate to all senders.</li>
+      <li><strong>MX hostname in policy does not match certificate</strong>: The certificate on your MX server must cover the hostname in the MX record (e.g., <code>mail.example.com</code>), not just the IP's rDNS or the apex domain. A certificate issued for <code>example.com</code> does not cover <code>mail.example.com</code> unless <code>mail.example.com</code> is in the SAN.</li>
+      <li><strong>Skipping testing mode</strong>: Going straight to enforce without a testing period risks deferring legitimate inbound mail if any MX server has a TLS issue. Always start in testing, always monitor TLSRPT.</li>
+      <li><strong>No TLSRPT alongside MTA-STS</strong>: Without TLSRPT, you have no signal when mail is deferred due to MTA-STS enforcement failures. Set up TLSRPT before or at the same time as MTA-STS.</li>
+    </ul>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check MTA-STS and email security with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="domain"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Validates MTA-STS policy, TLSRPT, DANE, and all email authentication records. Returns an A–F grade.</p>
+  </section>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect raw MTA-STS DNS records with prism</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com +check"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect</button>
+    </form>
+    <p class="tool-entry__hint">Queries the <code>_mta-sts</code> TXT record and other email DNS records directly.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/email-auth">Email Authentication: SPF, DKIM, and DMARC</a></li>
+      <li><a href="/guide/email-deliverability">How to Diagnose Email Deliverability Problems</a></li>
+      <li><a href="/guide/tls-rpt">SMTP TLS Reporting (TLSRPT)</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

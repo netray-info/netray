@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Service Status — netray.info</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/guide/suite-nav.css" />
+  <meta name="theme-color" content="#07090f" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f6f8fb" media="(prefers-color-scheme: light)" />
+
+  <!-- Open Graph / Twitter -->
+  <meta property="og:type"        content="website" />
+  <meta property="og:title"       content="Status — netray.info" />
+  <meta property="og:description" content="Live uptime for the seven netray.info services." />
+  <meta property="og:image"       content="https://netray.info/og/landing.png" />
+  <meta property="og:url"         content="https://netray.info/status" />
+  <meta name="twitter:card"       content="summary_large_image" />
+
+  <style>
+    /* ── Token palette (copied from site/tools/index.html) ──────────────── */
+    :root {
+      color-scheme: light;
+      --bg:        #f6f8fb;
+      --surface:   #ffffff;
+      --surface2:  #eef1f6;
+      --border:    #dde3ed;
+      --text:      #0d1521;
+      --muted:     #6b7c93;
+      --faint:     #eef1f6;
+      --shadow:    rgba(0,0,0,.07);
+      --dot:       #d5dce8;
+      --spotlight: rgba(90,120,180,.05);
+
+      /* Status-page semantic tokens */
+      --ok:      #16a34a;
+      --warn:    #d97706;
+      --err:     #dc2626;
+      --neutral: #6b7280;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --bg:        #07090f;
+        --surface:   #0d1220;
+        --surface2:  #111827;
+        --border:    #1a2438;
+        --text:      #dce6f5;
+        --muted:     #4d6480;
+        --faint:     #1a2438;
+        --shadow:    rgba(0,0,0,.4);
+        --dot:       #1a2438;
+        --spotlight: rgba(100,130,200,.06);
+
+        --ok:      #22c55e;
+        --warn:    #fbbf24;
+        --err:     #ef4444;
+        --neutral: #6b7280;
+      }
+    }
+
+    /* ── Base ────────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+      line-height: 1.6;
+    }
+
+    a { color: var(--muted); text-decoration: none; }
+    a:hover { color: var(--text); text-decoration: underline; }
+
+    /* ── Page layout ─────────────────────────────────────────────────────── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 3rem;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin: 0 0 0.25rem;
+    }
+
+    .intro {
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+    }
+
+    .last-refresh-line {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin: 0 0 1.5rem;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    }
+
+    /* ── Status banner ───────────────────────────────────────────────────── */
+    #status-banner {
+      padding: 0.75rem 1.25rem;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #fff;
+      margin-bottom: 1.5rem;
+      min-height: 2.5rem;
+    }
+    #status-banner:empty { display: none; }
+
+    /* ── Error banner ────────────────────────────────────────────────────── */
+    #error-banner {
+      padding: 0.75rem 1.25rem;
+      border-radius: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.5rem;
+    }
+    #error-banner a { color: var(--text); }
+
+    /* ── Cards grid ──────────────────────────────────────────────────────── */
+    #cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    /* ── Monitor card ────────────────────────────────────────────────────── */
+    article.monitor-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.125rem;
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      gap: 0.5rem;
+    }
+
+    .card-header h2 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin: 0;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-pill {
+      display: inline-block;
+      padding: 0.15rem 0.6rem;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* ── Day strip ───────────────────────────────────────────────────────── */
+    .day-strip {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow: hidden;
+      gap: 2px;
+      margin: 0.6rem 0;
+    }
+
+    .day-strip span {
+      width: 6px;
+      height: 20px;
+      border-radius: 2px;
+      flex-shrink: 0;
+      cursor: default;
+    }
+
+    /* ── Card stats ──────────────────────────────────────────────────────── */
+    .card-stats {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .card-stats strong {
+      color: var(--text);
+    }
+
+    /* ── Incidents section ───────────────────────────────────────────────── */
+    #incidents {
+      margin-top: 1rem;
+    }
+
+    #incidents h2 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin: 0 0 0.75rem;
+    }
+
+    .incidents__empty {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .incidents__raw {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.75rem 1rem;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 0.8rem;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 1.25rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    footer p { margin: 0.25rem 0; }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status" aria-current="page">Status</a>
+  </nav>
+</header>
+
+<main>
+  <noscript>
+    <p>Live status requires JavaScript — check live at <a href="https://stats.uptimerobot.com/36qCbftdDW">stats.uptimerobot.com/36qCbftdDW</a></p>
+  </noscript>
+
+  <div id="error-banner" style="display:none">
+    Status data unavailable — check live at <a href="https://stats.uptimerobot.com/36qCbftdDW">stats.uptimerobot.com/36qCbftdDW</a>
+  </div>
+
+  <div id="status-banner"></div>
+
+  <h1>Service Status</h1>
+  <p class="intro">Live uptime for the seven netray.info services, sourced from UptimeRobot. Data refreshes every 60 seconds.</p>
+  <p class="last-refresh-line"><span id="last-refresh">Last refresh: —</span></p>
+
+  <section id="cards" aria-label="Service status cards"></section>
+
+  <section id="incidents">
+    <h2>Incidents</h2>
+  </section>
+</main>
+
+<footer>
+  <p>Powered by <a href="https://uptimerobot.com">UptimeRobot</a> — full history at <a href="https://stats.uptimerobot.com/36qCbftdDW">stats.uptimerobot.com/36qCbftdDW</a></p>
+  <p>Monitors check each hostname every 5 minutes from a single region (UptimeRobot Free tier).</p>
+</footer>
+
+<script>
+  const UR_STATS_ID      = "36qCbftdDW";
+  const UR_BASE          = "https://stats.uptimerobot.com/api";
+  const MONITOR_LIST_URL = `${UR_BASE}/getMonitorList/${UR_STATS_ID}`;
+  const EVENT_FEED_URL   = `${UR_BASE}/getEventFeed/${UR_STATS_ID}`;
+  const UR_PUBLIC_URL    = `https://stats.uptimerobot.com/${UR_STATS_ID}`;
+
+  let intervalId = null;
+
+  async function fetchStatus() {
+    const [monRes, evRes] = await Promise.all([
+      fetch(MONITOR_LIST_URL, { credentials: "omit" }),
+      fetch(EVENT_FEED_URL,   { credentials: "omit" }),
+    ]);
+    if (!monRes.ok) throw new Error(`Monitor list returned ${monRes.status}`);
+    if (!evRes.ok)  throw new Error(`Event feed returned ${evRes.status}`);
+    const monData = await monRes.json();
+    const evData  = await evRes.json();
+    return [monData.data, evData.data];
+  }
+
+  function orderMonitors(monitors) {
+    const apex  = monitors.filter(m => m.name === "netray.info");
+    const rest  = monitors.filter(m => m.name !== "netray.info")
+                          .sort((a, b) => a.name.localeCompare(b.name));
+    return [...apex, ...rest];
+  }
+
+  function formatDuration(seconds) {
+    const s = Math.floor(seconds);
+    if (s < 60)    return `${s}s`;
+    if (s < 3600)  return `${Math.floor(s / 60)}m ${s % 60}s`;
+    return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m ${s % 60}s`;
+  }
+
+  function colorForDayEntry(color) {
+    switch (color) {
+      case "green":  return "var(--ok)";
+      case "yellow": return "var(--warn)";
+      case "red":    return "var(--err)";
+      case "blue":   return "#60a5fa";
+      case "grey":   return "var(--neutral)";
+      default:       return "var(--neutral)";
+    }
+  }
+
+  function renderBanner(monitors) {
+    const banner = document.getElementById("status-banner");
+    const n = monitors.filter(m => m.statusClass !== "success").length;
+    if (monitors.some(m => m.statusClass === "danger")) {
+      banner.textContent = `Service degraded — ${n} of 7 monitors affected`;
+      banner.style.backgroundColor = "var(--err)";
+    } else if (n > 0) {
+      banner.textContent = `Service degraded — ${n} of 7 monitors affected`;
+      banner.style.backgroundColor = "var(--warn)";
+    } else {
+      banner.textContent = "All systems operational";
+      banner.style.backgroundColor = "var(--ok)";
+    }
+  }
+
+  function renderMonitorCard(monitor) {
+    const article = document.createElement("article");
+    article.className = "monitor-card";
+    article.setAttribute("aria-label", monitor.name);
+
+    // Header: name + pill
+    const header = document.createElement("div");
+    header.className = "card-header";
+
+    const h2 = document.createElement("h2");
+    h2.textContent = monitor.name;
+
+    const pill = document.createElement("span");
+    pill.className = "status-pill";
+    let pillText, pillColor;
+    switch (monitor.statusClass) {
+      case "success": pillText = "Operational"; pillColor = "var(--ok)";      break;
+      case "warning": pillText = "Degraded";    pillColor = "var(--warn)";    break;
+      case "danger":  pillText = "Down";        pillColor = "var(--err)";     break;
+      default:        pillText = "Unknown";     pillColor = "var(--neutral)"; break;
+    }
+    pill.textContent = pillText;
+    pill.style.backgroundColor = pillColor;
+    pill.setAttribute("aria-label", pillText);
+
+    header.appendChild(h2);
+    header.appendChild(pill);
+    article.appendChild(header);
+
+    // Day strip (last 30 of 90 dailyRatios: index 60–89)
+    const strip = document.createElement("div");
+    strip.className = "day-strip";
+    const dailyRatios = monitor.dailyRatios || [];
+    for (let i = 60; i < 90; i++) {
+      const entry = dailyRatios[i] || {};
+      const span = document.createElement("span");
+      span.role = "img";
+      span.setAttribute("role", "img");
+      span.setAttribute("tabindex", "0");
+      span.setAttribute("aria-label", `${entry.date || "?"}: ${entry.ratio || "?"}%`);
+      span.style.backgroundColor = colorForDayEntry(entry.color);
+      strip.appendChild(span);
+    }
+    article.appendChild(strip);
+
+    // Stats
+    const stats = document.createElement("div");
+    stats.className = "card-stats";
+
+    const r30 = document.createElement("div");
+    r30.textContent = `30-day uptime: ${monitor["30dRatio"]?.ratio ?? "—"}%`;
+    stats.appendChild(r30);
+
+    const r90 = document.createElement("div");
+    r90.textContent = `90-day uptime: ${monitor["90dRatio"]?.ratio ?? "—"}%`;
+    stats.appendChild(r90);
+
+    // Last downtime
+    const ltd = document.createElement("div");
+    if (monitor.lastDowntime === null || monitor.lastDowntime === undefined) {
+      ltd.textContent = "Last downtime: None recorded.";
+    } else if (monitor.lastDowntime.reason === "") {
+      ltd.textContent = `Last downtime: ${monitor.lastDowntime.date} — Unknown`;
+    } else {
+      ltd.textContent = `Last downtime: ${monitor.lastDowntime.date} (${formatDuration(monitor.lastDowntime.duration)}) — ${monitor.lastDowntime.reason}`;
+    }
+    stats.appendChild(ltd);
+
+    article.appendChild(stats);
+    return article;
+  }
+
+  function renderCards(monitors) {
+    const section = document.getElementById("cards");
+    section.innerHTML = "";
+    for (const m of monitors) {
+      section.appendChild(renderMonitorCard(m));
+    }
+  }
+
+  function renderIncidents(events) {
+    const section = document.getElementById("incidents");
+    const h2El = document.createElement("h2");
+    h2El.textContent = "Incidents";
+    section.replaceChildren(h2El);
+
+    if (!events || events.length === 0) {
+      const p = document.createElement("p");
+      p.className = "incidents__empty";
+      p.textContent = "No incidents to report.";
+      section.appendChild(p);
+    } else {
+      console.warn("getEventFeed returned non-empty data — update SDD with observed entry shape:", events);
+      for (const entry of events) {
+        const pre = document.createElement("pre");
+        pre.className = "incidents__raw";
+        pre.textContent = JSON.stringify(entry, null, 2);
+        section.appendChild(pre);
+      }
+    }
+  }
+
+  function updateTimestamp() {
+    document.getElementById("last-refresh").textContent =
+      "Last refresh: " + new Date().toLocaleTimeString("en-GB");
+  }
+
+  function showError() {
+    document.getElementById("error-banner").style.display = "";
+  }
+
+  function clearError() {
+    document.getElementById("error-banner").style.display = "none";
+  }
+
+  async function loadStatus() {
+    try {
+      const [monitors, events] = await fetchStatus();
+      clearError();
+      renderBanner(monitors);
+      renderCards(orderMonitors(monitors));
+      renderIncidents(events);
+      updateTimestamp();
+    } catch (err) {
+      console.error("[status] fetch failed:", err);
+      showError();
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    loadStatus();
+    intervalId = setInterval(loadStatus, 60_000);
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") {
+        clearInterval(intervalId);
+        intervalId = null;
+      } else {
+        loadStatus();
+        intervalId = setInterval(loadStatus, 60_000);
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Email Authentication Guide: SPF, DKIM, and DMARC Explained | netray.info</title>
+  <meta name="description" content="Learn how to check SPF, DKIM, and DMARC records for your domain. Understand email authentication, why it matters, common mistakes, and how to debug delivery issues.">
+  <link rel="canonical" href="https://netray.info/guide/email-auth">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Email Authentication Guide: SPF, DKIM, and DMARC Explained">
+  <meta property="og:description" content="Learn how to check SPF, DKIM, and DMARC records for your domain. Understand email authentication and debug delivery issues.">
+  <meta property="og:url" content="https://netray.info/guide/email-auth">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Email Authentication Guide: SPF, DKIM, and DMARC Explained">
+  <meta name="twitter:description" content="Learn how to check SPF, DKIM, and DMARC records for your domain. Understand email authentication and debug delivery issues.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Email Authentication Guide: SPF, DKIM, and DMARC Explained",
+    "description": "Learn how to check SPF, DKIM, and DMARC records for your domain. Understand email authentication, why it matters, common mistakes, and how to debug delivery issues.",
+    "url": "https://netray.info/guide/email-auth",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/email-auth"
+  }
+  </script>
+  <meta property="og:image" content="/og/email.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Email Authentication Guide: SPF, DKIM, and DMARC</h1>
+  <p class="page-subtitle">How email authentication works, why it matters, and how to check your domain's records.</p>
+
+  <article>
+    <h2>What is email authentication?</h2>
+    <p>Email authentication is a set of DNS-based mechanisms that let receiving mail servers verify that a message genuinely came from the domain it claims to be from. Three protocols work together to achieve this: <strong>SPF</strong> (Sender Policy Framework), <strong>DKIM</strong> (DomainKeys Identified Mail), and <strong>DMARC</strong> (Domain-based Message Authentication, Reporting, and Conformance).</p>
+    <p>Without these records, anyone can send email that appears to come from your domain. Phishing campaigns, business email compromise, and brand impersonation all exploit missing or misconfigured email authentication.</p>
+
+    <h2>SPF: who is allowed to send</h2>
+    <p>An SPF record is a TXT record on your domain that lists the IP addresses and hostnames authorized to send mail on your behalf. When a receiving server gets a message from <code>user@example.com</code>, it looks up the SPF record for <code>example.com</code> and checks whether the sending server's IP is permitted.</p>
+    <p>A typical SPF record looks like this:</p>
+    <pre><code>v=spf1 include:_spf.google.com include:sendgrid.net -all</code></pre>
+    <p>The <code>-all</code> at the end means "reject anything not explicitly listed." Using <code>~all</code> (soft fail) instead is a common transitional choice but provides weaker protection.</p>
+
+    <h3>SPF lookup limit</h3>
+    <p>SPF evaluation is capped at 10 DNS lookups. Every <code>include:</code>, <code>a:</code>, <code>mx:</code>, and <code>redirect=</code> mechanism counts. Exceeding this limit causes a permanent error (<code>permerror</code>), and many receivers treat that as a fail. Organizations using multiple SaaS providers frequently hit this limit without realizing it.</p>
+
+    <h2>DKIM: cryptographic message signing</h2>
+    <p>DKIM adds a digital signature to outgoing messages. The sending server signs a hash of the message headers and body with a private key. The corresponding public key is published in DNS as a TXT record under a selector subdomain, such as <code>selector1._domainkey.example.com</code>.</p>
+    <p>When the receiving server processes the message, it retrieves the public key from DNS, verifies the signature, and confirms that the message was not tampered with in transit. Unlike SPF, DKIM survives forwarding because the signature travels with the message.</p>
+
+    <h2>DMARC: policy and reporting</h2>
+    <p>DMARC ties SPF and DKIM together. It tells receiving servers what to do when neither SPF nor DKIM passes with alignment to the <code>From:</code> header domain. The policy is published as a TXT record at <code>_dmarc.example.com</code>:</p>
+    <pre><code>v=DMARC1; p=reject; rua=mailto:dmarc-reports@example.com; adkim=s; aspf=s</code></pre>
+    <ul>
+      <li><code>p=none</code> -- monitor only, no enforcement</li>
+      <li><code>p=quarantine</code> -- flag failures as spam</li>
+      <li><code>p=reject</code> -- reject failures outright</li>
+    </ul>
+    <p>The <code>rua</code> tag specifies where aggregate reports are sent. These XML reports from receiving servers show you who is sending mail as your domain and whether authentication passes or fails.</p>
+
+    <h3>Alignment</h3>
+    <p>DMARC requires <strong>alignment</strong>: the domain in the <code>From:</code> header must match the domain that passed SPF or DKIM. Strict alignment (<code>adkim=s</code>, <code>aspf=s</code>) requires an exact match; relaxed alignment (<code>adkim=r</code>) allows subdomains. If your transactional email is sent from <code>mail.example.com</code> but the From header says <code>example.com</code>, strict alignment will fail even if SPF passes.</p>
+
+    <h2>Why it matters</h2>
+    <p>Major mailbox providers (Gmail, Outlook, Yahoo) increasingly require all three protocols. As of 2024, Google and Yahoo require bulk senders to publish SPF, DKIM, and DMARC with at least <code>p=none</code>. Messages failing these checks may be silently dropped or routed to spam, regardless of content quality.</p>
+    <p>Beyond deliverability, email authentication protects your domain's reputation. A single phishing campaign spoofing your domain can erode customer trust and trigger blocklisting that affects your legitimate mail for weeks.</p>
+
+    <h2>How to check your records</h2>
+    <p>You can inspect all email authentication records for a domain using a DNS lookup tool. Query the following record types:</p>
+    <ul>
+      <li><strong>SPF</strong>: TXT record on the root domain</li>
+      <li><strong>DKIM</strong>: TXT record at <code>&lt;selector&gt;._domainkey.&lt;domain&gt;</code></li>
+      <li><strong>DMARC</strong>: TXT record at <code>_dmarc.&lt;domain&gt;</code></li>
+      <li><strong>MX</strong>: mail exchanger records to confirm mail routing</li>
+      <li><strong>MTA-STS</strong>: TXT record at <code>_mta-sts.&lt;domain&gt;</code> plus HTTPS policy file</li>
+      <li><strong>BIMI</strong>: TXT record at <code>default._bimi.&lt;domain&gt;</code> for brand indicators</li>
+    </ul>
+    <p>Use <a href="https://email.netray.info">beacon</a> for a full scored analysis — it evaluates SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL and produces an A–F grade with per-category verdicts. The DNS inspector's <code>+check</code> mode is useful for raw record inspection and DNS-level lint rules (e.g. flagging multiple SPF records or a malformed DMARC tag).</p>
+
+    <h2>BIMI: brand indicators in email</h2>
+    <p>Brand Indicators for Message Identification (BIMI) allows organizations to display their logo next to authenticated emails in supporting email clients (Gmail, Apple Mail, Yahoo Mail, and others). BIMI builds on top of DMARC: only messages that pass DMARC authentication with a policy of <code>p=quarantine</code> or <code>p=reject</code> are eligible to display the logo.</p>
+    <p>BIMI is published as a TXT record at <code>default._bimi.&lt;domain&gt;</code>:</p>
+    <pre><code>default._bimi.example.com.  IN  TXT  "v=BIMI1; l=https://example.com/logo.svg; a=https://example.com/vmc.pem"</code></pre>
+    <p>The two parameters:</p>
+    <ul>
+      <li><strong><code>l=</code></strong> (location) -- a URL pointing to the brand's logo in SVG Tiny PS format (a restricted SVG profile). The logo must be square, served over HTTPS, and publicly accessible. Regular SVG files must be converted to SVG Tiny PS to comply with the specification.</li>
+      <li><strong><code>a=</code></strong> (authority) -- an optional URL pointing to a Verified Mark Certificate (VMC), issued by a CA (DigiCert or Entrust) that certifies trademark ownership of the logo. Gmail requires a VMC for logo display; other providers may show the logo without one.</li>
+    </ul>
+    <p>BIMI is not a security mechanism -- it is a brand visibility feature that rewards domains with strong email authentication. The prerequisites (DMARC at enforcement, DKIM signing, SPF alignment) are the actual security measures. BIMI provides a visible incentive for organizations to deploy them.</p>
+
+    <h2>SMTP TLS Reporting (TLSRPT)</h2>
+    <p>SMTP TLS Reporting (RFC 8460) provides visibility into TLS failures during email delivery. When a sending mail server fails to establish a TLS connection to your MX servers -- whether due to an expired certificate, a misconfigured cipher suite, or a MTA-STS policy violation -- the sender generates a report and delivers it to the address specified in your TLSRPT record.</p>
+    <p>TLSRPT is published as a TXT record at <code>_smtp._tls.&lt;domain&gt;</code>:</p>
+    <pre><code>_smtp._tls.example.com.  IN  TXT  "v=TLSRPTv1; rua=mailto:tlsrpt@example.com"</code></pre>
+    <p>The <code>rua</code> tag specifies where aggregate reports are sent. Reports are JSON documents (often gzip-compressed) that include:</p>
+    <ul>
+      <li>The sending organization and the reporting period</li>
+      <li>The MTA-STS or DANE policy that was applied</li>
+      <li>Success and failure counts for TLS connections</li>
+      <li>Failure details: certificate errors, handshake failures, policy mismatches</li>
+    </ul>
+    <p>TLSRPT is the companion to MTA-STS and DANE. MTA-STS tells senders to require TLS; TLSRPT tells you when that requirement causes delivery failures. Without TLSRPT, you have no way to know if your MTA-STS policy is rejecting legitimate mail due to a misconfiguration on either side.</p>
+    <p>Key considerations:</p>
+    <ul>
+      <li><strong>Deploy TLSRPT before enforcing MTA-STS</strong> -- start with MTA-STS in <code>testing</code> mode and monitor TLSRPT reports. Switch to <code>enforce</code> only when reports confirm no legitimate senders are failing.</li>
+      <li><strong>Use a dedicated mailbox</strong> -- TLSRPT reports are machine-readable JSON, not human-readable email. Route them to a dedicated address and use a parsing tool or service to analyze them.</li>
+      <li><strong>HTTPS reporting</strong> -- TLSRPT also supports <code>rua=https://...</code> for HTTP POST delivery of reports, which is easier to integrate with monitoring systems than email delivery.</li>
+    </ul>
+
+    <h2>Common mistakes</h2>
+    <ul>
+      <li><strong>Multiple SPF records</strong>: A domain must have exactly one SPF TXT record. Two records cause a permerror. Merge them into one.</li>
+      <li><strong>Exceeding the 10-lookup limit</strong>: Each SaaS vendor you add to SPF costs lookups. Use <code>ip4:</code>/<code>ip6:</code> mechanisms or SPF flattening services to stay within the limit.</li>
+      <li><strong>DMARC at <code>p=none</code> indefinitely</strong>: Monitoring mode is for rollout, not a permanent state. Once you confirm legitimate sources pass, move to <code>p=quarantine</code> and then <code>p=reject</code>.</li>
+      <li><strong>Missing DKIM for third-party senders</strong>: If a marketing platform sends as your domain, it must DKIM-sign with your domain's key. SPF alone is not sufficient for DMARC alignment when messages are forwarded.</li>
+      <li><strong>Forgetting subdomains</strong>: DMARC's <code>sp=</code> tag controls subdomain policy. Without it, subdomains inherit the organizational domain's policy, which may not be what you intend.</li>
+      <li><strong>No aggregate reporting</strong>: Without <code>rua</code>, you are flying blind. You will not know if legitimate mail is failing or if someone is spoofing your domain.</li>
+    </ul>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check email security with beacon</h2>
+    <form class="tool-entry__form" action="https://email.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="domain"
+        placeholder="example.com"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Scores SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, and DNSBL. Returns an A–F grade with per-category verdicts.</p>
+  </section>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Inspect raw DNS records with prism</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com +check"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect</button>
+    </form>
+    <p class="tool-entry__hint">Queries SPF, DKIM, DMARC, MTA-STS, BIMI, and MX records and applies DNS-level lint rules.</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>Email authentication</h3>
+    <p>Publish an SPF record that covers your mail servers, configure DKIM signing with your email provider, and publish a DMARC policy at <code>p=quarantine</code> or <code>p=reject</code>.</p>
+    <h3>Email infrastructure</h3>
+    <p>Ensure your domain has valid MX records pointing to functioning mail servers, and that each pointed hostname resolves to an A or AAAA record.</p>
+    <h3>Email transport security</h3>
+    <p>Publish an MTA-STS policy to enforce encrypted email transport and prevent SMTP downgrade attacks on mail delivered to your domain.</p>
+    <h3>Email brand policy</h3>
+    <p>Publish a BIMI record with a valid SVG Tiny PS logo once your DMARC policy is at <code>p=quarantine</code> or <code>p=reject</code>, to show your brand logo in supporting email clients.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/dkim">DKIM: DomainKeys Identified Mail</a></li>
+      <li><a href="/guide/bimi">BIMI: Brand Indicators for Message Identification</a></li>
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/ip-enrichment">What Your IP Reveals</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

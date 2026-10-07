@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DNS API Reference - netray.info</title>
+  <meta name="description" content="DNS inspection API reference for dns.netray.info. Multi-resolver queries, domain health checks, DNSSEC validation, delegation traces, and SSE streaming.">
+  <link rel="canonical" href="https://netray.info/api/dns">
+  <meta property="og:title" content="DNS API Reference - netray.info">
+  <meta property="og:description" content="DNS inspection API: multi-resolver queries, health checks, DNSSEC, delegation traces via curl.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://netray.info/api/dns">
+  <meta property="og:site_name" content="netray.info">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="../guide/style.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "DNS Inspector API Reference",
+    "description": "DNS inspection API reference for dns.netray.info. Multi-resolver queries, domain health checks, DNSSEC validation, delegation traces, and SSE streaming.",
+    "url": "https://netray.info/api/dns",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/api/dns"
+  }
+  </script>
+  <meta property="og:image" content="/og/dns.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">DNS Inspector API</h1>
+  <p class="page-subtitle">Base URL: <code>https://dns.netray.info</code></p>
+
+  <article>
+
+      <p>
+        Multi-resolver DNS debugger with six modes: query, check, trace, compare,
+        auth compare, and DNSSEC validation. Results stream via Server-Sent Events
+        or can be returned as a single JSON response.
+      </p>
+
+      <p>
+        See also: <a href="https://dns.netray.info/docs">interactive API reference</a>
+        (auto-generated OpenAPI)
+      </p>
+
+      <h2>Query Language</h2>
+
+      <p>
+        All endpoints accept a <code>query</code> field using a dig-inspired syntax:
+      </p>
+
+<pre><code>domain [TYPE...] [@server...] [+flag...]</code></pre>
+
+      <table>
+        <thead>
+          <tr><th>Component</th><th>Description</th><th>Examples</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Domain</td>
+            <td>Target domain (required)</td>
+            <td><code>example.com</code></td>
+          </tr>
+          <tr>
+            <td>Types</td>
+            <td>Record types to query (default: A)</td>
+            <td><code>A AAAA MX NS TXT CNAME SOA SRV CAA TLSA HTTPS</code></td>
+          </tr>
+          <tr>
+            <td>Servers</td>
+            <td>DNS servers to use</td>
+            <td><code>@1.1.1.1</code>, <code>@cloudflare</code>, <code>@google</code>, <code>@quad9</code>, <code>@public</code>, <code>@all</code></td>
+          </tr>
+          <tr>
+            <td>Flags</td>
+            <td>Mode and behavior flags</td>
+            <td><code>+check</code>, <code>+trace</code>, <code>+compare</code>, <code>+auth</code>, <code>+dnssec</code>, <code>+norecurse</code>, <code>+short</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+<pre><code># Query A and MX records via Cloudflare and Google
+example.com A MX @cloudflare @google
+
+# Run a health check
+example.com +check
+
+# Trace delegation chain for AAAA
+example.com AAAA +trace</code></pre>
+
+      <h2>Streaming vs JSON</h2>
+
+      <p>
+        By default, all query endpoints return Server-Sent Events (SSE). Add
+        <code>?stream=false</code> to get a single JSON response instead.
+      </p>
+
+      <h3>SSE mode (default)</h3>
+      <p>Events stream as they arrive. Use <code>--no-buffer</code> with curl:</p>
+<pre><code>curl -s -N -X POST https://dns.netray.info/api/query \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com A @cloudflare"}' \
+  --no-buffer</code></pre>
+
+      <p>SSE event types:</p>
+      <table>
+        <thead>
+          <tr><th>Event</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>batch</code></td><td>A batch of results (one or more records)</td></tr>
+          <tr><td><code>done</code></td><td>Stream complete</td></tr>
+          <tr><td><code>error</code></td><td>An error occurred</td></tr>
+        </tbody>
+      </table>
+
+      <p>Raw SSE output looks like:</p>
+<pre><code>event: batch
+data: {"records": [{"name": "example.com", "type": "A", "ttl": 300, "data": "93.184.215.14", ...}]}
+
+event: done
+data: {"key": "abc123"}</code></pre>
+
+      <h3>JSON mode (<code>?stream=false</code>)</h3>
+      <p>Waits for all results and returns a single JSON object:</p>
+<pre><code>curl -s -X POST 'https://dns.netray.info/api/query?stream=false' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com A MX"}' | jq .</code></pre>
+<pre><code>{
+  "events": [
+    {"type": "batch", "data": {"records": [...]}},
+    ...
+  ],
+  "truncated": false
+}</code></pre>
+
+      <h2>Endpoints</h2>
+
+      <h3><code>POST /api/query</code> -- DNS Query</h3>
+      <p>Standard DNS lookup. Fan-out across record types and servers.</p>
+<pre><code># A records from default resolver
+curl -s -X POST 'https://dns.netray.info/api/query?stream=false' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com A"}' | jq .</code></pre>
+
+<pre><code># MX and TXT from all public resolvers
+curl -s -X POST 'https://dns.netray.info/api/query?stream=false' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com MX TXT @public"}' | jq .</code></pre>
+
+      <h3><code>POST /api/check</code> -- Domain Health Check</h3>
+      <p>
+        Comprehensive domain health analysis: SPF, DKIM, DMARC, MTA-STS, TLSRPT,
+        BIMI, DANE, nameserver consistency, and more.
+      </p>
+<pre><code>curl -s -X POST 'https://dns.netray.info/api/check?stream=false' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com"}' | jq .</code></pre>
+
+      <h3><code>POST /api/trace</code> -- Delegation Trace</h3>
+      <p>Walk the delegation chain from root to authoritative nameservers.</p>
+<pre><code>curl -s -X POST 'https://dns.netray.info/api/trace?stream=false' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com"}' | jq .</code></pre>
+
+      <h3><code>POST /api/dnssec</code> -- DNSSEC Validation</h3>
+      <p>Validate the full DNSSEC chain of trust from root to domain.</p>
+<pre><code>curl -s -X POST 'https://dns.netray.info/api/dnssec?stream=false' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com"}' | jq .</code></pre>
+
+      <h3><code>POST /api/compare</code> -- Transport Comparison</h3>
+      <p>Compare results across different DNS transports (UDP, TCP, DoT, DoH).</p>
+<pre><code>curl -s -X POST 'https://dns.netray.info/api/compare?stream=false' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com A"}' | jq .</code></pre>
+
+      <h3><code>POST /api/authcompare</code> -- Authoritative vs Recursive</h3>
+      <p>Compare authoritative nameserver responses against recursive resolver responses.</p>
+<pre><code>curl -s -X POST 'https://dns.netray.info/api/authcompare?stream=false' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example.com A"}' | jq .</code></pre>
+
+      <h2>Utility Endpoints</h2>
+
+      <h3><code>POST /api/parse</code> -- Query Parser</h3>
+      <p>Parse a query string and get completions. Useful for building UIs.</p>
+<pre><code>curl -s -X POST https://dns.netray.info/api/parse \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "example"}' | jq .</code></pre>
+
+      <h3><code>GET /api/results/{key}</code> -- Cached Results</h3>
+      <p>Retrieve a cached result by its permalink key (returned in the <code>done</code> SSE event).</p>
+<pre><code>curl -s https://dns.netray.info/api/results/abc123 | jq .</code></pre>
+
+      <h3><code>GET /api/servers</code> -- Available DNS Servers</h3>
+      <p>List all available DNS servers and their aliases.</p>
+<pre><code>curl -s https://dns.netray.info/api/servers | jq .</code></pre>
+
+      <h3><code>GET /api/record-types</code> -- Supported Record Types</h3>
+      <p>List all supported DNS record types.</p>
+<pre><code>curl -s https://dns.netray.info/api/record-types | jq .</code></pre>
+
+      <h3><code>GET /api/config</code> -- Client Configuration</h3>
+      <p>Server-side configuration relevant to API clients.</p>
+<pre><code>curl -s https://dns.netray.info/api/config | jq .</code></pre>
+
+      <h2>Rate Limits</h2>
+
+      <p>
+        Three-tier GCRA rate limiting: per-IP, per-target domain, and global.
+        The cost of a request is calculated as:
+      </p>
+
+<pre><code>cost = number_of_record_types * number_of_servers</code></pre>
+
+      <p>
+        For example, querying <code>example.com A MX @cloudflare @google</code> costs 4 (2 types x 2 servers).
+      </p>
+
+      <p>
+        When rate-limited, you receive a <code>429</code> with a
+        <code>Retry-After</code> header.
+      </p>
+
+      <h2>Errors</h2>
+
+      <p>Standard error envelope:</p>
+<pre><code>{
+  "error": {
+    "code": "rate_limited",
+    "message": "Too many requests. Retry after 5 seconds."
+  }
+}</code></pre>
+
+      <p>In SSE mode, errors arrive as an <code>error</code> event:</p>
+<pre><code>event: error
+data: {"error": {"code": "bad_request", "message": "Invalid query syntax"}}</code></pre>
+  </article>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">API References</h2>
+    <ul class="page-footer__links">
+      <li><a href="index.html">API Overview</a></li>
+      <li><a href="ip.html">IP API</a></li>
+      <li><a href="tls.html">TLS API</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Encrypted Client Hello (ECH): How It Works and How to Enable It | netray.info</title>
+  <meta name="description" content="Understand Encrypted Client Hello (ECH), the TLS extension that hides the hostname from network observers. Learn how ECH works with HTTPS DNS records, how to enable it, and how to verify it.">
+  <link rel="canonical" href="https://netray.info/guide/encrypted-client-hello">
+  <link rel="stylesheet" href="style.css">
+
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Encrypted Client Hello (ECH): How It Works and How to Enable It">
+  <meta property="og:description" content="Understand Encrypted Client Hello, the TLS extension that hides the hostname from passive network observers.">
+  <meta property="og:url" content="https://netray.info/guide/encrypted-client-hello">
+  <meta property="og:site_name" content="netray.info">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Encrypted Client Hello (ECH)">
+  <meta name="twitter:description" content="How ECH hides the hostname from network observers and how to enable it.">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Encrypted Client Hello (ECH): How It Works and How to Enable It",
+    "description": "Understand Encrypted Client Hello (ECH), the TLS extension that hides the hostname from network observers. Learn how ECH works with HTTPS DNS records, how to enable it, and how to verify it.",
+    "url": "https://netray.info/guide/encrypted-client-hello",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/encrypted-client-hello"
+  }
+  </script>
+  <meta property="og:image" content="/og/tls.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Encrypted Client Hello (ECH)</h1>
+  <p class="page-subtitle">How ECH hides the hostname from passive network observers, why it requires HTTPS DNS records, and how to enable and verify it.</p>
+
+  <article>
+    <h2>The problem: SNI leaks the hostname</h2>
+    <p>When a TLS connection begins, the client sends a ClientHello message that includes the <strong>Server Name Indication (SNI)</strong> -- the hostname the client wants to connect to. SNI is necessary because a single IP address often hosts many domains, and the server needs to know which certificate to present before the encrypted channel is established.</p>
+    <p>The problem is that the ClientHello is sent in plaintext. Anyone observing the network -- an ISP, a corporate firewall, a coffee shop attacker, or a nation-state surveillance system -- can see exactly which hostname the client is connecting to, even though TLS encrypts all subsequent traffic. This metadata leakage undermines the privacy that HTTPS is supposed to provide.</p>
+    <p>HTTPS encrypts what you send and receive, but without ECH, it does not hide <em>where</em> you are going. The destination hostname is visible in every TLS connection to every passive observer on the network path.</p>
+
+    <h2>What ECH does</h2>
+    <p>Encrypted Client Hello (ECH) encrypts the SNI and other sensitive fields in the ClientHello message, so that passive observers see only an "outer" ClientHello directed at a generic, privacy-preserving name (the <strong>public name</strong>), while the real hostname is encrypted inside the message and only readable by the server.</p>
+    <p>ECH splits the ClientHello into two layers:</p>
+    <ul>
+      <li><strong>Outer ClientHello</strong> -- visible to the network. Contains the public name (typically the CDN or hosting provider's name, e.g., <code>cloudflare-ech.com</code>). This is what an observer sees.</li>
+      <li><strong>Inner ClientHello</strong> -- encrypted with a public key obtained from DNS. Contains the real hostname the client wants to reach. Only the server can decrypt it.</li>
+    </ul>
+    <p>The result: a passive observer sees the client connecting to the CDN's generic name, not the specific website. The actual destination is hidden inside the encrypted inner ClientHello.</p>
+
+    <h2>How ECH works</h2>
+    <p>ECH relies on three components working together:</p>
+    <ol>
+      <li><strong>HTTPS DNS record</strong> -- the domain publishes an HTTPS (type 65) DNS record containing an <code>ech</code> parameter. This parameter holds the server's ECH public key (an HPKE key) that clients use to encrypt the inner ClientHello.</li>
+      <li><strong>Client support</strong> -- the browser or TLS client fetches the HTTPS record, extracts the ECH configuration, and uses the public key to encrypt the inner ClientHello before connecting.</li>
+      <li><strong>Server support</strong> -- the server (or CDN edge) holds the corresponding private key, decrypts the inner ClientHello, reads the real SNI, and serves the appropriate certificate and content.</li>
+    </ol>
+    <p>The DNS lookup for the HTTPS record should itself be encrypted (via DNS-over-HTTPS or DNS-over-TLS) to prevent the hostname from leaking at the DNS layer. Without encrypted DNS, an observer can still see the DNS query even though the TLS SNI is hidden.</p>
+
+    <h3>The HTTPS DNS record</h3>
+    <p>The HTTPS record (RFC 9460) is a DNS record type that advertises HTTPS service parameters. For ECH, the critical parameter is the <code>ech</code> value, which contains the Base64-encoded ECHConfig structure:</p>
+    <pre><code>example.com.  300  IN  HTTPS  1 . alpn="h2,h3" ech="AEX+..."</code></pre>
+    <p>The ECHConfig includes:</p>
+    <ul>
+      <li>The public name (what appears in the outer ClientHello)</li>
+      <li>The HPKE public key (for encrypting the inner ClientHello)</li>
+      <li>The supported HPKE cipher suites</li>
+      <li>The maximum name length (to prevent length-based traffic analysis)</li>
+    </ul>
+    <p>Without this DNS record, clients have no way to obtain the ECH key, and ECH is not available. This is why the lens check flags domains that do not advertise ECH in their HTTPS record.</p>
+
+    <h2>Who supports ECH today</h2>
+    <p>ECH is still in its early deployment phase. As of 2025:</p>
+    <ul>
+      <li><strong>Cloudflare</strong> -- enables ECH by default for all proxied domains. Cloudflare was the first major CDN to deploy ECH at scale. If your domain is proxied through Cloudflare, ECH is likely already active.</li>
+      <li><strong>Firefox</strong> -- supports ECH by default (enabled since Firefox 118). Firefox uses DNS-over-HTTPS by default in many regions, providing the encrypted DNS layer ECH needs.</li>
+      <li><strong>Chrome</strong> -- supports ECH (enabled in Chrome 117+). Requires the system or configured DNS resolver to support DNS-over-HTTPS.</li>
+      <li><strong>Safari</strong> -- does not yet support ECH as of early 2025.</li>
+      <li><strong>Self-hosted servers</strong> -- limited support. Some reverse proxies and TLS libraries are adding ECH, but it requires careful key management and DNS coordination.</li>
+    </ul>
+
+    <h2>How to enable ECH</h2>
+    <p>The path to enabling ECH depends on your hosting setup:</p>
+
+    <h3>Behind a CDN (Cloudflare, etc.)</h3>
+    <p>If your domain is proxied through Cloudflare, ECH is typically enabled automatically. Verify by checking for the HTTPS DNS record with an <code>ech</code> parameter. If the record is present and contains an ECH configuration, ECH is active.</p>
+
+    <h3>Self-hosted</h3>
+    <p>Self-hosting ECH is more involved:</p>
+    <ol>
+      <li>Generate an HPKE key pair for ECH.</li>
+      <li>Configure your TLS server to use the ECH private key and public name.</li>
+      <li>Publish the ECHConfig in an HTTPS DNS record for your domain.</li>
+      <li>Implement key rotation -- ECH keys should be rotated regularly, and the DNS record updated to advertise the new key while still accepting the old one during the transition.</li>
+    </ol>
+    <p>This is complex because the DNS record and the server configuration must be kept in sync. A stale ECH key in DNS causes clients to encrypt the inner ClientHello with a key the server cannot decrypt, resulting in a fallback to non-ECH mode or a connection failure, depending on the client's retry behavior.</p>
+
+    <h2>ECH and privacy: what it protects and what it does not</h2>
+    <p>ECH addresses one specific privacy gap: hiding the hostname from passive network observers during the TLS handshake. It does <strong>not</strong> provide:</p>
+    <ul>
+      <li><strong>IP address privacy</strong> -- the server's IP address is still visible. For domains with dedicated IPs, the IP itself reveals the destination. ECH is most effective when the server IP is shared by many domains (CDN deployments).</li>
+      <li><strong>DNS query privacy</strong> -- unless DNS is also encrypted (DoH/DoT), the DNS query for the domain is visible. ECH without encrypted DNS is a partial measure.</li>
+      <li><strong>Traffic analysis resistance</strong> -- the size and timing of encrypted traffic can still reveal information about the content being accessed.</li>
+      <li><strong>Protection from the server</strong> -- ECH protects the hostname from the network, not from the server itself. The server sees everything.</li>
+    </ul>
+    <p>ECH is one layer in a defense-in-depth approach to connection privacy. It complements HTTPS, encrypted DNS, and HSTS, but does not replace any of them.</p>
+
+    <h2>Verifying ECH</h2>
+    <p>To check whether a domain supports ECH:</p>
+    <ol>
+      <li><strong>Check for the HTTPS DNS record</strong>: query the domain's HTTPS record and look for the <code>ech</code> parameter. If absent, ECH is not advertised.</li>
+      <li><strong>Test with a supporting browser</strong>: Firefox and Chrome display ECH status in their developer tools (Security tab). A successful ECH negotiation shows "Encrypted Client Hello: true" or similar.</li>
+      <li><strong>Use the DNS inspector</strong>: query for the HTTPS record type to see the raw ECHConfig data.</li>
+    </ol>
+    <pre><code># Check for HTTPS record with dig
+dig example.com HTTPS +short
+
+# Expected output includes ech= parameter
+# 1 . alpn="h2,h3" ech="AEX+DQA..."</code></pre>
+
+    <h2>Common issues</h2>
+    <ul>
+      <li><strong>No HTTPS DNS record</strong> -- ECH requires a published ECHConfig in DNS. Without the HTTPS record, clients have no key to encrypt with. This is the most common reason ECH is not active.</li>
+      <li><strong>Stale ECH key</strong> -- if the server rotates its ECH key but the DNS record still advertises the old key, clients encrypt with the wrong key. Robust implementations fall back to non-ECH mode, but the privacy benefit is lost.</li>
+      <li><strong>DNS not encrypted</strong> -- ECH hides the hostname in TLS, but if the DNS query is in plaintext, the hostname leaks there instead. For ECH to be effective, DNS resolution must also be encrypted (DoH or DoT).</li>
+      <li><strong>Split-horizon DNS</strong> -- corporate networks that intercept DNS queries may strip HTTPS records or return different results, effectively disabling ECH for their users.</li>
+      <li><strong>Firewall interference</strong> -- some network middleboxes block or modify ClientHello messages with ECH extensions, causing connection failures. ECH includes a retry mechanism, but persistent interference degrades the user experience.</li>
+    </ul>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check ECH and HTTPS record status</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com HTTPS"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Query</button>
+    </form>
+    <p class="tool-entry__hint">Query the HTTPS DNS record to see if ECH is advertised and inspect the ECHConfig parameters.</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <p>Consider enabling Encrypted Client Hello to hide the SNI from network observers — requires an HTTPS DNS record with ECH keys and web server support (nginx 1.27+ or nginx-quic).</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/tls-protocol">TLS Protocol and Cipher Suite Guide</a></li>
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/hsts">HSTS Preloading Guide</a></li>
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

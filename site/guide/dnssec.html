@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DNSSEC: How to Enable and Verify It | netray.info</title>
+  <meta name="description" content="How DNSSEC works, how to enable it at your registrar, how to verify the chain of trust, and what to do when validation fails.">
+  <link rel="canonical" href="https://netray.info/guide/dnssec">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="DNSSEC: How to Enable and Verify It">
+  <meta property="og:description" content="How DNSSEC works, how to enable it at your registrar, how to verify the chain of trust, and what to do when validation fails.">
+  <meta property="og:url" content="https://netray.info/guide/dnssec">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DNSSEC: How to Enable and Verify It">
+  <meta name="twitter:description" content="How DNSSEC works, how to enable it at your registrar, how to verify the chain of trust, and what to do when validation fails.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "DNSSEC: How to Enable and Verify It",
+    "description": "How DNSSEC works, how to enable it at your registrar, how to verify the chain of trust, and what to do when validation fails.",
+    "url": "https://netray.info/guide/dnssec",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/dnssec"
+  }
+  </script>
+  <meta property="og:image" content="/og/dns.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">DNSSEC: How to Enable and Verify It</h1>
+  <p class="page-subtitle">How DNS Security Extensions protect against cache poisoning and how to check your domain's signing chain.</p>
+
+  <article>
+    <h2>What DNSSEC protects against</h2>
+    <p>The DNS protocol was designed without authentication. A resolver that queries for <code>example.com A</code> has no way to verify that the answer it receives is genuine — it could have been injected by an attacker anywhere between the resolver and the authoritative server. This is the basis of the <strong>Kaminsky cache poisoning attack</strong> (published 2008): by flooding a resolver with forged responses, an attacker can cause it to cache a malicious IP address for a domain, silently redirecting all users who query through that resolver.</p>
+    <p>DNSSEC (DNS Security Extensions, RFC 4033–4035) addresses this by adding cryptographic signatures to DNS records. A validating resolver can verify that a response was signed by the legitimate zone owner and has not been tampered with in transit.</p>
+    <p>What DNSSEC does <em>not</em> protect: it does not encrypt DNS queries (that is DNS-over-HTTPS or DNS-over-TLS), it does not prevent DDoS against authoritative servers, and it does not protect against a compromised authoritative server. DNSSEC proves authenticity, not confidentiality or availability.</p>
+
+    <h2>How it works</h2>
+    <p>DNSSEC builds a chain of trust from the DNS root downward. Each zone signs its records and publishes the public key in DNS itself. Parent zones vouch for child zones by publishing a hash of the child's key.</p>
+    <p>The core record types involved:</p>
+    <ul>
+      <li><strong>DNSKEY</strong>: the zone's public signing key, published in DNS</li>
+      <li><strong>RRSIG</strong>: a cryptographic signature over a resource record set, created with the zone's private key</li>
+      <li><strong>DS (Delegation Signer)</strong>: a hash of the child zone's DNSKEY, published in the <em>parent</em> zone</li>
+      <li><strong>NSEC / NSEC3</strong>: authenticated denial of existence — proves that a queried name does not exist</li>
+    </ul>
+    <p>Zones typically use two key pairs: the <strong>Key Signing Key (KSK)</strong>, which signs the DNSKEY RRset itself and whose hash is published as the DS record in the parent zone, and the <strong>Zone Signing Key (ZSK)</strong>, which signs all other records in the zone. The KSK is changed rarely (low rollover overhead from the parent); the ZSK rotates more frequently (no parent interaction needed for ZSK rollover).</p>
+    <p>Validation works by traversing from root to leaf: the resolver trusts the root zone's DNSKEY (distributed as a trust anchor), uses it to verify the <code>.com</code> DS record, uses that to verify <code>example.com</code>'s DNSKEY, and uses that DNSKEY to verify the RRSIG on the A record.</p>
+
+    <h2>How to enable it</h2>
+    <p>Enabling DNSSEC involves two parties: your DNS provider (who manages the zone) and your registrar (who manages the parent DS record).</p>
+    <p>The standard procedure:</p>
+    <ol>
+      <li><strong>Enable signing at your DNS provider</strong>. Most managed DNS providers (Cloudflare, Route 53, Google Cloud DNS) handle key generation and RRSIG creation automatically when you enable DNSSEC in the control panel.</li>
+      <li><strong>Retrieve the DS record</strong>. After signing is enabled, your DNS provider will give you a DS record — a digest of your KSK — to publish in the parent zone.</li>
+      <li><strong>Submit the DS record to your registrar</strong>. Log into your domain registrar's control panel and enter the DS record (key tag, algorithm number, digest type, digest). This links the parent zone to your zone's signing key.</li>
+      <li><strong>Verify the chain</strong>. After propagation (usually minutes to an hour), validate using a DNSSEC-aware resolver.</li>
+    </ol>
+    <p>Key rollover requires updating the DS record at the registrar. Pre-publish the new DNSKEY, wait for caches to expire, then update the DS record at the registrar, then remove the old DNSKEY. Skipping the wait causes a validation gap.</p>
+
+    <h2>Algorithm choices</h2>
+    <p>The signing algorithm determines the key type and signature scheme. Current recommendations:</p>
+    <ul>
+      <li><strong>Ed25519 (algorithm 15)</strong>: the preferred modern choice — small keys, fast verification, strong security. Supported by all major DNS providers and resolvers as of 2023.</li>
+      <li><strong>ECDSAP256SHA256 (algorithm 13)</strong>: widely supported, good choice if Ed25519 is not available. Smaller than RSA keys with equivalent security.</li>
+      <li><strong>RSASHA256 (algorithm 8)</strong>: acceptable but produces larger keys and signatures; only use if older resolver compatibility is required.</li>
+    </ul>
+    <p>Algorithms to avoid: RSASHA1 (algorithm 5) and DSA (algorithm 3) are deprecated. SHA-1-based algorithms are prohibited by most validators. If your zone was signed years ago and has never been reviewed, check the algorithm number in your DNSKEY record.</p>
+
+    <h2>How to verify</h2>
+    <p>To manually verify a domain's DNSSEC chain, query each link in the chain:</p>
+    <ul>
+      <li><code>example.com DNSKEY</code> — should return one or two keys (KSK and ZSK)</li>
+      <li><code>example.com DS</code> — query this at a parent-zone resolver; the hash should match a digest of the DNSKEY</li>
+      <li><code>example.com A RRSIG</code> — the signature over the A record; check the signer's name and expiry date</li>
+    </ul>
+    <p>A valid chain shows: DS in <code>.com</code> matches DNSKEY in <code>example.com</code>, and RRSIG signatures are present and within their validity window. A DNSSEC-validating resolver returns the <code>AD</code> (Authenticated Data) flag in the response when validation succeeds.</p>
+    <p>Use the <code>+dnssec</code> flag in the DNS inspector to run a full chain validation that shows each step, flags algorithm numbers, and checks RRSIG expiry dates.</p>
+
+    <h2>Common failure modes</h2>
+    <ul>
+      <li><strong>Expired RRSIG signatures</strong>: RRSIG records have validity windows (typically 14–30 days). If the zone's automatic re-signing fails (a cron job outage, an API key rotation), signatures expire and the zone becomes unresolvable for validating resolvers. Monitor RRSIG expiry.</li>
+      <li><strong>Missing DS after key rollover</strong>: The new KSK was published in the zone but the registrar DS record was not updated. Validating resolvers find no matching DS for the published DNSKEY and return SERVFAIL.</li>
+      <li><strong>Lame delegation with DNSSEC</strong>: The parent DS record was published but the zone is no longer signed (e.g., migrated to a DNS provider that disabled DNSSEC). Resolvers expecting a signed zone get unsigned responses and treat them as bogus.</li>
+      <li><strong>Algorithm mismatch</strong>: DS record uses a different algorithm number than the published DNSKEY. This prevents chain validation and is usually caused by an incomplete key rollover.</li>
+    </ul>
+
+    <h2>DNSSEC and DANE</h2>
+    <p>DANE (DNS-based Authentication of Named Entities) publishes TLS certificate pins as TLSA records in DNS. DANE is only meaningful when the DNS records are DNSSEC-signed — otherwise an attacker who can manipulate DNS can also replace the TLSA record with one matching their own certificate. DNSSEC is a prerequisite for DANE, not an optional add-on. If you intend to deploy DANE for SMTP (for email transport security), DNSSEC on your domain must be working correctly first.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Validate your domain's DNSSEC chain</h2>
+    <form class="tool-entry__form" action="https://dns.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="q"
+        placeholder="example.com +dnssec"
+        aria-label="Domain to check"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Check</button>
+    </form>
+    <p class="tool-entry__hint">Validates the DNSSEC chain of trust for your domain, including DS, DNSKEY, and RRSIG records.</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>DNSSEC signing</h3>
+    <p>Enable DNSSEC signing for your domain at your registrar or DNS provider.</p>
+    <h3>DNSSEC algorithm</h3>
+    <p>Upgrade your DNSSEC signing algorithm to ECDSA P-256 (Algorithm 13) or Ed25519 (Algorithm 15) — older algorithms are no longer considered safe.</p>
+    <h3>DNSSEC key rollover</h3>
+    <p>Complete the DNSSEC key rollover: remove the old DNSKEY and ensure only the new key's DS record is published at your registrar.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/record-types">DNS Record Types Reference</a></li>
+      <li><a href="/guide/dane-tlsa">DANE/TLSA Setup Guide</a></li>
+      <li><a href="/guide/caa-records">CAA Records: Locking Down Certificate Issuance</a></li>
+      <li><a href="/guide/lame-delegation">Lame Delegation and DNS Misconfigurations</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

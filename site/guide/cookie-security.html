@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cookie Security: Flags, Prefixes, and Best Practices | netray.info</title>
+  <meta name="description" content="How to secure cookies with Secure, HttpOnly, SameSite flags, __Host- and __Secure- prefixes, and a practical session-cookie hardening checklist.">
+  <link rel="canonical" href="https://netray.info/guide/cookie-security">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Cookie Security: Flags, Prefixes, and Best Practices">
+  <meta property="og:description" content="How to secure cookies with Secure, HttpOnly, SameSite flags, __Host- and __Secure- prefixes, and a practical session-cookie hardening checklist.">
+  <meta property="og:url" content="https://netray.info/guide/cookie-security">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Cookie Security: Flags, Prefixes, and Best Practices">
+  <meta name="twitter:description" content="Secure, HttpOnly, SameSite, cookie prefixes, and a practical hardening checklist for session cookies.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Cookie Security: Flags, Prefixes, and Best Practices",
+    "description": "How to secure cookies with Secure, HttpOnly, SameSite flags, __Host- and __Secure- prefixes, and a practical session-cookie hardening checklist.",
+    "url": "https://netray.info/guide/cookie-security",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/cookie-security"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://netray.info/" },
+      { "@type": "ListItem", "position": 2, "name": "Guides", "item": "https://netray.info/guide/" },
+      { "@type": "ListItem", "position": 3, "name": "Cookie Security: Flags, Prefixes, and Best Practices" }
+    ]
+  }
+  </script>
+  <meta property="og:image" content="/og/http.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Cookie Security: Flags, Prefixes, and Best Practices</h1>
+  <p class="page-subtitle">How cookie attributes protect against session hijacking, CSRF, and cross-site leakage -- and how to configure them correctly.</p>
+
+  <article>
+    <h2>The Secure flag</h2>
+    <p>A cookie with the <code>Secure</code> flag is only sent over HTTPS connections. Without it, the browser will transmit the cookie over plain HTTP, allowing any network observer to intercept it.</p>
+    <pre><code>Set-Cookie: session=abc123; Secure</code></pre>
+    <p>This flag should be set on <strong>every</strong> cookie in production. There is no legitimate reason to send cookies over unencrypted HTTP. Even if your site redirects HTTP to HTTPS, an attacker who intercepts the initial HTTP request will see any cookies that lack the Secure flag.</p>
+    <p>Note that <code>Secure</code> does not encrypt the cookie value -- it only restricts the transport. The cookie is still visible in browser developer tools and to any JavaScript on the page (unless <code>HttpOnly</code> is also set).</p>
+
+    <h2>The HttpOnly flag</h2>
+    <p>A cookie with <code>HttpOnly</code> cannot be accessed by JavaScript via <code>document.cookie</code>, the Cookie Store API, or any other client-side API. It is only sent with HTTP requests.</p>
+    <pre><code>Set-Cookie: session=abc123; Secure; HttpOnly</code></pre>
+    <p>This is the primary defense against session theft via XSS. If an attacker injects a script into your page, they cannot read HttpOnly cookies and exfiltrate them to their server. The cookie is still sent with every request to your origin, but the attacker's JavaScript cannot touch it.</p>
+    <p>Set <code>HttpOnly</code> on all session cookies and authentication tokens. Only omit it for cookies that JavaScript genuinely needs to read, such as a CSRF token (which needs to be read by JavaScript to include in request headers) or a UI preference cookie.</p>
+
+    <h2>SameSite attribute</h2>
+    <p>The <code>SameSite</code> attribute controls whether a cookie is sent with cross-site requests, providing protection against CSRF (cross-site request forgery) attacks.</p>
+
+    <h3>SameSite=Strict</h3>
+    <p>The cookie is never sent with cross-site requests. If a user clicks a link to your site from an external page, the cookie is not included in that initial request. This is the most secure setting but can hurt usability -- users following links from emails or other sites will arrive unauthenticated on the first request.</p>
+    <pre><code>Set-Cookie: session=abc123; Secure; HttpOnly; SameSite=Strict</code></pre>
+
+    <h3>SameSite=Lax</h3>
+    <p>The cookie is sent with top-level navigations (clicking a link) but not with cross-site subrequests (images, iframes, AJAX/fetch). This provides CSRF protection for state-changing requests (POST, PUT, DELETE) while preserving usability for navigation.</p>
+    <pre><code>Set-Cookie: session=abc123; Secure; HttpOnly; SameSite=Lax</code></pre>
+    <p><code>Lax</code> is the default in modern browsers (Chrome 80+, Firefox 69+, Edge 80+). If you omit SameSite entirely, the browser treats it as Lax. However, explicitly setting it is best practice because older browsers default to <code>None</code> (no restriction).</p>
+
+    <h3>SameSite=None</h3>
+    <p>The cookie is sent with all cross-site requests, including in iframes and AJAX. This is required for legitimate cross-site use cases like third-party embedded widgets, single sign-on across domains, and payment provider integrations.</p>
+    <pre><code>Set-Cookie: widget_session=xyz; Secure; HttpOnly; SameSite=None</code></pre>
+    <p><code>SameSite=None</code> requires the <code>Secure</code> flag. Browsers reject <code>SameSite=None</code> cookies without <code>Secure</code>. Only use this when cross-site sending is genuinely needed.</p>
+
+    <h2>Cookie prefixes: __Host- and __Secure-</h2>
+    <p>Cookie prefixes are a defense-in-depth mechanism that prevents certain types of cookie injection and scope manipulation attacks.</p>
+
+    <h3>__Host- prefix</h3>
+    <p>A cookie whose name starts with <code>__Host-</code> must be:</p>
+    <ul>
+      <li>Set with the <code>Secure</code> flag</li>
+      <li>Sent from a secure (HTTPS) origin</li>
+      <li>Not include a <code>Domain</code> attribute (bound to the exact host, not subdomains)</li>
+      <li>Have <code>Path=/</code></li>
+    </ul>
+    <pre><code>Set-Cookie: __Host-session=abc123; Secure; HttpOnly; SameSite=Lax; Path=/</code></pre>
+    <p>This is the strongest cookie binding available. It prevents a subdomain from overwriting the cookie (because the cookie has no Domain attribute, it is bound to the exact host). It also prevents an attacker who controls a sibling subdomain from setting a cookie that shadows yours.</p>
+
+    <h3>__Secure- prefix</h3>
+    <p>A cookie whose name starts with <code>__Secure-</code> must be set with the <code>Secure</code> flag from a secure origin. It is less restrictive than <code>__Host-</code> because it allows a <code>Domain</code> attribute.</p>
+    <pre><code>Set-Cookie: __Secure-prefs=dark; Secure; SameSite=Lax; Domain=example.com; Path=/</code></pre>
+    <p>Use <code>__Secure-</code> when you need a cookie to be shared across subdomains but still want the guarantee that it was originally set over HTTPS.</p>
+
+    <h2>Session cookie hardening checklist</h2>
+    <p>For a secure session cookie, apply all of the following:</p>
+    <pre><code>Set-Cookie: __Host-session=&lt;token&gt;; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400</code></pre>
+    <ul>
+      <li><strong><code>__Host-</code> prefix</strong>: Binds to exact host, prevents subdomain cookie injection.</li>
+      <li><strong><code>Secure</code></strong>: HTTPS transport only.</li>
+      <li><strong><code>HttpOnly</code></strong>: No JavaScript access, prevents XSS-based session theft.</li>
+      <li><strong><code>SameSite=Lax</code></strong>: Prevents CSRF on state-changing requests while allowing link navigation.</li>
+      <li><strong><code>Path=/</code></strong>: Required by __Host- prefix; also ensures the cookie is available site-wide.</li>
+      <li><strong><code>Max-Age</code></strong>: Explicit expiry. Prefer <code>Max-Age</code> over <code>Expires</code> -- it is not affected by clock skew between server and client. For session cookies, use the shortest lifetime your application can tolerate.</li>
+    </ul>
+
+    <h3>Additional measures</h3>
+    <ul>
+      <li><strong>Rotate session tokens</strong> after login and privilege escalation. Invalidate the old token server-side.</li>
+      <li><strong>Use a strong random generator</strong> for session token values. At least 128 bits of entropy from a cryptographically secure PRNG.</li>
+      <li><strong>Set short lifetimes</strong> and use refresh mechanisms rather than long-lived session cookies.</li>
+      <li><strong>Implement server-side session invalidation</strong>. Deleting a cookie client-side does not protect against stolen tokens -- the server must reject the old value.</li>
+    </ul>
+
+    <h3>Framework examples</h3>
+    <p>Express.js (Node):</p>
+    <pre><code>app.use(session({
+  name: '__Host-session',
+  cookie: {
+    secure: true,
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 86400000 // 24 hours in milliseconds
+  },
+  // ... store configuration
+}));</code></pre>
+
+    <p>Nginx proxy (setting cookie flags on upstream response):</p>
+    <pre><code># Add flags to cookies from a backend that does not set them
+proxy_cookie_flags ~ secure httponly samesite=lax;</code></pre>
+
+    <p>Apache (mod_headers):</p>
+    <pre><code># Append Secure and HttpOnly to all Set-Cookie headers
+Header always edit Set-Cookie ^(.*)$ "$1; Secure; HttpOnly; SameSite=Lax"</code></pre>
+  </article>
+
+  <section class="tool-entry">
+    <h2>Check your site's HTTP headers with spectra</h2>
+    <form class="tool-entry__form" action="https://http.netray.info/" method="get">
+      <input type="url" name="url" placeholder="https://example.com" required>
+      <button type="submit">Inspect Headers</button>
+    </form>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <p>Set the <code>Secure</code> and <code>HttpOnly</code> flags on all cookies so they are never sent over plain HTTP and are not accessible to JavaScript.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/security-headers">Security Headers Overview</a></li>
+      <li><a href="/guide/cors">Cross-Origin Resource Sharing (CORS)</a></li>
+      <li><a href="/guide/csp">Content Security Policy (CSP)</a></li>
+      <li><a href="/guide/hsts">HSTS Preloading</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>

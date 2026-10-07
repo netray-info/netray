@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Understanding Multi-IP TLS Consistency | netray.info</title>
+  <meta name="description" content="Why domains hosted across multiple IPs or CDN edge nodes can serve different TLS configurations, how to detect inconsistencies, and why they matter.">
+  <link rel="canonical" href="https://netray.info/guide/multi-ip-tls">
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Understanding Multi-IP TLS Consistency">
+  <meta property="og:description" content="Why domains hosted across multiple IPs or CDN edge nodes can serve different TLS configurations, how to detect inconsistencies, and why they matter.">
+  <meta property="og:url" content="https://netray.info/guide/multi-ip-tls">
+  <meta property="og:site_name" content="netray.info">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Understanding Multi-IP TLS Consistency">
+  <meta name="twitter:description" content="Why domains hosted across multiple IPs or CDN edge nodes can serve different TLS configurations, how to detect inconsistencies, and why they matter.">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Understanding Multi-IP TLS Consistency",
+    "description": "Why domains hosted across multiple IPs or CDN edge nodes can serve different TLS configurations, how to detect inconsistencies, and why they matter.",
+    "url": "https://netray.info/guide/multi-ip-tls",
+    "publisher": {
+      "@type": "Organization",
+      "name": "netray.info",
+      "url": "https://netray.info"
+    },
+    "mainEntityOfPage": "https://netray.info/guide/multi-ip-tls"
+  }
+  </script>
+  <meta property="og:image" content="/og/tls.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+</head>
+<body>
+
+<header>
+  <nav class="suite-nav" aria-label="netray.info suite">
+    <a class="suite-nav__brand" href="/">netray.info</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://ip.netray.info">IP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://dns.netray.info">DNS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://tls.netray.info">TLS</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://http.netray.info">HTTP</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="https://email.netray.info">Email</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/tools">Tools</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/compare">Compare</a>
+    <span class="suite-nav__sep" aria-hidden="true">|</span>
+    <a class="suite-nav__link" href="/status">Status</a>
+  </nav>
+</header>
+
+<main class="page-wrapper">
+  <h1 class="page-title">Understanding Multi-IP TLS Consistency</h1>
+  <p class="page-subtitle">Why CDN and multi-server setups can serve different certificates across IPs, and how to detect and fix inconsistencies.</p>
+
+  <article>
+    <h2>The multi-IP problem</h2>
+    <p>A domain is not a single server. DNS round-robin, CDN anycast, and load balancers mean that a single hostname can resolve to dozens or hundreds of IP addresses, each potentially serving a different TLS configuration. The client connecting to <code>example.com</code> gets whichever IP the DNS resolver happens to return — and from a single vantage point, you only see one of them.</p>
+    <p>This becomes a problem when those IPs are not in identical states. Certificate deployments take time to propagate, CDN edge caches are not synchronized, and configuration changes roll out node by node. At any given moment during a deployment, some fraction of your traffic may be hitting a different certificate, a different TLS version, or a different protocol stack than the rest.</p>
+    <p>The fundamental issue is that standard monitoring checks one IP at a time. If your monitoring pings the IP that got the new cert, everything looks fine — while a significant fraction of real user traffic is hitting an older node. The inconsistency is real; your monitoring just cannot see it from a single perspective.</p>
+
+    <h2>How mismatches happen</h2>
+    <p>The most common cause is a rolling certificate deployment. When you push a new certificate — whether via your CDN's API, Ansible, or a deployment pipeline — nodes are updated sequentially, not atomically. During the rollout window, new and old certificates coexist across the fleet. If the rollout stalls (a node fails health checks, a deployment error on one region, a misconfigured Ansible play that exits early), the inconsistent state becomes permanent rather than transient.</p>
+    <p>CDN-specific causes are more subtle. CDNs operate globally distributed edge networks, and configuration changes — including certificate updates — propagate via an eventually-consistent control plane. The propagation SLA varies by CDN: Cloudflare typically converges in seconds, but some CDNs take minutes to tens of minutes. For a domain with Let's Encrypt certificates renewing every 90 days, this is not a practical problem. For emergency certificate revocation and reissuance after a key compromise, the propagation delay is operationally critical.</p>
+    <p>A distinct failure mode involves origin vs. edge configuration drift. The CDN edge serves its own certificate to clients (negotiated via SNI); the origin server has a separate certificate used for the CDN-to-origin connection. If the origin certificate expires or is replaced with one covering different SANs, the CDN-to-origin TLS may break while client-facing TLS remains unaffected — and vice versa. These two certificate paths are independently managed and independently monitored, which means errors in one are often invisible when checking the other.</p>
+
+    <h2>Why it matters</h2>
+    <p>Inconsistent TLS across IPs produces errors that are intermittent, hard to reproduce, and hard to diagnose. A user reporting a certificate warning or connection failure cannot tell you which IP they hit. Your support team's attempt to reproduce the issue hits a different IP and sees no error. The problem appears and disappears as DNS load balancing routes requests to different nodes.</p>
+    <p>The severity scales with the nature of the mismatch:</p>
+    <ul>
+      <li><strong>Expired certificate on some nodes</strong> — users hitting those nodes see a hard browser error. Expired certificates cause immediate, visible failures, not degraded performance.</li>
+      <li><strong>Different SANs across nodes</strong> — if some nodes serve a certificate that does not cover the requested hostname, the TLS handshake fails with an SNI mismatch. This is a hard failure with no fallback.</li>
+      <li><strong>Different TLS versions</strong> — some nodes still negotiating TLS 1.0/1.1 while others use 1.3. Security scanners will flag the entire domain as supporting deprecated protocols even if most nodes do not.</li>
+      <li><strong>Different ALPN</strong> — some nodes advertising HTTP/2 (<code>h2</code>), others only HTTP/1.1. Clients connecting to HTTP/1.1 nodes get degraded performance without visible errors.</li>
+    </ul>
+
+    <h2>What to look for</h2>
+    <p>A multi-IP consistency check compares the TLS handshake output across all IPs a domain resolves to. Key comparison dimensions:</p>
+    <ul>
+      <li><strong>Certificate serial number and fingerprint</strong> — the most direct comparison. Different serial numbers across IPs confirm different certificates are being served.</li>
+      <li><strong>Certificate expiry date</strong> — identical certs will have the same expiry. Divergent expiry dates mean some nodes renewed and others did not.</li>
+      <li><strong>SAN list</strong> — should be identical across all nodes. Divergent SANs indicate nodes serving different certificates, which may cover different subdomains.</li>
+      <li><strong>Negotiated TLS version</strong> — using a client that supports TLS 1.3, check which version is actually negotiated on each IP. Nodes still on older TLS versions will negotiate 1.2 or lower.</li>
+      <li><strong>ALPN protocol</strong> — <code>h2</code> vs <code>http/1.1</code> affects performance. Inconsistency here indicates nodes with different server configurations.</li>
+      <li><strong>Certificate chain</strong> — the server should send the full chain (leaf + intermediates). Some nodes may be misconfigured to send only the leaf, causing chain validation failures on clients that do not have the intermediate cached.</li>
+    </ul>
+
+    <h2>CDN-specific patterns</h2>
+    <p>CDNs offer two modes for TLS termination: a shared certificate (the CDN's own certificate covering many customer domains via SANs or SNI-based routing) and a custom certificate (your certificate, uploaded to or provisioned by the CDN). The failure modes differ by mode.</p>
+    <p>With <strong>shared certificates</strong>, the CDN manages the certificate and rotation. You have no control over the specific certificate details, and inconsistency across edge nodes is the CDN's operational problem, not yours. If you observe inconsistency, it is a CDN issue to report.</p>
+    <p>With <strong>custom certificates</strong>, you upload and manage the certificate. Push operations go to the CDN's control plane, which distributes to edge nodes. A partially completed push — interrupted by an API error, rate limit, or network issue — can leave some edge nodes on the old certificate. Most CDN dashboards provide a certificate status view that shows propagation state per region or PoP.</p>
+    <p>Certificate pinning interactions are a specific hazard. If a mobile application pins your certificate's fingerprint (or the issuer's), a certificate rotation that lands on some CDN nodes before others can cause the application to fail on connections to un-rotated nodes. If you use certificate pinning, all nodes must rotate atomically — or pinning must be done at the SPKI level with backup pins to accommodate rotation.</p>
+
+    <h2>Detection and monitoring</h2>
+    <p>Effective TLS consistency monitoring resolves all DNS A and AAAA records for a hostname, opens a TLS connection to each resulting IP (with the same SNI), and compares the handshake output. A test that checks only one IP provides false confidence in multi-IP deployments.</p>
+    <p>For proactive monitoring, the check frequency should be higher during and after any certificate deployment. Certificate expiry monitoring should check all IPs, not just one. An expiry alert that fires only when the monitoring probe's specific IP gets a renewed cert means other IPs may have already expired by the time the alert fires.</p>
+    <p>For CDN deployments, also check the origin TLS separately from the edge TLS. A monitoring check against the CDN hostname validates the edge certificate; a check against the origin IP (bypassing the CDN) validates the origin-to-CDN path. Both are independently important.</p>
+
+    <h2>Fixing mismatches</h2>
+    <p>For CDN-propagated mismatches, the first step is verifying that the certificate update was fully propagated via the CDN's control plane. Most CDNs provide a propagation status API or dashboard. If propagation is stuck, re-triggering the deployment operation usually clears it.</p>
+    <p>For bare-metal or VM-based multi-server deployments, the fix depends on the deployment mechanism. If using Ansible, identify which hosts failed and re-run the certificate deployment play against only those hosts. If using a configuration management tool with convergence semantics (Chef, Puppet), a convergence run will resolve the drift automatically on the next check interval.</p>
+    <p>For ACME-based certificates on multi-node setups, ensure the ACME client is running and has valid credentials on every node. Shared certificate storage (a mounted NFS volume or a secrets manager) is simpler than per-node renewal but requires careful access controls and a single point of renewal, not per-node ACME requests, which can exhaust rate limits.</p>
+    <p>After any corrective action, run the multi-IP consistency check again to confirm all nodes are in the expected state before closing the incident.</p>
+  </article>
+
+  <section class="tool-entry">
+    <h2 class="tool-entry__heading">Check TLS consistency across all IPs</h2>
+    <form class="tool-entry__form" action="https://tls.netray.info/" method="get">
+      <input
+        class="tool-entry__input"
+        type="text"
+        name="h"
+        placeholder="example.com"
+        aria-label="Domain to inspect"
+        required
+      >
+      <button class="tool-entry__submit" type="submit">Inspect</button>
+    </form>
+    <p class="tool-entry__hint">Inspects TLS configuration across all resolved IPs and flags inconsistencies in certificates, protocol versions, and ALPN.</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>TLS consistency</h3>
+    <p>Your TLS configuration varies across your server IPs — ensure all servers behind your domain serve identical certificates and cipher suites.</p>
+    <h3>ALPN consistency</h3>
+    <p>Your servers advertise different protocols (HTTP/1.1, HTTP/2) on different IPs — align your web server configuration across all instances.</p>
+  </section>
+
+  <footer class="page-footer">
+    <h2 class="page-footer__heading">Related guides</h2>
+    <ul class="page-footer__links">
+      <li><a href="/guide/certificate-chain">TLS Certificate Chain Explained</a></li>
+      <li><a href="/guide/certificate-transparency">Understanding Certificate Transparency</a></li>
+      <li><a href="/guide/hsts">HTTP Strict Transport Security (HSTS)</a></li>
+      <li><a href="/guide/domain-security-audit">Domain Security Audit in 5 Minutes</a></li>
+    </ul>
+    <p class="page-footer__suite">
+      <a href="/">netray.info</a> --
+      <a href="https://ip.netray.info">IP</a> /
+      <a href="https://dns.netray.info">DNS</a> /
+      <a href="https://tls.netray.info">TLS</a> /
+      <a href="https://http.netray.info">HTTP</a> /
+      <a href="https://email.netray.info">Email</a> /
+      <a href="/tools">Tools</a> /
+      <a href="https://netray.info/compare">Compare</a> /
+      <a href="https://netray.info/status">Status</a>
+    </p>
+  </footer>
+</main>
+
+</body>
+</html>
