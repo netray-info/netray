@@ -12,7 +12,8 @@ Apply these rules when creating or modifying any workflow file.
 
 | File | Purpose |
 |------|---------|
-| `.github/workflows/ci.yml` | PR gate: lint, test, audit |
+| `.github/workflows/ci.yml` | PR gate: lint, test, cargo-deny (bans, licenses, sources) |
+| `.github/workflows/audit.yml` | Daily schedule + manual: advisory scans (RUSTSEC, npm audit) |
 | `.github/workflows/release.yml` | Tag push: test gate → Docker build → merge manifests → upload release ref |
 | `.github/workflows/deploy.yml` | Fires after release succeeds → webhook to deploy.netray.info |
 
@@ -21,7 +22,8 @@ Apply these rules when creating or modifying any workflow file.
 
 | File | Purpose |
 |------|---------|
-| `.github/workflows/ci.yml` | PR gate: lint, test, audit |
+| `.github/workflows/ci.yml` | PR gate: lint, test, cargo-deny (bans, licenses, sources) |
+| `.github/workflows/audit.yml` | Daily schedule + manual: advisory scans (RUSTSEC) |
 
 No release automation. Publish to crates.io is a manual `cargo publish` on the developer's machine.
 
@@ -67,6 +69,15 @@ on:
         required: true
 ```
 
+### `audit.yml` — always:
+```yaml
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+```
+Never `push:` or `pull_request:` — see R-J6.
+
 ### `publish.yml` (npm only) — same as release.yml.
 
 **Rules:**
@@ -84,7 +95,7 @@ on:
 Five parallel jobs. No `needs:` dependencies between them — all run concurrently.
 
 ```
-fmt      clippy      test      frontend      audit
+fmt      clippy      test      frontend      deny
 ```
 
 ### `fmt`
@@ -174,30 +185,59 @@ frontend:
 ```
 No Rust toolchain — frontend job is Node-only.
 
-### `audit`
+### `deny`
 ```yaml
-audit:
-  name: Dependency Audit
+deny:
+  name: Cargo Deny (bans/licenses/sources)
   runs-on: ubuntu-latest
   permissions:
     contents: read
-    checks: write
   steps:
     - uses: actions/checkout@<sha> # v4.x.x
-    - uses: rustsec/audit-check@v2
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
     - uses: EmbarkStudios/cargo-deny-action@v2
       with:
-        command: check
-    - uses: actions/setup-node@<sha> # v4.x.x
-      with:
-        node-version: '22'
-        cache: npm
-        cache-dependency-path: frontend/package-lock.json
-    - name: npm audit
-      run: npm audit --audit-level=high --omit=dev
-      working-directory: frontend
+        command: check bans licenses sources
+```
+Deterministic supply-chain checks only. Advisories are not in the gate.
+
+### `audit.yml` (separate workflow, scheduled)
+```yaml
+jobs:
+  rust:
+    name: Rust advisories
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@<sha> # v4.x.x
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Kept in sync with deny.toml [advisories].ignore
+          ignore: RUSTSEC-YYYY-NNNN
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
+  npm:
+    name: npm advisories
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@<sha> # v4.x.x
+      - uses: actions/setup-node@<sha> # v4.x.x
+        with:
+          node-version: '22'
+          registry-url: https://npm.pkg.github.com
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: npm audit
+        run: npm audit --audit-level=high --omit=dev
+        working-directory: frontend
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
 `checks: write` is required by `rustsec/audit-check` to post check annotations.
 
@@ -207,14 +247,14 @@ audit:
 - R-J3: Every `npm ci` step MUST set `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` as an env var. Missing this causes E401 from `https://npm.pkg.github.com`.
 - R-J4: `cargo test` always uses `--locked --no-fail-fast`. Never add `--lib` unless the project has a dedicated `integration-test` job that runs those tests with required data files (e.g. ifconfig-rs, which needs GeoIP databases only available in the Docker-based integration job). In that case, the `test` job uses `--lib` and the `integration-test` job runs the full suite.
 - R-J5: `cargo clippy` always uses `--locked -- -D warnings`.
-- R-J6: The `audit` job MUST include both Rust (`rustsec/audit-check` + `cargo-deny`) and npm (`npm audit --audit-level=high --omit=dev`) checks.
+- R-J6: Advisory scans — Rust (`rustsec/audit-check` + `cargo-deny check advisories`) and npm (`npm audit --audit-level=high --omit=dev`) — MUST run in `audit.yml` on a daily schedule plus `workflow_dispatch`, never on push or PR. A new advisory in a transitive dependency must not block an unrelated merge or hotfix; it is triaged on its own cadence. `ci.yml` keeps only the deterministic `cargo-deny check bans licenses sources`. The `ignore:` list of `rustsec/audit-check` mirrors `deny.toml` `[advisories].ignore`. Note: GitHub disables scheduled workflows in public repos after 60 days without activity; check `gh workflow list --all` after a pause.
 - R-J7: Multi-step npm operations (install + build, install + test) MUST use `working-directory: frontend` on the step, not an inline `cd frontend &&` prefix. Inline `cd` defeats the cache-path contract and diverges from the canonical job templates in this spec.
 
 ---
 
 ## §4 Job Structure for `ci.yml` (Rust library, no frontend)
 
-Four parallel jobs: `fmt`, `clippy`, `test`, `audit`. Same structure as §3 but all Node/frontend steps are absent.
+Four parallel jobs: `fmt`, `clippy`, `test`, `deny`. Same structure as §3 but all Node/frontend steps are absent; advisory scans go to `audit.yml` (R-J6) without the `npm` job.
 
 ```yaml
 fmt:
@@ -247,20 +287,16 @@ test:
     - uses: Swatinem/rust-cache@<sha> # v2.x.x
     - run: cargo test --locked --no-fail-fast
 
-audit:
-  name: Dependency Audit
+deny:
+  name: Cargo Deny (bans/licenses/sources)
   runs-on: ubuntu-latest
   permissions:
     contents: read
-    checks: write
   steps:
     - uses: actions/checkout@<sha> # v4.x.x
-    - uses: rustsec/audit-check@v2
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
     - uses: EmbarkStudios/cargo-deny-action@v2
       with:
-        command: check
+        command: check bans licenses sources
 ```
 
 ---
@@ -599,7 +635,7 @@ jobs:
 - R-P1: Omit `permissions:` at the workflow level. Set it per-job at the minimum scope needed.
 - R-P2: Default implicit permission is `contents: read`. Only escalate where required.
 - R-P3: Docker build/merge jobs need `contents: read, packages: write`.
-- R-P4: Audit job needs `contents: read, checks: write` (for `rustsec/audit-check` annotations).
+- R-P4: The `rust` job in `audit.yml` needs `contents: read, checks: write` (for `rustsec/audit-check` annotations).
 - R-P5: Never use a personal access token (`LP_GHCR_TOKEN` or equivalent). `secrets.GITHUB_TOKEN` is sufficient for GHCR reads and writes within the same org.
 
 ---
@@ -637,15 +673,16 @@ Never hardcode the image name with the org path. `github.repository` expands to 
 
 ## §14 Responsibility Boundaries
 
-| Step | `ci.yml` | `release.yml` | `deploy.yml` |
-|------|----------|---------------|--------------|
-| Lint, test, audit | yes | no | no |
-| Docker build + push | no | yes | no |
-| SBOM generation | no | yes | no |
-| Manifest merge + tagging | no | yes | no |
-| Deploy webhook | no | no | yes |
-| Produces artifacts | no | digests, SBOMs, release-ref | no |
-| Consumes artifacts | no | no | release-ref (from release.yml) |
+| Step | `ci.yml` | `audit.yml` | `release.yml` | `deploy.yml` |
+|------|----------|-------------|---------------|--------------|
+| Lint, test, cargo-deny (bans/licenses/sources) | yes | no | no | no |
+| Advisory scans (RUSTSEC, npm audit) | no | yes | no | no |
+| Docker build + push | no | no | yes | no |
+| SBOM generation | no | no | yes | no |
+| Manifest merge + tagging | no | no | yes | no |
+| Deploy webhook | no | no | no | yes |
+| Produces artifacts | no | no | digests, SBOMs, release-ref | no |
+| Consumes artifacts | no | no | no | release-ref (from release.yml) |
 
 `ci.yml` is a gate — it produces no artifacts and makes no external changes.
 `release.yml` builds and publishes the image — it does not deploy.
