@@ -1,0 +1,146 @@
+[server]
+bind = "0.0.0.0:8085"
+metrics_bind = "127.0.0.1:9095"
+# trusted_proxies = ["10.0.0.0/8"]
+
+[backends]
+# DNS server names to pass to mhost-prism (predefined provider names).
+# Empty = use prism's default. Single server recommended for reliable scoring.
+#dns_servers = ["cloudflare"]
+
+[backends.dns]
+url = "https://dns.netray.info"
+timeout_ms = 20000
+
+[backends.tls]
+url = "https://tls.netray.info"
+timeout_ms = 20000
+
+[backends.ip]
+url = "https://ip.netray.info"
+timeout_ms = 2000
+
+# [backends.http]
+# url = "https://http.netray.info"   # optional; omit to disable HTTP section
+# timeout_ms = 20000
+
+# [backends.email]
+# url = "http://beacon:8085"         # optional; omit to disable email section
+# timeout is fixed at 15 s (load-bearing: leaves 5 s before the 20 s hard deadline)
+# Public URL for detail_url links is sourced from [ecosystem] email_base_url, not this url.
+
+[ecosystem]
+ip_base_url    = "https://ip.netray.info"
+dns_base_url   = "https://dns.netray.info"
+tls_base_url   = "https://tls.netray.info"
+# http_base_url  = "https://http.netray.info"
+# email_base_url = "https://email.netray.info"
+# lens_base_url  = "https://lens.netray.info"
+
+[cache]
+enabled = true
+ttl_seconds = 300
+
+[rate_limit]
+per_ip_per_minute = 10
+per_ip_burst = 3
+global_per_minute = 100
+global_burst = 20
+
+[scoring]
+# profile_path = "profiles/default.toml"   # override built-in default profile
+
+[site]
+# Apex landing-page branding. Every field is optional; missing values fall
+# back to the built-in defaults shown below. All fields can also be overridden
+# via LENS_SITE__<FIELD> env vars (e.g. LENS_SITE__HERO_HEADING).
+#
+# Product semantics (grade thresholds, per-check `fix_hint` copy, check labels)
+# are NOT configurable here — see specs/sdd/product-repositioning.md §11.
+
+# <title> + og:title.
+#title = "netray.info — your domain's health grade, in under a second"
+
+# <meta name=description> + og:description.
+#description = "Type a domain, get an A+ to F grade across DNS, TLS, HTTP, and email security. No account, no ads, open source."
+
+# Absolute URL for og:image. Omitted from <head> when unset.
+#og_image = "https://netray.info/og-card.png"
+
+#og_site_name = "netray.info"
+
+# Brand strings rendered in the apex header.
+#brand_name = "lens"
+#brand_tagline = "your domain's health grade, in under a second"
+#status_pill = "open source · self-hosted · built in Rust"
+
+# Idle-state hero copy.
+#hero_heading = "How healthy is your domain?"
+#hero_subheading = "DNS, TLS, HTTP, email, and the IPs behind them — checked in parallel, one grade, usually under a second."
+
+# Clickable example chips on the landing page.
+#example_domains = ["netray.info", "example.com", "github.com", "cloudflare.com"]
+
+# Trust strip rendered below the hero.
+#trust_strip = "No account · No ads · Open source · Self-hostable"
+
+# Footer about-text (frontend supplies a sensible default when unset).
+#footer_about = "lens is part of the netray.info suite — open source, MIT licensed, self-hostable."
+
+# Footer link list (frontend supplies a sensible default set when unset).
+#footer_links = [
+#    { label = "Tools", href = "https://netray.info/tools", external = true },
+#    { label = "Guides", href = "https://netray.info/guide", external = true },
+#    { label = "GitHub", href = "https://github.com/netrayinfo", external = true },
+#]
+
+[badges]
+# Enable the /badge/:domain.svg endpoint.
+enabled = true
+
+# How long a cached grade is considered fresh for badge requests.
+# Recomputes are throttled to at most one per domain per this window.
+# Default: 3600 (1 hour)
+ttl_seconds = 3600
+
+# Left-segment label text shown in every badge.
+# Max 32 ASCII printable characters. Operators can brand as "myco" etc.
+default_label = "lens"
+
+# Maximum length for the ?label= query parameter override (bytes).
+max_label_len = 32
+
+[og_cards]
+# Enable the /og/:domain.png endpoint (1200×630 social preview cards).
+enabled = true
+# Note: OG card freshness uses OG_TTL_SECONDS (3600 s, compile-time constant).
+# Ensure cache.ttl_seconds is >= 3600 s; otherwise cache entries expire before
+# the OG freshness window and every request triggers a recompute.
+
+[telemetry]
+# Log output format.
+#   "text" -- human-readable, colour-coded (default; best for terminals)
+#   "json" -- structured JSON lines (best for log aggregators: Loki, Dozzle, etc.)
+# Also configurable via: LENS_TELEMETRY__LOG_FORMAT=json
+#log_format = "text"
+
+# Enable OpenTelemetry distributed tracing (OTLP/HTTP export).
+#enabled = false
+
+# OTLP HTTP endpoint to export spans to.
+#otlp_endpoint = "http://localhost:4318"
+
+# Service name reported in spans and logs.
+#service_name = "lens"
+
+# Trace sampling rate (0.0 = off, 1.0 = 100%).
+#sample_rate = 1.0
+
+[snapshots]
+# Enable persistent snapshot storage. Each completed SSE check is saved to SQLite,
+# and GET /r/:shortid returns a static HTML page rendering that snapshot.
+enabled = true
+
+# Path to the SQLite database file for snapshots.
+# The file is created automatically if it does not exist.
+db_path = "snapshots.db"

@@ -1,0 +1,123 @@
+[package]
+name = "lens"
+version = "0.12.0"
+edition = "2024"
+license = "MIT"
+description = "Unified domain health check — netray.info"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["json"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tower = { version = "0.5", features = ["limit"] }
+tower-http = { version = "0.6", features = ["cors", "compression-gzip", "set-header", "trace", "limit"] }
+governor = "0.10"
+netray-common = { version = "0.8", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment", "backend"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+
+# HTTP client (backend calls)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+
+# SSE
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Configuration
+config = "0.15"
+
+# Error handling
+thiserror = "2"
+
+# Logging / tracing
+tracing = "0.1"
+
+# Metrics
+metrics = "0.24"
+metrics-exporter-prometheus = "0.18"
+
+# Cache
+moka = { version = "0.12", features = ["future"] }
+
+# Embedded frontend
+rust-embed = "8"
+mime_guess = "2"
+
+# OpenAPI
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-axum = "0.2"
+utoipa-scalar = { version = "0.3", features = ["axum"] }
+
+# UUID for request IDs
+uuid = { version = "1", features = ["v7"] }
+
+# Scoring profile
+toml = "1"
+
+# Snapshot storage
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate", "chrono"] }
+nanoid = "0.4"
+regex = "1"
+chrono = { version = "0.4", features = ["serde"] }
+
+# OG cards: SVG→PNG rasterization and deterministic ETag hashing
+resvg = { version = "0.45", default-features = false, features = ["text"] }
+fontdb = "0.23"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+tempfile = "3"
+
+[[test]]
+name = "reference_domains"
+path = "tests/reference_domains.rs"
+
+[[test]]
+name = "scoring_regression"
+path = "tests/scoring_regression.rs"
+
+[[test]]
+name = "badge_render"
+path = "tests/badge_render.rs"
+
+[[test]]
+name = "badge_routes"
+path = "tests/badge_routes.rs"
+
+[[test]]
+name = "sdd_lens_badges_p2_c5_meta_badges"
+path = "tests/sdd_lens_badges_p2_c5_meta_badges.rs"
+
+[[test]]
+name = "sdd_lens_badges_p1_c11_cache_coalesce"
+path = "tests/sdd_lens_badges_p1_c11_cache_coalesce.rs"
+
+[[test]]
+name = "og_render"
+path = "tests/og_render.rs"
+
+[[test]]
+name = "og_routes"
+path = "tests/og_routes.rs"
+
+[[test]]
+name = "snapshot_store"
+path = "tests/snapshot_store.rs"
+
+[[test]]
+name = "snapshot_routes"
+path = "tests/snapshot_routes.rs"
+
+[[test]]
+name = "snapshot_render"
+path = "tests/snapshot_render.rs"

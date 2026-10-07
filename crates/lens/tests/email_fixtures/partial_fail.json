@@ -1,0 +1,16 @@
+{
+  "grade": "B",
+  "categories": {
+    "spf":         { "verdict": "Pass", "message": null },
+    "dkim":        { "verdict": "Warn", "message": "DKIM key rotation recommended" },
+    "dmarc":       { "verdict": "Pass", "message": null },
+    "mx":          { "verdict": "Pass", "message": null },
+    "fcrdns":      { "verdict": "Pass", "message": null },
+    "dnsbl":       { "verdict": "Pass", "message": null },
+    "mta_sts":     { "verdict": "Pass", "message": null },
+    "tlsrpt":      { "verdict": "Pass", "message": null },
+    "dane":        { "verdict": "Pass", "message": null },
+    "bimi":        { "verdict": "Pass", "message": null },
+    "dmarc_policy":{ "verdict": "Pass", "message": null }
+  }
+}

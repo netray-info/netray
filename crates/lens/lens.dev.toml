@@ -1,0 +1,45 @@
+[server]
+bind = "127.0.0.1:8085"
+metrics_bind = "127.0.0.1:9095"
+
+[backends]
+dns_servers = ["cloudflare"]
+
+[backends.dns]
+url = "https://dns.netray.info"
+timeout_ms = 20000
+
+[backends.tls]
+url = "https://tls.netray.info"
+timeout_ms = 20000
+
+[backends.ip]
+url = "https://ip.netray.info"
+timeout_ms = 2000
+
+[backends.http]
+url = "https://http.netray.info"
+timeout_ms = 20000
+
+[backends.email]
+url = "https://email.netray.info"
+
+[ecosystem]
+ip_base_url    = "https://ip.netray.info"
+dns_base_url   = "https://dns.netray.info"
+tls_base_url   = "https://tls.netray.info"
+http_base_url  = "https://http.netray.info"
+email_base_url = "https://email.netray.info"
+lens_base_url  = "https://lens.netray.info"
+
+[snapshots]
+db_path = "data/snapshots.db"
+
+[cache]
+enabled = true
+
+[rate_limit]
+per_ip_per_minute = 120
+per_ip_burst = 30
+global_per_minute = 500
+global_burst = 100
