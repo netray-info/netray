@@ -1,0 +1,13 @@
+# adlc.toml — what this repository declares, and what the gate can therefore check.
+
+# The contract: the one recipe in the justfile that runs the suite.
+[contract]
+recipe = "adlc-verify"
+
+[exceptions]
+# tests/acceptance is Playwright against the deployed services (`just acceptance`), not part of the gate.
+not-tests = ["tests/acceptance/**"]
+
+# Command names the contract calls; `adlc audit` reports the ones missing on this machine.
+[tools]
+required = ["cargo", "node", "npm", "bash"]

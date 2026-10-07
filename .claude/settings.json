@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "adlc-process@adlc": true,
+    "adlc-sensors@adlc": true
+  }
+}
