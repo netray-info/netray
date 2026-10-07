@@ -1,0 +1,70 @@
+[package]
+name = "beacon"
+version = "0.4.0"
+edition = "2024"
+license = "MIT"
+description = "Email security inspector for netray.info — DNS-only mail posture analysis"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["json", "macros"] }
+tower = { version = "0.5", features = ["limit"] }
+tower-http = { version = "0.6", features = ["compression-gzip", "trace", "limit"] }
+governor = "0.10"
+netray-common = { version = "0.8", features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment", "backend"] }
+
+# HTTP client (MTA-STS policy, BIMI logo)
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "webpki-roots", "http2"] }
+
+# DNS
+mhost = { version = "0.11", default-features = false }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+tokio-stream = "0.1"
+pin-project-lite = "0.2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Configuration
+config = "0.15"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging / tracing
+tracing = "0.1"
+
+# Metrics
+metrics = "0.24"
+
+# Embedded frontend
+rust-embed = "8"
+
+# OpenAPI
+utoipa = { version = "5", features = ["axum_extras"] }
+
+# IP networks (SPF CIDR sets)
+ipnet = "2"
+
+# DKIM key parsing
+x509-parser = "0.17"
+base64 = "0.22"
+
+# Percent-decoding for path params
+percent-encoding = "2"
+
+# URL parsing (BIMI logo scheme validation)
+url = "2"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+serde_json = "1"
+tokio = { version = "1", features = ["full", "test-util"] }
+# HTTP mock server for the enrichment integration test (per project-review SDD Req 12).
+wiremock = "0.6"

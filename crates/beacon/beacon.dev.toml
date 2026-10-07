@@ -1,0 +1,39 @@
+[server]
+bind = "127.0.0.1:8084"
+metrics_bind = "127.0.0.1:9094"
+
+[dns]
+resolvers = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"]
+timeout_ms = 5000
+
+[dnsbl]
+zones = [
+  "zen.spamhaus.org",
+  "b.barracudacentral.org",
+  "bl.spamcop.net",
+  "dbl.spamhaus.org",
+]
+timeout_ms = 2000
+resolvers = ["system"]
+
+[http]
+timeout_ms = 10000
+
+[rate_limit]
+per_ip = "10/min"
+
+[dkim]
+max_user_selectors = 5
+
+[ecosystem]
+ip_base_url = "https://ip.netray.info"
+dns_base_url = "https://dns.netray.info"
+tls_base_url = "https://tls.netray.info"
+http_base_url = "https://http.netray.info"
+email_base_url = "https://email.netray.info"
+lens_base_url = "https://lens.netray.info"
+
+[telemetry]
+log_format = "text"
+service_name = "beacon"
+sample_rate = 1.0

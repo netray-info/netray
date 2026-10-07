@@ -1,0 +1,49 @@
+[server]
+bind = "127.0.0.1:8084"
+metrics_bind = "127.0.0.1:9094"
+trusted_proxies = []
+
+[dns]
+resolvers = ["cloudflare"]
+timeout_ms = 5000
+
+[dnsbl]
+zones = [
+  "zen.spamhaus.org",
+  "b.barracudacentral.org",
+  "bl.spamcop.net",
+  "dbl.spamhaus.org",
+]
+timeout_ms = 2000
+# Spamhaus and most public DNSBLs block queries from public/open resolvers
+# (Cloudflare 1.1.1.1, Google 8.8.8.8, Quad9), returning synthetic 127.255.255.x
+# responses that look like listings. Default to the system resolver so operators
+# can point at a local resolver if they have one. Override with ["1.1.1.1"] only
+# if you accept that Spamhaus results will be unreliable.
+resolvers = ["system"]
+
+[http]
+timeout_ms = 10000
+
+[rate_limit]
+per_ip = "10/min"
+
+# [ecosystem]
+# ip_base_url = "https://ip.netray.info"
+# dns_base_url = "https://dns.netray.info"
+# tls_base_url = "https://tls.netray.info"
+# http_base_url = "https://http.netray.info"
+# email_base_url = "https://email.netray.info"
+# lens_base_url = "https://lens.netray.info"
+
+# [backends]
+# ip_url = "http://localhost:3001"
+# timeout_ms = 5000
+
+[dkim]
+max_user_selectors = 5
+
+[telemetry]
+log_format = "json"
+service_name = "beacon"
+sample_rate = 1.0
