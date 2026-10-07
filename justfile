@@ -46,8 +46,18 @@ test-rust-offline:
     cargo test --workspace --exclude ifconfig-rs
     cargo test -p ifconfig-rs --lib
 
+# The full Rust suite. Most ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`,
+# MaxMind licence); without it they are skipped with a notice and run in CI with the data image.
 test-rust:
-    cargo test --workspace
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f crates/ifconfig-rs/data/GeoLite2-City.mmdb ]; then
+        cargo test --workspace
+    else
+        echo "notice: no GeoIP data; ifconfig-rs integration tests skipped (just ifconfig-data, then just test-ifconfig-data)" >&2
+        cargo test --workspace --exclude ifconfig-rs
+        cargo test -p ifconfig-rs --lib
+    fi
 
 # ifconfig-rs including the tests that need GeoIP data.
 test-ifconfig-data:
