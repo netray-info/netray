@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-07
+
+### Changed (BREAKING)
+- Every lens config struct rejects unknown keys (`deny_unknown_fields`): a typo or stale key in `lens.toml` or a `LENS_*` variable now fails the load instead of being ignored (3f6c03b)
+
+### Fixed
+- Per-IP rate limiting keys on the real client IP. Behind trusted proxies every visitor resolved to one synthetic loopback peer and shared a single bucket (a26eed6)
+- A client-supplied `CF-Connecting-IP` no longer chooses the client IP; there is no Cloudflare in front, so Traefik's `X-Real-Ip` decides (9137054)
+- Every backend call carries the client IP (`X-Forwarded-For`) and the request ID (ae52ae0)
+
+### Changed
+- CI: the scheduled audit may open issues (9c5c5c1)
+- `justfile` replaces the Makefile (1d8fdc4)
+
 ## [0.11.0] - 2026-05-09
 
 ### Added
