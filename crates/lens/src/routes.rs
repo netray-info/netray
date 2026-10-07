@@ -983,11 +983,11 @@ pub async fn badge_handler(
 pub async fn check_get_handler(
     State(state): State<AppState>,
     axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
-    headers: axum::http::HeaderMap,
+    mut headers: axum::http::HeaderMap,
     Path(domain): Path<String>,
     Query(query): Query<CheckGetQuery>,
 ) -> Response {
-    let client_ip = state.ip_extractor.extract(&headers, peer);
+    let client_ip = client_ip_from(&state, &mut headers, peer);
     let sync = is_sync_mode(&headers, query.stream);
     let dkim_selectors = match validate_dkim_selectors(query.dkim_selectors.as_deref()) {
         Ok(s) => s,
@@ -1013,10 +1013,10 @@ pub async fn check_get_handler(
 pub async fn check_post_handler(
     State(state): State<AppState>,
     axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<std::net::SocketAddr>,
-    headers: axum::http::HeaderMap,
+    mut headers: axum::http::HeaderMap,
     Json(body): Json<CheckPostBody>,
 ) -> Response {
-    let client_ip = state.ip_extractor.extract(&headers, peer);
+    let client_ip = client_ip_from(&state, &mut headers, peer);
     let sync = is_sync_mode(&headers, body.stream);
     let dkim_selectors = match validate_dkim_selectors(body.dkim_selectors.as_deref()) {
         Ok(s) => s,
@@ -1034,6 +1034,18 @@ pub async fn check_post_handler(
         request_id,
     )
     .await
+}
+
+/// The real client IP behind the trusted proxy. lens has no Cloudflare in
+/// front, so `CF-Connecting-IP` is whatever the client sent and Traefik passes
+/// it through; drop it so the extractor falls back to Traefik's `X-Real-Ip`.
+fn client_ip_from(
+    state: &AppState,
+    headers: &mut axum::http::HeaderMap,
+    peer: std::net::SocketAddr,
+) -> std::net::IpAddr {
+    headers.remove("cf-connecting-ip");
+    state.ip_extractor.extract(headers, peer)
 }
 
 /// The request ID set (or validated) by the `request_id` middleware.
