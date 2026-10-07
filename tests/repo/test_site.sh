@@ -38,6 +38,11 @@ for p in / /does-not-exist; do
 done
 fetch git "$base/.git/config";       expect_status "GET /.git/config" 404
 fetch env "$base/.env";              expect_status "GET /.env" 404
+# A file path with a trailing slash is not the file (nginx try_files $uri $uri.html $uri/).
+fetch slash "$base/guide/dnssec/";   expect_status "GET /guide/dnssec/" 404
+# The error pages are internal (nginx `location = /404.html { internal; }`).
+fetch e404 "$base/404.html";         expect_status "GET /404.html" 404
+fetch e50x "$base/50x.html";         expect_status "GET /50x.html" 404
 
 # C11 MTA-STS
 fetch mta -H 'Host: mta-sts.example.com' "$base/.well-known/mta-sts.txt"

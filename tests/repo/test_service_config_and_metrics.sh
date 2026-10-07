@@ -26,16 +26,18 @@ check_precedence() {
     pa=$(free_port); pb=$(free_port); ma=$(free_port); mb=$(free_port)
     make_cfg "$src" "$TMP/$sub-a.toml" "$pa" "$ma"
     make_cfg "$src" "$TMP/$sub-b.toml" "$pb" "$mb"
-    env "$var=$TMP/$sub-b.toml" start_bg "$TMP/$sub-prec.log" "$NETRAY" "$sub" "$TMP/$sub-a.toml"
+    start_bg "$TMP/$sub-prec.log" env "$var=$TMP/$sub-b.toml" "$NETRAY" "$sub" "$TMP/$sub-a.toml"
     wait_http "http://127.0.0.1:$pa/health" 30 \
         || fail "netray $sub does not listen on the port of the config argument ($pa)"
     if curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$pb/health"; then
         fail "netray $sub also listens on the port of $var ($pb): env beat the argument"
     fi
     if [ "$want_log" = yes ]; then
-        grep -Eq 'config_source[^A-Za-z]{1,12}argv' "$TMP/$sub-prec.log" \
+        # Text logs carry ANSI colour codes between key and value; strip them first.
+        sed $'s/\x1b\\[[0-9;]*m//g' "$TMP/$sub-prec.log" > "$TMP/$sub-prec.plain"
+        grep -Eq 'config_source[^A-Za-z]{1,12}argv' "$TMP/$sub-prec.plain" \
             || fail "netray $sub startup log lacks config_source=argv"
-        grep -Eq 'config_source[^A-Za-z]{1,12}BEACON_CONFIG' "$TMP/$sub-prec.log" \
+        grep -Eq 'config_source[^A-Za-z]{1,12}BEACON_CONFIG' "$TMP/$sub-prec.plain" \
             && fail "netray $sub startup log reports config_source=BEACON_CONFIG"
     fi
 }
@@ -49,8 +51,8 @@ check_precedence http SPECTRA_CONFIG crates/spectra/spectra.dev.toml no
 check_metrics() {
     local sub=$1 envp=$2 prefix=$3 p m
     p=$(free_port); m=$(free_port)
-    env "${envp}SERVER__BIND=127.0.0.1:$p" "${envp}SERVER__METRICS_BIND=127.0.0.1:$m" \
-        start_bg "$TMP/$sub-metrics.log" "$NETRAY" "$sub"
+    start_bg "$TMP/$sub-metrics.log" \
+        env "${envp}SERVER__BIND=127.0.0.1:$p" "${envp}SERVER__METRICS_BIND=127.0.0.1:$m" "$NETRAY" "$sub"
     wait_http "http://127.0.0.1:$p/health" 30 || fail "netray $sub did not come up on $p"
     curl -s -o /dev/null "http://127.0.0.1:$p/api/meta"
     local body
