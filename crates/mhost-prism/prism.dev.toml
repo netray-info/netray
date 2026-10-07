@@ -1,0 +1,31 @@
+# Development configuration — relaxed limits for local testing.
+# Used by `make dev`.
+
+# site_name = "prism (dev)"
+
+[server]
+bind = "127.0.0.1:8081"
+metrics_bind = "127.0.0.1:9091"
+
+[limits]
+per_ip_per_minute = 600
+per_ip_burst = 64
+per_target_per_minute = 300
+per_target_burst = 50
+global_per_minute = 5000
+global_burst = 200
+per_ip_max_streams = 20
+
+[dns]
+default_servers = ["google"]
+allow_system_resolvers = true
+allow_arbitrary_servers = true
+
+[ecosystem]
+ifconfig_url = "https://ip.netray.info"
+tls_url = "https://tls.netray.info"
+
+[telemetry]
+# Human-readable text output for local development.
+# Switch to "json" if piping logs to a local aggregator.
+log_format = "text"
