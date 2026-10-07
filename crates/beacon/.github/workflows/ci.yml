@@ -82,30 +82,29 @@ jobs:
         run: npm test
         working-directory: frontend
 
-  audit:
-    name: Dependency Audit
+  # Deterministic supply-chain checks only — bans, licenses, sources.
+  # Advisory scans (RUSTSEC, npm audit) live in audit.yml on a daily cron so
+  # a newly-published advisory in an unrelated transitive dep cannot block
+  # an unrelated PR or hotfix merge.
+  deny:
+    name: Cargo Deny (bans/licenses/sources)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      checks: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
-          command: check
+          command: check bans licenses sources
+
+  machete:
+    name: Unused Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       - name: Install cargo-machete
         run: cargo install cargo-machete --locked
       - name: Check for unused dependencies
         run: cargo machete
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: npm audit
-        run: npm audit --audit-level=high --omit=dev
-        working-directory: frontend
