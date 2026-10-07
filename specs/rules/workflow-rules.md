@@ -209,6 +209,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      issues: write
     steps:
       - uses: actions/checkout@<sha> # v4.x.x
       - uses: rustsec/audit-check@v2
@@ -239,7 +240,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
-`checks: write` is required by `rustsec/audit-check` to post check annotations.
+`checks: write` is required by `rustsec/audit-check` to post check annotations; `issues: write` because on `schedule` events it opens one issue per advisory instead.
 
 **Rules:**
 - R-J1: Five parallel jobs for binary services. No serial dependency chain in CI.
@@ -635,7 +636,7 @@ jobs:
 - R-P1: Omit `permissions:` at the workflow level. Set it per-job at the minimum scope needed.
 - R-P2: Default implicit permission is `contents: read`. Only escalate where required.
 - R-P3: Docker build/merge jobs need `contents: read, packages: write`.
-- R-P4: The `rust` job in `audit.yml` needs `contents: read, checks: write` (for `rustsec/audit-check` annotations).
+- R-P4: The `rust` job in `audit.yml` needs `contents: read, checks: write, issues: write` (`rustsec/audit-check` posts annotations, and opens issues on scheduled runs).
 - R-P5: Never use a personal access token (`LP_GHCR_TOKEN` or equivalent). `secrets.GITHUB_TOKEN` is sufficient for GHCR reads and writes within the same org.
 
 ---
