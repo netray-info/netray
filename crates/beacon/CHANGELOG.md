@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-07
+
+### Changed (BREAKING)
+- Every config struct rejects unknown keys (`deny_unknown_fields`): a typo or stale key now fails the load instead of being ignored (45f4d5f)
+
+### Fixed
+- The container image honours `BEACON_CONFIG`; the image `CMD` passed `beacon.toml` as argv, which outranks `BEACON_CONFIG`, so production ran on the baked config. The startup line now logs the config path and source (3980cca)
+
+### Changed
+- CI: advisory scans (RUSTSEC, npm audit) moved from the PR gate to a daily scheduled `audit.yml`, which may open issues (658dd02, ad7de7e)
+- `justfile` replaces the Makefile (e0393bb); CONTRIBUTING.md and DCO sign-off CI added (f4a52d3, 1d53421)
+
 ## [0.3.1] - 2026-05-01
 
 ### Changed
