@@ -192,3 +192,64 @@ pub fn shutdown() {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::otlp_export_timeout;
+    use std::collections::HashMap;
+    use std::time::Duration;
+
+    fn timeout_with(vars: &[(&str, &str)]) -> Duration {
+        let map: HashMap<String, String> = vars
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        otlp_export_timeout(|name| map.get(name).cloned())
+    }
+
+    #[test]
+    fn otlp_export_timeout_defaults_to_10s_without_vars() {
+        assert_eq!(timeout_with(&[]), Duration::from_secs(10));
+    }
+
+    #[test]
+    fn otlp_export_timeout_uses_generic_var_in_millis() {
+        assert_eq!(
+            timeout_with(&[("OTEL_EXPORTER_OTLP_TIMEOUT", "2000")]),
+            Duration::from_secs(2)
+        );
+    }
+
+    #[test]
+    fn otlp_export_timeout_traces_var_wins_over_generic() {
+        assert_eq!(
+            timeout_with(&[
+                ("OTEL_EXPORTER_OTLP_TIMEOUT", "2000"),
+                ("OTEL_EXPORTER_OTLP_TRACES_TIMEOUT", "500"),
+            ]),
+            Duration::from_millis(500)
+        );
+    }
+
+    #[test]
+    fn otlp_export_timeout_unparsable_traces_falls_back_to_generic() {
+        assert_eq!(
+            timeout_with(&[
+                ("OTEL_EXPORTER_OTLP_TIMEOUT", "2000"),
+                ("OTEL_EXPORTER_OTLP_TRACES_TIMEOUT", "soon"),
+            ]),
+            Duration::from_secs(2)
+        );
+    }
+
+    #[test]
+    fn otlp_export_timeout_unparsable_everywhere_falls_back_to_default() {
+        assert_eq!(
+            timeout_with(&[
+                ("OTEL_EXPORTER_OTLP_TIMEOUT", "-1"),
+                ("OTEL_EXPORTER_OTLP_TRACES_TIMEOUT", "2s"),
+            ]),
+            Duration::from_secs(10)
+        );
+    }
+}

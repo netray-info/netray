@@ -409,4 +409,79 @@ mod tests {
         assert_eq!(captured_ip, "8.8.8.8", "should query for the requested IP");
         assert_eq!(captured_rid, "req-abc-123", "should propagate X-Request-Id");
     }
+
+    // B3: behaviour is chosen at runtime by EnrichmentMode, not by Cargo features.
+    #[tokio::test]
+    async fn enrichment_mode_selects_user_agent_and_cache_at_runtime() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        // (mode, expected requests for two lookups of the same IP, expected User-Agent)
+        let cases: Vec<(&str, EnrichmentMode, usize, Option<&str>)> = vec![
+            ("plain", EnrichmentMode::Plain, 2, Some("spectra")),
+            (
+                "backend ttl 0",
+                EnrichmentMode::Backend { cache_ttl_secs: 0 },
+                2,
+                None,
+            ),
+            (
+                "backend ttl 300",
+                EnrichmentMode::Backend { cache_ttl_secs: 300 },
+                1,
+                None,
+            ),
+        ];
+
+        for (name, mode, expected_requests, expected_ua) in cases {
+            let count = Arc::new(AtomicUsize::new(0));
+            let last_ua = Arc::new(tokio::sync::Mutex::new(String::new()));
+            let (c, ua) = (count.clone(), last_ua.clone());
+
+            let app = axum::Router::new().route(
+                "/network/json",
+                axum::routing::get(move |headers: axum::http::HeaderMap| {
+                    let (c, ua) = (c.clone(), ua.clone());
+                    async move {
+                        c.fetch_add(1, Ordering::SeqCst);
+                        *ua.lock().await = headers
+                            .get("user-agent")
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or_default()
+                            .to_owned();
+                        axum::Json(serde_json::json!({
+                            "asn": 15169,
+                            "org": "Google LLC",
+                            "type": "cloud"
+                        }))
+                    }
+                }),
+            );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            tokio::spawn(async move {
+                axum::serve(listener, app).await.ok();
+            });
+
+            let client = EnrichmentClient::new(
+                &format!("http://{addr}"),
+                Duration::from_secs(5),
+                "spectra",
+                None,
+                mode,
+            );
+            let ip: IpAddr = "8.8.8.8".parse().unwrap();
+            assert!(client.lookup(ip, None).await.is_some(), "{name}: first lookup");
+            assert!(client.lookup(ip, None).await.is_some(), "{name}: second lookup");
+
+            assert_eq!(
+                count.load(Ordering::SeqCst),
+                expected_requests,
+                "{name}: request count for two lookups of the same IP"
+            );
+            if let Some(expected) = expected_ua {
+                assert_eq!(&*last_ua.lock().await, expected, "{name}: User-Agent");
+            }
+        }
+    }
 }
