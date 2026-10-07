@@ -1,5 +1,5 @@
 # Development configuration — relaxed limits for local testing.
-# Used by `make dev`.
+# Used by `netray dns crates/mhost-prism/prism.dev.toml`.
 
 # site_name = "prism (dev)"
 

@@ -18,30 +18,24 @@ Core principles: high performance, high efficiency, high stability, high securit
 
 ## Build & Test
 
-Use `make` targets for all build and test operations.
+The verbs live in the root `justfile` (see the root `README.md`); run them from the repository root.
 
 ```sh
-# Prerequisites: Node.js (for frontend), Rust toolchain
+# Prerequisites: Node.js (for frontend), Rust toolchain; `just adlc-setup` once per checkout
 
-# The gate (pdt-adlc ADR 0008) — offline, run it before every commit
-just adlc-verify                      # fmt-check + clippy + cargo test
+# The gate — offline, run it before every commit
+just adlc-verify                      # fmt-check + clippy + tests + site checks
 
-# Full production build (frontend + backend)
+# Full production build (frontends + release binary `netray`)
 just build
 
-# Individual recipes
-just test-rust                        # cargo test
-just clippy                           # cargo clippy -- -D warnings
-just fmt                              # cargo fmt
-just fmt-check                        # cargo fmt -- --check
-just lint                             # clippy + fmt-check
-just frontend                         # cd frontend && npm ci && npm run build
-just clean                            # remove target/ + frontend/dist/ + node_modules/
-just check                            # lint + test + frontend (everything)
+# This crate only
+cargo test -p prism                   # Rust tests
+npm test -w prism-frontend            # frontend tests (vitest)
 
 # Development (two terminals)
-just frontend-dev                     # Vite dev server :5173 (proxies /api/* to :8080)
-just dev                              # cargo run (axum server :8080)
+npm run dev -w prism-frontend                      # Vite dev server :5173
+netray dns crates/mhost-prism/prism.dev.toml       # the service
 ```
 
 ### Test Guidelines
@@ -160,25 +154,23 @@ mhost-prism/                  # standalone crate (not a workspace member)
 
 ## Architecture Rules
 
-Rules: [`specs/rules/architecture-rules.md`](../specs/rules/architecture-rules.md) in the netray.info meta repo. Apply when modifying health probes or readiness checks.
+Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rules.md). Apply when modifying health probes or readiness checks.
 
 ## Logging & Telemetry
 
-Rules: [`specs/rules/logging-rules.md`](../specs/rules/logging-rules.md) in the netray.info meta repo. Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
+Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
 Default filter: `info,prism=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `PRISM_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "prism"`.
 
 ## CI/CD
 
-Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+Workflow rules: [`specs/rules/workflow-rules.md`](../../specs/rules/workflow-rules.md). Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
 
 Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, deny), `audit.yml` (daily advisory scans: RUSTSEC, npm audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
 
-GitHub Packages auth (`NODE_AUTH_TOKEN`) requirement: see workflow-rules R-J3.
-
 ## Frontend Rules
 
-Full spec: [`specs/rules/frontend-rules.md`](../specs/rules/frontend-rules.md) in the netray.info meta repo. Apply when modifying anything under `frontend/`.
+Full spec: [`specs/rules/frontend-rules.md`](../../specs/rules/frontend-rules.md). Apply when modifying anything under `frontend/`.
 
 Prism uses CodeMirror 6 for its query input -- this is specific to prism's query language and not a suite-wide requirement.
 

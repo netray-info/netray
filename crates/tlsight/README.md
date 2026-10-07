@@ -257,13 +257,15 @@ Override any value with `TLSIGHT_` env vars (`__` for nested sections): `TLSIGHT
 
 ### Build targets
 
+From the repository root (see the root `README.md`):
+
 ```sh
-just build         # frontend + release binary
-just dev           # cargo run with tlsight.dev.toml (port 8081)
-just test          # all tests
-just check         # full gate: fmt, clippy, test, frontend build
-just adlc-verify   # the fast, offline subset the ADLC runs before a push
-just data          # refresh CAA issuer lookup table (data/caa_domains.tsv)
+just build                                   # frontends + release binary `netray`
+netray tls crates/tlsight/tlsight.dev.toml   # run with the dev config
+cargo test -p tlsight                        # this crate's tests
+just check                                   # the gate plus the full Rust suite
+just adlc-verify                             # the fast, offline gate run before a push
+just tlsight-data                            # refresh CAA issuer lookup table (data/caa_domains.tsv)
 ```
 
 ---

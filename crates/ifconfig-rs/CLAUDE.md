@@ -9,23 +9,22 @@
 
 ## Build & Test
 
+The verbs live in the root `justfile` (see the root `README.md`); run them from the repository root.
+
 ```sh
-just adlc-verify   # the ADLC gate: fmt-check, clippy, 201 library tests — offline, ~5 s
-just frontend      # npm ci + vite build (needs NODE_AUTH_TOKEN); required before any cargo build
-just build         # frontend + release binary
-just test-lib      # library tests only (fast, no network, no GeoIP database)
-just test-rust     # library + integration tests (needs data/GeoLite2-City.mmdb)
-just test          # everything Rust and frontend
-just check         # lint + test + frontend build
-just dev           # local dev server on :8080
-just integration   # Docker-based integration tests only
-just acceptance    # Playwright E2E tests only
-just bench         # Criterion benchmarks
-just docker        # production Docker image
+just adlc-setup            # once: npm workspaces + frontend builds; required before any cargo build
+just adlc-verify           # the gate, offline; runs only this crate's library tests
+just build                 # frontends + release binary `netray`
+cargo test -p ifconfig-rs --lib   # library tests only (fast, no network, no GeoIP database)
+just ifconfig-data         # fetch the runtime data into data/ (GeoIP needs data/.geoip.conf)
+just test-ifconfig-data    # library + integration tests (needs data/GeoLite2-City.mmdb)
+just e2e ifconfig-rs       # Playwright E2E tests against BASE_URL
+cargo bench -p ifconfig-rs # Criterion benchmarks
+netray ip crates/ifconfig-rs/ifconfig.dev.toml   # local dev server on :8080
 ```
 
 The Rust build embeds `frontend/dist` via RustEmbed and does not compile without
-it; `dist` is gitignored, so `just frontend` has to run once after a clone.
+it; `dist` is gitignored, so `just adlc-setup` has to run once after a clone.
 `adlc-verify` checks for the directory and says so rather than failing inside
 the compiler.
 
@@ -106,7 +105,7 @@ See `docs/enrichment.md` for the full reference. Key points:
 
 ## Frontend Rules
 
-Full spec: [`specs/rules/frontend-rules.md`](../specs/rules/frontend-rules.md) in the netray.info meta repo. Apply when modifying anything under `frontend/`.
+Full spec: [`specs/rules/frontend-rules.md`](../../specs/rules/frontend-rules.md). Apply when modifying anything under `frontend/`.
 
 ## Frontend
 
@@ -171,25 +170,23 @@ Validate all configured data files and exit: `--check` flag (exit 0 = all files 
 
 Config is validated at load time (`Config::validate()`) — zero rate-limit values are rejected with a descriptive error before the server starts.
 
-Data files live in `data/`. See `data/README.md` for sources and acquisition instructions (`make -C data get_all`).
+Data files live in `data/`. See `data/README.md` for sources and acquisition instructions (`just ifconfig-data`).
 
 ## Architecture Rules
 
-Rules: [`specs/rules/architecture-rules.md`](../specs/rules/architecture-rules.md) in the netray.info meta repo. Apply when modifying health probes or readiness checks.
+Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rules.md). Apply when modifying health probes or readiness checks.
 
 ## Logging & Telemetry
 
-Rules: [`specs/rules/logging-rules.md`](../specs/rules/logging-rules.md) in the netray.info meta repo. Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
+Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
 Default filter: `info,ifconfig_rs=debug,hyper=warn,h2=warn,mhost=warn`. Telemetry config via `[telemetry]` section or `IFCONFIG_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "ifconfig"`.
 
 ## CI/CD
 
-Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+Workflow rules: [`specs/rules/workflow-rules.md`](../../specs/rules/workflow-rules.md). Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
 
 Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, deny, integration-test), `audit.yml` (daily advisory scans: RUSTSEC, npm audit for frontend and tests/e2e), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
-
-GitHub Packages auth (`NODE_AUTH_TOKEN`) requirement: see workflow-rules R-J3.
 
 ## Common Patterns
 
@@ -206,4 +203,4 @@ GitHub Packages auth (`NODE_AUTH_TOKEN`) requirement: see workflow-rules R-J3.
 - Application-level Prometheus metrics: `http_requests_total{method,status}`, `http_request_duration_seconds{method}`, `enrichment_sources_loaded{source}`, `geoip_database_age_seconds`. `metrics` macros are no-op when no recorder is installed (safe in tests).
 - Frontend assets are embedded at compile time via `rust-embed` — `cargo build` requires `frontend/dist/` to exist.
 - All error responses are structured JSON via `error_response()` returning `ErrorResponse { error, status }`. The `ErrorResponse` struct derives `utoipa::ToSchema` and is referenced in OpenAPI error response annotations.
-- Criterion benchmarks in `benches/` cover negotiation, ASN classification, serialization (all 4 formats), and cloud CIDR lookup. Run with `just bench`.
+- Criterion benchmarks in `benches/` cover negotiation, ASN classification, serialization (all 4 formats), and cloud CIDR lookup. Run with `cargo bench -p ifconfig-rs`.

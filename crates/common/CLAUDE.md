@@ -9,17 +9,17 @@
 
 ## CI/CD
 
-Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+Workflow rules: [`specs/rules/workflow-rules.md`](../../specs/rules/workflow-rules.md). Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
 
-Workflows: `ci.yml` (PR gate: fmt, clippy, test, audit). No release automation — publish to crates.io is a manual `cargo publish`.
+Workflows: `ci.yml` (PR gate: fmt, clippy, test, audit), inert until the monorepo CI spec replaces it. Not published: a workspace member that the service crates depend on by path, versioned with the workspace.
 
 ## Build & Test
 
+The verbs live in the root `justfile` (see the root `README.md`); run them from the repository root.
+
 ```sh
-cargo test                   # run all tests
-cargo clippy -- -D warnings  # lint
-cargo fmt                    # format
-cargo fmt -- --check         # check formatting
+cargo test -p netray-common  # this crate's tests
+just adlc-verify             # the gate: fmt-check, clippy, every test, offline
 ```
 
 ## Architecture
@@ -44,7 +44,7 @@ netray-common/
 | `error` | `ApiError` trait + `into_error_response()` produces `{"error": {"code": "...", "message": "..."}}` JSON. Adds `Retry-After` header for rate-limited responses. |
 | `rate_limit` | `check_keyed_cost` and `check_direct_cost` wrap governor's GCRA limiter. Emit `{prefix}_rate_limit_hits_total` metrics on rejection. |
 | `security_headers` | `security_headers_layer()` returns an axum middleware closure. Sets CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy. Supports relaxed CSP for docs paths. |
-| `telemetry` | `init_subscriber()` sets up tracing-subscriber with env filter + optional OTel OTLP layer. `TelemetryConfig` (log_format, enabled, otlp_endpoint, service_name, sample_rate). `shutdown()` flushes spans. All tools must use this -- see [`specs/rules/logging-rules.md`](../specs/rules/logging-rules.md). |
+| `telemetry` | `init_subscriber()` sets up tracing-subscriber with env filter + optional OTel OTLP layer. `TelemetryConfig` (log_format, enabled, otlp_endpoint, service_name, sample_rate). `shutdown()` flushes spans. All tools must use this -- see [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). |
 
 ## Key Dependencies
 

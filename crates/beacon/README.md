@@ -4,20 +4,18 @@ DNS-only email security inspector for the [netray.info](https://netray.info) sui
 
 ## Prerequisites
 
-- Rust 1.85+
+- Rust (pinned by the root `rust-toolchain.toml`)
 - Node 20+
-- `NODE_AUTH_TOKEN` environment variable set to a GitHub personal access token with `read:packages` scope (required for `npm install` to fetch `@netray-info/common-frontend` from GitHub Packages via `npm.pkg.github.com`)
+- `just adlc-setup` once per checkout, from the repository root (npm workspaces, frontend builds)
 
 ## Quick Start
 
 ```sh
-# Backend
-cargo run -- --config beacon.toml
+# Backend (from the repository root, after `just build`)
+netray email crates/beacon/beacon.dev.toml
 
 # Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev   # Vite dev server on :5176
+npm run dev -w beacon-frontend   # Vite dev server on :5176
 ```
 
 Copy `beacon.toml.example` to `beacon.toml` and adjust settings as needed.
@@ -28,18 +26,18 @@ Beacon loads configuration from a TOML file and allows every value to be overrid
 
 - **`beacon.toml.example`** — template, committed to the repo. Copy this as a starting point.
 - **`beacon.toml`** — production config. Deployed to the server, not checked into the repo with real values.
-- **`beacon.dev.toml`** — local development config. Used with `cargo run -- --config beacon.dev.toml`.
+- **`beacon.dev.toml`** — local development config. Used with `netray email crates/beacon/beacon.dev.toml`.
 
 ### Environment variables
 
-Environment variables use the `BEACON_` prefix and `__` (double underscore) to traverse nested sections:
+Environment variables use the `BEACON__` prefix (two underscores) and `__` (double underscore) to traverse nested sections:
 
 ```sh
 # [backends.ip] url = "..."
-BEACON_BACKENDS__IP__URL=http://ip.netray.info
+BEACON__BACKENDS__IP__URL=http://ip.netray.info
 
 # [telemetry] level = "..."
-BEACON_TELEMETRY__LEVEL=info
+BEACON__TELEMETRY__LEVEL=info
 ```
 
 ## API
@@ -64,14 +62,11 @@ Each category emits its own SSE event as it completes; a final `summary` event c
 
 ## Testing & Build
 
-Common tasks are exposed via the Makefile:
+The verbs live in the root `justfile`; see the root `README.md`. For this crate alone:
 
 ```sh
-make           # default build (cargo + frontend)
-just test          # run Rust and frontend tests
-just dev           # run backend + frontend with dev configs
-just adlc-verify   # the offline gate: fmt-check + clippy + cargo test
-just check         # everything: lint + test + frontend build
+cargo test -p beacon               # Rust tests
+npm test -w beacon-frontend        # frontend tests
 ```
 
 ## Architecture

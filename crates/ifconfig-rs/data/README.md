@@ -10,13 +10,11 @@ This document explains where each file comes from and how to keep it up to date.
 cp geoipupdate.conf.example .geoip.conf
 $EDITOR .geoip.conf   # fill in AccountID and LicenseKey (see below)
 
-# 2. Fetch all data files
-make -C data get_all
-# or, from this directory:
-make get_all
+# 2. Fetch all data files (from the repository root)
+just ifconfig-data
 ```
 
-`make get_all` downloads every data file. It requires
+`just ifconfig-data` (which runs `fetch.sh`) downloads every data file. It requires
 [`geoipupdate`](https://github.com/maxmind/geoipupdate) for the MaxMind databases
 and `curl` + `jq` for the rest. Everything else is sourced from public URLs.
 
@@ -25,7 +23,7 @@ and `curl` + `jq` for the rest. Everything else is sourced from public URLs.
 ## MaxMind GeoLite2 (GeoIP City + ASN)
 
 **Files:** `GeoLite2-City.mmdb`, `GeoLite2-ASN.mmdb`
-**Make target:** `make geoip_mmdbs`
+**Fetched by:** `just ifconfig-data`
 
 MaxMind distributes these databases under the
 [GeoLite2 End User License Agreement](https://www.maxmind.com/en/geolite2/eula).
@@ -43,14 +41,14 @@ A free MaxMind account is required.
 3. Copy the example config and fill in your credentials:
 
    ```sh
-   cp data/geoipupdate.conf.example data/.geoip.conf
+   cp crates/ifconfig-rs/data/geoipupdate.conf.example crates/ifconfig-rs/data/.geoip.conf
    ```
 
-   Edit `data/.geoip.conf` — set `AccountID` and `LicenseKey`. The `DatabaseDirectory`
-   line is ignored by the Makefile (it passes `-d .` to override it), so only the
+   Edit `.geoip.conf` — set `AccountID` and `LicenseKey`. The `DatabaseDirectory`
+   line is ignored by `fetch.sh` (it passes `-d .` to override it), so only the
    credentials matter.
 
-4. Run `make -C data geoip_mmdbs` (or `make -C data get_all` to fetch everything).
+4. Run `just ifconfig-data` from the repository root (fetches everything).
 
 MaxMind releases updated databases on the first and third Tuesday of each month.
 
@@ -58,19 +56,19 @@ MaxMind releases updated databases on the first and third Tuesday of each month.
 
 ## Other Data Sources
 
-All remaining files are fetched from public URLs — no account required.
+All remaining files are fetched from public URLs by `just ifconfig-data` — no account required. A file that already exists is not fetched again; `crates/ifconfig-rs/data/fetch.sh clean` removes them.
 
-| File | Make target | Source |
-|---|---|---|
-| `regexes.yaml` | `make regexes.yaml` | [ua-parser/uap-core](https://github.com/ua-parser/uap-core/blob/master/regexes.yaml) |
-| `tor_exit_nodes.txt` | `make tor_exit_nodes.txt` | [Tor Project bulk exit list](https://check.torproject.org/torbulkexitlist) |
-| `feodo_botnet_ips.txt` | `make feodo_botnet_ips.txt` | [Feodo Tracker](https://feodotracker.abuse.ch/downloads/ipblocklist.txt) |
-| `vpn_ranges.txt` | `make vpn_ranges.txt` | [X4BNet lists\_vpn](https://github.com/X4BNet/lists_vpn) (IPv4 + IPv6) |
-| `cloud_provider_ranges.jsonl` | `make cloud_provider_ranges.jsonl` | AWS, GCP, Azure, Cloudflare, Oracle, Fastly, DigitalOcean, Linode, GitHub, Google Services (normalized to JSONL) |
-| `datacenter_ranges.txt` | `make datacenter_ranges.txt` | [X4BNet datacenter list](https://github.com/X4BNet/lists_vpn) |
-| `bot_ranges.jsonl` | `make bot_ranges.jsonl` | Googlebot, Bingbot, Applebot, GPTBot (normalized to JSONL) |
-| `spamhaus_drop.txt` | `make spamhaus_drop.txt` | [Spamhaus DROP + EDROP + DROPv6](https://www.spamhaus.org/drop/) (concatenated, comments stripped) |
-| `cins_army_ips.txt` | `make cins_army_ips.txt` | [CINS Army / CI Bad Guys](https://cinsscore.com/list/ci-badguys.txt) (one IPv4 per line, comment lines stripped) |
+| File | Source |
+|---|---|
+| `regexes.yaml` | [ua-parser/uap-core](https://github.com/ua-parser/uap-core/blob/master/regexes.yaml) |
+| `tor_exit_nodes.txt` | [Tor Project bulk exit list](https://check.torproject.org/torbulkexitlist) |
+| `feodo_botnet_ips.txt` | [Feodo Tracker](https://feodotracker.abuse.ch/downloads/ipblocklist.txt) |
+| `vpn_ranges.txt` | [X4BNet lists\_vpn](https://github.com/X4BNet/lists_vpn) (IPv4 + IPv6) |
+| `cloud_provider_ranges.jsonl` | AWS, GCP, Azure, Cloudflare, Oracle, Fastly, DigitalOcean, Linode, GitHub, Google Services (normalized to JSONL) |
+| `datacenter_ranges.txt` | [X4BNet datacenter list](https://github.com/X4BNet/lists_vpn) |
+| `bot_ranges.jsonl` | Googlebot, Bingbot, Applebot, GPTBot (normalized to JSONL) |
+| `spamhaus_drop.txt` | [Spamhaus DROP + EDROP + DROPv6](https://www.spamhaus.org/drop/) (concatenated, comments stripped) |
+| `cins_army_ips.txt` | [CINS Army / CI Bad Guys](https://cinsscore.com/list/ci-badguys.txt) (one IPv4 per line, comment lines stripped) |
 
 > **Note on Spamhaus:** The free DROP feeds are rate-limited and intended for
 > non-commercial use. A [data feed license](https://www.spamhaus.com/pricing/) is
@@ -95,7 +93,7 @@ watch_data_files = true   # server reloads automatically when files change
 
 ```cron
 # Weekly refresh — update GeoIP databases and public lists
-0 3 * * 2 cd /path/to/ifconfig-rs && make -C data get_all
+0 3 * * 2 cd /path/to/netray && just ifconfig-data
 ```
 
 ### Manual reload (without `watch_data_files`)
@@ -103,7 +101,7 @@ watch_data_files = true   # server reloads automatically when files change
 Send SIGHUP to the running process:
 
 ```sh
-kill -HUP $(pidof ifconfig-rs)
+kill -HUP <pid of `netray ip`>
 # or with Docker:
 docker kill --signal=HUP <container>
 ```
@@ -113,10 +111,10 @@ docker kill --signal=HUP <container>
 ## Docker Image Shortcut
 
 The `ifconfig-rs-data` Docker image ships all data files pre-built.
-Use it to bootstrap a deployment without running `make get_all`:
+Use it to bootstrap a deployment without running `just ifconfig-data`:
 
 ```sh
-docker create --name ifconfig-data ghcr.io/lukaspustina/ifconfig-rs-data:latest
+docker create --name ifconfig-data ghcr.io/netray-info/ifconfig-rs-data:latest
 docker cp ifconfig-data:/data ./data
 docker rm ifconfig-data
 ```
@@ -124,6 +122,6 @@ docker rm ifconfig-data
 To build and push an updated data image yourself:
 
 ```sh
-make -C data build   # build locally
-make -C data push    # build and push to GHCR
+just ifconfig-data-image             # build locally
+just ifconfig-data-image true        # build and push to GHCR
 ```

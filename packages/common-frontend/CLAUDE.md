@@ -2,28 +2,27 @@
 
 ## Frontend Rules
 
-Full spec: [`specs/rules/frontend-rules.md`](../specs/rules/frontend-rules.md) in the netray.info meta repo. Apply when modifying components, CSS tokens, or the theme system.
+Full spec: [`specs/rules/frontend-rules.md`](../../specs/rules/frontend-rules.md). Apply when modifying components, CSS tokens, or the theme system.
 
 ## Project Overview
 
-**netray-common-frontend** is a shared SolidJS package (`@netray-info/common-frontend`) published to GitHub Packages. It provides the theme system, shared UI components, keyboard utilities, and CSS design tokens consumed by all tool frontends.
+**netray-common-frontend** is a shared SolidJS package (`@netray-info/common-frontend`), a member of the root npm workspace. It provides the theme system, shared UI components, keyboard utilities, and CSS design tokens consumed by all tool frontends.
 
-- **Registry**: GitHub Packages (`https://npm.pkg.github.com`, scope `@netray-info`)
-- **Consumers**: ifconfig-rs, mhost-prism, tlsight, lens frontends
+- **Distribution**: workspace member only, not published; the frontends under `crates/*/frontend` resolve it through the root `package.json` workspaces
+- **Consumers**: every service frontend under `crates/*/frontend`
 
 ## CI/CD
 
-Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+Workflow rules: [`specs/rules/workflow-rules.md`](../../specs/rules/workflow-rules.md). Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
 
-Workflows: `ci.yml` (PR gate: lint, test, audit), `publish.yml` (tag-push: test → publish to GitHub Packages).
-
-Publishing: tag push matching `v*.*.*` triggers `publish.yml`. Manual `workflow_dispatch` also supported. `NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}` is required on every `npm ci` and `npm publish` step.
+The workflows in this package's `.github/` are inert until the monorepo CI spec replaces them.
 
 ## Build & Test
 
+Run from the repository root (see the root `README.md` and `justfile`):
+
 ```sh
-npm ci                  # install deps (requires NODE_AUTH_TOKEN if private deps)
-npm run lint            # ESLint / type check
-npm test                # vitest
-npm run build           # compile to dist/
+just adlc-setup                                         # npm ci + build:types + every frontend build
+npm test -w @netray-info/common-frontend                # vitest
+npm run build:types -w @netray-info/common-frontend     # emit dist/types
 ```

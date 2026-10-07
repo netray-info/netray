@@ -453,16 +453,16 @@ Values are HTML-escaped before being substituted into the SPA shell, so an `<scr
 
 Prerequisites: Rust toolchain, Node.js (for the frontend).
 
+The verbs live in the root `justfile`; see the root `README.md`. From the repository root:
+
 ```sh
-make          # frontend + release binary
-just adlc-verify   # the ADLC gate: fmt-check + clippy + cargo test (offline)
-just dev      # cargo run (hot-reloads nothing, but starts quickly)
-just test     # Rust unit + integration tests + frontend tests
-just check    # full gate: fmt, clippy, deny, test, frontend build
+just build                                # frontends + release binary `netray`
+cargo test -p lens                        # this crate's Rust tests
+npm test -w @netray-info/lens             # frontend tests
 
 # Two-terminal dev workflow
-just frontend-dev   # Vite dev server on :5174 (proxies /api/* to :8082)
-just dev            # cargo run on :8082
+npm run dev -w @netray-info/lens          # Vite dev server on :5174
+netray lens crates/lens/lens.dev.toml     # the service
 ```
 
 The release binary embeds the compiled frontend — no separate static file hosting required.

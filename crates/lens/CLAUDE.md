@@ -85,32 +85,33 @@ Any code change to scoring must update README.md in the same commit.
 
 ## Frontend Rules
 
-Full spec: [`specs/rules/frontend-rules.md`](../specs/rules/frontend-rules.md) in the netray.info meta repo. Apply when modifying anything under `frontend/`.
+Full spec: [`specs/rules/frontend-rules.md`](../../specs/rules/frontend-rules.md). Apply when modifying anything under `frontend/`.
 
 ## Architecture Rules
 
-Rules: [`specs/rules/architecture-rules.md`](../specs/rules/architecture-rules.md) in the netray.info meta repo. Apply when modifying health probes or readiness checks.
+Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rules.md). Apply when modifying health probes or readiness checks.
 
 ## Logging & Telemetry
 
-Rules: [`specs/rules/logging-rules.md`](../specs/rules/logging-rules.md) in the netray.info meta repo. Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
+Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
 Default filter: `info,lens=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `LENS_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "lens"`.
 
 ## CI/CD
 
-Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+Workflow rules: [`specs/rules/workflow-rules.md`](../../specs/rules/workflow-rules.md). Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
 
 Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
 
 ## Build & Test
 
+The verbs live in the root `justfile` (see the root `README.md`); run them from the repository root.
+
 ```sh
-make          # frontend + release binary
-just adlc-verify   # the ADLC gate: fmt-check + clippy + cargo test (offline)
-just dev           # cargo run (dev mode)
-just test          # Rust + frontend tests
-just check         # lint + deny + test + frontend
+just adlc-verify                          # the gate, offline
+cargo test -p lens                        # this crate's Rust tests
+npm test -w @netray-info/lens             # frontend tests
+netray lens crates/lens/lens.dev.toml     # run the service (after `just build`)
 ```
 
 Live reference domain tests are gated behind `#[ignore]` and `LENS_LIVE_TESTS=1`.

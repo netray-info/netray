@@ -44,26 +44,22 @@ argus-oci template must render.
 
 ## Development
 
-Everything runs through `just` (pdt-adlc ADR 0008; `make` until 2026-08-18).
+The verbs live in the root `justfile` (see the root `README.md`); run them from the repository root.
 
 ```sh
-just adlc-verify                     # the gate: fmt-check + clippy + cargo test, offline
-just test-rust                       # cargo test
-just lint                            # clippy + fmt-check
-just check                           # everything, including the frontend build
-just frontend-install                # npm ci (needs NODE_AUTH_TOKEN)
-just frontend-dev                    # Vite dev server on :5176
-just frontend                        # production build into frontend/dist/
+just adlc-verify                     # the gate, offline
+cargo test -p beacon                 # this crate's tests only
+npm run dev -w beacon-frontend       # Vite dev server on :5176
+netray email crates/beacon/beacon.dev.toml   # run the service (after `just build`)
 ```
 
 The Rust build embeds `frontend/dist` via RustEmbed and does not compile without
-it; `dist` is gitignored, so `just frontend` has to run once after a clone.
+it; `dist` is gitignored, so `just adlc-setup` has to run once after a clone.
 
 ## Specs
 
-- SDD: [`specs/done/sdd/beacon.md`](../specs/done/sdd/beacon.md)
 - Performance/quality SDD: [`specs/sdd/beacon-review.md`](../specs/sdd/beacon-review.md)
-- Apply [frontend-rules](../specs/rules/frontend-rules.md) when modifying `frontend/`
-- Apply [logging-rules](../specs/rules/logging-rules.md) when modifying tracing/telemetry
-- Apply [architecture-rules](../specs/rules/architecture-rules.md) for health probes and middleware
-- Apply [workflow-rules](../specs/rules/workflow-rules.md) for CI/CD workflows
+- Apply [frontend-rules](../../specs/rules/frontend-rules.md) when modifying `frontend/`
+- Apply [logging-rules](../../specs/rules/logging-rules.md) when modifying tracing/telemetry
+- Apply [architecture-rules](../../specs/rules/architecture-rules.md) for health probes and middleware
+- Apply [workflow-rules](../../specs/rules/workflow-rules.md) for CI/CD workflows

@@ -13,8 +13,10 @@ Shared utilities for the [netray.info](https://netray.info) service ecosystem.
 
 ## Usage
 
-```sh
-cargo add netray-common
+A workspace member, not published. Service crates depend on it through the root `[workspace.dependencies]`:
+
+```toml
+netray-common = { workspace = true }
 ```
 
 ### IP extraction

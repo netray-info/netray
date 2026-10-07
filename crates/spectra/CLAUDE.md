@@ -34,32 +34,28 @@ TOML file (default: `spectra.dev.toml` for local dev) + env overrides as `SPECTR
 
 ### Setup
 
-```sh
-cp spectra.example.toml spectra.dev.toml   # create local config (gitignored)
-# edit spectra.dev.toml as needed
-```
+`spectra.dev.toml` is committed; copy `spectra.example.toml` for a config of your own.
 
 ### Running locally
 
 ```sh
-just run                                     # starts the service (reads spectra.dev.toml or falls back to defaults)
-SPECTRA_CONFIG=my.toml cargo run             # use a custom config file path
+netray http crates/spectra/spectra.dev.toml  # starts the service (after `just build`)
+SPECTRA_CONFIG=my.toml netray http           # use a custom config file path
 ```
 
 ### Build & test
 
+The verbs live in the root `justfile` (see the root `README.md`); run them from the repository root.
+
 ```sh
-cargo build                          # build backend
-cargo test                           # run all tests
-cargo clippy -- -D warnings          # lint
-cd frontend && npm ci                # install frontend deps (needs NODE_AUTH_TOKEN)
-cd frontend && npm run dev           # Vite dev server on :5175
-cd frontend && npm run build         # production build into dist/
+just adlc-setup                      # once: npm workspaces + frontend builds
+just adlc-verify                     # the gate: fmt-check, clippy, tests, offline
+cargo test -p spectra                # this crate's tests
+npm run dev -w spectra-frontend      # Vite dev server on :5175
 ```
 
 ## Specs
 
-- SDD: [`specs/done/sdd/http-inspector.md`](../specs/done/sdd/http-inspector.md)
-- Apply [frontend-rules](../specs/rules/frontend-rules.md) when modifying `frontend/`
-- Apply [logging-rules](../specs/rules/logging-rules.md) when modifying tracing/telemetry
-- Apply [architecture-rules](../specs/rules/architecture-rules.md) for health probes and middleware
+- Apply [frontend-rules](../../specs/rules/frontend-rules.md) when modifying `frontend/`
+- Apply [logging-rules](../../specs/rules/logging-rules.md) when modifying tracing/telemetry
+- Apply [architecture-rules](../../specs/rules/architecture-rules.md) for health probes and middleware

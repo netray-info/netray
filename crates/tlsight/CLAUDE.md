@@ -16,51 +16,36 @@ Core principles: high performance, high efficiency, high stability, high securit
 
 ## Frontend Rules
 
-Full spec: [`specs/rules/frontend-rules.md`](../specs/rules/frontend-rules.md) in the netray.info meta repo. Apply when modifying anything under `frontend/`.
+Full spec: [`specs/rules/frontend-rules.md`](../../specs/rules/frontend-rules.md). Apply when modifying anything under `frontend/`.
 
 See `HostInput.tsx` for the reference input pattern implementation.
 
 ## Build & Test
 
-**Always use `make` targets** — never run raw `cargo`, `npm`, or `npx` commands directly.
+The verbs live in the root `justfile` (see the root `README.md`); run them from the repository root.
 
 ```sh
-# Prerequisites: Node.js (for frontend), Rust toolchain
+# Prerequisites: Node.js (for frontend), Rust toolchain; `just adlc-setup` once per checkout
 
 just --list                           # list all recipes with descriptions
 
-# The gate (pdt-adlc ADR 0008) — offline, run it before every commit
-just adlc-verify                      # fmt-check + clippy + cargo test
+# The gate — offline, run it before every commit
+just adlc-verify                      # fmt-check + clippy + tests + site checks
 
-# Full production build (frontend + backend)
+# Full production build (frontends + release binary `netray`)
 just build
-just run                              # build + run release binary
 
-# Rust
-just test-rust                        # cargo test
-just clippy                           # cargo clippy -- -D warnings
-just fmt                              # cargo fmt
-just fmt-check                        # cargo fmt -- --check
-
-# Frontend
-just frontend-install                 # npm ci (deps only, no build)
-just frontend                         # npm ci + npm run build
-just frontend-test                    # npm ci + vitest run
-
-# Combined
-just test                             # test-rust + frontend-test
-just lint                             # clippy + fmt-check
-just check                            # lint + test + frontend (everything)
+# This crate only
+cargo test -p tlsight                 # Rust tests
+npm test -w tlsight-frontend          # frontend tests (vitest)
+just e2e tlsight                      # Playwright E2E tests against BASE_URL
 
 # Development (two terminals)
-just frontend-dev                     # Vite dev server :5174 (proxies /api/* to :8081)
-just dev                              # cargo run with tlsight.dev.toml
+npm run dev -w tlsight-frontend                  # Vite dev server :5174
+netray tls crates/tlsight/tlsight.dev.toml       # the service
 
 # CA/CAA data (refreshes data/caa_domains.tsv — commit the result)
-just data                             # fetch SSLMate + CCADB sources and regenerate TSV
-
-# Cleanup
-just clean                            # remove target/ + frontend/dist/ + node_modules/
+just tlsight-data                     # fetch SSLMate + CCADB sources and regenerate TSV
 ```
 
 ### Test Guidelines
@@ -82,10 +67,8 @@ just clean                            # remove target/ + frontend/dist/ + node_m
 tlsight/
   Cargo.toml                      # depends on mhost (crates.io), rustls, etc.
   build.rs                        # (1) panics in release if frontend/dist missing; (2) reads data/caa_domains.tsv and generates src/validate/caa_issuers.rs into $OUT_DIR at compile time
-  Makefile                        # build/test/docker targets
   data/
-    Makefile                      # fetch + process targets; run via `make data` from project root
-    process.py                    # merges SSLMate JSON + CCADB CSV into caa_domains.tsv
+    process.py                    # merges SSLMate JSON + CCADB CSV into caa_domains.tsv; run via `just tlsight-data` from the repository root
     caa_domains.tsv               # committed; two columns: caa_domain <TAB> ca_name (155 entries, sorted)
     sslmate_issuers.json          # gitignored; fetched from web.api.sslmate.com/caahelper/issuers
     ccadb_caa_identifiers.csv     # gitignored; fetched from CCADB AllCAAIdentifiersReportCSVV2
@@ -178,7 +161,7 @@ tlsight/
 - **Request IDs**: UUID v7 in `X-Request-Id` header on every response.
 - **Static file serving**: `rust-embed` in release, filesystem reads in debug. Vite-hashed assets get `immutable` cache headers; `index.html` gets `no-cache`.
 - **Prometheus metrics**: Separate port. `metrics` macros are no-op when no recorder is installed (safe in tests).
-- **CAA issuer matching**: `caa_compliance::issuer_domain_matches` looks up the CAA `issue` domain in the compile-time table (`caa_issuers::lookup_caa_issuer`, binary search). If found, it checks the cert's issuer DN O=/CN= fields against the CA name using bidirectional normalized containment and ≥6-char word overlap. Unknown CAA domains → Fail. Refresh the table with `make data` when CAs are added or renamed.
+- **CAA issuer matching**: `caa_compliance::issuer_domain_matches` looks up the CAA `issue` domain in the compile-time table (`caa_issuers::lookup_caa_issuer`, binary search). If found, it checks the cert's issuer DN O=/CN= fields against the CA name using bidirectional normalized containment and ≥6-char word overlap. Unknown CAA domains → Fail. Refresh the table with `just tlsight-data` when CAs are added or renamed.
 
 ## Key Dependencies
 
@@ -206,21 +189,19 @@ tlsight/
 
 ## Architecture Rules
 
-Rules: [`specs/rules/architecture-rules.md`](../specs/rules/architecture-rules.md) in the netray.info meta repo. Apply when modifying health probes or readiness checks.
+Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rules.md). Apply when modifying health probes or readiness checks.
 
 ## Logging & Telemetry
 
-Rules: [`specs/rules/logging-rules.md`](../specs/rules/logging-rules.md) in the netray.info meta repo. Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
+Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
 Default filter: `info,tlsight=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `TLSIGHT_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "tlsight"`.
 
 ## CI/CD
 
-Workflow rules: [`specs/rules/workflow-rules.md`](../specs/rules/workflow-rules.md) in the netray.info meta repo. Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
+Workflow rules: [`specs/rules/workflow-rules.md`](../../specs/rules/workflow-rules.md). Follow those rules when creating or modifying any `.github/workflows/*.yml` file.
 
 Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, deny), `audit.yml` (daily advisory scans: RUSTSEC, npm audit), `release.yml` (tag-push: test → build → merge), `deploy.yml` (fires after release via webhook).
-
-GitHub Packages auth (`NODE_AUTH_TOKEN`) requirement: see workflow-rules R-J3.
 
 ## Security Checklist
 

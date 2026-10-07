@@ -258,12 +258,14 @@ Data files live in `data/`. Acquire them with `just ifconfig-data` (requires a f
 
 Prerequisites: Rust toolchain, Node.js (for the frontend).
 
+From the repository root (see the root `README.md`):
+
 ```sh
-just build         # frontend + release binary
-just dev           # cargo run with ifconfig.dev.toml (port 8080)
-just test          # unit + integration tests (~300 tests)
-just check         # full gate: fmt, clippy, test, frontend
-just adlc-verify   # the fast, offline subset the ADLC runs before a push
+just build                                       # frontends + release binary `netray`
+netray ip crates/ifconfig-rs/ifconfig.dev.toml   # run with the dev config (port 8080)
+just ifconfig-data                               # fetch the runtime data (see data/README.md)
+just test-ifconfig-data                          # unit + integration tests (needs the data)
+just adlc-verify                                 # the fast, offline gate run before a push
 ```
 
 ---

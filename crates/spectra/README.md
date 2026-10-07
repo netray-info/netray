@@ -108,21 +108,19 @@ Use in GitHub Actions to gate on security posture:
 
 Prerequisites: Rust toolchain, Node.js (for the frontend).
 
-```sh
-# Full production build (frontend + Rust binary)
-make
+The verbs live in the root `justfile`; see the root `README.md`. From the repository root:
 
-# Build release binary + run it (reads spectra.dev.toml)
-just run
+```sh
+# Full production build (frontends + release binary `netray`)
+just build
 
 # Development (two terminals)
-just frontend-dev   # Vite dev server on :5175, proxies /api/* to :3000
-just dev            # cargo run (debug build, reads spectra.dev.toml)
+npm run dev -w spectra-frontend                   # Vite dev server on :5175
+netray http crates/spectra/spectra.dev.toml       # the service
 
-# Tests and lints
-just test           # Rust tests
-just lint           # clippy + fmt check
-just check             # Full CI: lint + test + frontend build
+# Tests
+cargo test -p spectra                             # this crate's Rust tests
+just check                                        # the gate plus the full Rust suite
 ```
 
 The release binary embeds the compiled frontend. No separate static file hosting required.

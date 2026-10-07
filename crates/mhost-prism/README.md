@@ -273,12 +273,14 @@ Override any value with `PRISM_` env vars (`__` for nested sections): `PRISM_SER
 
 ### Build targets
 
+From the repository root (see the root `README.md`):
+
 ```sh
-just build         # frontend + release binary
-just dev           # cargo run (port 8080)
-just test          # all tests
-just check         # full gate: fmt, clippy, test, frontend build
-just adlc-verify   # the fast, offline subset the ADLC runs before a push
+just build                                     # frontends + release binary `netray`
+netray dns crates/mhost-prism/prism.dev.toml   # run prism with the dev config
+cargo test -p prism                            # this crate's tests
+just check                                     # the gate plus the full Rust suite
+just adlc-verify                               # the fast, offline gate run before a push
 ```
 
 ---
