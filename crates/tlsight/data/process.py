@@ -8,7 +8,7 @@ Sources:
 Output: caa_domains.tsv — two tab-separated columns: caa_domain <TAB> ca_name
 Sorted by caa_domain. Committed to the repo; read by build.rs at compile time.
 
-Run via: make -C data  (or: make data from project root)
+Run via: just tlsight-data  (from the repository root; fetches both sources first)
 """
 
 import csv
@@ -98,7 +98,7 @@ def main() -> None:
     out_path = SCRIPT_DIR / "caa_domains.tsv"
 
     if not sslmate_path.exists():
-        print(f"error: {sslmate_path} not found; run 'make fetch'", file=sys.stderr)
+        print(f"error: {sslmate_path} not found; run 'just tlsight-data'", file=sys.stderr)
         sys.exit(1)
 
     sslmate = load_sslmate(sslmate_path)
