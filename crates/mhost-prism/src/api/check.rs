@@ -76,23 +76,23 @@ const CHECK_TOTAL_STEPS: u32 = 19;
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize)]
-struct LintEvent {
-    request_id: String,
-    category: &'static str,
-    results: Vec<CheckResult>,
+pub struct LintEvent {
+    pub request_id: String,
+    pub category: &'static str,
+    pub results: Vec<CheckResult>,
 }
 
 #[derive(Serialize)]
-struct CheckDoneEvent {
-    request_id: String,
-    duration_ms: u64,
-    total_checks: u32,
-    passed: u32,
-    warnings: u32,
-    failed: u32,
-    not_found: u32,
+pub struct CheckDoneEvent {
+    pub request_id: String,
+    pub duration_ms: u64,
+    pub total_checks: u32,
+    pub passed: u32,
+    pub warnings: u32,
+    pub failed: u32,
+    pub not_found: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
-    cache_key: Option<String>,
+    pub cache_key: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

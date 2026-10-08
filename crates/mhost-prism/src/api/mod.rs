@@ -20,6 +20,8 @@ use serde::Serialize;
 use tokio::sync::Semaphore;
 use utoipa::OpenApi;
 
+pub use check::{CheckDoneEvent, LintEvent};
+
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ErrorInfo, ErrorResponse};
