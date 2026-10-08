@@ -1,0 +1,26 @@
+data: {"category":"mx","detail":"No MX records found","sub_checks":[{"detail":"no MX records found","name":"no_mx","verdict":"fail"}],"title":"MX","type":"category","verdict":"fail"}
+
+data: {"category":"spf","detail":"No SPF record","sub_checks":[{"detail":"no SPF record found","name":"no_spf","verdict":"fail"}],"title":"SPF","type":"category","verdict":"fail"}
+
+data: {"category":"dkim","detail":"No DKIM keys found","sub_checks":[{"detail":"no DKIM keys found for any selector","name":"no_dkim","verdict":"info"}],"title":"DKIM","type":"category","verdict":"info"}
+
+data: {"category":"dmarc","detail":"No DMARC record","sub_checks":[{"detail":"no DMARC record found","name":"no_dmarc","verdict":"fail"}],"title":"DMARC","type":"category","verdict":"fail"}
+
+data: {"category":"mta_sts","detail":"No MTA-STS record","sub_checks":[{"detail":"no MTA-STS DNS record","name":"absent","verdict":"info"}],"title":"MTA-STS","type":"category","verdict":"info"}
+
+data: {"category":"tls_rpt","detail":"No TLS-RPT record","sub_checks":[{"detail":"no TLS-RPT record","name":"absent","verdict":"info"}],"title":"TLS-RPT","type":"category","verdict":"info"}
+
+data: {"category":"dane","detail":"No MX hosts","sub_checks":[{"detail":"no MX hosts to check for DANE","name":"absent","verdict":"info"}],"title":"DANE","type":"category","verdict":"info"}
+
+data: {"category":"dnssec","detail":"DNSSEC not validated","sub_checks":[{"detail":"DNSSEC not validated","name":"ad_not_set","verdict":"info"}],"title":"DNSSEC","type":"category","verdict":"info"}
+
+data: {"category":"bimi","detail":"No BIMI record","sub_checks":[{"detail":"no BIMI record","name":"absent","verdict":"info"}],"title":"BIMI","type":"category","verdict":"info"}
+
+data: {"category":"fcrdns","detail":"No MX IPs","sub_checks":[{"detail":"no MX IPs to check","name":"no_ips","verdict":"info"}],"title":"FCrDNS","type":"category","verdict":"info"}
+
+data: {"category":"dnsbl","detail":"No MX IPs","sub_checks":[{"detail":"no MX IPs to check","name":"no_ips","verdict":"info"}],"title":"DNSBL","type":"category","verdict":"info"}
+
+data: {"category":"cross_validation","detail":"all cross-validation checks passed","sub_checks":[],"title":"Cross-Validation","type":"category","verdict":"pass"}
+
+data: {"duration_ms":1234,"grade":"F","type":"summary","verdicts":{"bimi":"info","cross_validation":"pass","dane":"info","dkim":"info","dmarc":"fail","dnsbl":"info","dnssec":"info","fcrdns":"info","mta_sts":"info","mx":"fail","spf":"fail","tls_rpt":"info"}}
+

@@ -1,0 +1,26 @@
+data: {"category":"mx","detail":"1 MX record(s), 2 IP(s)","sub_checks":[{"detail":"MX `mail.example.com` points to a CNAME (RFC 5321 §5.1)","name":"mx_cname","verdict":"fail"},{"detail":"only one MX record, but it resolves to 2 IP addresses","name":"single_mx","verdict":"info"},{"detail":"no MX host has an AAAA record","name":"no_ipv6","verdict":"info"}],"title":"MX","type":"category","verdict":"fail"}
+
+data: {"category":"spf","detail":"SPF record: v=spf1 ip4:192.0.2.0/24 -all","sub_checks":[{"detail":"valid SPF with 1 authorized prefix(es)","name":"spf_ok","verdict":"pass"}],"title":"SPF","type":"category","verdict":"pass"}
+
+data: {"category":"dkim","detail":"DKIM key(s) found","sub_checks":[{"detail":"selector 'default': RSA 2048 bits","name":"rsa_key_ok","verdict":"pass"}],"title":"DKIM","type":"category","verdict":"pass"}
+
+data: {"category":"dmarc","detail":"DMARC: v=DMARC1; p=reject; rua=mailto:dmarc@example.com","sub_checks":[{"detail":"p=reject","name":"policy_reject","verdict":"pass"}],"title":"DMARC","type":"category","verdict":"pass"}
+
+data: {"category":"mta_sts","detail":"No MTA-STS record","sub_checks":[{"detail":"no MTA-STS DNS record","name":"absent","verdict":"info"}],"title":"MTA-STS","type":"category","verdict":"info"}
+
+data: {"category":"tls_rpt","detail":"No TLS-RPT record","sub_checks":[{"detail":"no TLS-RPT record","name":"absent","verdict":"info"}],"title":"TLS-RPT","type":"category","verdict":"info"}
+
+data: {"category":"dane","detail":"No DANE TLSA records","sub_checks":[{"detail":"no TLSA records on any MX host","name":"absent","verdict":"info"}],"title":"DANE","type":"category","verdict":"info"}
+
+data: {"category":"dnssec","detail":"DNSSEC not validated","sub_checks":[{"detail":"DNSSEC not validated","name":"ad_not_set","verdict":"info"}],"title":"DNSSEC","type":"category","verdict":"info"}
+
+data: {"category":"bimi","detail":"No BIMI record","sub_checks":[{"detail":"no BIMI record","name":"absent","verdict":"info"}],"title":"BIMI","type":"category","verdict":"info"}
+
+data: {"category":"fcrdns","detail":"FCrDNS checked for 2 IP(s)","sub_checks":[{"detail":"FCrDNS confirmed for 192.0.2.10","name":"fcrdns_pass","verdict":"pass"}],"title":"FCrDNS","type":"category","verdict":"pass"}
+
+data: {"category":"dnsbl","detail":"checked 3 zone(s) for 2 IP(s)","sub_checks":[{"detail":"192.0.2.10 listed in zen.spamhaus.org (127.0.0.2)","name":"listed_zen_spamhaus_org","verdict":"fail"}],"title":"DNSBL","type":"category","verdict":"fail"}
+
+data: {"category":"cross_validation","detail":"all cross-validation checks passed","sub_checks":[],"title":"Cross-Validation","type":"category","verdict":"pass"}
+
+data: {"duration_ms":1234,"grade":"F","type":"summary","verdicts":{"bimi":"info","cross_validation":"pass","dane":"info","dkim":"pass","dmarc":"pass","dnsbl":"fail","dnssec":"info","fcrdns":"pass","mta_sts":"info","mx":"fail","spf":"pass","tls_rpt":"info"}}
+

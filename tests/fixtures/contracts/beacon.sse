@@ -1,26 +1,26 @@
-data: {"category":"mx","detail":"mx_present detail","sub_checks":[{"detail":"example.com","name":"mx_present","verdict":"pass"}],"title":"MX","type":"category","verdict":"pass"}
+data: {"category":"mx","detail":"2 MX record(s), 4 IP(s)","sub_checks":[{"detail":"2 MX record(s), 4 IP(s) resolved","name":"mx_ok","verdict":"pass"}],"title":"MX","type":"category","verdict":"pass"}
 
-data: {"category":"spf","detail":"spf_record detail","sub_checks":[{"detail":"example.com","name":"spf_record","verdict":"pass"}],"title":"SPF","type":"category","verdict":"pass"}
+data: {"category":"spf","detail":"SPF record: v=spf1 ip4:192.0.2.0/24 -all","sub_checks":[{"detail":"valid SPF with 1 authorized prefix(es)","name":"spf_ok","verdict":"pass"}],"title":"SPF","type":"category","verdict":"pass"}
 
-data: {"category":"dkim","detail":"dkim_selector detail","sub_checks":[{"detail":"example.com","name":"dkim_selector","verdict":"fail"}],"title":"DKIM","type":"category","verdict":"fail"}
+data: {"category":"dkim","detail":"DKIM key(s) found","sub_checks":[{"detail":"selector 'default': RSA 512 bits < 1024","name":"weak_rsa_key","verdict":"fail"},{"detail":"selector 'selector1': RSA 2048 bits","name":"rsa_key_ok","verdict":"pass"}],"title":"DKIM","type":"category","verdict":"fail"}
 
-data: {"category":"dmarc","detail":"dmarc_policy detail","sub_checks":[{"detail":"example.com","name":"dmarc_policy","verdict":"pass"}],"title":"DMARC","type":"category","verdict":"pass"}
+data: {"category":"dmarc","detail":"DMARC: v=DMARC1; p=none; rua=mailto:dmarc@example.com","sub_checks":[{"detail":"no enforcement","name":"policy_none","verdict":"warn"}],"title":"DMARC","type":"category","verdict":"warn"}
 
-data: {"category":"mta_sts","detail":"mta_sts_policy detail","sub_checks":[{"detail":"example.com","name":"mta_sts_policy","verdict":"warn"}],"title":"MTA-STS","type":"category","verdict":"warn"}
+data: {"category":"mta_sts","detail":"MTA-STS id=20260101","sub_checks":[{"detail":"mode: testing","name":"mode","verdict":"warn"},{"detail":"max_age 3600 < 86400; suggest >= 604800","name":"max_age_low","verdict":"warn"}],"title":"MTA-STS","type":"category","verdict":"warn"}
 
-data: {"category":"tls_rpt","detail":"tls_rpt_record detail","sub_checks":[{"detail":"example.com","name":"tls_rpt_record","verdict":"warn"}],"title":"TLS-RPT","type":"category","verdict":"warn"}
+data: {"category":"tls_rpt","detail":"TLS-RPT: v=TLSRPTv1; rua=mailto:tls@example.com","sub_checks":[{"detail":"valid TLS-RPT record","name":"valid","verdict":"pass"}],"title":"TLS-RPT","type":"category","verdict":"pass"}
 
-data: {"category":"dane","detail":"dane_tlsa detail","sub_checks":[{"detail":"example.com","name":"dane_tlsa","verdict":"pass"}],"title":"DANE","type":"category","verdict":"pass"}
+data: {"category":"dane","detail":"No DANE TLSA records","sub_checks":[{"detail":"no TLSA records on any MX host","name":"absent","verdict":"info"}],"title":"DANE","type":"category","verdict":"info"}
 
-data: {"category":"dnssec","detail":"dnssec_chain detail","sub_checks":[{"detail":"example.com","name":"dnssec_chain","verdict":"pass"}],"title":"DNSSEC","type":"category","verdict":"pass"}
+data: {"category":"dnssec","detail":"DNSSEC signed","sub_checks":[{"detail":"DNSSEC signed (DNSKEY records present)","name":"ad_set","verdict":"pass"}],"title":"DNSSEC","type":"category","verdict":"pass"}
 
-data: {"category":"bimi","detail":"bimi_record detail","sub_checks":[{"detail":"example.com","name":"bimi_record","verdict":"pass"}],"title":"BIMI","type":"category","verdict":"pass"}
+data: {"category":"bimi","detail":"No BIMI record","sub_checks":[{"detail":"no BIMI record","name":"absent","verdict":"info"}],"title":"BIMI","type":"category","verdict":"info"}
 
-data: {"category":"fcrdns","detail":"fcrdns_match detail","sub_checks":[{"detail":"example.com","name":"fcrdns_match","verdict":"pass"}],"title":"FCrDNS","type":"category","verdict":"pass"}
+data: {"category":"fcrdns","detail":"FCrDNS checked for 4 IP(s)","sub_checks":[{"detail":"FCrDNS confirmed for 192.0.2.10","name":"fcrdns_pass","verdict":"pass"}],"title":"FCrDNS","type":"category","verdict":"pass"}
 
-data: {"category":"dnsbl","detail":"dnsbl_clean detail","sub_checks":[{"detail":"example.com","name":"dnsbl_clean","verdict":"pass"}],"title":"DNSBL","type":"category","verdict":"pass"}
+data: {"category":"dnsbl","detail":"checked 3 zone(s) for 4 IP(s)","sub_checks":[{"detail":"not listed in any DNSBL","name":"clean","verdict":"pass"}],"title":"DNSBL","type":"category","verdict":"pass"}
 
-data: {"category":"cross_validation","detail":"cross_checks detail","sub_checks":[{"detail":"example.com","name":"cross_checks","verdict":"pass"}],"title":"Cross-Validation","type":"category","verdict":"pass"}
+data: {"category":"cross_validation","detail":"all cross-validation checks passed","sub_checks":[],"title":"Cross-Validation","type":"category","verdict":"pass"}
 
-data: {"duration_ms":1234,"grade":"D","type":"summary","verdicts":{"bimi":"pass","cross_validation":"pass","dane":"pass","dkim":"fail","dmarc":"pass","dnsbl":"pass","dnssec":"pass","fcrdns":"pass","mta_sts":"warn","mx":"pass","spf":"pass","tls_rpt":"warn"}}
+data: {"duration_ms":1234,"grade":"D","type":"summary","verdicts":{"bimi":"info","cross_validation":"pass","dane":"info","dkim":"fail","dmarc":"warn","dnsbl":"pass","dnssec":"pass","fcrdns":"pass","mta_sts":"warn","mx":"pass","spf":"pass","tls_rpt":"pass"}}
 

@@ -11,17 +11,17 @@ use lens::backends::email::EmailBackend;
 use lens::backends::{Backend, BackendContext, BackendExtra, BackendResult};
 use lens::scoring::engine::CheckVerdict;
 
-fn golden() -> Vec<u8> {
-    let path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tests/fixtures/contracts/beacon.sse"
+fn golden(name: &str) -> Vec<u8> {
+    let path = format!(
+        "{}/../../tests/fixtures/contracts/{name}",
+        env!("CARGO_MANIFEST_DIR")
     );
-    std::fs::read(path).unwrap_or_else(|e| panic!("golden {path} unreadable: {e}"))
+    std::fs::read(&path).unwrap_or_else(|e| panic!("golden {path} unreadable: {e}"))
 }
 
 /// Serve the golden at POST /inspect; with `hold_open` the body never ends.
-async fn serve(hold_open: bool) -> String {
-    let bytes = golden();
+async fn serve(name: &str, hold_open: bool) -> String {
+    let bytes = golden(name);
     let app = Router::new().route(
         "/inspect",
         post(move || {
@@ -96,11 +96,41 @@ fn assert_reflects_golden(res: &BackendResult) {
         BackendExtra::Email { grade, .. } => assert_eq!(grade.as_deref(), Some("D")),
         _ => panic!("expected BackendExtra::Email"),
     }
+    // The reason lives in beacon's sub_checks[].detail, not in the category status line.
+    assert!(
+        auth.messages
+            .iter()
+            .any(|m| m.contains("RSA 512 bits < 1024")),
+        "auth messages must carry the DKIM sub-check detail, got {:?}",
+        auth.messages
+    );
+    assert!(
+        transport
+            .messages
+            .iter()
+            .any(|m| m.contains("mode: testing")),
+        "transport messages must carry the MTA-STS sub-check detail, got {:?}",
+        transport.messages
+    );
+}
+
+fn bucket<'a>(res: &'a BackendResult, name: &str) -> &'a lens::scoring::engine::CheckResult {
+    res.checks
+        .iter()
+        .find(|c| c.name == name)
+        .unwrap_or_else(|| panic!("{name} bucket"))
+}
+
+fn bucket_na(res: &BackendResult) -> &std::collections::HashMap<String, String> {
+    match &res.extra {
+        BackendExtra::Email { bucket_na, .. } => bucket_na,
+        _ => panic!("expected BackendExtra::Email"),
+    }
 }
 
 #[tokio::test]
 async fn lens_parses_beacon_golden_verdicts() {
-    let base = serve(false).await;
+    let base = serve("beacon.sse", false).await;
     let res = run_backend(base, Duration::from_secs(5))
         .await
         .expect("backend result");
@@ -109,7 +139,7 @@ async fn lens_parses_beacon_golden_verdicts() {
 
 #[tokio::test]
 async fn lens_returns_at_summary_without_waiting_for_stream_end() {
-    let base = serve(true).await;
+    let base = serve("beacon.sse", true).await;
     let outcome = tokio::time::timeout(
         Duration::from_secs(5),
         run_backend(base, Duration::from_secs(20)),
@@ -119,4 +149,75 @@ async fn lens_returns_at_summary_without_waiting_for_stream_end() {
         .expect("lens must return at the summary event, not wait for the stream to close")
         .expect("backend result");
     assert_reflects_golden(&res);
+}
+
+#[tokio::test]
+async fn lens_marks_buckets_na_only_for_beacon_no_mx() {
+    let base = serve("beacon-no-mx.sse", false).await;
+    let res = run_backend(base, Duration::from_secs(5))
+        .await
+        .expect("backend result");
+    for name in [
+        "email_infrastructure",
+        "email_transport",
+        "email_brand_policy",
+    ] {
+        let b = bucket(&res, name);
+        assert!(
+            matches!(b.verdict, CheckVerdict::Skip),
+            "{name} must be N/A (Skip) for no_mx, got {:?}",
+            b.verdict
+        );
+        assert!(
+            b.messages.iter().any(|m| m.contains("No MX records")),
+            "{name} messages: {:?}",
+            b.messages
+        );
+        assert!(
+            bucket_na(&res).contains_key(name),
+            "{name} missing from bucket_na"
+        );
+    }
+}
+
+#[tokio::test]
+async fn lens_does_not_treat_mx_cname_failure_as_no_mx() {
+    let base = serve("beacon-mx-cname.sse", false).await;
+    let res = run_backend(base, Duration::from_secs(5))
+        .await
+        .expect("backend result");
+    assert!(
+        bucket_na(&res).is_empty(),
+        "mx_cname is not 'no MX records'; got bucket_na {:?}",
+        bucket_na(&res)
+    );
+    for name in ["email_transport", "email_brand_policy"] {
+        let b = bucket(&res, name);
+        assert!(
+            !matches!(b.verdict, CheckVerdict::Skip),
+            "{name} must not be N/A when MX records exist"
+        );
+    }
+    let infra = bucket(&res, "email_infrastructure");
+    assert!(
+        matches!(infra.verdict, CheckVerdict::Fail),
+        "infra must reflect the mx_cname failure, got {:?}",
+        infra.verdict
+    );
+    assert!(
+        infra
+            .messages
+            .iter()
+            .any(|m| m.contains("points to a CNAME")),
+        "infra messages must carry the mx_cname detail, got {:?}",
+        infra.messages
+    );
+    assert!(
+        infra
+            .messages
+            .iter()
+            .any(|m| m.contains("listed in zen.spamhaus.org")),
+        "infra messages must carry the DNSBL listing, got {:?}",
+        infra.messages
+    );
 }
