@@ -82,6 +82,7 @@ One image, `ghcr.io/netray-info/netray`, built natively for arm64 on `ubuntu-24.
 - R-R5: No data file is ever baked into a published image: the GeoLite2 licence forbids redistributing the `.mmdb` files, and the other ifconfig-rs lists carry their own terms. The deployment mounts the data at `/netray/data`. Before pushing, `release.yml` fails when the running image or any of its published layers (`docker save`, so a file removed by a later layer still counts) contains a `*.mmdb` file or anything under `netray/data`; only `ci.yml` reads the private `ifconfig-rs-data` image, to run the ifconfig-rs integration tests. Login is `docker/login-action` to `ghcr.io` with `username: ${{ github.actor }}` and `password: ${{ secrets.GITHUB_TOKEN }}`.
 - R-R6: `release.yml` builds and publishes. It does not deploy and calls no webhook.
 - R-R7: `concurrency` groups runs by `github.ref_name` with `cancel-in-progress: false`, so a second run for the same tag queues, then fails the existence check instead of overwriting the first image.
+- R-R8: Logic that guards a publication (the release data checks, the tag-existence check) belongs in a script under `.github/scripts/` that `tests/repo` runs against fixtures — clean, offending, empty; text checks on the YAML verify only the wiring. unenforced: the current guards are still inline in `release.yml`.
 
 ---
 

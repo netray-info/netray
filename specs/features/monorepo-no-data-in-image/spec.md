@@ -1,7 +1,8 @@
 # Spec: no data files in the published image
 
-Status: In progress
+Status: Done
 Created: 2026-10-08
+Finished: 2026-10-08
 
 `specs/features/monorepo-p2/spec.md` (decision D4) baked ifconfig-rs's data files into the one public image, copied from the private `ifconfig-rs-data` image. The GeoLite2 licence does not allow redistributing the MaxMind `.mmdb` files, and the other lists (Spamhaus DROP, abuse.ch, X4BNet, ipverse, uap-core, cloud provider ranges) carry their own terms. This spec supersedes D4: the published image contains no data files; the deployment mounts them.
 
