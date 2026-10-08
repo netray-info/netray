@@ -14,6 +14,7 @@ use std::path::PathBuf;
 
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
+use beacon::checks::mx::NO_MX;
 use beacon::quality::{Category, CheckResult, SseEvent, SubCheck, Verdict, compute_grade};
 use http_body_util::BodyExt;
 use serde_json::{Map, Value};
@@ -180,7 +181,7 @@ fn scenario_no_mx() -> Vec<CheckResult> {
         cat(
             Category::Mx,
             "No MX records found",
-            vec![sub("no_mx", Verdict::Fail, "no MX records found")],
+            vec![sub(NO_MX, Verdict::Fail, "no MX records found")],
         ),
         cat(
             Category::Spf,

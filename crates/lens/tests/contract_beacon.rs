@@ -221,3 +221,66 @@ async fn lens_does_not_treat_mx_cname_failure_as_no_mx() {
         infra.messages
     );
 }
+
+#[tokio::test]
+async fn lens_keeps_utf8_char_split_across_chunks() {
+    let bytes = golden("beacon-mx-cname.sse");
+    let at = bytes
+        .windows(2)
+        .position(|w| w == [0xC2, 0xA7])
+        .expect("golden contains the section sign")
+        + 1;
+    let (first, second) = (bytes[..at].to_vec(), bytes[at..].to_vec());
+    let app = Router::new().route(
+        "/inspect",
+        post(move || {
+            let (first, second) = (first.clone(), second.clone());
+            async move {
+                let stream = futures::stream::unfold(0u8, move |state| {
+                    let (first, second) = (first.clone(), second.clone());
+                    async move {
+                        match state {
+                            0 => Some((
+                                Ok::<_, std::convert::Infallible>(axum::body::Bytes::from(first)),
+                                1,
+                            )),
+                            1 => {
+                                tokio::time::sleep(Duration::from_millis(200)).await;
+                                Some((Ok(axum::body::Bytes::from(second)), 2))
+                            }
+                            _ => None,
+                        }
+                    }
+                });
+                (
+                    [("content-type", "text/event-stream")],
+                    axum::body::Body::from_stream(stream),
+                )
+                    .into_response()
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.ok();
+    });
+
+    let res = run_backend(base, Duration::from_secs(5))
+        .await
+        .expect("backend result");
+    let infra = bucket(&res, "email_infrastructure");
+    assert!(
+        infra
+            .messages
+            .iter()
+            .any(|m| m.contains("points to a CNAME (RFC 5321 \u{a7}5.1)")),
+        "infra messages must carry the exact mx_cname detail, got {:?}",
+        infra.messages
+    );
+    assert!(
+        !infra.messages.iter().any(|m| m.contains('\u{FFFD}')),
+        "no U+FFFD allowed in messages, got {:?}",
+        infra.messages
+    );
+}
