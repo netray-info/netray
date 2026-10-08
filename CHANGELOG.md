@@ -28,6 +28,7 @@ First release from the monorepo: the six services and the static site ship as on
 - No service trusts `CF-Connecting-IP` any more. In ifconfig-rs a client could use it to choose the address it was reported and rate-limited under.
 - lens no longer waits for beacon's stream to close after the summary, and it no longer corrupts non-ASCII text split across network reads.
 - A backend timeout is reported as a timeout, not as a generic backend error.
+- `crates/ifconfig-rs/data/fetch.sh` fails closed. An HTTP error makes it exit non-zero instead of saving the error page, every data file is written atomically, and a run never removes another run's files.
 
 ### Removed
 
