@@ -114,7 +114,7 @@ jobs:
       - name: Image carries no data files
         run: |
           found=$(docker run --rm --user 0 --entrypoint sh "ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}" \
-            -c 'find / -xdev -name "*.mmdb"; if [ -d /netray/data ]; then find /netray/data -type f; fi')
+            -ec 'find / -xdev -name "*.mmdb"; if [ -d /netray/data ]; then find /netray/data -type f; fi')
           if [ -n "$found" ]; then
             echo "::error::the image must not contain data files (GeoLite2 licence):"
             echo "$found"
