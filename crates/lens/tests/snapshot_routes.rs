@@ -246,6 +246,13 @@ async fn malformed_shortids_return_404_expired_or_unknown_page() {
         "/r/AAAA-AAA",
         "/r/AAAA%2DAAA",
         "/r/AA%20AAAAA",
+        // invalid UTF-8 after percent-decoding: rejected by the extractor, not the handler
+        "/r/%C0",
+        "/r/%FF%FE%FD%FC%FB%FA%F9%F8",
+        // paths `/r/{shortid}` does not match must not fall through to the SPA
+        "/r/",
+        "/r/a/b",
+        "/r/AAAAAAAA/",
     ] {
         let (app, _store, _tmp) = make_app_with_store().await;
         assert_expired_or_unknown_page(app, uri).await;
