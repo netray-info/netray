@@ -1,0 +1,52 @@
+{
+  "ip": {
+    "addr": "203.0.113.42",
+    "hostname": null,
+    "version": "4"
+  },
+  "location": {
+    "accuracy_radius_km": null,
+    "city": "Berlin",
+    "continent": "Europe",
+    "continent_code": "EU",
+    "country": "Germany",
+    "country_iso": "DE",
+    "is_eu": true,
+    "latitude": 52.52,
+    "longitude": 13.405,
+    "postal_code": "10115",
+    "region": "Berlin",
+    "region_code": "BE",
+    "registered_country": null,
+    "registered_country_iso": null,
+    "timezone": "Europe/Berlin"
+  },
+  "network": {
+    "asn": 64496,
+    "asn_category": "hosting",
+    "asn_registered": "2010-01-01",
+    "bot": null,
+    "cloud": {
+      "provider": "aws",
+      "region": "eu-central-1",
+      "service": "EC2"
+    },
+    "infra_type": "cloud",
+    "is_anycast": false,
+    "is_bot": false,
+    "is_c2": false,
+    "is_cins": false,
+    "is_datacenter": true,
+    "is_internal": false,
+    "is_spamhaus": false,
+    "is_tor": false,
+    "is_vpn": false,
+    "network_role": "stub",
+    "org": "Example Cloud GmbH",
+    "prefix": "203.0.113.0/24",
+    "type": "cloud",
+    "vpn": null
+  },
+  "tcp": null,
+  "user_agent": null
+}

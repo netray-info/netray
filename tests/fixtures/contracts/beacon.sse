@@ -1,0 +1,26 @@
+data: {"category":"mx","detail":"mx_present detail","sub_checks":[{"detail":"example.com","name":"mx_present","verdict":"pass"}],"title":"MX","type":"category","verdict":"pass"}
+
+data: {"category":"spf","detail":"spf_record detail","sub_checks":[{"detail":"example.com","name":"spf_record","verdict":"pass"}],"title":"SPF","type":"category","verdict":"pass"}
+
+data: {"category":"dkim","detail":"dkim_selector detail","sub_checks":[{"detail":"example.com","name":"dkim_selector","verdict":"fail"}],"title":"DKIM","type":"category","verdict":"fail"}
+
+data: {"category":"dmarc","detail":"dmarc_policy detail","sub_checks":[{"detail":"example.com","name":"dmarc_policy","verdict":"pass"}],"title":"DMARC","type":"category","verdict":"pass"}
+
+data: {"category":"mta_sts","detail":"mta_sts_policy detail","sub_checks":[{"detail":"example.com","name":"mta_sts_policy","verdict":"warn"}],"title":"MTA-STS","type":"category","verdict":"warn"}
+
+data: {"category":"tls_rpt","detail":"tls_rpt_record detail","sub_checks":[{"detail":"example.com","name":"tls_rpt_record","verdict":"warn"}],"title":"TLS-RPT","type":"category","verdict":"warn"}
+
+data: {"category":"dane","detail":"dane_tlsa detail","sub_checks":[{"detail":"example.com","name":"dane_tlsa","verdict":"pass"}],"title":"DANE","type":"category","verdict":"pass"}
+
+data: {"category":"dnssec","detail":"dnssec_chain detail","sub_checks":[{"detail":"example.com","name":"dnssec_chain","verdict":"pass"}],"title":"DNSSEC","type":"category","verdict":"pass"}
+
+data: {"category":"bimi","detail":"bimi_record detail","sub_checks":[{"detail":"example.com","name":"bimi_record","verdict":"pass"}],"title":"BIMI","type":"category","verdict":"pass"}
+
+data: {"category":"fcrdns","detail":"fcrdns_match detail","sub_checks":[{"detail":"example.com","name":"fcrdns_match","verdict":"pass"}],"title":"FCrDNS","type":"category","verdict":"pass"}
+
+data: {"category":"dnsbl","detail":"dnsbl_clean detail","sub_checks":[{"detail":"example.com","name":"dnsbl_clean","verdict":"pass"}],"title":"DNSBL","type":"category","verdict":"pass"}
+
+data: {"category":"cross_validation","detail":"cross_checks detail","sub_checks":[{"detail":"example.com","name":"cross_checks","verdict":"pass"}],"title":"Cross-Validation","type":"category","verdict":"pass"}
+
+data: {"duration_ms":1234,"grade":"D","type":"summary","verdicts":{"bimi":"pass","cross_validation":"pass","dane":"pass","dkim":"fail","dmarc":"pass","dnsbl":"pass","dnssec":"pass","fcrdns":"pass","mta_sts":"warn","mx":"pass","spf":"pass","tls_rpt":"warn"}}
+

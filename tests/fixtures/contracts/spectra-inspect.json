@@ -1,0 +1,131 @@
+{
+  "caching": {
+    "directives": {
+      "immutable": false,
+      "must_revalidate": false,
+      "no_cache": false,
+      "no_store": false,
+      "private": false,
+      "public": false
+    },
+    "vary": []
+  },
+  "cdn": {
+    "indicators": []
+  },
+  "cookies": [],
+  "cors": {
+    "allows_any_origin": false,
+    "allows_credentials": false,
+    "message": "No CORS headers",
+    "reflects_origin": false,
+    "status": "pass"
+  },
+  "deprecated_headers": [],
+  "duration_ms": 87,
+  "enrichment": {
+    "ip": "192.0.2.10",
+    "ip_type": "datacenter",
+    "org": "Example Hosting"
+  },
+  "final_url": "https://example.com/",
+  "fingerprint": {
+    "info_leakage": {
+      "exposed_headers": [],
+      "status": "pass"
+    }
+  },
+  "headers": {
+    "content-type": "text/html",
+    "strict-transport-security": "max-age=31536000"
+  },
+  "http_upgrade": {
+    "message": "http://example.com redirects to https",
+    "redirects": [],
+    "redirects_to_https": true,
+    "same_host": true,
+    "status_code": 301
+  },
+  "http_version": "HTTP/2",
+  "quality": {
+    "checks": [
+      {
+        "label": "HSTS",
+        "name": "hsts",
+        "status": "pass"
+      },
+      {
+        "label": "Content-Security-Policy",
+        "message": "No Content-Security-Policy header",
+        "name": "csp",
+        "status": "warn"
+      },
+      {
+        "label": "X-Frame-Options",
+        "name": "x_frame_options",
+        "status": "pass"
+      },
+      {
+        "label": "CORS",
+        "name": "cors",
+        "status": "pass"
+      },
+      {
+        "label": "Information leakage",
+        "name": "info_leakage",
+        "status": "pass"
+      }
+    ],
+    "verdict": "warn"
+  },
+  "redirects": [],
+  "reporting": {
+    "csp_reporting": false,
+    "nel": false,
+    "report_to": false
+  },
+  "security": {
+    "coep": {
+      "status": "skip"
+    },
+    "coop": {
+      "status": "skip"
+    },
+    "corp": {
+      "status": "skip"
+    },
+    "csp": {
+      "directives": {},
+      "enforced": false,
+      "issues": [
+        "No Content-Security-Policy header"
+      ],
+      "report_only": false,
+      "status": "warn"
+    },
+    "hsts": {
+      "include_sub_domains": false,
+      "max_age": 31536000,
+      "preload": false,
+      "status": "pass"
+    },
+    "permissions_policy": {
+      "status": "skip"
+    },
+    "referrer_policy": {
+      "status": "pass",
+      "value": "no-referrer"
+    },
+    "x_content_type_options": {
+      "status": "pass",
+      "value": "nosniff"
+    },
+    "x_frame_options": {
+      "status": "pass",
+      "value": "DENY"
+    }
+  },
+  "status": 200,
+  "timestamp": "2030-01-01T00:00:00Z",
+  "url": "https://example.com"
+}

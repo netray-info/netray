@@ -1,0 +1,21 @@
+event: batch
+data: {"completed":1,"lookups":{"lookups":[{"name_server":"udp:192.0.2.53:53","query":{"name":"example.com.","record_type":"A"},"result":{"Response":{"records":[{"data":{"A":"192.0.2.10"},"name":"example.com.","ttl":300,"type":"A"}],"response_time":{"nanos":12000000,"secs":0},"valid_until":"2030-01-01T00:00:00Z"}}}]},"record_type":"A","request_id":"contract-golden","total":19}
+
+event: batch
+data: {"completed":2,"lookups":{"lookups":[{"name_server":"udp:192.0.2.53:53","query":{"name":"example.com.","record_type":"NS"},"result":{"Response":{"records":[{"data":{"NS":"ns1.example.com."},"name":"example.com.","ttl":300,"type":"NS"},{"data":{"NS":"ns2.example.com."},"name":"example.com.","ttl":300,"type":"NS"}],"response_time":{"nanos":12000000,"secs":0},"valid_until":"2030-01-01T00:00:00Z"}}}]},"record_type":"NS","request_id":"contract-golden","total":19}
+
+event: batch
+data: {"completed":3,"lookups":{"lookups":[{"name_server":"udp:192.0.2.53:53","query":{"name":"example.com.","record_type":"TXT"},"result":{"Response":{"records":[{"data":{"TXT":{"txt_data":[[118,61,115,112,102,49,32,45,97,108,108]],"txt_explain":"Sender Policy Framework — defines which servers may send email for this domain.\nQualifier \"fail: reject the message\".\n\"all\" is a catch-all for any sender not matched above.","txt_human":"SPF version 1\n-all","txt_string":"v=spf1 -all"}},"name":"example.com.","ttl":300,"type":"TXT"}],"response_time":{"nanos":12000000,"secs":0},"valid_until":"2030-01-01T00:00:00Z"}}}]},"record_type":"TXT","request_id":"contract-golden","total":19}
+
+event: lint
+data: {"category":"caa","request_id":"contract-golden","results":[{"Warning":"No CAA records found: any Certificate Authority can issue certificates for this domain; cf. RFC 8659"}]}
+
+event: lint
+data: {"category":"ns","request_id":"contract-golden","results":[{"Ok":"Found 2 NS records, meeting minimum redundancy requirement"}]}
+
+event: lint
+data: {"category":"spf","request_id":"contract-golden","results":[{"Ok":"Found exactly one SPF record"},{"Ok":"Successfully parsed SPF record"}]}
+
+event: done
+data: {"duration_ms":1,"failed":0,"not_found":0,"passed":3,"request_id":"contract-golden","total_checks":4,"warnings":1}
+
