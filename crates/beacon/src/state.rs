@@ -21,6 +21,37 @@ pub struct AppState {
     pub inspect_semaphore: Arc<Semaphore>,
 }
 
+/// Builder for the no-redirect HTTP client, before `.build()`.
+pub(crate) fn http_client_builder(timeout_ms: u64) -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .timeout(Duration::from_millis(timeout_ms))
+        .redirect(reqwest::redirect::Policy::none())
+        .user_agent(format!(
+            "beacon/{} (netray.info)",
+            env!("CARGO_PKG_VERSION")
+        ))
+}
+
+/// Builder for the HTTPS-only, five-hop redirect-following HTTP client, before `.build()`.
+pub(crate) fn http_client_follow_builder(timeout_ms: u64) -> reqwest::ClientBuilder {
+    reqwest::Client::builder()
+        .timeout(Duration::from_millis(timeout_ms))
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 5 {
+                return attempt.error("too many redirects");
+            }
+            let url = attempt.url();
+            if url.scheme() != "https" {
+                return attempt.error("redirect to non-HTTPS URL rejected");
+            }
+            attempt.follow()
+        }))
+        .user_agent(format!(
+            "beacon/{} (netray.info)",
+            env!("CARGO_PKG_VERSION")
+        ))
+}
+
 impl AppState {
     pub async fn new(config: &Config) -> Result<Self, crate::error::MailError> {
         let dns_resolver = DnsResolver::new(&config.dns.resolvers, config.dns.timeout_ms)
@@ -43,32 +74,11 @@ impl AppState {
             )))
         };
 
-        let http_client = reqwest::Client::builder()
-            .timeout(Duration::from_millis(config.http.timeout_ms))
-            .redirect(reqwest::redirect::Policy::none())
-            .user_agent(format!(
-                "beacon/{} (netray.info)",
-                env!("CARGO_PKG_VERSION")
-            ))
+        let http_client = http_client_builder(config.http.timeout_ms)
             .build()
             .expect("failed to build HTTP client");
 
-        let http_client_follow = reqwest::Client::builder()
-            .timeout(Duration::from_millis(config.http.timeout_ms))
-            .redirect(reqwest::redirect::Policy::custom(|attempt| {
-                if attempt.previous().len() >= 5 {
-                    return attempt.error("too many redirects");
-                }
-                let url = attempt.url();
-                if url.scheme() != "https" {
-                    return attempt.error("redirect to non-HTTPS URL rejected");
-                }
-                attempt.follow()
-            }))
-            .user_agent(format!(
-                "beacon/{} (netray.info)",
-                env!("CARGO_PKG_VERSION")
-            ))
+        let http_client_follow = http_client_follow_builder(config.http.timeout_ms)
             .build()
             .expect("failed to build HTTP client (follow redirects)");
 
