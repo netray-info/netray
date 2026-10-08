@@ -1,6 +1,6 @@
 # Review: fetch.sh upstream drift
 
-Context: argus-oci reported that `fetch.sh` at v0.22.0 fails on its host (2026-10-08): `openai.com/gptbot-ranges.txt` answers 403 (replaced by `gptbot.json`), Google's `googlebot.json` answers 301 to `common-crawlers.json`. Every other upstream URL answered 200 when probed. Fix: `c3fb929` (new URLs, jq for gptbot, `-L` in `get()`), `<this range>` (`-L` on every curl).
+Context: argus-oci reported that `fetch.sh` at v0.22.0 fails on its host (2026-10-08): `openai.com/gptbot-ranges.txt` answers 403 (replaced by `gptbot.json`), Google's `googlebot.json` answers 301 to `common-crawlers.json`. Every other upstream URL answered 200 when probed. Fix: `c3fb929` (new URLs, jq for gptbot, `-L` in `get()`), `ffa9bb4` (`-L` on every curl).
 
 ## main..c3fb929
 
