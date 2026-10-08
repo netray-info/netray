@@ -13,6 +13,7 @@ use lens::config::{
     RateLimitConfig, ScoringConfig, ServerConfig, SiteConfig, SnapshotsConfig,
 };
 use lens::routes::snapshot_router;
+use lens::snapshot::store::SNAPSHOT_TTL_SECS;
 use lens::snapshot::{Snapshot, SnapshotFinding, SnapshotSection, SnapshotStore};
 use lens::state::AppState;
 
@@ -198,42 +199,51 @@ async fn existing_snapshot_body_contains_domain() {
     );
 }
 
-#[tokio::test]
-async fn unknown_shortid_returns_404() {
-    let (app, _store, _tmp) = make_app_with_store().await;
-
-    let req = Request::builder()
-        .uri("/r/AAAAAAAA")
-        .body(Body::empty())
-        .unwrap();
+/// Assert the "expired or unknown" contract: 404, text/html, body names expiry/unknown.
+async fn assert_expired_or_unknown_page(app: Router, uri: &str) {
+    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
     let resp = app.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND, "uri: {uri}");
+    let ct = resp
+        .headers()
+        .get("content-type")
+        .expect("content-type must be present")
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        ct.contains("text/html"),
+        "content-type must be text/html for {uri}, got: {ct}"
+    );
+    let body = to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
+    let html = std::str::from_utf8(&body).unwrap().to_lowercase();
+    assert!(
+        html.contains("expired") && html.contains("unknown"),
+        "body must say the snapshot is expired or unknown for {uri}, got: {html}"
+    );
 }
 
 #[tokio::test]
-async fn invalid_shortid_returns_400() {
+async fn unknown_shortid_returns_404_expired_or_unknown_page() {
     let (app, _store, _tmp) = make_app_with_store().await;
-
-    // Too short
-    let req = Request::builder()
-        .uri("/r/short")
-        .body(Body::empty())
-        .unwrap();
-    let resp = app.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    assert_expired_or_unknown_page(app, "/r/AAAAAAAA").await;
 }
 
 #[tokio::test]
-async fn invalid_shortid_with_special_chars_returns_400() {
-    let (app, _store, _tmp) = make_app_with_store().await;
+async fn expired_snapshot_returns_404_expired_or_unknown_page() {
+    let (app, store, _tmp) = make_app_with_store().await;
+    let mut snap = make_snapshot("example.com", "A");
+    snap.created_at = Utc::now() - chrono::Duration::seconds(SNAPSHOT_TTL_SECS + 3600);
+    let id = store.insert(snap).await.unwrap();
+    assert_expired_or_unknown_page(app, &format!("/r/{id}")).await;
+}
 
-    // Contains non-alphanumeric
-    let req = Request::builder()
-        .uri("/r/AAAA-AAA")
-        .body(Body::empty())
-        .unwrap();
-    let resp = app.oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+#[tokio::test]
+async fn malformed_shortids_return_404_expired_or_unknown_page() {
+    for uri in ["/r/x", "/r/short", "/r/AAAA-AAA", "/r/AAAA%2DAAA", "/r/AA%20AAAAA"] {
+        let (app, _store, _tmp) = make_app_with_store().await;
+        assert_expired_or_unknown_page(app, uri).await;
+    }
 }
 
 #[tokio::test]
