@@ -121,5 +121,30 @@ jobs:
             exit 1
           fi
 
+      - name: Published layers carry no data files
+        run: |
+          dir="$RUNNER_TEMP/image-layers"
+          mkdir -p "$dir"
+          docker save "ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}" | tar -x -C "$dir"
+          layers=0
+          found=""
+          while IFS= read -r f; do
+            if listing=$(tar -tf "$f" 2>/dev/null); then
+              layers=$((layers + 1))
+              hits=$(printf '%s\n' "$listing" | grep -E '(^|/)[^/]+\.mmdb$|^(\./)?netray/data/.' || true)
+              [ -z "$hits" ] || found="$found$hits"$'\n'
+            fi
+          done < <(find "$dir" -type f ! -name '*.json' ! -name oci-layout ! -name repositories)
+          if [ "$layers" -eq 0 ]; then
+            echo "::error::no image layer found to scan"
+            exit 1
+          fi
+          if [ -n "$found" ]; then
+            echo "::error::the published layers contain data files (GeoLite2 licence):"
+            echo "$found"
+            exit 1
+          fi
+          echo "scanned $layers layers: no data files"
+
       - name: Publish the image
         run: docker push "ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}"

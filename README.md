@@ -25,7 +25,7 @@ just release X.Y.Z       # set the workspace version, changelog section, commit,
 
 `just --list` shows the rest (`ifconfig-data`, `test-ifconfig-data`, `tlsight-data`, `e2e`, …).
 
-The image contains no data files. In production the ifconfig-rs config points its GeoIP and list paths at `data/…`, and the deployment fills `/netray/data` with `crates/ifconfig-rs/data/fetch.sh` (MaxMind licence required) and mounts it read-only; the bundled `ifconfig.example.toml` leaves those paths unset.
+The image contains no data files. In production the ifconfig-rs config points its GeoIP and list paths at `data/…`, and the deployment fills `/netray/data` with `crates/ifconfig-rs/data/fetch.sh` (MaxMind licence required) plus the repository's `asn_patterns.toml`, and mounts it read-only; the bundled `ifconfig.example.toml` leaves those paths unset.
 
 ## Releases
 
