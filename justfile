@@ -101,9 +101,11 @@ build:
 image:
     docker build -t netray:local .
 
-# Playwright acceptance suite against TEST_ENV (default: production). Network and browser.
+# Playwright acceptance against TEST_ENV (default: production): only the `prod` project, the
+# subset that hits known paths. The full suite trips production's fail2ban; run it with
+# `just acceptance-local`.
 acceptance:
-    cd tests/acceptance && TEST_ENV={{test_env}} npx playwright test
+    cd tests/acceptance && TEST_ENV={{test_env}} npx playwright test --project prod
 
 # Playwright acceptance against a local stack: `netray site` and the six services on free 127.0.0.1 ports
 # (passed to the suite as LOCAL_<NAME>_URL), from their dev configs. Default specs: the two that need no network.
