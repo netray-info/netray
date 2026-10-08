@@ -18,3 +18,5 @@ Traced: `--list --project prod` collects exactly the 7 files (67 tests); every r
 ### Summary
 
 0 / 0 / 3. Verified 0, held 0. The three minors are listed, not repaired: a guard that lists the project through `npx playwright test --list` would close the first two but needs the acceptance node_modules in the gate.
+
+Measurement note: the review row was recorded with tokens 0 / seconds 0; the reader cost 94,529 tokens, 285 s.
