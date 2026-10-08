@@ -4,7 +4,9 @@
 //! a request without any listener would also count zero, so the error proves the guard.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -30,8 +32,9 @@ impl StubResolver {
 }
 
 impl Resolve for StubResolver {
-    async fn resolve(&self, host: &str) -> Vec<IpAddr> {
-        self.0.get(host).cloned().unwrap_or_default()
+    fn resolve(&self, host: &str) -> Pin<Box<dyn Future<Output = Vec<IpAddr>> + Send>> {
+        let addrs = self.0.get(host).cloned().unwrap_or_default();
+        Box::pin(async move { addrs })
     }
 }
 
@@ -207,7 +210,7 @@ fn loopback_opts(method: Method) -> FetchOptions {
 async fn loopback_ipv4_literal_is_refused() {
     let srv = ok_server(bind4().await, "x");
     let url = format!("https://127.0.0.1:{}/", srv.port);
-    let result = fetch(base, &StubResolver::new(&[]), &url, &opts(Method::GET)).await;
+    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &opts(Method::GET)).await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -219,7 +222,7 @@ async fn loopback_ipv4_literal_is_refused() {
 async fn userinfo_does_not_hide_the_host() {
     let srv = ok_server(bind4().await, "x");
     let url = format!("https://x@127.0.0.1:{}/", srv.port);
-    let result = fetch(base, &StubResolver::new(&[]), &url, &opts(Method::GET)).await;
+    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &opts(Method::GET)).await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -231,7 +234,7 @@ async fn userinfo_does_not_hide_the_host() {
 async fn loopback_ipv6_literal_is_refused() {
     let srv = ok_server(bind6().await, "x");
     let url = format!("https://[::1]:{}/", srv.port);
-    let result = fetch(base, &StubResolver::new(&[]), &url, &opts(Method::GET)).await;
+    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &opts(Method::GET)).await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -242,7 +245,7 @@ async fn loopback_ipv6_literal_is_refused() {
 #[tokio::test]
 async fn empty_resolution_is_refused() {
     let resolver = StubResolver::new(&[("empty.invalid", vec![])]);
-    let result = fetch(base, &resolver, "http://empty.invalid/", &opts(Method::GET)).await;
+    let result = fetch(base, Arc::new(resolver), "http://empty.invalid/", &opts(Method::GET)).await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -255,7 +258,7 @@ async fn one_disallowed_address_in_the_set_refuses_the_whole_set() {
     let public: IpAddr = "93.184.216.34".parse().unwrap();
     let resolver = StubResolver::new(&[("mixed.example.com", vec![public, V4])]);
     let url = format!("http://mixed.example.com:{}/", srv.port);
-    let result = fetch(base, &resolver, &url, &opts(Method::GET)).await;
+    let result = fetch(base, Arc::new(resolver), &url, &opts(Method::GET)).await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -269,7 +272,7 @@ async fn https_only_refuses_plain_http() {
     let mut o = loopback_opts(Method::GET);
     o.https_only = true;
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let result = fetch(base, &StubResolver::new(&[]), &url, &o).await;
+    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &o).await;
     assert!(matches!(result, Err(FetchError::Scheme(_))), "{result:?}");
     assert_eq!(srv.connections(), 0);
 }
@@ -282,7 +285,7 @@ async fn connection_goes_to_the_checked_address() {
     let srv = ok_server(bind4().await, "pinned");
     let resolver = StubResolver::new(&[("pinned.invalid", vec![V4])]);
     let url = format!("http://pinned.invalid:{}/", srv.port);
-    let res = fetch(base, &resolver, &url, &loopback_opts(Method::GET))
+    let res = fetch(base, Arc::new(resolver), &url, &loopback_opts(Method::GET))
         .await
         .expect("fetch through the pin");
     assert_eq!(res.status.as_u16(), 200);
@@ -301,7 +304,7 @@ async fn redirect_target_is_checked_again() {
     o.allow = only_v4_loopback;
     o.max_redirects = 3;
     let url = format!("http://start.invalid:{}/", first.port);
-    let result = fetch(base, &resolver, &url, &o).await;
+    let result = fetch(base, Arc::new(resolver), &url, &o).await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -320,7 +323,7 @@ async fn redirect_to_localhost_name_is_checked_again() {
     o.allow = only_v4_loopback;
     o.max_redirects = 3;
     let url = format!("http://start.invalid:{}/", first.port);
-    let result = fetch(base, &resolver, &url, &o).await;
+    let result = fetch(base, Arc::new(resolver), &url, &o).await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -338,7 +341,7 @@ async fn chain_at_the_limit_is_followed() {
     o.max_redirects = 4;
     o.at_limit = AtLimit::Fail;
     let url = format!("http://127.0.0.1:{}/0", srv.port);
-    let res = fetch(base, &StubResolver::new(&[]), &url, &o)
+    let res = fetch(base, Arc::new(StubResolver::new(&[])), &url, &o)
         .await
         .expect("4 redirects within a limit of 4");
     assert_eq!(res.status.as_u16(), 200);
@@ -353,7 +356,7 @@ async fn chain_beyond_the_limit_fails() {
     o.max_redirects = 4;
     o.at_limit = AtLimit::Fail;
     let url = format!("http://127.0.0.1:{}/0", srv.port);
-    let result = fetch(base, &StubResolver::new(&[]), &url, &o).await;
+    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &o).await;
     assert!(
         matches!(result, Err(FetchError::TooManyRedirects)),
         "{result:?}"
@@ -370,7 +373,7 @@ async fn return_last_hands_back_the_unfollowed_redirect() {
     o.max_redirects = 2;
     o.at_limit = AtLimit::ReturnLast;
     let url = format!("http://127.0.0.1:{}/0", srv.port);
-    let res = fetch(base, &StubResolver::new(&[]), &url, &o)
+    let res = fetch(base, Arc::new(StubResolver::new(&[])), &url, &o)
         .await
         .expect("ReturnLast does not fail at the limit");
     assert_eq!(res.status.as_u16(), 302);
@@ -394,7 +397,7 @@ async fn hops_record_url_status_and_location() {
     let mut o = loopback_opts(Method::GET);
     o.max_redirects = 5;
     let url = format!("http://127.0.0.1:{}/a", srv.port);
-    let res = fetch(base, &StubResolver::new(&[]), &url, &o)
+    let res = fetch(base, Arc::new(StubResolver::new(&[])), &url, &o)
         .await
         .expect("allowed chain");
     let hops: Vec<(String, u16, String)> = res
@@ -430,7 +433,7 @@ async fn post_through_redirect(status: u16) -> Req {
     o.body = Some(bytes::Bytes::from_static(b"payload"));
     o.max_redirects = 2;
     let url = format!("http://127.0.0.1:{}/", first.port);
-    let res = fetch(base, &StubResolver::new(&[]), &url, &o)
+    let res = fetch(base, Arc::new(StubResolver::new(&[])), &url, &o)
         .await
         .expect("redirected POST");
     assert_eq!(res.status.as_u16(), 200);
@@ -461,7 +464,7 @@ async fn body_over_the_cap_is_an_error() {
     let mut o = loopback_opts(Method::GET);
     o.body_cap = 16;
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let result = fetch(base, &StubResolver::new(&[]), &url, &o).await;
+    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &o).await;
     assert!(
         matches!(result, Err(FetchError::BodyTooLarge)),
         "{result:?}"

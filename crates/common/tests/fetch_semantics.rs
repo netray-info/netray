@@ -5,7 +5,9 @@
 //! The listener helpers are copied from `tests/fetch.rs`, which is protected.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -34,8 +36,9 @@ impl StubResolver {
 }
 
 impl Resolve for StubResolver {
-    async fn resolve(&self, host: &str) -> Vec<IpAddr> {
-        self.0.get(host).cloned().unwrap_or_default()
+    fn resolve(&self, host: &str) -> Pin<Box<dyn Future<Output = Vec<IpAddr>> + Send>> {
+        let addrs = self.0.get(host).cloned().unwrap_or_default();
+        Box::pin(async move { addrs })
     }
 }
 
@@ -46,9 +49,12 @@ struct SlowResolver {
 }
 
 impl Resolve for SlowResolver {
-    async fn resolve(&self, _host: &str) -> Vec<IpAddr> {
-        tokio::time::sleep(self.delay).await;
-        self.addrs.clone()
+    fn resolve(&self, _host: &str) -> Pin<Box<dyn Future<Output = Vec<IpAddr>> + Send>> {
+        let (delay, addrs) = (self.delay, self.addrs.clone());
+        Box::pin(async move {
+            tokio::time::sleep(delay).await;
+            addrs
+        })
     }
 }
 
@@ -222,7 +228,7 @@ async fn raw_utf8_location_is_followed_below_the_limit() {
     let mut o = loopback_opts(Method::GET);
     o.max_redirects = 2;
     let url = format!("http://127.0.0.1:{}/start", srv.port);
-    let res = fetch(base, &no_resolver(), &url, &o)
+    let res = fetch(base, Arc::new(no_resolver()), &url, &o)
         .await
         .expect("raw UTF-8 Location is joined");
     assert_eq!(res.status.as_u16(), 200);
@@ -238,7 +244,7 @@ async fn non_ascii_location_at_limit_zero_is_returned_not_rejected() {
     o.max_redirects = 0;
     o.at_limit = AtLimit::ReturnLast;
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let res = fetch(base, &no_resolver(), &url, &o)
+    let res = fetch(base, Arc::new(no_resolver()), &url, &o)
         .await
         .expect("the limit check comes before Location parsing");
     assert_eq!(res.status.as_u16(), 301);
@@ -252,7 +258,7 @@ async fn unjoinable_location_ends_the_chain_with_that_redirect() {
     let mut o = loopback_opts(Method::GET);
     o.max_redirects = 3;
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let res = fetch(base, &no_resolver(), &url, &o)
+    let res = fetch(base, Arc::new(no_resolver()), &url, &o)
         .await
         .expect("an unjoinable Location returns the 3xx");
     assert_eq!(res.status.as_u16(), 302);
@@ -271,7 +277,7 @@ async fn truncate_body_cuts_at_the_cap() {
     o.body_cap = 16;
     o.truncate_body = true;
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let res = fetch(base, &no_resolver(), &url, &o)
+    let res = fetch(base, Arc::new(no_resolver()), &url, &o)
         .await
         .expect("truncation is not an error");
     assert_eq!(res.body.len(), 16);
@@ -286,7 +292,7 @@ async fn read_body_false_returns_an_empty_body() {
     let mut o = loopback_opts(Method::GET);
     o.read_body = false;
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let res = fetch(base, &no_resolver(), &url, &o)
+    let res = fetch(base, Arc::new(no_resolver()), &url, &o)
         .await
         .expect("an unread body is no error");
     assert_eq!(res.status.as_u16(), 200);
@@ -305,7 +311,7 @@ async fn redirect_body_over_the_cap_is_never_read() {
     o.max_redirects = 2;
     o.body_cap = 16;
     let url = format!("http://127.0.0.1:{}/start", srv.port);
-    let res = fetch(base, &no_resolver(), &url, &o)
+    let res = fetch(base, Arc::new(no_resolver()), &url, &o)
         .await
         .expect("a 3xx body does not count against the cap");
     assert_eq!(res.status.as_u16(), 200);
@@ -320,7 +326,7 @@ async fn blocked_name_without_address_reports_no_address_at_hop_zero() {
     let resolver = StubResolver::new(&[("empty.invalid", vec![])]);
     let result = fetch(
         base,
-        &resolver,
+        Arc::new(resolver),
         "http://empty.invalid/",
         &FetchOptions::new(Method::GET),
     )
@@ -341,7 +347,7 @@ async fn blocked_name_without_address_reports_no_address_at_hop_zero() {
 async fn blocked_initial_address_reports_disallowed_at_hop_zero() {
     let srv = serve(bind4().await, |_| response(200, &[], "x"));
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let result = fetch(base, &no_resolver(), &url, &FetchOptions::new(Method::GET)).await;
+    let result = fetch(base, Arc::new(no_resolver()), &url, &FetchOptions::new(Method::GET)).await;
     match result {
         Err(FetchError::Blocked {
             reason, hop, hops, ..
@@ -373,7 +379,7 @@ async fn blocked_second_redirect_target_reports_hop_two_and_followed_hops() {
     o.allow = only_v4_loopback;
     o.max_redirects = 5;
     let url = format!("http://a.invalid:{p}/a");
-    let result = fetch(base, &resolver, &url, &o).await;
+    let result = fetch(base, Arc::new(resolver), &url, &o).await;
     match result {
         Err(FetchError::Blocked {
             reason, hop, hops, ..
@@ -415,11 +421,11 @@ async fn timeout_is_one_deadline_for_the_whole_chain() {
     let mut o = loopback_opts(Method::GET);
     o.max_redirects = 2;
     o.timeout = Duration::from_millis(300);
-    let result = fetch(base, &no_resolver(), &url, &o).await;
+    let result = fetch(base, Arc::new(no_resolver()), &url, &o).await;
     assert!(matches!(result, Err(FetchError::Timeout)), "{result:?}");
 
     o.timeout = Duration::from_secs(1);
-    let res = fetch(base, &no_resolver(), &url, &o)
+    let res = fetch(base, Arc::new(no_resolver()), &url, &o)
         .await
         .expect("the same chain fits into 1 s");
     assert_eq!(res.status.as_u16(), 200);
@@ -437,7 +443,7 @@ async fn timeout_covers_name_resolution() {
     o.timeout = Duration::from_millis(200);
     let url = format!("http://slow.invalid:{}/", srv.port);
     let start = Instant::now();
-    let result = fetch(base, &resolver, &url, &o).await;
+    let result = fetch(base, Arc::new(resolver), &url, &o).await;
     let elapsed = start.elapsed();
     assert!(matches!(result, Err(FetchError::Timeout)), "{result:?}");
     assert!(elapsed < Duration::from_millis(400), "took {elapsed:?}");
@@ -463,7 +469,7 @@ async fn through_redirect(
     }
     o.max_redirects = 2;
     let url = format!("http://127.0.0.1:{}/", first.port);
-    let res = fetch(base, &no_resolver(), &url, &o)
+    let res = fetch(base, Arc::new(no_resolver()), &url, &o)
         .await
         .expect("redirected request");
     assert_eq!(res.status.as_u16(), 200);
@@ -532,7 +538,7 @@ async fn hop_and_response_urls_carry_no_userinfo_and_location_is_absolute() {
     let mut o = loopback_opts(Method::GET);
     o.max_redirects = 2;
     let url = format!("http://u:p@start.invalid:{p}/");
-    let res = fetch(base, &resolver, &url, &o)
+    let res = fetch(base, Arc::new(resolver), &url, &o)
         .await
         .expect("redirect with userinfo in the start URL");
     assert_eq!(res.status.as_u16(), 200);
