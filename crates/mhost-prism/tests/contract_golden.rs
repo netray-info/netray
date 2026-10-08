@@ -4,9 +4,8 @@
 // `BatchEvent` and mhost's real lint functions, framed by axum's real `Sse` response.
 // lens's `tests/contract_backends.rs` reads the same file.
 //
-// `LintEvent` and `CheckDoneEvent` are private to `api::check`, and the `/api/check`
-// handler needs live DNS, so the lint and done envelopes are built here with the same
-// field names; the lint results inside are mhost's `CheckResult` values, not hand-written.
+// The `/api/check` handler needs live DNS, so the stream is assembled here from prism's real
+// `LintEvent` and `CheckDoneEvent`; the lint results inside are mhost's `CheckResult` values.
 //
 // UPDATE_GOLDEN=1 cargo test -p prism --test contract_golden   writes the golden.
 
@@ -18,7 +17,7 @@ use axum::response::sse::{Event, Sse};
 use http_body_util::BodyExt;
 use mhost::lints::{CheckResult, check_caa, check_ns_count, check_spf};
 use mhost::resolver::Lookups;
-use prism::api::BatchEvent;
+use prism::api::{BatchEvent, CheckDoneEvent, LintEvent};
 use prism::record_format;
 
 fn golden_path(name: &str) -> PathBuf {
@@ -76,13 +75,9 @@ fn batch_event(label: &str, lookups: &Lookups, completed: u32) -> Event {
     Event::default().event("batch").json_data(&v).unwrap()
 }
 
-fn lint_event(category: &str, results: Vec<CheckResult>) -> Event {
-    let v = serde_json::json!({
-        "request_id": "contract-golden",
-        "category": category,
-        "results": results,
-    });
-    Event::default().event("lint").json_data(&v).unwrap()
+fn lint_event(category: &'static str, results: Vec<CheckResult>) -> Event {
+    let lint = LintEvent { request_id: "contract-golden".to_string(), category, results };
+    Event::default().event("lint").json_data(&lint).unwrap()
 }
 
 #[tokio::test]
@@ -137,20 +132,17 @@ async fn prism_check_stream_matches_golden() {
     for (category, results) in lints {
         events.push(lint_event(category, results));
     }
-    events.push(
-        Event::default()
-            .event("done")
-            .json_data(serde_json::json!({
-                "request_id": "contract-golden",
-                "duration_ms": 1,
-                "total_checks": total,
-                "passed": passed,
-                "warnings": warnings,
-                "failed": failed,
-                "not_found": not_found,
-            }))
-            .unwrap(),
-    );
+    let done = CheckDoneEvent {
+        request_id: "contract-golden".to_string(),
+        duration_ms: 1,
+        total_checks: total,
+        passed,
+        warnings,
+        failed,
+        not_found,
+        cache_key: None,
+    };
+    events.push(Event::default().event("done").json_data(&done).unwrap());
 
     let resp = Sse::new(futures::stream::iter(events.into_iter().map(Ok::<_, Infallible>))).into_response();
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
