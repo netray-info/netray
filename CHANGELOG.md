@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `just acceptance` runs against production only the Playwright project `prod`: health, ready, security headers and CORS, TLS handshakes, assets and MTA-STS, meta, docs. The full suite probes unknown paths and crawls the sitemap, which the production host's fail2ban bans. Run the full suite with `just acceptance-local`.
+
+### Fixed
+
+- `crates/ifconfig-rs/data/fetch.sh` follows upstream moves. The Googlebot ranges now come from `common-crawlers.json` and the GPTBot ranges from `gptbot.json`; the old URLs answer 301 and 403. Every download follows redirects, so a 3xx body is never saved as data.
+
+### Security
+
+- Known advisories are listed in `deny.toml` with their reason and deferred until the next release: `hickory-proto` RUSTSEC-2026-0118/0119, `time` -0009, `lru` -0253, and the unmaintained `rustybuzz` and `ttf-parser`.
+
 ## [0.22.0] - 2026-10-08
 
 First release from the monorepo: the six services and the static site ship as one binary `netray` in one image, `ghcr.io/netray-info/netray`.
