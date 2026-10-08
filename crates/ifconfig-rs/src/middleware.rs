@@ -69,11 +69,6 @@ pub async fn rate_limit(State(state): State<AppState>, req: Request<axum::body::
 /// Adds or overrides:
 /// - `Vary: Accept, User-Agent` — required for correct content-negotiation caching.
 /// - `Cache-Control` — no-cache for errors/health/HTML; private, max-age=60 otherwise.
-/// - `Strict-Transport-Security: max-age=63072000` — intentionally 2 years (netray-common
-///   sets 1 year); ifconfig-rs is a stable public endpoint that warrants the longer preload
-///   candidate value.
-/// - Appends `font-src 'self' data:` to the CSP set by netray-common, which the SolidJS
-///   build requires for embedded fonts. netray-common does not include font-src by design.
 pub async fn ifconfig_response_headers(req: Request<axum::body::Body>, next: Next) -> Response {
     let path = req.uri().path().to_owned();
     let is_health = path == "/health" || path == "/ready";
@@ -96,26 +91,6 @@ pub async fn ifconfig_response_headers(req: Request<axum::body::Body>, next: Nex
         headers.insert("cache-control", HeaderValue::from_static("no-cache"));
     } else {
         headers.insert("cache-control", HeaderValue::from_static("private, max-age=60"));
-    }
-
-    // Override HSTS: ifconfig-rs uses 2 years (63072000s) rather than netray-common's
-    // 1 year, making it a candidate for HSTS preload.
-    headers.insert(
-        "strict-transport-security",
-        HeaderValue::from_static("max-age=63072000; includeSubDomains"),
-    );
-
-    // Extend the CSP set by netray_common::security_headers_layer to add font-src,
-    // which the SolidJS/Vite build requires for embedded data-URI fonts.
-    // netray-common omits font-src by default; we append it here rather than
-    // duplicating the full CSP string.
-    if let Some(existing_csp) = headers.get("content-security-policy").cloned()
-        && let Ok(csp_str) = existing_csp.to_str()
-    {
-        let extended = format!("{csp_str}; font-src 'self' data:");
-        if let Ok(val) = HeaderValue::from_str(&extended) {
-            headers.insert("content-security-policy", val);
-        }
     }
 
     response

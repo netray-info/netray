@@ -22,3 +22,36 @@
 - `prism.dev.toml` and `tlsight.dev.toml`: rename the unknown `[ecosystem]` keys to `*_base_url`.
 
 **G3.** `crates/netray/src/main.rs`: `--check-config <PATH>` on the six service subcommands; a helper prints `config ok: <path>` and exits 0, or the error to stderr and exits 1, before any `run`. `ip --check` keeps its wider meaning (config plus data files); `--check-config` checks the config only.
+
+## Phase 2 — Header and CORS parity
+
+### Groups
+
+| Group | Criteria | Depends on |
+|---|---|---|
+| G1 | C1, C2, C4, C5, C6, C7 | — |
+| G2 | C3, C9 | G1 |
+| G3 | C8 (production run, no files) | G2 |
+
+### Plan
+
+**G1.**
+- **`crates/common/src/security_headers.rs`:**
+  - `SecurityHeadersConfig.hsts`, default `max-age=31536000; includeSubDomains; preload`.
+  - `include_permissions_policy` is dropped.
+  - The strict CSP is exactly `csp-tool-spa`; the relaxed CSP appends `extra_script_src` to its `script-src`.
+  - Permissions-Policy, COOP `same-origin` and CORP `cross-origin` are set on every response.
+- **`crates/common/src/cors.rs`:** `cors_layer` allows any origin, methods `GET, POST, OPTIONS`, headers `content-type, accept`, max-age 600.
+- **Service layer order** (lens, prism, tlsight, spectra, beacon, ifconfig-rs):
+  - Security headers outermost, then CORS, so 413, 429, 304 and preflight responses carry them.
+  - lens `/docs` moves inside the layers and gets the jsDelivr allowance.
+  - beacon gains the CORS layer it lacked.
+- **ifconfig-rs:**
+  - `ifconfig_response_headers` loses its HSTS and CSP rewrites.
+  - `build_app` sets `hsts = max-age=63072000; includeSubDomains; preload` and uses `cors_layer()`.
+
+**G2.** A `just acceptance-local` recipe starts `netray site` and the six services on the `env.ts` local ports, then runs the header and assets specs with `TEST_ENV=local`.
+
+**G3.** Run the two acceptance specs against production and record the result.
+
+Prose (`architecture-rules.md` §Security Headers, `crates/common/CLAUDE.md`, `crates/ifconfig-rs/CLAUDE.md`, root `CLAUDE.md` verbs) goes in the spec's closing docs commit.

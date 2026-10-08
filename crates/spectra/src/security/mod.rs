@@ -20,7 +20,7 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
     let layer_fn = security_headers_layer(SecurityHeadersConfig {
         extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
         relaxed_csp_path_prefix: "/docs".to_string(),
-        include_permissions_policy: true,
+        ..Default::default()
     });
     let mut response = layer_fn(request, next).await;
     response.headers_mut().insert(

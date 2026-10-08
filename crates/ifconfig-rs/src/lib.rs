@@ -25,7 +25,7 @@ use std::sync::Arc;
 use subtle::ConstantTimeEq;
 use tokio::net::TcpListener;
 use tower_http::compression::CompressionLayer;
-use tower_http::cors::{AllowOrigin, Any, CorsLayer};
+use tower_http::cors::AllowOrigin;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
@@ -115,7 +115,7 @@ pub async fn build_app(config: &Config) -> AppBundle {
     let api_routes = routes::router();
 
     let cors = if config.server.cors_allowed_origins.iter().any(|o| o == "*") {
-        CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
+        netray_common::cors::cors_layer()
     } else {
         let origins: Vec<axum::http::HeaderValue> = config
             .server
@@ -123,10 +123,7 @@ pub async fn build_app(config: &Config) -> AppBundle {
             .iter()
             .filter_map(|o| o.parse().ok())
             .collect();
-        CorsLayer::new()
-            .allow_origin(AllowOrigin::list(origins))
-            .allow_methods(Any)
-            .allow_headers(Any)
+        netray_common::cors::cors_layer().allow_origin(AllowOrigin::list(origins))
     };
 
     let app = Router::new()
@@ -137,19 +134,7 @@ pub async fn build_app(config: &Config) -> AppBundle {
             state.clone(),
             middleware::etag_last_modified,
         ))
-        .layer(axum_mw::from_fn(
-            netray_common::security_headers::security_headers_layer(
-                netray_common::security_headers::SecurityHeadersConfig {
-                    // Scalar API docs UI loads its renderer from jsDelivr.
-                    extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
-                    ..Default::default()
-                },
-            ),
-        ))
-        // ifconfig_response_headers must be outer (runs last on response) so its HSTS
-        // override (2 years) takes precedence over netray-common's default (1 year).
         .layer(axum_mw::from_fn(middleware::ifconfig_response_headers))
-        .layer(cors)
         .layer(axum_mw::from_fn_with_state(
             state.clone(),
             middleware::geoip_date_headers,
@@ -158,6 +143,18 @@ pub async fn build_app(config: &Config) -> AppBundle {
         .layer(axum_mw::from_fn_with_state(
             state.clone(),
             extractors::requester_info_middleware,
+        ))
+        // Outside rate_limit and etag so 429 and 304 responses carry the headers too.
+        .layer(cors)
+        .layer(axum_mw::from_fn(
+            netray_common::security_headers::security_headers_layer(
+                netray_common::security_headers::SecurityHeadersConfig {
+                    // Scalar API docs UI loads its renderer from jsDelivr.
+                    extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
+                    hsts: "max-age=63072000; includeSubDomains; preload".to_string(),
+                    ..Default::default()
+                },
+            ),
         ))
         .layer(
             TraceLayer::new_for_http()

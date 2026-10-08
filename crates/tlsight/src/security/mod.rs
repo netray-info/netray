@@ -34,7 +34,7 @@ pub async fn security_headers(request: Request, next: Next) -> Response {
     let layer_fn = security_headers_layer(SecurityHeadersConfig {
         extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
         relaxed_csp_path_prefix: "/docs".to_string(),
-        include_permissions_policy: true,
+        ..Default::default()
     });
     let mut response = layer_fn(request, next).await;
     response.headers_mut().insert(
@@ -118,7 +118,7 @@ mod tests {
         let response = make_response_with_security_headers().await;
         assert_eq!(
             response.headers().get("strict-transport-security").unwrap(),
-            "max-age=31536000; includeSubDomains"
+            "max-age=31536000; includeSubDomains; preload"
         );
     }
 

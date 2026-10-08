@@ -60,3 +60,52 @@ config error: /nonexistent.toml: configuration file "/nonexistent.toml" not foun
 ```
 
 `adlc verify`: passed, 24 tests collected.
+
+## Phase 2 — Header and CORS parity
+
+### Criteria
+
+| Id | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R6: every response of the six services carries `secure-headers` (D3), no `Server`/`X-Powered-By`; non-`/docs` responses carry `csp-tool-spa` verbatim; ACAO `*` and CORP `cross-origin` everywhere; POST preflight 2xx with D3 methods, headers, max-age 600 | green | `tests/repo/test_header_parity.sh` |
+| C2 | R7: ifconfig-rs's HSTS difference is a `SecurityHeadersConfig` field; no header-rewriting code in ifconfig-rs | green | `tests/repo/test_header_parity.sh` |
+| C3 | R8: acceptance asserts R6 per host and `netray site`'s set, against production and a local `netray`; mta-sts policy check replaces the TODO | green | `tests/acceptance/smoke/security-headers.spec.ts; tests/acceptance/static-site/assets.spec.ts` |
+| C4 | Scenario: `/` and a JSON route per service carry the D3 set, `csp-tool-spa`, ACAO, CORP, no `server` | green | `tests/repo/test_header_parity.sh` |
+| C5 | Scenario: `/docs` has the relaxed CSP allowing Scalar, other D3 headers present | green | `tests/repo/test_header_parity.sh` |
+| C6 | Scenario: POST preflight → 2xx, methods `GET, POST, OPTIONS`, headers `content-type, accept`, max-age 600 | green | `tests/repo/test_header_parity.sh` |
+| C7 | Scenario: ifconfig-rs HSTS from `SecurityHeadersConfig`, no own header code | green | `tests/repo/test_header_parity.sh` |
+| C8 | Scenario: acceptance header spec passes against production (operator-observed) | green | `tests/acceptance/smoke/security-headers.spec.ts` |
+| C9 | Scenario: acceptance mta-sts spec: `version: STSv1`, `mode: enforce` | green | `tests/acceptance/static-site/assets.spec.ts` |
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 headers and CORS | 1 | sonnet | 65,514 | 182 |
+| G2 `acceptance-local` (fixed ports, collided with foreign dev servers on 8000/8080) | 3 | stuck → replaced | 42,915 | 89 |
+| G2 `acceptance-local` on free ports via `LOCAL_<NAME>_URL` | 2 | sonnet | 34,762 | 62 |
+
+### Review
+
+| Class | Finding | Outcome |
+|---|---|---|
+| BLOCKER | beacon's relaxed `/docs` CSP source `…/api-reference@1.44.25/` ends in `/` and does not match the page's script `…/api-reference@1.44.25`; Scalar would render blank after cutover (verified in headless Chromium by the reader) | test sharpened (`16dee7f`: scripts must match `script-src` by CSP source rules), source fixed without the slash |
+| NIT | the `/docs` check only grepped for the host | repaired with the BLOCKER |
+| AMENDMENT | C7/R7 named a `font-src` field and "no header-rewriting code", but D3 drops `font-src` and ifconfig-rs keeps `Vary`/`Cache-Control` | repaired in phase (`8f13662`) |
+
+Unit tests changed in production files: common `sets_all_base_headers` (exact CSP, preload HSTS, COOP, CORP), `no_permissions_policy_by_default` → `permissions_policy_always_set`, `includes_permissions_policy_when_configured` → `hsts_taken_from_config`; prism and tlsight `sets_strict_transport_security` (preload).
+
+Not run locally: ifconfig-rs integration tests (`ok_handlers.rs`), which need GeoIP data; their header asserts (2-year HSTS, CDN in `/docs` CSP, preflight 2xx) hold by reading. CI runs them.
+
+### Behavioural verification
+
+```
+$ just acceptance-local            # all seven subcommands on free ports, no proxy
+  29 passed (3.3s)
+$ cd tests/acceptance && TEST_ENV=production npx playwright test --no-deps smoke/security-headers.spec.ts static-site/assets.spec.ts
+  29 passed (1.5s)
+$ bash tests/repo/test_header_parity.sh
+PASS: test_header_parity
+```
+
+`adlc verify`: passed.

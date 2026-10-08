@@ -117,8 +117,9 @@ pub async fn run(config_arg: Option<String>) {
     //
     // Layer order matters: outermost layers run first on requests (last on
     // responses). The concurrency limit is outermost so excess connections are
-    // shed before any work. Security headers and CORS wrap everything. Tracing
-    // and compression are innermost around the actual handlers.
+    // shed before any work. Security headers and CORS wrap everything below the
+    // concurrency limit, including the body limit, so 413 responses carry them.
+    // Tracing and compression are innermost around the actual handlers.
     let security_headers_fn = security::security_headers_layer();
     let app = Router::new()
         .merge(api::health_router(state.clone()))
@@ -132,11 +133,6 @@ pub async fn run(config_arg: Option<String>) {
         .layer(axum::middleware::from_fn(
             netray_common::middleware::request_id,
         ))
-        .layer(axum::middleware::from_fn(move |req, next| {
-            let f = security_headers_fn.clone();
-            async move { f(req, next).await }
-        }))
-        .layer(security::cors_layer())
         .layer(CompressionLayer::new())
         .layer(
             TraceLayer::new_for_http()
@@ -168,6 +164,11 @@ pub async fn run(config_arg: Option<String>) {
                 ),
         )
         .layer(RequestBodyLimitLayer::new(8 * 1024))
+        .layer(security::cors_layer())
+        .layer(axum::middleware::from_fn(move |req, next| {
+            let f = security_headers_fn.clone();
+            async move { f(req, next).await }
+        }))
         .layer(tower::limit::ConcurrencyLimitLayer::new(
             config.limits.max_concurrent_connections,
         ));

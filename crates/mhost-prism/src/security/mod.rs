@@ -155,7 +155,7 @@ mod tests {
         let response = make_response("/test").await;
         assert_eq!(
             response.headers().get("strict-transport-security").unwrap(),
-            "max-age=31536000; includeSubDomains"
+            "max-age=31536000; includeSubDomains; preload"
         );
     }
 

@@ -105,6 +105,52 @@ image:
 acceptance:
     cd tests/acceptance && TEST_ENV={{test_env}} npx playwright test
 
+# Playwright acceptance against a local stack: `netray site` and the six services on free 127.0.0.1 ports
+# (passed to the suite as LOCAL_<NAME>_URL), from their dev configs. Default specs: the two that need no network.
+acceptance-local *args:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    source tests/repo/lib/netray.sh
+    bin=$(netray_bin) || exit 1
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"; _netray_cleanup' EXIT
+    mkdir -p "$tmp/custom_cas"
+
+    site_port=$(free_port)
+    start_bg "$tmp/site.log" "$bin" site --bind "127.0.0.1:$site_port" --root site
+    wait_http "http://127.0.0.1:$site_port/" 30 || { echo "netray site did not answer on 127.0.0.1:$site_port" >&2; exit 1; }
+    export LOCAL_SITE_URL="http://localhost:$site_port"
+
+    # sub | crate dir | config | bind var | metrics bind var | extra env (see tests/repo/test_smoke_services.sh)
+    rows=(
+      "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db"
+      "dns|mhost-prism|prism.dev.toml|PRISM_SERVER__BIND|PRISM_SERVER__METRICS_BIND|"
+      "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
+      "http|spectra|spectra.dev.toml|SPECTRA__SERVER__BIND|SPECTRA__SERVER__METRICS_BIND|"
+      "email|beacon|beacon.dev.toml|BEACON__SERVER__BIND|BEACON__SERVER__METRICS_BIND|"
+      "ip|ifconfig-rs|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND|"
+    )
+    for row in "${rows[@]}"; do
+        IFS='|' read -r sub dir cfg bind_var metrics_var extra <<<"$row"
+        port=$(free_port)
+        (
+            cd "$REPO_ROOT/crates/$dir" || exit 1
+            # shellcheck disable=SC2086
+            start_bg "$tmp/$sub.log" env "$bind_var=127.0.0.1:$port" "$metrics_var=127.0.0.1:$(free_port)" $extra \
+                "$bin" "$sub" "$cfg"
+            echo "$!" >"$tmp/$sub.pid"
+        )
+        _NETRAY_PIDS+=("$(cat "$tmp/$sub.pid")")
+        wait_http "http://127.0.0.1:$port/health" 30 \
+            || { echo "netray $sub did not answer on 127.0.0.1:$port: $(tail -n 1 "$tmp/$sub.log")" >&2; exit 1; }
+        export "LOCAL_$(printf %s "$sub" | tr a-z A-Z)_URL=http://localhost:$port"
+    done
+
+    cd tests/acceptance
+    TEST_ENV=local npx playwright test --no-deps {{ if args == "" { "smoke/security-headers.spec.ts static-site/assets.spec.ts" } else { args } }}
+    status=$?
+    exit $status
+
 # Set the workspace version, open a changelog section, commit and tag. Never pushes.
 release version:
     #!/usr/bin/env bash

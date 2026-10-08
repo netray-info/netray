@@ -100,8 +100,6 @@ pub async fn run(config_arg: Option<String>) {
         .layer(axum::middleware::from_fn(
             netray_common::middleware::request_id,
         ))
-        .layer(axum::middleware::from_fn(security::security_headers))
-        .layer(security::cors_layer())
         .layer(CompressionLayer::new())
         .layer(
             TraceLayer::new_for_http()
@@ -133,6 +131,8 @@ pub async fn run(config_arg: Option<String>) {
                 ),
         )
         .layer(RequestBodyLimitLayer::new(4 * 1024))
+        .layer(security::cors_layer())
+        .layer(axum::middleware::from_fn(security::security_headers))
         .layer(tower::limit::ConcurrencyLimitLayer::new(
             config.limits.max_concurrent_connections,
         ));

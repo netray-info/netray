@@ -126,6 +126,14 @@ pub async fn run(config_arg: Option<String>) {
         .route("/robots.txt", get(robots_txt))
         .fallback(spa::handler)
         .with_state(state)
+        .route(
+            "/api-docs/openapi.json",
+            get({
+                let spec = openapi.clone();
+                move || async move { axum::Json(spec) }
+            }),
+        )
+        .merge(Scalar::with_url("/docs", openapi))
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("lens", req, next)
         }))
@@ -161,20 +169,10 @@ pub async fn run(config_arg: Option<String>) {
         .layer(axum::middleware::from_fn(
             netray_common::middleware::request_id,
         ))
-        .layer(axum::middleware::from_fn(security_headers_mw))
-        .layer(cors_layer())
         .layer(CompressionLayer::new())
         .layer(RequestBodyLimitLayer::new(8 * 1024))
-        // OpenAPI docs routes are added after the middleware stack so they are not
-        // covered by the tower middleware layers applied above.
-        .route(
-            "/api-docs/openapi.json",
-            get({
-                let spec = openapi.clone();
-                move || async move { axum::Json(spec) }
-            }),
-        )
-        .merge(Scalar::with_url("/docs", openapi));
+        .layer(cors_layer())
+        .layer(axum::middleware::from_fn(security_headers_mw));
 
     // 6. Graceful shutdown channel.
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -233,9 +231,9 @@ async fn security_headers_mw(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     let layer_fn = security_headers_layer(SecurityHeadersConfig {
-        extra_script_src: vec![],
+        extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
         relaxed_csp_path_prefix: "/docs".to_string(),
-        include_permissions_policy: true,
+        ..Default::default()
     });
     layer_fn(request, next).await
 }

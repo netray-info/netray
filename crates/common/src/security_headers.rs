@@ -14,8 +14,8 @@ pub struct SecurityHeadersConfig {
     /// Defaults to `"/docs"` if empty.
     pub relaxed_csp_path_prefix: String,
 
-    /// Whether to include the `Permissions-Policy` header.
-    pub include_permissions_policy: bool,
+    /// `Strict-Transport-Security` header value.
+    pub hsts: String,
 }
 
 impl Default for SecurityHeadersConfig {
@@ -23,7 +23,7 @@ impl Default for SecurityHeadersConfig {
         Self {
             extra_script_src: Vec::new(),
             relaxed_csp_path_prefix: "/docs".to_string(),
-            include_permissions_policy: false,
+            hsts: "max-age=31536000; includeSubDomains; preload".to_string(),
         }
     }
 }
@@ -39,8 +39,10 @@ impl Default for SecurityHeadersConfig {
 /// - `X-Content-Type-Options: nosniff`
 /// - `X-Frame-Options: DENY`
 /// - `Referrer-Policy: strict-origin-when-cross-origin`
-/// - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
-/// - `Permissions-Policy` (optional, when `include_permissions_policy` is true)
+/// - `Strict-Transport-Security`: the configured `hsts` value
+/// - `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`
+/// - `Cross-Origin-Opener-Policy: same-origin`
+/// - `Cross-Origin-Resource-Policy: cross-origin`
 pub fn security_headers_layer(
     config: SecurityHeadersConfig,
 ) -> impl Fn(Request, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Response> + Send>>
@@ -60,16 +62,18 @@ pub fn security_headers_layer(
         })
         .collect();
 
-    let strict_csp =
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'".to_string();
+    let csp_with = |script_src: &str| {
+        format!(
+            "default-src 'self'; script-src {script_src}; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+        )
+    };
+
+    let strict_csp = csp_with("'self' 'unsafe-inline'");
 
     let relaxed_csp = if valid_extra.is_empty() {
         strict_csp.clone()
     } else {
-        let extra = valid_extra.join(" ");
-        format!(
-            "default-src 'self'; script-src 'self' {extra}; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'"
-        )
+        csp_with(&format!("'self' 'unsafe-inline' {}", valid_extra.join(" ")))
     };
 
     let strict_csp_val: HeaderValue = strict_csp.parse().expect("valid CSP header value");
@@ -79,18 +83,12 @@ pub fn security_headers_layer(
     let referrer: HeaderValue = "strict-origin-when-cross-origin"
         .parse()
         .expect("valid header value");
-    let hsts: HeaderValue = "max-age=31536000; includeSubDomains"
+    let hsts: HeaderValue = config.hsts.parse().expect("valid HSTS header value");
+    let pp_val: HeaderValue = "camera=(), microphone=(), geolocation=(), payment=()"
         .parse()
         .expect("valid header value");
-    let pp_val: Option<HeaderValue> = if config.include_permissions_policy {
-        Some(
-            "geolocation=(), microphone=(), camera=(), payment=()"
-                .parse()
-                .expect("valid header value"),
-        )
-    } else {
-        None
-    };
+    let coop: HeaderValue = "same-origin".parse().expect("valid header value");
+    let corp: HeaderValue = "cross-origin".parse().expect("valid header value");
 
     let prefix = config.relaxed_csp_path_prefix;
     let prefix_with_slash = format!("{prefix}/");
@@ -103,6 +101,8 @@ pub fn security_headers_layer(
         let referrer = referrer.clone();
         let hsts = hsts.clone();
         let pp_val = pp_val.clone();
+        let coop = coop.clone();
+        let corp = corp.clone();
         let prefix = prefix.clone();
         let prefix_with_slash = prefix_with_slash.clone();
 
@@ -124,12 +124,18 @@ pub fn security_headers_layer(
             headers.insert(axum::http::header::REFERRER_POLICY, referrer);
             headers.insert(axum::http::header::STRICT_TRANSPORT_SECURITY, hsts);
 
-            if let Some(pp) = pp_val {
-                headers.insert(
-                    axum::http::HeaderName::from_static("permissions-policy"),
-                    pp,
-                );
-            }
+            headers.insert(
+                axum::http::HeaderName::from_static("permissions-policy"),
+                pp_val,
+            );
+            headers.insert(
+                axum::http::HeaderName::from_static("cross-origin-opener-policy"),
+                coop,
+            );
+            headers.insert(
+                axum::http::HeaderName::from_static("cross-origin-resource-policy"),
+                corp,
+            );
 
             response
         })
@@ -181,9 +187,10 @@ mod tests {
             .to_str()
             .unwrap();
         assert!(csp.contains("default-src 'self'"));
-        assert!(csp.contains("script-src 'self'"));
-        assert!(csp.contains("style-src 'self' 'unsafe-inline'"));
-        assert!(csp.contains("frame-ancestors 'none'"));
+        assert_eq!(
+            csp,
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+        );
 
         assert_eq!(
             response.headers().get("x-content-type-options").unwrap(),
@@ -196,31 +203,44 @@ mod tests {
         );
         assert_eq!(
             response.headers().get("strict-transport-security").unwrap(),
-            "max-age=31536000; includeSubDomains"
+            "max-age=31536000; includeSubDomains; preload"
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get("cross-origin-opener-policy")
+                .unwrap(),
+            "same-origin"
+        );
+        assert_eq!(
+            response
+                .headers()
+                .get("cross-origin-resource-policy")
+                .unwrap(),
+            "cross-origin"
         );
     }
 
     #[tokio::test]
-    async fn no_permissions_policy_by_default() {
+    async fn permissions_policy_always_set() {
         let response = make_response(SecurityHeadersConfig::default(), "/test").await;
-        assert!(response.headers().get("permissions-policy").is_none());
+        assert_eq!(
+            response.headers().get("permissions-policy").unwrap(),
+            "camera=(), microphone=(), geolocation=(), payment=()"
+        );
     }
 
     #[tokio::test]
-    async fn includes_permissions_policy_when_configured() {
+    async fn hsts_taken_from_config() {
         let config = SecurityHeadersConfig {
-            include_permissions_policy: true,
+            hsts: "max-age=63072000; includeSubDomains; preload".to_string(),
             ..Default::default()
         };
         let response = make_response(config, "/test").await;
-        let pp = response
-            .headers()
-            .get("permissions-policy")
-            .expect("Permissions-Policy header present")
-            .to_str()
-            .unwrap();
-        assert!(pp.contains("geolocation=()"));
-        assert!(pp.contains("camera=()"));
+        assert_eq!(
+            response.headers().get("strict-transport-security").unwrap(),
+            "max-age=63072000; includeSubDomains; preload"
+        );
     }
 
     #[tokio::test]

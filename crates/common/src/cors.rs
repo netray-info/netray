@@ -1,16 +1,17 @@
 //! Shared CORS layer construction.
 
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 
-/// Returns a restrictive `CorsLayer` that allows only GET and POST with
-/// standard content-type/accept headers.
-///
-/// No origin allowlist is configured, so `CorsLayer` rejects all cross-origin
-/// requests by default. Same-origin requests from an embedded SPA never trigger
-/// CORS preflight and are unaffected.
+/// Returns a public-API `CorsLayer`: any origin, `GET`/`POST`/`OPTIONS`,
+/// `content-type` and `accept` request headers, preflight cached for 600 s.
 pub fn cors_layer() -> CorsLayer {
     CorsLayer::new()
-        .allow_methods([axum::http::Method::GET, axum::http::Method::POST])
+        .allow_origin(Any)
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::OPTIONS,
+        ])
         .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::ACCEPT])
-        .max_age(std::time::Duration::from_secs(3600))
+        .max_age(std::time::Duration::from_secs(600))
 }
