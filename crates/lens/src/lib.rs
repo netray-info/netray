@@ -166,13 +166,13 @@ pub async fn run(config_arg: Option<String>) {
                     },
                 ),
         )
-        .layer(axum::middleware::from_fn(
-            netray_common::middleware::request_id,
-        ))
         .layer(CompressionLayer::new())
         .layer(RequestBodyLimitLayer::new(8 * 1024))
         .layer(cors_layer())
-        .layer(axum::middleware::from_fn(security_headers_mw));
+        .layer(axum::middleware::from_fn(security_headers_mw))
+        .layer(axum::middleware::from_fn(
+            netray_common::middleware::request_id,
+        ));
 
     // 6. Graceful shutdown channel.
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);

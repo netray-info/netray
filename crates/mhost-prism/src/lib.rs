@@ -117,8 +117,9 @@ pub async fn run(config_arg: Option<String>) {
     //
     // Layer order matters: outermost layers run first on requests (last on
     // responses). The concurrency limit is outermost so excess connections are
-    // shed before any work. Security headers and CORS wrap everything below the
-    // concurrency limit, including the body limit, so 413 responses carry them.
+    // shed before any work. The request id comes next, so every response —
+    // CORS preflights included — carries it and the trace span sees it.
+    // Security headers and CORS wrap the body limit, so 413 responses carry them.
     // Tracing and compression are innermost around the actual handlers.
     let security_headers_fn = security::security_headers_layer();
     let app = Router::new()
@@ -130,9 +131,6 @@ pub async fn run(config_arg: Option<String>) {
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("prism", req, next)
         }))
-        .layer(axum::middleware::from_fn(
-            netray_common::middleware::request_id,
-        ))
         .layer(CompressionLayer::new())
         .layer(
             TraceLayer::new_for_http()
@@ -169,6 +167,9 @@ pub async fn run(config_arg: Option<String>) {
             let f = security_headers_fn.clone();
             async move { f(req, next).await }
         }))
+        .layer(axum::middleware::from_fn(
+            netray_common::middleware::request_id,
+        ))
         .layer(tower::limit::ConcurrencyLimitLayer::new(
             config.limits.max_concurrent_connections,
         ));

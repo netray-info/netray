@@ -94,9 +94,6 @@ pub async fn run(config_arg: Option<String>) -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("beacon", req, next)
         }))
-        .layer(axum::middleware::from_fn(
-            netray_common::middleware::request_id,
-        ))
         .layer(CompressionLayer::new())
         .layer(
             TraceLayer::new_for_http()
@@ -129,7 +126,10 @@ pub async fn run(config_arg: Option<String>) -> anyhow::Result<()> {
         )
         .layer(RequestBodyLimitLayer::new(64 * 1024))
         .layer(security::cors_layer())
-        .layer(axum::middleware::from_fn(security::security_headers));
+        .layer(axum::middleware::from_fn(security::security_headers))
+        .layer(axum::middleware::from_fn(
+            netray_common::middleware::request_id,
+        ));
 
     // Graceful shutdown
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
