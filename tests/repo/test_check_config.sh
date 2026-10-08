@@ -111,7 +111,7 @@ for row in "${telemetry_rejects[@]}"; do
     fi
     run_check "$sub" "$tmp/$sub.otlp.toml"
     [ "$rc" -eq 1 ] || fail "$sub: invalid otlp_endpoint exited $rc, expected 1"
-    grep -q 'otlp_endpoint' <<<"$out" || fail "$sub: invalid otlp_endpoint error does not name otlp_endpoint ($out)"
+    grep -qF 'telemetry.otlp_endpoint' <<<"$out" || fail "$sub: invalid otlp_endpoint error does not name telemetry.otlp_endpoint ($out)"
 done
 
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
