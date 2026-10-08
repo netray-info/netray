@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { resolveEnv } from '../fixtures/env.js';
+import { resolveEnv, isProduction } from '../fixtures/env.js';
 
 const urls = resolveEnv();
 const siteUrl = urls.site;
@@ -8,7 +8,6 @@ const ASSETS = [
   '/robots.txt',
   '/favicon.svg',
   '/bimi-logo.svg',
-  // TODO: mta-sts.txt is not served from the static site origin
 ];
 
 for (const path of ASSETS) {
@@ -19,3 +18,14 @@ for (const path of ASSETS) {
     expect(body.length, `${path} body non-empty`).toBeGreaterThan(0);
   });
 }
+
+test('mta-sts: policy served with STSv1 enforce', async ({ request }) => {
+  // Production: dedicated host. Local: `netray site` selects the policy by a Host header starting with `mta-sts.`.
+  const response = isProduction()
+    ? await request.get('https://mta-sts.netray.info/.well-known/mta-sts.txt')
+    : await request.get(`${siteUrl}/.well-known/mta-sts.txt`, { headers: { Host: 'mta-sts.localhost' } });
+  expect(response.status(), 'mta-sts.txt returns 200').toBe(200);
+  const body = await response.text();
+  expect(body).toContain('version: STSv1');
+  expect(body).toContain('mode: enforce');
+});
