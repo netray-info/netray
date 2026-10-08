@@ -16,14 +16,20 @@ netray.info is a suite of network inspectors, live at [netray.info](https://netr
 
 ```sh
 just adlc-setup          # once per checkout: npm workspaces and frontend builds
-just check               # the gate plus the full Rust suite
+just check               # the gate, cargo-deny and the full Rust suite
 just build               # frontends, then the release binary target/release/netray
-just image               # the container image, local architecture
+just image               # the container image, local architecture (needs `docker login ghcr.io`)
 just acceptance          # Playwright suite against TEST_ENV (default: production)
 just release X.Y.Z       # set the workspace version, changelog section, commit, tag; never pushes
 ```
 
 `just --list` shows the rest (`ifconfig-data`, `test-ifconfig-data`, `tlsight-data`, `e2e`, …).
+
+`just image` copies ifconfig-rs's GeoIP data from the private `ghcr.io/netray-info/ifconfig-rs-data` image, so it needs a GHCR login that can read it.
+
+## Releases
+
+`just release X.Y.Z` commits the version and changelog and tags `vX.Y.Z`; pushing the tag runs `.github/workflows/release.yml`, which builds the one arm64 image, smoke-tests every subcommand and pushes `ghcr.io/netray-info/netray:X.Y.Z`. It never overwrites a tag, never pushes `latest` and deploys nothing; deployment pins that tag in the infrastructure repository. `.github/workflows/ci.yml` runs `just check` on every push to `main` and every pull request.
 
 ## Running locally
 
