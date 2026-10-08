@@ -79,7 +79,7 @@ One image, `ghcr.io/netray-info/netray`, built natively for arm64 on `ubuntu-24.
 - R-R2: The image tag is the exact version without the leading `v` (`v1.2.3` pushes `1.2.3`, `v1.2.3-rc.1` pushes `1.2.3-rc.1`). Never `latest`, never a floating `major` or `major.minor` tag.
 - R-R3: An existing tag is never overwritten. Before building, the workflow asks GHCR for the tag and fails if it exists — and also when the answer is neither the tag nor "manifest unknown", so a registry error never leads to an overwrite.
 - R-R4: Before pushing, every subcommand is smoke-tested from the built image (loaded locally, not yet in the registry). A failing smoke test means nothing is pushed.
-- R-R5: The build reads the private `ghcr.io/netray-info/ifconfig-rs-data` image (GeoIP data stage). Login is `docker/login-action` to `ghcr.io` with `username: ${{ github.actor }}` and `password: ${{ secrets.GITHUB_TOKEN }}`; the same token reads that image and pushes the result.
+- R-R5: No data file is ever baked into a published image: the GeoLite2 licence forbids redistributing the `.mmdb` files, and the other ifconfig-rs lists carry their own terms. The deployment mounts the data at `/netray/data`. Before pushing, `release.yml` fails when the built image contains a `*.mmdb` file or any file under `/netray/data`; only `ci.yml` reads the private `ifconfig-rs-data` image, to run the ifconfig-rs integration tests. Login is `docker/login-action` to `ghcr.io` with `username: ${{ github.actor }}` and `password: ${{ secrets.GITHUB_TOKEN }}`.
 - R-R6: `release.yml` builds and publishes. It does not deploy and calls no webhook.
 - R-R7: `concurrency` groups runs by `github.ref_name` with `cancel-in-progress: false`, so a second run for the same tag queues, then fails the existence check instead of overwriting the first image.
 
@@ -97,7 +97,7 @@ One image, `ghcr.io/netray-info/netray`, built natively for arm64 on `ubuntu-24.
 
 | Name | Used for | Scope |
 |------|----------|-------|
-| `GITHUB_TOKEN` | GHCR login: read `ifconfig-rs-data` (ci, release), push `netray` (release) | Auto-provided |
+| `GITHUB_TOKEN` | GHCR login: read `ifconfig-rs-data` (ci only), push `netray` (release) | Auto-provided |
 
 - R-S1: No other secret. A workflow that references any other secret is defective.
 

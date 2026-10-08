@@ -27,7 +27,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 
 - `just adlc-setup` first in a fresh checkout: the crates embed `frontend/dist` and do not compile without it.
 - `just adlc-verify` is the gate: offline, no browser. `just check` adds the full Rust suite.
-- `just build`, `just image` (needs a GHCR login that reads the private GeoIP data image), `just acceptance` (network + browser), `just release X.Y.Z` (never pushes).
+- `just build`, `just image`, `just acceptance` (network + browser), `just release X.Y.Z` (never pushes).
+- The published image never contains data files (GeoLite2 licence); `netray ip` gets `/netray/data` from the deployment's mount.
 - `just check` runs `cargo deny check bans licenses sources`; `just adlc-setup` installs cargo-deny when it is missing.
 - CI (`ci.yml`) and the release (`release.yml`) follow `specs/rules/workflow-rules.md`: one image, exact version tags, no deploy step.
 - Data: `just ifconfig-data` / `just test-ifconfig-data` (GeoIP), `just tlsight-data` (CAA table, committed).

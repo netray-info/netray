@@ -18,14 +18,14 @@ netray.info is a suite of network inspectors, live at [netray.info](https://netr
 just adlc-setup          # once per checkout: npm workspaces and frontend builds
 just check               # the gate, cargo-deny and the full Rust suite
 just build               # frontends, then the release binary target/release/netray
-just image               # the container image, local architecture (needs `docker login ghcr.io`)
+just image               # the container image, local architecture
 just acceptance          # Playwright suite against TEST_ENV (default: production)
 just release X.Y.Z       # set the workspace version, changelog section, commit, tag; never pushes
 ```
 
 `just --list` shows the rest (`ifconfig-data`, `test-ifconfig-data`, `tlsight-data`, `e2e`, …).
 
-`just image` copies ifconfig-rs's GeoIP data from the private `ghcr.io/netray-info/ifconfig-rs-data` image, so it needs a GHCR login that can read it.
+The image contains no data files: `netray ip` reads its GeoIP and list files from `/netray/data`, which the deployment fills with `crates/ifconfig-rs/data/fetch.sh` (MaxMind licence required) and mounts read-only.
 
 ## Releases
 

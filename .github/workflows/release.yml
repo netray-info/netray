@@ -76,7 +76,7 @@ jobs:
             "tls|tlsight.example.toml|TLSIGHT_SERVER__|-e TLSIGHT_VALIDATION__CUSTOM_CA_DIR=/tmp/custom_cas -v $cas:/tmp/custom_cas:ro"
             "http|spectra.example.toml|SPECTRA__SERVER__|"
             "email|beacon.toml|BEACON__SERVER__|"
-            "ip|ifconfig.example.toml|IFCONFIG_SERVER__|-e IFCONFIG_GEOIP_CITY_DB=data/GeoLite2-City.mmdb -e IFCONFIG_GEOIP_ASN_DB=data/GeoLite2-ASN.mmdb"
+            "ip|ifconfig.example.toml|IFCONFIG_SERVER__|"
           )
 
           check() {
@@ -110,6 +110,16 @@ jobs:
           docker rm -f smoke-site >/dev/null
 
           exit "$failed"
+
+      - name: Image carries no data files
+        run: |
+          found=$(docker run --rm --entrypoint sh "ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}" \
+            -c 'find / -xdev -name "*.mmdb" 2>/dev/null; [ -d /netray/data ] && find /netray/data -type f')
+          if [ -n "$found" ]; then
+            echo "::error::the image must not contain data files (GeoLite2 licence):"
+            echo "$found"
+            exit 1
+          fi
 
       - name: Publish the image
         run: docker push "ghcr.io/netray-info/netray:${{ steps.version.outputs.version }}"
