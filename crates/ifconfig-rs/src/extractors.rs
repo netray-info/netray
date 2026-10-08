@@ -157,6 +157,21 @@ mod tests {
     }
 
     #[test]
+    fn trusted_proxy_cf_connecting_ip_is_ignored() {
+        // No Cloudflare in front: a client-set CF-Connecting-IP must neither be
+        // reported nor key the rate limiter.
+        let peer: SocketAddr = "10.0.0.1:1234".parse().unwrap();
+        let trusted = vec![net("10.0.0.0/24")];
+        let headers = headers_with(&[("cf-connecting-ip", "198.51.100.1"), ("x-real-ip", "198.51.100.2")]);
+        assert_eq!(
+            extract_client_ip(peer, &headers, &trusted).ip(),
+            "198.51.100.2".parse::<IpAddr>().unwrap()
+        );
+        let headers = headers_with(&[("cf-connecting-ip", "198.51.100.1")]);
+        assert_eq!(extract_client_ip(peer, &headers, &trusted), peer);
+    }
+
+    #[test]
     fn no_trusted_proxies_returns_peer() {
         let peer: SocketAddr = "1.2.3.4:1234".parse().unwrap();
         let headers = headers_with(&[("x-forwarded-for", "10.0.0.1")]);

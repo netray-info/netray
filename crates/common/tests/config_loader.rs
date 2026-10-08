@@ -93,6 +93,17 @@ fn variables_of_another_prefix_are_ignored() {
 }
 
 #[test]
+fn prefix_matches_case_insensitively() {
+    for var in [
+        "prism_limits__per_ip_per_minute",
+        "Prism_Limits__Per_Ip_Per_Minute",
+    ] {
+        let cfg = load_with_env::<TestConfig>(None, "PRISM_", env(&[(var, "60")])).unwrap();
+        assert_eq!(cfg.limits.per_ip_per_minute, 60, "{var} was not applied");
+    }
+}
+
+#[test]
 fn non_utf8_env_entries_do_not_panic() {
     let bad = || OsString::from_vec(vec![0xff, 0xfe]);
     let vars = vec![

@@ -49,11 +49,21 @@ def scan(path, in_scope_all):
     return out
 
 res = []
-for p in sorted(glob.glob("crates/*/src/**/*.rs", recursive=True)):
+files = sorted(glob.glob("crates/*/src/**/*.rs", recursive=True))
+for p in files:
     res += scan(p, os.path.basename(p) == "config.rs" and os.path.dirname(p).endswith("/src"))
+print(f"scanned {len(files)}")
 print("\n".join(res))
 PY
-)
+) || { echo "FAIL: the scan did not run"; exit 1; }
+
+# A scan that never ran (no stdin, no files) must not pass: demand its own evidence.
+scanned=$(head -n1 <<< "$offenders")
+case "$scanned" in
+    "scanned "[1-9]*) ;;
+    *) echo "FAIL: the scan reported no files ('$scanned')"; exit 1 ;;
+esac
+offenders=$(tail -n +2 <<< "$offenders")
 
 if [ -n "$offenders" ]; then
     while IFS= read -r line; do
