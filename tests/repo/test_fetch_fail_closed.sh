@@ -139,5 +139,12 @@ while IFS= read -r line; do
 done < <(grep -E '(^|[^A-Za-z_])curl( |$)' "$src" | grep -vE '^[[:space:]]*#')
 [ "$n" -gt 0 ] || fail "C9: no curl invocation found in $src"
 
+# C2 under concurrency: a run's cleanup removes only its own temp files (*.tmp.$$);
+# deleting another run's half-built temp file lets that run rename a partial file into place.
+if grep -E 'rm .*\*\.tmp\.\*' "$src" >/dev/null; then
+    fail "C2: cleanup removes every run's temp files (*.tmp.*), not only this run's (*.tmp.\$\$)"
+fi
+grep -E 'rm .*\.tmp\.\$\$' "$src" >/dev/null || fail "C2: cleanup does not remove this run's temp files (*.tmp.\$\$)"
+
 [ "$fails" -eq 0 ] || exit 1
 echo "PASS: test_fetch_fail_closed"
