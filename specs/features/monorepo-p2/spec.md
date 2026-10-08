@@ -1,7 +1,8 @@
 # Spec: one CI, one release
 
-Status: In progress
+Status: Done
 Created: 2026-10-07
+Finished: 2026-10-08
 
 The repository builds as one workspace into one binary `netray` (`specs/features/monorepo-p1/spec.md`). It still carries the per-crate GitHub workflows of the repositories it came from: inert here, because GitHub only runs `.github/workflows/` at the root, but misleading. This spec gives the repository one CI workflow and one release workflow that publishes one image, retires the per-crate workflows and the rules written for them, and makes the production acceptance suite pass again.
 
