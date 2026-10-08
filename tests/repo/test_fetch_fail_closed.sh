@@ -21,6 +21,8 @@ cat > "$stubs/curl" <<'STUB'
 #!/usr/bin/env bash
 # Minimal curl: -s -S -f (also clustered), -o FILE, URL. FAIL_URLS (space separated
 # substrings) answer HTTP 404: with -f exit 22 and no output, without -f an HTML page, exit 0.
+# HTML_URLS answer HTTP 200 with an HTML error page (exit 0 even with -f): a 2xx garbage body.
+# PARTIAL_URLS emulate a transfer dying mid-body: with -f part of the body is written, exit 22.
 f=0 out="" url=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -41,6 +43,21 @@ for pat in ${FAIL_URLS:-}; do
             fi
             echo '<html><body>404 Not Found</body></html>' | emit
             exit 0 ;;
+    esac
+done
+for pat in ${HTML_URLS:-}; do
+    case "$url" in
+        *"$pat"*) echo '<html><body>Service Unavailable, try again later</body></html>' | emit; exit 0 ;;
+    esac
+done
+for pat in ${PARTIAL_URLS:-}; do
+    case "$url" in
+        *"$pat"*)
+            if [ "$f" = 1 ]; then
+                printf '192.0.2.0/2' | emit
+                echo "curl: (18) transfer closed with outstanding read data remaining" >&2
+                exit 22
+            fi ;;
     esac
 done
 prefixes='{"prefixes":[{"ipv4Prefix":"192.0.2.0/24","service":"svc","scope":"sc"},{"ipv6Prefix":"2001:db8::/32","service":"svc","scope":"sc"}]}'
@@ -75,12 +92,13 @@ chmod +x "$stubs/curl" "$stubs/geoipupdate"
 
 data_files="regexes.yaml tor_exit_nodes.txt feodo_botnet_ips.txt vpn_ranges.txt cloud_provider_ranges.jsonl datacenter_ranges.txt bot_ranges.jsonl spamhaus_drop.txt cins_army_ips.txt as_metadata.jsonl"
 
-# run_scenario DIR FAIL_URLS -> exit code in $rc
+# run_scenario DIR FAIL_URLS [HTML_URLS [PARTIAL_URLS [ARG]]] -> exit code in $rc
 run_scenario() {
     mkdir -p "$1"
     cp "$root/$src" "$1/fetch.sh"
     rc=0
-    (cd "$1" && PATH="$stubs:$PATH" FAIL_URLS="$2" bash ./fetch.sh get_all >"$1.out" 2>&1) || rc=$?
+    (cd "$1" && PATH="$stubs:$PATH" FAIL_URLS="$2" HTML_URLS="${3:-}" PARTIAL_URLS="${4:-}" \
+        bash ./fetch.sh "${5:-get_all}" >"$1.out" 2>&1) || rc=$?
 }
 
 # Anything in DIR that is neither fetch.sh, a final data file, nor a *.mmdb is a leftover.
@@ -139,12 +157,58 @@ while IFS= read -r line; do
 done < <(grep -E '(^|[^A-Za-z_])curl( |$)' "$src" | grep -vE '^[[:space:]]*#')
 [ "$n" -gt 0 ] || fail "C9: no curl invocation found in $src"
 
-# C2 under concurrency: a run's cleanup removes only its own temp files (*.tmp.$$);
-# deleting another run's half-built temp file lets that run rename a partial file into place.
-if grep -E 'rm .*\*\.tmp\.\*' "$src" >/dev/null; then
-    fail "C2: cleanup removes every run's temp files (*.tmp.*), not only this run's (*.tmp.\$\$)"
-fi
-grep -E 'rm .*\.tmp\.\$\$' "$src" >/dev/null || fail "C2: cleanup does not remove this run's temp files (*.tmp.\$\$)"
+# C10: a later input is bad (2xx HTML body, or a download dying mid-pipeline) after earlier
+# steps of a multi-step writer succeeded: no final file, no leftovers, non-zero exit.
+partial_case() { # NAME TARGET FAIL_URLS HTML_URLS
+    local d="$work/c10-$1"
+    run_scenario "$d" "$3" "$4"
+    [ "$rc" -ne 0 ] || fail "C10 $1: bad input but fetch.sh exited 0"
+    [ ! -e "$d/$2" ] || fail "C10 $1: $2 exists after a later input was bad"
+    l=$(leftovers "$d"); [ -z "$l" ] || fail "C10 $1: leftovers: $(echo $l)"
+}
+partial_case cloud  cloud_provider_ranges.jsonl "" oracle.com
+partial_case bots   bot_ranges.jsonl            "" bing.com
+partial_case asmeta as_metadata.jsonl           "" as-metadata
+partial_case cins   cins_army_ips.txt           cinsscore ""
+
+# C11: get never writes the final name directly: a transfer failing mid-body leaves no file.
+for u in torbulkexitlist regexes.yaml; do
+    d="$work/c11-$u"; run_scenario "$d" "" "" "$u"
+    case "$u" in torbulkexitlist) t=tor_exit_nodes.txt ;; *) t=regexes.yaml ;; esac
+    [ "$rc" -ne 0 ] || fail "C11: partial transfer of $u but fetch.sh exited 0"
+    [ ! -e "$d/$t" ] || fail "C11: $t exists after a partial transfer of $u"
+    l=$(leftovers "$d"); [ -z "$l" ] || fail "C11: leftovers after partial $u: $(echo $l)"
+done
+
+# C12 under concurrency: files owned by another run (pid 99999) survive this run, on a usage
+# error (typo) and on a failing run alike. Intermediates live in a per-run dir .fetch.$$,
+# never under shared names such as .aws.json.
+for mode in typo tor cins; do
+    d="$work/c12-$mode"; mkdir -p "$d"
+    printf 'other run\n' > "$d/vpn_ranges.txt.tmp.99999"
+    printf 'other aws\n' > "$d/.aws.json"
+    mkdir -p "$d/.fetch.99999"; printf 'other aws\n' > "$d/.fetch.99999/aws.json"
+    case "$mode" in
+        typo) run_scenario "$d" "" "" "" get-all
+              [ "$rc" -eq 2 ] || fail "C12: typo'd subcommand exited $rc, expected 2" ;;
+        tor)  run_scenario "$d" "torbulkexitlist"
+              [ "$rc" -ne 0 ] || fail "C12: Tor list 404 but fetch.sh exited 0" ;;
+        cins) run_scenario "$d" "cinsscore"
+              [ "$rc" -ne 0 ] || fail "C12: CINS 404 but fetch.sh exited 0" ;;
+    esac
+    [ "$(cat "$d/vpn_ranges.txt.tmp.99999" 2>/dev/null)" = "other run" ] \
+        || fail "C12 ($mode): another run's vpn_ranges.txt.tmp.99999 was removed or changed"
+    [ "$(cat "$d/.fetch.99999/aws.json" 2>/dev/null)" = "other aws" ] \
+        || fail "C12 ($mode): another run's .fetch.99999/aws.json was removed or changed"
+    [ "$(cat "$d/.aws.json" 2>/dev/null)" = "other aws" ] \
+        || fail "C12 ($mode): shared .aws.json was removed or changed"
+    [ "$mode" = typo ] || [ ! -e "$d/cloud_provider_ranges.jsonl" ] || \
+        ! grep -q 'other aws' "$d/cloud_provider_ranges.jsonl" 2>/dev/null \
+        || fail "C12 ($mode): another run's .aws.json was consumed into the output"
+done
+# Own cleanup still works: no .fetch.* dir of this run remains after a failing run.
+ls -d "$work"/c12-cins/.fetch.* 2>/dev/null | grep -v '\.fetch\.99999$' | grep -q . \
+    && fail "C12: this run's per-run directory was not removed"
 
 [ "$fails" -eq 0 ] || exit 1
 echo "PASS: test_fetch_fail_closed"
