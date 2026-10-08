@@ -109,3 +109,45 @@ PASS: test_header_parity
 ```
 
 `adlc verify`: passed.
+
+## Phase 3 — lens snapshot 404
+
+### Criteria
+
+| Id | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R9: `/r/<id>` answers 404 with the "expired or unknown" HTML page for an unknown, an expired and a malformed id | green | `crates/lens/tests/snapshot_routes.rs` |
+| C2 | Scenario: unknown id `abcdefgh` → 404, HTML says expired or unknown | green | `crates/lens/tests/snapshot_routes.rs` |
+| C3 | Scenario: snapshot past its expiry → 404, same page | green | `crates/lens/tests/snapshot_routes.rs` |
+| C4 | Scenario: malformed id (`/r/x`, `/r/not-a-valid-id!`) → 404, same page, not 400 JSON | green | `crates/lens/tests/snapshot_routes.rs` |
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 malformed id → 404 page | 1 | sonnet | 25,979 | 48 |
+| G1 repair: path rejection and unmatched `/r/` paths | 2 | sonnet | 29,765 | 45 |
+
+### Review
+
+| Class | Finding | Outcome |
+|---|---|---|
+| BLOCKER | an id that percent-decodes to invalid UTF-8 (`/r/%C0`) was rejected by `Path<String>` with 400 text/plain before the handler | repaired: the handler takes `Result<Path<String>, PathRejection>`; test rows added (`ce09f5e`) |
+| DEFERRED → repaired | `/r/`, `/r/a/b`, `/r/AAAAAAAA/` fell through to the SPA with 200 | repaired: `/r/`, `/r/{shortid}/`, `/r/{shortid}/{*rest}` answer the 404 page (axum 0.8 rejects `/r/{*rest}` beside `/r/{shortid}`) |
+
+Unchanged and checked by the reader: no caller used the 400 JSON `INVALID_SHORTID`; the 404 page carries the security headers and request id; HEAD works; the id is never reflected into the page.
+
+### Behavioural verification
+
+```
+$ netray lens lens.dev.toml   # snapshots enabled, empty store
+/r/abcdefgh    -> 404 text/html   "This snapshot has expired or the ID is unknown."
+/r/x           -> 404 text/html
+/r/%C0         -> 404 text/html
+/r/a/b         -> 404 text/html
+/r/AAAAAAAA/   -> 404 text/html
+/r/            -> 404 text/html
+/              -> 200 text/html
+```
+
+`adlc verify`: passed.

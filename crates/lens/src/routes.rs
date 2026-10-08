@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use axum::Json;
+use axum::extract::rejection::PathRejection;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -1833,23 +1834,30 @@ async fn create_snapshot(state: &AppState, domain: &str, output: &CheckOutput) -
 /// Returns an Axum Router for the snapshot page endpoint.
 pub fn snapshot_router() -> axum::Router<AppState> {
     use axum::routing::get;
-    axum::Router::new().route("/r/{shortid}", get(snapshot_handler))
+    axum::Router::new()
+        .route("/r/{shortid}", get(snapshot_handler))
+        .route("/r/", get(snapshot_unmatched))
+        .route("/r/{shortid}/", get(snapshot_unmatched))
+        .route("/r/{shortid}/{*rest}", get(snapshot_unmatched))
+}
+
+async fn snapshot_unmatched() -> Response {
+    not_found_html().into_response()
 }
 
 /// `GET /r/:shortid` — render a saved snapshot as HTML.
 pub async fn snapshot_handler(
     State(state): State<AppState>,
-    Path(shortid): Path<String>,
+    shortid: Result<Path<String>, PathRejection>,
 ) -> Response {
     use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
     use serde_json::json;
 
+    let Ok(Path(shortid)) = shortid else {
+        return not_found_html().into_response();
+    };
     if !crate::snapshot::validate_shortid(&shortid) {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": {"code": "INVALID_SHORTID", "message": "shortid must be 8 alphanumeric characters"}})),
-        )
-            .into_response();
+        return not_found_html().into_response();
     }
     let store = match &state.snapshot_store {
         None => return not_found_html().into_response(),
@@ -1884,7 +1892,7 @@ fn not_found_html() -> impl IntoResponse {
     (
         StatusCode::NOT_FOUND,
         [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        r#"<!DOCTYPE html><html><head><title>Not found</title></head><body><h1>Snapshot not found</h1><p>This snapshot may have expired or the ID is invalid.</p></body></html>"#,
+        r#"<!DOCTYPE html><html><head><title>Not found</title></head><body><h1>Snapshot not found</h1><p>This snapshot has expired or the ID is unknown.</p></body></html>"#,
     )
 }
 

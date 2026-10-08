@@ -55,3 +55,15 @@
 **G3.** Run the two acceptance specs against production and record the result.
 
 Prose (`architecture-rules.md` §Security Headers, `crates/common/CLAUDE.md`, `crates/ifconfig-rs/CLAUDE.md`, root `CLAUDE.md` verbs) goes in the spec's closing docs commit.
+
+## Phase 3 — lens snapshot 404
+
+### Groups
+
+| Group | Criteria | Depends on |
+|---|---|---|
+| G1 | C1, C2, C3, C4 | — |
+
+### Plan
+
+**G1.** `crates/lens/src/routes.rs`: `snapshot_handler` answers a malformed shortid with `not_found_html()` instead of 400 JSON; `not_found_html` says the snapshot is expired or unknown. Expiry is already enforced by `SnapshotStore::get`.
