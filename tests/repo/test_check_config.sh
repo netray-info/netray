@@ -59,5 +59,28 @@ for row in "${table[@]}"; do
     fi
 done
 
+# Values the service refuses at startup must fail the check too, or the operator check
+# passes a config that crash-loops (sub:fixture:perl substitution).
+startup_rejects=(
+    "http:crates/spectra/tests/fixtures/spectra.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
+    "http:crates/spectra/tests/fixtures/spectra.production.toml:s/^per_ip_burst = .*/per_ip_burst = 0/"
+    "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"0/min\"|"
+    "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"ten\"|"
+    "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[validation\\]\$|[validation]\\ncustom_ca_dir = \"/nonexistent-ca-dir\"|"
+)
+n=0
+for row in "${startup_rejects[@]}"; do
+    IFS=: read -r sub fixture expr <<<"$row"
+    fixture="$REPO_ROOT/$fixture"
+    n=$((n + 1))
+    perl -pe "$expr" "$fixture" >"$tmp/$sub.reject$n.toml"
+    if cmp -s "$fixture" "$tmp/$sub.reject$n.toml"; then
+        fail "$sub: substitution '$expr' did not change the fixture"
+        continue
+    fi
+    run_check "$sub" "$tmp/$sub.reject$n.toml"
+    [ "$rc" -eq 1 ] || fail "$sub: startup-rejected value ($expr) exited $rc, expected 1"
+done
+
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
 echo "PASS: test_check_config"
