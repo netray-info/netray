@@ -44,6 +44,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **One workspace version.** Every crate inherits `[workspace.package] version`; only `just release` changes it.
 - **Services are libraries.** Each service crate exposes an async `run(config)` and has no `main.rs` or `[[bin]]`; `crates/netray` only parses arguments and dispatches.
 - **Config stays per service.** Config keys, the `*_CONFIG` variable and the env prefix (`LENS_`, `PRISM_`, `TLSIGHT_`, `IFCONFIG_`; `SPECTRA__` and `BEACON__` with a double underscore), metrics names and log targets are unchanged by the merge; do not unify them.
+- **One config loader.** Config loads only through `netray_common::config::load`; every config struct carries `deny_unknown_fields` (`tests/repo/test_config_strict.sh`).
+- **Startup rejects are checked.** A new startup `.expect`/`panic!` on a config value needs a `validate()` rule and a `startup_rejects` row in `tests/repo/test_check_config.sh`.
 - **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
 - **Features unify.** A dependency feature one crate enables reaches every service in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
