@@ -63,7 +63,10 @@ fn serve_close(listener: TcpListener) {
 async fn fetch_traced_keeps_hops_on_mid_chain_error() {
     let a = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let b = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let (pa, pb) = (a.local_addr().unwrap().port(), b.local_addr().unwrap().port());
+    let (pa, pb) = (
+        a.local_addr().unwrap().port(),
+        b.local_addr().unwrap().port(),
+    );
     let a_url = format!("http://a.test:{pa}/");
     let b_url = format!("http://b.test:{pb}/");
     serve_redirect(a, b_url.clone());
@@ -78,12 +81,36 @@ async fn fetch_traced_keeps_hops_on_mid_chain_error() {
     opts.at_limit = AtLimit::ReturnLast;
     opts.allow = loopback_v4;
 
-    let (result, hops) =
-        fetch_traced(&ClientSettings::default(), resolver, &a_url, &opts).await;
+    let (result, hops) = fetch_traced(&ClientSettings::default(), resolver, &a_url, &opts).await;
 
     assert!(result.is_err(), "B closes the connection: {result:?}");
     assert_eq!(hops.len(), 1, "hops: {hops:?}");
     assert_eq!(hops[0].url.as_str(), a_url);
     assert_eq!(hops[0].status, StatusCode::MOVED_PERMANENTLY);
     assert_eq!(hops[0].location, b_url);
+}
+
+/// A redirect to a scheme the helper does not follow is still recorded, as reqwest-based
+/// callers recorded it before the scheme error.
+#[tokio::test]
+async fn fetch_traced_records_a_hop_refused_for_its_scheme() {
+    let a = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let pa = a.local_addr().unwrap().port();
+    let a_url = format!("http://a.test:{pa}/");
+    serve_redirect(a, "ftp://a.test/file".to_string());
+
+    let resolver = Arc::new(StubResolver(HashMap::from([(
+        "a.test".to_string(),
+        vec![IpAddr::V4(Ipv4Addr::LOCALHOST)],
+    )])));
+    let mut opts = FetchOptions::new(Method::GET);
+    opts.max_redirects = 10;
+    opts.allow = loopback_v4;
+
+    let (result, hops) = fetch_traced(&ClientSettings::default(), resolver, &a_url, &opts).await;
+
+    assert!(result.is_err(), "ftp is not followed: {result:?}");
+    assert_eq!(hops.len(), 1, "hops: {hops:?}");
+    assert_eq!(hops[0].url.as_str(), a_url);
+    assert_eq!(hops[0].location, "ftp://a.test/file");
 }
