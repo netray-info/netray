@@ -19,18 +19,46 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Domain health checker (netray.info)
-    Lens { config: Option<String> },
+    Lens {
+        config: Option<String>,
+        /// Validate the configuration file at PATH and exit
+        #[arg(long, value_name = "PATH")]
+        check_config: Option<String>,
+    },
     /// DNS inspector (dns.netray.info)
-    Dns { config: Option<String> },
+    Dns {
+        config: Option<String>,
+        /// Validate the configuration file at PATH and exit
+        #[arg(long, value_name = "PATH")]
+        check_config: Option<String>,
+    },
     /// TLS certificate inspector (tls.netray.info)
-    Tls { config: Option<String> },
+    Tls {
+        config: Option<String>,
+        /// Validate the configuration file at PATH and exit
+        #[arg(long, value_name = "PATH")]
+        check_config: Option<String>,
+    },
     /// HTTP header inspector (http.netray.info)
-    Http { config: Option<String> },
+    Http {
+        config: Option<String>,
+        /// Validate the configuration file at PATH and exit
+        #[arg(long, value_name = "PATH")]
+        check_config: Option<String>,
+    },
     /// Email security inspector (email.netray.info)
-    Email { config: Option<String> },
+    Email {
+        config: Option<String>,
+        /// Validate the configuration file at PATH and exit
+        #[arg(long, value_name = "PATH")]
+        check_config: Option<String>,
+    },
     /// IP enrichment API (ip.netray.info)
     Ip {
         config: Option<String>,
+        /// Validate the configuration file at PATH and exit
+        #[arg(long, value_name = "PATH")]
+        check_config: Option<String>,
         /// Validate the configuration and exit
         #[arg(long)]
         check: bool,
@@ -47,18 +75,59 @@ enum Command {
     },
 }
 
+fn check_config<T, E: std::fmt::Display>(
+    path: &str,
+    load: impl FnOnce(Option<&str>) -> Result<T, E>,
+) -> ! {
+    match load(Some(path)) {
+        Ok(_) => {
+            println!("config ok: {path}");
+            std::process::exit(0)
+        }
+        Err(err) => {
+            eprintln!("config error: {path}: {err}");
+            std::process::exit(1)
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
-        Command::Lens { config } => lens::run(config).await,
-        Command::Dns { config } => prism::run(config).await,
-        Command::Tls { config } => tlsight::run(config).await,
-        Command::Http { config } => spectra::run(config).await,
-        Command::Email { config } => beacon::run(config).await?,
+        Command::Lens {
+            check_config: Some(path),
+            ..
+        } => check_config(&path, lens::config::Config::load),
+        Command::Dns {
+            check_config: Some(path),
+            ..
+        } => check_config(&path, prism::config::Config::load),
+        Command::Tls {
+            check_config: Some(path),
+            ..
+        } => check_config(&path, tlsight::config::Config::load),
+        Command::Http {
+            check_config: Some(path),
+            ..
+        } => check_config(&path, spectra::config::Config::load),
+        Command::Email {
+            check_config: Some(path),
+            ..
+        } => check_config(&path, beacon::config::Config::load),
+        Command::Ip {
+            check_config: Some(path),
+            ..
+        } => check_config(&path, ifconfig_rs::config::Config::load),
+        Command::Lens { config, .. } => lens::run(config).await,
+        Command::Dns { config, .. } => prism::run(config).await,
+        Command::Tls { config, .. } => tlsight::run(config).await,
+        Command::Http { config, .. } => spectra::run(config).await,
+        Command::Email { config, .. } => beacon::run(config).await?,
         Command::Ip {
             config,
             check,
             print_config,
+            ..
         } => ifconfig_rs::run(config, print_config, check).await,
         Command::Site { bind, root } => site::run(bind, root).await?,
     }

@@ -18,7 +18,7 @@ custom_ca_dir = "custom_cas"
 check_ct = true
 
 [ecosystem]
-ip_api_url = "https://ip.netray.info"
+ip_base_url ="https://ip.netray.info"
 
 [quality]
 enabled = true

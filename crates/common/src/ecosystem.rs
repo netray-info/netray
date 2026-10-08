@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 /// for cross-tool navigation. They go through Traefik and are subject to
 /// public rate limits. Fields set to `None` are omitted from serialization.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct EcosystemConfig {
     /// Public base URL of the IP enrichment service (ip.netray.info).

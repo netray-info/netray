@@ -84,6 +84,7 @@ pub enum LogFormat {
 
 /// Telemetry configuration shared across services.
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TelemetryConfig {
     #[serde(default)]
     pub enabled: bool,

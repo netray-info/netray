@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::net::SocketAddr;
 
 use serde::{Deserialize, Serialize};
@@ -417,24 +418,17 @@ impl Config {
     ///
     /// Precedence (highest first): env vars (LENS_ prefix) > TOML file > built-in defaults.
     pub fn load(config_path: Option<&str>) -> Result<Self, ConfigError> {
-        let mut builder = config::Config::builder();
+        Self::load_with_env(config_path, std::env::vars_os())
+    }
 
-        if let Some(path) = config_path {
-            builder = builder.add_source(config::File::with_name(path).required(true));
-        }
-
-        // LENS_ prefix, __ section separator.
-        // e.g. LENS_RATE_LIMIT__PER_IP_PER_MINUTE=20 maps to rate_limit.per_ip_per_minute.
-        builder = builder.add_source(
-            config::Environment::with_prefix("LENS")
-                .prefix_separator("_")
-                .separator("__")
-                .try_parsing(true)
-                .source(Some(config_env(std::env::vars()))),
-        );
-
-        let raw = builder.build()?;
-        let mut cfg: Config = raw.try_deserialize()?;
+    // e.g. LENS_RATE_LIMIT__PER_IP_PER_MINUTE=20 maps to rate_limit.per_ip_per_minute.
+    // LENS_LIVE_TESTS is a test switch, not a config key.
+    fn load_with_env(
+        config_path: Option<&str>,
+        env: impl IntoIterator<Item = (OsString, OsString)>,
+    ) -> Result<Self, ConfigError> {
+        let env = env.into_iter().filter(|(k, _)| k != "LENS_LIVE_TESTS");
+        let mut cfg: Config = netray_common::config::load_with_env(config_path, "LENS_", env)?;
         cfg.validate()?;
 
         Ok(cfg)
@@ -457,15 +451,6 @@ impl Config {
 
         Ok(())
     }
-}
-
-/// `LENS_*` variables that are not config keys. Every config struct denies
-/// unknown fields, so these would otherwise fail the load.
-const NON_CONFIG_ENV: &[&str] = &["LENS_CONFIG", "LENS_LIVE_TESTS"];
-
-fn config_env(vars: impl Iterator<Item = (String, String)>) -> config::Map<String, String> {
-    vars.filter(|(k, _)| !NON_CONFIG_ENV.contains(&k.as_str()))
-        .collect()
 }
 
 fn reject_zero<T: PartialEq + From<u8>>(name: &str, value: T) -> Result<(), ConfigError> {
@@ -686,10 +671,12 @@ mod tests {
             ("LENS_LIVE_TESTS", "1"),
             ("LENS_SERVER__BIND", "0.0.0.0:8082"),
         ]
-        .map(|(k, v)| (k.to_string(), v.to_string()));
-        let env = config_env(vars.into_iter());
-        assert_eq!(env.len(), 1);
-        assert!(env.contains_key("LENS_SERVER__BIND"));
+        .map(|(k, v)| (OsString::from(k), OsString::from(v)));
+        let cfg = Config::load_with_env(None, vars).unwrap();
+        assert_eq!(
+            cfg.server.bind,
+            "0.0.0.0:8082".parse::<SocketAddr>().unwrap()
+        );
     }
 
     #[test]

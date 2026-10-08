@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::net::SocketAddr;
 
 use serde::Deserialize;
@@ -105,23 +106,14 @@ impl Config {
     /// Loads the TOML file at `path` (if any), then `SPECTRA__<SECTION>__<KEY>`
     /// env overrides. Unknown keys in either source are a load error.
     pub fn load(path: Option<&str>) -> Result<Self, ConfigError> {
-        Self::load_with_env(
-            path,
-            config::Environment::with_prefix("SPECTRA")
-                .separator("__")
-                .try_parsing(true),
-        )
+        Self::load_with_env(path, std::env::vars_os())
     }
 
-    fn load_with_env(path: Option<&str>, env: config::Environment) -> Result<Self, ConfigError> {
-        let mut builder = config::Config::builder();
-
-        if let Some(p) = path {
-            builder = builder.add_source(config::File::with_name(p).required(true));
-        }
-
-        let cfg: Config = builder.add_source(env).build()?.try_deserialize()?;
-        Ok(cfg)
+    fn load_with_env(
+        path: Option<&str>,
+        env: impl IntoIterator<Item = (OsString, OsString)>,
+    ) -> Result<Self, ConfigError> {
+        netray_common::config::load_with_env(path, "SPECTRA__", env)
     }
 }
 
@@ -296,19 +288,12 @@ mod tests {
 
     #[test]
     fn env_overrides_apply() {
-        let env = config::Environment::with_prefix("SPECTRA")
-            .separator("__")
-            .try_parsing(true)
-            .source(Some(
-                [
-                    ("SPECTRA__ENRICHMENT__IP_URL", "http://ip.example.com"),
-                    ("SPECTRA__LIMITS__PER_IP_BURST", "7"),
-                    ("SPECTRA__META__LENS_BASE_URL", "https://lens.example.com"),
-                ]
-                .into_iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-            ));
+        let env = [
+            ("SPECTRA__ENRICHMENT__IP_URL", "http://ip.example.com"),
+            ("SPECTRA__LIMITS__PER_IP_BURST", "7"),
+            ("SPECTRA__META__LENS_BASE_URL", "https://lens.example.com"),
+        ]
+        .map(|(k, v)| (OsString::from(k), OsString::from(v)));
         let cfg = Config::load_with_env(None, env).unwrap();
         assert_eq!(
             cfg.enrichment.ip_url.as_deref(),
@@ -323,16 +308,10 @@ mod tests {
 
     #[test]
     fn unknown_env_key_is_rejected() {
-        let env = config::Environment::with_prefix("SPECTRA")
-            .separator("__")
-            .source(Some(
-                [(
-                    "SPECTRA__BACKENDS__IP__URL".to_string(),
-                    "http://ip.example.com".to_string(),
-                )]
-                .into_iter()
-                .collect(),
-            ));
+        let env = [(
+            OsString::from("SPECTRA__BACKENDS__IP__URL"),
+            OsString::from("http://ip.example.com"),
+        )];
         let err = Config::load_with_env(None, env).unwrap_err().to_string();
         assert!(err.contains("unknown field `backends`"), "{err}");
     }

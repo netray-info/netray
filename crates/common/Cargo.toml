@@ -45,6 +45,9 @@ metrics = { workspace = true }
 # Serialization
 serde = { workspace = true, features = ["derive"] }
 
+# Layered configuration loader
+config = { workspace = true }
+
 # Logging
 tracing = { workspace = true }
 

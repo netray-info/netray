@@ -6,9 +6,9 @@ use ip_network::IpNetwork;
 
 /// Extracts the real client IP from proxy headers.
 ///
-/// When deployed behind a reverse proxy (Cloudflare, nginx, Caddy), the direct
+/// When deployed behind a reverse proxy (Traefik, nginx, Caddy), the direct
 /// peer IP is the proxy, not the actual client. This extractor checks proxy headers
-/// in priority order (CF-Connecting-IP, X-Real-IP, X-Forwarded-For) but only when
+/// in priority order (X-Real-IP, X-Forwarded-For) but only when
 /// the peer IP is in the configured trusted proxy list.
 ///
 /// Trusted proxies can be specified as individual IPs (auto-promoted to /32 or /128)
@@ -58,10 +58,9 @@ impl IpExtractor {
     /// Priority:
     /// 1. If no trusted proxies configured, return peer IP (safe default).
     /// 2. If peer IP is not trusted, return peer IP (untrusted source).
-    /// 3. Try `CF-Connecting-IP` header (Cloudflare).
-    /// 4. Try `X-Real-IP` header (nginx).
-    /// 5. Try rightmost non-trusted IP in `X-Forwarded-For`.
-    /// 6. Fall back to peer IP.
+    /// 3. Try `X-Real-IP` header (nginx).
+    /// 4. Try rightmost non-trusted IP in `X-Forwarded-For`.
+    /// 5. Fall back to peer IP.
     pub fn extract(&self, headers: &HeaderMap, peer_addr: SocketAddr) -> IpAddr {
         if self.trusted_proxies.is_empty() {
             return peer_addr.ip();
@@ -71,21 +70,13 @@ impl IpExtractor {
             return peer_addr.ip();
         }
 
-        self.extract_cf_connecting_ip(headers)
-            .or_else(|| self.extract_x_real_ip(headers))
+        self.extract_x_real_ip(headers)
             .or_else(|| self.extract_x_forwarded_for(headers))
             .unwrap_or_else(|| peer_addr.ip())
     }
 
     fn is_trusted(&self, ip: IpAddr) -> bool {
         self.trusted_proxies.iter().any(|net| net.contains(ip))
-    }
-
-    fn extract_cf_connecting_ip(&self, headers: &HeaderMap) -> Option<IpAddr> {
-        headers
-            .get("cf-connecting-ip")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|s| IpAddr::from_str(s.trim()).ok())
     }
 
     fn extract_x_real_ip(&self, headers: &HeaderMap) -> Option<IpAddr> {
@@ -156,34 +147,19 @@ mod tests {
     }
 
     #[test]
-    fn trusted_peer_uses_cf_connecting_ip() {
+    fn trusted_peer_ignores_cf_connecting_ip() {
         let ext = extractor(&["10.0.0.1"]);
         let mut headers = HeaderMap::new();
         headers.insert("cf-connecting-ip", HeaderValue::from_static("203.0.114.50"));
 
         assert_eq!(
             ext.extract(&headers, peer("10.0.0.1:443")),
-            "203.0.114.50".parse::<IpAddr>().unwrap()
+            "10.0.0.1".parse::<IpAddr>().unwrap()
         );
     }
 
     #[test]
-    fn cf_connecting_ip_with_whitespace() {
-        let ext = extractor(&["10.0.0.1"]);
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            "cf-connecting-ip",
-            HeaderValue::from_static(" 203.0.114.50 "),
-        );
-
-        assert_eq!(
-            ext.extract(&headers, peer("10.0.0.1:443")),
-            "203.0.114.50".parse::<IpAddr>().unwrap()
-        );
-    }
-
-    #[test]
-    fn cf_connecting_ip_invalid_falls_through() {
+    fn cf_connecting_ip_is_ignored_in_favour_of_x_real_ip() {
         let ext = extractor(&["10.0.0.1"]);
         let mut headers = HeaderMap::new();
         headers.insert("cf-connecting-ip", HeaderValue::from_static("not-an-ip"));
@@ -208,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn cf_connecting_ip_takes_priority_over_x_real_ip() {
+    fn x_real_ip_wins_over_cf_connecting_ip() {
         let ext = extractor(&["10.0.0.1"]);
         let mut headers = HeaderMap::new();
         headers.insert("cf-connecting-ip", HeaderValue::from_static("1.1.1.1"));
@@ -216,7 +192,7 @@ mod tests {
 
         assert_eq!(
             ext.extract(&headers, peer("10.0.0.1:443")),
-            "1.1.1.1".parse::<IpAddr>().unwrap()
+            "2.2.2.2".parse::<IpAddr>().unwrap()
         );
     }
 

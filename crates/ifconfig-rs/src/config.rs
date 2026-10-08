@@ -6,6 +6,7 @@ pub const HARD_CAP_RATE_LIMIT_BURST: u32 = 100;
 pub const HARD_CAP_BATCH_SIZE: usize = 100;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
     pub server: ServerConfig,
@@ -76,6 +77,7 @@ impl Config {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ServerConfig {
     #[serde(default = "ServerConfig::default_bind")]
     pub bind: String,
@@ -118,6 +120,7 @@ impl ServerConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RateLimitConfig {
     #[serde(default = "RateLimitConfig::default_per_ip_per_minute")]
     pub per_ip_per_minute: u32,
@@ -156,6 +159,7 @@ impl RateLimitConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BatchConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -179,6 +183,7 @@ impl BatchConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct CacheConfig {
     #[serde(default = "CacheConfig::default_enabled")]
     pub enabled: bool,
@@ -212,20 +217,7 @@ impl CacheConfig {
 
 impl Config {
     pub fn load(path: Option<&str>) -> Result<Self, config::ConfigError> {
-        let mut builder = config::Config::builder();
-
-        if let Some(path) = path {
-            builder = builder.add_source(config::File::with_name(path));
-        }
-
-        builder = builder.add_source(
-            config::Environment::with_prefix("IFCONFIG")
-                .prefix_separator("_")
-                .separator("__")
-                .try_parsing(true),
-        );
-
-        let cfg: Self = builder.build()?.try_deserialize()?;
+        let cfg: Self = netray_common::config::load(path, "IFCONFIG_")?;
         cfg.validate()?;
         Ok(cfg)
     }

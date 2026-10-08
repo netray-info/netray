@@ -9,6 +9,7 @@ use std::time::Duration;
 
 /// Configuration for a single backend service.
 #[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackendConfig {
     /// Base URL of the backend service. `None` disables this backend.
     pub url: Option<String>,

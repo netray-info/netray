@@ -2,6 +2,7 @@
 //!
 //! This crate provides cross-cutting concerns used by multiple backend services:
 //!
+//! - [`config`] -- Strict layered configuration loading (TOML file + prefixed environment variables).
 //! - [`ip_extract`] -- Extract real client IP from proxy headers with trusted-proxy CIDR matching.
 //! - [`error`] -- Structured JSON error responses via the [`error::ApiError`] trait.
 //! - [`rate_limit`] -- Keyed and global rate limiting wrappers around `governor`.
@@ -18,6 +19,7 @@
 
 #[cfg(feature = "backend")]
 pub mod backend;
+pub mod config;
 #[cfg(feature = "cors")]
 pub mod cors;
 pub mod ecosystem;

@@ -49,21 +49,14 @@ fn extract_client_ip(peer: SocketAddr, headers: &HeaderMap, trusted_proxies: &[I
         return peer;
     }
 
-    // Priority 1: CF-Connecting-IP (set exclusively by Cloudflare; single IP, no chain)
-    if let Some(ip_str) = headers.get("cf-connecting-ip").and_then(|v| v.to_str().ok())
-        && let Ok(ip) = IpAddr::from_str(ip_str.trim())
-    {
-        return SocketAddr::new(ip, peer.port());
-    }
-
-    // Priority 2: X-Real-IP (set by nginx/similar; single IP, no chain)
+    // Priority 1: X-Real-IP (set by nginx/similar; single IP, no chain)
     if let Some(ip_str) = headers.get("x-real-ip").and_then(|v| v.to_str().ok())
         && let Ok(ip) = IpAddr::from_str(ip_str.trim())
     {
         return SocketAddr::new(ip, peer.port());
     }
 
-    // Priority 3: X-Forwarded-For chain (right-to-left walk, skip trusted proxies)
+    // Priority 2: X-Forwarded-For chain (right-to-left walk, skip trusted proxies)
     let xff = match headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
         Some(xff) => xff,
         None => return peer,

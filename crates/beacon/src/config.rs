@@ -1,3 +1,5 @@
+use std::ffi::OsString;
+
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -17,7 +19,7 @@ pub struct Config {
     pub dkim: DkimConfig,
     #[serde(default)]
     pub telemetry: TelemetryConfig,
-    #[serde(default, deserialize_with = "deserialize_ecosystem")]
+    #[serde(default)]
     pub ecosystem: EcosystemConfig,
     #[serde(default)]
     pub backends: BackendsConfig,
@@ -94,36 +96,6 @@ pub struct TelemetryConfig {
 
 pub use netray_common::ecosystem::EcosystemConfig;
 
-/// Strict mirror of [`EcosystemConfig`]: the upstream struct lives in
-/// netray-common and accepts unknown keys, so `[ecosystem]` is parsed through
-/// this type to reject typos like the other sections do. The exhaustive
-/// struct literal below stops compiling if upstream adds a field.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct StrictEcosystemConfig {
-    ip_base_url: Option<String>,
-    dns_base_url: Option<String>,
-    tls_base_url: Option<String>,
-    http_base_url: Option<String>,
-    email_base_url: Option<String>,
-    lens_base_url: Option<String>,
-}
-
-fn deserialize_ecosystem<'de, D>(deserializer: D) -> Result<EcosystemConfig, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let s = StrictEcosystemConfig::deserialize(deserializer)?;
-    Ok(EcosystemConfig {
-        ip_base_url: s.ip_base_url,
-        dns_base_url: s.dns_base_url,
-        tls_base_url: s.tls_base_url,
-        http_base_url: s.http_base_url,
-        email_base_url: s.email_base_url,
-        lens_base_url: s.lens_base_url,
-    })
-}
-
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendsConfig {
@@ -182,20 +154,15 @@ impl Config {
         path: Option<&str>,
         env: Option<config::Map<String, String>>,
     ) -> Result<Self, config::ConfigError> {
-        let mut builder = config::Config::builder();
-
-        if let Some(path) = path {
-            builder = builder.add_source(config::File::with_name(path).required(true));
+        match env {
+            None => netray_common::config::load(path, "BEACON__"),
+            Some(map) => netray_common::config::load_with_env(
+                path,
+                "BEACON__",
+                map.into_iter()
+                    .map(|(k, v)| (OsString::from(k), OsString::from(v))),
+            ),
         }
-
-        builder = builder.add_source(
-            config::Environment::with_prefix("BEACON")
-                .separator("__")
-                .try_parsing(true)
-                .source(env),
-        );
-
-        builder.build()?.try_deserialize()
     }
 }
 

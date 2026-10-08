@@ -12,6 +12,7 @@ const HARD_CAP_MAX_IPS: usize = 10;
 const HARD_CAP_HTTP_CHECK_TIMEOUT: u64 = 5;
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     /// Display name shown in the UI. Defaults to "tlsight".
     #[serde(default = "default_site_name")]
@@ -35,6 +36,7 @@ pub struct Config {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ServerConfig {
     #[serde(default = "default_bind")]
     pub bind: SocketAddr,
@@ -45,6 +47,7 @@ pub struct ServerConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LimitsConfig {
     #[serde(default = "default_per_ip_per_minute")]
     pub per_ip_per_minute: u32,
@@ -75,12 +78,14 @@ pub struct LimitsConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DnsConfig {
     #[serde(default = "default_dns_timeout_secs")]
     pub timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ValidationConfig {
     #[serde(default = "default_expiry_warning_days")]
     pub expiry_warning_days: u32,
@@ -99,12 +104,14 @@ pub struct ValidationConfig {
 pub use netray_common::ecosystem::EcosystemConfig;
 
 #[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct BackendsConfig {
     #[serde(default)]
     pub ip: Option<netray_common::backend::BackendConfig>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct QualityConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -255,24 +262,8 @@ impl Config {
     ///
     /// Precedence (highest first): env vars (TLSIGHT_ prefix) > TOML file > built-in defaults.
     pub fn load(config_path: Option<&str>) -> Result<Self, ConfigError> {
-        let mut builder = config::Config::builder();
-
-        // Layer 1: optional TOML file.
-        if let Some(path) = config_path {
-            builder = builder.add_source(config::File::with_name(path).required(true));
-        }
-
-        // Layer 2: environment variables with TLSIGHT_ prefix and __ section separator.
         // e.g. TLSIGHT_LIMITS__PER_IP_PER_MINUTE=60 maps to limits.per_ip_per_minute.
-        builder = builder.add_source(
-            config::Environment::with_prefix("TLSIGHT")
-                .prefix_separator("_")
-                .separator("__")
-                .try_parsing(true),
-        );
-
-        let raw = builder.build()?;
-        let mut cfg: Config = raw.try_deserialize()?;
+        let mut cfg: Config = netray_common::config::load(config_path, "TLSIGHT_")?;
         cfg.validate()?;
 
         Ok(cfg)
