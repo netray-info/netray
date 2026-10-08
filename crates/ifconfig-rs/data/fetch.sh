@@ -44,8 +44,8 @@ feodo_botnet_ips() {
 vpn_ranges() {
     [ -e vpn_ranges.txt ] && return 0
     local out=vpn_ranges.txt.tmp.$$
-    curl -fsS https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv4.txt > $out
-    curl -fsS https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv6.txt >> $out
+    curl -fsSL --max-redirs 5 https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv4.txt > $out
+    curl -fsSL --max-redirs 5 https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv6.txt >> $out
     mv $out vpn_ranges.txt
 }
 
@@ -104,9 +104,9 @@ bot_ranges() {
 spamhaus_drop() {
     [ -e spamhaus_drop.txt ] && return 0
     local out=spamhaus_drop.txt.tmp.$$
-    { curl -fsS https://www.spamhaus.org/drop/drop.txt;
-      curl -fsS https://www.spamhaus.org/drop/edrop.txt;
-      curl -fsS https://www.spamhaus.org/drop/dropv6.txt; } \
+    { curl -fsSL --max-redirs 5 https://www.spamhaus.org/drop/drop.txt;
+      curl -fsSL --max-redirs 5 https://www.spamhaus.org/drop/edrop.txt;
+      curl -fsSL --max-redirs 5 https://www.spamhaus.org/drop/dropv6.txt; } \
     | sed -e 's/ ;.*//' -e '/^;/d' -e '/^$/d' > $out
     mv $out spamhaus_drop.txt
 }
@@ -114,7 +114,7 @@ spamhaus_drop() {
 cins_army_ips() {
     [ -e cins_army_ips.txt ] && return 0
     local out=cins_army_ips.txt.tmp.$$
-    curl -fsS https://cinsscore.com/list/ci-badguys.txt | grep -v '^#' | grep -v '^$' > $out
+    curl -fsSL --max-redirs 5 https://cinsscore.com/list/ci-badguys.txt | grep -v '^#' | grep -v '^$' > $out
     mv $out cins_army_ips.txt
 }
 
