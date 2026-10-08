@@ -14,7 +14,7 @@ carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
 |---|---|
 | `crates/{lens,mhost-prism,tlsight,spectra,beacon,ifconfig-rs}` | the services; each a library with its frontend in `frontend/` |
 | `crates/common` | `netray-common`, shared Rust (workspace member, not published) |
-| `crates/netray` | the binary: subcommands `lens dns tls http email ip site` |
+| `crates/netray` | the binary: subcommands `lens dns tls http email ip site`; all but `site` take `--check-config <path>` (exit 0 `config ok: <path>`, exit 1 with the error) |
 | `packages/common-frontend` | `@netray-info/common-frontend` (workspace member, not published) |
 | `site/` | static site, served by `netray site` |
 | `tests/repo` | repository structure checks (`just test-repo`), one script per check |
@@ -45,6 +45,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Services are libraries.** Each service crate exposes an async `run(config)` and has no `main.rs` or `[[bin]]`; `crates/netray` only parses arguments and dispatches.
 - **Config stays per service.** Config keys, the `*_CONFIG` variable and the env prefix (`LENS_`, `PRISM_`, `TLSIGHT_`, `IFCONFIG_`; `SPECTRA__` and `BEACON__` with a double underscore), metrics names and log targets are unchanged by the merge; do not unify them.
 - **One config loader.** Config loads only through `netray_common::config::load`; every config struct carries `deny_unknown_fields` (`tests/repo/test_config_strict.sh`).
+- **Contract goldens.** `tests/fixtures/contracts/` holds each backend's response as written by its own tests (`contract_golden`); lens's tests parse them. A backend shape change fails its golden test: regenerate with `UPDATE_GOLDEN=1 cargo test -p <crate> --test contract_golden` (ifconfig-rs: `--lib contract_golden`), commit, and keep lens green.
 - **Startup rejects are checked.** A new startup `.expect`/`panic!` on a config value needs a `validate()` rule and a `startup_rejects` row in `tests/repo/test_check_config.sh`.
 - **Layer order**, outermost first: concurrency limit, `request_id`, security headers, CORS, body limit, trace, compression — so preflights and 413s carry the request id and headers.
 - **`start_bg` never in a subshell**: the EXIT trap of `tests/repo/lib/netray.sh` kills only PIDs recorded in the parent shell.

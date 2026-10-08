@@ -162,7 +162,7 @@ service_name = "spectra"
 sample_rate  = 1.0
 ```
 
-Configuration is loaded from `spectra.toml` by default. Override the path with `SPECTRA_CONFIG`. Environment variables take precedence over the file, using the `SPECTRA_` prefix with `__` as the section separator — e.g. `SPECTRA_SERVER__BIND=0.0.0.0:3000`.
+Configuration is loaded from `spectra.toml` by default. Override the path with `SPECTRA_CONFIG`. Environment variables take precedence over the file, using the `SPECTRA__` prefix (two underscores) with `__` as the section separator — e.g. `SPECTRA__SERVER__BIND=0.0.0.0:3000`. An unknown key, in the file or the environment, fails the load.
 
 ---
 

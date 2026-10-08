@@ -64,7 +64,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
                               #   Server group aliases: @public → Google+Cloudflare+Quad9,
                               #   @cloudflare → 1.1.1.1+1.0.0.1, @google → 8.8.8.8+8.8.4.4,
                               #   @quad9 → 9.9.9.9+149.112.112.112, @all → all public (capped to 4)
-    config.rs                 # config crate: TOML + env vars (PRISM_ prefix)
+    config.rs                 # netray_common::config::load: TOML + env vars (PRISM_ prefix), unknown keys rejected
     error.rs                  # thiserror ApiError enum → HTTP status + error codes
     record_format.rs          # Human-readable formatting for TXT, CAA, MX, SOA, SVCB, TLSA, etc.
     telemetry.rs              # tracing-subscriber init; optional OTel OTLP export; log_format switch
@@ -96,7 +96,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
     security/
       mod.rs                  # Middleware composition, cors_layer, security_headers
       rate_limit.rs           # 3-tier GCRA (per-IP, per-target, global)
-      ip_extract.rs           # Real client IP from CF-Connecting-IP / X-Real-IP / X-Forwarded-For
+      ip_extract.rs           # Real client IP from X-Real-IP / X-Forwarded-For (trusted proxies only; CF-Connecting-IP ignored)
       query_policy.rs         # Target validation (is_allowed_target), type restrictions, limits
   frontend/                   # SolidJS + Vite (strict TypeScript)
     src/
@@ -129,7 +129,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
 - **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens. Compare endpoint cost = `record_types * servers * 4` (4 transports). Auth compare cost = `record_types * servers + 16` (recursive + NS discovery + auth queries).
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
-- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps are upper bounds that config cannot exceed. Notable options: `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs and CIDR ranges (e.g. `["10.0.0.1", "172.16.0.0/12"]`); invalid entries are skipped with a warning at startup.
+- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps are upper bounds that config cannot exceed. Notable options: `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs and CIDR ranges (e.g. `["10.0.0.1", "172.16.0.0/12"]`); invalid entries are skipped with a warning at startup. Every config struct is `deny_unknown_fields`; `netray dns --check-config <path>` validates a file and exits 0 (`config ok: <path>`) or 1 with the error.
 - **Routing flags**: `+check`, `+trace`, `+compare`, and `+auth` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
 - **Query flags**: `+norecurse` sets RD=0 (non-recursive query, stored as `recursive: false` on `ParsedQuery`). `+short` suppresses TTL display in output.
 
@@ -185,5 +185,5 @@ When modifying API endpoints or adding features, verify:
 - [ ] Timeouts enforced (10s per-query, 30s stream)
 - [ ] Rate limiting applied with correct cost calculation
 - [ ] No PII in logs (no full DNS response content)
-- [ ] Security headers present on all responses
-- [ ] CORS restricted to same origin
+- [ ] Security headers present on all responses (production parity, `specs/rules/architecture-rules.md` §Security Headers)
+- [ ] CORS is production's public-API set: `Access-Control-Allow-Origin: *`, no credentials

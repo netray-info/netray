@@ -292,7 +292,7 @@ Four layers of defense — this is a public DNS proxy, not just a query tool:
 1. **Query restrictions** — blocked types (ANY, AXFR, IXFR), no RFC 1918/loopback/CGNAT targets, max 10 record types, max 4 resolvers
 2. **Rate limiting** — 3-tier GCRA (per-IP, per-target, global) with query cost model
 3. **IP extraction** — trusted-proxy CIDR validation for real client IP
-4. **Security headers** — CSP, HSTS, X-Frame-Options, X-Content-Type-Options on all responses
+4. **Security headers** — CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, COOP, CORP and public-API CORS on all responses, set by the service itself
 
 ---
 

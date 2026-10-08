@@ -256,9 +256,9 @@ The email section is split into four buckets:
 | `email_authentication` | 10 | Every domain — SPF, DKIM, DMARC |
 | `email_infrastructure` | 5  | Domains with MX records only — MX, FCrDNS, DNSBL |
 | `email_transport`      | 5  | Domains with MX records only — MTA-STS, TLS-RPT, DANE |
-| `email_brand_policy`   | 2  | Domains with MX records only — BIMI, DMARC policy |
+| `email_brand_policy`   | 2  | Domains with MX records only — BIMI |
 
-When a domain has no MX records (parked domain), the three receiving buckets are marked **not-applicable** and use `CheckVerdict::Skip`. They contribute 0 to both earned and possible points — no penalty. Only `email_authentication` (weight 10) is scored, as SPF/DKIM/DMARC apply to every domain for outbound mail protection.
+When beacon reports no MX records (its `no_mx` sub-check; a parked domain), the three receiving buckets are marked **not-applicable** and use `CheckVerdict::Skip`. They contribute 0 to both earned and possible points — no penalty. Only `email_authentication` (weight 10) is scored, as SPF/DKIM/DMARC apply to every domain for outbound mail protection. Any other MX failure (an MX pointing at a CNAME, an MX host without an address) means MX records exist: the receiving buckets are scored and fail accordingly.
 
 ### Grade thresholds
 

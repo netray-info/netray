@@ -38,9 +38,11 @@ the path and source. A deployment that passes no argument lets
 
 Every config struct is `#[serde(deny_unknown_fields)]`: an unknown key in the
 file or a `BEACON__*` env var fails startup instead of silently disabling a
-feature. `[ecosystem]` goes through a local strict mirror of netray-common's
-`EcosystemConfig`. `tests/fixtures/beacon.production.toml` pins the shape the
-argus-oci template must render.
+feature; `[ecosystem]` uses netray-common's `EcosystemConfig`, strict as well.
+`tests/fixtures/beacon.production.toml` pins the shape the argus-oci template
+must render. `netray email --check-config <path>` validates a file, including
+the values startup rejects (unparsable or zero `per_ip`), and exits 0
+(`config ok: <path>`) or 1 with the error.
 
 ## Development
 

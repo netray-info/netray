@@ -74,7 +74,7 @@ tlsight/
     ccadb_caa_identifiers.csv     # gitignored; fetched from CCADB AllCAAIdentifiersReportCSVV2
   src/
     main.rs                       # entry point, axum server, graceful shutdown
-    config.rs                     # config crate: TOML + env vars (TLSIGHT_ prefix)
+    config.rs                     # netray_common::config::load: TOML + env vars (TLSIGHT_ prefix), unknown keys rejected
     error.rs                      # thiserror AppError enum -> HTTP status + error codes
     input.rs                      # hostname[:port,...] input parsing and validation
     state.rs                      # AppState (config, rate limiter, dns resolver, trust store)
@@ -156,7 +156,7 @@ tlsight/
 - **Per-request concurrency**: `JoinSet` + `Arc<Semaphore>` bounds concurrent handshakes per request (`max_concurrent_handshakes`). Ports run concurrently, not sequentially.
 - **Cap-and-warn rate limiting**: When multi-IP fan-out exceeds rate budget, reduce inspected IPs (prefer one v4 + one v6) instead of rejecting. Response includes `warnings` and `skipped_ips`.
 - **Trust store**: `RootCertStore` built at startup from `webpki-roots` (Mozilla bundle) + all `*.pem` and `*.crt` files from `custom_ca_dir` (if configured). Supports private CAs without rebuilds.
-- **Config precedence**: CLI arg / `TLSIGHT_CONFIG` env var > TOML file > built-in defaults. Env vars override TOML (`TLSIGHT_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed.
+- **Config precedence**: CLI arg / `TLSIGHT_CONFIG` env var > TOML file > built-in defaults. Env vars override TOML (`TLSIGHT_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed. Every config struct is `deny_unknown_fields`; `netray tls --check-config <path>` validates a file, including that `custom_ca_dir` exists, and exits 0 (`config ok: <path>`) or 1 with the error.
 - **Error responses**: Structured JSON via `AppError` enum: `{ "error": { "code": "...", "message": "..." } }`.
 - **Request IDs**: UUID v7 in `X-Request-Id` header on every response.
 - **Static file serving**: `rust-embed` in release, filesystem reads in debug. Vite-hashed assets get `immutable` cache headers; `index.html` gets `no-cache`.
@@ -218,5 +218,5 @@ When modifying API endpoints or adding features, verify:
 - [ ] No application data sent after TLS handshake (handshake only, then close)
 - [ ] No PII in logs (no full certificate content)
 - [ ] Security headers present on all responses
-- [ ] CORS restricted to configured origins
+- [ ] CORS is production's public-API set: `Access-Control-Allow-Origin: *`, no credentials
 - [ ] Custom CA directory loads only `*.pem` and `*.crt` files, fails fast on bad PEM

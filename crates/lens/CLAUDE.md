@@ -33,7 +33,7 @@ lens/
     default.toml          # Default scoring profile (embedded at compile time)
   src/
     main.rs               # Entry point, Axum server, graceful shutdown
-    config.rs             # TOML + LENS_ env vars
+    config.rs             # netray_common::config::load: TOML + LENS_ env vars, unknown keys rejected
     error.rs              # AppError enum → HTTP status + error codes
     input.rs              # Domain validation (no IPs, no wildcards, max 253 chars)
     state.rs              # AppState (config, rate limiters, reqwest client, cache, profile)
@@ -43,7 +43,7 @@ lens/
       mod.rs
       dns.rs              # Call prism, parse CollectedResponse, extract lint + IPs
       tls.rs              # Call tlsight, parse quality checks
-      ip.rs               # Call ifconfig-rs /batch, map network.type to verdict
+      ip.rs               # Call ifconfig-rs /json?ip= per IP, map network.type to verdict
     scoring/
       mod.rs
       profile.rs          # Profile, SectionProfile structs (serde from TOML)
@@ -80,7 +80,7 @@ Any code change to scoring must update README.md in the same commit.
 - `config` — TOML + env var layering (LENS_ prefix, __ separator)
 - `toml` — Scoring profile deserialization
 - `sqlx` 0.8 (sqlite, runtime-tokio, migrate, chrono) — durable snapshot storage; WAL mode; auto-migrated at startup
-- `nanoid` 0.4 + `regex` 1 — 8-char base62 shortids for `GET /r/:shortid`
+- `nanoid` 0.4 + `regex` 1 — 8-char base62 shortids for `GET /r/:shortid` (unknown, expired or malformed id → 404 "expired or unknown" HTML page)
 - `chrono` 0.4 — UTC timestamps in snapshots
 
 ## Frontend Rules

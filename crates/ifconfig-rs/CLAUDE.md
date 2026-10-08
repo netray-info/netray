@@ -49,7 +49,7 @@ Request → CompressionLayer → request_id → record_metrics → TraceLayer (r
 Key modules:
 - `src/lib.rs` — Module hub, `build_app()` returns `AppBundle` (main app + optional admin app), installs Prometheus metrics recorder, configures middleware stack (compression, request ID, metrics, tracing, CORS)
 - `src/main.rs` — tokio entry point, config loading, `--print-config` flag, `IFCONFIG_LOG_FORMAT=json` support, optional admin port, SIGHUP reload, optional filesystem watcher (`watch_data_files`), graceful shutdown
-- `src/config.rs` — `Config` struct (derives `Serialize` + `Deserialize`) loaded from config file + `IFCONFIG_` env vars via `config` crate
+- `src/config.rs` — `Config` struct (derives `Serialize` + `Deserialize`) loaded from config file + `IFCONFIG_` env vars via `netray_common::config::load`; every config struct is `deny_unknown_fields`
 - `src/state.rs` — `AppState` wrapping Arc'd backends (GeoIP, UA parser, Tor nodes); `KeyedRateLimiter` uses `StateInformationMiddleware` for burst-capacity tracking; `trusted_proxies: Arc<Vec<IpNetwork>>` for CIDR-aware XFF parsing
 - `src/backend/mod.rs` — Core logic: `get_ifconfig()` orchestrates GeoIP, reverse DNS, UA parsing, network classification
 - `src/backend/user_agent.rs` — UA parsing wrapper around `uaparser`
@@ -67,8 +67,8 @@ Key modules:
 - `src/scalar_docs.html` — Lightweight HTML page for Scalar API reference UI (loaded via `include_str!()`; CDN dependency is client-side only)
 - `src/handlers.rs` — Per-endpoint `to_json`/`to_plain` functions used as fn pointers by `dispatch_standard()`
 - `src/negotiate.rs` — Content negotiation: format suffix → CLI detection → Accept header → HTML default
-- `src/extractors.rs` — `RequesterInfo` extraction (IP from ConnectInfo/XFF with CIDR-aware trusted proxy matching, UA, URI)
-- `src/middleware.rs` — Request ID generation (`X-Request-Id`), application metrics (`record_metrics`), security headers, cache control, rate limiting with `X-RateLimit-*` / `Retry-After` headers, `X-GeoIP-Database-Date` / `X-GeoIP-Database-Age-Days` headers
+- `src/extractors.rs` — `RequesterInfo` extraction (IP from ConnectInfo, or `X-Real-IP`/XFF from CIDR-matched trusted proxies only; `CF-Connecting-IP` is ignored; UA, URI)
+- `src/middleware.rs` — Request ID generation (`X-Request-Id`), application metrics (`record_metrics`), `Vary` and cache control on top of the shared security headers, rate limiting with `X-RateLimit-*` / `Retry-After` headers, `X-GeoIP-Database-Date` / `X-GeoIP-Database-Age-Days` headers
 - `src/error.rs` — `AppError` enum with `IntoResponse` impl; `ErrorResponse` struct (JSON `{error, status}` body) and `error_response()` helper used by all error paths
 - `src/format.rs` — `OutputFormat` enum with serialization to JSON/YAML/TOML/CSV/plain
 
@@ -167,6 +167,7 @@ max_entries = 1024
 Env var examples: `IFCONFIG_SERVER__BIND=0.0.0.0:8080`, `IFCONFIG_BASE_URL=ip.netray.info`, `IFCONFIG_SERVER__ADMIN_TOKEN=secret`.
 Print effective config and exit: `--print-config` flag.
 Validate all configured data files and exit: `--check` flag (exit 0 = all files ok, exit 1 = one or more failed). Useful in deploy scripts and container startup checks.
+Validate a config file without starting: `netray ip --check-config <path>` (exit 0 and `config ok: <path>`; exit 1 with the error for an unknown key, a missing file or a value startup rejects). It does not touch the data files; `--check` covers those.
 
 Config is validated at load time (`Config::validate()`) — zero rate-limit values are rejected with a descriptive error before the server starts.
 
@@ -193,13 +194,14 @@ Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, deny, integration-tes
 - Routes use explicit handler functions with `dispatch_standard()` for compute-once dispatch. Each handler module in `handlers.rs` exposes `to_json(&Ifconfig) -> Option<Value>` and `to_plain(&Ifconfig) -> String` fn pointers.
 - `Ifconfig` struct in `backend/mod.rs` is the central data model — all endpoint responses derive from it. `tcp` is `Option<Tcp>` (null for `?ip=` queries where the port is synthetic). `Location` includes `region`, `region_code`, `postal_code`, `is_eu`, and `accuracy_radius_km` from GeoIP. `Network` struct holds IP classification: flat boolean flags (`is_vpn`, `is_tor`, `is_bot`, `is_c2`, `is_spamhaus`, `is_datacenter`, `is_internal`, `is_anycast`, `is_cins`), two-dimension output (`type` = priority summary, `infra_type` = infrastructure), typed identity objects (`cloud: CloudInfo`, `vpn: VpnInfo`, `bot: NetworkBot`), ASN metadata (`asn_category`, `network_role` from ipverse/as-metadata), and `iana_label: Option<String>` (IANA special-purpose registry label, e.g. "Shared Address Space").
 - CLI client detection in `negotiate.rs` checks User-Agent patterns and `Accept: */*` header.
-- Config values are loaded from a TOML file (`ifconfig.dev.toml` for local dev) via the `config` crate with env var overrides.
+- Config values are loaded from a TOML file (`ifconfig.dev.toml` for local dev) via `netray_common::config::load` with env var overrides; an unknown key fails the load.
 - `AppState` is shared via Axum's `State` extractor; all backends are `Arc`-wrapped.
 - `build_app()` returns `AppBundle { app, admin_app }` — `admin_app` is `Some` only when `server.admin_bind` is configured and the metrics recorder installs successfully. In tests, multiple `build_app()` calls silently skip metrics (global recorder can only be set once).
 - Rate limit middleware emits `X-RateLimit-Limit`, `X-RateLimit-Remaining` on all responses and `Retry-After` on 429s. `/health`, `/ready`, and `/batch` are exempt (batch has its own per-IP token consumption: N IPs = N tokens).
 - Response compression via `CompressionLayer` (gzip) — outermost layer, respects `Accept-Encoding`.
 - `X-Request-Id` header on every response — propagates client-sent IDs, otherwise generates 16-char hex IDs via atomic counter + random seed. Included in `TraceLayer` spans for log correlation.
-- CORS via `tower_http::cors::CorsLayer` — configurable origins (default `["*"]`), handles OPTIONS preflight.
+- CORS via `netray_common::cors::cors_layer()` (production parity: `GET, POST, OPTIONS`, `Content-Type, Accept`, max-age 600); `server.cors_allowed_origins` narrows the origin (default `["*"]`).
+- Security headers come from `netray_common::security_headers`; ifconfig-rs's only difference is its two-year HSTS, set through `SecurityHeadersConfig.hsts`. It sets no `Strict-Transport-Security` or `Content-Security-Policy` (and no `font-src`) of its own, only `Vary` and `Cache-Control`.
 - Application-level Prometheus metrics: `http_requests_total{method,status}`, `http_request_duration_seconds{method}`, `enrichment_sources_loaded{source}`, `geoip_database_age_seconds`. `metrics` macros are no-op when no recorder is installed (safe in tests).
 - Frontend assets are embedded at compile time via `rust-embed` — `cargo build` requires `frontend/dist/` to exist.
 - All error responses are structured JSON via `error_response()` returning `ErrorResponse { error, status }`. The `ErrorResponse` struct derives `utoipa::ToSchema` and is referenced in OpenAPI error response annotations.

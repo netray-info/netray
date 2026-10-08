@@ -29,6 +29,8 @@ netray-common/
   Cargo.toml
   src/
     lib.rs                   # crate root, re-exports modules
+    config.rs                # the one config loader: optional TOML + env, strict
+    cors.rs                  # public-API CORS layer (production parity)
     ip_extract.rs            # real client IP extraction from proxy headers
     error.rs                 # structured JSON error responses (ApiError trait)
     rate_limit.rs            # keyed + global rate limiting (governor wrappers)
@@ -40,10 +42,12 @@ netray-common/
 
 | Module | Purpose |
 |--------|---------|
-| `ip_extract` | `IpExtractor` checks proxy headers (CF-Connecting-IP, X-Real-IP, X-Forwarded-For) only when the peer IP is in the trusted proxy CIDR list. Safe default: empty list ignores all headers. |
+| `config` | `load::<T>(path, prefix)` builds a service config from an optional TOML file and the environment (`<PREFIX><SECTION>__<KEY>`; `<NAME>_CONFIG` names the file and is never a key). The only loader any subcommand uses; every config struct, the shared ones here included, carries `deny_unknown_fields`, so an unknown key in file or env fails the load. |
+| `cors` | `cors_layer()`: production's `cors-public-api` — any origin, `GET`/`POST`/`OPTIONS`, `content-type`/`accept`, max-age 600, no credentials. |
+| `ip_extract` | `IpExtractor` checks proxy headers (X-Real-IP, X-Forwarded-For) only when the peer IP is in the trusted proxy CIDR list; `CF-Connecting-IP` is ignored (no Cloudflare in front of any service). Safe default: empty list ignores all headers. |
 | `error` | `ApiError` trait + `into_error_response()` produces `{"error": {"code": "...", "message": "..."}}` JSON. Adds `Retry-After` header for rate-limited responses. |
 | `rate_limit` | `check_keyed_cost` and `check_direct_cost` wrap governor's GCRA limiter. Emit `{prefix}_rate_limit_hits_total` metrics on rejection. |
-| `security_headers` | `security_headers_layer()` returns an axum middleware closure. Sets CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy. Supports relaxed CSP for docs paths. |
+| `security_headers` | `security_headers_layer()` returns an axum middleware closure that emits production's `secure-headers` and `csp-tool-spa` itself: CSP, HSTS (`SecurityHeadersConfig.hsts`, default one year with `preload`), X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, COOP, CORP `cross-origin`. Relaxed CSP for `/docs` only. Parity rule: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rules.md) §Security Headers. |
 | `telemetry` | `init_subscriber()` sets up tracing-subscriber with env filter + optional OTel OTLP layer. `TelemetryConfig` (log_format, enabled, otlp_endpoint, service_name, sample_rate). `shutdown()` flushes spans. All tools must use this -- see [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). |
 
 ## Key Dependencies

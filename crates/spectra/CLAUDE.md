@@ -21,7 +21,7 @@ Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows the same patterns a
 
 ## Config
 
-TOML file (default: `spectra.dev.toml` for local dev) + env overrides as `SPECTRA__<SECTION>__<KEY>` (double underscore after the prefix too). Set `SPECTRA_CONFIG` to override the config file path. Every config struct is `deny_unknown_fields`: an unknown section or key, in the file or the env, fails the load.
+TOML file (default: `spectra.dev.toml` for local dev) + env overrides as `SPECTRA__<SECTION>__<KEY>` (double underscore after the prefix too). Set `SPECTRA_CONFIG` to override the config file path. Every config struct is `deny_unknown_fields`: an unknown section or key, in the file or the env, fails the load. `netray http --check-config <path>` validates a file, including the values startup rejects (zero rate limits), and exits 0 (`config ok: <path>`) or 1 with the error.
 
 ## Key conventions
 

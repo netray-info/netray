@@ -40,6 +40,8 @@ netray dns crates/mhost-prism/prism.dev.toml
 netray site --root site          # the static site on 127.0.0.1:8080
 ```
 
+`netray <service> --check-config <path>` validates a config file without starting the service: exit 0 and `config ok: <path>`, or exit 1 with the error (unknown key, missing file, a value startup would reject). It does not check host data files; `netray ip --check` covers ifconfig-rs's.
+
 ifconfig-rs needs its runtime data first: `just ifconfig-data`.
 
 ## License and contributing

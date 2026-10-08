@@ -6,10 +6,12 @@ Shared utilities for the [netray.info](https://netray.info) service ecosystem.
 
 | Module | Purpose |
 |--------|---------|
-| `ip_extract` | Extract real client IP from proxy headers (CF-Connecting-IP, X-Real-IP, X-Forwarded-For) with trusted-proxy CIDR matching |
+| `config` | The one config loader (`load::<T>(path, prefix)`): optional TOML file plus environment overrides; config structs deny unknown keys |
+| `cors` | Public-API CORS layer: any origin, `GET`/`POST`/`OPTIONS`, preflight cached 600 s |
+| `ip_extract` | Extract real client IP from proxy headers (X-Real-IP, X-Forwarded-For) with trusted-proxy CIDR matching; `CF-Connecting-IP` is ignored |
 | `error` | Structured JSON error responses (`ApiError` trait + `into_error_response`) with `Retry-After` support |
 | `rate_limit` | Keyed and global rate limiting wrappers around `governor` with metrics integration |
-| `security_headers` | Axum middleware that sets CSP, HSTS, X-Frame-Options, and other security headers |
+| `security_headers` | Axum middleware that sets CSP, HSTS, X-Frame-Options, Permissions-Policy, COOP, CORP and the other headers production expects |
 
 ## Usage
 
