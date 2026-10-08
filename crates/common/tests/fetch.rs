@@ -462,5 +462,8 @@ async fn body_over_the_cap_is_an_error() {
     o.body_cap = 16;
     let url = format!("http://127.0.0.1:{}/", srv.port);
     let result = fetch(base, &StubResolver::new(&[]), &url, &o).await;
-    assert!(matches!(result, Err(FetchError::BodyTooLarge)), "{result:?}");
+    assert!(
+        matches!(result, Err(FetchError::BodyTooLarge)),
+        "{result:?}"
+    );
 }
