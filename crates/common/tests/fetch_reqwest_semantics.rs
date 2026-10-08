@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use netray_common::fetch::{AtLimit, FetchOptions, Resolve, fetch};
+use netray_common::fetch::{AtLimit, ClientSettings, FetchOptions, Resolve, fetch};
 use netray_common::target_policy::is_allowed_target;
 use reqwest::Method;
 use reqwest::header::{AUTHORIZATION, HeaderValue};
@@ -154,10 +154,6 @@ fn serve(listener: TcpListener, handler: impl Fn(&Req) -> Reply + Send + Sync + 
     }
 }
 
-fn base() -> reqwest::ClientBuilder {
-    reqwest::Client::builder()
-}
-
 fn allow_loopback(ip: IpAddr) -> bool {
     ip.is_loopback() || is_allowed_target(ip)
 }
@@ -190,7 +186,7 @@ async fn final_3xx_with_stalled_body_is_returned_at_once() {
     o.read_body = true;
     o.timeout = Duration::from_secs(2);
     let started = Instant::now();
-    let res = fetch(base, no_resolver(), &url, &o)
+    let res = fetch(&ClientSettings::default(),no_resolver(), &url, &o)
         .await
         .expect("a final 3xx is returned, not an error");
     assert!(
@@ -208,7 +204,7 @@ async fn referer_is_sent_on_a_followed_hop() {
     let loc = format!("http://127.0.0.1:{}/b", b.port);
     let a = serve(bind4().await, move |_| Reply::Full(redirect(302, &loc)));
     let url_a = format!("http://127.0.0.1:{}/a", a.port);
-    fetch(base, no_resolver(), &url_a, &loopback_opts())
+    fetch(&ClientSettings::default(),no_resolver(), &url_a, &loopback_opts())
         .await
         .expect("follow the redirect");
     let seen = b.requests();
@@ -226,7 +222,7 @@ async fn cross_host_redirect_drops_authorization() {
     o.headers
         .insert(AUTHORIZATION, HeaderValue::from_static("Bearer x"));
     let url = format!("http://a.invalid:{}/", p1.port);
-    fetch(base, Arc::new(resolver), &url, &o)
+    fetch(&ClientSettings::default(),Arc::new(resolver), &url, &o)
         .await
         .expect("follow the cross-host redirect");
     let first = p1.requests();
@@ -252,7 +248,7 @@ async fn location_fragment_is_not_recorded() {
         }
     });
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let res = fetch(base, no_resolver(), &url, &loopback_opts())
+    let res = fetch(&ClientSettings::default(),no_resolver(), &url, &loopback_opts())
         .await
         .expect("follow the redirect");
     assert_eq!(res.hops.len(), 1);
