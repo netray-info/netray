@@ -48,14 +48,14 @@ impl EcosystemConfig {
 
 /// Canonical `/api/meta` response shape returned by every netray.info service.
 ///
-/// Hand-mirrored by `tests/acceptance/schemas/ecosystem-meta.schema.json`
-/// in the meta repo; keep them in sync when this struct changes.
+/// Hand-mirrored by `tests/acceptance/schemas/ecosystem-meta.schema.json`;
+/// keep them in sync when this struct changes.
 ///
-/// `site_name` is the canonical service identifier — the legacy `service`
-/// key from beacon's old shape is removed. All fields are required: services
-/// that do not orchestrate other services (i.e. anything other than lens)
-/// shall populate `ecosystem` with empty strings rather than omitting the
-/// object, so the response shape is uniform.
+/// `site_name` is the service's display identifier — the legacy `service`
+/// key from beacon's old shape is removed. All fields are required. Every
+/// service fills `ecosystem` with the absolute `https://` URLs from its
+/// `[ecosystem]` config; only ifconfig-rs, which links to no sibling, sends
+/// empty strings for the sibling URLs (never for its own `ip_base_url`).
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct EcosystemMeta {
@@ -64,8 +64,8 @@ pub struct EcosystemMeta {
     pub site_name: String,
     /// Service binary version, e.g. `"0.5.1"`.
     pub version: String,
-    /// URLs of sibling services. Populated by lens; other services use
-    /// empty strings so the shape stays uniform.
+    /// URLs of the suite's services, from the `[ecosystem]` config; see the
+    /// struct doc for the ifconfig-rs exception.
     pub ecosystem: EcosystemUrls,
     /// Service-specific feature flags, e.g. `{"geoip": true}`. The contract
     /// is "present as an object"; key names are not constrained by the schema.

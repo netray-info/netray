@@ -47,3 +47,54 @@ Second pass: 0 BLOCKER.
 ### Behavioural verification
 
 skipped: both workflows run only on GitHub runners and there is no Docker daemon here. Verified statically (YAML parses, `tests/repo/test_workflows.sh`, `cargo deny check bans licenses sources` passes locally). The behavioural check is the spec's acceptance: CI on the first push and the `v0.22.0-rc.1` release run (decision M17 of the planning SDD), both operator-triggered.
+
+## Phase 2 — Acceptance suite
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | Req 7: meta schema accepts lens's `site` object, rejects empty ecosystem URLs; every ecosystem URL absolute `https://` | green | tests/repo/test_meta_schema.sh |
+| C2 | GIVEN schema WHEN lens sample with `site` validated THEN passes | green | tests/repo/test_meta_schema.sh |
+| C3 | GIVEN schema WHEN `email_base_url: ""` / `http://` / relative THEN fails | green | tests/repo/test_meta_schema.sh |
+| C4 | GIVEN suite WHEN `just acceptance` against production THEN passes (operator-observed, outside the gate) | test-unwritable | tests/acceptance (operator-observed) |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| schema (`site`, https URLs, ajv declared) | — | orchestrator (three-line schema change; one escaping slip, caught by the test) | — | — |
+
+### Production acceptance (2026-10-08, `TEST_ENV=production npx playwright test`)
+
+89 tests: 72 passed, 10 skipped, 7 failed.
+- 5 × `integration/cross-links.spec.ts` (browser context): local environment. Playwright's `chromium_headless_shell-1217` download hangs on this machine; no product finding.
+- `static-site/links.spec.ts`: stale since the apex became the lens SPA (no SuiteNav in its HTML). Now reads the static `/tools` page and passes against production (36 passed in its project run).
+- `static-site/pages.spec.ts`: `/status/` lacked `<meta name="description">`. Fixed in `site/status/index.html` and verified through `netray site`. Production serves the site frozen (infrastructure Phase 3b replaces it with `netray site`), so the fix goes live then.
+
+C4 is `test-unwritable` in the gate: it needs network, a browser and a deployment; it is observed, not gated.
+
+### Review
+
+First pass: 1 BLOCKER, 1 DEFERRED, 2 NIT.
+- BLOCKER: the https-only schema rejected ifconfig-rs's real `/api/meta`, which sends "" for the sibling URLs it does not link to. Repaired test-first with a live fixture: if/then/else on `site_name: "ip.netray.info"` allows "" for ifconfig-rs's siblings only, never for its own `ip_base_url`; every other service needs absolute https.
+- DEFERRED → repaired: no acceptance spec validated `/api/meta` against the schema (planning N1). New `api-contract/meta-shape.spec.ts` checks all six services; it passes against production (6/6).
+- NIT → repaired with the blocker's lines: URL pattern end-anchored; `site` description named a non-existent type.
+
+Second pass: 0 BLOCKER.
+- AMENDMENT: the exception keys on a configurable `site_name`. Kept, and documented in the schema: a rename makes the check fail loudly. A structural rule ("only ip set") would let a misconfigured service of that shape through.
+- AMENDMENT: netray-common's contract doc still said every non-lens service sends empty strings. Rewritten: every service fills its URLs from `[ecosystem]`, with the ifconfig-rs exception.
+- NIT, listed: the host part accepts degenerate hosts (`https://?`, `https://https://…`).
+- NIT, listed: the repo test mutates only one key per branch.
+- NIT, listed: `validate_meta.mjs` exits 1 on a mistyped `--set` path.
+- NIT, listed: `site` is allowed on every service.
+
+### Behavioural verification
+
+```
+$ TEST_ENV=production npx playwright test api-contract/meta-shape.spec.ts static-site/links.spec.ts
+… ip/dns/tls/http/email/lens: /api/meta matches the ecosystem-meta schema — 6 passed
+… all SuiteNav links on /tools resolve to 200 — passed
+$ netray site --root site; curl /status/ | grep description
+<meta name="description" content="Live uptime for the seven netray.info services." />
+```

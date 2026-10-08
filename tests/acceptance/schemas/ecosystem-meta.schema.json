@@ -4,7 +4,14 @@
   "title": "EcosystemMeta",
   "description": "Canonical /api/meta response shape returned by every netray.info service. Hand-authored — keep in sync with netray_common::ecosystem::EcosystemMeta.",
   "type": "object",
-  "required": ["site_name", "version", "ecosystem", "features", "limits", "rate_limit"],
+  "required": [
+    "site_name",
+    "version",
+    "ecosystem",
+    "features",
+    "limits",
+    "rate_limit"
+  ],
   "additionalProperties": false,
   "properties": {
     "site_name": {
@@ -28,25 +35,172 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "ip_base_url":    { "type": "string" },
-        "dns_base_url":   { "type": "string" },
-        "tls_base_url":   { "type": "string" },
-        "http_base_url":  { "type": "string" },
-        "email_base_url": { "type": "string" },
-        "lens_base_url":  { "type": "string" }
+        "ip_base_url": {
+          "type": "string"
+        },
+        "dns_base_url": {
+          "type": "string"
+        },
+        "tls_base_url": {
+          "type": "string"
+        },
+        "http_base_url": {
+          "type": "string"
+        },
+        "email_base_url": {
+          "type": "string"
+        },
+        "lens_base_url": {
+          "type": "string"
+        }
       }
     },
-    "features": { "type": "object" },
-    "limits":   { "type": "object" },
+    "site": {
+      "type": "object",
+      "description": "lens only: the apex landing copy (lens SiteConfig)."
+    },
+    "features": {
+      "type": "object"
+    },
+    "limits": {
+      "type": "object"
+    },
     "rate_limit": {
       "type": "object",
-      "required": ["per_ip_per_minute", "per_ip_burst", "global_per_minute", "global_burst"],
+      "required": [
+        "per_ip_per_minute",
+        "per_ip_burst",
+        "global_per_minute",
+        "global_burst"
+      ],
       "additionalProperties": false,
       "properties": {
-        "per_ip_per_minute": { "type": "integer", "minimum": 0 },
-        "per_ip_burst":      { "type": "integer", "minimum": 0 },
-        "global_per_minute": { "type": "integer", "minimum": 0 },
-        "global_burst":      { "type": "integer", "minimum": 0 }
+        "per_ip_per_minute": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "per_ip_burst": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "global_per_minute": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "global_burst": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "if": {
+    "properties": {
+      "site_name": {
+        "const": "ip.netray.info"
+      }
+    },
+    "required": [
+      "site_name"
+    ]
+  },
+  "then": {
+    "$comment": "ifconfig-rs sends empty strings for the sibling URLs it does not link to (netray-common ecosystem.rs); its own ip_base_url stays required and absolute. Keyed on its production site_name: renaming it makes this check fail loudly, which is intended.",
+    "properties": {
+      "ecosystem": {
+        "properties": {
+          "ip_base_url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+          },
+          "dns_base_url": {
+            "anyOf": [
+              {
+                "const": ""
+              },
+              {
+                "type": "string",
+                "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+              }
+            ]
+          },
+          "tls_base_url": {
+            "anyOf": [
+              {
+                "const": ""
+              },
+              {
+                "type": "string",
+                "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+              }
+            ]
+          },
+          "http_base_url": {
+            "anyOf": [
+              {
+                "const": ""
+              },
+              {
+                "type": "string",
+                "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+              }
+            ]
+          },
+          "email_base_url": {
+            "anyOf": [
+              {
+                "const": ""
+              },
+              {
+                "type": "string",
+                "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+              }
+            ]
+          },
+          "lens_base_url": {
+            "anyOf": [
+              {
+                "const": ""
+              },
+              {
+                "type": "string",
+                "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "ecosystem": {
+        "properties": {
+          "ip_base_url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+          },
+          "dns_base_url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+          },
+          "tls_base_url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+          },
+          "http_base_url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+          },
+          "email_base_url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+          },
+          "lens_base_url": {
+            "type": "string",
+            "pattern": "^https://[^/\\s]+(/[^\\s]*)?$"
+          }
+        }
       }
     }
   }

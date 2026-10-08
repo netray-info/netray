@@ -1,2 +1,4 @@
 /target/
 node_modules/
+tests/acceptance/test-results/
+tests/acceptance/playwright-report/

@@ -4,5 +4,8 @@
   "workspaces": [
     "crates/*/frontend",
     "packages/common-frontend"
-  ]
+  ],
+  "devDependencies": {
+    "ajv": "^6.12.6"
+  }
 }
