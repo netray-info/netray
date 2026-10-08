@@ -7,7 +7,9 @@
 // hop is followed. The rows pin exactly that.
 
 use std::collections::HashMap;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::future::Future;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -16,7 +18,8 @@ use axum::Router;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use spectra::inspect::assembler::RedirectHop;
-use spectra::inspect::request::execute_request;
+use netray_common::fetch::Resolve;
+use spectra::inspect::request::{Outbound, execute_request};
 use spectra::inspect::{EnrichmentData, InspectResult, TaskResult, assemble_response};
 use spectra::quality::types::CheckStatus;
 use tokio::net::TcpListener;
@@ -84,10 +87,46 @@ fn hop_tuples(hops: &[RedirectHop]) -> Vec<(String, u16, String)> {
         .collect()
 }
 
-async fn run(url: &str, port: u16, max_redirects: usize) -> TaskResult {
+/// Stub resolver: name -> addresses; unknown names resolve to nothing.
+struct Stub(HashMap<String, Vec<IpAddr>>);
+
+impl Resolve for Stub {
+    fn resolve(&self, host: &str) -> Pin<Box<dyn Future<Output = Vec<IpAddr>> + Send>> {
+        let ips = self.0.get(host).cloned().unwrap_or_default();
+        Box::pin(async move { ips })
+    }
+}
+
+fn outbound(names: &[(&str, Vec<IpAddr>)]) -> Outbound {
+    Outbound {
+        resolver: Arc::new(Stub(
+            names
+                .iter()
+                .map(|(n, ips)| (n.to_string(), ips.clone()))
+                .collect(),
+        )),
+        allow: |ip| ip == IpAddr::V4(Ipv4Addr::LOCALHOST),
+    }
+}
+
+fn v4(a: u8, b: u8, c: u8, d: u8) -> IpAddr {
+    IpAddr::V4(Ipv4Addr::new(a, b, c, d))
+}
+
+/// `localhost` -> 127.0.0.1, the only admitted address.
+fn localhost_v4() -> Vec<(&'static str, Vec<IpAddr>)> {
+    vec![("localhost", vec![v4(127, 0, 0, 1)])]
+}
+
+async fn run(
+    url: &str,
+    port: u16,
+    max_redirects: usize,
+    names: &[(&str, Vec<IpAddr>)],
+) -> TaskResult {
     let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
     execute_request(
-        &reqwest::Client::new(),
+        &outbound(names),
         Url::parse(url).unwrap(),
         resolved,
         max_redirects,
@@ -153,7 +192,7 @@ async fn redirect_results_table() {
             ),
         ]);
         serve(l, routes);
-        let r = run(&format!("{base}/r0"), p, 10).await;
+        let r = run(&format!("{base}/r0"), p, 10, &localhost_v4()).await;
         assert_eq!(r.error, None, "row 1");
         assert_eq!(r.status, 200, "row 1");
         assert_eq!(r.final_url, format!("{base}/r3"), "row 1");
@@ -182,7 +221,7 @@ async fn redirect_results_table() {
             ("/b".to_string(), redirect(302, format!("{base}/a"))),
         ]);
         let hits = serve(l, routes);
-        let r = run(&format!("{base}/a"), p, 10).await;
+        let r = run(&format!("{base}/a"), p, 10, &localhost_v4()).await;
         assert_eq!(r.error, None, "row 2");
         assert_eq!(r.status, 302, "row 2");
         assert_eq!(r.final_url, format!("{base}/a"), "row 2");
@@ -209,12 +248,16 @@ async fn redirect_results_table() {
         );
     }
 
-    // Row 3: the initial target answers 302 to http://localhost:<p2>/. `localhost` is not an
-    // IP literal, so the redirect guard does not inspect it and the hop is followed: p2 is
-    // reached and its 200 plus distinctive header is the final result. Limit not reached.
+    // Row 3: the initial target answers 302 to http://localhost:<p2>/ while the stub resolves
+    // `localhost` to [::1], which `allow` refuses. The redirect is not followed: p2 (a
+    // listener on [::1]) sees no connection. The result is the blocked shape: error
+    // "Redirect destination blocked", status 0, the initial URL as final URL, no headers,
+    // limit not reached. The hop list keeps the refused redirect; the `redirect_limit`
+    // check is absent.
     {
         let (l1, p1) = bind().await;
-        let (l2, p2) = bind().await;
+        let l2 = TcpListener::bind("[::1]:0").await.unwrap();
+        let p2 = l2.local_addr().unwrap().port();
         let target = format!("http://localhost:{p2}/");
         serve(
             l1,
@@ -232,17 +275,18 @@ async fn redirect_results_table() {
             )]),
         );
         let first = format!("http://127.0.0.1:{p1}/");
-        let r = run(&first, p1, 10).await;
-        assert_eq!(r.error, None, "row 3");
-        assert_eq!(r.status, 200, "row 3");
-        assert_eq!(r.final_url, target, "row 3");
-        assert!(!r.redirect_limit_reached, "row 3");
-        assert_eq!(hits2.load(Ordering::SeqCst), 1, "row 3: p2 was reached");
+        let names = vec![("localhost", vec![IpAddr::V6(Ipv6Addr::LOCALHOST)])];
+        let r = run(&first, p1, 10, &names).await;
         assert_eq!(
-            r.headers.get("x-second-listener").unwrap(),
-            "reached",
+            r.error.as_deref(),
+            Some("Redirect destination blocked"),
             "row 3"
         );
+        assert_eq!(r.status, 0, "row 3");
+        assert_eq!(r.final_url, first, "row 3");
+        assert!(!r.redirect_limit_reached, "row 3");
+        assert_eq!(hits2.load(Ordering::SeqCst), 0, "row 3: p2 was not reached");
+        assert!(r.headers.get("x-second-listener").is_none(), "row 3");
         assert_eq!(
             hop_tuples(&r.redirects),
             vec![hop(&first, 302, &target)],
@@ -251,6 +295,38 @@ async fn redirect_results_table() {
         assert_eq!(redirect_limit_check(r), None, "row 3");
     }
 
-    // Row 4 (redirect to a name resolving to [public, 10.0.0.1]) is omitted: later hops go
-    // through the system resolver, which a test cannot control deterministically.
+    // Row 4 (C15): the initial target answers 302 to http://mixed.test:<p2>/, and the stub
+    // resolves `mixed.test` to [127.0.0.1, 10.0.0.1]. One refused address refuses the whole
+    // name: blocked shape (error "Redirect destination blocked", status 0), and the
+    // listener p2 on 127.0.0.1 sees no connection.
+    {
+        let (l1, p1) = bind().await;
+        let (l2, p2) = bind().await;
+        let target = format!("http://mixed.test:{p2}/");
+        serve(
+            l1,
+            HashMap::from([("/".to_string(), redirect(302, target.clone()))]),
+        );
+        let hits2 = serve(
+            l2,
+            HashMap::from([(
+                "/".to_string(),
+                Canned {
+                    status: 200,
+                    location: None,
+                    header: None,
+                },
+            )]),
+        );
+        let first = format!("http://127.0.0.1:{p1}/");
+        let names = vec![("mixed.test", vec![v4(127, 0, 0, 1), v4(10, 0, 0, 1)])];
+        let r = run(&first, p1, 10, &names).await;
+        assert_eq!(
+            r.error.as_deref(),
+            Some("Redirect destination blocked"),
+            "row 4"
+        );
+        assert_eq!(r.status, 0, "row 4");
+        assert_eq!(hits2.load(Ordering::SeqCst), 0, "row 4: p2 was not reached");
+    }
 }

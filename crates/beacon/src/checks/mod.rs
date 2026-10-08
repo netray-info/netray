@@ -42,6 +42,8 @@ pub mod util;
 mod bimi_results_table;
 #[cfg(test)]
 mod mta_sts_results_table;
+#[cfg(test)]
+mod outbound_fetch_scenarios;
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -742,15 +744,17 @@ mod tests {
 
         let (tx, mut rx) = mpsc::channel::<SseEvent>(64);
 
-        let http = reqwest::Client::new();
+        let fetch = crate::state::OutboundFetch::new(
+            5_000,
+            Arc::new(crate::dns::FetchResolver(dns.clone())),
+        );
         let handle = tokio::spawn(run_all_checks(
             "example.com".to_string(),
             Vec::new(),
             config,
             dns,
             dnsbl,
-            http.clone(),
-            http,
+            fetch,
             None,
             tx,
         ));

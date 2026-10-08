@@ -274,6 +274,25 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+    /// Test seam: empty stub resolver, allow admits only 127.0.0.1.
+    struct NoNames;
+
+    impl netray_common::fetch::Resolve for NoNames {
+        fn resolve(
+            &self,
+            _host: &str,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<IpAddr>> + Send>> {
+            Box::pin(async { Vec::new() })
+        }
+    }
+
+    fn test_outbound() -> request::Outbound {
+        request::Outbound {
+            resolver: std::sync::Arc::new(NoNames),
+            allow: |ip| ip == IpAddr::V4(Ipv4Addr::LOCALHOST),
+        }
+    }
+
     fn test_config() -> InspectConfig {
         InspectConfig {
             request_timeout_secs: 5,
@@ -354,11 +373,11 @@ mod tests {
         let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
 
         let url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
-        let client = reqwest::Client::new();
+        let outbound = test_outbound();
         let mut cfg = test_config();
         cfg.total_timeout_secs = 5;
 
-        let result = inspect(&url, resolved, &cfg, &client).await.unwrap();
+        let result = inspect(&url, resolved, &cfg, &outbound).await.unwrap();
         assert!(
             result.https.error.is_none(),
             "https probe should not error: {:?}",
@@ -386,13 +405,13 @@ mod tests {
 
         let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
         let url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
-        let client = reqwest::Client::new();
+        let outbound = test_outbound();
         let mut cfg = test_config();
         cfg.request_timeout_secs = 2;
         cfg.total_timeout_secs = 10;
 
         // inspect() should return Ok (not Err) even when probes fail — partial result
-        let result = inspect(&url, resolved, &cfg, &client).await.unwrap();
+        let result = inspect(&url, resolved, &cfg, &outbound).await.unwrap();
         // At least one probe should have an error (connection closed)
         let any_error = result.https.error.is_some() || result.cors.error.is_some();
         assert!(
@@ -418,12 +437,12 @@ mod tests {
 
         let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
         let url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
-        let client = reqwest::Client::new();
+        let outbound = test_outbound();
         let mut cfg = test_config();
         cfg.request_timeout_secs = 60;
         cfg.total_timeout_secs = 1; // total timeout fires first
 
-        let result = inspect(&url, resolved, &cfg, &client).await;
+        let result = inspect(&url, resolved, &cfg, &outbound).await;
         assert!(
             matches!(result, Err(crate::error::AppError::Timeout(1))),
             "expected Timeout(1), got {:?}",
@@ -440,14 +459,14 @@ mod tests {
         let addr = spawn_http_server(response).await;
         let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
 
-        let client = reqwest::Client::new();
+        let outbound = test_outbound();
         let mut cfg = test_config();
         cfg.request_timeout_secs = 1;
         cfg.total_timeout_secs = 5;
 
         // https:// → upgrade probe is attempted (Some), even if it errors (port 80 not open)
         let https_url = Url::parse(&format!("https://127.0.0.1:{}/", addr.port())).unwrap();
-        let result = inspect(&https_url, resolved, &cfg, &client).await.unwrap();
+        let result = inspect(&https_url, resolved, &cfg, &outbound).await.unwrap();
         assert!(
             result.http_upgrade.is_some(),
             "expected http_upgrade to be Some for https:// URL"
@@ -455,7 +474,7 @@ mod tests {
 
         // http:// → upgrade probe is skipped (None)
         let http_url = Url::parse(&format!("http://127.0.0.1:{}/", addr.port())).unwrap();
-        let result = inspect(&http_url, resolved, &cfg, &client).await.unwrap();
+        let result = inspect(&http_url, resolved, &cfg, &outbound).await.unwrap();
         assert!(
             result.http_upgrade.is_none(),
             "expected http_upgrade to be None for http:// URL"

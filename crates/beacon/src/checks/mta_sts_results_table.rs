@@ -1,24 +1,27 @@
 //! Pinning table for today's MTA-STS results.
 //!
-//! Each row drives `check_mta_sts` through a stub DNS resolver and a client
-//! built from the production builder (`crate::state::http_client_builder`).
-//! The client is given a resolve override that points
-//! `mta-sts.example.com` at a local TLS listener and trusts the listener's
-//! self-signed certificate; everything else (timeout, no-redirect policy,
-//! user agent) is the production configuration.
+//! Each row drives `check_mta_sts_at` (the policy URL carries the listener
+//! port) through one stub DNS resolver that answers both the TXT lookup and
+//! the fetch's host resolution (through `FetchResolver`). The fetch trusts the
+//! listener's self-signed certificate and admits exactly 127.0.0.1, which
+//! stands in for a public address; everything else (timeout, user agent) is
+//! the production `OutboundFetch`.
 //!
 //! The expected sub-check names, verdicts and grades are derived from reading
 //! `mta_sts.rs`, not from running it.
 
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::sync::Arc;
 
+use netray_common::fetch::ClientSettings;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 
-use crate::checks::mta_sts::check_mta_sts;
+use crate::checks::mta_sts::check_mta_sts_at;
+use crate::dns::FetchResolver;
 use crate::dns::test_support::TestDnsResolver;
 use crate::quality::{Grade, Verdict, compute_grade};
+use crate::state::OutboundFetch;
 
 const POLICY_BODY: &str =
     "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 604800\nid: 20200101T000000\n";
@@ -109,19 +112,18 @@ struct Row {
 #[tokio::test]
 async fn mta_sts_results_table() {
     let rows = vec![
-        // Row 1: the stub returns no addresses (models a beacon resolver error),
-        // so the pre-flight loop over resolved addresses has nothing to reject.
-        // The client's own resolve map still reaches the listener, which serves
-        // a valid enforce policy: only `mode` Pass is recorded. Verdict Pass,
-        // no Warn/Fail, grade A.
+        // Row 1: refused target (requirement 8). The stub returns no addresses
+        // (models a beacon resolver error); the fetch resolves through the same
+        // stub and refuses a host without addresses: `https_fetch_failed` Fail,
+        // grade D.
         Row {
             name: "empty stub answer, policy reachable",
             stub_ips: vec![],
             endpoint: Endpoint::ValidPolicy,
-            expected: vec![("mode", Verdict::Pass)],
-            grade: Grade::A,
+            expected: vec![("https_fetch_failed", Verdict::Fail)],
+            grade: Grade::D,
         },
-        // Row 2: 10.0.0.1 is RFC 1918, so `is_allowed_target` is false and
+        // Row 2: 10.0.0.1 is RFC 1918, so the fetch's `allow` is false and
         // check_mta_sts returns early with a single `ssrf_blocked` Fail before
         // any fetch. Category verdict Fail; one Fail and no Warn gives grade D.
         Row {
@@ -131,22 +133,22 @@ async fn mta_sts_results_table() {
             expected: vec![("ssrf_blocked", Verdict::Fail)],
             grade: Grade::D,
         },
-        // Row 3: 93.184.216.34 is publicly routable and not in any blocked
-        // range, so the pre-flight passes and the fetch runs against the
-        // listener, giving a valid enforce policy: `mode` Pass only, grade A.
+        // Row 3: 127.0.0.1 stands in for a public address (the only one the
+        // fetch admits), so the pre-flight passes and the fetch runs against
+        // the listener, giving a valid enforce policy: `mode` Pass only, grade A.
         Row {
             name: "public address in stub, policy reachable",
-            stub_ips: vec!["93.184.216.34".parse().unwrap()],
+            stub_ips: vec!["127.0.0.1".parse().unwrap()],
             endpoint: Endpoint::ValidPolicy,
             expected: vec![("mode", Verdict::Pass)],
             grade: Grade::A,
         },
-        // Row 4: the endpoint answers 301. The client never follows redirects
-        // and fetch_and_parse_policy checks `is_redirection()` first, so it
-        // records `https_redirect` Fail and stops (no mode check). Grade D.
+        // Row 4: the endpoint answers 301. The fetch follows no redirect and
+        // the check tests `is_redirection()` first, so it records
+        // `https_redirect` Fail and stops (no mode check). Grade D.
         Row {
             name: "policy endpoint answers 301",
-            stub_ips: vec!["93.184.216.34".parse().unwrap()],
+            stub_ips: vec!["127.0.0.1".parse().unwrap()],
             endpoint: Endpoint::Redirect,
             expected: vec![("https_redirect", Verdict::Fail)],
             grade: Grade::D,
@@ -156,22 +158,26 @@ async fn mta_sts_results_table() {
     for row in rows {
         let (port, cert_der) = start_tls_listener(row.endpoint).await;
 
-        // `resolve` keeps a non-zero port when the URL has no explicit port
-        // (the policy URL has none), so this reaches the ephemeral listener.
-        let client = crate::state::http_client_builder(5_000)
-            .resolve(
-                "mta-sts.example.com",
-                SocketAddr::from(([127, 0, 0, 1], port)),
-            )
-            .add_root_certificate(reqwest::Certificate::from_der(&cert_der).unwrap())
-            .build()
-            .unwrap();
+        let resolver = Arc::new(
+            TestDnsResolver::new()
+                .with_txt("_mta-sts.example.com", vec!["v=STSv1; id=20200101T000000;"])
+                .with_ips("mta-sts.example.com", row.stub_ips.clone()),
+        );
 
-        let resolver = TestDnsResolver::new()
-            .with_txt("_mta-sts.example.com", vec!["v=STSv1; id=20200101T000000;"])
-            .with_ips("mta-sts.example.com", row.stub_ips.clone());
+        let base = OutboundFetch::new(5_000, Arc::new(FetchResolver(resolver.clone())));
+        let fetch = OutboundFetch {
+            settings: ClientSettings {
+                root_certificates: vec![reqwest::Certificate::from_der(&cert_der).unwrap()],
+                ..base.settings.clone()
+            },
+            allow: |ip| ip == IpAddr::V4(Ipv4Addr::LOCALHOST),
+            ..base
+        };
 
-        let (result, _info) = check_mta_sts("example.com", &resolver, &client).await;
+        // The policy URL carries the listener port; the production URL has none.
+        let policy_url = format!("https://mta-sts.example.com:{port}/.well-known/mta-sts.txt");
+        let (result, _info) =
+            check_mta_sts_at("example.com", &*resolver, &fetch, &policy_url).await;
 
         let got: Vec<(&str, Verdict)> = result
             .sub_checks

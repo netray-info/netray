@@ -193,6 +193,25 @@ mod tests {
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+    /// Test seam: empty stub resolver, allow admits only 127.0.0.1.
+    struct NoNames;
+
+    impl netray_common::fetch::Resolve for NoNames {
+        fn resolve(
+            &self,
+            _host: &str,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<IpAddr>> + Send>> {
+            Box::pin(async { Vec::new() })
+        }
+    }
+
+    fn test_outbound() -> Outbound {
+        Outbound {
+            resolver: Arc::new(NoNames),
+            allow: |ip| ip == IpAddr::V4(Ipv4Addr::LOCALHOST),
+        }
+    }
+
     #[tokio::test]
     async fn redirect_hops_are_captured() {
         // Bind a listener on an ephemeral port
@@ -215,9 +234,9 @@ mod tests {
         let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
 
         // max_redirects=0 so reqwest stops after the first 301 without following it
-        let client = reqwest::Client::new();
+        let outbound = test_outbound();
         let result = execute_request(
-            &client,
+            &outbound,
             url,
             resolved,
             0, // stop immediately — captures the hop

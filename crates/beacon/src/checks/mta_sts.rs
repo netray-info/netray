@@ -368,25 +368,11 @@ async fn fetch_and_parse_policy(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dns::FetchResolver;
     use crate::dns::test_support::TestDnsResolver;
+    use crate::state::OutboundFetch;
     use axum::http::{HeaderMap, HeaderValue, StatusCode};
-    use axum::routing::get;
-
-    /// Bind an ephemeral loopback TCP listener and serve the provided `axum::Router`.
-    /// Returns the base URL (e.g. `http://127.0.0.1:54321`) and the server's `JoinHandle`.
-    async fn start_mock_server(handler: axum::Router) -> (String, tokio::task::JoinHandle<()>) {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let handle = tokio::spawn(async move { axum::serve(listener, handler).await.unwrap() });
-        (format!("http://127.0.0.1:{}", addr.port()), handle)
-    }
-
-    fn client() -> reqwest::Client {
-        reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .unwrap()
-    }
+    use std::sync::Arc;
 
     /// Body exactly `MTA_STS_MAX_BODY_BYTES + 1` → policy_body_too_large Warn.
     #[tokio::test]
@@ -400,27 +386,19 @@ mod tests {
         // Now body.len() == MTA_STS_MAX_BODY_BYTES + 1 (or slightly more; one more 'x' fine).
         assert!(body.len() > MTA_STS_MAX_BODY_BYTES);
 
-        let body_clone = body.clone();
-        let router = axum::Router::new().route(
-            "/.well-known/mta-sts.txt",
-            get(move || {
-                let b = body_clone.clone();
-                async move {
-                    let mut headers = HeaderMap::new();
-                    headers.insert(
-                        "content-type",
-                        HeaderValue::from_static("text/plain; charset=utf-8"),
-                    );
-                    (StatusCode::OK, headers, b)
-                }
-            }),
+        // The fetch truncates at the cap and reports it.
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "content-type",
+            HeaderValue::from_static("text/plain; charset=utf-8"),
         );
-        let (base, handle) = start_mock_server(router).await;
-        let url = format!("{}/.well-known/mta-sts.txt", base);
-
-        let (sub_checks, _info, _detail) =
-            fetch_and_parse_policy(&url, "20200101T000000".to_string(), &client()).await;
-        handle.abort();
+        let (sub_checks, _info, _detail) = evaluate_policy(
+            StatusCode::OK,
+            &headers,
+            &body.as_bytes()[..MTA_STS_MAX_BODY_BYTES],
+            true,
+            "20200101T000000".to_string(),
+        );
 
         assert!(
             sub_checks
@@ -435,20 +413,15 @@ mod tests {
     #[tokio::test]
     async fn valid_enforce_policy_passes() {
         let body = "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 604800\nid: 20200101T000000\n";
-        let router = axum::Router::new().route(
-            "/.well-known/mta-sts.txt",
-            get(move || async move {
-                let mut headers = HeaderMap::new();
-                headers.insert("content-type", HeaderValue::from_static("text/plain"));
-                (StatusCode::OK, headers, body)
-            }),
+        let mut headers = HeaderMap::new();
+        headers.insert("content-type", HeaderValue::from_static("text/plain"));
+        let (sub_checks, info, _detail) = evaluate_policy(
+            StatusCode::OK,
+            &headers,
+            body.as_bytes(),
+            false,
+            "20200101T000000".to_string(),
         );
-        let (base, handle) = start_mock_server(router).await;
-        let url = format!("{}/.well-known/mta-sts.txt", base);
-
-        let (sub_checks, info, _detail) =
-            fetch_and_parse_policy(&url, "20200101T000000".to_string(), &client()).await;
-        handle.abort();
 
         assert!(
             sub_checks
@@ -466,20 +439,15 @@ mod tests {
     #[tokio::test]
     async fn wrong_content_type_fails() {
         let body = "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 604800\n";
-        let router = axum::Router::new().route(
-            "/.well-known/mta-sts.txt",
-            get(move || async move {
-                let mut headers = HeaderMap::new();
-                headers.insert("content-type", HeaderValue::from_static("application/json"));
-                (StatusCode::OK, headers, body)
-            }),
+        let mut headers = HeaderMap::new();
+        headers.insert("content-type", HeaderValue::from_static("application/json"));
+        let (sub_checks, _info, _detail) = evaluate_policy(
+            StatusCode::OK,
+            &headers,
+            body.as_bytes(),
+            false,
+            String::new(),
         );
-        let (base, handle) = start_mock_server(router).await;
-        let url = format!("{}/.well-known/mta-sts.txt", base);
-
-        let (sub_checks, _info, _detail) =
-            fetch_and_parse_policy(&url, String::new(), &client()).await;
-        handle.abort();
 
         assert!(
             sub_checks
@@ -494,14 +462,17 @@ mod tests {
     #[tokio::test]
     async fn ssrf_hostname_blocked() {
         let domain = "example.com";
-        let resolver = TestDnsResolver::new()
-            .with_txt("_mta-sts.example.com", vec!["v=STSv1; id=20200101T000000;"])
-            .with_ips(
-                "mta-sts.example.com",
-                vec!["10.0.0.1".parse::<std::net::IpAddr>().unwrap()],
-            );
+        let resolver = Arc::new(
+            TestDnsResolver::new()
+                .with_txt("_mta-sts.example.com", vec!["v=STSv1; id=20200101T000000;"])
+                .with_ips(
+                    "mta-sts.example.com",
+                    vec!["10.0.0.1".parse::<std::net::IpAddr>().unwrap()],
+                ),
+        );
+        let fetch = OutboundFetch::new(5_000, Arc::new(FetchResolver(resolver.clone())));
 
-        let (result, info) = check_mta_sts(domain, &resolver, &client()).await;
+        let (result, info) = check_mta_sts(domain, &*resolver, &fetch).await;
         assert!(
             result
                 .sub_checks
