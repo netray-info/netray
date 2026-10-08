@@ -1,20 +1,61 @@
-use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::future::Future;
+use std::net::{IpAddr, SocketAddr};
+use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
-use reqwest::redirect::Policy;
+use netray_common::fetch::{
+    self, AtLimit, ClientSettings, FetchError, FetchOptions, Hop, Resolve, SystemResolver,
+};
+use netray_common::target_policy::is_allowed_target;
+use reqwest::Method;
+use reqwest::header::{ACCEPT_ENCODING, HeaderMap, HeaderValue, USER_AGENT};
 use url::Url;
 
 use super::TaskResult;
 use super::assembler::RedirectHop;
 
+/// Name resolution and address predicate for outbound inspection requests.
+#[derive(Clone)]
+pub struct Outbound {
+    pub resolver: Arc<dyn Resolve>,
+    pub allow: fn(IpAddr) -> bool,
+}
+
+impl Outbound {
+    /// The system resolver with [`is_allowed_target`].
+    pub fn system() -> Self {
+        Self {
+            resolver: Arc::new(SystemResolver),
+            allow: is_allowed_target,
+        }
+    }
+}
+
+/// Answers `host` with `ip` and every other name through `inner`.
+struct Pinned {
+    host: String,
+    ip: IpAddr,
+    inner: Arc<dyn Resolve>,
+}
+
+impl Resolve for Pinned {
+    fn resolve(&self, host: &str) -> Pin<Box<dyn Future<Output = Vec<IpAddr>> + Send>> {
+        if host.eq_ignore_ascii_case(&self.host) {
+            let ip = self.ip;
+            Box::pin(async move { vec![ip] })
+        } else {
+            self.inner.resolve(host)
+        }
+    }
+}
+
 /// Execute a single HTTP request chain, capturing redirects and HTTP versions.
 ///
-/// Accepts a shared `reqwest::Client` (connection pool reuse). The client must
-/// have been built with `danger_accept_invalid_certs(true)` and without a
-/// `.resolve()` pin — per-request host pinning is applied via `RequestBuilder`.
+/// The initial host name connects to `resolved_addr`'s IP; every other name resolves through
+/// `outbound.resolver`, and every address must pass `outbound.allow`.
 pub async fn execute_request(
-    client: &reqwest::Client,
+    outbound: &Outbound,
     url: Url,
     resolved_addr: SocketAddr,
     max_redirects: usize,
@@ -22,157 +63,83 @@ pub async fn execute_request(
     user_agent: &str,
     cors_origin: Option<&str>,
 ) -> TaskResult {
-    let hops = Arc::new(Mutex::new(Vec::<RedirectHop>::new()));
-    let hops_clone = Arc::clone(&hops);
-    let redirect_limit_reached = Arc::new(Mutex::new(false));
-    let limit_clone = Arc::clone(&redirect_limit_reached);
-    let ssrf_blocked = Arc::new(Mutex::new(false));
-    let ssrf_blocked_clone = Arc::clone(&ssrf_blocked);
-    let ssrf_blocked_url = Arc::new(Mutex::new(String::new()));
-    let ssrf_blocked_url_clone = Arc::clone(&ssrf_blocked_url);
-
-    let host = url.host_str().unwrap_or_default().to_string();
-
-    let policy = Policy::custom(move |attempt| {
-        let count = {
-            let h = hops_clone.lock().unwrap();
-            h.len()
-        };
-
-        if count >= max_redirects {
-            *limit_clone.lock().unwrap() = true;
-            return attempt.stop();
-        }
-
-        // SSRF redirect guard: validate redirect destination before following.
-        let dest_url = attempt.url();
-        if let Some(host) = dest_url.host_str() {
-            let port = dest_url.port_or_known_default().unwrap_or(443);
-            let addr_str = format!("{host}:{port}");
-            // Perform a synchronous IP check for IP-literal URLs; hostname
-            // resolution is not possible inside the synchronous redirect closure.
-            use std::str::FromStr;
-            if let Ok(ip) = std::net::IpAddr::from_str(host) {
-                let blocked_addr = std::net::SocketAddr::new(ip, port);
-                if !netray_common::target_policy::is_allowed_target(blocked_addr.ip()) {
-                    *ssrf_blocked_clone.lock().unwrap() = true;
-                    *ssrf_blocked_url_clone.lock().unwrap() = addr_str;
-                    return attempt.stop();
-                }
-            }
-        }
-
-        let prev_url = attempt.previous().last().map(|u| u.to_string());
-        let prev_status = attempt.status().as_u16();
-
-        hops_clone.lock().unwrap().push(RedirectHop {
-            url: prev_url.unwrap_or_default(),
-            status: prev_status,
-            location: attempt.url().to_string().into(),
-            // TODO: reqwest Policy::custom does not expose per-hop response version
-            http_version: String::new(),
-        });
-
-        attempt.follow()
-    });
-
-    // Build a per-request client from the shared base client by adding
-    // per-call settings (.resolve() and optional Origin header).
-    let mut req_builder_headers = reqwest::header::HeaderMap::new();
-    req_builder_headers.insert(
-        reqwest::header::ACCEPT_ENCODING,
-        "gzip, br, zstd".parse().unwrap(),
-    );
-    req_builder_headers.insert(reqwest::header::USER_AGENT, user_agent.parse().unwrap());
+    let mut default_headers = HeaderMap::new();
+    default_headers.insert(ACCEPT_ENCODING, HeaderValue::from_static("gzip, br, zstd"));
+    default_headers.insert(USER_AGENT, user_agent.parse().unwrap());
     if let Some(origin) = cors_origin {
-        req_builder_headers.insert("origin", origin.parse().unwrap());
+        default_headers.insert("origin", origin.parse().unwrap());
     }
-
-    let per_request_client = match reqwest::Client::builder()
-        .redirect(policy)
-        .timeout(timeout)
-        .danger_accept_invalid_certs(true) // Intentional: inspecting sites with broken or self-signed certs is a core feature.
-        .resolve(&host, resolved_addr)
-        .default_headers(req_builder_headers)
-        .build()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            return TaskResult {
-                final_url: url.to_string(),
-                status: 0,
-                http_version: String::new(),
-                headers: reqwest::header::HeaderMap::new(),
-                redirects: vec![],
-                redirect_limit_reached: false,
-                error: Some(format!("Failed to build HTTP client: {e}")),
-            };
-        }
+    let settings = ClientSettings {
+        accept_invalid_certs: true, // Intentional: inspecting sites with broken or self-signed certs is a core feature.
+        default_headers,
+        ..ClientSettings::default()
     };
-    let _ = client; // shared client available for future pool reuse
 
-    match per_request_client.get(url.as_str()).send().await {
-        Ok(response) => {
-            let http_version = format_http_version(response.version());
-            let status = response.status().as_u16();
-            let final_url = response.url().to_string();
-            let response_headers = response.headers().clone();
-            let redirects = hops.lock().unwrap().clone();
-            let limit = *redirect_limit_reached.lock().unwrap();
-            let blocked = *ssrf_blocked.lock().unwrap();
-            let blocked_url = ssrf_blocked_url.lock().unwrap().clone();
+    let resolver: Arc<dyn Resolve> = match url.domain() {
+        Some(host) => Arc::new(Pinned {
+            host: host.to_owned(),
+            ip: resolved_addr.ip(),
+            inner: Arc::clone(&outbound.resolver),
+        }),
+        None => Arc::clone(&outbound.resolver),
+    };
 
-            if blocked {
-                TaskResult {
-                    final_url: url.to_string(),
-                    status: 0,
-                    http_version: String::new(),
-                    headers: reqwest::header::HeaderMap::new(),
-                    redirects,
-                    redirect_limit_reached: limit,
-                    error: Some(format!("Redirect destination blocked: {blocked_url}")),
-                }
-            } else {
-                TaskResult {
-                    final_url,
-                    status,
-                    http_version,
-                    headers: response_headers,
-                    redirects,
-                    redirect_limit_reached: limit,
-                    error: None,
-                }
+    let opts = FetchOptions {
+        max_redirects,
+        at_limit: AtLimit::ReturnLast,
+        read_body: false,
+        timeout,
+        allow: outbound.allow,
+        ..FetchOptions::new(Method::GET)
+    };
+
+    let (result, hops) = fetch::fetch_traced(&settings, resolver, url.as_str(), &opts).await;
+    match result {
+        Ok(response) => TaskResult {
+            final_url: response.url.to_string(),
+            status: response.status.as_u16(),
+            http_version: format_http_version(response.version),
+            headers: response.headers,
+            redirects: redirect_hops(response.hops),
+            redirect_limit_reached: response.limit_reached,
+            error: None,
+        },
+        Err(FetchError::Blocked { mut hops, hop, .. }) => {
+            if hop >= 1 {
+                hops.pop();
             }
+            failed(
+                &url,
+                redirect_hops(hops),
+                "Redirect destination blocked".to_string(),
+            )
         }
-        Err(e) => {
-            let redirects = hops.lock().unwrap().clone();
-            let limit = *redirect_limit_reached.lock().unwrap();
-            let blocked = *ssrf_blocked.lock().unwrap();
-            let blocked_url = ssrf_blocked_url.lock().unwrap().clone();
-
-            if blocked {
-                TaskResult {
-                    final_url: url.to_string(),
-                    status: 0,
-                    http_version: String::new(),
-                    headers: reqwest::header::HeaderMap::new(),
-                    redirects,
-                    redirect_limit_reached: limit,
-                    error: Some(format!("Redirect destination blocked: {blocked_url}")),
-                }
-            } else {
-                TaskResult {
-                    final_url: url.to_string(),
-                    status: 0,
-                    http_version: String::new(),
-                    headers: reqwest::header::HeaderMap::new(),
-                    redirects,
-                    redirect_limit_reached: limit,
-                    error: Some(format!("Request failed: {e}")),
-                }
-            }
-        }
+        Err(e) => failed(&url, redirect_hops(hops), format!("Request failed: {e}")),
     }
+}
+
+fn failed(url: &Url, redirects: Vec<RedirectHop>, error: String) -> TaskResult {
+    TaskResult {
+        final_url: url.to_string(),
+        status: 0,
+        http_version: String::new(),
+        headers: HeaderMap::new(),
+        redirects,
+        redirect_limit_reached: false,
+        error: Some(error),
+    }
+}
+
+fn redirect_hops(hops: Vec<Hop>) -> Vec<RedirectHop> {
+    hops.into_iter()
+        .map(|hop| RedirectHop {
+            url: hop.url.to_string(),
+            status: hop.status.as_u16(),
+            location: Some(hop.location),
+            // TODO: the redirect policy does not expose per-hop response version
+            http_version: String::new(),
+        })
+        .collect()
 }
 
 fn format_http_version(version: reqwest::Version) -> String {
@@ -192,6 +159,25 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
     use std::time::Duration;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    /// Test seam: empty stub resolver, allow admits only 127.0.0.1.
+    struct NoNames;
+
+    impl netray_common::fetch::Resolve for NoNames {
+        fn resolve(
+            &self,
+            _host: &str,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<IpAddr>> + Send>> {
+            Box::pin(async { Vec::new() })
+        }
+    }
+
+    fn test_outbound() -> Outbound {
+        Outbound {
+            resolver: Arc::new(NoNames),
+            allow: |ip| ip == IpAddr::V4(Ipv4Addr::LOCALHOST),
+        }
+    }
 
     #[tokio::test]
     async fn redirect_hops_are_captured() {
@@ -215,9 +201,9 @@ mod tests {
         let resolved = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), addr.port());
 
         // max_redirects=0 so reqwest stops after the first 301 without following it
-        let client = reqwest::Client::new();
+        let outbound = test_outbound();
         let result = execute_request(
-            &client,
+            &outbound,
             url,
             resolved,
             0, // stop immediately — captures the hop

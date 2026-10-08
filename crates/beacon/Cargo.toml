@@ -11,7 +11,7 @@ axum = { workspace = true, features = ["json", "macros"] }
 tower = { workspace = true, features = ["limit"] }
 tower-http = { workspace = true, features = ["compression-gzip", "trace", "limit"] }
 governor = { workspace = true }
-netray-common = { workspace = true, features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment", "backend"] }
+netray-common = { workspace = true, features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment", "backend", "fetch"] }
 
 # HTTP client (MTA-STS policy, BIMI logo)
 reqwest = { workspace = true, features = ["json", "rustls", "webpki-roots", "http2"] }
@@ -68,3 +68,7 @@ serde_json = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 # HTTP mock server for the enrichment integration test (per project-review SDD Req 12).
 wiremock = "0.6"
+# Loopback TLS listener for the MTA-STS results table (checks/mta_sts_results_table.rs).
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = "0.26"

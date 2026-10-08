@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::config::Config;
+use crate::inspect::request::Outbound;
 use crate::security::{IpExtractor, RateLimitState};
 use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
 
@@ -11,7 +12,7 @@ pub struct AppState {
     pub ip_extractor: Arc<IpExtractor>,
     pub rate_limiter: Arc<RateLimitState>,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
-    pub http_client: Arc<reqwest::Client>,
+    pub outbound: Outbound,
 }
 
 impl AppState {
@@ -26,20 +27,12 @@ impl AppState {
             ))
         });
 
-        // Shared base client for all inspection probes. Per-request settings
-        // (.resolve(), Origin header, redirect policy) are applied in execute_request.
-        let http_client = Arc::new(
-            reqwest::Client::builder()
-                .build()
-                .expect("failed to build shared HTTP client"),
-        );
-
         Self {
             ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             enrichment_client,
             config: Arc::new(config.clone()),
-            http_client,
+            outbound: Outbound::system(),
         }
     }
 }

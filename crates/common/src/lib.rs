@@ -26,6 +26,8 @@ pub mod ecosystem;
 #[cfg(feature = "enrichment")]
 pub mod enrichment;
 pub mod error;
+#[cfg(feature = "fetch")]
+pub mod fetch;
 pub mod ip_extract;
 pub mod ip_filter;
 pub mod metrics;

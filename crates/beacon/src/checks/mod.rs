@@ -38,6 +38,13 @@ pub mod spf;
 pub mod tls_rpt;
 pub mod util;
 
+#[cfg(test)]
+mod bimi_results_table;
+#[cfg(test)]
+mod mta_sts_results_table;
+#[cfg(test)]
+mod outbound_fetch_scenarios;
+
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
@@ -50,6 +57,7 @@ use tracing::Instrument;
 use crate::config::Config;
 use crate::dns::DnsLookup;
 use crate::quality::{AllResults, Category, CheckResult, Grade, SseEvent, Verdict, compute_grade};
+use crate::state::OutboundFetch;
 use netray_common::enrichment::EnrichmentClient;
 
 /// Run all email security checks for a domain, streaming results via mpsc channel.
@@ -61,8 +69,7 @@ pub async fn run_all_checks<R: DnsLookup + 'static>(
     config: Arc<Config>,
     dns: Arc<R>,
     dnsbl_dns: Arc<R>,
-    http_client: reqwest::Client,
-    http_client_follow: reqwest::Client,
+    fetch: OutboundFetch,
     enrichment_client: Option<Arc<EnrichmentClient>>,
     tx: mpsc::Sender<SseEvent>,
 ) {
@@ -74,8 +81,7 @@ pub async fn run_all_checks<R: DnsLookup + 'static>(
             config,
             dns,
             dnsbl_dns,
-            http_client,
-            http_client_follow,
+            fetch,
             enrichment_client,
             tx.clone(),
         ),
@@ -207,8 +213,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     config: Arc<Config>,
     dns: Arc<R>,
     dnsbl_dns: Arc<R>,
-    http_client: reqwest::Client,
-    http_client_follow: reqwest::Client,
+    fetch: OutboundFetch,
     enrichment_client: Option<Arc<EnrichmentClient>>,
     tx: mpsc::Sender<SseEvent>,
 ) {
@@ -344,11 +349,11 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     {
         let domain = domain.clone();
         let dns = dns.clone();
-        let http_follow = http_client_follow.clone();
+        let fetch = fetch.clone();
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, present) = bimi::check_bimi(&domain, dns.as_ref(), &http_follow).await;
+                let (result, present) = bimi::check_bimi(&domain, dns.as_ref(), &fetch).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "bimi")
                     .record(elapsed);
@@ -474,11 +479,11 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     {
         let domain = domain.clone();
         let dns = dns.clone();
-        let http = http_client.clone();
+        let fetch = fetch.clone();
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, info) = mta_sts::check_mta_sts(&domain, dns.as_ref(), &http).await;
+                let (result, info) = mta_sts::check_mta_sts(&domain, dns.as_ref(), &fetch).await;
                 let present = info.is_some();
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "mta_sts")
@@ -737,15 +742,17 @@ mod tests {
 
         let (tx, mut rx) = mpsc::channel::<SseEvent>(64);
 
-        let http = reqwest::Client::new();
+        let fetch = crate::state::OutboundFetch::new(
+            5_000,
+            Arc::new(crate::dns::FetchResolver(dns.clone())),
+        );
         let handle = tokio::spawn(run_all_checks(
             "example.com".to_string(),
             Vec::new(),
             config,
             dns,
             dnsbl,
-            http.clone(),
-            http,
+            fetch,
             None,
             tx,
         ));

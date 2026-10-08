@@ -54,6 +54,9 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Review the paths a contract fix wakes up.** When real data first reaches a code path, it may never have run before (lens `detect_no_mx` read every MX `fail` as "no MX").
 - **Timer-run scripts fail closed**: write every file atomically (temp in the same dir, then `mv`), clean only their own files (`*.tmp.$$`, a per-run dir), and are tested with stubs that behave like the real tool (`curl` without `-f` saves the error page, exit 0).
 - **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
+- **Outbound fetches of user- or domain-controlled URLs** go only through `netray_common::fetch`; never build a `reqwest::Client` for them. Checking and pinning live in its DNS resolver; reqwest keeps redirect handling.
+- **`FetchOptions::new` follows no redirect**: a test that follows one sets `max_redirects`.
+- **rcgen is 0.14**: sign with `Issuer::from_params(&ca_params, &ca_key)`, not 0.13's three-argument `signed_by`.
 - **Features unify.** A dependency feature one crate enables reaches every service in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
 - **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
