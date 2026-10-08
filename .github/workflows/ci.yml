@@ -41,8 +41,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: GeoIP data for the ifconfig-rs integration tests
         run: |
+          mkdir -p "$RUNNER_TEMP/ifconfig-data"
           docker create --name ifconfig-data ghcr.io/netray-info/ifconfig-rs-data:latest /noop
-          docker cp ifconfig-data:/data/. crates/ifconfig-rs/data/
+          docker cp ifconfig-data:/data/. "$RUNNER_TEMP/ifconfig-data"
           docker rm ifconfig-data
+          cp -n "$RUNNER_TEMP"/ifconfig-data/* crates/ifconfig-rs/data/
       - run: just adlc-setup
       - run: just check
