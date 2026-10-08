@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- One outbound fetch policy: beacon's MTA-STS and BIMI fetches, spectra's redirect following, tlsight's live OCSP request and prism's MTA-STS policy fetch go through `netray_common::fetch`, which applies the shared target policy to every resolved address and every redirect hop.
+- spectra sends each redirect hop to the port of its own URL, so a same-host redirect that changes scheme or port is followed correctly.
+- Outbound fetch failures are reported with fixed detail texts.
+
+### Added
+
+- `SECURITY.md`: report vulnerabilities privately through GitHub.
+
 ## [0.22.1] - 2026-10-08
 
 ### Changed
