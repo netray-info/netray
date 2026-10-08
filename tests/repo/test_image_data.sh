@@ -29,6 +29,13 @@ push_line=$(grep -nE 'docker push' "$rel" | head -n1 | cut -d: -f1)
 # image: `[ -d … ] && find` returns 1 when the dir is absent and aborts `bash -e`.
 grep -qE 'docker run[^|]*--user 0[^|]*--entrypoint sh' "$rel" || fail "release.yml data check does not run as root (--user 0)"
 grep -qE '\[ -d /netray/data \] &&' "$rel" && fail "release.yml data check ends in '[ -d … ] && find', which fails a clean image under bash -e"
+# A search that cannot run must fail the step: the shell runs with -e.
+grep -qE -- "--entrypoint sh[^|]*\"?[^ ]*\"? *(\\\\$)?" "$rel" && grep -qE -- "^ *-ec '" "$rel" || fail "release.yml data check does not run its search with sh -e"
+# The published layers, not only the running filesystem: a file deleted by a later layer still ships.
+save_line=$(grep -nE 'docker save' "$rel" | head -n1 | cut -d: -f1)
+if [ -z "$save_line" ] || [ -z "$push_line" ] || [ "$save_line" -gt "$push_line" ]; then
+    fail "release.yml does not scan the image layers (docker save) before pushing"
+fi
 if [ -z "$check_line" ] || [ -z "$data_line" ] || [ -z "$push_line" ]; then
     fail "release.yml has no image check for *.mmdb and /netray/data, or no push step"
 elif [ "$check_line" -gt "$push_line" ] || [ "$data_line" -gt "$push_line" ]; then
