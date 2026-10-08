@@ -31,6 +31,15 @@ expect 0 "C2 beacon fixture validates" "$beacon"
 for v in "" "http://email.example.com" "/email"; do
     expect 1 "C3 lens with email_base_url='$v' is rejected" "$lens" --set "ecosystem.email_base_url=$v"
 done
+# ifconfig-rs sends empty strings for the ecosystem entries it does not use (netray-common
+# ecosystem.rs contract); only its own ip_base_url must be set.
+ifconfig=tests/repo/fixtures/meta/ifconfig-rs.json
+[ -f "$ifconfig" ] || { echo "FAIL: missing $ifconfig"; exit 1; }
+expect 0 "ifconfig-rs fixture (empty sibling URLs) validates" "$ifconfig"
+expect 1 "ifconfig-rs with an empty ip_base_url is rejected" "$ifconfig" --set "ecosystem.ip_base_url="
+expect 1 "beacon with an empty email_base_url is rejected" "$beacon" --set "ecosystem.email_base_url="
+expect 1 "lens with a trailing space in email_base_url is rejected" "$lens" \
+    --set "ecosystem.email_base_url=https://email.example.com "
 # Control: a valid override must still pass, so the rejections above are not a broken helper.
 expect 0 "control: lens with email_base_url=https://email.example.com validates" "$lens" \
     --set "ecosystem.email_base_url=https://email.example.com"

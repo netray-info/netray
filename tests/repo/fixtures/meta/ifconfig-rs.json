@@ -1,0 +1,31 @@
+{
+  "site_name": "ip.netray.info",
+  "version": "0.21.2",
+  "ecosystem": {
+    "ip_base_url": "https://ip.netray.info",
+    "dns_base_url": "",
+    "tls_base_url": "",
+    "http_base_url": "",
+    "email_base_url": "",
+    "lens_base_url": ""
+  },
+  "features": {
+    "batch": true,
+    "cloud": true,
+    "datacenter": true,
+    "geoip_asn": true,
+    "geoip_city": true,
+    "tor": true,
+    "user_agent": true,
+    "vpn": true
+  },
+  "limits": {
+    "batch_max_size": 10
+  },
+  "rate_limit": {
+    "per_ip_per_minute": 60,
+    "per_ip_burst": 10,
+    "global_per_minute": 0,
+    "global_burst": 0
+  }
+}
