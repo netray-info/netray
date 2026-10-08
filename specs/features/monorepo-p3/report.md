@@ -151,3 +151,53 @@ $ netray lens lens.dev.toml   # snapshots enabled, empty store
 ```
 
 `adlc verify`: passed.
+
+## Phase 4 — lens and its backends agree
+
+### Criteria
+
+| Id | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R10: each backend's tests write a golden from its real response types to `tests/fixtures/contracts/<backend>.*` (prism batch SSE, tlsight and spectra `InspectResponse`, beacon SSE incl. summary, ifconfig-rs `/json?ip=`); a test fails when the written golden differs from the committed one | green | `crates/*/tests/contract_golden.rs; crates/ifconfig-rs/src/contract_golden.rs` |
+| C2 | R11: lens's parsers read the committed goldens and produce a non-default result from each (grade from beacon `verdicts`, network type and location from ifconfig-rs, checks from prism, tlsight, spectra) | green | `crates/lens/tests/contract_{beacon,ip,backends}.rs` |
+| C3 | R12: lens ends a beacon stream at beacon's summary event as beacon frames it, not at stream end | green | `crates/lens/tests/contract_beacon.rs` |
+| C4 | Scenario: each backend's golden test equals the committed golden | already_implemented | `crates/*/tests/contract_golden.rs` |
+| C5 | Scenario: a renamed field in beacon's summary fails the beacon golden test | already_implemented | `crates/beacon/tests/contract_golden.rs` |
+| C6 | Scenario: lens parses beacon's golden into the grade its `verdicts` imply | green | `crates/lens/tests/contract_beacon.rs` |
+| C7 | Scenario: lens parses ifconfig-rs's golden into its `network_type` and location, not `unknown` | green | `crates/lens/tests/contract_ip.rs` |
+| C8 | Scenario: prism, tlsight, spectra goldens → at least one check, no parse error | green | `crates/lens/tests/contract_backends.rs` |
+| C9 | Scenario: a beacon stream whose summary arrives before close → lens returns at the summary | green | `crates/lens/tests/contract_beacon.rs` |
+
+C4 and C5 were in place once the goldens existed: each backend's golden test compares against the committed file, so a renamed field fails it. tlsight, spectra and prism showed no lens mismatch (their lens tests passed at `09d552b`).
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 lens reads beacon `verdicts`, ends at the summary | 1 | sonnet | 41,002 | 70 |
+| G2 lens calls ifconfig-rs `/json?ip=` | 1 | sonnet | 29,392 | 63 |
+| G3 prism exports `LintEvent`, `CheckDoneEvent` | 1 | sonnet | 27,996 | 61 |
+| Repair: no-MX only on `no_mx`, reasons from sub-checks | 3 | sonnet (one legacy-fixture adapter line by the orchestrator) | 41,160 | 47 |
+
+### Review
+
+| Class | Finding | Outcome |
+|---|---|---|
+| BLOCKER | `detect_no_mx` read any `mx` fail as "no MX records"; an MX pointing at a CNAME marked Infra/Transport/Brand N/A and scored the email section 100 % — live once real `verdicts` arrive | repaired: only beacon's `no_mx` sub-check means no MX; goldens `beacon-no-mx.sse`, `beacon-mx-cname.sse` from beacon's real sub-checks (`700eee2`) |
+| AMENDMENT | bucket messages came from the category's status line, not the reason in `sub_checks[].detail` | repaired in phase |
+| AMENDMENT | lens README says the Brand bucket covers DMARC policy; no beacon category feeds it besides `bimi` | prose, in the spec's closing docs commit |
+| DEFERRED | timeout guard compares `"Skipped"`, beacon sends `"skipped"`; unreachable today (lens's 15 s email timeout fires before beacon's 30 s) | follow-up SDD |
+| DEFERRED | a bucket whose categories are all `info`/`skip` aggregates to Pass, so a Null-MX domain scores Pass instead of N/A; `dnssec` and `cross_validation` feed no bucket | scoring, out of scope (follow-up SDD) |
+| NIT | C1 named `/network/json` | fixed in this table |
+
+Unit test changes in production files: lens `routes.rs` `ip_backend_uses_network_json_path` → `ip_backend_uses_json_path` and the header-forwarding table entry (`/json?ip=`); lens `email.rs` test helper `summary_event` → `beacon_events` (re-shapes the legacy fixtures into beacon's events; a missing MX becomes the `no_mx` sub-check).
+
+### Behavioural verification
+
+```
+# local lens with this branch, backends pointed at production (dns., tls., ip., http., email.netray.info)
+$ curl -s http://127.0.0.1:<port>/api/check/netray.info
+ip:     network_type "cloud" / "datacenter", org "Oracle Corporation", geo "Frankfurt am Main, …"   (before: empty)
+email:  Auth OK  Infra OK  Transport OK  Brand OK, beacon grade "A" passed through
+summary: section_grades ip A+, email A+, tls A+, dns B, http C; grade A, score 91.7
+```

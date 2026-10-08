@@ -104,7 +104,7 @@ async fn check_email(
     }
 
     // Drain until the "summary" event, with the same timeout budget.
-    let events = tokio::time::timeout(timeout, super::sse::collect(resp, "summary"))
+    let events = tokio::time::timeout(timeout, super::sse::collect_until_type(resp, "summary"))
         .await
         .map_err(|_| {
             tracing::warn!(service = "beacon", url = %url, error = "stream timeout", "backend call failed");
@@ -184,10 +184,18 @@ async fn check_email(
 // ---------------------------------------------------------------------------
 
 #[derive(Debug)]
+pub struct SubCheck {
+    pub name: String,
+    pub verdict: String,
+    pub detail: String,
+}
+
+#[derive(Debug)]
 pub struct CategoryVerdict {
     pub name: String,
     pub verdict: String,
     pub message: Option<String>,
+    pub sub_checks: Vec<SubCheck>,
 }
 
 #[derive(Debug)]
@@ -202,15 +210,14 @@ pub struct BeaconSummary {
 
 /// Extract the summary event from drained SSE events.
 ///
-/// Beacon may omit `event:` type lines and send raw `data:` only. In that case all
-/// events arrive with an empty type. We find the summary by looking for an explicit
-/// `event: summary` first, then fall back to the event whose data contains a `"grade"` field.
+/// Events carry their kind in the JSON `type` field. The summary is the `summary` event; as a
+/// fallback, the event whose data contains a `"grade"` field. Verdicts come from its `verdicts`
+/// map (category -> verdict); messages and sub-checks come from the `category` events.
 pub fn parse_summary(events: &[Value]) -> Result<BeaconSummary, SectionError> {
     let data = events
         .iter()
         .find(|e| e.get("type").and_then(|v| v.as_str()) == Some("summary"))
         .or_else(|| {
-            // Beacon sends no event type names — locate by data content.
             events
                 .iter()
                 .find(|e| e.get("data").and_then(|d| d.get("grade")).is_some())
@@ -225,60 +232,62 @@ pub fn parse_summary(events: &[Value]) -> Result<BeaconSummary, SectionError> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let mut categories = Vec::new();
-    if let Some(cats) = data.get("categories") {
-        if let Some(obj) = cats.as_object() {
-            // Object form: {"spf": {"verdict": "Pass", ...}, ...}
-            for (name, cat_data) in obj {
-                let verdict = cat_data
-                    .get("verdict")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Skip")
-                    .to_string();
-                let message = cat_data
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                categories.push(CategoryVerdict {
-                    name: name.clone(),
-                    verdict,
-                    message,
-                });
-            }
-        } else if let Some(arr) = cats.as_array() {
-            // Array form: [{"name": "spf", "verdict": "Pass", ...}, ...]
-            for cat_data in arr {
-                let name = match cat_data.get("name").and_then(|v| v.as_str()) {
-                    Some(n) => n.to_string(),
-                    None => continue,
-                };
-                let verdict = cat_data
-                    .get("verdict")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("Skip")
-                    .to_string();
-                let message = cat_data
-                    .get("message")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_string());
-                categories.push(CategoryVerdict {
-                    name,
-                    verdict,
-                    message,
-                });
-            }
-        }
-    }
+    // Per-category events carry the detail and sub-checks; the summary carries the verdicts.
+    let category_events: HashMap<&str, &Value> = events
+        .iter()
+        .filter_map(|e| e.get("data"))
+        .filter(|d| d.get("type").and_then(|v| v.as_str()) == Some("category"))
+        .filter_map(|d| Some((d.get("category")?.as_str()?, d)))
+        .collect();
+
+    let categories = data
+        .get("verdicts")
+        .and_then(|v| v.as_object())
+        .map(|obj| {
+            obj.iter()
+                .map(|(name, verdict)| {
+                    let event = category_events.get(name.as_str());
+                    CategoryVerdict {
+                        name: name.clone(),
+                        verdict: verdict.as_str().unwrap_or("Skip").to_string(),
+                        message: event
+                            .and_then(|d| d.get("detail")?.as_str())
+                            .map(|s| s.to_string()),
+                        sub_checks: event.map(|d| parse_sub_checks(d)).unwrap_or_default(),
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
     Ok(BeaconSummary { grade, categories })
 }
 
-/// Detect whether the domain has no MX records from the beacon summary.
+fn parse_sub_checks(category_event: &Value) -> Vec<SubCheck> {
+    category_event
+        .get("sub_checks")
+        .and_then(|v| v.as_array())
+        .map(|subs| {
+            subs.iter()
+                .filter_map(|s| {
+                    Some(SubCheck {
+                        name: s.get("name")?.as_str()?.to_string(),
+                        verdict: s.get("verdict")?.as_str()?.to_string(),
+                        detail: s.get("detail")?.as_str()?.to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Detect whether the domain has no MX records: beacon's `mx` category carries the `no_mx`
+/// sub-check. Other `mx` failures (`mx_cname`, `mx_no_addr`, ...) mean MX records exist.
 pub fn detect_no_mx(summary: &BeaconSummary) -> bool {
     summary
         .categories
         .iter()
-        .any(|c| c.name == "mx" && c.verdict.eq_ignore_ascii_case("Fail"))
+        .any(|c| c.name == "mx" && c.sub_checks.iter().any(|s| s.name == "no_mx"))
 }
 
 // ---------------------------------------------------------------------------
@@ -287,8 +296,8 @@ pub fn detect_no_mx(summary: &BeaconSummary) -> bool {
 
 const BUCKET_AUTH: &[&str] = &["spf", "dkim", "dmarc"];
 const BUCKET_INFRA: &[&str] = &["mx", "fcrdns", "dnsbl"];
-const BUCKET_TRANSPORT: &[&str] = &["mta_sts", "tlsrpt", "dane"];
-const BUCKET_BRAND: &[&str] = &["bimi", "dmarc_policy"];
+const BUCKET_TRANSPORT: &[&str] = &["mta_sts", "tls_rpt", "dane"];
+const BUCKET_BRAND: &[&str] = &["bimi"];
 
 /// Map beacon's per-category verdicts into four scored CheckResults.
 pub fn map_buckets(summary: &BeaconSummary, no_mx: bool) -> Vec<CheckResult> {
@@ -342,9 +351,9 @@ fn aggregate_bucket(name: &str, category_names: &[&str], summary: &BeaconSummary
 
     for &cat_name in category_names {
         let cat = summary.categories.iter().find(|c| c.name == cat_name);
-        let (verdict, msg) = match cat {
-            None => (CheckVerdict::Skip, None),
-            Some(c) => (parse_beacon_verdict(&c.verdict), c.message.clone()),
+        let (verdict, msgs) = match cat {
+            None => (CheckVerdict::Skip, Vec::new()),
+            Some(c) => (parse_beacon_verdict(&c.verdict), category_messages(c)),
         };
 
         if verdict_rank(&verdict) > verdict_rank(&worst) {
@@ -352,9 +361,7 @@ fn aggregate_bucket(name: &str, category_names: &[&str], summary: &BeaconSummary
         }
         match verdict {
             CheckVerdict::Warn | CheckVerdict::Fail | CheckVerdict::NotFound => {
-                if let Some(m) = msg {
-                    messages.push(m);
-                }
+                messages.extend(msgs);
             }
             _ => {}
         }
@@ -367,6 +374,26 @@ fn aggregate_bucket(name: &str, category_names: &[&str], summary: &BeaconSummary
         name: name.to_string(),
         verdict: worst,
         messages,
+    }
+}
+
+/// Reasons for a category: the details of its warn/fail sub-checks, else the category detail.
+fn category_messages(cat: &CategoryVerdict) -> Vec<String> {
+    let reasons: Vec<String> = cat
+        .sub_checks
+        .iter()
+        .filter(|s| {
+            matches!(
+                parse_beacon_verdict(&s.verdict),
+                CheckVerdict::Warn | CheckVerdict::Fail
+            )
+        })
+        .map(|s| s.detail.clone())
+        .collect();
+    if reasons.is_empty() {
+        cat.message.iter().cloned().collect()
+    } else {
+        reasons
     }
 }
 
@@ -437,13 +464,37 @@ mod tests {
         serde_json::from_str(&contents).expect("fixture must be valid JSON")
     }
 
-    fn summary_event(data: Value) -> Vec<Value> {
-        vec![json!({ "type": "summary", "data": data })]
+    /// Re-shape a `{grade, categories: {name: {verdict, message}}}` fixture into the
+    /// events beacon streams: one `category` event each, then the `summary`.
+    fn beacon_events(fixture: &Value) -> Vec<Value> {
+        let mut events = Vec::new();
+        let mut verdicts = serde_json::Map::new();
+        for (name, cat) in fixture["categories"].as_object().unwrap() {
+            let name = if name == "tlsrpt" { "tls_rpt" } else { name };
+            verdicts.insert(name.to_string(), cat["verdict"].clone());
+            if let Some(msg) = cat["message"].as_str() {
+                // The legacy fixtures predate sub-checks; beacon reports a missing MX
+                // as the `no_mx` sub-check, so translate that one case.
+                let sub_checks = if name == "mx" && msg.to_lowercase().contains("no mx records") {
+                    json!([{ "name": "no_mx", "verdict": "fail", "detail": msg }])
+                } else {
+                    json!([])
+                };
+                events.push(json!({ "type": "category", "data": {
+                    "type": "category", "category": name, "detail": msg,
+                    "sub_checks": sub_checks,
+                }}));
+            }
+        }
+        events.push(json!({ "type": "summary", "data": {
+            "type": "summary", "grade": fixture["grade"], "verdicts": verdicts,
+        }}));
+        events
     }
 
     fn run_fixture(name: &str) -> Result<BackendResult, SectionError> {
-        let data = load_fixture(name);
-        let events = summary_event(data);
+        let fixture = load_fixture(name);
+        let events = beacon_events(&fixture);
         let summary = parse_summary(&events)?;
         if summary.grade.as_deref() == Some("Skipped") {
             return Err(SectionError::NotApplicable {

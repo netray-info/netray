@@ -2797,7 +2797,7 @@ pub mod tests {
             ("/api/inspect?h=", "tlsight"),
             ("/api/inspect?url=", "spectra"),
             ("/inspect", "beacon"),
-            ("/network/json?ip=", "ifconfig-rs"),
+            ("/json?ip=", "ifconfig-rs"),
         ] {
             let (uri, headers) = seen
                 .iter()
@@ -3070,9 +3070,9 @@ pub mod tests {
         );
     }
 
-    // T10: Lens IP backend uses /network/json path
+    // T10: Lens IP backend uses /json path
     #[tokio::test]
-    async fn ip_backend_uses_network_json_path() {
+    async fn ip_backend_uses_json_path() {
         use crate::backends::ip::check_ip;
         use std::sync::Arc;
 
@@ -3080,7 +3080,7 @@ pub mod tests {
         let path_ref = received_path.clone();
 
         let app = axum::Router::new().route(
-            "/network/json",
+            "/json",
             axum::routing::get(
                 move |axum::extract::Query(params): axum::extract::Query<
                     std::collections::HashMap<String, String>,
@@ -3088,7 +3088,7 @@ pub mod tests {
                     let path_ref = path_ref.clone();
                     async move {
                         let ip = params.get("ip").cloned().unwrap_or_default();
-                        *path_ref.lock().await = format!("/network/json?ip={ip}");
+                        *path_ref.lock().await = format!("/json?ip={ip}");
                         axum::Json(serde_json::json!({
                             "network": { "type": "cloud", "org": "Example Corp" },
                             "location": { "city": "Berlin", "country": "Germany" }
@@ -3117,10 +3117,7 @@ pub mod tests {
 
         assert!(result.is_ok(), "check_ip should succeed");
         let path = received_path.lock().await;
-        assert_eq!(
-            *path, "/network/json?ip=1.2.3.4",
-            "should call /network/json?ip=<addr>"
-        );
+        assert_eq!(*path, "/json?ip=1.2.3.4", "should call /json?ip=<addr>");
     }
 
     // --- dkim_selectors validation ---

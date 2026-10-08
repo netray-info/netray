@@ -149,7 +149,7 @@ async fn check_ip_inner(
     let futures: Vec<_> = capped
         .iter()
         .map(|ip| {
-            let url = format!("{base}/network/json?ip={ip}");
+            let url = format!("{base}/json?ip={ip}");
             let client = client.clone();
             let fwd = fwd.clone();
             async move {

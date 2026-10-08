@@ -67,3 +67,28 @@ Prose (`architecture-rules.md` §Security Headers, `crates/common/CLAUDE.md`, `c
 ### Plan
 
 **G1.** `crates/lens/src/routes.rs`: `snapshot_handler` answers a malformed shortid with `not_found_html()` instead of 400 JSON; `not_found_html` says the snapshot is expired or unknown. Expiry is already enforced by `SnapshotStore::get`.
+
+## Phase 4 — lens and its backends agree
+
+### Groups
+
+| Group | Criteria | Depends on |
+|---|---|---|
+| G1 beacon | C2, C3, C6, C9 | — |
+| G2 ifconfig-rs | C2, C7 | — |
+| G3 prism types | C1, C4 (golden from real types) | — |
+
+C1, C4, C5 and C8 hold already for tlsight, spectra and beacon (their golden tests and lens tests pass at `09d552b`).
+
+### Plan
+
+- **G1, `crates/lens/src/backends/email.rs`:**
+  - `parse_summary` reads beacon's `verdicts` map, keyed by beacon's `Category` serde names: `tls_rpt`, `mta_sts`, `cross_validation`, and the rest.
+  - The bucket tables use those keys.
+- **G1, SSE collection:** `check_email` stops at the first event whose JSON `type` is `summary`, so the stream need not close. The change sits in `crates/lens/src/backends/sse.rs` `collect`, or a typed variant of it, and must not change prism's `done` handling.
+- **G2, `crates/lens/src/backends/ip.rs`:**
+  - `check_ip` requests `{base}/json?ip=<addr>`.
+  - The in-file unit test asserting `/network/json` (routes.rs T10) follows the path change.
+- **G3, `crates/mhost-prism/src/api/check.rs`:**
+  - `LintEvent` and `CheckDoneEvent` become `pub`, re-exported where `BatchEvent` is.
+  - `crates/mhost-prism/tests/contract_golden.rs` then builds the lint and done events from them instead of `json!`. That is a test change after the production change, carrying an `ADLC-Test-Change` trailer.
