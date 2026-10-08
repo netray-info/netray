@@ -240,7 +240,13 @@ async fn expired_snapshot_returns_404_expired_or_unknown_page() {
 
 #[tokio::test]
 async fn malformed_shortids_return_404_expired_or_unknown_page() {
-    for uri in ["/r/x", "/r/short", "/r/AAAA-AAA", "/r/AAAA%2DAAA", "/r/AA%20AAAAA"] {
+    for uri in [
+        "/r/x",
+        "/r/short",
+        "/r/AAAA-AAA",
+        "/r/AAAA%2DAAA",
+        "/r/AA%20AAAAA",
+    ] {
         let (app, _store, _tmp) = make_app_with_store().await;
         assert_expired_or_unknown_page(app, uri).await;
     }
