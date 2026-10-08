@@ -6,6 +6,9 @@ use futures::future::join_all;
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, IpEnrichment, SubCheck, Verdict};
 
+/// Sub-check name emitted when the domain has no MX records; lens relies on it.
+pub const NO_MX: &str = "no_mx";
+
 /// Check MX records for the domain.
 /// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag).
 #[tracing::instrument(skip_all, fields(category = "mx", domain = %domain))]
@@ -20,7 +23,7 @@ pub async fn check_mx(
         let result = CheckResult::new(
             Category::Mx,
             vec![SubCheck {
-                name: "no_mx".to_string(),
+                name: NO_MX.to_string(),
                 verdict: Verdict::Fail,
                 detail: "no MX records found".to_string(),
             }],

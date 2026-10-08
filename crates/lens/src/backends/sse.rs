@@ -5,7 +5,8 @@ use serde_json::Value;
 ///
 /// Each event is returned as `{"type": "<event-name>", "data": <parsed-json>}`.
 /// Reading stops when an event matching `terminal_event` is dispatched, or when
-/// the stream ends. Returns Err on a chunk read error or UTF-8 decode failure.
+/// the stream ends. Returns Err on a chunk read error or when a complete line is
+/// not valid UTF-8.
 pub async fn collect(resp: reqwest::Response, terminal_event: &str) -> Result<Vec<Value>, String> {
     drain(resp, terminal_event, false).await
 }
@@ -28,21 +29,24 @@ async fn drain(
     type_from_data: bool,
 ) -> Result<Vec<Value>, String> {
     let mut stream = resp.bytes_stream();
-    let mut buf = String::new();
+    let mut buf: Vec<u8> = Vec::new();
     let mut events: Vec<Value> = Vec::new();
     let mut cur_type = String::new();
     let mut cur_data = String::new();
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
-        buf.push_str(&String::from_utf8_lossy(&chunk));
+        buf.extend_from_slice(&chunk);
 
         loop {
-            match buf.find('\n') {
+            match buf.iter().position(|&b| b == b'\n') {
                 None => break,
                 Some(pos) => {
-                    let line = buf[..pos].trim_end_matches('\r').to_string();
-                    buf = buf[pos + 1..].to_string();
+                    let raw: Vec<u8> = buf.drain(..=pos).collect();
+                    let line = std::str::from_utf8(&raw[..pos])
+                        .map_err(|e| format!("invalid UTF-8 in SSE stream: {e}"))?
+                        .trim_end_matches('\r')
+                        .to_string();
 
                     if line.is_empty() {
                         // Blank line = dispatch current event.
