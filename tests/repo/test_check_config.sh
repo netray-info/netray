@@ -67,6 +67,14 @@ startup_rejects=(
     "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"0/min\"|"
     "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"ten\"|"
     "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[validation\\]\$|[validation]\\ncustom_ca_dir = \"/nonexistent-ca-dir\"|"
+    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s|^bind = .*|bind = \"nope\"|"
+    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s|^admin_bind = .*|admin_bind = \"nope\"|"
+    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s/^per_target_per_minute = .*/per_target_per_minute = 0/"
+    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s/^per_target_burst = .*/per_target_burst = 0/"
+    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s/^max_size = .*/max_size = 0/"
+    "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^bind = .*|bind = \"nope\"|"
+    "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^metrics_bind = .*|metrics_bind = \"nope\"|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[badges]\\nttl_seconds = 0\\n\\n[site]|"
 )
 n=0
 for row in "${startup_rejects[@]}"; do
