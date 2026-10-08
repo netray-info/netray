@@ -207,6 +207,10 @@ impl BackendClient {
                     "caller" => self.caller,
                 )
                 .increment(1);
+                // reqwest's own timeout (same duration as ours) can fire first; it is a timeout.
+                if e.is_timeout() {
+                    return Err(BackendError::Timeout);
+                }
                 return Err(BackendError::Network(e));
             }
             Err(_) => {
