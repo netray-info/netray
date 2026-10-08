@@ -1,7 +1,8 @@
 # Spec: contract deliverables
 
-Status: Active
+Status: Done
 Created: 2026-10-08
+Finished: 2026-10-08
 
 The infrastructure repository deploys `netray` as one container per subcommand and will drop the Traefik middlewares that today add the security headers and CORS. Before it can, the binary must deliver what the deployment relies on: a strict, checkable config per subcommand, the production headers set by the apps themselves, a 404 for lens snapshots that do not exist, and a lens that understands what its backends actually send. This spec delivers those four things.
 

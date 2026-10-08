@@ -211,3 +211,53 @@ No wrong result. Traced: the handler answers the 404 page for a path rejection (
 ### Summary
 
 0 / 0 / 0. Verified 0, held 0. No roll call.
+
+## main..bc19f26
+
+### Reader
+
+COUNTS blockers=0 majors=1 minors=1
+LENSES Engineering, Testing
+MAJOR | crates/lens/src/backends/sse.rs:38 | When a network read boundary falls inside a multi-byte UTF-8 character, `drain` decodes each chunk with `from_utf8_lossy`, so the beacon sub-check text that this change now surfaces as bucket messages arrives corrupted. The doc comment at line 8 promises an Err on UTF-8 failure, but no error is ever returned. | I served the committed `beacon-mx-cname.sse` in two body chunks, split between 0xC2 and 0xA7 of "§", against `EmailBackend::run` (scratch build of bc19f26). `email_infrastructure.messages` came back as `"MX `mail.example.com` points to a CNAME (RFC 5321 ��5.1)"`. Before this range, lens surfaced no beacon text.
+MINOR | crates/beacon/tests/contract_golden.rs:183 | The golden writes `no_mx` as a hand-typed literal and never calls `check_mx`. If beacon's sub-check is renamed, every test stays green, yet lens's `detect_no_mx` (email.rs:290) stops matching, and parked domains get scored receiving buckets where they should be N/A. | Change `"no_mx"` at crates/beacon/src/checks/mx.rs:23 to any other name. `cargo test -p beacon --test contract_golden` and lens's `contract_beacon` still pass, and no other test references the name.
+
+```quote crates/lens/src/backends/sse.rs:38
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+```
+
+```quote crates/beacon/tests/contract_golden.rs:183
+            vec![sub("no_mx", Verdict::Fail, "no MX records found")],
+```
+
+```quote crates/lens/src/backends/email.rs:290
+        .any(|c| c.name == "mx" && c.sub_checks.iter().any(|s| s.name == "no_mx"))
+```
+
+### Refuted
+
+None.
+
+### Calibration
+
+| Finding | Refuter | Confidence | Result | Command |
+|---|---|---|---|---|
+| F1 SSE chunks decoded lossily per chunk | CONFIRMED (pre-existing in `collect`, widened: beacon text now surfaces) | 8 | held | read `crates/lens/src/backends/sse.rs:38` and `git show main:crates/lens/src/backends/sse.rs`; the reader's two-chunk probe returned `"RFC 5321 ��5.1"` |
+
+### Summary
+
+Before refutation: 0 / 1 / 1. After: 0 / 1 / 1. Verified 1, held 1. No roll call. Both are repaired before finish: the SSE buffer decodes whole lines from bytes; beacon exports its `no_mx` sub-check name and the golden uses it.
+
+## bc19f26..3dee309
+
+### Reader
+
+COUNTS blockers=0 majors=0 minors=0
+LENSES Engineering, Testing
+
+No wrong result. The SSE decoder splits on 0x0A (never inside a UTF-8 sequence) and decodes complete lines; invalid UTF-8 now errs, which neither backend can emit (axum `Event` + serde). `NO_MX` equals `"no_mx"`, so the golden is unchanged; a rename fails the beacon golden, and after regeneration lens's `lens_marks_buckets_na_only_for_beacon_no_mx`. With the old `sse.rs` swapped in, `lens_keeps_utf8_char_split_across_chunks` fails with `"… ��5.1"`; hyper delivers each body frame as its own chunk, so the test does not depend on timing.
+
+### Summary
+
+0 / 0 / 0. Verified 0, held 0. No roll call.
+
+Measurement note: the review row for `bc19f26..3dee309` was recorded with tokens 0 / seconds 0; the reader cost 60,095 tokens, 188 s.
