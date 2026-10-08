@@ -15,7 +15,9 @@ use http_body_util::BodyExt;
 use spectra::inspect::assembler::InspectResponse;
 
 fn golden_path(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/contracts").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/contracts")
+        .join(name)
 }
 
 fn assert_golden(name: &str, actual: &str) {
@@ -26,7 +28,10 @@ fn assert_golden(name: &str, actual: &str) {
         return;
     }
     let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-        panic!("golden {} is missing; run with UPDATE_GOLDEN=1 to write it", path.display())
+        panic!(
+            "golden {} is missing; run with UPDATE_GOLDEN=1 to write it",
+            path.display()
+        )
     });
     assert!(
         committed == actual,
@@ -46,7 +51,12 @@ fn header_check(status: &str, value: Option<&str>, message: Option<&str>) -> ser
     v
 }
 
-fn quality_check(name: &str, label: &str, status: &str, message: Option<&str>) -> serde_json::Value {
+fn quality_check(
+    name: &str,
+    label: &str,
+    status: &str,
+    message: Option<&str>,
+) -> serde_json::Value {
     let mut v = serde_json::json!({ "name": name, "label": label, "status": status });
     if let Some(message) = message {
         v["message"] = message.into();

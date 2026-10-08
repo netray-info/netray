@@ -16,7 +16,10 @@ async fn check_ip_reads_real_ifconfig_json_body() {
         golden["location"]["city"].as_str().unwrap(),
         golden["location"]["country"].as_str().unwrap()
     );
-    assert_ne!(want_type, "residential", "golden must carry a meaningful type");
+    assert_ne!(
+        want_type, "residential",
+        "golden must carry a meaningful type"
+    );
 
     let app = axum::Router::new().route(
         "/json",
@@ -45,7 +48,18 @@ async fn check_ip_reads_real_ifconfig_json_body() {
     .expect("check_ip");
 
     let info = &result.addresses[0];
-    assert_eq!(info.network_type, want_type, "network_type must come from the golden");
-    assert_eq!(info.org.as_deref(), Some(want_org.as_str()), "org must come from the golden");
-    assert_eq!(info.geo.as_deref(), Some(want_geo.as_str()), "geo must be built from city, country");
+    assert_eq!(
+        info.network_type, want_type,
+        "network_type must come from the golden"
+    );
+    assert_eq!(
+        info.org.as_deref(),
+        Some(want_org.as_str()),
+        "org must come from the golden"
+    );
+    assert_eq!(
+        info.geo.as_deref(),
+        Some(want_geo.as_str()),
+        "geo must be built from city, country"
+    );
 }

@@ -21,7 +21,9 @@ use tlsight::tls::params::TlsParams;
 use tlsight::validate::{CheckStatus, Summary, SummaryChecks, ValidationResult};
 
 fn golden_path(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/contracts").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/contracts")
+        .join(name)
 }
 
 fn assert_golden(name: &str, actual: &str) {
@@ -32,7 +34,10 @@ fn assert_golden(name: &str, actual: &str) {
         return;
     }
     let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-        panic!("golden {} is missing; run with UPDATE_GOLDEN=1 to write it", path.display())
+        panic!(
+            "golden {} is missing; run with UPDATE_GOLDEN=1 to write it",
+            path.display()
+        )
     });
     assert!(
         committed == actual,
@@ -41,7 +46,13 @@ fn assert_golden(name: &str, actual: &str) {
     );
 }
 
-fn check(id: &str, category: Category, status: CheckStatus, label: &str, detail: &str) -> HealthCheck {
+fn check(
+    id: &str,
+    category: Category,
+    status: CheckStatus,
+    label: &str,
+    detail: &str,
+) -> HealthCheck {
     HealthCheck {
         id: id.to_string(),
         category,
@@ -112,10 +123,34 @@ fn response() -> InspectResponse {
         raw_certs: None,
     };
     let port_checks = vec![
-        check("chain_trusted", Category::Certificate, CheckStatus::Pass, "Chain trusted", "Chain validates to a trusted root"),
-        check("expiry_window", Category::Certificate, CheckStatus::Warn, "Expiry window", "Certificate expires in 60 days"),
-        check("tls_version", Category::Protocol, CheckStatus::Pass, "TLS version", "TLSv1.3"),
-        check("ocsp_stapled", Category::Configuration, CheckStatus::Fail, "OCSP stapling", "No OCSP response stapled"),
+        check(
+            "chain_trusted",
+            Category::Certificate,
+            CheckStatus::Pass,
+            "Chain trusted",
+            "Chain validates to a trusted root",
+        ),
+        check(
+            "expiry_window",
+            Category::Certificate,
+            CheckStatus::Warn,
+            "Expiry window",
+            "Certificate expires in 60 days",
+        ),
+        check(
+            "tls_version",
+            Category::Protocol,
+            CheckStatus::Pass,
+            "TLS version",
+            "TLSv1.3",
+        ),
+        check(
+            "ocsp_stapled",
+            Category::Configuration,
+            CheckStatus::Fail,
+            "OCSP stapling",
+            "No OCSP response stapled",
+        ),
     ];
     InspectResponse {
         request_id: "contract-golden".to_string(),
@@ -156,7 +191,13 @@ fn response() -> InspectResponse {
         }),
         quality: Some(QualityResult {
             verdict: CheckStatus::Pass,
-            checks: vec![check("hsts", Category::Configuration, CheckStatus::Pass, "HSTS", "max-age=31536000")],
+            checks: vec![check(
+                "hsts",
+                Category::Configuration,
+                CheckStatus::Pass,
+                "HSTS",
+                "max-age=31536000",
+            )],
             hsts: None,
             https_redirect: None,
         }),

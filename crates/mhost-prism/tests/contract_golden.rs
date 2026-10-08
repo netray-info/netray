@@ -21,7 +21,9 @@ use prism::api::{BatchEvent, CheckDoneEvent, LintEvent};
 use prism::record_format;
 
 fn golden_path(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/contracts").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/contracts")
+        .join(name)
 }
 
 fn assert_golden(name: &str, actual: &str) {
@@ -32,7 +34,10 @@ fn assert_golden(name: &str, actual: &str) {
         return;
     }
     let committed = std::fs::read_to_string(&path).unwrap_or_else(|_| {
-        panic!("golden {} is missing; run with UPDATE_GOLDEN=1 to write it", path.display())
+        panic!(
+            "golden {} is missing; run with UPDATE_GOLDEN=1 to write it",
+            path.display()
+        )
     });
     assert!(
         committed == actual,
@@ -76,7 +81,11 @@ fn batch_event(label: &str, lookups: &Lookups, completed: u32) -> Event {
 }
 
 fn lint_event(category: &'static str, results: Vec<CheckResult>) -> Event {
-    let lint = LintEvent { request_id: "contract-golden".to_string(), category, results };
+    let lint = LintEvent {
+        request_id: "contract-golden".to_string(),
+        category,
+        results,
+    };
     Event::default().event("lint").json_data(&lint).unwrap()
 }
 
@@ -85,14 +94,26 @@ async fn prism_check_stream_matches_golden() {
     let a = lookups(
         "example.com.",
         "A",
-        serde_json::json!([record("example.com.", "A", serde_json::json!({ "A": "192.0.2.10" }))]),
+        serde_json::json!([record(
+            "example.com.",
+            "A",
+            serde_json::json!({ "A": "192.0.2.10" })
+        )]),
     );
     let ns = lookups(
         "example.com.",
         "NS",
         serde_json::json!([
-            record("example.com.", "NS", serde_json::json!({ "NS": "ns1.example.com." })),
-            record("example.com.", "NS", serde_json::json!({ "NS": "ns2.example.com." })),
+            record(
+                "example.com.",
+                "NS",
+                serde_json::json!({ "NS": "ns1.example.com." })
+            ),
+            record(
+                "example.com.",
+                "NS",
+                serde_json::json!({ "NS": "ns2.example.com." })
+            ),
         ]),
     );
     let txt = lookups(
@@ -111,7 +132,8 @@ async fn prism_check_stream_matches_golden() {
         ("ns", check_ns_count(&all)),
         ("spf", check_spf(&all)),
     ];
-    let (mut passed, mut warnings, mut failed, mut not_found, mut total) = (0u32, 0u32, 0u32, 0u32, 0u32);
+    let (mut passed, mut warnings, mut failed, mut not_found, mut total) =
+        (0u32, 0u32, 0u32, 0u32, 0u32);
     for (_, results) in &lints {
         for r in results {
             total += 1;
@@ -144,10 +166,16 @@ async fn prism_check_stream_matches_golden() {
     };
     events.push(Event::default().event("done").json_data(&done).unwrap());
 
-    let resp = Sse::new(futures::stream::iter(events.into_iter().map(Ok::<_, Infallible>))).into_response();
+    let resp = Sse::new(futures::stream::iter(
+        events.into_iter().map(Ok::<_, Infallible>),
+    ))
+    .into_response();
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let body = String::from_utf8(bytes.to_vec()).unwrap();
 
-    assert!(body.contains("event: lint"), "stream must carry lint events");
+    assert!(
+        body.contains("event: lint"),
+        "stream must carry lint events"
+    );
     assert_golden("prism.sse", &body);
 }

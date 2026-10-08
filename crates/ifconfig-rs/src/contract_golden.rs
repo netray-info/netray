@@ -27,7 +27,11 @@ mod tests {
         location.continent = Some("Europe".into());
         location.continent_code = Some("EU".into());
         Ifconfig {
-            ip: Ip { addr: "203.0.113.42".into(), version: "4".into(), hostname: None },
+            ip: Ip {
+                addr: "203.0.113.42".into(),
+                version: "4".into(),
+                hostname: None,
+            },
             // An explicit ?ip= query has no TCP peer and no User-Agent of the target.
             tcp: None,
             location,

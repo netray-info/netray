@@ -13,9 +13,7 @@ use std::path::PathBuf;
 
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
-use beacon::quality::{
-    Category, CheckResult, SseEvent, SubCheck, Verdict, compute_grade,
-};
+use beacon::quality::{Category, CheckResult, SseEvent, SubCheck, Verdict, compute_grade};
 use http_body_util::BodyExt;
 use serde_json::{Map, Value};
 
@@ -135,7 +133,8 @@ async fn sse_wire_format_matches_golden() {
         )
     });
     assert_eq!(
-        golden, produced,
+        golden,
+        produced,
         "beacon's SSE output differs from {}; if the change is intended, regenerate with \
          `UPDATE_GOLDEN=1 cargo test -p beacon --test contract_golden` and check lens still parses it",
         path.display()
