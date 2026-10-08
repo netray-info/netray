@@ -33,6 +33,7 @@ export function assertToolHeaders(response: APIResponse): void {
   expect(h['access-control-allow-origin'], 'access-control-allow-origin').toBe('*');
   expect(h['cross-origin-resource-policy'], 'cross-origin-resource-policy').toBe('cross-origin');
   expect(h['server'], 'no server header').toBeUndefined();
+  expect(h['x-powered-by'], 'no x-powered-by header').toBeUndefined();
 }
 
 /** Headers of `netray site` (D4): secure-headers plus csp-netray-web. */
@@ -53,6 +54,10 @@ export function assertCorsPreflight(response: APIResponse): void {
   const methods = (h['access-control-allow-methods'] ?? '').split(',').map((m) => m.trim().toUpperCase());
   for (const m of ['GET', 'POST', 'OPTIONS']) {
     expect(methods, `allow-methods includes ${m}`).toContain(m);
+  }
+  const allowed = (h['access-control-allow-headers'] ?? '').split(',').map((k) => k.trim().toLowerCase());
+  for (const k of ['content-type', 'accept']) {
+    expect(allowed, `allow-headers includes ${k}`).toContain(k);
   }
   expect(h['access-control-max-age'], 'preflight max-age').toBe('600');
 }

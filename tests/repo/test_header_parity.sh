@@ -144,13 +144,17 @@ PY
         case ",$allow," in *",$k,"*) ;; *) bad "$l: access-control-allow-headers '$allow' lacks $k" ;; esac
     done
     expect "$l" "$h" access-control-max-age 600
+    # architecture-rules: X-Request-Id on every response, preflights included
+    present "$l" "$h" x-request-id
 
     kill "$pid" 2>/dev/null
 done
 
 # D4: netray site keeps its own header set
 port=$(free_port)
-(cd "$REPO_ROOT" && start_bg "$tmp/site.log" "$bin" site --bind "127.0.0.1:$port" --root site)
+# No subshell: start_bg must record the PID in this shell, or the EXIT trap leaks the server.
+cd "$REPO_ROOT" || exit 1
+start_bg "$tmp/site.log" "$bin" site --bind "127.0.0.1:$port" --root site
 if wait_http "http://127.0.0.1:$port/" 30; then
     l="site GET /"
     h="$tmp/site.h"
@@ -168,11 +172,11 @@ else
 fi
 
 # R7 / C7: HSTS and CSP live in netray-common, not in ifconfig-rs
-for f in middleware.rs lib.rs; do
-    if grep -niE 'strict-transport-security|content-security-policy' "$REPO_ROOT/crates/ifconfig-rs/src/$f" >/dev/null 2>&1; then
-        bad "R7: crates/ifconfig-rs/src/$f still sets HSTS/CSP"
-    fi
-done
+# Header names as strings and as axum/http constants, in every source file of the crate.
+hits=$(grep -rniE 'strict-transport-security|content-security-policy|STRICT_TRANSPORT_SECURITY|CONTENT_SECURITY_POLICY' \
+    "$REPO_ROOT/crates/ifconfig-rs/src" 2>/dev/null)
+[ -z "$hits" ] || bad "R7: ifconfig-rs sets HSTS/CSP itself: $(head -n1 <<<"$hits")"
+[ -n "$(find "$REPO_ROOT/crates/ifconfig-rs/src" -name '*.rs' | head -n1)" ] || bad "R7: no ifconfig-rs sources found"
 awk '/pub struct SecurityHeadersConfig/,/^}/' "$REPO_ROOT/crates/common/src/security_headers.rs" | grep -qi 'hsts' \
     || bad "R7: SecurityHeadersConfig has no hsts field"
 
