@@ -182,6 +182,8 @@ impl Config {
         crate::security::rate_limit::parse_rate(&self.rate_limit.per_ip).map_err(|e| {
             config::ConfigError::Message(format!("invalid configuration: rate_limit.per_ip: {e}"))
         })?;
+        netray_common::telemetry::validate(&(&self.telemetry).into())
+            .map_err(config::ConfigError::Message)?;
         Ok(())
     }
 }

@@ -449,6 +449,7 @@ impl Config {
         )?;
         reject_zero("rate_limit.global_burst", self.rate_limit.global_burst)?;
         reject_zero("badges.ttl_seconds", self.badges.ttl_seconds)?;
+        netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
 
         Ok(())
     }

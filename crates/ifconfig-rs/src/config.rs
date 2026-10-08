@@ -289,6 +289,7 @@ impl Config {
                 self.batch.max_size, HARD_CAP_BATCH_SIZE
             )));
         }
+        netray_common::telemetry::validate(&self.telemetry).map_err(config::ConfigError::Message)?;
         Ok(())
     }
 }

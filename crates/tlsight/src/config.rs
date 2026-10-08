@@ -363,6 +363,7 @@ impl Config {
         }
 
         // Telemetry config validation.
+        netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
         if self.telemetry.enabled && !(0.0..=1.0).contains(&self.telemetry.sample_rate) {
             return Err(ConfigError::Message(
                 "invalid configuration: telemetry.sample_rate must be in [0.0, 1.0]".to_owned(),

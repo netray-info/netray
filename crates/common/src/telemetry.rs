@@ -118,6 +118,28 @@ fn default_sample_rate() -> f64 {
     1.0
 }
 
+/// Reject an OTLP endpoint that [`init_subscriber`] would panic on.
+///
+/// Only checked when `config.enabled`. The exporter parses the endpoint as an
+/// `http::Uri`; on top of that an `http`/`https` scheme and an authority are required.
+pub fn validate(config: &TelemetryConfig) -> Result<(), String> {
+    if !config.enabled {
+        return Ok(());
+    }
+    let endpoint = &config.otlp_endpoint;
+    let request = Request::builder()
+        .uri(endpoint.as_str())
+        .body(())
+        .map_err(|e| format!("invalid configuration: telemetry.otlp_endpoint ({endpoint}): {e}"))?;
+    let uri = request.uri();
+    if !matches!(uri.scheme_str(), Some("http" | "https")) || uri.authority().is_none() {
+        return Err(format!(
+            "invalid configuration: telemetry.otlp_endpoint ({endpoint}) must be an http:// or https:// URL"
+        ));
+    }
+    Ok(())
+}
+
 /// Initialise the tracing subscriber with an optional OpenTelemetry layer.
 ///
 /// `default_filter` is used as the fallback when `RUST_LOG` is not set
@@ -248,7 +270,7 @@ pub fn shutdown() {
 
 #[cfg(test)]
 mod tests {
-    use super::otlp_export_timeout;
+    use super::{TelemetryConfig, otlp_export_timeout, validate};
     use std::collections::HashMap;
     use std::time::Duration;
 
@@ -258,6 +280,40 @@ mod tests {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
         otlp_export_timeout(|name| map.get(name).cloned())
+    }
+
+    fn enabled_with(endpoint: &str) -> TelemetryConfig {
+        TelemetryConfig {
+            enabled: true,
+            otlp_endpoint: endpoint.to_owned(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn validate_accepts_default_endpoint() {
+        assert!(validate(&enabled_with("http://localhost:4318")).is_ok());
+        assert!(validate(&enabled_with("https://otel.example.com/v1/traces")).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_endpoint_with_space() {
+        let err = validate(&enabled_with("http://bad host:4318")).unwrap_err();
+        assert!(err.contains("telemetry.otlp_endpoint"), "{err}");
+    }
+
+    #[test]
+    fn validate_rejects_missing_scheme() {
+        assert!(validate(&enabled_with("localhost:4318")).is_err());
+    }
+
+    #[test]
+    fn validate_ignores_endpoint_when_disabled() {
+        let cfg = TelemetryConfig {
+            otlp_endpoint: "http://bad host:4318".to_owned(),
+            ..Default::default()
+        };
+        assert!(validate(&cfg).is_ok());
     }
 
     #[test]

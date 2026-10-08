@@ -123,6 +123,8 @@ impl Config {
                 )));
             }
         }
+        netray_common::telemetry::validate(&(&self.telemetry).into())
+            .map_err(ConfigError::Message)?;
         Ok(())
     }
 
