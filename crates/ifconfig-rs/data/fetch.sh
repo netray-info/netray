@@ -5,7 +5,20 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-get() { curl -s "$1" -o "$2"; }
+# Only this run's temp files: deleting another run's half-built file would let that run
+# rename a partial file into place.
+cleanup() {
+    rm -f -- ./*.tmp.$$ ./.*.tmp.$$ \
+        .aws.json .gcp.json .cloudflare-v4.txt .cloudflare-v6.txt .oracle.json .fastly.json \
+        .digitalocean.csv .linode.csv .github.json .google-services.json .azure.txt \
+        .googlebot.json .bingbot.json .applebot.json .gptbot.txt .as_metadata.json
+}
+trap cleanup EXIT
+
+get() {
+    curl -fsS "$1" -o "$2.tmp.$$" || return 1
+    mv "$2.tmp.$$" "$2"
+}
 
 geoip_mmdbs() {
     geoipupdate -f .geoip.conf -d .
@@ -27,8 +40,10 @@ feodo_botnet_ips() {
 
 vpn_ranges() {
     [ -e vpn_ranges.txt ] && return 0
-    curl -s https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv4.txt > vpn_ranges.txt
-    curl -s https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv6.txt >> vpn_ranges.txt
+    local out=vpn_ranges.txt.tmp.$$
+    curl -fsS https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv4.txt > $out
+    curl -fsS https://raw.githubusercontent.com/X4BNet/lists_vpn/main/output/vpn/ipv6.txt >> $out
+    mv $out vpn_ranges.txt
 }
 
 cloud_provider_ranges() {
@@ -45,7 +60,7 @@ cloud_provider_ranges() {
     [ -e .google-services.json ] || get https://www.gstatic.com/ipranges/goog.json .google-services.json
     [ -e .azure.txt ] || get https://cloud-ip-ranges.com/download/azure.txt .azure.txt
 
-    local out=cloud_provider_ranges.jsonl cidr
+    local out=cloud_provider_ranges.jsonl.tmp.$$ cidr
     jq -c '.prefixes[] | {cidr: .ip_prefix, provider: "aws", service: .service, region: .region}' .aws.json > $out
     jq -c '.ipv6_prefixes[] | {cidr: .ipv6_prefix, provider: "aws", service: .service, region: .region}' .aws.json >> $out
     jq -c '.prefixes[] | {cidr: .ipv4Prefix, provider: "gcp", service: .service, region: .scope}' .gcp.json >> $out
@@ -60,6 +75,7 @@ cloud_provider_ranges() {
     jq -c 'to_entries[] | select(.value | type == "array") | .key as $svc | .value[] | select(type == "string" and contains("/")) | {cidr: ., provider: "github", service: $svc, region: null}' .github.json >> $out
     jq -c '.prefixes[] | if .ipv4Prefix then {cidr: .ipv4Prefix, provider: "google-services", service: null, region: null} elif .ipv6Prefix then {cidr: .ipv6Prefix, provider: "google-services", service: null, region: null} else empty end' .google-services.json >> $out
     while IFS= read -r cidr; do printf '{"cidr":"%s","provider":"azure","service":null,"region":null}\n' "$cidr"; done < .azure.txt >> $out
+    mv $out cloud_provider_ranges.jsonl
     rm -f .aws.json .gcp.json .cloudflare-v4.txt .cloudflare-v6.txt .oracle.json .fastly.json .digitalocean.csv .linode.csv .github.json .google-services.json .azure.txt
 }
 
@@ -75,31 +91,37 @@ bot_ranges() {
     [ -e .applebot.json ] || get https://search.developer.apple.com/applebot.json .applebot.json
     [ -e .gptbot.txt ] || get https://openai.com/gptbot-ranges.txt .gptbot.txt
 
-    local out=bot_ranges.jsonl cidr
+    local out=bot_ranges.jsonl.tmp.$$ cidr
     jq -c '.prefixes[] | if .ipv4Prefix then {cidr: .ipv4Prefix, provider: "googlebot"} elif .ipv6Prefix then {cidr: .ipv6Prefix, provider: "googlebot"} else empty end' .googlebot.json > $out
     jq -c '.prefixes[] | if .ipv4Prefix then {cidr: .ipv4Prefix, provider: "bingbot"} elif .ipv6Prefix then {cidr: .ipv6Prefix, provider: "bingbot"} else empty end' .bingbot.json >> $out
     jq -c '.prefixes[] | if .ipv4Prefix then {cidr: .ipv4Prefix, provider: "applebot"} elif .ipv6Prefix then {cidr: .ipv6Prefix, provider: "applebot"} else empty end' .applebot.json >> $out
     while IFS= read -r cidr; do case "$cidr" in \#*|"") continue;; esac; printf '{"cidr":"%s","provider":"gptbot"}\n' "$cidr"; done < .gptbot.txt >> $out
+    mv $out bot_ranges.jsonl
     rm -f .googlebot.json .bingbot.json .applebot.json .gptbot.txt
 }
 
 spamhaus_drop() {
     [ -e spamhaus_drop.txt ] && return 0
-    { curl -s https://www.spamhaus.org/drop/drop.txt;
-      curl -s https://www.spamhaus.org/drop/edrop.txt;
-      curl -s https://www.spamhaus.org/drop/dropv6.txt; } \
-    | sed -e 's/ ;.*//' -e '/^;/d' -e '/^$/d' > spamhaus_drop.txt
+    local out=spamhaus_drop.txt.tmp.$$
+    { curl -fsS https://www.spamhaus.org/drop/drop.txt;
+      curl -fsS https://www.spamhaus.org/drop/edrop.txt;
+      curl -fsS https://www.spamhaus.org/drop/dropv6.txt; } \
+    | sed -e 's/ ;.*//' -e '/^;/d' -e '/^$/d' > $out
+    mv $out spamhaus_drop.txt
 }
 
 cins_army_ips() {
     [ -e cins_army_ips.txt ] && return 0
-    curl -s https://cinsscore.com/list/ci-badguys.txt | grep -v '^#' | grep -v '^$' > cins_army_ips.txt
+    local out=cins_army_ips.txt.tmp.$$
+    curl -fsS https://cinsscore.com/list/ci-badguys.txt | grep -v '^#' | grep -v '^$' > $out
+    mv $out cins_army_ips.txt
 }
 
 as_metadata() {
     [ -e as_metadata.jsonl ] && return 0
     [ -e .as_metadata.json ] || get https://raw.githubusercontent.com/ipverse/as-metadata/master/as.json .as_metadata.json
-    jq -c 'to_entries[] | select(.value.asn != null) | {asn: .value.asn, category: (.value.metadata.category // ""), network_role: (.value.metadata.networkRole // ""), registered: ((.value.metadata.registered // "")[:10])}' .as_metadata.json > as_metadata.jsonl
+    jq -c 'to_entries[] | select(.value.asn != null) | {asn: .value.asn, category: (.value.metadata.category // ""), network_role: (.value.metadata.networkRole // ""), registered: ((.value.metadata.registered // "")[:10])}' .as_metadata.json > as_metadata.jsonl.tmp.$$
+    mv as_metadata.jsonl.tmp.$$ as_metadata.jsonl
     rm -f .as_metadata.json
 }
 
