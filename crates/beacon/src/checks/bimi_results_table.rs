@@ -403,8 +403,11 @@ async fn bimi_results_table() {
             .iter()
             .map(|s| (s.name.clone(), s.verdict))
             .collect();
-        let want: Vec<(String, Verdict)> =
-            row.expect.iter().map(|(n, v)| (n.to_string(), *v)).collect();
+        let want: Vec<(String, Verdict)> = row
+            .expect
+            .iter()
+            .map(|(n, v)| (n.to_string(), *v))
+            .collect();
         let grade = compute_grade(&[result.verdict]);
 
         if !present || got != want || grade != row.grade {

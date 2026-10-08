@@ -190,7 +190,11 @@ async fn redirect_results_table() {
         assert_eq!(hits.load(Ordering::SeqCst), 11, "row 2");
         let expected: Vec<_> = (0..10)
             .map(|i| {
-                let (from, to) = if i % 2 == 0 { ("/a", "/b") } else { ("/b", "/a") };
+                let (from, to) = if i % 2 == 0 {
+                    ("/a", "/b")
+                } else {
+                    ("/b", "/a")
+                };
                 hop(&format!("{base}{from}"), 302, &format!("{base}{to}"))
             })
             .collect();
