@@ -269,6 +269,19 @@ impl Config {
         Ok(cfg)
     }
 
+    /// Checks that only startup (and `--check-config`) enforces: a SIGHUP reload goes
+    /// through `load` and must keep the previous trust store instead of failing.
+    pub fn check_startup(&self) -> Result<(), ConfigError> {
+        if let Some(dir) = &self.validation.custom_ca_dir
+            && !std::path::Path::new(dir).is_dir()
+        {
+            return Err(ConfigError::Message(format!(
+                "invalid configuration: validation.custom_ca_dir does not exist or is not a directory: {dir}"
+            )));
+        }
+        Ok(())
+    }
+
     /// Validate and clamp configuration values to hard caps.
     ///
     /// - Values exceeding hard caps are clamped with a tracing warning.
@@ -338,14 +351,6 @@ impl Config {
             "validation.expiry_critical_days",
             self.validation.expiry_critical_days,
         )?;
-
-        if let Some(dir) = &self.validation.custom_ca_dir
-            && !std::path::Path::new(dir).is_dir()
-        {
-            return Err(ConfigError::Message(format!(
-                "invalid configuration: validation.custom_ca_dir does not exist or is not a directory: {dir}"
-            )));
-        }
 
         // Quality assessment HTTP check timeout: clamp to hard cap.
         if self.quality.http_check_timeout_secs > HARD_CAP_HTTP_CHECK_TIMEOUT {

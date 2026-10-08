@@ -105,7 +105,10 @@ async fn main() -> anyhow::Result<()> {
         Command::Tls {
             check_config: Some(path),
             ..
-        } => check_config(&path, tlsight::config::Config::load),
+        } => check_config(&path, |p| {
+            let cfg = tlsight::config::Config::load(p)?;
+            cfg.check_startup()
+        }),
         Command::Http {
             check_config: Some(path),
             ..

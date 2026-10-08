@@ -448,6 +448,7 @@ impl Config {
             self.rate_limit.global_per_minute,
         )?;
         reject_zero("rate_limit.global_burst", self.rate_limit.global_burst)?;
+        reject_zero("badges.ttl_seconds", self.badges.ttl_seconds)?;
 
         Ok(())
     }

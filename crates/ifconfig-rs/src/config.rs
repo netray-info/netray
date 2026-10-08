@@ -223,6 +223,17 @@ impl Config {
     }
 
     pub fn validate(&self) -> Result<(), config::ConfigError> {
+        self.server.bind.parse::<std::net::SocketAddr>().map_err(|e| {
+            config::ConfigError::Message(format!(
+                "server.bind ({}) is not a socket address: {e}",
+                self.server.bind
+            ))
+        })?;
+        if let Some(admin_bind) = &self.server.admin_bind {
+            admin_bind.parse::<std::net::SocketAddr>().map_err(|e| {
+                config::ConfigError::Message(format!("server.admin_bind ({admin_bind}) is not a socket address: {e}"))
+            })?;
+        }
         if self.rate_limit.per_ip_per_minute == 0 {
             return Err(config::ConfigError::Message(
                 "rate_limit.per_ip_per_minute must be > 0".to_string(),
@@ -245,6 +256,16 @@ impl Config {
                 self.rate_limit.per_ip_burst, HARD_CAP_RATE_LIMIT_BURST
             )));
         }
+        if self.rate_limit.per_target_per_minute == 0 {
+            return Err(config::ConfigError::Message(
+                "rate_limit.per_target_per_minute must be > 0".to_string(),
+            ));
+        }
+        if self.rate_limit.per_target_burst == 0 {
+            return Err(config::ConfigError::Message(
+                "rate_limit.per_target_burst must be > 0".to_string(),
+            ));
+        }
         if self.rate_limit.per_target_per_minute > HARD_CAP_RATE_LIMIT_PER_MINUTE {
             return Err(config::ConfigError::Message(format!(
                 "rate_limit.per_target_per_minute ({}) exceeds hard cap ({})",
@@ -256,6 +277,11 @@ impl Config {
                 "rate_limit.per_target_burst ({}) exceeds hard cap ({})",
                 self.rate_limit.per_target_burst, HARD_CAP_RATE_LIMIT_BURST
             )));
+        }
+        if self.batch.enabled && self.batch.max_size == 0 {
+            return Err(config::ConfigError::Message(
+                "batch.max_size must be > 0 when batch.enabled".to_string(),
+            ));
         }
         if self.batch.max_size > HARD_CAP_BATCH_SIZE {
             return Err(config::ConfigError::Message(format!(

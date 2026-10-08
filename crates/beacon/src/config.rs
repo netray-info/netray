@@ -169,6 +169,16 @@ impl Config {
 
     /// Rejects the values `RateLimitState::new` refuses at startup.
     fn validate(&self) -> Result<(), config::ConfigError> {
+        for (name, value) in [
+            ("server.bind", &self.server.bind),
+            ("server.metrics_bind", &self.server.metrics_bind),
+        ] {
+            value.parse::<std::net::SocketAddr>().map_err(|e| {
+                config::ConfigError::Message(format!(
+                    "invalid configuration: {name} ({value}) is not a socket address: {e}"
+                ))
+            })?;
+        }
         crate::security::rate_limit::parse_rate(&self.rate_limit.per_ip).map_err(|e| {
             config::ConfigError::Message(format!("invalid configuration: rate_limit.per_ip: {e}"))
         })?;
