@@ -64,3 +64,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 serde_json = { workspace = true }
+reqwest = { workspace = true, features = ["rustls"] }
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = "0.26"

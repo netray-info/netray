@@ -1449,6 +1449,10 @@ fn check_tlsrpt(lookups: &Lookups, mta_sts_lookups: &Lookups) -> Vec<CheckResult
 }
 
 #[cfg(test)]
+#[path = "check_mta_sts_tests.rs"]
+mod mta_sts_outbound_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

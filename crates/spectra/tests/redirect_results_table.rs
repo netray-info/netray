@@ -17,8 +17,8 @@ use std::time::Duration;
 use axum::Router;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
-use spectra::inspect::assembler::RedirectHop;
 use netray_common::fetch::Resolve;
+use spectra::inspect::assembler::RedirectHop;
 use spectra::inspect::request::{Outbound, execute_request};
 use spectra::inspect::{EnrichmentData, InspectResult, TaskResult, assemble_response};
 use spectra::quality::types::CheckStatus;
@@ -252,8 +252,8 @@ async fn redirect_results_table() {
     // `localhost` to [::1], which `allow` refuses. The redirect is not followed: p2 (a
     // listener on [::1]) sees no connection. The result is the blocked shape: error
     // "Redirect destination blocked", status 0, the initial URL as final URL, no headers,
-    // limit not reached. The hop list keeps the refused redirect; the `redirect_limit`
-    // check is absent.
+    // limit not reached. The refused redirect is not recorded, as before the helper
+    // (requirement 8); the `redirect_limit` check is absent.
     {
         let (l1, p1) = bind().await;
         let l2 = TcpListener::bind("[::1]:0").await.unwrap();
@@ -287,11 +287,7 @@ async fn redirect_results_table() {
         assert!(!r.redirect_limit_reached, "row 3");
         assert_eq!(hits2.load(Ordering::SeqCst), 0, "row 3: p2 was not reached");
         assert!(r.headers.get("x-second-listener").is_none(), "row 3");
-        assert_eq!(
-            hop_tuples(&r.redirects),
-            vec![hop(&first, 302, &target)],
-            "row 3"
-        );
+        assert_eq!(hop_tuples(&r.redirects), vec![], "row 3");
         assert_eq!(redirect_limit_check(r), None, "row 3");
     }
 

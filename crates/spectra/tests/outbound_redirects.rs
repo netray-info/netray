@@ -148,8 +148,64 @@ async fn c11_allowed_chain_records_exactly_its_hops() {
         .iter()
         .map(|h| (h.url.clone(), h.status, h.location.clone()))
         .collect();
-    assert_eq!(
-        hops,
-        vec![(a, 301, Some(b.clone())), (b, 302, Some(c))],
+    assert_eq!(hops, vec![(a, 301, Some(b.clone())), (b, 302, Some(c))],);
+}
+
+#[tokio::test]
+async fn mid_chain_connection_error_keeps_followed_hops() {
+    // a answers 301 to b; nothing listens on b's port, so the second hop fails to connect.
+    // The followed redirect stays in `redirects`, as before the helper.
+    let (la, pa) = bind4().await;
+    let (lb, pb) = bind4().await;
+    drop(lb);
+    let a = format!("http://a.test:{pa}/");
+    let b = format!("http://b.test:{pb}/");
+    serve(la, vec![("/", 301, Some(b.clone()))]);
+
+    let names = [("a.test", LO4), ("b.test", LO4)];
+    let r = run(&a, pa, &names).await;
+
+    assert!(r.error.is_some(), "b refuses the connection");
+    let hops: Vec<_> = r
+        .redirects
+        .iter()
+        .map(|h| (h.url.clone(), h.status, h.location.clone()))
+        .collect();
+    assert_eq!(hops, vec![(a, 301, Some(b))]);
+}
+
+#[tokio::test]
+async fn port80_redirect_to_refused_https_target_is_not_recorded() {
+    // The port-80 probe as `inspect` runs it: `execute_request` on the http URL, its result
+    // assembled as `http_upgrade`. The probe answers 301 to https://10.0.0.1/, which `allow`
+    // refuses: the refused hop is not recorded and `redirects_to_https` stays false.
+    let (l, p) = bind4().await;
+    serve(l, vec![("/", 301, Some("https://10.0.0.1/".to_string()))]);
+    let probe = run(&format!("http://a.test:{p}/"), p, &[("a.test", LO4)]).await;
+    assert_eq!(probe.error.as_deref(), Some("Redirect destination blocked"));
+
+    let empty = || TaskResult {
+        final_url: "https://a.test/".into(),
+        status: 200,
+        http_version: "h1.1".into(),
+        headers: reqwest::header::HeaderMap::new(),
+        redirects: vec![],
+        redirect_limit_reached: false,
+        error: None,
+    };
+    let resp = spectra::inspect::assemble_response(
+        &Url::parse("https://a.test/").unwrap(),
+        SocketAddr::new(LO4, 443),
+        spectra::inspect::InspectResult {
+            https: empty(),
+            http_upgrade: Some(probe),
+            cors: empty(),
+        },
+        spectra::inspect::EnrichmentData::default(),
+        None,
+        1,
     );
+    let upgrade = resp.http_upgrade.expect("http_upgrade is assembled");
+    assert!(!upgrade.redirects_to_https);
+    assert!(upgrade.redirects.is_empty(), "{:?}", upgrade.redirects);
 }
