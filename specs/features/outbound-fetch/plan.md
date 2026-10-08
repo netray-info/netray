@@ -272,7 +272,7 @@ No production file. Run the three tables and confirm that only the rows marked c
 7. spectra keeps the pin: a private `Pinned` resolver answers the initial host with the validated address and delegates the rest to `Checked`'s inner resolver.
 8. Accepted: the tlsight frontend shows `reason` only for `revoked`.
 9. Metric kind for a refused target: `blocked`.
-10. A refused hop ≥ 1 keeps the existing `logo_redirect_ssrf_blocked` detail text.
+10. A hop ≥ 1 refused as `Disallowed` keeps the existing `logo_redirect_ssrf_blocked` detail text; a hop ≥ 1 with `NoAddress` is `logo_unreachable` Warn, as before (branch review, 2026-10-09).
 11. Intended: beacon's fetches resolve through its configured resolvers (SC13 refusal rule).
 12. Accepted: OCSP ignores environment proxies; the 64 KB cap is new.
 

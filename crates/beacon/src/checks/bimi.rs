@@ -49,7 +49,12 @@ fn classify_fetch_error(e: &FetchError) -> &'static str {
 /// error's own text.
 fn fetch_error_sub_check(e: &FetchError, initial_is_name: bool) -> SubCheck {
     let (name, verdict, detail) = match e {
-        FetchError::Blocked { hop, .. } if *hop >= 1 => (
+        // A hop with no address is unreachable, as before; only a non-public one is refused.
+        FetchError::Blocked {
+            hop,
+            reason: BlockReason::Disallowed,
+            ..
+        } if *hop >= 1 => (
             "logo_redirect_ssrf_blocked",
             Verdict::Fail,
             "BIMI logo URL redirects to private address",
