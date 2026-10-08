@@ -37,7 +37,15 @@ export function resolveEnv(): ServiceURLs {
   if (!urls) {
     throw new Error(`Unknown TEST_ENV: ${env}. Expected 'local' or 'production'.`);
   }
-  return urls;
+  if (env !== 'local') return urls;
+  // `just acceptance-local` starts the stack on free ports and passes them as
+  // LOCAL_<NAME>_URL, so it never collides with other servers on the default ports.
+  const overridden = { ...urls };
+  for (const name of Object.keys(urls) as (keyof ServiceURLs)[]) {
+    const url = process.env[`LOCAL_${name.toUpperCase()}_URL`];
+    if (url) overridden[name] = url;
+  }
+  return overridden;
 }
 
 export function testEnv(): TestEnv {
