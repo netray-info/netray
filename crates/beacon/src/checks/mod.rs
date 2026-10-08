@@ -38,6 +38,11 @@ pub mod spf;
 pub mod tls_rpt;
 pub mod util;
 
+#[cfg(test)]
+mod bimi_results_table;
+#[cfg(test)]
+mod mta_sts_results_table;
+
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::Arc;
