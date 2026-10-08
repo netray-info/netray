@@ -90,5 +90,29 @@ for row in "${startup_rejects[@]}"; do
     [ "$rc" -eq 1 ] || fail "$sub: startup-rejected value ($expr) exited $rc, expected 1"
 done
 
+# Telemetry init panics on an OTLP endpoint that is not a valid URI; the check must name
+# the key, so a row cannot pass by tripping over an unknown field instead.
+bad_otlp='otlp_endpoint = \"http://bad host:4318\"'
+telemetry_rejects=(
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+    "dns:crates/mhost-prism/tests/fixtures/prism.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+    "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+    "http:crates/spectra/tests/fixtures/spectra.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+    "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\n$bad_otlp|"
+    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+)
+for row in "${telemetry_rejects[@]}"; do
+    IFS=: read -r sub fixture expr <<<"$row"
+    fixture="$REPO_ROOT/$fixture"
+    perl -pe "$expr" "$fixture" >"$tmp/$sub.otlp.toml"
+    if cmp -s "$fixture" "$tmp/$sub.otlp.toml"; then
+        fail "$sub: telemetry substitution did not change the fixture"
+        continue
+    fi
+    run_check "$sub" "$tmp/$sub.otlp.toml"
+    [ "$rc" -eq 1 ] || fail "$sub: invalid otlp_endpoint exited $rc, expected 1"
+    grep -q 'otlp_endpoint' <<<"$out" || fail "$sub: invalid otlp_endpoint error does not name otlp_endpoint ($out)"
+done
+
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
 echo "PASS: test_check_config"
