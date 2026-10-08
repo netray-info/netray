@@ -9,12 +9,12 @@ The infrastructure repository deploys `netray` as one container per subcommand a
 
 | # | Decision |
 |---|---|
-| D1 | One config loader in `netray-common` serves all six subcommands. Each keeps its environment naming exactly as deployed: `PRISM_<SECTION>__<KEY>`, `TLSIGHT_…`, `IFCONFIG_…`, `LENS_…` (prefix separator `_`), `SPECTRA__…`, `BEACON__…` (prefix separator `__`). `<PREFIX>_CONFIG`, which names the config file, is never a config key. |
-| D2 | `--check-config <path>` loads and validates, prints one line, and exits 0 or 1, for every subcommand; `netray ip --check` stays as an alias. |
+| D1 | One config loader in `netray-common` serves all six subcommands. Each keeps its environment naming exactly as deployed: `PRISM_<SECTION>__<KEY>`, `TLSIGHT_…`, `IFCONFIG_…`, `LENS_…` (prefix separator `_`), `SPECTRA__…`, `BEACON__…` (prefix separator `__`). `<PREFIX>_CONFIG`, which names the config file, is never a config key. The prefix matches case-insensitively, as the `config` crate did before; an entry that is not valid UTF-8 is skipped. |
+| D2 | `--check-config <path>` loads and validates, prints one line, and exits 0 or 1, for every subcommand. `netray ip --check` keeps its wider meaning (config and data files) and is not an alias. |
 | D3 | Header parity means the apps emit exactly what production clients get from Traefik today: `secure-headers` on every response; `csp-tool-spa` on the five tools and lens, except under `/docs`, which keeps the relaxed CSP the Scalar reference needs; `cors-public-api` (`access-control-allow-origin: *`, methods `GET, POST, OPTIONS`, headers `Content-Type, Accept`, max-age 600, `cross-origin-resource-policy: cross-origin`) on the five tools and lens. ifconfig-rs's two-year HSTS and extra `font-src` move into `netray-common` configuration. Tightening the CSP is not this spec (SDD M19). |
 | D4 | `netray site` keeps its own header set, which already equals `secure-headers` plus `csp-netray-web`; this spec only asserts it. |
 | D5 | lens parses what the backends send today; the backends' response shapes do not change (SDD M20). Golden files are written by each backend's own tests and read by lens's tests. |
-| D6 | No Cloudflare sits in front of any service: `IpExtractor` no longer trusts `CF-Connecting-IP`, as lens already does since 0.12.0. |
+| D6 | No Cloudflare sits in front of any service: neither `IpExtractor` nor ifconfig-rs's own `extract_client_ip` trusts `CF-Connecting-IP`, as lens already does since 0.12.0. |
 
 ## Requirements
 
@@ -22,7 +22,7 @@ The infrastructure repository deploys `netray` as one container per subcommand a
 2. Every config struct reachable from a subcommand's top-level config, including `netray-common`'s shared ones, rejects unknown keys; a convention test fails when a `Deserialize` struct in a `config.rs` lacks `deny_unknown_fields`.
 3. `netray <sub> --check-config <path>` for `lens dns tls http email ip`: exit 0 and `config ok: <path>` for a valid file; exit 1 and the loader's error for an unknown key, a missing file, or a value `validate()` rejects. It starts no listener.
 4. `tests/fixtures/<service>.production.toml` exists for all six services, mirrors the infrastructure repository's template for that service with placeholders for secrets and hosts, and a test per service loads it through the subcommand's loader. Differences between a fixture and its template are reported to the operator, never resolved by editing the infrastructure repository.
-5. `IpExtractor` uses the peer address, and `X-Real-IP` / `X-Forwarded-For` from trusted proxies only; `CF-Connecting-IP` is ignored.
+5. `IpExtractor` and ifconfig-rs's `extract_client_ip` use the peer address, and `X-Real-IP` / `X-Forwarded-For` from trusted proxies only; `CF-Connecting-IP` is ignored.
 6. Every response of `lens dns tls http email ip` carries the `secure-headers` set of D3 and no `Server` or `X-Powered-By` header; every non-`/docs` response carries `csp-tool-spa` verbatim; every response carries `access-control-allow-origin: *` and `cross-origin-resource-policy: cross-origin`; a CORS preflight (`OPTIONS` with `Origin` and `Access-Control-Request-Method: POST`) answers 2xx with the D3 methods, headers and `access-control-max-age: 600`.
 7. ifconfig-rs's HSTS and CSP differences from the shared layer are fields of `netray-common`'s `SecurityHeadersConfig`, not code in ifconfig-rs.
 8. The acceptance suite asserts 6 per host, and `netray site`'s set (D4) for the apex paths; it runs against production and against a locally started `netray` with no proxy in front. It also asserts that `https://mta-sts.netray.info/.well-known/mta-sts.txt` serves `version: STSv1` and `mode: enforce`, replacing the TODO in `tests/acceptance/static-site/assets.spec.ts`.
@@ -44,7 +44,8 @@ The infrastructure repository deploys `netray` as one container per subcommand a
 - GIVEN the workspace WHEN the convention test scans every `config.rs` THEN each `#[derive(…Deserialize…)]` struct carries `deny_unknown_fields`.
 - GIVEN each production fixture WHEN `netray <sub> --check-config <fixture>` runs THEN it exits 0; GIVEN the fixture plus one unknown key THEN it exits 1; GIVEN a missing path THEN it exits 1.
 - GIVEN each of the six services WHEN its fixture test runs THEN the fixture loads through that service's loader.
-- GIVEN a request from a trusted proxy with `CF-Connecting-IP: 198.51.100.1` and `X-Real-IP: 198.51.100.2` WHEN the client IP is extracted THEN it is `198.51.100.2`.
+- GIVEN a request from a trusted proxy with `CF-Connecting-IP: 198.51.100.1` and `X-Real-IP: 198.51.100.2` WHEN the client IP is extracted THEN it is `198.51.100.2`. The same holds for ifconfig-rs's `extract_client_ip`.
+- GIVEN `prism_limits__per_ip_per_minute=60` (lower-case prefix) WHEN prism's config loads THEN the value is applied, as before.
 
 ## Phase 2 — Header and CORS parity
 
