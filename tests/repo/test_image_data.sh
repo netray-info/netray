@@ -25,6 +25,10 @@ grep -q 'IFCONFIG_GEOIP_' "$rel" && fail "release.yml sets GeoIP paths for the s
 check_line=$(grep -nE 'mmdb' "$rel" | head -n1 | cut -d: -f1)
 data_line=$(grep -nE '/netray/data' "$rel" | head -n1 | cut -d: -f1)
 push_line=$(grep -nE 'docker push' "$rel" | head -n1 | cut -d: -f1)
+# The check runs as root (root-only dirs are searchable) and must not fail on a clean
+# image: `[ -d … ] && find` returns 1 when the dir is absent and aborts `bash -e`.
+grep -qE 'docker run[^|]*--user 0[^|]*--entrypoint sh' "$rel" || fail "release.yml data check does not run as root (--user 0)"
+grep -qE '\[ -d /netray/data \] &&' "$rel" && fail "release.yml data check ends in '[ -d … ] && find', which fails a clean image under bash -e"
 if [ -z "$check_line" ] || [ -z "$data_line" ] || [ -z "$push_line" ]; then
     fail "release.yml has no image check for *.mmdb and /netray/data, or no push step"
 elif [ "$check_line" -gt "$push_line" ] || [ "$data_line" -gt "$push_line" ]; then
