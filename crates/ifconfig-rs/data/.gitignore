@@ -26,3 +26,5 @@ cins_army_ips.txt
 .geoip.conf
 .geoipupdate.lock
 as_metadata.jsonl
+.fetch.*/
+*.tmp.*

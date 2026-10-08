@@ -8,12 +8,14 @@ cd "$(dirname "$0")"
 # Intermediates live in a per-run directory; cleanup removes only this run's directory and
 # temp files: deleting another run's inputs or half-built files would break that run.
 RUN=.fetch.$$
-mkdir -- "$RUN"
 cleanup() {
     rm -rf -- "$RUN"
     rm -f -- ./*.tmp.$$ ./.*.tmp.$$
 }
 trap cleanup EXIT
+# A directory with this PID can only be left by a killed earlier run: no live run shares it.
+rm -rf -- "$RUN"
+mkdir -- "$RUN"
 
 get() {
     curl -fsS "$1" -o "$2.tmp.$$" || return 1
