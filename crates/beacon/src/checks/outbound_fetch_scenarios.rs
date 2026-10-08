@@ -324,3 +324,40 @@ async fn bimi_redirect_to_refused_literal_fails_before_connecting() {
     assert_eq!(logo.connections(), 1, "connections at the logo host");
     assert_eq!(target.connections(), 0, "connections at [::1]");
 }
+
+/// A redirect to a name that does not resolve is an unreachable logo, as before, not a
+/// redirect to a non-public address.
+#[tokio::test]
+async fn bimi_redirect_to_unresolvable_name_warns() {
+    let logo = listen(
+        IpAddr::V4(Ipv4Addr::LOCALHOST),
+        &["logo.example.com"],
+        empty_response("302 Found", Some("https://cdn.gone.invalid/l.svg")),
+    )
+    .await;
+
+    let record = format!("v=BIMI1; l=https://logo.example.com:{}/l.svg", logo.port);
+    let resolver = Arc::new(
+        TestDnsResolver::new()
+            .with_txt("default._bimi.example.com", vec![record.as_str()])
+            .with_ips("logo.example.com", vec![IpAddr::V4(Ipv4Addr::LOCALHOST)]),
+    );
+    let base = OutboundFetch::new(5_000, Arc::new(FetchResolver(resolver.clone())));
+    let fetch = OutboundFetch {
+        settings: ClientSettings {
+            accept_invalid_certs: true,
+            ..base.settings.clone()
+        },
+        allow: only_loopback_v4,
+        ..base
+    };
+
+    let (result, _present) = check_bimi("example.com", &*resolver, &fetch).await;
+
+    let got: Vec<(String, Verdict)> = sub_checks(&result)
+        .into_iter()
+        .map(|(n, v, _)| (n, v))
+        .collect();
+    assert_eq!(got, vec![("logo_unreachable".to_string(), Verdict::Warn)]);
+    assert_eq!(logo.connections(), 1, "connections at the logo host");
+}
