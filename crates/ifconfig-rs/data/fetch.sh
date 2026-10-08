@@ -17,8 +17,9 @@ trap cleanup EXIT
 rm -rf -- "$RUN"
 mkdir -- "$RUN"
 
+# -L: an upstream that moves answers 3xx, whose body -f does not reject.
 get() {
-    curl -fsS "$1" -o "$2.tmp.$$" || return 1
+    curl -fsSL --max-redirs 5 "$1" -o "$2.tmp.$$" || return 1
     mv "$2.tmp.$$" "$2"
 }
 
@@ -87,16 +88,16 @@ datacenter_ranges() {
 
 bot_ranges() {
     [ -e bot_ranges.jsonl ] && return 0
-    get https://developers.google.com/search/apis/ipranges/googlebot.json "$RUN/googlebot.json"
+    get https://developers.google.com/static/crawling/ipranges/common-crawlers.json "$RUN/googlebot.json"
     get https://www.bing.com/toolbox/bingbot.json "$RUN/bingbot.json"
     get https://search.developer.apple.com/applebot.json "$RUN/applebot.json"
-    get https://openai.com/gptbot-ranges.txt "$RUN/gptbot.txt"
+    get https://openai.com/gptbot.json "$RUN/gptbot.json"
 
-    local out=bot_ranges.jsonl.tmp.$$ cidr
+    local out=bot_ranges.jsonl.tmp.$$
     jq -c '.prefixes[] | if .ipv4Prefix then {cidr: .ipv4Prefix, provider: "googlebot"} elif .ipv6Prefix then {cidr: .ipv6Prefix, provider: "googlebot"} else empty end' "$RUN/googlebot.json" > $out
     jq -c '.prefixes[] | if .ipv4Prefix then {cidr: .ipv4Prefix, provider: "bingbot"} elif .ipv6Prefix then {cidr: .ipv6Prefix, provider: "bingbot"} else empty end' "$RUN/bingbot.json" >> $out
     jq -c '.prefixes[] | if .ipv4Prefix then {cidr: .ipv4Prefix, provider: "applebot"} elif .ipv6Prefix then {cidr: .ipv6Prefix, provider: "applebot"} else empty end' "$RUN/applebot.json" >> $out
-    while IFS= read -r cidr; do case "$cidr" in \#*|"") continue;; esac; printf '{"cidr":"%s","provider":"gptbot"}\n' "$cidr"; done < "$RUN/gptbot.txt" >> $out
+    jq -c '.prefixes[] | if .ipv4Prefix then {cidr: .ipv4Prefix, provider: "gptbot"} elif .ipv6Prefix then {cidr: .ipv6Prefix, provider: "gptbot"} else empty end' "$RUN/gptbot.json" >> $out
     mv $out bot_ranges.jsonl
 }
 
