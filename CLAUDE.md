@@ -49,6 +49,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Layer order**, outermost first: concurrency limit, `request_id`, security headers, CORS, body limit, trace, compression — so preflights and 413s carry the request id and headers.
 - **`start_bg` never in a subshell**: the EXIT trap of `tests/repo/lib/netray.sh` kills only PIDs recorded in the parent shell.
 - **`just acceptance-local`** starts the stack on free ports (`LOCAL_<NAME>_URL`); never assume 8000 or 8080 are free.
+- **Test invalid input through the router**, not the handler: extractor rejections (invalid UTF-8) and unmatched paths answer before the handler runs; in axum 0.8 `/x/{*rest}` conflicts with `/x/{id}`.
 - **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
 - **Features unify.** A dependency feature one crate enables reaches every service in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.

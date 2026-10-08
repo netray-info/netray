@@ -198,3 +198,16 @@ No wrong result. Traced: `request_id` now wraps CORS, security headers, the body
 0 / 0 / 0. Verified 0, held 0. No roll call.
 
 Measurement note: the review row for `6915288..7862293` was recorded with tokens 0 / seconds 0; the reader cost 82,327 tokens, 209 s.
+
+## main..a6813b4
+
+### Reader
+
+COUNTS blockers=0 majors=0 minors=0
+LENSES Engineering, Security, Testing
+
+No wrong result. Traced: the handler answers the 404 page for a path rejection (`/r/%C0`), a shortid failing `^[0-9A-Za-z]{8}$`, and an unknown or expired id (`SnapshotStore::get` filters `created_at > now - TTL`; the expired test inserts `now - TTL - 3600`). Rebuilt the merged router with the SPA fallback (axum 0.8.9, matchit 0.8.4): `/r/`, `/r//`, `/r//x`, `/r/a/b`, `/r/AAAAAAAA/`, `/r/AAAAAAAA//`, `/r/%C0`, `HEAD /r/a/b`, `/r/%2F` reach the 404 page; only `/r`, `//r/x`, `/R/x` reach the SPA, none a `/r/<id>` path. No route collision, no reference to the removed `INVALID_SHORTID`. Each new test row fails without its fix. With `snapshots.enabled = false` the router is not mounted and `/r/…` keeps the SPA — an operator opt-out, unchanged.
+
+### Summary
+
+0 / 0 / 0. Verified 0, held 0. No roll call.
