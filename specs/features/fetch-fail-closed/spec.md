@@ -1,7 +1,8 @@
 # Spec: fetch.sh fails closed
 
-Status: Active
+Status: Done
 Created: 2026-10-08
+Finished: 2026-10-08
 
 `crates/ifconfig-rs/data/fetch.sh` fetches ifconfig-rs's data files; the deployment vendors it at the release tag and runs it from a host timer. It calls `curl -s` without `-f`, so an HTTP error page is saved as a data file, and `> file` redirects truncate the target before the download, so a failed second or third download leaves a half file. Because the script skips files that already exist, a bad file stays until someone deletes it.
 
