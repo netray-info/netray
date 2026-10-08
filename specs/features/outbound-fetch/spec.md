@@ -1,7 +1,8 @@
 # Spec: one outbound fetch policy
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-08
+Finished: 2026-10-09
 
 Four places fetch a URL that comes from a checked domain's records or certificates: beacon's MTA-STS policy fetch, beacon's BIMI logo fetch, spectra's redirect hops and tlsight's live OCSP request. Each builds its own client and decides on its own which targets it accepts. This spec gives them one fetch helper in `netray-common` with one target policy, applied to every hop, and with the connection pinned to the checked address.
 
