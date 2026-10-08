@@ -11,9 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
-use netray_common::fetch::{
-    AtLimit, BlockReason, FetchError, FetchOptions, Resolve, fetch,
-};
+use netray_common::fetch::{AtLimit, BlockReason, FetchError, FetchOptions, Resolve, fetch};
 use netray_common::target_policy::is_allowed_target;
 use reqwest::Method;
 use reqwest::header::{CONTENT_TYPE, HeaderValue};
@@ -109,7 +107,9 @@ fn raw_redirect(status: u16, location: &[u8], body: &str) -> Vec<u8> {
 }
 
 async fn bind4() -> TcpListener {
-    TcpListener::bind("127.0.0.1:0").await.expect("bind listener")
+    TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind listener")
 }
 
 /// Accepts connections, counts them on accept, waits `delay`, answers with `handler(request)`.
@@ -509,8 +509,14 @@ async fn redirect_method_and_content_type_follow_reqwest_semantics() {
         307,
     )
     .await;
-    assert_eq!((req.method.as_str(), req.body.as_str()), ("POST", "payload"));
-    assert_eq!(req.content_type.as_deref(), Some("application/ocsp-request"));
+    assert_eq!(
+        (req.method.as_str(), req.body.as_str()),
+        ("POST", "payload")
+    );
+    assert_eq!(
+        req.content_type.as_deref(),
+        Some("application/ocsp-request")
+    );
 }
 
 // ---------------------------------------------------------------- 11: hop URLs
