@@ -347,7 +347,13 @@ async fn blocked_name_without_address_reports_no_address_at_hop_zero() {
 async fn blocked_initial_address_reports_disallowed_at_hop_zero() {
     let srv = serve(bind4().await, |_| response(200, &[], "x"));
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let result = fetch(base, Arc::new(no_resolver()), &url, &FetchOptions::new(Method::GET)).await;
+    let result = fetch(
+        base,
+        Arc::new(no_resolver()),
+        &url,
+        &FetchOptions::new(Method::GET),
+    )
+    .await;
     match result {
         Err(FetchError::Blocked {
             reason, hop, hops, ..

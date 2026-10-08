@@ -92,10 +92,7 @@ async fn bind4() -> TcpListener {
 }
 
 /// Accepts connections, counts them on accept, records each request and answers with `handler`.
-fn serve(
-    listener: TcpListener,
-    handler: impl Fn(&Req) -> Reply + Send + Sync + 'static,
-) -> Server {
+fn serve(listener: TcpListener, handler: impl Fn(&Req) -> Reply + Send + Sync + 'static) -> Server {
     let port = listener.local_addr().unwrap().port();
     let count = Arc::new(AtomicUsize::new(0));
     let requests = Arc::new(Mutex::new(Vec::new()));
@@ -170,6 +167,8 @@ const V4: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 fn loopback_opts() -> FetchOptions {
     let mut o = FetchOptions::new(Method::GET);
     o.allow = allow_loopback;
+    // The default follows no redirect; these cases follow one.
+    o.max_redirects = 1;
     o
 }
 
@@ -182,9 +181,7 @@ fn no_resolver() -> Arc<StubResolver> {
 #[tokio::test]
 async fn final_3xx_with_stalled_body_is_returned_at_once() {
     let srv = serve(bind4().await, |_| {
-        Reply::Stall(
-            b"HTTP/1.1 301 X\r\nLocation: /x\r\nContent-Length: 100\r\n\r\n".to_vec(),
-        )
+        Reply::Stall(b"HTTP/1.1 301 X\r\nLocation: /x\r\nContent-Length: 100\r\n\r\n".to_vec())
     });
     let url = format!("http://127.0.0.1:{}/", srv.port);
     let mut o = loopback_opts();

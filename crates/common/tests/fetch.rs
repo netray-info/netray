@@ -210,7 +210,13 @@ fn loopback_opts(method: Method) -> FetchOptions {
 async fn loopback_ipv4_literal_is_refused() {
     let srv = ok_server(bind4().await, "x");
     let url = format!("https://127.0.0.1:{}/", srv.port);
-    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &opts(Method::GET)).await;
+    let result = fetch(
+        base,
+        Arc::new(StubResolver::new(&[])),
+        &url,
+        &opts(Method::GET),
+    )
+    .await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -222,7 +228,13 @@ async fn loopback_ipv4_literal_is_refused() {
 async fn userinfo_does_not_hide_the_host() {
     let srv = ok_server(bind4().await, "x");
     let url = format!("https://x@127.0.0.1:{}/", srv.port);
-    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &opts(Method::GET)).await;
+    let result = fetch(
+        base,
+        Arc::new(StubResolver::new(&[])),
+        &url,
+        &opts(Method::GET),
+    )
+    .await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -234,7 +246,13 @@ async fn userinfo_does_not_hide_the_host() {
 async fn loopback_ipv6_literal_is_refused() {
     let srv = ok_server(bind6().await, "x");
     let url = format!("https://[::1]:{}/", srv.port);
-    let result = fetch(base, Arc::new(StubResolver::new(&[])), &url, &opts(Method::GET)).await;
+    let result = fetch(
+        base,
+        Arc::new(StubResolver::new(&[])),
+        &url,
+        &opts(Method::GET),
+    )
+    .await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
@@ -245,7 +263,13 @@ async fn loopback_ipv6_literal_is_refused() {
 #[tokio::test]
 async fn empty_resolution_is_refused() {
     let resolver = StubResolver::new(&[("empty.invalid", vec![])]);
-    let result = fetch(base, Arc::new(resolver), "http://empty.invalid/", &opts(Method::GET)).await;
+    let result = fetch(
+        base,
+        Arc::new(resolver),
+        "http://empty.invalid/",
+        &opts(Method::GET),
+    )
+    .await;
     assert!(
         matches!(result, Err(FetchError::Blocked { .. })),
         "{result:?}"
