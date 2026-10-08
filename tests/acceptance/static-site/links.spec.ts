@@ -4,8 +4,9 @@ import { resolveEnv } from '../fixtures/env.js';
 const urls = resolveEnv();
 const siteUrl = urls.site;
 
-test('all SuiteNav links in index.html resolve to 200', async ({ request }) => {
-  const response = await request.get(`${siteUrl}/`);
+// The apex is the lens SPA (client-rendered); /tools is the static page that carries the SuiteNav.
+test('all SuiteNav links on /tools resolve to 200', async ({ request }) => {
+  const response = await request.get(`${siteUrl}/tools`);
   expect(response.status()).toBe(200);
   const html = await response.text();
 
