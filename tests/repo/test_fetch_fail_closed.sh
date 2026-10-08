@@ -25,7 +25,10 @@ cat > "$stubs/curl" <<'STUB'
 # Upstream drift (2026-10-08): openai.com/gptbot-ranges.txt answers 403 (like FAIL_URLS, but 403);
 # the old googlebot.json URL answers 301 to common-crawlers.json: with -L the stub follows, without
 # -L it writes the redirect HTML and exits 0 even under -f (curl -f only fails on >= 400).
+# REDIRECT_URLS (substrings, or '*' for every URL) answer HTTP 301 with an HTML body unless -L is
+# among the flags (exit 0 even under -f); with -L the normal body is served.
 # PARTIAL_URLS emulate a transfer dying mid-body: with -f part of the body is written, exit 22.
+set -f  # REDIRECT_URLS='*' must not glob
 f=0 L=0 out="" url=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -62,6 +65,15 @@ for pat in ${PARTIAL_URLS:-}; do
                 exit 22
             fi ;;
     esac
+done
+for pat in ${REDIRECT_URLS:-}; do
+    if [ "$L" = 0 ]; then
+        if [ "$pat" = '*' ]; then hit=1; else case "$url" in *"$pat"*) hit=1 ;; *) hit=0 ;; esac; fi
+        if [ "$hit" = 1 ]; then
+            echo '<html><head><title>301 Moved Permanently</title></head><body>301 Moved Permanently</body></html>' | emit
+            exit 0
+        fi
+    fi
 done
 case "$url" in
     *openai.com/gptbot-ranges.txt)
@@ -111,13 +123,13 @@ chmod +x "$stubs/curl" "$stubs/geoipupdate"
 
 data_files="regexes.yaml tor_exit_nodes.txt feodo_botnet_ips.txt vpn_ranges.txt cloud_provider_ranges.jsonl datacenter_ranges.txt bot_ranges.jsonl spamhaus_drop.txt cins_army_ips.txt as_metadata.jsonl"
 
-# run_scenario DIR FAIL_URLS [HTML_URLS [PARTIAL_URLS [ARG]]] -> exit code in $rc
+# run_scenario DIR FAIL_URLS [HTML_URLS [PARTIAL_URLS [ARG [REDIRECT_URLS]]]] -> exit code in $rc
 run_scenario() {
     mkdir -p "$1"
     cp "$root/$src" "$1/fetch.sh"
     rc=0
     (cd "$1" && PATH="$stubs:$PATH" FAIL_URLS="$2" HTML_URLS="${3:-}" PARTIAL_URLS="${4:-}" \
-        bash ./fetch.sh "${5:-get_all}" >"$1.out" 2>&1) || rc=$?
+        REDIRECT_URLS="${6:-}" bash ./fetch.sh "${5:-get_all}" >"$1.out" 2>&1) || rc=$?
 }
 
 # Anything in DIR that is neither fetch.sh, a final data file, nor a *.mmdb is a leftover.
@@ -169,12 +181,23 @@ grep -q '"provider":"gptbot"' "$d/bot_ranges.jsonl" 2>/dev/null || fail "C8: bot
 grep -q '"provider":"googlebot"' "$d/bot_ranges.jsonl" 2>/dev/null || fail "C8: bot_ranges.jsonl has no googlebot entry"
 l=$(leftovers "$d"); [ -z "$l" ] || fail "C8: leftovers after a successful run: $(echo $l)"
 
-# C9: every curl invocation carries -f (alone or in a flag cluster).
+# C14: every upstream answers 301 unless curl follows redirects (-L): the run must still succeed
+# and produce exactly the files of the plain success run (C8), no redirect HTML in any of them.
+d="$work/c14"; run_scenario "$d" "" "" "" get_all '*'
+[ "$rc" -eq 0 ] || fail "C14: redirecting upstreams but fetch.sh exited $rc: $(tail -n3 "$d.out")"
+for f in $data_files; do
+    cmp -s "$d/$f" "$work/c8/$f" || fail "C14: $f differs from the no-redirect run"
+    ! grep -qiE '301 Moved|<html' "$d/$f" 2>/dev/null || fail "C14: $f contains redirect HTML"
+done
+
+# C9: every curl invocation carries -f and -L (alone or in a flag cluster).
 n=0
 while IFS= read -r line; do
     n=$((n + 1))
     printf '%s\n' "$line" | grep -qE 'curl +(-[A-Za-z]*f[A-Za-z]*|.* -[A-Za-z]*f[A-Za-z]*)( |$)' \
         || fail "C9: curl without -f: $(echo $line)"
+    printf '%s\n' "$line" | grep -qE 'curl +(-[A-Za-z]*L[A-Za-z]*|.* -[A-Za-z]*L[A-Za-z]*)( |$)' \
+        || fail "C9: curl without -L: $(echo $line)"
 done < <(grep -E '(^|[^A-Za-z_])curl( |$)' "$src" | grep -vE '^[[:space:]]*#')
 [ "$n" -gt 0 ] || fail "C9: no curl invocation found in $src"
 
