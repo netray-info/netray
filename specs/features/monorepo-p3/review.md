@@ -118,3 +118,83 @@ Traced and sound: `validate` parses with the same `http` 1.5.0 `Uri` parser open
 Before refutation: 0 / 0 / 1. After: 0 / 0 / 1. Verified 0, held 0 (no blocker or major). No roll call. The minor is repaired: the check now greps for `telemetry.otlp_endpoint`, which the unknown-field message never contains.
 
 Measurement note: the review row for `3544642..d2c4218` was recorded with insertions 0 / deletions 0; the range is 89 / 1.
+
+## main..6915288
+
+### Reader
+
+COUNTS blockers=0 majors=3 minors=3
+LENSES Engineering, Security, Testing
+MAJOR | tests/repo/test_header_parity.sh:153 | The `netray site` server started for the D4 check is never killed: `start_bg` runs inside a `( … )` subshell, so its PID is added to the subshell's `_NETRAY_PIDS`, not the parent's, and `_netray_cleanup` at EXIT never sees it. | Every `just test-repo` / `adlc verify` run leaves a `netray site` listening on 127.0.0.1:<free_port> after the script exits. Reproduced with the same helpers and `sleep 30` in place of the binary: the parent recorded 0 PIDs and the child was still alive after the script exited. `test_site.sh` calls `start_bg` without a subshell and does not leak.
+MAJOR | crates/beacon/src/lib.rs:131 | beacon's new CORS layer sits outside `request_id`, so CORS preflight responses no longer carry `X-Request-Id`. `specs/rules/architecture-rules.md:52` requires it on every response. | Before the change, `OPTIONS /health` (with Origin and Access-Control-Request-Method: POST) reached the router and returned 405 through the `request_id` layer. Running the HEAD binary (`netray email beacon.dev.toml`), the same request now returns 200 with `access-control-*` and all security headers but no `x-request-id`; `GET /health` still has one.
+MAJOR | crates/common/src/cors.rs:9 | prism and tlsight now answer any Origin with `access-control-allow-origin: *`. This contradicts the security checklists in their crate CLAUDE.md files ("CORS restricted to same origin" / "restricted to configured origins"); the change does not update either file, and the plan's docs list does not name them. | Before, `cors_layer()` had no allow_origin, so no ACAO was sent. On the HEAD binary, `netray dns prism.dev.toml` with `GET /api/meta` and `Origin: https://evil.example` returns `access-control-allow-origin: *`. tlsight shares the same layer. Any website can now read prism/tlsight API responses from a visitor's browser, against the stated crate convention.
+MINOR | tests/repo/test_header_parity.sh:172 | The R7/C7 guard ("ifconfig-rs sets no HSTS/CSP of its own") only greps for the hyphenated header names in two files, so it passes code that sets those headers through axum's constants. The runtime checks cannot catch this either, because the outer shared layer overwrites any inner value. | Append `h.insert(axum::http::header::STRICT_TRANSPORT_SECURITY, …)` or `CONTENT_SECURITY_POLICY` to a copy of `crates/ifconfig-rs/src/middleware.rs` and run the guard's grep: no match, so the guard passes. The same applies to any new file under `crates/ifconfig-rs/src/` other than `middleware.rs`/`lib.rs`.
+MINOR | tests/acceptance/fixtures/security-headers.ts:48 | The acceptance preflight assertion never checks `access-control-allow-headers`, although spec item 8 says the suite asserts item 6 (D3 methods, headers and max-age) per host. | If production answers the preflight with `access-control-allow-headers: accept` (content-type dropped), a browser's cross-origin JSON `POST` fails its preflight, but `smoke/security-headers.spec.ts` "CORS preflight on /health" still passes.
+MINOR | tests/acceptance/fixtures/security-headers.ts:35 | `assertToolHeaders` checks that `Server` is absent but not `X-Powered-By`, which spec item 6 forbids and item 8 requires the acceptance suite to assert. | A tool response carrying `X-Powered-By: Express` passes every acceptance header test on both production and local.
+
+```quote tests/repo/test_header_parity.sh:153
+(cd "$REPO_ROOT" && start_bg "$tmp/site.log" "$bin" site --bind "127.0.0.1:$port" --root site)
+```
+
+```quote crates/beacon/src/lib.rs:131
+        .layer(security::cors_layer())
+```
+
+```quote specs/rules/architecture-rules.md:52
+- Emit `X-Request-Id` on every response.
+```
+
+```quote crates/common/src/cors.rs:9
+        .allow_origin(Any)
+```
+
+```quote crates/mhost-prism/CLAUDE.md:189
+- [ ] CORS restricted to same origin
+```
+
+```quote crates/tlsight/CLAUDE.md:221
+- [ ] CORS restricted to configured origins
+```
+
+```quote tests/repo/test_header_parity.sh:172
+    if grep -niE 'strict-transport-security|content-security-policy' "$REPO_ROOT/crates/ifconfig-rs/src/$f" >/dev/null 2>&1; then
+```
+
+```quote tests/acceptance/fixtures/security-headers.ts:48
+export function assertCorsPreflight(response: APIResponse): void {
+```
+
+```quote tests/acceptance/fixtures/security-headers.ts:35
+  expect(h['server'], 'no server header').toBeUndefined();
+```
+
+### Refuted
+
+- F3 `crates/common/src/cors.rs:9` (ACAO `*` on prism/tlsight) — REFUTED, confidence 8: D3/M19 require ACAO `*` on all six; production already sends it via Traefik's `cors-public-api` (observed `curl -sI https://dns.netray.info/` → `access-control-allow-origin: *`, 2026-10-08). The crate CLAUDE.md checklist lines are stale prose, fixed in the spec's closing docs commit.
+
+### Calibration
+
+| Finding | Refuter | Confidence | Result | Command |
+|---|---|---|---|---|
+| F1 `netray site` leaked by `start_bg` in a subshell | CONFIRMED | 8 | held | read `tests/repo/test_header_parity.sh:153` and `tests/repo/lib/netray.sh:39` |
+| F2 preflight lacks `X-Request-Id` | CONFIRMED (five of six services, not only beacon) | 8 | held | started email, dns, http from dev configs; `curl -X OPTIONS … /health` → no `x-request-id` in all three |
+| F3 ACAO `*` on prism/tlsight | REFUTED | 8 | not held | production `dns.netray.info` already answers `access-control-allow-origin: *` |
+
+### Summary
+
+Before refutation: 0 blockers, 3 majors, 3 minors. After: 0 / 2 / 3. Verified 3, held 2. No roll call. F1 and F2 are repaired on this branch before finish; the three minors (R7 grep misses axum constants, acceptance preflight misses allow-headers, acceptance misses `X-Powered-By`) are repaired with them.
+
+## 6915288..7862293
+
+### Reader
+
+COUNTS blockers=0 majors=0 minors=0
+LENSES Engineering, Security, Testing
+
+No wrong result. Traced: `request_id` now wraps CORS, security headers, the body limit and `TraceLayer` in beacon, lens, prism, spectra and tlsight (only `ConcurrencyLimitLayer` outside); tower-http 0.6.11's `CorsLayer` answers `OPTIONS` itself, so preflights now carry the id; `make_span_with` reads the generated id; no route is left unwrapped. The test's site server is started without a subshell and is killed at exit; the R7 grep covers every file and the constant spellings.
+
+### Summary
+
+0 / 0 / 0. Verified 0, held 0. No roll call.
+
+Measurement note: the review row for `6915288..7862293` was recorded with tokens 0 / seconds 0; the reader cost 82,327 tokens, 209 s.

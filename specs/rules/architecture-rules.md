@@ -38,12 +38,15 @@ All error responses share one shape:
 
 ## Security Headers
 
-Every response (including error responses) must carry:
+Every response, error responses and CORS preflights included, carries what Traefik's `secure-headers`, `csp-tool-spa` and `cors-public-api` middlewares add in production (parity, SDD M19), set by `netray_common::security_headers` and `netray_common::cors`:
 
-- `Content-Security-Policy` — strict; loosened only on `/docs` to permit Scalar's inline scripts (per-route override).
-- `Strict-Transport-Security` — `max-age=63072000; includeSubDomains; preload`.
-- `X-Frame-Options: DENY`.
-- `X-Content-Type-Options: nosniff`.
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`; ifconfig-rs sets two years through `SecurityHeadersConfig.hsts`, never in its own code.
+- `Content-Security-Policy`: exactly `csp-tool-spa`; only `/docs` is relaxed, and every CDN script the docs page loads must match a `script-src` source under CSP source-matching rules (a source ending in `/` is a path prefix).
+- `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: cross-origin`; no `Server`, no `X-Powered-By`.
+- CORS: `Access-Control-Allow-Origin: *`, methods `GET, POST, OPTIONS`, headers `Content-Type, Accept`, max-age 600, no credentials.
+- `netray site` keeps its own set (`secure-headers` plus `csp-netray-web`, CORP `same-origin`).
+
+Enforced: `tests/repo/test_header_parity.sh` (gate), `tests/acceptance/smoke/security-headers.spec.ts` (`just acceptance-local`, `just acceptance`).
 
 ---
 
