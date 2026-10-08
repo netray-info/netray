@@ -27,8 +27,8 @@ The infrastructure repository deploys `netray` as one container per subcommand a
 7. ifconfig-rs's HSTS difference from the shared layer is a field of `netray-common`'s `SecurityHeadersConfig`, not code in ifconfig-rs; ifconfig-rs sets no security header of its own.
 8. The acceptance suite asserts 6 per host (HSTS `max-age` at least one year; `/docs` CSP not asserted, since Traefik overrides it until cutover), and `netray site`'s set (D4) for the apex paths; it runs against production and against a locally started `netray` with no proxy in front. It also asserts that `https://mta-sts.netray.info/.well-known/mta-sts.txt` serves `version: STSv1` and `mode: enforce`, replacing the TODO in `tests/acceptance/static-site/assets.spec.ts`.
 9. lens `/r/<id>` answers 404 with the "expired or unknown" HTML page for an unknown id, an expired id and a malformed id.
-10. Each backend's tests write a golden response from its real response types to `tests/fixtures/contracts/<backend>.*` in the workspace: prism's batch SSE stream, tlsight's and spectra's `InspectResponse`, beacon's SSE stream including its summary, ifconfig-rs's `/network/json` body. A test fails when the written golden differs from the committed one.
-11. lens's backend parsers read the committed goldens and produce a non-default result from each: a grade from beacon's `verdicts`, the network type and location from ifconfig-rs's bare network body, checks from prism, tlsight and spectra.
+10. Each backend's tests write a golden response from its real response types to `tests/fixtures/contracts/<backend>.*` in the workspace: prism's batch SSE stream, tlsight's and spectra's `InspectResponse`, beacon's SSE stream including its summary, ifconfig-rs's `/json?ip=` body (lens calls `/json?ip=`, whose `{network, location}` shape its parser expects; operator decision 2026-10-08). A test fails when the written golden differs from the committed one.
+11. lens's backend parsers read the committed goldens and produce a non-default result from each: a grade from beacon's `verdicts`, the network type, organisation and location from ifconfig-rs's `/json?ip=` body, checks from prism, tlsight and spectra.
 12. lens ends a beacon stream at beacon's summary event, as beacon actually frames it, not at stream end.
 
 ## Phase 1 — Config loader and check
@@ -84,7 +84,7 @@ The infrastructure repository deploys `netray` as one container per subcommand a
 - GIVEN each backend's response types WHEN its golden test runs THEN the written golden equals the committed one under `tests/fixtures/contracts/`.
 - GIVEN a field in beacon's summary renamed WHEN the beacon golden test runs THEN it fails.
 - GIVEN beacon's committed golden WHEN lens parses it THEN the email result carries the grade the golden's `verdicts` imply, not the default.
-- GIVEN ifconfig-rs's committed `/network/json` golden WHEN lens parses it THEN `network_type` and the location are the golden's values, not `unknown`.
+- GIVEN ifconfig-rs's committed `/json?ip=` golden WHEN lens parses it THEN `network_type`, the organisation and the location are the golden's values, not `unknown`.
 - GIVEN prism's, tlsight's and spectra's goldens WHEN lens parses each THEN the result has at least one check and no parse error.
 - GIVEN a beacon stream whose summary arrives before the connection closes WHEN lens collects it THEN it returns at the summary.
 
