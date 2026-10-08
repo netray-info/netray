@@ -445,7 +445,7 @@ mod tests {
         .expect("production-shaped config must load");
         assert_eq!(cfg.server.metrics_bind, "0.0.0.0:9090");
         assert_eq!(cfg.server.trusted_proxies.len(), 2);
-        assert_eq!(cfg.rate_limit.per_ip, "30/min");
+        assert_eq!(cfg.rate_limit.per_ip, "10/min");
         assert_eq!(
             cfg.ecosystem.lens_base_url.as_deref(),
             Some("https://lens.example.com")

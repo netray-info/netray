@@ -1,5 +1,5 @@
 # Shape of the production config rendered by argus-oci
-# (ansible/roles/beacon/templates/beacon.toml.j2), with the Jinja variables
+# (ansible/roles/app_stack/templates/beacon.toml.j2), with the Jinja variables
 # filled in. Keys must match src/config.rs exactly: every config struct denies
 # unknown fields, so a key the code does not read fails startup.
 
@@ -26,7 +26,7 @@ timeout_ms = 2000
 timeout_ms = 10000
 
 [rate_limit]
-per_ip = "30/min"
+per_ip = "10/min"
 
 [dkim]
 max_user_selectors = 5
@@ -46,4 +46,3 @@ timeout_ms = 500
 [telemetry]
 log_format = "json"
 service_name = "beacon"
-sample_rate = 1.0

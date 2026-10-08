@@ -1,0 +1,45 @@
+# Shape of the production config rendered by argus-oci
+# (ansible/roles/app_stack/templates/ifconfig.toml.j2), with the Jinja variables
+# filled in (domain = example.com, group_vars defaults, placeholder subnets).
+# Keep in sync with that template.
+
+base_url = "ip.example.com"
+site_name = "ip.example.com"
+
+geoip_city_db = "data/GeoLite2-City.mmdb"
+geoip_asn_db = "data/GeoLite2-ASN.mmdb"
+user_agent_regexes = "data/regexes.yaml"
+tor_exit_nodes = "data/tor_exit_nodes.txt"
+cloud_provider_ranges = "data/cloud_provider_ranges.jsonl"
+feodo_botnet_ips = "data/feodo_botnet_ips.txt"
+vpn_ranges = "data/vpn_ranges.txt"
+datacenter_ranges = "data/datacenter_ranges.txt"
+bot_ranges = "data/bot_ranges.jsonl"
+spamhaus_drop = "data/spamhaus_drop.txt"
+cins_army_ips = "data/cins_army_ips.txt"
+asn_patterns = "data/asn_patterns.toml"
+asn_info = "data/as_metadata.jsonl"
+
+filtered_headers = ["^x-forwarded-", "^x-real-"]
+
+[server]
+bind = "0.0.0.0:8000"
+admin_bind = "0.0.0.0:9090"
+trusted_proxies = ["172.31.0.0/24", "172.30.0.0/24"]
+
+[rate_limit]
+per_ip_per_minute = 60
+per_ip_burst = 10
+per_target_per_minute = 120
+per_target_burst = 20
+
+[batch]
+enabled = true
+max_size = 10
+
+[cache]
+enabled = true
+
+[telemetry]
+log_format = "json"
+service_name = "ifconfig"

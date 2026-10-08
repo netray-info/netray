@@ -1,4 +1,4 @@
-# Shape of the production lens config (argus-oci roles/lens/templates/lens.toml.j2)
+# Shape of the production lens config (argus-oci roles/app_stack/templates/lens.toml.j2)
 # rendered with domain = example.com. Keep in sync with that template; the
 # config tests load this file to catch keys lens no longer accepts.
 

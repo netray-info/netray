@@ -1,0 +1,44 @@
+# Shape of the production config rendered by argus-oci
+# (ansible/roles/app_stack/templates/prism.toml.j2), with the Jinja variables
+# filled in (domain = example.com, group_vars defaults, placeholder subnets).
+# Keep in sync with that template.
+
+[server]
+bind = "0.0.0.0:8080"
+metrics_bind = "0.0.0.0:9090"
+trusted_proxies = ["172.31.0.0/24", "172.30.0.0/24"]
+
+[limits]
+per_ip_per_minute = 240
+per_ip_burst = 128
+per_target_per_minute = 120
+per_target_burst = 40
+global_per_minute = 2000
+global_burst = 100
+max_concurrent_connections = 256
+per_ip_max_streams = 10
+max_timeout_secs = 10
+max_record_types = 10
+max_servers = 4
+
+[dns]
+default_servers = ["google"]
+
+[telemetry]
+log_format = "json"
+service_name = "prism"
+
+[ecosystem]
+ip_base_url = "https://ip.example.com"
+dns_base_url = "https://dns.example.com"
+tls_base_url = "https://tls.example.com"
+http_base_url = "https://http.example.com"
+email_base_url = "https://email.example.com"
+lens_base_url = "https://lens.example.com"
+
+[backends.ip]
+url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+max_concurrent = 20
+cache_ttl_secs = 300
+cache_capacity = 1024

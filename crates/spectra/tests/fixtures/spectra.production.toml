@@ -1,0 +1,38 @@
+# Shape of the production config rendered by argus-oci
+# (ansible/roles/app_stack/templates/spectra.toml.j2), with the Jinja variables
+# filled in (domain = example.com, group_vars defaults, placeholder subnets).
+# Keep in sync with that template.
+
+[server]
+bind = "0.0.0.0:8082"
+metrics_bind = "0.0.0.0:9090"
+trusted_proxies = ["172.31.0.0/24", "172.30.0.0/24"]
+
+[inspect]
+request_timeout_secs = 10
+total_timeout_secs = 30
+max_redirects = 10
+user_agent = "netray-spectra"
+
+[limits]
+per_ip_per_minute = 10
+per_ip_burst = 5
+per_target_per_minute = 30
+per_target_burst = 10
+max_concurrent_connections = 256
+
+[meta]
+ip_base_url = "https://ip.example.com"
+dns_base_url = "https://dns.example.com"
+tls_base_url = "https://tls.example.com"
+http_base_url = "https://http.example.com"
+email_base_url = "https://email.example.com"
+lens_base_url = "https://lens.example.com"
+
+[enrichment]
+ip_url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+
+[telemetry]
+log_format = "json"
+service_name = "spectra"
