@@ -210,5 +210,16 @@ done
 ls -d "$work"/c12-cins/.fetch.* 2>/dev/null | grep -v '\.fetch\.99999$' | grep -q . \
     && fail "C12: this run's per-run directory was not removed"
 
+# A directory left by a killed run with the same PID must not block this run.
+d="$work/c13-stale"; mkdir -p "$d"; cp "$root/$src" "$d/fetch.sh"
+rc=0
+(cd "$d" && PATH="$stubs:$PATH" FAIL_URLS="" HTML_URLS="" PARTIAL_URLS="" \
+    bash -c 'mkdir ".fetch.$$" && exec bash ./fetch.sh get_all' >"$d.out" 2>&1) || rc=$?
+[ "$rc" -eq 0 ] || fail "C13: a stale .fetch.<own pid> made the run fail (rc=$rc): $(tail -n1 "$d.out")"
+ls -d "$d"/.fetch.* >/dev/null 2>&1 && fail "C13: the stale per-run directory was left behind"
+# Killed runs leave .fetch.<pid>/ behind; it must stay out of git.
+grep -qxF '.fetch.*/' "$root/crates/ifconfig-rs/data/.gitignore" \
+    || fail "C13: crates/ifconfig-rs/data/.gitignore does not ignore .fetch.*/"
+
 [ "$fails" -eq 0 ] || exit 1
 echo "PASS: test_fetch_fail_closed"
