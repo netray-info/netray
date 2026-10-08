@@ -27,6 +27,7 @@
 | G2 | 2 | sonnet | 72,458 | 218 |
 | G3 | 1 | sonnet | 33,834 | 36 |
 | Review repairs (prefix case, ifconfig-rs CF) | 1 | sonnet | 27,894 | 44 |
+| Startup rejects (`validate()` for spectra, beacon, tlsight) | 1 | sonnet | 47,384 | 49 |
 
 ### Review
 
@@ -37,7 +38,7 @@
 | AMENDMENT | Prefix matched case-sensitively; the `config` crate matched case-insensitively before | repaired in phase: D1 amended, test `prefix_matches_case_insensitively` |
 | AMENDMENT | A non-UTF-8 override is skipped silently (before: a load error in prism/tlsight/ifconfig-rs) | decided in D1: skipped |
 | AMENDMENT | `specs/rules/architecture-rules.md` gives `PRISM_TELEMETRY__LEVEL` as its example (now an unknown key) and `SPECTRA_`/`BEACON_` with one underscore | prose, fixed in the spec's closing docs commit |
-| AMENDMENT | `--check-config` for http/email only deserialises: spectra and beacon have no `validate()`, so a zero rate limit passes the check and fails at startup (tlsight likewise for a missing `custom_ca_dir`) | not repaired: forwarded to the operator |
+| AMENDMENT | `--check-config` for http/email only deserialises: spectra and beacon have no `validate()`, so a zero rate limit passes the check and fails at startup (tlsight likewise for a missing `custom_ca_dir`) | forwarded to the operator, who chose to repair it now: R3 amended, `validate()` added to spectra and beacon, tlsight checks `custom_ca_dir`; five `startup_rejects` cases in `test_check_config.sh` |
 | NIT | Changed unit tests need `ADLC-Test-Change` trailers | carried in this commit |
 | — | `test_config_strict.sh` passed on an empty scan | repaired: the scan must report the files it read |
 

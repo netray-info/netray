@@ -109,11 +109,30 @@ impl Config {
         Self::load_with_env(path, std::env::vars_os())
     }
 
+    /// Rejects the values `RateLimitState::new` would otherwise panic on.
+    fn validate(&self) -> Result<(), ConfigError> {
+        for (name, value) in [
+            ("per_ip_per_minute", self.limits.per_ip_per_minute),
+            ("per_ip_burst", self.limits.per_ip_burst),
+            ("per_target_per_minute", self.limits.per_target_per_minute),
+            ("per_target_burst", self.limits.per_target_burst),
+        ] {
+            if value == 0 {
+                return Err(ConfigError::Message(format!(
+                    "invalid configuration: limits.{name} must not be zero"
+                )));
+            }
+        }
+        Ok(())
+    }
+
     fn load_with_env(
         path: Option<&str>,
         env: impl IntoIterator<Item = (OsString, OsString)>,
     ) -> Result<Self, ConfigError> {
-        netray_common::config::load_with_env(path, "SPECTRA__", env)
+        let cfg: Self = netray_common::config::load_with_env(path, "SPECTRA__", env)?;
+        cfg.validate()?;
+        Ok(cfg)
     }
 }
 

@@ -38,7 +38,7 @@ impl RateLimitState {
 /// rate limiter always applies the returned number as a per-minute quota.
 /// Returns `Err` on empty/non-numeric input and on a zero numerator (zero
 /// would panic inside `NonZeroU32::new`).
-fn parse_rate(s: &str) -> Result<u32, String> {
+pub(crate) fn parse_rate(s: &str) -> Result<u32, String> {
     let numeric = s
         .split('/')
         .next()

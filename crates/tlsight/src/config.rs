@@ -339,6 +339,14 @@ impl Config {
             self.validation.expiry_critical_days,
         )?;
 
+        if let Some(dir) = &self.validation.custom_ca_dir
+            && !std::path::Path::new(dir).is_dir()
+        {
+            return Err(ConfigError::Message(format!(
+                "invalid configuration: validation.custom_ca_dir does not exist or is not a directory: {dir}"
+            )));
+        }
+
         // Quality assessment HTTP check timeout: clamp to hard cap.
         if self.quality.http_check_timeout_secs > HARD_CAP_HTTP_CHECK_TIMEOUT {
             tracing::warn!(

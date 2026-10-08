@@ -154,15 +154,25 @@ impl Config {
         path: Option<&str>,
         env: Option<config::Map<String, String>>,
     ) -> Result<Self, config::ConfigError> {
-        match env {
-            None => netray_common::config::load(path, "BEACON__"),
+        let cfg: Self = match env {
+            None => netray_common::config::load(path, "BEACON__")?,
             Some(map) => netray_common::config::load_with_env(
                 path,
                 "BEACON__",
                 map.into_iter()
                     .map(|(k, v)| (OsString::from(k), OsString::from(v))),
-            ),
-        }
+            )?,
+        };
+        cfg.validate()?;
+        Ok(cfg)
+    }
+
+    /// Rejects the values `RateLimitState::new` refuses at startup.
+    fn validate(&self) -> Result<(), config::ConfigError> {
+        crate::security::rate_limit::parse_rate(&self.rate_limit.per_ip).map_err(|e| {
+            config::ConfigError::Message(format!("invalid configuration: rate_limit.per_ip: {e}"))
+        })?;
+        Ok(())
     }
 }
 
