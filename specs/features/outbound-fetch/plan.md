@@ -139,7 +139,8 @@ Read-only pass on `/Users/lukas/Documents/src/netray`, branch `outbound-fetch/p1
 |---|---|---|
 | `Ok`, success | `logo_reachable` Pass | "logo reachable at {l=}" (unchanged) |
 | `Ok`, other status | `logo_unreachable` Warn | "logo unreachable: HTTP {s}" (allowed target) |
-| `Blocked{hop ≥ 1}`, any reason | `logo_redirect_ssrf_blocked` Fail | existing detail |
+| `Blocked{hop ≥ 1, Disallowed}` | `logo_redirect_ssrf_blocked` Fail | existing detail |
+| `Blocked{hop ≥ 1, NoAddress}` | `logo_unreachable` Warn | "logo host not reachable" (decision 10) |
 | `Blocked{hop 0, Disallowed}` and `initial_is_name` | `logo_ssrf_blocked` Fail | existing detail |
 | `Blocked{hop 0, ..}` otherwise (NoAddress, refused literal) | `logo_unreachable` Warn | "logo host not reachable" |
 | `TooManyRedirects` / `Scheme` / `Timeout` / `Http` / `InvalidUrl` / `BodyTooLarge` | `logo_unreachable` Warn | a fixed text per variant |
