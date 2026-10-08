@@ -79,3 +79,60 @@ Four readers over the phase.
 ### Behavioural verification
 
 skipped: the helper has no entry point of its own yet; Phase 3 wires it into beacon, spectra and tlsight.
+
+## Phase 3 — Callers
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R3: MTA-STS through the helper (limit 0, `ReturnLast`, 3xx keeps `https_redirect` Fail, HTTPS only, 64 KB); refused/unresolvable → `https_fetch_failed` Fail "policy host not reachable"; non-public resolution keeps `ssrf_blocked` Fail | green | crates/beacon/src/checks/mta_sts_results_table.rs |
+| C2 | R4: BIMI through the helper (HTTPS only, ≤ 4 redirects); refused initial name → `logo_ssrf_blocked` Fail; refused redirect hop → `logo_redirect_ssrf_blocked` Fail; other refused/unresolvable → `logo_unreachable` Warn "logo host not reachable"; no echo; custom client and `extract_host` removed | green | crates/beacon/src/checks/bimi_results_table.rs |
+| C3 | R5: spectra redirects through the helper with `ReturnLast` at `max_redirects`; hop recording kept; refused hop → "Redirect destination blocked" | green | crates/spectra/tests/redirect_results_table.rs |
+| C4 | R6: tlsight OCSP through the helper (HTTP allowed, ≤ 10 redirects, today's method rules, 64 KB); refused → `unknown`/`blocked` | green | crates/tlsight/src/tls/ocsp.rs |
+| C5 | R8: refusal rule; results tables unchanged except rows with a refused target | green | all three results tables |
+| C6 | MTA-STS host → `[]`: `https_fetch_failed` Fail, "policy host not reachable", 0 connections | green | crates/beacon/src/checks/outbound_fetch_scenarios.rs |
+| C7 | MTA-STS host → public address: request goes to that pinned address | green | crates/beacon/src/checks/outbound_fetch_scenarios.rs |
+| C8 | BIMI `l=` 127.0.0.1 / userinfo / `[::1]` / `internal.invalid` (→ `[]`): table verdict, no internal status, 0 connections | green | crates/beacon/src/checks/outbound_fetch_scenarios.rs |
+| C9 | public BIMI logo redirecting to loopback → `logo_redirect_ssrf_blocked` Fail before the second hop connects | green | crates/beacon/src/checks/outbound_fetch_scenarios.rs |
+| C10 | spectra 302 to `localhost` / `[::1]` / `svc.invalid` → "Redirect destination blocked", 0 connections | green | crates/spectra/tests/outbound_redirects.rs |
+| C11 | spectra chain A→301→B→302→C→200 → ends at C, hops exactly `[A→B (301), B→C (302)]` | green | crates/spectra/tests/outbound_redirects.rs |
+| C12 | OCSP `http://127.0.0.1:<p>/` / `ocsp.invalid` → `unknown`/`blocked`, 0 connections | green | crates/tlsight/src/tls/ocsp.rs |
+| C13 | OCSP 301 → second responder gets GET without body; 307 → POST | green | crates/tlsight/src/tls/ocsp.rs |
+| C14 | MTA-STS endpoint 301 → `https_redirect` Fail | green | crates/beacon/src/checks/mta_sts_results_table.rs (row 4) |
+| C15 | spectra hop to a name resolving `[public, 10.0.0.1]` → "Redirect destination blocked", 0 connections | green | crates/spectra/tests/redirect_results_table.rs (row 4) |
+| C16 | Phase 1 tables green, only refused-target rows changed (`ADLC-Test-Change` naming requirement 8) | green | all three results tables |
+| C17 | R9: prism's MTA-STS policy fetch through the helper; refused → "MTA-STS policy file unreachable"; valid policy on an allowed target → today's result | green | crates/mhost-prism/src/api/check_mta_sts_tests.rs |
+| C18 | spectra keeps followed hops on a mid-chain error and does not record a refused hop | green | crates/spectra/tests/outbound_redirects.rs, crates/common/tests/fetch_traced.rs |
+
+Changed results-table rows, all refused targets (requirement 8): BIMI 4b, 5, 7a, 7b, 7c, 8, 9; MTA-STS 1; spectra 3 (and the new row 4). Every other row is unchanged.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 tlsight OCSP | 1 | sonnet (test used the rcgen 0.13 API; orchestrator fixed the harness) | 47093 | 59 |
+| G2 beacon MTA-STS, BIMI | 1 | opus | 91059 | 242 |
+| G3 spectra | 2 | opus | 86626 | 239 |
+| review fixes: `fetch_traced`, spectra hops | 1 | opus | 45221 | 98 |
+| G5 prism | 2 | opus (orchestrator removed `AppState.http_client`, lossy decode) | 54570 | 165 |
+| scheme-refused hop recorded | 0 | orchestrator, two-line reorder | – | – |
+
+### Review
+
+- First pass: 2 BLOCKERs in spectra and 2 AMENDMENTs.
+  - BLOCKER: a mid-chain error dropped hops, and `redirects_to_https` feeds lens's score.
+  - BLOCKER: a refused hop was recorded and read as a same-host upgrade.
+  - AMENDMENT: spectra's port behaviour.
+  - AMENDMENT: a fifth fetch site, prism's MTA-STS policy fetch. It became requirement 9 and SDD R1.5b.
+  - All repaired in phase.
+- Second pass: 1 BLOCKER and 2 AMENDMENTs.
+  - BLOCKER: a scheme-refused redirect was not recorded. Repaired: hops are recorded before any refusal.
+  - AMENDMENT: the port fix also reaches the main and CORS probes. The operator kept it as a stated change, recorded in requirement 8.
+  - AMENDMENT: detail texts and prism's body window. Recorded in requirement 8.
+- DEFERRED: prism's NS checks send raw DNS queries to the checked domain's NS addresses without a target policy (`crates/mhost-prism/src/api/check.rs:803`, `:901`, `authcompare.rs:237`). This is DNS, not a URL fetch; it is a follow-up item for the SDD.
+- Metric kind for a refused target: `blocked`. Neither the monorepo nor argus-oci consumes the old label.
+
+### Behavioural verification
+
+skipped: the routes need outbound access to public targets, and the sandbox and tests cannot reach the internet deterministically. The results tables drive the real `check_bimi`, `check_mta_sts`, `execute_request`, `check_live_ocsp_with` and `check_mta_sts_at`. Production acceptance (`just acceptance`) runs after the deploy.

@@ -130,6 +130,7 @@ pub struct Hop {
 #[derive(Debug, Clone)]
 pub struct FetchResponse {
     pub status: StatusCode,
+    pub version: reqwest::Version,
     pub headers: HeaderMap,
     /// URL of the final response, without userinfo.
     pub url: Url,
@@ -239,18 +240,44 @@ pub async fn fetch(
     url: &str,
     opts: &FetchOptions,
 ) -> Result<FetchResponse, FetchError> {
-    let mut url = Url::parse(url).map_err(|e| FetchError::InvalidUrl(e.to_string()))?;
+    fetch_traced(settings, resolver, url, opts).await.0
+}
+
+/// [`fetch`], also returning the redirects followed before the outcome, whether it is a
+/// response or an error.
+pub async fn fetch_traced(
+    settings: &ClientSettings,
+    resolver: Arc<dyn Resolve>,
+    url: &str,
+    opts: &FetchOptions,
+) -> (Result<FetchResponse, FetchError>, Vec<Hop>) {
+    let mut url = match Url::parse(url) {
+        Ok(url) => url,
+        Err(e) => return (Err(FetchError::InvalidUrl(e.to_string())), Vec::new()),
+    };
     url.set_fragment(None);
-    if !scheme_allowed(&url, opts.https_only) {
-        return Err(FetchError::Scheme(url));
-    }
     let state = Arc::new(Mutex::new(State {
         hops: Vec::new(),
         current: without_userinfo(&url),
         limit_reached: false,
     }));
+    let result = fetch_with(settings, resolver, url, opts, &state).await;
+    let hops = lock(&state).hops.clone();
+    (result, hops)
+}
+
+async fn fetch_with(
+    settings: &ClientSettings,
+    resolver: Arc<dyn Resolve>,
+    url: Url,
+    opts: &FetchOptions,
+    state: &Arc<Mutex<State>>,
+) -> Result<FetchResponse, FetchError> {
+    if !scheme_allowed(&url, opts.https_only) {
+        return Err(FetchError::Scheme(url));
+    }
     if !literal_allowed(&url, opts.allow) {
-        return Err(blocked(&state, BlockReason::Disallowed));
+        return Err(blocked(state, BlockReason::Disallowed));
     }
     let mut builder = reqwest::Client::builder()
         .danger_accept_invalid_certs(settings.accept_invalid_certs)
@@ -268,7 +295,7 @@ pub async fn fetch(
             inner: resolver,
             allow: opts.allow,
         }))
-        .redirect(policy(state.clone(), opts))
+        .redirect(policy(Arc::clone(state), opts))
         .build()?;
     let mut request = client
         .request(opts.method.clone(), url)
@@ -276,14 +303,15 @@ pub async fn fetch(
     if let Some(body) = &opts.body {
         request = request.body(body.clone());
     }
-    let mut response = request.send().await.map_err(|e| map_error(e, &state))?;
+    let mut response = request.send().await.map_err(|e| map_error(e, state))?;
     let status = response.status();
+    let version = response.version();
     let headers = response.headers().clone();
     let url = without_userinfo(response.url());
     let mut body = BytesMut::new();
     let mut body_truncated = false;
     if opts.read_body && !status.is_redirection() {
-        while let Some(chunk) = response.chunk().await.map_err(|e| map_error(e, &state))? {
+        while let Some(chunk) = response.chunk().await.map_err(|e| map_error(e, state))? {
             let room = opts.body_cap - body.len();
             if chunk.len() > room {
                 if !opts.truncate_body {
@@ -296,12 +324,13 @@ pub async fn fetch(
             body.extend_from_slice(&chunk);
         }
     }
-    let mut state = lock(&state);
+    let state = lock(state);
     Ok(FetchResponse {
         status,
+        version,
         headers,
         url,
-        hops: std::mem::take(&mut state.hops),
+        hops: state.hops.clone(),
         limit_reached: state.limit_reached,
         body: body.freeze(),
         body_truncated,
@@ -329,15 +358,16 @@ fn policy(state: Arc<Mutex<State>>, opts: &FetchOptions) -> Policy {
             };
         }
         let next = without_userinfo(attempt.url());
-        if !scheme_allowed(&next, https_only) {
-            return attempt.error(SchemeRefused(next));
-        }
+        // Record before any refusal, so a caller keeps the redirect it was shown.
         let from = std::mem::replace(&mut s.current, next.clone());
         s.hops.push(Hop {
             url: from,
             status: attempt.status(),
             location: next.to_string(),
         });
+        if !scheme_allowed(&next, https_only) {
+            return attempt.error(SchemeRefused(next));
+        }
         if !literal_allowed(&next, allow) {
             return attempt.error(Refused(BlockReason::Disallowed));
         }

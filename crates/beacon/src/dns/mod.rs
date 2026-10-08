@@ -5,8 +5,22 @@ pub mod test_support;
 
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr};
+use std::pin::Pin;
+use std::sync::Arc;
 
 pub use resolver::{DnsResolver, TlsaRecord};
+
+/// [`netray_common::fetch::Resolve`] through a [`DnsLookup`], so outbound
+/// fetches resolve with the same resolver as the checks.
+pub struct FetchResolver<R>(pub Arc<R>);
+
+impl<R: DnsLookup + 'static> netray_common::fetch::Resolve for FetchResolver<R> {
+    fn resolve(&self, host: &str) -> Pin<Box<dyn Future<Output = Vec<IpAddr>> + Send>> {
+        let r = self.0.clone();
+        let h = host.to_owned();
+        Box::pin(async move { r.lookup_ips(&h).await })
+    }
+}
 
 /// Minimal DNS lookup surface required by the category `check_*` functions.
 ///

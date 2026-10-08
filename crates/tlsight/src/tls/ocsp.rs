@@ -1,7 +1,15 @@
 use der::{Any, Decode, Encode, asn1::OctetString};
+use netray_common::fetch::{
+    AtLimit, ClientSettings, FetchError, FetchOptions, Resolve, SystemResolver, fetch,
+};
+use netray_common::target_policy::is_allowed_target;
+use reqwest::header::{CONTENT_TYPE, HeaderValue};
+use reqwest::{Method, StatusCode};
 use serde::Serialize;
 use sha1::{Digest, Sha1};
 use spki::AlgorithmIdentifierOwned;
+use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::Duration;
 use utoipa::ToSchema;
 use x509_cert::serial_number::SerialNumber;
@@ -14,7 +22,8 @@ use chrono::Utc;
 pub struct OcspRevocationResult {
     /// "good", "revoked", or "unknown"
     pub status: String,
-    /// Revocation reason string (only set when status == "revoked")
+    /// Revocation reason string when status == "revoked"; "blocked" when the responder URL
+    /// was refused
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
     /// ISO 8601 revocation time (only set when status == "revoked")
@@ -27,6 +36,25 @@ pub struct OcspRevocationResult {
 /// Perform a live OCSP check for the leaf cert using the AIA OCSP URL.
 /// On network error or timeout, returns status "unknown".
 pub async fn check_live_ocsp(
+    ocsp_url: &str,
+    leaf_der: &[u8],
+    issuer_der: &[u8],
+) -> OcspRevocationResult {
+    check_live_ocsp_with(
+        Arc::new(SystemResolver),
+        is_allowed_target,
+        ocsp_url,
+        leaf_der,
+        issuer_der,
+    )
+    .await
+}
+
+/// [`check_live_ocsp`] with the resolver and the address predicate of the fetch chosen by the
+/// caller. A refused target yields status "unknown" with reason "blocked".
+pub async fn check_live_ocsp_with(
+    resolver: Arc<dyn Resolve>,
+    allow: fn(IpAddr) -> bool,
     ocsp_url: &str,
     leaf_der: &[u8],
     issuer_der: &[u8],
@@ -45,28 +73,33 @@ pub async fn check_live_ocsp(
         Err(_) => return unknown(),
     };
 
-    let response = match reqwest::Client::new()
-        .post(ocsp_url)
-        .header("Content-Type", "application/ocsp-request")
-        .body(req_bytes)
-        .timeout(Duration::from_secs(3))
-        .send()
-        .await
-    {
+    let mut opts = FetchOptions::new(Method::POST);
+    opts.body = Some(req_bytes.into());
+    opts.headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/ocsp-request"),
+    );
+    opts.max_redirects = 10;
+    opts.at_limit = AtLimit::Fail;
+    opts.timeout = Duration::from_secs(3);
+    opts.allow = allow;
+
+    let response = match fetch(&ClientSettings::default(), resolver, ocsp_url, &opts).await {
         Ok(r) => r,
+        Err(FetchError::Blocked { .. }) => {
+            return OcspRevocationResult {
+                reason: Some("blocked".to_string()),
+                ..unknown()
+            };
+        }
         Err(_) => return unknown(),
     };
 
-    if response.status() != reqwest::StatusCode::OK {
+    if response.status != StatusCode::OK {
         return unknown();
     }
 
-    let body = match response.bytes().await {
-        Ok(b) => b,
-        Err(_) => return unknown(),
-    };
-
-    match x509_ocsp::OcspResponse::from_der(&body) {
+    match x509_ocsp::OcspResponse::from_der(&response.body) {
         Ok(resp) => parse_live_ocsp_response(resp, checked_at),
         Err(_) => unknown(),
     }
@@ -382,15 +415,16 @@ mod live_fetch_tests {
 
     /// A real (leaf, issuer) DER pair, so `build_ocsp_request` succeeds.
     fn cert_pair() -> (Vec<u8>, Vec<u8>) {
-        use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
+        use rcgen::{BasicConstraints, CertificateParams, IsCa, Issuer, KeyPair};
         let ca_key = KeyPair::generate().unwrap();
         let mut ca_params = CertificateParams::new(vec![]).unwrap();
         ca_params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
         let ca = ca_params.self_signed(&ca_key).unwrap();
+        let issuer = Issuer::from_params(&ca_params, &ca_key);
         let leaf_key = KeyPair::generate().unwrap();
         let leaf = CertificateParams::new(vec!["leaf.example.com".to_string()])
             .unwrap()
-            .signed_by(&leaf_key, &ca, &ca_key)
+            .signed_by(&leaf_key, &issuer)
             .unwrap();
         (leaf.der().to_vec(), ca.der().to_vec())
     }
@@ -439,8 +473,8 @@ mod live_fetch_tests {
             ))
             .await;
             let url = format!("http://ocsp.test:{}/", first.port);
-            let _ = check_live_ocsp_with(resolver.clone(), loopback_only, &url, &leaf, &issuer)
-                .await;
+            let _ =
+                check_live_ocsp_with(resolver.clone(), loopback_only, &url, &leaf, &issuer).await;
 
             let seen = second.seen.lock().unwrap().clone();
             assert_eq!(seen.len(), 1, "{status}: second listener hit once");

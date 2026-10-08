@@ -23,8 +23,7 @@ use super::{Outbound, check_mta_sts_at};
 
 const DOMAIN: &str = "example.com";
 const POLICY_HOST: &str = "mta-sts.example.com";
-const POLICY_BODY: &str =
-    "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 604800\n";
+const POLICY_BODY: &str = "version: STSv1\nmode: enforce\nmx: mail.example.com\nmax_age: 604800\n";
 
 /// `_mta-sts.example.com` with a valid TXT record, built through serde like `tests::make_txt_lookups`.
 fn sts_lookups() -> Lookups {
@@ -176,7 +175,8 @@ async fn mta_sts_policy_host_on_private_address_is_unreachable() {
     };
     let url = format!("https://{POLICY_HOST}/.well-known/mta-sts.txt");
 
-    let results = check_mta_sts_at(&sts_lookups(), DOMAIN, &Lookups::empty(), &outbound, &url).await;
+    let results =
+        check_mta_sts_at(&sts_lookups(), DOMAIN, &Lookups::empty(), &outbound, &url).await;
 
     assert_eq!(results, unreachable());
 }
@@ -201,9 +201,13 @@ async fn mta_sts_policy_redirect_to_loopback_is_unreachable() {
         resolver: stub(POLICY_HOST, IpAddr::V4(Ipv4Addr::LOCALHOST)),
         allow: only_loopback_v4,
     };
-    let url = format!("https://{POLICY_HOST}:{}/.well-known/mta-sts.txt", policy.port);
+    let url = format!(
+        "https://{POLICY_HOST}:{}/.well-known/mta-sts.txt",
+        policy.port
+    );
 
-    let results = check_mta_sts_at(&sts_lookups(), DOMAIN, &Lookups::empty(), &outbound, &url).await;
+    let results =
+        check_mta_sts_at(&sts_lookups(), DOMAIN, &Lookups::empty(), &outbound, &url).await;
 
     assert_eq!(results, unreachable());
     assert_eq!(policy.connections(), 1, "the policy host was fetched");
@@ -227,9 +231,13 @@ async fn mta_sts_valid_policy_on_allowed_host_is_valid() {
         resolver: stub(POLICY_HOST, IpAddr::V4(Ipv4Addr::LOCALHOST)),
         allow: only_loopback_v4,
     };
-    let url = format!("https://{POLICY_HOST}:{}/.well-known/mta-sts.txt", policy.port);
+    let url = format!(
+        "https://{POLICY_HOST}:{}/.well-known/mta-sts.txt",
+        policy.port
+    );
 
-    let results = check_mta_sts_at(&sts_lookups(), DOMAIN, &Lookups::empty(), &outbound, &url).await;
+    let results =
+        check_mta_sts_at(&sts_lookups(), DOMAIN, &Lookups::empty(), &outbound, &url).await;
 
     assert_eq!(
         results,

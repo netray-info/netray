@@ -91,12 +91,6 @@ pub async fn run(config_arg: Option<String>) {
         })
     });
 
-    let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .user_agent(concat!("prism/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .expect("failed to build HTTP client");
-
     let state = api::AppState {
         circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(
             &config.circuit_breaker,
@@ -106,7 +100,6 @@ pub async fn run(config_arg: Option<String>) {
         hot_state: hot_state.clone(),
         ip_enrichment,
         query_semaphore: Arc::new(tokio::sync::Semaphore::new(api::QUERY_SEMAPHORE_PERMITS)),
-        http_client,
         config: Arc::new(config.clone()),
     };
 

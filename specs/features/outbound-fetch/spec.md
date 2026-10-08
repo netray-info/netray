@@ -16,7 +16,8 @@ A fetch the policy allows keeps today's result. A fetch the policy refuses gets 
 5. spectra's redirect following goes through the helper with `ReturnLast` at its `max_redirects`. It keeps its hop recording (`RedirectHop`). A refused hop ends the chain with the existing "Redirect destination blocked" result.
 6. tlsight's live OCSP request goes through the helper: HTTP allowed, up to 10 redirects (today's limit) with today's redirect semantics (301/302/303 continue as GET without body, 307/308 keep the POST), 64 KB cap. A refused URL or hop gives status `unknown` with reason `blocked`.
 7. A results table test drives the real `check_bimi`, `check_mta_sts` and spectra's redirect follower against a stub resolver and local listeners, and records per row the sub-check name, verdict and beacon grade (beacon), or the final status, limit flag, hop list and check verdicts (spectra). It runs against today's check code: the only production change it needs is a behaviour-neutral extraction of beacon's two client builders (`state::http_client_builder`, `state::http_client_follow_builder`), so a test can add a local resolve map and a test certificate to the production builder.
-8. Refusal rule: every fetch the policy refuses, initial target or any redirect hop, whatever the host form (a name resolving to any non-public address, an empty resolution, an IP literal, userinfo, a bracketed IPv6 literal), gets the checker's refused result from requirements 3–6; every fetch the policy allows keeps today's result. After this spec the results table is unchanged except rows whose target the policy refuses.
+9. prism's MTA-STS policy fetch goes through the helper: GET, up to 10 redirects with `Fail` (reqwest's default today), 5 s total, 64 KB cap. A refused target gives today's unreachable result, "MTA-STS policy file unreachable" (Warning), without any error text; a timeout keeps "MTA-STS policy file fetch timed out". No `reqwest::Client` remains in prism.
+8. Refusal rule: every fetch the policy refuses, initial target or any redirect hop, whatever the host form (a name resolving to any non-public address, an empty resolution, an IP literal, userinfo, a bracketed IPv6 literal), gets the checker's refused result from requirements 3–6 and 9; every fetch the policy allows keeps today's result, with these stated exceptions (operator, 2026-10-09): spectra sends every redirect hop to its own URL's port, where the old client carried the first hop's port to every same-host hop (TLS to :80, plaintext to :443); failure details no longer carry reqwest's error text; prism's policy fetch now has one 5 s deadline and a 64 KiB cap over the whole body. After this spec the results table is unchanged except rows whose target the policy refuses.
 
 ## Phase 1 — Results table
 
@@ -59,7 +60,7 @@ Every refused case asserts the typed `Blocked` error and that a dual-stack liste
 ## Phase 3 — Callers
 
 **Depends on:** Phase 2
-**Requirements:** 3, 4, 5, 6, 8
+**Requirements:** 3, 4, 5, 6, 8, 9
 
 ### Test Scenarios
 
@@ -74,6 +75,10 @@ Every refused case asserts the typed `Blocked` error and that a dual-stack liste
 - GIVEN an MTA-STS policy endpoint answering 301 WHEN checked THEN `https_redirect` Fail, as today.
 - GIVEN a spectra hop to a name resolving to `[public, 10.0.0.1]` WHEN inspected THEN "Redirect destination blocked", 0 connections.
 - GIVEN the Phase 1 results table WHEN run THEN it is green, and only rows with a refused target changed, each to its refused result (`ADLC-Test-Change` naming requirement 8).
+
+- GIVEN prism checks a domain whose `mta-sts.` host resolves to `10.0.0.1`, or whose public policy host redirects to loopback WHEN `+check` runs THEN the MTA-STS result is "MTA-STS policy file unreachable" (Warning), with no status or error text, and the target sees 0 connections.
+- GIVEN spectra follows `http://a/` → 301 → `https://b/` and `b` refuses the connection WHEN inspected THEN `redirects` still holds `[a→b 301]` and `redirects_to_https` is true, as today.
+- GIVEN spectra's port-80 probe is answered with 301 to `https://10.0.0.1/` WHEN inspected THEN the refused hop is not recorded, `redirects_to_https` is false, as today.
 
 ## Open decisions
 

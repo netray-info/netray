@@ -9,28 +9,61 @@
 //! errors, mode strictness (`enforce` vs `testing` vs `none`), MX-pattern
 //! coverage, and `max_age` bounds.
 //!
-//! The HTTP fetch uses a no-redirect client per RFC 8461 §3.3 (redirects
-//! are explicitly disallowed for the policy endpoint), caps the response
-//! body at 64 KB to prevent resource exhaustion, and caps parsed MX
-//! patterns at 32. Connection-level failures are categorised as
-//! `timeout`/`tls`/`other` for the `beacon_upstream_errors_total` metric.
+//! The policy is fetched through [`netray_common::fetch`]: HTTPS only, no
+//! redirect followed per RFC 8461 §3.3 (a 3xx answer fails the check), every
+//! resolved address checked by [`OutboundFetch::allow`], the response body
+//! cut at 64 KB to prevent resource exhaustion. Parsed MX patterns are capped
+//! at 32. Fetch failures are categorised as `timeout`/`tls`/`blocked`/`other`
+//! for the `beacon_upstream_errors_total` metric.
+
+use netray_common::fetch::{self, AtLimit, FetchError, FetchOptions};
+use reqwest::header::HeaderMap;
+use reqwest::{Method, StatusCode};
 
 use crate::checks::util;
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, MtaStsInfo, SubCheck, Verdict};
+use crate::state::OutboundFetch;
 
 const MTA_STS_MAX_BODY_BYTES: usize = 65_536; // generous cap per RFC 8461; real policies are ~200 bytes
 const MTA_STS_MAX_MX_PATTERNS: usize = 32;
 
-/// Map a `reqwest::Error` to the coarse `kind` label for the
+/// Map a [`FetchError`] to the coarse `kind` label for the
 /// `beacon_upstream_errors_total` counter.
-fn classify_reqwest_error(e: &reqwest::Error) -> &'static str {
-    if e.is_timeout() {
-        "timeout"
-    } else if e.is_connect() || e.to_string().to_lowercase().contains("tls") {
-        "tls"
-    } else {
-        "other"
+fn classify_fetch_error(e: &FetchError) -> &'static str {
+    match e {
+        FetchError::Timeout => "timeout",
+        FetchError::Blocked { .. } => "blocked",
+        FetchError::Http(e) => {
+            if e.is_timeout() {
+                "timeout"
+            } else if e.is_connect() || e.to_string().to_lowercase().contains("tls") {
+                "tls"
+            } else {
+                "other"
+            }
+        }
+        _ => "other",
+    }
+}
+
+/// Fixed sub-check detail for a fetch error; never the error's own text.
+fn fetch_error_detail(e: &FetchError) -> &'static str {
+    match e {
+        FetchError::Blocked { .. } => "policy host not reachable",
+        FetchError::Timeout => "failed to fetch policy: timeout",
+        FetchError::Http(e) if e.is_timeout() => "failed to fetch policy: timeout",
+        FetchError::Http(e) if e.is_connect() => "failed to fetch policy: connection failed",
+        _ => "failed to fetch policy",
+    }
+}
+
+fn info_without_policy(dns_id: String) -> MtaStsInfo {
+    MtaStsInfo {
+        dns_id,
+        policy_id: None,
+        mode: None,
+        mx_patterns: Vec::new(),
     }
 }
 
@@ -49,7 +82,18 @@ fn record_upstream_error(backend: &'static str, kind: &'static str) {
 pub async fn check_mta_sts(
     domain: &str,
     resolver: &impl DnsLookup,
-    http_client: &reqwest::Client,
+    fetch: &OutboundFetch,
+) -> (CheckResult, Option<MtaStsInfo>) {
+    let policy_url = format!("https://mta-sts.{}/.well-known/mta-sts.txt", domain);
+    check_mta_sts_at(domain, resolver, fetch, &policy_url).await
+}
+
+/// [`check_mta_sts`] with the policy fetched from `policy_url`.
+pub(crate) async fn check_mta_sts_at(
+    domain: &str,
+    resolver: &impl DnsLookup,
+    fetch: &OutboundFetch,
+    policy_url: &str,
 ) -> (CheckResult, Option<MtaStsInfo>) {
     let mut sub_checks = Vec::new();
 
@@ -81,94 +125,100 @@ pub async fn check_mta_sts(
     let dns_tags = util::parse_tags(dns_record);
     let dns_id = dns_tags.get("id").cloned().unwrap_or_default();
 
-    // Step 2: Fetch HTTPS policy
-    let policy_url = format!("https://mta-sts.{}/.well-known/mta-sts.txt", domain);
-
-    // SSRF check: resolve mta-sts.<domain> and check for private IPs
+    // Step 2: refuse a policy host with an address `allow` does not admit
     let sts_host = format!("mta-sts.{}", domain);
     let sts_ips = resolver.lookup_ips(&sts_host).await;
-    for ip in &sts_ips {
-        if !netray_common::target_policy::is_allowed_target(*ip) {
-            record_upstream_error("mta_sts", "ssrf_blocked");
-            sub_checks.push(SubCheck {
-                name: "ssrf_blocked".to_string(),
-                verdict: Verdict::Fail,
-                detail: "MTA-STS policy host resolves to a private address".to_string(),
-            });
-            let info = MtaStsInfo {
-                dns_id,
-                policy_id: None,
-                mode: None,
-                mx_patterns: Vec::new(),
-            };
-            let result = CheckResult::new(
-                Category::MtaSts,
-                sub_checks,
-                "MTA-STS fetch blocked".to_string(),
-            );
-            return (result, Some(info));
-        }
+    if sts_ips.iter().any(|ip| !(fetch.allow)(*ip)) {
+        record_upstream_error("mta_sts", "blocked");
+        sub_checks.push(SubCheck {
+            name: "ssrf_blocked".to_string(),
+            verdict: Verdict::Fail,
+            detail: "MTA-STS policy host resolves to a private address".to_string(),
+        });
+        let result = CheckResult::new(
+            Category::MtaSts,
+            sub_checks,
+            "MTA-STS fetch blocked".to_string(),
+        );
+        return (result, Some(info_without_policy(dns_id)));
     }
 
-    let (fetch_sub_checks, info, detail) =
-        fetch_and_parse_policy(&policy_url, dns_id.clone(), http_client).await;
+    // Step 3: fetch and evaluate the HTTPS policy
+    let (fetch_sub_checks, info, detail) = fetch_and_parse_policy(policy_url, dns_id, fetch).await;
     sub_checks.extend(fetch_sub_checks);
     let result = CheckResult::new(Category::MtaSts, sub_checks, detail);
     (result, info)
 }
 
-/// Fetch the MTA-STS policy from `policy_url`, parse it, and return the
-/// derived sub-checks, [`MtaStsInfo`], and detail string. This helper exists
-/// so tests can exercise the fetch + parse logic against a local mock
-/// server without tripping the SSRF pre-flight in [`check_mta_sts`].
+/// Fetch the MTA-STS policy from `policy_url` and evaluate it with
+/// [`evaluate_policy`].
 async fn fetch_and_parse_policy(
     policy_url: &str,
     dns_id: String,
-    http_client: &reqwest::Client,
+    fetch: &OutboundFetch,
+) -> (Vec<SubCheck>, Option<MtaStsInfo>, String) {
+    let opts = FetchOptions {
+        max_redirects: 0,
+        at_limit: AtLimit::ReturnLast,
+        https_only: true,
+        body_cap: MTA_STS_MAX_BODY_BYTES,
+        truncate_body: true,
+        timeout: fetch.timeout,
+        allow: fetch.allow,
+        ..FetchOptions::new(Method::GET)
+    };
+
+    let fetch_start = std::time::Instant::now();
+    match fetch::fetch(&fetch.settings, fetch.resolver.clone(), policy_url, &opts).await {
+        Ok(r) => {
+            metrics::histogram!("beacon_https_fetch_duration_seconds", "target" => "mta_sts")
+                .record(fetch_start.elapsed().as_secs_f64());
+            evaluate_policy(r.status, &r.headers, &r.body, r.body_truncated, dns_id)
+        }
+        Err(e) => {
+            record_upstream_error("mta_sts", classify_fetch_error(&e));
+            let sub_checks = vec![SubCheck {
+                name: "https_fetch_failed".to_string(),
+                verdict: Verdict::Fail,
+                detail: fetch_error_detail(&e).to_string(),
+            }];
+            (
+                sub_checks,
+                Some(info_without_policy(dns_id)),
+                "MTA-STS fetch failed".to_string(),
+            )
+        }
+    }
+}
+
+/// Evaluate a fetched policy response: status, Content-Type, body size and
+/// the policy fields. `truncated` means `body` was cut at
+/// `MTA_STS_MAX_BODY_BYTES`.
+fn evaluate_policy(
+    status: StatusCode,
+    headers: &HeaderMap,
+    body: &[u8],
+    truncated: bool,
+    dns_id: String,
 ) -> (Vec<SubCheck>, Option<MtaStsInfo>, String) {
     let mut sub_checks = Vec::new();
 
-    let fetch_start = std::time::Instant::now();
-    let response = match http_client.get(policy_url).send().await {
-        Ok(resp) => resp,
-        Err(e) => {
-            record_upstream_error("mta_sts", classify_reqwest_error(&e));
-            sub_checks.push(SubCheck {
-                name: "https_fetch_failed".to_string(),
-                verdict: Verdict::Fail,
-                detail: format!("failed to fetch policy: {}", e),
-            });
-            let info = MtaStsInfo {
-                dns_id,
-                policy_id: None,
-                mode: None,
-                mx_patterns: Vec::new(),
-            };
-            return (sub_checks, Some(info), "MTA-STS fetch failed".to_string());
-        }
-    };
-
-    metrics::histogram!("beacon_https_fetch_duration_seconds", "target" => "mta_sts")
-        .record(fetch_start.elapsed().as_secs_f64());
-
-    if response.status().is_redirection() {
+    if status.is_redirection() {
         record_upstream_error("mta_sts", "other");
         sub_checks.push(SubCheck {
             name: "https_redirect".to_string(),
             verdict: Verdict::Fail,
             detail: "policy endpoint must not redirect".to_string(),
         });
-        let info = MtaStsInfo {
-            dns_id,
-            policy_id: None,
-            mode: None,
-            mx_patterns: Vec::new(),
-        };
-        return (sub_checks, Some(info), "MTA-STS redirected".to_string());
+        return (
+            sub_checks,
+            Some(info_without_policy(dns_id)),
+            "MTA-STS redirected".to_string(),
+        );
     }
 
-    if !response.status().is_success() {
-        let kind = match response.status().as_u16() / 100 {
+    if !status.is_success() {
+        let kind = match status.as_u16() / 100 {
             4 => "status_4xx",
             5 => "status_5xx",
             _ => "other",
@@ -177,19 +227,16 @@ async fn fetch_and_parse_policy(
         sub_checks.push(SubCheck {
             name: "https_fetch_failed".to_string(),
             verdict: Verdict::Fail,
-            detail: format!("HTTP {}", response.status()),
+            detail: format!("HTTP {}", status),
         });
-        let info = MtaStsInfo {
-            dns_id,
-            policy_id: None,
-            mode: None,
-            mx_patterns: Vec::new(),
-        };
-        return (sub_checks, Some(info), "MTA-STS fetch failed".to_string());
+        return (
+            sub_checks,
+            Some(info_without_policy(dns_id)),
+            "MTA-STS fetch failed".to_string(),
+        );
     }
 
-    let content_type = response
-        .headers()
+    let content_type = headers
         .get("content-type")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
@@ -202,43 +249,6 @@ async fn fetch_and_parse_policy(
         });
     }
 
-    let mut body_bytes: Vec<u8> = Vec::with_capacity(4096);
-    let mut truncated = false;
-    let mut response = response;
-    loop {
-        match response.chunk().await {
-            Ok(Some(chunk)) => {
-                if body_bytes.len() + chunk.len() > MTA_STS_MAX_BODY_BYTES {
-                    let remaining = MTA_STS_MAX_BODY_BYTES - body_bytes.len();
-                    body_bytes.extend_from_slice(&chunk[..remaining]);
-                    truncated = true;
-                    break;
-                }
-                body_bytes.extend_from_slice(&chunk);
-            }
-            Ok(None) => break,
-            Err(e) => {
-                record_upstream_error("mta_sts", classify_reqwest_error(&e));
-                sub_checks.push(SubCheck {
-                    name: "https_fetch_failed".to_string(),
-                    verdict: Verdict::Fail,
-                    detail: format!("failed to read policy body: {}", e),
-                });
-                let info = MtaStsInfo {
-                    dns_id,
-                    policy_id: None,
-                    mode: None,
-                    mx_patterns: Vec::new(),
-                };
-                return (
-                    sub_checks,
-                    Some(info),
-                    "MTA-STS body read failed".to_string(),
-                );
-            }
-        }
-    }
-
     if truncated {
         record_upstream_error("mta_sts", "size_cap");
         sub_checks.push(SubCheck {
@@ -248,23 +258,17 @@ async fn fetch_and_parse_policy(
         });
     }
 
-    let body = match std::str::from_utf8(&body_bytes) {
-        Ok(s) => s.to_string(),
+    let body = match std::str::from_utf8(body) {
+        Ok(s) => s,
         Err(_) => {
             sub_checks.push(SubCheck {
                 name: "https_fetch_failed".to_string(),
                 verdict: Verdict::Fail,
                 detail: "policy body is not valid UTF-8".to_string(),
             });
-            let info = MtaStsInfo {
-                dns_id,
-                policy_id: None,
-                mode: None,
-                mx_patterns: Vec::new(),
-            };
             return (
                 sub_checks,
-                Some(info),
+                Some(info_without_policy(dns_id)),
                 "MTA-STS body read failed".to_string(),
             );
         }

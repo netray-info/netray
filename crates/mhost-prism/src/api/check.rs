@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use axum::Json;
 use axum::extract::{ConnectInfo, Query, State};
-use axum::http::HeaderMap;
+use axum::http::{HeaderMap, Method};
 use axum::response::IntoResponse;
 use axum::response::Response;
 use axum::response::sse::{Event, KeepAlive, Sse};
@@ -27,6 +27,10 @@ use mhost::lints::{
 use mhost::resolver::lookup::Uniquify;
 use mhost::resolver::{Lookups, MultiQuery, Resolver};
 use mhost::resources::rdata::{DnssecAlgorithm, TXT};
+use netray_common::fetch::{
+    AtLimit, ClientSettings, FetchError, FetchOptions, Resolve, SystemResolver, fetch,
+};
+use netray_common::target_policy::is_allowed_target;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Semaphore, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
@@ -212,7 +216,7 @@ pub async fn post_handler(
     let query_string = domain.clone();
     let enrichment_svc = state.ip_enrichment.clone();
     let query_semaphore = state.query_semaphore.clone();
-    let http_client = state.http_client.clone();
+    let outbound = Outbound::production();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
@@ -462,7 +466,7 @@ pub async fn post_handler(
         let (lame_results, delegation_results, mta_sts_results) = tokio::join!(
             check_ns_lame_delegation(&all_lookups, &domain, query_timeout),
             check_ns_delegation_consistency(&all_lookups, &domain, query_timeout),
-            check_mta_sts(&mta_sts_lookups, &domain, &all_lookups, &http_client),
+            check_mta_sts(&mta_sts_lookups, &domain, &all_lookups, &outbound),
         );
         let dnssec_rollover_results = check_dnssec_rollover(&all_lookups);
 
@@ -1272,12 +1276,44 @@ fn validate_mta_sts_dns(lookups: &Lookups) -> Result<(), Vec<CheckResult>> {
     Ok(())
 }
 
+/// Outbound fetch settings for the MTA-STS policy fetch.
+pub(crate) struct Outbound {
+    pub(crate) settings: ClientSettings,
+    pub(crate) resolver: Arc<dyn Resolve>,
+    pub(crate) allow: fn(IpAddr) -> bool,
+}
+
+impl Outbound {
+    fn production() -> Self {
+        Self {
+            settings: ClientSettings {
+                user_agent: Some(concat!("prism/", env!("CARGO_PKG_VERSION")).to_string()),
+                ..ClientSettings::default()
+            },
+            resolver: Arc::new(SystemResolver),
+            allow: is_allowed_target,
+        }
+    }
+}
+
 /// MTA-STS check: validate DNS record then fetch and validate the policy file.
 async fn check_mta_sts(
     lookups: &Lookups,
     domain: &str,
     mx_lookups: &Lookups,
-    http_client: &reqwest::Client,
+    outbound: &Outbound,
+) -> Vec<CheckResult> {
+    let policy_url = format!("https://mta-sts.{domain}/.well-known/mta-sts.txt");
+    check_mta_sts_at(lookups, domain, mx_lookups, outbound, &policy_url).await
+}
+
+/// MTA-STS check against the policy file at `policy_url`.
+pub(crate) async fn check_mta_sts_at(
+    lookups: &Lookups,
+    _domain: &str,
+    mx_lookups: &Lookups,
+    outbound: &Outbound,
+    policy_url: &str,
 ) -> Vec<CheckResult> {
     if let Err(results) = validate_mta_sts_dns(lookups) {
         return results;
@@ -1285,44 +1321,47 @@ async fn check_mta_sts(
 
     let mut results = vec![CheckResult::Ok("MTA-STS DNS record valid".into())];
 
-    let policy_url = format!("https://mta-sts.{domain}/.well-known/mta-sts.txt");
+    let opts = FetchOptions {
+        max_redirects: 10,
+        at_limit: AtLimit::Fail,
+        body_cap: 64 * 1024,
+        timeout: Duration::from_secs(5),
+        allow: outbound.allow,
+        ..FetchOptions::new(Method::GET)
+    };
+    let response = match fetch(
+        &outbound.settings,
+        outbound.resolver.clone(),
+        policy_url,
+        &opts,
+    )
+    .await
+    {
+        Ok(resp) => resp,
+        Err(FetchError::Timeout) => {
+            results.push(CheckResult::Warning(
+                "MTA-STS policy file fetch timed out".into(),
+            ));
+            return results;
+        }
+        Err(_) => {
+            results.push(CheckResult::Warning(
+                "MTA-STS policy file unreachable".into(),
+            ));
+            return results;
+        }
+    };
 
-    let response =
-        match tokio::time::timeout(Duration::from_secs(5), http_client.get(&policy_url).send())
-            .await
-        {
-            Err(_) => {
-                results.push(CheckResult::Warning(
-                    "MTA-STS policy file fetch timed out".into(),
-                ));
-                return results;
-            }
-            Ok(Err(e)) => {
-                results.push(CheckResult::Warning(format!(
-                    "MTA-STS policy file unreachable: {e}"
-                )));
-                return results;
-            }
-            Ok(Ok(resp)) => resp,
-        };
-
-    if !response.status().is_success() {
+    if !response.status.is_success() {
         results.push(CheckResult::Failed(format!(
             "MTA-STS policy file fetch failed: HTTP {}",
-            response.status().as_u16()
+            response.status.as_u16()
         )));
         return results;
     }
 
-    let body = match response.text().await {
-        Ok(t) => t,
-        Err(e) => {
-            results.push(CheckResult::Warning(format!(
-                "MTA-STS policy file unreadable: {e}"
-            )));
-            return results;
-        }
-    };
+    // Lossy, as reqwest's `text()` decoded it before: a stray non-UTF-8 byte keeps today's result.
+    let body = String::from_utf8_lossy(&response.body);
 
     let policy = match parse_mta_sts_policy(&body) {
         Err(msg) => {

@@ -1,12 +1,15 @@
+use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::Semaphore;
 
 use crate::config::Config;
-use crate::dns::DnsResolver;
+use crate::dns::{DnsResolver, FetchResolver};
 use crate::security::{IpExtractor, RateLimitState};
 use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
+use netray_common::fetch::{ClientSettings, Resolve};
+use netray_common::target_policy::is_allowed_target;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -15,41 +18,35 @@ pub struct AppState {
     pub rate_limiter: Arc<RateLimitState>,
     pub dns_resolver: Arc<DnsResolver>,
     pub dnsbl_resolver: Arc<DnsResolver>,
-    pub http_client: reqwest::Client,
-    pub http_client_follow: reqwest::Client,
+    pub fetch: OutboundFetch,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
     pub inspect_semaphore: Arc<Semaphore>,
 }
 
-/// Builder for the no-redirect HTTP client, before `.build()`.
-pub(crate) fn http_client_builder(timeout_ms: u64) -> reqwest::ClientBuilder {
-    reqwest::Client::builder()
-        .timeout(Duration::from_millis(timeout_ms))
-        .redirect(reqwest::redirect::Policy::none())
-        .user_agent(format!(
-            "beacon/{} (netray.info)",
-            env!("CARGO_PKG_VERSION")
-        ))
+/// Settings for the MTA-STS and BIMI fetches.
+#[derive(Clone)]
+pub struct OutboundFetch {
+    pub settings: ClientSettings,
+    pub resolver: Arc<dyn Resolve>,
+    pub allow: fn(IpAddr) -> bool,
+    pub timeout: Duration,
 }
 
-/// Builder for the HTTPS-only, five-hop redirect-following HTTP client, before `.build()`.
-pub(crate) fn http_client_follow_builder(timeout_ms: u64) -> reqwest::ClientBuilder {
-    reqwest::Client::builder()
-        .timeout(Duration::from_millis(timeout_ms))
-        .redirect(reqwest::redirect::Policy::custom(|attempt| {
-            if attempt.previous().len() >= 5 {
-                return attempt.error("too many redirects");
-            }
-            let url = attempt.url();
-            if url.scheme() != "https" {
-                return attempt.error("redirect to non-HTTPS URL rejected");
-            }
-            attempt.follow()
-        }))
-        .user_agent(format!(
-            "beacon/{} (netray.info)",
-            env!("CARGO_PKG_VERSION")
-        ))
+impl OutboundFetch {
+    pub fn new(timeout_ms: u64, resolver: Arc<dyn Resolve>) -> Self {
+        Self {
+            settings: ClientSettings {
+                user_agent: Some(format!(
+                    "beacon/{} (netray.info)",
+                    env!("CARGO_PKG_VERSION")
+                )),
+                ..ClientSettings::default()
+            },
+            resolver,
+            allow: is_allowed_target,
+            timeout: Duration::from_millis(timeout_ms),
+        }
+    }
 }
 
 impl AppState {
@@ -57,6 +54,7 @@ impl AppState {
         let dns_resolver = DnsResolver::new(&config.dns.resolvers, config.dns.timeout_ms)
             .await
             .map_err(|e| crate::error::MailError::DnsError(e.to_string()))?;
+        let dns_resolver = Arc::new(dns_resolver);
 
         let dnsbl_resolver = DnsResolver::new(&config.dnsbl.resolvers, config.dnsbl.timeout_ms)
             .await
@@ -74,13 +72,10 @@ impl AppState {
             )))
         };
 
-        let http_client = http_client_builder(config.http.timeout_ms)
-            .build()
-            .expect("failed to build HTTP client");
-
-        let http_client_follow = http_client_follow_builder(config.http.timeout_ms)
-            .build()
-            .expect("failed to build HTTP client (follow redirects)");
+        let fetch = OutboundFetch::new(
+            config.http.timeout_ms,
+            Arc::new(FetchResolver(dns_resolver.clone())),
+        );
 
         let rate_limiter =
             RateLimitState::new(&config.rate_limit).map_err(crate::error::MailError::Config)?;
@@ -88,10 +83,9 @@ impl AppState {
         Ok(Self {
             ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
             rate_limiter: Arc::new(rate_limiter),
-            dns_resolver: Arc::new(dns_resolver),
+            dns_resolver,
             dnsbl_resolver: Arc::new(dnsbl_resolver),
-            http_client,
-            http_client_follow,
+            fetch,
             enrichment_client,
             inspect_semaphore: Arc::new(Semaphore::new(config.server.max_concurrent_inspections)),
             config: Arc::new(config.clone()),
@@ -114,13 +108,17 @@ impl AppState {
     ) -> Self {
         let rate_limiter = RateLimitState::new(&config.rate_limit)
             .expect("test config must have a valid rate-limit string");
+        let dns_resolver = Arc::new(dns_resolver);
+        let fetch = OutboundFetch::new(
+            config.http.timeout_ms,
+            Arc::new(FetchResolver(dns_resolver.clone())),
+        );
         Self {
             ip_extractor: Arc::new(IpExtractor::new(&[])),
             rate_limiter: Arc::new(rate_limiter),
-            dns_resolver: Arc::new(dns_resolver),
+            dns_resolver,
             dnsbl_resolver: Arc::new(dnsbl_resolver),
-            http_client: reqwest::Client::new(),
-            http_client_follow: reqwest::Client::new(),
+            fetch,
             enrichment_client: None,
             inspect_semaphore: Arc::new(Semaphore::new(16)),
             config: Arc::new(config),

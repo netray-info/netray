@@ -38,12 +38,12 @@ pub struct TaskResult {
 }
 
 /// Execute the full inspection: HTTPS + HTTP-upgrade probe + CORS probe.
-#[tracing::instrument(skip(client, config), fields(url = %url, request_id = tracing::field::Empty))]
+#[tracing::instrument(skip(outbound, config), fields(url = %url, request_id = tracing::field::Empty))]
 pub async fn inspect(
     url: &Url,
     resolved_addr: SocketAddr,
     config: &InspectConfig,
-    client: &reqwest::Client,
+    outbound: &request::Outbound,
 ) -> Result<InspectResult, crate::error::AppError> {
     let total_timeout = Duration::from_secs(config.total_timeout_secs);
 
@@ -54,7 +54,7 @@ pub async fn inspect(
     let user_agent = format!("{}/{}", config.user_agent, env!("CARGO_PKG_VERSION"));
 
     let https_task = request::execute_request(
-        client,
+        outbound,
         https_url,
         resolved_addr,
         max_redirects,
@@ -74,7 +74,7 @@ pub async fn inspect(
         let upgrade_addr = SocketAddr::new(resolved_addr.ip(), 80);
         Some(
             request::execute_request(
-                client,
+                outbound,
                 http_url,
                 upgrade_addr,
                 max_redirects,
@@ -87,7 +87,7 @@ pub async fn inspect(
     };
 
     let cors_task = request::execute_request(
-        client,
+        outbound,
         cors_url,
         resolved_addr,
         max_redirects,
@@ -466,7 +466,9 @@ mod tests {
 
         // https:// → upgrade probe is attempted (Some), even if it errors (port 80 not open)
         let https_url = Url::parse(&format!("https://127.0.0.1:{}/", addr.port())).unwrap();
-        let result = inspect(&https_url, resolved, &cfg, &outbound).await.unwrap();
+        let result = inspect(&https_url, resolved, &cfg, &outbound)
+            .await
+            .unwrap();
         assert!(
             result.http_upgrade.is_some(),
             "expected http_upgrade to be Some for https:// URL"

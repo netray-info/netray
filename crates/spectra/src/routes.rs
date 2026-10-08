@@ -345,13 +345,8 @@ async fn do_inspect_inner(
         .unwrap_or("")
         .to_string();
     tracing::Span::current().record("request_id", request_id.as_str());
-    let result = inspect::inspect(
-        &url,
-        resolved_addr,
-        &state.config.inspect,
-        state.http_client.as_ref(),
-    )
-    .await?;
+    let result =
+        inspect::inspect(&url, resolved_addr, &state.config.inspect, &state.outbound).await?;
 
     // 5. IP enrichment (non-blocking, failure is OK)
     let enrichment = if let Some(ref client) = state.enrichment_client {
