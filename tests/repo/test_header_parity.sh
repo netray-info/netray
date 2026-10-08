@@ -105,6 +105,31 @@ for row in "${rows[@]}"; do
     contains "$l" "$h" content-security-policy "https://cdn.jsdelivr.net"
     [ "$(hdr "$h" content-security-policy)" != "$CSP" ] || bad "$l: CSP must differ from csp-tool-spa"
 
+    # The docs page's own CDN scripts must match a script-src source under CSP source
+    # matching (host-only, a path ending in "/" as prefix, or the exact URL); containing
+    # the host as text is not enough.
+    curl -sL -D "$tmp/$sub.docs.h" -o "$tmp/$sub.docs.html" "$base/docs"
+    docs_csp=$(grep -i '^content-security-policy:' "$tmp/$sub.docs.h" | tail -n1 | cut -d: -f2- | tr -d '\r')
+    scripts=$(tr '\n' ' ' <"$tmp/$sub.docs.html" | grep -oE '<script[^>]*src="https://cdn\.jsdelivr\.net[^"]*"' | sed -E 's/.*src="([^"]*)"/\1/')
+    [ -n "$scripts" ] || bad "$l: the docs page loads no jsDelivr script"
+    for src in $scripts; do
+        python3 -I - "$docs_csp" "$src" <<'PY' || bad "$l: script $src is not allowed by script-src"
+import sys
+csp, url = sys.argv[1], sys.argv[2]
+srcs = next((d.split()[1:] for d in csp.split(";") if d.split()[:1] == ["script-src"]), [])
+def ok(s):
+    if not s.startswith("https://"): return False
+    host = s[len("https://"):].split("/", 1)
+    uhost = url[len("https://"):].split("/", 1)
+    if host[0] != uhost[0]: return False
+    if len(host) == 1 or host[1] == "": return True
+    path = "/" + host[1]
+    upath = "/" + (uhost[1] if len(uhost) > 1 else "")
+    return upath.startswith(path) if path.endswith("/") else upath == path
+sys.exit(0 if any(ok(s) for s in srcs) else 1)
+PY
+    done
+
     l="$sub OPTIONS /health"
     code=$(fetch "$port" "$h" -X OPTIONS -H 'Origin: https://example.com' \
         -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: content-type' "$base/health")
