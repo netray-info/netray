@@ -22,6 +22,7 @@ spa = ["server", "dep:rust-embed", "dep:mime_guess"]
 enrichment = ["dep:reqwest", "dep:futures"]
 enrichment-cache = ["enrichment", "dep:moka"]
 backend = ["dep:reqwest", "dep:moka", "dep:tokio", "dep:bytes", "dep:thiserror"]
+fetch = ["dep:reqwest", "dep:tokio", "dep:url", "dep:thiserror", "dep:bytes"]
 
 [dependencies]
 # HTTP framework (for HeaderMap, StatusCode, IntoResponse)
@@ -88,7 +89,33 @@ moka = { workspace = true, features = ["future"], optional = true }
 bytes = { version = "1", optional = true }
 thiserror = { workspace = true, optional = true }
 
+# Optional: outbound fetch helper (fetch feature)
+url = { workspace = true, optional = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "time"] }
 tower = { workspace = true, features = ["util"] }
 futures = { workspace = true }
+rcgen = "0.14"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+tokio-rustls = "0.26"
+
+[[test]]
+name = "fetch"
+required-features = ["fetch"]
+
+[[test]]
+name = "fetch_semantics"
+required-features = ["fetch"]
+
+[[test]]
+name = "fetch_reqwest_semantics"
+required-features = ["fetch"]
+
+[[test]]
+name = "fetch_guards"
+required-features = ["fetch"]
+
+[[test]]
+name = "fetch_env_proxy"
+required-features = ["fetch"]

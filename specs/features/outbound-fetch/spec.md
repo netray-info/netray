@@ -9,8 +9,8 @@ A fetch the policy allows keeps today's result. A fetch the policy refuses gets 
 
 ## Requirements
 
-1. `netray_common::fetch` (feature-gated) fetches a URL for a caller. It parses with `url::Url`, resolves the host once, refuses the request when the resolved set is empty or any address fails `target_policy`, and connects only to the checked addresses (`reqwest` `resolve_to_addrs`). A refused target returns a typed `Blocked` error, and no connection is made to it.
-2. The helper follows redirects itself (`redirect::Policy::none()` plus a loop). Every hop is parsed, resolved, checked and pinned again. The caller sets the hop limit and what reaching it does: `Fail`, or `ReturnLast` (the last 3xx response is returned with a limit-reached flag). The caller also sets HTTPS-only and a body cap.
+1. `netray_common::fetch` (feature-gated) fetches a URL for a caller. It parses with `url::Url`, resolves every host through a checking resolver that refuses an empty set or any address failing `target_policy` and otherwise hands reqwest exactly the checked addresses, checks IP-literal hosts itself, and builds the client from typed settings so no caller can route around the check. A refused target returns a typed `Blocked` error, and no connection is made to it.
+2. reqwest follows redirects with a custom policy, so Location handling, method rules, header stripping and Referer stay as today. Every hop's host is checked again: names through the checking resolver, literals in the policy. The caller sets the hop limit and what reaching it does: `Fail`, or `ReturnLast` (the last 3xx response is returned with a limit-reached flag). The caller also sets HTTPS-only and a body cap.
 3. beacon's MTA-STS policy fetch goes through the helper: limit 0 with `ReturnLast` (a 3xx keeps today's `https_redirect` Fail), HTTPS only, 64 KB cap. A refused or unresolvable policy host gives `https_fetch_failed` Fail with the detail "policy host not reachable". The existing `ssrf_blocked` sub-check keeps its name and verdict.
 4. beacon's BIMI logo fetch goes through the helper: HTTPS only, at most 4 redirects (today's limit). The custom redirect client and the string-based host extraction are removed. A refused initial host that resolves to a non-public address keeps `logo_ssrf_blocked` Fail. A refused redirect hop gives `logo_redirect_ssrf_blocked` Fail. Any other refused or unresolvable target gives `logo_unreachable` Warn with the detail "logo host not reachable". No response status or connection error text from a refused target appears in a detail.
 5. spectra's redirect following goes through the helper with `ReturnLast` at its `max_redirects`. It keeps its hop recording (`RedirectHop`). A refused hop ends the chain with the existing "Redirect destination blocked" result.
@@ -54,7 +54,7 @@ Every refused case asserts the typed `Blocked` error and that a dual-stack liste
 - GIVEN `pinned.invalid` stub-mapped to an allowed listener WHEN fetched in test mode THEN it succeeds (`.invalid` cannot resolve through the system, so success proves the pin).
 - GIVEN an allowed hop redirecting to `localhost:<p>` or `http://svc.invalid/` (stub → loopback) WHEN fetched THEN `Blocked`, 0 connections at the target.
 - GIVEN limit 4 and `Fail` WHEN 4 redirects end in 200 THEN success; WHEN 5 THEN error.
-- GIVEN limit 2 and `ReturnLast` WHEN 3 redirects THEN the second 3xx is returned with the limit flag set.
+- GIVEN limit 2 and `ReturnLast` WHEN 3 redirects THEN the third 3xx, the one not followed, is returned with the limit flag set and two hops, as spectra counts today.
 
 ## Phase 3 — Callers
 

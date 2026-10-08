@@ -36,3 +36,46 @@ C12 passed before any change (pinning). C10 uses a redirect to `https://127.0.0.
 ### Behavioural verification
 
 skipped: no callable entry point changes; the phase is a test table plus a behaviour-neutral extraction.
+
+## Phase 2 — Fetch helper
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R1: resolve once, refuse empty set or any disallowed address with typed `Blocked`, connect only to checked addresses | green | crates/common/tests/fetch.rs |
+| C2 | R2: reqwest's redirect handling with a custom policy, every hop re-checked, caller sets limit and `Fail`/`ReturnLast`, HTTPS-only, body cap | green | crates/common/tests/fetch.rs, fetch_semantics.rs, fetch_reqwest_semantics.rs, fetch_guards.rs, fetch_env_proxy.rs |
+| C3 | `https://127.0.0.1:<p>/` → `Blocked`, 0 connections | green | crates/common/tests/fetch.rs |
+| C4 | `https://x@127.0.0.1:<p>/` → `Blocked`, 0 connections | green | crates/common/tests/fetch.rs |
+| C5 | `https://[::1]:<p>/` → `Blocked`, 0 connections | green | crates/common/tests/fetch.rs |
+| C6 | name stub-mapped to `[]` → `Blocked` | green | crates/common/tests/fetch.rs |
+| C7 | name mapped to `[public, 127.0.0.1]` → `Blocked` | green | crates/common/tests/fetch.rs |
+| C8 | `pinned.invalid` stub-mapped to an allowed listener → succeeds (proves the pin) | green | crates/common/tests/fetch.rs |
+| C9 | allowed hop redirecting to `localhost:<p>` or `http://svc.invalid/` (stub → loopback) → `Blocked`, 0 connections at the target | green | crates/common/tests/fetch.rs |
+| C10 | limit 4 with `Fail`: 4 redirects to 200 succeed, 5 fail | green | crates/common/tests/fetch.rs |
+| C11 | limit 2 with `ReturnLast`: 3 redirects → the second 3xx is returned with the limit flag | green | crates/common/tests/fetch.rs |
+
+Beyond the eleven criteria, the phase review added `fetch_semantics.rs` (13), `fetch_reqwest_semantics.rs` (4), `fetch_guards.rs` (3) and `fetch_env_proxy.rs` (1): 37 tests in all.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| fetch helper, hand-written loop | 1 | opus | 56333 | 198 |
+| amendments to the loop | 1 | opus | 61633 | 181 |
+| redesign on reqwest | 2 | opus (two test-harness fixes by the orchestrator) | 100068 | 306 |
+| typed client settings, fragment | 1 | opus (two test-harness fixes by the orchestrator) | 41666 | 85 |
+
+### Review
+
+Four readers over the phase.
+- First pass (hand-written loop): 1 BLOCKER (non-ASCII Location → error), 5 AMENDMENTs. Repaired in phase.
+- Second pass: 1 BLOCKER (a final 3xx body is read), 5 AMENDMENTs, all about divergence from reqwest. Halted with `blocker`. The operator chose to rebuild on reqwest.
+- Third pass (redesign): 2 BLOCKERs, 4 AMENDMENTs. The BLOCKERs were that `base` could inject `resolve` overrides or `unix_socket` around the check, and that the initial fragment leaked into `hops[0]`. Repaired with typed `ClientSettings`, `set_fragment(None)`, and tests for literal hops, `https_only` per hop and env proxies.
+- Fourth pass: no BLOCKER. Three AMENDMENTs were repaired in the spec and plan text (requirements 1 and 2, the Location ordering note) or forwarded as Phase 3 notes (userinfo in the initial `Scheme` error).
+  - NIT: `rcgen`, `rustls` and `tokio-rustls` are declared per crate rather than in `[workspace.dependencies]`.
+- Security boundary: no finding in any pass.
+
+### Behavioural verification
+
+skipped: the helper has no entry point of its own yet; Phase 3 wires it into beacon, spectra and tlsight.
