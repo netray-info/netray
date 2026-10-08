@@ -186,7 +186,7 @@ async fn final_3xx_with_stalled_body_is_returned_at_once() {
     o.read_body = true;
     o.timeout = Duration::from_secs(2);
     let started = Instant::now();
-    let res = fetch(&ClientSettings::default(),no_resolver(), &url, &o)
+    let res = fetch(&ClientSettings::default(), no_resolver(), &url, &o)
         .await
         .expect("a final 3xx is returned, not an error");
     assert!(
@@ -204,9 +204,14 @@ async fn referer_is_sent_on_a_followed_hop() {
     let loc = format!("http://127.0.0.1:{}/b", b.port);
     let a = serve(bind4().await, move |_| Reply::Full(redirect(302, &loc)));
     let url_a = format!("http://127.0.0.1:{}/a", a.port);
-    fetch(&ClientSettings::default(),no_resolver(), &url_a, &loopback_opts())
-        .await
-        .expect("follow the redirect");
+    fetch(
+        &ClientSettings::default(),
+        no_resolver(),
+        &url_a,
+        &loopback_opts(),
+    )
+    .await
+    .expect("follow the redirect");
     let seen = b.requests();
     assert_eq!(seen.len(), 1);
     assert_eq!(seen[0].headers.get("referer"), Some(&url_a));
@@ -222,7 +227,7 @@ async fn cross_host_redirect_drops_authorization() {
     o.headers
         .insert(AUTHORIZATION, HeaderValue::from_static("Bearer x"));
     let url = format!("http://a.invalid:{}/", p1.port);
-    fetch(&ClientSettings::default(),Arc::new(resolver), &url, &o)
+    fetch(&ClientSettings::default(), Arc::new(resolver), &url, &o)
         .await
         .expect("follow the cross-host redirect");
     let first = p1.requests();
@@ -248,9 +253,14 @@ async fn location_fragment_is_not_recorded() {
         }
     });
     let url = format!("http://127.0.0.1:{}/", srv.port);
-    let res = fetch(&ClientSettings::default(),no_resolver(), &url, &loopback_opts())
-        .await
-        .expect("follow the redirect");
+    let res = fetch(
+        &ClientSettings::default(),
+        no_resolver(),
+        &url,
+        &loopback_opts(),
+    )
+    .await
+    .expect("follow the redirect");
     assert_eq!(res.hops.len(), 1);
     assert!(
         !res.hops[0].location.contains("#frag"),

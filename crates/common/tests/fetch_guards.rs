@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use netray_common::fetch::{ClientSettings, FetchError, FetchOptions, Resolve, fetch};
 use netray_common::target_policy::is_allowed_target;
@@ -75,7 +75,10 @@ impl Server {
 }
 
 /// Counts connections on accept, answers each with `handler(request path)`.
-fn serve(listener: TcpListener, handler: impl Fn(&str) -> String + Send + Sync + 'static) -> Server {
+fn serve(
+    listener: TcpListener,
+    handler: impl Fn(&str) -> String + Send + Sync + 'static,
+) -> Server {
     let port = listener.local_addr().unwrap().port();
     let count = Arc::new(AtomicUsize::new(0));
     let c = count.clone();
@@ -183,6 +186,7 @@ async fn redirect_to_refused_ip_literal_is_blocked_at_hop_one() {
     let resolver = StubResolver::new(&[("start.invalid", vec![V4])]);
     let mut o = FetchOptions::new(Method::GET);
     o.allow = only_v4_loopback;
+    o.max_redirects = 1;
     let url = format!("http://start.invalid:{}/", start.port);
     let result = fetch(&ClientSettings::default(), Arc::new(resolver), &url, &o).await;
 
@@ -205,10 +209,7 @@ async fn https_only_refuses_an_https_to_http_redirect_hop() {
     })
     .await;
 
-    let resolver = StubResolver::new(&[
-        ("start.invalid", vec![V4]),
-        ("localhost", vec![V4]),
-    ]);
+    let resolver = StubResolver::new(&[("start.invalid", vec![V4]), ("localhost", vec![V4])]);
     let settings = ClientSettings {
         accept_invalid_certs: true,
         ..ClientSettings::default()
@@ -221,7 +222,11 @@ async fn https_only_refuses_an_https_to_http_redirect_hop() {
     let result = fetch(&settings, Arc::new(resolver), &url, &o).await;
 
     assert!(matches!(result, Err(FetchError::Scheme(_))), "{result:?}");
-    assert_eq!(tls.connections(), 1, "the TLS first hop must have been reached");
+    assert_eq!(
+        tls.connections(),
+        1,
+        "the TLS first hop must have been reached"
+    );
     assert_eq!(plain.connections(), 0);
 }
 
@@ -238,6 +243,7 @@ async fn initial_url_fragment_is_not_recorded_in_the_first_hop() {
     let resolver = StubResolver::new(&[("start.invalid", vec![V4])]);
     let mut o = FetchOptions::new(Method::GET);
     o.allow = allow_loopback;
+    o.max_redirects = 1;
     let url = format!("http://start.invalid:{}/#top", srv.port);
     let res = fetch(&ClientSettings::default(), Arc::new(resolver), &url, &o)
         .await
