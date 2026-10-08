@@ -22,13 +22,16 @@ cat > "$stubs/curl" <<'STUB'
 # Minimal curl: -s -S -f (also clustered), -o FILE, URL. FAIL_URLS (space separated
 # substrings) answer HTTP 404: with -f exit 22 and no output, without -f an HTML page, exit 0.
 # HTML_URLS answer HTTP 200 with an HTML error page (exit 0 even with -f): a 2xx garbage body.
+# Upstream drift (2026-10-08): openai.com/gptbot-ranges.txt answers 403 (like FAIL_URLS, but 403);
+# the old googlebot.json URL answers 301 to common-crawlers.json: with -L the stub follows, without
+# -L it writes the redirect HTML and exits 0 even under -f (curl -f only fails on >= 400).
 # PARTIAL_URLS emulate a transfer dying mid-body: with -f part of the body is written, exit 22.
-f=0 out="" url=""
+f=0 L=0 out="" url=""
 while [ $# -gt 0 ]; do
     case "$1" in
         -o) out=$2; shift ;;
         --*) ;;
-        -*) case "$1" in *f*) f=1 ;; esac ;;
+        -*) case "$1" in *f*) f=1 ;; esac; case "$1" in *L*) L=1 ;; esac ;;
         *) url=$1 ;;
     esac
     shift
@@ -60,6 +63,22 @@ for pat in ${PARTIAL_URLS:-}; do
             fi ;;
     esac
 done
+case "$url" in
+    *openai.com/gptbot-ranges.txt)
+        if [ "$f" = 1 ]; then
+            echo "curl: (22) The requested URL returned error: 403" >&2
+            exit 22
+        fi
+        echo '<html><body>403 Forbidden</body></html>' | emit
+        exit 0 ;;
+    *developers.google.com/search/apis/ipranges/googlebot.json)
+        if [ "$L" = 1 ]; then
+            url=https://developers.google.com/static/crawling/ipranges/common-crawlers.json
+        else
+            echo '<html><body>Redirecting...</body></html>' | emit
+            exit 0
+        fi ;;
+esac
 prefixes='{"prefixes":[{"ipv4Prefix":"192.0.2.0/24","service":"svc","scope":"sc"},{"ipv6Prefix":"2001:db8::/32","service":"svc","scope":"sc"}]}'
 case "$url" in
     *amazonaws.com*) echo '{"prefixes":[{"ip_prefix":"192.0.2.0/24","service":"S","region":"r"}],"ipv6_prefixes":[{"ipv6_prefix":"2001:db8::/32","service":"S","region":"r"}]}' ;;
@@ -72,8 +91,8 @@ case "$url" in
     *digitalocean.com*|*linode.com*) printf 'range,country,region,city\n192.0.2.0/24,US,US-CA,x\n' ;;
     *api.github.com*) echo '{"hooks":["192.0.2.0/24"],"verifiable_password_authentication":true}' ;;
     *cloud-ip-ranges.com*) echo 192.0.2.0/24 ;;
-    *googlebot.json|*bingbot.json|*applebot.json) echo "$prefixes" ;;
-    *gptbot-ranges.txt) printf '# gptbot\n192.0.2.0/24\n' ;;
+    *common-crawlers.json|*bingbot.json|*applebot.json) echo "$prefixes" ;;
+    *openai.com/gptbot.json) echo '{"creationTime":"2026-10-08T00:00:00.000000","prefixes":[{"ipv4Prefix":"192.0.2.0/24"}]}' ;;
     *ipverse/as-metadata*) echo '{"64500":{"asn":64500,"metadata":{"category":"isp","networkRole":"transit","registered":"2020-01-01T00:00:00Z"}}}' ;;
     *regexes.yaml) printf 'user_agent_parsers:\n  - regex: (x)\n' ;;
     *spamhaus.org*) printf '; header\n192.0.2.0/24 ; SBL1\n' ;;
@@ -146,6 +165,8 @@ d="$work/c8"; run_scenario "$d" ""
 for f in $data_files GeoLite2-City.mmdb GeoLite2-ASN.mmdb; do
     [ -s "$d/$f" ] || fail "C8: $f missing or empty after a successful run"
 done
+grep -q '"provider":"gptbot"' "$d/bot_ranges.jsonl" 2>/dev/null || fail "C8: bot_ranges.jsonl has no gptbot entry (from gptbot.json)"
+grep -q '"provider":"googlebot"' "$d/bot_ranges.jsonl" 2>/dev/null || fail "C8: bot_ranges.jsonl has no googlebot entry"
 l=$(leftovers "$d"); [ -z "$l" ] || fail "C8: leftovers after a successful run: $(echo $l)"
 
 # C9: every curl invocation carries -f (alone or in a flag cluster).
