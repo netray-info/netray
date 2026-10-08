@@ -3,7 +3,7 @@
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
 
-use netray_common::config::{load_with_env, ConfigError};
+use netray_common::config::{ConfigError, load_with_env};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -56,8 +56,16 @@ fn env_overrides_with_each_prefix_style_and_config_var_is_not_a_key() {
     // (prefix, config-file variable, value variable)
     let cases = [
         ("PRISM_", "PRISM_CONFIG", "PRISM_LIMITS__PER_IP_PER_MINUTE"),
-        ("SPECTRA__", "SPECTRA_CONFIG", "SPECTRA__LIMITS__PER_IP_PER_MINUTE"),
-        ("BEACON__", "BEACON_CONFIG", "BEACON__LIMITS__PER_IP_PER_MINUTE"),
+        (
+            "SPECTRA__",
+            "SPECTRA_CONFIG",
+            "SPECTRA__LIMITS__PER_IP_PER_MINUTE",
+        ),
+        (
+            "BEACON__",
+            "BEACON_CONFIG",
+            "BEACON__LIMITS__PER_IP_PER_MINUTE",
+        ),
     ];
     for (prefix, config_var, value_var) in cases {
         let cfg = load_with_env::<TestConfig>(
@@ -88,7 +96,10 @@ fn variables_of_another_prefix_are_ignored() {
 fn non_utf8_env_entries_do_not_panic() {
     let bad = || OsString::from_vec(vec![0xff, 0xfe]);
     let vars = vec![
-        (OsString::from("PRISM_LIMITS__PER_IP_PER_MINUTE"), OsString::from("60")),
+        (
+            OsString::from("PRISM_LIMITS__PER_IP_PER_MINUTE"),
+            OsString::from("60"),
+        ),
         (OsString::from("PRISM_BADVALUE"), bad()),
         (bad(), OsString::from("1")),
     ];
