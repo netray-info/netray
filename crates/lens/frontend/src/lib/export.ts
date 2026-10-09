@@ -1,5 +1,6 @@
 import type { DnsEvent, TlsEvent, HttpEvent, EmailEvent, IpEvent, SummaryEvent, DoneEvent } from './types';
 import { CHECK_LABELS } from './checkMeta';
+import { inlineCode } from '@netray-info/common-frontend/utils';
 
 export interface ExportInput {
   domain: string;
@@ -31,7 +32,7 @@ export function toMarkdown(input: ExportInput): string {
   const { domain, dns, tls, http, email, ip, summary, done } = input;
   const lines: string[] = [];
 
-  lines.push(`# lens report: ${domain}`);
+  lines.push(`# lens report: ${inlineCode(domain)}`);
   lines.push('');
 
   if (summary) {
@@ -50,7 +51,7 @@ export function toMarkdown(input: ExportInput): string {
     for (const check of event.checks) {
       const sym = verdictSymbol(check.verdict);
       const name = CHECK_LABELS[check.name] ?? check.name;
-      const msg = check.messages?.length ? ` · ${check.messages.join('; ')}` : '';
+      const msg = check.messages?.length ? ` · ${check.messages.map(inlineCode).join('; ')}` : '';
       lines.push(`- ${sym} ${name}${msg}`);
     }
     lines.push('');
@@ -74,7 +75,7 @@ export function toMarkdown(input: ExportInput): string {
     for (const check of ip.checks) {
       const sym = verdictSymbol(check.verdict);
       const name = CHECK_LABELS[check.name] ?? check.name;
-      const msg = check.messages?.length ? ` · ${check.messages.join('; ')}` : '';
+      const msg = check.messages?.length ? ` · ${check.messages.map(inlineCode).join('; ')}` : '';
       lines.push(`- ${sym} ${name}${msg}`);
     }
     lines.push('');
