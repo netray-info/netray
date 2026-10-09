@@ -36,6 +36,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
 - `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.
 - The `ifconfig-rs-data` image also carries tracked files (`asn_patterns.toml`): never copy it over `crates/ifconfig-rs/data/`.
+- `adlc feature start` branches from `origin/main`: with unpushed commits on local `main`, fast-forward the new feature branch to `main` before writing the spec.
 
 The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
 
