@@ -38,7 +38,7 @@ Grades change in this release. Old snapshots keep the grade they were stored wit
 ### Security
 
 - Unchecked DNS queries to addresses from the checked domain's data, fixed in 0.23.0. prism sent raw DNS queries to the addresses of a domain's nameservers without the shared target policy:
-  - the lame-delegation and delegation-consistency checks, whose findings named the address;
+  - the lame-delegation check, whose findings named the address, and the delegation-consistency check, which returned the NS names it received;
   - the authoritative comparison (`+auth`, `POST /api/authcompare`), which returned the records it received and listed each queried address;
   - the DNSSEC chain walk, which follows referral glue and returned the records it received.
 
