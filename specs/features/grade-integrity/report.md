@@ -161,7 +161,7 @@ C9 passed at the baseline (`3425629`); the others failed there. Goldens regenera
 
 skipped: the TLS paths are driven by `assess_port` tables, the closed-port `inspect_ip` test and the lens goldens; a live HTTPS-less target is not reachable offline.
 
-## Phase 5 — HSTS owned by HTTP
+## Phase 5 — HSTS once
 
 ### Criteria
 

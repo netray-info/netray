@@ -57,7 +57,7 @@ One group: `check.rs`, the backends' request paths, `state.rs` and `config.rs` s
 3. Goldens, after 1 and 2 are green: `UPDATE_GOLDEN=1 cargo test -p tlsight --test contract_golden` (tlsight-inspect.json gains `tls_reachable`; tlsight-unreachable.json and tlsight-not-tested.json are written), then `UPDATE_GOLDEN=1 cargo test -p lens --test lens_golden` (lens-http-only.json, lens-no-weighted-tls.json written; the existing lens goldens move in their TLS score). The orchestrator commits the regenerated goldens with `ADLC-Test-Change` naming requirement 7.
 - Review fixes: `EHOSTUNREACH` → `HANDSHAKE_FAILED`; tlsight `qualityVerdict` all-skip → skip; `tls_reachable` texts, labels and docs.
 
-## Phase 5 — HSTS owned by HTTP
+## Phase 5 — HSTS once
 
 ### Plan
 

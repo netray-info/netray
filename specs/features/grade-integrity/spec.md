@@ -116,7 +116,7 @@ tlsight's `tls/mod.rs` (error codes), `quality/mod.rs` (`assess_port`), its cont
 - GIVEN the `no-weighted-tls` tlsight answer WHEN lens scores it THEN `grade:"incomplete"` and TLS status `"error"`.
 - GIVEN the healthy tlsight contract golden regenerated with `tls_reachable` Pass WHEN the lens goldens run THEN their TLS scores, section grades and summary scores move (`ADLC-Test-Change` naming requirement 7).
 
-## Phase 5 — HSTS owned by HTTP
+## Phase 5 — HSTS once
 
 **Depends on:** Phase 4
 **Requirements:** 9
