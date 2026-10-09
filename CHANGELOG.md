@@ -38,11 +38,11 @@ Grades change in this release. Old snapshots keep the grade they were stored wit
 ### Security
 
 - Unchecked DNS queries to addresses from the checked domain's data, fixed in 0.23.0. prism sent raw DNS queries to the addresses of a domain's nameservers without the shared target policy:
-  - the lame-delegation and delegation-consistency checks;
-  - the authoritative comparison (`authcompare`);
+  - the lame-delegation and delegation-consistency checks, whose findings named the address;
+  - the authoritative comparison (`+auth`, `POST /api/authcompare`), which returned the records it received and listed each queried address;
   - the DNSSEC chain walk, which follows referral glue and returned the records it received.
 
-  Missing glue was resolved through the system resolver, which inside a container answers service names with container addresses. A domain could therefore make prism send queries to a non-public address on port 53, and the DNSSEC walk echoed the answers. Every such query now goes through one outbound policy; a refused address is never queried, and the checks report it as "nameserver address not public, not queried". Found in an internal review. Every earlier release is affected; upgrade to 0.23.0.
+  Missing glue was resolved through the system resolver, which inside a container answers service names with container addresses. A domain could therefore make prism send queries to a non-public address on port 53, return what that address answered, and reveal the container address behind a service name. Every such query now goes through one outbound policy, and a refused address is never queried. The NS checks and the authoritative comparison report it as "nameserver address not public, not queried"; the DNSSEC walk drops it and, when no public server remains for a level, ends that branch with the same warning. Found in an internal review. Every earlier release is affected; upgrade to 0.23.0.
 - prism's `@system` resolver exposed container addresses. `@system` queries the resolvers in the host's `/etc/resolv.conf`; inside a container that is the container runtime's embedded resolver, which answers service names with container addresses. On netray.info `@system` is now off, and the query UI and `POST /api/parse` offer it only when the server allows it. The default stays `allow_system_resolvers = true`: a containerised deployment should set `[dns] allow_system_resolvers = false`.
 
 ## [0.22.2] - 2026-10-09
