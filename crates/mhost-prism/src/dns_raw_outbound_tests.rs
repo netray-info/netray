@@ -59,16 +59,6 @@ impl RecordingSender {
     pub(crate) fn recorded_ips(&self) -> Vec<IpAddr> {
         self.sent().iter().map(|s| s.server.ip()).collect()
     }
-
-    /// The server addresses that received a query for `name`.
-    pub(crate) fn recorded_ips_for(&self, name: &str) -> Vec<IpAddr> {
-        let name = Name::from_ascii(name).unwrap();
-        self.sent()
-            .iter()
-            .filter(|s| s.name == name)
-            .map(|s| s.server.ip())
-            .collect()
-    }
 }
 
 impl RawSend for RecordingSender {

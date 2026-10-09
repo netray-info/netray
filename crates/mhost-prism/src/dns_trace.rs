@@ -13,11 +13,7 @@ use std::time::Duration;
 use hickory_proto::rr::{Name, RecordType};
 use serde::Serialize;
 
-use crate::dns_raw::{
-    DnsRecord, ROOT_SERVERS, RawQueryResult, build_server_list, parallel_queries,
-    record_to_dns_record, resolve_missing_glue,
-};
-use crate::security::query_policy::check_target_ip;
+use crate::dns_raw::{DnsRecord, ROOT_SERVERS, RawOutbound, RawQueryResult, record_to_dns_record};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -109,6 +105,24 @@ pub async fn walk(
     max_hops: usize,
     query_timeout: Duration,
 ) -> Vec<TraceHop> {
+    walk_with(
+        &RawOutbound::production(),
+        name,
+        record_type,
+        max_hops,
+        query_timeout,
+    )
+    .await
+}
+
+/// [`walk`] through the given outbound context.
+pub(crate) async fn walk_with(
+    raw: &RawOutbound,
+    name: Name,
+    record_type: RecordType,
+    max_hops: usize,
+    query_timeout: Duration,
+) -> Vec<TraceHop> {
     // Start with all IPv4 root servers.
     let mut current_servers: Vec<(SocketAddr, Option<String>)> = ROOT_SERVERS
         .iter()
@@ -135,7 +149,9 @@ pub async fn walk(
             "trace hop"
         );
 
-        let results = parallel_queries(&server_addrs, &name, record_type, query_timeout).await;
+        let results = raw
+            .parallel_queries(&server_addrs, &name, record_type, query_timeout)
+            .await;
 
         let (server_results, next_servers, is_final) = process_hop(&results, &server_names);
 
@@ -170,13 +186,11 @@ pub async fn walk(
 
         // Resolve NS names that have no glue IP addresses.
         let mut resolved = next_servers;
-        resolve_missing_glue(&mut resolved).await;
+        raw.resolve_missing_glue(&mut resolved).await;
 
         // Build next hop server list (IPv4 only — avoids IPv6 connectivity issues).
-        // Also filter through check_target_ip so glue IPs resolved via the system
-        // resolver cannot point at private/loopback/internal addresses (SSRF prevention).
-        current_servers =
-            build_server_list(&resolved, |ip| ip.is_ipv4() && check_target_ip(ip).is_ok());
+        // The outbound policy decides which addresses may be queried.
+        current_servers = raw.build_server_list(&resolved).servers;
 
         current_zone = next_zone;
     }

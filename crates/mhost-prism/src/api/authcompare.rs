@@ -35,11 +35,66 @@ use crate::api::query::{
     record_breaker_outcomes, send_enrichment_event, target_keys_from_servers,
 };
 use crate::api::{AppState, CollectedResponse, STREAM_TIMEOUT_SECS};
-use crate::dns_raw;
+use crate::dns_raw::{self, NOT_PUBLIC, RawOutbound};
 use crate::error::{ApiError, ErrorResponse};
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::security::QueryPolicy;
+
+// ---------------------------------------------------------------------------
+// Authoritative servers
+// ---------------------------------------------------------------------------
+
+/// The authoritative servers of a domain that the outbound policy lets us query.
+pub(crate) struct AuthServers {
+    /// IPv4, port 53, allowed only.
+    pub(crate) servers: Vec<SocketAddr>,
+    /// `"ns1.example.com. (192.0.2.53)"` per listed server.
+    pub(crate) labels: Vec<String>,
+    /// `NOT_PUBLIC` once when any address was refused.
+    pub(crate) warnings: Vec<String>,
+}
+
+/// Resolve the NS names to addresses and keep the ones the outbound policy allows.
+pub(crate) async fn resolve_auth_servers(raw: &RawOutbound, ns_names: &[String]) -> AuthServers {
+    let mut ns_ips: HashMap<String, Vec<IpAddr>> = HashMap::new();
+    for ns in ns_names {
+        ns_ips.insert(ns.clone(), Vec::new());
+    }
+    raw.resolve_missing_glue(&mut ns_ips).await;
+
+    let list = raw.build_server_list(&ns_ips);
+    let mut servers = Vec::with_capacity(list.servers.len());
+    let mut labels = Vec::with_capacity(list.servers.len());
+    for (addr, ns_name) in &list.servers {
+        servers.push(*addr);
+        if let Some(ns_name) = ns_name {
+            labels.push(format!("{ns_name} ({})", addr.ip()));
+        }
+    }
+    let warnings = if list.refused > 0 {
+        vec![NOT_PUBLIC.to_owned()]
+    } else {
+        Vec::new()
+    };
+    AuthServers {
+        servers,
+        labels,
+        warnings,
+    }
+}
+
+/// The authoritative branch's per-record-type fan-out.
+pub(crate) async fn query_auth_servers(
+    raw: &RawOutbound,
+    servers: &[SocketAddr],
+    name: &Name,
+    record_type: RecordType,
+    timeout: Duration,
+) -> Vec<dns_raw::RawQueryResult> {
+    raw.parallel_queries(servers, name, record_type, timeout)
+        .await
+}
 
 // ---------------------------------------------------------------------------
 // SSE event payloads
@@ -145,6 +200,7 @@ pub async fn post_handler(
     let result_cache = state.result_cache.clone();
     let enrichment_svc = state.ip_enrichment.clone();
     let query_semaphore = state.query_semaphore.clone();
+    let raw_outbound = RawOutbound::production();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
@@ -229,29 +285,11 @@ pub async fn post_handler(
                 .await;
         }
 
-        // Resolve NS hostnames to IPs.
-        let mut ns_ips: HashMap<String, Vec<IpAddr>> = HashMap::new();
-        for ns in &ns_names {
-            ns_ips.insert(ns.clone(), Vec::new());
-        }
-        dns_raw::resolve_missing_glue(&mut ns_ips).await;
-
-        // Build auth server list (IPv4 only, port 53).
-        let auth_servers: Vec<SocketAddr> = ns_ips
-            .values()
-            .flat_map(|ips| ips.iter().filter(|ip| ip.is_ipv4()).copied())
-            .map(|ip| SocketAddr::new(ip, 53))
-            .collect();
-
-        // Build labels for done event.
-        let mut auth_server_labels: Vec<String> = Vec::new();
-        for (ns_name, ips) in &ns_ips {
-            for ip in ips {
-                if ip.is_ipv4() {
-                    auth_server_labels.push(format!("{ns_name} ({ip})"));
-                }
-            }
-        }
+        // Resolve NS hostnames to IPs through the outbound context.
+        let auth = resolve_auth_servers(&raw_outbound, &ns_names).await;
+        all_warnings.extend(auth.warnings);
+        let auth_servers = auth.servers;
+        let auth_server_labels = auth.labels;
 
         let has_auth = !auth_servers.is_empty();
         let total_batches = if has_auth {
@@ -356,6 +394,7 @@ pub async fn post_handler(
         // Authoritative branch (only if we have auth servers).
         if has_auth {
             let auth_servers = auth_servers.clone();
+            let raw_outbound = raw_outbound.clone();
             let record_types = record_types.clone();
             let domain_name = domain_name.clone();
             let tx_err = tx.clone();
@@ -367,12 +406,14 @@ pub async fn post_handler(
                         let rt = *rt;
                         let domain_name = domain_name.clone();
                         let auth_servers = auth_servers.clone();
+                        let raw_outbound = raw_outbound.clone();
                         let tx_err = tx_err.clone();
                         async move {
                             // Convert mhost RecordType to hickory RecordType.
                             let hickory_rt: RecordType = hickory_proto::rr::RecordType::from(u16::from(rt));
 
-                            let results = dns_raw::parallel_queries(
+                            let results = query_auth_servers(
+                                &raw_outbound,
                                 &auth_servers,
                                 &domain_name,
                                 hickory_rt,

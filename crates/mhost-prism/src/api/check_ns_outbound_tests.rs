@@ -16,7 +16,7 @@ use mhost::resolver::Lookups;
 use super::{check_ns_delegation_consistency, check_ns_lame_delegation};
 use crate::dns_raw::NOT_PUBLIC;
 use crate::dns_raw::outbound_tests::{
-    RecordingSender, StubResolver, name, ns_record, reply, soa_record, test_outbound, v4,
+    RecordingSender, StubResolver, ns_record, reply, soa_record, test_outbound, v4,
 };
 
 const DOMAIN: &str = "example.com";

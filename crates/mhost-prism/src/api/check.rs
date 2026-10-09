@@ -42,7 +42,7 @@ use crate::api::query::{
 };
 use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
-use crate::dns_raw;
+use crate::dns_raw::{self, NOT_PUBLIC, RawOutbound};
 use crate::error::{ApiError, ErrorResponse};
 use crate::parser::ParsedQuery;
 use crate::record_format;
@@ -217,6 +217,7 @@ pub async fn post_handler(
     let enrichment_svc = state.ip_enrichment.clone();
     let query_semaphore = state.query_semaphore.clone();
     let outbound = Outbound::production();
+    let raw_outbound = RawOutbound::production();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
@@ -465,8 +466,8 @@ pub async fn post_handler(
         let query_timeout = Duration::from_secs(3);
         let unique = unique_records(&all_lookups);
         let (lame_results, delegation_results, mta_sts_results) = tokio::join!(
-            check_ns_lame_delegation(&unique, &domain, query_timeout),
-            check_ns_delegation_consistency(&unique, &domain, query_timeout),
+            check_ns_lame_delegation(&unique, &domain, query_timeout, &raw_outbound),
+            check_ns_delegation_consistency(&unique, &domain, query_timeout, &raw_outbound),
             check_mta_sts(&mta_sts_lookups, &domain, &unique, &outbound),
         );
 
@@ -910,6 +911,7 @@ async fn check_ns_lame_delegation(
     lookups: &Lookups,
     domain: &str,
     timeout: Duration,
+    raw: &RawOutbound,
 ) -> Vec<CheckResult> {
     let ns_names: Vec<String> = lookups.ns().into_iter().map(|n| n.to_ascii()).collect();
 
@@ -920,37 +922,49 @@ async fn check_ns_lame_delegation(
     // Resolve NS hostnames to IPs.
     let mut ns_ips: HashMap<String, Vec<IpAddr>> =
         ns_names.iter().map(|n| (n.clone(), Vec::new())).collect();
-    dns_raw::resolve_missing_glue(&mut ns_ips).await;
+    raw.resolve_missing_glue(&mut ns_ips).await;
 
     let domain_name = match hickory_proto::rr::Name::from_ascii(domain) {
         Ok(n) => n,
         Err(_) => return vec![CheckResult::NotFound()],
     };
 
-    let servers: Vec<SocketAddr> = ns_ips
-        .values()
-        .flat_map(|ips| ips.iter().filter(|ip| ip.is_ipv4()).copied())
-        .map(|ip| SocketAddr::new(ip, 53))
-        .collect();
+    let list = raw.build_server_list(&ns_ips);
+    let servers: Vec<SocketAddr> = list.servers.iter().map(|(addr, _)| *addr).collect();
 
     if servers.is_empty() {
+        if list.refused > 0 {
+            return vec![CheckResult::Warning(NOT_PUBLIC.to_owned())];
+        }
         return vec![CheckResult::Warning(
             "NS lame delegation: could not resolve any NS server IPs for direct query".to_owned(),
         )];
     }
 
-    let results_raw = dns_raw::parallel_queries(
-        &servers,
-        &domain_name,
-        hickory_proto::rr::RecordType::SOA,
-        timeout,
-    )
-    .await;
+    let results_raw = raw
+        .parallel_queries(
+            &servers,
+            &domain_name,
+            hickory_proto::rr::RecordType::SOA,
+            timeout,
+        )
+        .await;
 
+    let mut results = judge_lame_delegation(&results_raw, domain);
+    if list.refused > 0 {
+        results.push(CheckResult::Warning(NOT_PUBLIC.to_owned()));
+    }
+    results
+}
+
+fn judge_lame_delegation(
+    results_raw: &[dns_raw::RawQueryResult],
+    domain: &str,
+) -> Vec<CheckResult> {
     let mut lame_servers: Vec<String> = Vec::new();
     let mut ok_count = 0usize;
 
-    for qr in &results_raw {
+    for qr in results_raw {
         match &qr.result {
             Ok(resp) => {
                 if resp.is_authoritative() {
@@ -999,6 +1013,7 @@ async fn check_ns_delegation_consistency(
     lookups: &Lookups,
     domain: &str,
     timeout: Duration,
+    raw: &RawOutbound,
 ) -> Vec<CheckResult> {
     // Recursive NS names (already collected).
     let mut recursive_ns: Vec<String> = lookups
@@ -1018,15 +1033,15 @@ async fn check_ns_delegation_consistency(
         .iter()
         .map(|n| (n.clone(), Vec::new()))
         .collect();
-    dns_raw::resolve_missing_glue(&mut ns_ips).await;
+    raw.resolve_missing_glue(&mut ns_ips).await;
 
-    let servers: Vec<SocketAddr> = ns_ips
-        .values()
-        .flat_map(|ips| ips.iter().filter(|ip| ip.is_ipv4()).copied())
-        .map(|ip| SocketAddr::new(ip, 53))
-        .collect();
+    let list = raw.build_server_list(&ns_ips);
+    let servers: Vec<SocketAddr> = list.servers.iter().map(|(addr, _)| *addr).collect();
 
     if servers.is_empty() {
+        if list.refused > 0 {
+            return vec![CheckResult::Warning(NOT_PUBLIC.to_owned())];
+        }
         return vec![CheckResult::Warning(
             "NS delegation consistency: could not resolve NS server IPs for direct query"
                 .to_owned(),
@@ -1038,17 +1053,29 @@ async fn check_ns_delegation_consistency(
         Err(_) => return vec![CheckResult::NotFound()],
     };
 
-    let results_raw = dns_raw::parallel_queries(
-        &servers,
-        &domain_name,
-        hickory_proto::rr::RecordType::NS,
-        timeout,
-    )
-    .await;
+    let results_raw = raw
+        .parallel_queries(
+            &servers,
+            &domain_name,
+            hickory_proto::rr::RecordType::NS,
+            timeout,
+        )
+        .await;
 
+    let mut results = judge_ns_consistency(&recursive_ns, &results_raw);
+    if list.refused > 0 {
+        results.push(CheckResult::Warning(NOT_PUBLIC.to_owned()));
+    }
+    results
+}
+
+fn judge_ns_consistency(
+    recursive_ns: &[String],
+    results_raw: &[dns_raw::RawQueryResult],
+) -> Vec<CheckResult> {
     // Collect NS names from direct (authoritative) responses.
     let mut auth_ns: Vec<String> = Vec::new();
-    for qr in &results_raw {
+    for qr in results_raw {
         if let Ok(resp) = &qr.result {
             for record in resp.answers() {
                 if let hickory_proto::rr::RData::NS(ns) = &record.data {
@@ -1071,7 +1098,7 @@ async fn check_ns_delegation_consistency(
     auth_ns.sort();
     auth_ns.dedup();
 
-    if recursive_ns == auth_ns {
+    if recursive_ns == auth_ns.as_slice() {
         vec![CheckResult::Ok(format!(
             "NS delegation is consistent: {} name server(s) match between parent and child",
             recursive_ns.len()
