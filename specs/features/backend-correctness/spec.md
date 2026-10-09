@@ -34,7 +34,7 @@ Line numbers at `8eb895a`.
 3. **Reputation from flags (R5.2).** lens scores an address from ifconfig-rs's booleans: `is_spamhaus`, `is_c2` or `is_tor` → Fail; `is_vpn` → Warn; otherwise Pass. lens enriches only public addresses (`netray_common::target_policy`); a non-public one is not sent and counts as not checked. A public address whose enrichment failed or timed out makes the IP section Errored (the result incomplete). lens enriches at most eight public addresses, up to four IPv4 and up to four IPv6, each family sorted; when it checked fewer than it resolved, the reputation detail states "checked N of M addresses".
 4. **One classifier (R5.2).** ifconfig-rs classifies with one function, in `/json`'s priority order (internal > c2 > bot > cloud > vpn > tor > spamhaus > datacenter > residential), used by `/json`, `/network` and `/range` (which applies it to the range's network address).
 5. **Messages are text (R5.5).** A lint or check message is rendered as text in prism's and lens's frontends, in lens's snapshot HTML and in SVG/OG text; lens's and prism's Markdown exports put every message and the domain in an inline code span (a backtick fence longer than any backtick run in the value), so a copied report carries no live link, autolink or HTML. A `tests/repo` convention test fails when a frontend under `crates/*/frontend/src` or `packages/common-frontend/src` uses `innerHTML`, `outerHTML`, `insertAdjacentHTML` or `dangerouslySetInnerHTML`.
-6. **`@system` only when allowed (R5.9, SC17).** prism's `/api/config` reports whether system resolvers are allowed; the UI lists and documents `@system` only when it said so (hidden before the answer and when the request fails). The server keeps refusing it when disallowed. `crates/mhost-prism/tests/fixtures/prism.production.toml` sets `[dns] allow_system_resolvers = false` (K5).
+6. **`@system` only when allowed (R5.9, SC17).** prism's `/api/config` reports whether system resolvers are allowed; the UI lists and documents `@system` only when it said so (hidden before the answer and when the request fails). `POST /api/parse` offers `@system` as a completion only when allowed. The server keeps refusing it when disallowed. `crates/mhost-prism/tests/fixtures/prism.production.toml` sets `[dns] allow_system_resolvers = false` (K5).
 
 ## Phase 1 — prism lints
 
@@ -98,6 +98,7 @@ The hostile value is `"><img src=x onerror=alert(1)>[x](javascript:alert(1))`, c
 - GIVEN the config on WHEN the same THEN both appear.
 - GIVEN `/api/config` not yet answered or failing WHEN the input renders THEN no `@system` suggestion.
 - GIVEN `allow_system_resolvers = false` WHEN a query names `@system` THEN `SYSTEM_RESOLVERS_DISABLED`, as today.
+- GIVEN `allow_system_resolvers = false` WHEN `POST /api/parse` completes `example.com @sy` or `example.com ` THEN no `@system` completion; GIVEN it true THEN `@system` is offered.
 - GIVEN `prism.production.toml` WHEN loaded THEN `allow_system_resolvers` is false.
 
 ## Decision log
@@ -106,6 +107,7 @@ The hostile value is `"><img src=x onerror=alert(1)>[x](javascript:alert(1))`, c
 - `+check` uses the DO bit instead of dropping RRSIGs: the expiry and algorithm lines stay (operator, 2026-10-09; AMENDMENT to SDD R5.1).
 - Non-public addresses are filtered before enrichment, over counting ifconfig-rs's refusal as a failure: such a domain would be incomplete forever (operator, 2026-10-09; AMENDMENT to SDD R5.2).
 - `@system` hidden until the server allows it (operator, 2026-10-09).
+- `POST /api/parse` filters `@system` the same way, over leaving a public completion the query then refuses (operator, 2026-10-09; AMENDMENT from the Phase 4 reading).
 - Messages and the domain as inline code in both Markdown exports, over escaping metacharacters: escaping leaves autolinks live (operator, 2026-10-09).
 - Duplicates keep the highest TTL, as mhost's `check_ttl` does; one classifier in `/json`'s order, applied to a range's network address (independent reading).
 - prism's frontend gains jsdom and `@solidjs/testing-library` as dev dependencies for its rendering test, matching lens's setup.
