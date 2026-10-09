@@ -4,7 +4,7 @@ data: {"category":"spf","detail":"SPF record: v=spf1 ip4:192.0.2.0/24 -all","sub
 
 data: {"category":"dkim","detail":"DKIM key(s) found","sub_checks":[{"detail":"selector 'default': RSA 2048 bits","name":"rsa_key_ok","verdict":"pass"}],"title":"DKIM","type":"category","verdict":"pass"}
 
-data: {"category":"dmarc","detail":"DMARC: v=DMARC1; p=reject; rua=mailto:dmarc@example.com","sub_checks":[{"detail":"p=reject","name":"policy_reject","verdict":"pass"}],"title":"DMARC","type":"category","verdict":"pass"}
+data: {"category":"dmarc","detail":"DMARC: v=DMARC1; p=reject; rua=mailto:dmarc@example.com","sub_checks":[{"detail":"p=reject","name":"policy_reject","verdict":"pass"},{"detail":"no forensic reports configured","name":"no_ruf","verdict":"info"}],"title":"DMARC","type":"category","verdict":"pass"}
 
 data: {"category":"mta_sts","detail":"No MTA-STS record","sub_checks":[{"detail":"no MTA-STS DNS record","name":"absent","verdict":"info"}],"title":"MTA-STS","type":"category","verdict":"info"}
 

@@ -1,5 +1,25 @@
 use crate::quality::{AllResults, Category, CheckResult, SubCheck, Verdict};
 
+/// Sub-check name emitted when the domain declares it sends no mail; lens relies on it.
+pub const SENDS_NO_MAIL: &str = "sends_no_mail";
+
+/// Every sub-check name `cross_validate` can emit.
+pub const CROSS_VALIDATION_CHECKS: &[&str] = &[
+    SENDS_NO_MAIL,
+    "dane_without_dnssec",
+    "mta_sts_without_tls_rpt",
+    "dane_without_tls_rpt",
+    "spf_mx_coverage",
+    "bimi_dmarc_policy",
+    "null_mx_spf",
+    "reject_no_dkim",
+    "mta_sts_id_mismatch",
+    "mta_sts_mx_coverage",
+    "dmarc_rua_auth",
+    "dmarc_sp_gap",
+    "fcrdns_mismatch",
+];
+
 /// Run all cross-validation rules against collected results.
 #[tracing::instrument(skip_all, fields(category = "cross_validation"))]
 pub fn cross_validate(results: &AllResults) -> CheckResult {
@@ -48,7 +68,18 @@ pub fn cross_validate(results: &AllResults) -> CheckResult {
         format!("{} cross-validation issue(s)", sub_checks.len())
     };
 
-    CheckResult::new(Category::CrossValidation, sub_checks, detail)
+    let mut result = CheckResult::new(Category::CrossValidation, sub_checks, detail);
+    if results.sends_no_mail {
+        result.sub_checks.insert(
+            0,
+            SubCheck {
+                name: SENDS_NO_MAIL.to_string(),
+                verdict: Verdict::Info,
+                detail: "domain declares it sends no mail (Null MX or SPF -all only)".to_string(),
+            },
+        );
+    }
+    result
 }
 
 fn check_dane_without_dnssec(r: &AllResults) -> Option<SubCheck> {
@@ -321,6 +352,7 @@ mod tests {
             mx_hosts: Vec::new(),
             mx_ips: Vec::new(),
             null_mx: false,
+            sends_no_mail: false,
             spf: empty_result(Category::Spf),
             spf_flat: None,
             spf_has_dash_all: false,
@@ -527,5 +559,51 @@ mod tests {
             .unwrap();
         assert_eq!(sc.verdict, Verdict::Warn);
         assert!(sc.detail.contains("subdomains"));
+    }
+
+    /// C19: every rule fires, and the emitted names are exactly `CROSS_VALIDATION_CHECKS`.
+    /// `null_mx_spf` (needs no `-all`) and `reject_no_dkim` (needs `-all`) exclude
+    /// each other, so two inputs cover the rules.
+    #[test]
+    fn emitted_names_equal_cross_validation_checks() {
+        use std::collections::BTreeSet;
+
+        let mut a = base_results();
+        a.dane_has_tlsa = true; // dane_without_dnssec, dane_without_tls_rpt
+        a.mta_sts_present = true; // mta_sts_without_tls_rpt
+        a.mta_sts_info = Some(MtaStsInfo {
+            dns_id: "a".to_string(),
+            policy_id: Some("b".to_string()), // mta_sts_id_mismatch
+            mode: Some("enforce".to_string()),
+            mx_patterns: vec!["other.example.com".to_string()], // mta_sts_mx_coverage
+        });
+        a.mx_hosts = vec!["mail.example.com".to_string()];
+        a.mx_ips = vec!["203.0.113.10".parse().unwrap()];
+        a.spf_flat = Some(SpfFlat {
+            authorized_prefixes: Vec::new(), // spf_mx_coverage
+        });
+        a.bimi_present = true; // bimi_dmarc_policy (policy not enforcing)
+        a.null_mx = true; // null_mx_spf (no -all)
+        a.sends_no_mail = true; // sends_no_mail
+        a.dmarc_rua_external_auth_ok = false; // dmarc_rua_auth
+        a.fcrdns_all_pass = false; // fcrdns_mismatch
+
+        let mut b = base_results();
+        b.dmarc_policy = Some("reject".to_string());
+        b.dmarc_sp = Some("none".to_string()); // dmarc_sp_gap
+        b.spf_has_dash_all = true; // reject_no_dkim (dkim_found false)
+
+        let mut emitted: BTreeSet<String> = BTreeSet::new();
+        for r in [&a, &b] {
+            for sc in cross_validate(r).sub_checks {
+                emitted.insert(sc.name);
+            }
+        }
+        let listed: BTreeSet<String> = CROSS_VALIDATION_CHECKS
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(emitted, listed);
+        assert!(listed.contains(SENDS_NO_MAIL));
     }
 }

@@ -25,11 +25,22 @@ use crate::quality::{Category, CheckResult, SpfFlat, SubCheck, Verdict};
 
 /// Check SPF records for the domain.
 /// Returns (CheckResult, Option<SpfFlat>, has_dash_all).
-#[tracing::instrument(skip_all, fields(category = "spf", domain = %domain))]
 pub async fn check_spf<R: DnsLookup>(
     domain: &str,
     resolver: &R,
 ) -> (CheckResult, Option<SpfFlat>, bool) {
+    let (result, flat, has_dash_all, _only_dash_all) = check_spf_detailed(domain, resolver).await;
+    (result, flat, has_dash_all)
+}
+
+/// Check SPF records for the domain.
+/// Returns (CheckResult, Option<SpfFlat>, has_dash_all, only_dash_all), where
+/// `only_dash_all` is true when the record's only mechanism is `-all`.
+#[tracing::instrument(skip_all, fields(category = "spf", domain = %domain))]
+pub async fn check_spf_detailed<R: DnsLookup>(
+    domain: &str,
+    resolver: &R,
+) -> (CheckResult, Option<SpfFlat>, bool, bool) {
     let txt_records = resolver.lookup_txt(domain).await;
     let spf_records: Vec<&str> = txt_records
         .iter()
@@ -46,7 +57,7 @@ pub async fn check_spf<R: DnsLookup>(
             detail: "no SPF record found".to_string(),
         });
         let result = CheckResult::new(Category::Spf, sub_checks, "No SPF record".to_string());
-        return (result, None, false);
+        return (result, None, false, false);
     }
 
     if spf_records.len() > 1 {
@@ -63,11 +74,19 @@ pub async fn check_spf<R: DnsLookup>(
             sub_checks,
             "Multiple SPF records".to_string(),
         );
-        return (result, None, false);
+        return (result, None, false, false);
     }
 
     let spf = spf_records[0];
     let mechanisms: Vec<&str> = spf.split_whitespace().skip(1).collect(); // skip "v=spf1"
+
+    let only_dash_all = {
+        let mut terms = mechanisms.iter().filter(|t| !is_modifier(t));
+        matches!(
+            (terms.next(), terms.next()),
+            (Some(only), None) if is_dash_all(only)
+        )
+    };
 
     let mut lookup_count: u16 = 0;
     let mut void_count: u16 = 0;
@@ -81,7 +100,7 @@ pub async fn check_spf<R: DnsLookup>(
         let (qualifier, body) = parse_mechanism(mech);
 
         // Top-level-only mechanisms: `all` and `ptr` set grading signals.
-        if body == "all" {
+        if body.eq_ignore_ascii_case("all") {
             match qualifier {
                 '+' => {
                     sub_checks.push(SubCheck {
@@ -179,7 +198,7 @@ pub async fn check_spf<R: DnsLookup>(
     };
     let result = CheckResult::new(Category::Spf, sub_checks, detail);
 
-    (result, Some(spf_flat), has_dash_all)
+    (result, Some(spf_flat), has_dash_all, only_dash_all)
 }
 
 /// Recursively expand SPF includes.
@@ -359,6 +378,17 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             }
         }
     })
+}
+
+fn is_dash_all(term: &str) -> bool {
+    let (qualifier, body) = parse_mechanism(term);
+    qualifier == '-' && body.eq_ignore_ascii_case("all")
+}
+
+/// An RFC 7208 modifier is `name=value`; a mechanism's `=` never precedes its first `:` or `/`.
+fn is_modifier(term: &str) -> bool {
+    term.find('=')
+        .is_some_and(|eq| !term[..eq].contains([':', '/']))
 }
 
 /// Parse an SPF mechanism into (qualifier, body).
@@ -607,5 +637,36 @@ mod tests {
             "void include targets should count; got {:?}",
             result.sub_checks
         );
+    }
+
+    /// Only-`-all` detection: modifiers and redirect do not count as mechanisms,
+    /// mechanism names are case-insensitive (RFC 7208 4.6.1).
+    #[tokio::test]
+    async fn only_dash_all_table() {
+        let rows: &[(&str, bool)] = &[
+            ("v=spf1 -all", true),
+            ("v=spf1 -all exp=explain.example.com", true),
+            ("v=spf1 redirect=_spf.example.com -all", true),
+            ("v=spf1 -ALL", true),
+            ("v=spf1 include:_spf.example.com -all", false),
+            ("v=spf1 ~all", false),
+            ("v=spf1 a -all", false),
+        ];
+        let mut failures = Vec::new();
+        for (record, want) in rows {
+            let resolver = TestDnsResolver::new().with_txt("example.com", vec![record]);
+            let (_r, _flat, _has, only) = check_spf_detailed("example.com", &resolver).await;
+            if only != *want {
+                failures.push(format!("{record:?}: only_dash_all={only}, want {want}"));
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    #[tokio::test]
+    async fn has_dash_all_is_case_insensitive() {
+        let resolver = TestDnsResolver::new().with_txt("example.com", vec!["v=spf1 -ALL"]);
+        let (_r, _flat, has_dash_all, _only) = check_spf_detailed("example.com", &resolver).await;
+        assert!(has_dash_all, "-ALL is -all (RFC 7208 4.6.1)");
     }
 }

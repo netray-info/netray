@@ -20,8 +20,8 @@ pub struct IpEnrichment {
 #[serde(rename_all = "snake_case")]
 pub enum Verdict {
     Skip,
-    Pass,
     Info,
+    Pass,
     Warn,
     Fail,
 }
@@ -68,6 +68,22 @@ pub enum Category {
 }
 
 impl Category {
+    /// Every category, in declaration order.
+    pub const ALL: [Category; 12] = [
+        Category::Mx,
+        Category::Spf,
+        Category::Dkim,
+        Category::Dmarc,
+        Category::MtaSts,
+        Category::TlsRpt,
+        Category::Dane,
+        Category::Dnssec,
+        Category::Bimi,
+        Category::Fcrdns,
+        Category::Dnsbl,
+        Category::CrossValidation,
+    ];
+
     pub fn title(&self) -> &'static str {
         match self {
             Self::Mx => "MX",
@@ -147,6 +163,7 @@ pub struct AllResults {
     pub mx_hosts: Vec<String>,
     pub mx_ips: Vec<IpAddr>,
     pub null_mx: bool,
+    pub sends_no_mail: bool,
     pub spf: CheckResult,
     pub spf_flat: Option<SpfFlat>,
     pub spf_has_dash_all: bool,
@@ -182,4 +199,40 @@ pub struct MtaStsInfo {
     #[allow(dead_code)]
     pub mode: Option<String>,
     pub mx_patterns: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sub(verdict: Verdict) -> SubCheck {
+        SubCheck {
+            name: "x".to_string(),
+            verdict,
+            detail: String::new(),
+        }
+    }
+
+    fn category_verdict(verdicts: &[Verdict]) -> Verdict {
+        let subs = verdicts.iter().copied().map(sub).collect();
+        CheckResult::new(Category::Spf, subs, String::new()).verdict
+    }
+
+    #[test]
+    fn c7_info_ranks_below_pass() {
+        assert!(Verdict::Info < Verdict::Pass);
+    }
+
+    #[test]
+    fn c7_category_verdict_info_does_not_outrank_pass() {
+        let rows: &[(&[Verdict], Verdict)] = &[
+            (&[Verdict::Pass, Verdict::Info], Verdict::Pass),
+            (&[Verdict::Info], Verdict::Info),
+            (&[Verdict::Info, Verdict::Warn], Verdict::Warn),
+            (&[], Verdict::Pass),
+        ];
+        for (subs, expected) in rows {
+            assert_eq!(category_verdict(subs), *expected, "sub-checks {subs:?}");
+        }
+    }
 }

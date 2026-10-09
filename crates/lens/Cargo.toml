@@ -71,6 +71,7 @@ fontdb = "0.24"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [dev-dependencies]
+beacon = { path = "../beacon" }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 serde_json = { workspace = true }

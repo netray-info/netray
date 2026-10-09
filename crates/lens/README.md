@@ -259,7 +259,20 @@ The email section is split into four buckets:
 | `email_transport`      | 5  | Domains with MX records only — MTA-STS, TLS-RPT, DANE |
 | `email_brand_policy`   | 2  | Domains with MX records only — BIMI |
 
-When beacon reports no MX records (its `no_mx` sub-check; a parked domain), the three receiving buckets are marked **not-applicable** and use `CheckVerdict::Skip`. They contribute 0 to both earned and possible points — no penalty. Only `email_authentication` (weight 10) is scored, as SPF/DKIM/DMARC apply to every domain for outbound mail protection. Any other MX failure (an MX pointing at a CNAME, an MX host without an address) means MX records exist: the receiving buckets are scored and fail accordingly.
+A bucket's verdict is the worst of its beacon categories' verdicts and of the cross-validation findings routed to it. Beacon's `info` is neutral: a bucket with none of pass, warn or fail (for example BIMI-less brand policy) is **not-applicable** (`CheckVerdict::Skip`, reason "not applicable") and contributes 0 to both earned and possible points. `dnssec` is scored in the DNS section, not here. Cross-validation is not a category of its own; its sub-checks are routed by name:
+
+| Bucket | Cross-validation sub-checks |
+|---|---|
+| `email_authentication` | `null_mx_spf`, `reject_no_dkim`, `dmarc_rua_auth`, `dmarc_sp_gap`, `spf_mx_coverage`, `sends_no_mail` |
+| `email_infrastructure` | `fcrdns_mismatch` |
+| `email_transport` | `mta_sts_*`, `dane_*` |
+| `email_brand_policy` | `bimi_dmarc_policy` |
+
+When the domain declares it sends no mail (`sends_no_mail`), `reject_no_dkim` and `spf_mx_coverage` are ignored.
+
+When beacon reports no MX records (its `no_mx` sub-check; a parked domain) or a Null MX (`null_mx`, RFC 7505), the three receiving buckets are marked **not-applicable** and use `CheckVerdict::Skip`. They contribute 0 to both earned and possible points — no penalty. Only `email_authentication` (weight 10) is scored, as SPF/DKIM/DMARC apply to every domain for outbound mail protection. Any other MX failure (an MX pointing at a CNAME, an MX host without an address) means MX records exist: the receiving buckets are scored and fail accordingly.
+
+**Timeouts and broken streams.** A beacon run whose own timeout fired (summary grade `skipped`) makes the email section a timeout, so the verdict is incomplete; it is never not-applicable. A category whose sub-check is `skipped`, a summary verdict without its category event, a category lens does not know, or an unrouted cross-validation sub-check makes the email section errored (the last two also increment `lens_unknown_verdict_total{section="email"}`).
 
 ### Grade thresholds
 

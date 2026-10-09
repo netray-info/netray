@@ -69,8 +69,8 @@ describe('SseEvent discriminant narrowing', () => {
 // ---- Verdict ordering ------------------------------------------------------
 
 describe('VERDICT_ORDER', () => {
-  it('orders skip < pass < info < warn < fail', () => {
-    const order: Verdict[] = ['skip', 'pass', 'info', 'warn', 'fail'];
+  it('orders skip < info < pass < warn < fail, as the server does', () => {
+    const order: Verdict[] = ['skip', 'info', 'pass', 'warn', 'fail'];
     for (let i = 0; i < order.length - 1; i++) {
       expect(VERDICT_ORDER[order[i]]).toBeLessThan(VERDICT_ORDER[order[i + 1]]);
     }

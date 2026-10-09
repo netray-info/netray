@@ -269,14 +269,14 @@ async fn known_verdicts_stay_ok_and_count_nothing() {
     assert_eq!(verdict_of(&http, "https_redirect"), CheckVerdict::Pass);
     assert_eq!(verdict_of(&http, "security_headers"), CheckVerdict::Warn);
 
-    // golden: dkim=fail, mta_sts=warn; bimi and dane are `info`, mapped as today (not scored)
+    // golden: dkim=fail, mta_sts=warn; brand (bimi `absent`, info only) is Skip
     let email = run("email", golden("beacon.sse")).await.expect("email Ok");
     assert_eq!(
         verdict_of(&email, "email_authentication"),
         CheckVerdict::Fail
     );
     assert_eq!(verdict_of(&email, "email_transport"), CheckVerdict::Warn);
-    assert_eq!(verdict_of(&email, "email_brand_policy"), CheckVerdict::Pass);
+    assert_eq!(verdict_of(&email, "email_brand_policy"), CheckVerdict::Skip);
 
     let ip = run("ip", golden("ifconfig-json.json"))
         .await

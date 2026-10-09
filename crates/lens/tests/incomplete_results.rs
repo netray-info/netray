@@ -335,6 +335,19 @@ async fn incomplete_c6_no_address_records_and_failed_tls_http_is_incomplete() {
     assert_incomplete(&c);
 }
 
+/// A beacon run that timed out ends with every check skipped: nothing was measured, so the
+/// verdict is incomplete, not a passing grade.
+#[tokio::test]
+async fn incomplete_email_all_skipped_summary_is_incomplete() {
+    let h = harness(Backends {
+        email: Answer::Golden("beacon-timeout.sse"),
+        ..Backends::healthy()
+    })
+    .await;
+    let c = post_check(&h.app).await;
+    assert_incomplete(&c);
+}
+
 #[tokio::test]
 async fn incomplete_c7_badge_first_shows_question_mark_and_leaves_check_uncached() {
     let h = harness(Backends {
