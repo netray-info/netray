@@ -6,6 +6,7 @@
 #   4. Cargo.lock's time package is >= 0.3.47
 #   5. crates/common declares rust-version = "1.88"
 #   7. every hickory-proto and hickory-net package in Cargo.lock is >= 0.26.1
+#   8. Cargo.lock has no rustybuzz or ttf-parser package (resvg/usvg 0.48, fontdb 0.24)
 #   6. the comment check can fail: it is run over a fixture with one uncommented ID
 #
 # Phase 2 tightens EXPECTED_IGNORES to the three hickory/paste-free remainder;
@@ -13,7 +14,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
-EXPECTED_IGNORES="RUSTSEC-2026-0206 RUSTSEC-2026-0192 RUSTSEC-2024-0436"
+EXPECTED_IGNORES="RUSTSEC-2024-0436"
 
 fails=0
 fail() { echo "FAIL: $1"; fails=1; }
@@ -82,9 +83,12 @@ check_lock() {
   echo "read $lock: $pkgs packages"
   [ "$pkgs" -gt 0 ] || { echo "FAIL: $lock: no packages parsed"; return 1; }
   local rc=0
-  if grep -q '^name = "rustls-pemfile"$' "$lock"; then
-    echo "FAIL: $lock still has the rustls-pemfile package"; rc=1
-  fi
+  local gone
+  for gone in rustls-pemfile rustybuzz ttf-parser; do
+    if grep -q "^name = \"$gone\"\$" "$lock"; then
+      echo "FAIL: $lock still has the $gone package"; rc=1
+    fi
+  done
   tv=$(lock_version "$lock" time)
   echo "time version in $lock: ${tv:-none}"
   if [ -z "$tv" ]; then
