@@ -34,3 +34,49 @@ C4 and C9 passed at the baseline (`6e1721b`) and pin today's behaviour; the othe
 ### Behavioural verification
 
 skipped: no entry point changes in this phase; the backends are driven by the contract-style tests against the real goldens.
+
+## Phase 2 — Incomplete results
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R3: incomplete when a weighted section is Errored, Timeout or Scored with `possible == 0`; NotApplicable excluded; grade `incomplete`; `complete` in the summary; `possible == 0` section status `"error"`; doc comments corrected | green | crates/lens/tests/scoring_regression.rs, crates/lens/tests/incomplete_results.rs |
+| C2 | R4: one cache writer refusing incomplete; no snapshot; badge and OG `?` with the short `Cache-Control` | green | crates/lens/tests/incomplete_results.rs |
+| C3 | R11: golden projection records `complete`; fixture `no-address-records` | green | crates/lens/tests/lens_golden.rs |
+| C4 | email 500 → `incomplete`, `complete:false`, no snapshot id, second request MISS; `scoring_regression.rs:571` moves | green | crates/lens/tests/incomplete_results.rs, scoring_regression.rs |
+| C5 | beacon answer with `skip` everywhere → `incomplete`, email status `"error"` | moved: email-scoring (R4.3) | crates/lens/tests/incomplete_results.rs |
+| C6 | A/AAAA `NxDomain`, tlsight and spectra error → `incomplete`; `no-address-records` golden | green | crates/lens/tests/incomplete_results.rs, lens_golden.rs |
+| C7 | badge first with email 500 → `?`, short `Cache-Control`, then `/api/check` MISS | green | crates/lens/tests/incomplete_results.rs |
+| C8 | OG first with email 500 → `?`, short `Cache-Control`, then `/api/check` MISS | green | crates/lens/tests/incomplete_results.rs |
+| C9 | every backend unreachable → badge `max-age=300`, as today | already_implemented | crates/lens/tests/badge_routes.rs |
+| C10 | email NotApplicable, others scored → letter, complete | already_implemented | crates/lens/tests/scoring_regression.rs |
+| C11 | committed lens goldens gain `complete:true`, otherwise unchanged | green | crates/lens/tests/lens_golden.rs |
+
+C9 and C10 passed at the baseline (`b486ead`); the others failed there. C5 is dropped from this feature (below).
+
+Test changes beyond the baseline commit, all named in the phase commit's trailers:
+- `OverallScore` literals in `routes.rs` tests, `og_routes.rs`, `badge_routes.rs`, `sdd_lens_badges_p1_c11_cache_coalesce.rs`, `og_label_bounds.rs` gain `complete` (true, or false for a stubbed `error`/`incomplete` grade).
+- `scoring::engine::tests::hard_fail_on_fail_verdict_forces_grade_f` used unweighted dns names (`spf`, `dmarc`), which now make the result incomplete; it uses weighted ones (`caa`, `ns`).
+- `routes::tests::cache_hit_returns_x_cache_hit` and `…_in_sync_mode` ran against unreachable backends; that result is now incomplete and never cached, so the second request is a MISS. Cache HIT in SSE and sync mode is pinned by the new `complete_result_is_snapshotted_and_cached` with stubbed healthy backends.
+- `incomplete_c5_email_all_skip_is_incomplete_with_error_section` is removed: it passed only because its rewrite dropped the stream's last blank line (so the collector errored); a well-formed all-`skip` beacon answer still scores email Pass, which R4.3 owns.
+- `lens-no-address-records.json` generated with `UPDATE_GOLDEN=1` once the code was green.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| incomplete results | 3 | sonnet + orchestrator (test literals, three adapted tests) | 71953 | 180 |
+
+### Review
+
+- BLOCKER → AMENDMENT (resolved by scope) | a well-formed beacon answer with `skip` in every category gets a complete letter with email Pass: `aggregate_bucket` starts at Pass and ranks Skip like Pass (`crates/lens/src/backends/email.rs:362,440`). The spec's C5 scenario and decision-log claim were wrong; C5 moves to the email-scoring feature (R4.2/R4.3), the spec's non-goal and decision log now say so | affected_phase: 2 | repaired_in_phase: yes (spec amended, test removed)
+- AMENDMENT (fixed) | C5 passed through the Errored path because `all_skip` dropped the final blank line | affected_phase: 2 | repaired_in_phase: yes (test removed)
+- AMENDMENT (fixed) | `crates/lens/README.md` scoring section (lens's SCORING SYNC RULE) now describes `Errored`, incomplete results, `complete` and `snapshot_id` | affected_phase: 2 | repaired_in_phase: yes
+- AMENDMENT (fixed) | no test reached the sync-mode cache-hit branch after `cache_hit_returns_x_cache_hit_in_sync_mode` moved to MISS; the control test now checks a JSON HIT | affected_phase: 2 | repaired_in_phase: yes
+- DEFERRED | with a custom scoring profile that lacks a registered section, that section reports `"error"` while the result stays complete and graded (`routes.rs:1192`, `:1479`); production uses the embedded profile with all five sections.
+- Sound per the reader: only `store_result` and `get_or_compute` write the cache and both refuse incomplete; snapshots only for complete results; badge/OG `?` with `max-age=300`; moka `and_compute_with` coalesces a complete burst and never blocks other keys; no-MX stays complete; old snapshots render unchanged.
+
+### Behavioural verification
+
+skipped: the routes are driven in-process with stubbed backends by `crates/lens/tests/incomplete_results.rs`; no deployment-shaped entry point beyond those.

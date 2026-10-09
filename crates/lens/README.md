@@ -231,9 +231,10 @@ Each backend returns a set of named checks. Every check has a status: `pass`, `w
 1. **Per-check score**: `pass` = full weight, `warn` = half weight, `fail`/`not_found` = 0. `skip` and `error` are excluded entirely.
 2. **Section score**: weighted sum of earned points ÷ weighted sum of possible points, as a percentage.
 3. **Overall score**: weighted average of section scores.
-4. **Section states**: a section can be `Scored` (contributes to overall), `Errored` (excluded silently), or `NotApplicable` (excluded; reason reported in `summary.not_applicable`).
-5. **Hard-fail overrides**: certain failures force the overall grade to **F** regardless of the numeric score.
-6. **Letter grade**: score mapped to thresholds.
+4. **Section states**: a section can be `Scored` (contributes to overall), `Errored` (the backend failed, timed out or sent an unknown verdict), or `NotApplicable` (excluded; reason reported in `summary.not_applicable`).
+5. **Incomplete results**: when any weighted section is `Errored` or `Scored` with no possible points (every weighted check `skip`), the result is incomplete: grade `incomplete`, `summary.complete` is `false`, finished sections keep their own scores and grades, and the result is never cached, snapshotted, or shown as a letter on the badge or OG card (both show `?`). `NotApplicable` sections do not make a result incomplete.
+6. **Hard-fail overrides**: certain failures force the overall grade to **F** regardless of the numeric score, unless the result is incomplete.
+7. **Letter grade**: score mapped to thresholds.
 
 ### Section weights
 
@@ -299,8 +300,8 @@ These conditions force an **F** regardless of the numeric score:
 | `http` | After HTTP backend (optional) | `status`, `headline`, `checks`, `detail_url` |
 | `email` | After email backend (optional) | `status`, `grade`, `buckets`, `headline`, `detail_url` |
 | `ip` | After IP backend | `status`, `headline`, `checks`, `addresses`, `detail_url` |
-| `summary` | After all backends | `grade`, `score`, `sections`, `not_applicable`, `hard_fail` |
-| `done` | Stream complete | `domain`, `duration_ms`, `cached` |
+| `summary` | After all backends | `grade`, `complete`, `score`, `sections`, `not_applicable`, `hard_fail` |
+| `done` | Stream complete | `domain`, `duration_ms`, `cached`, `snapshot_id` (null for an incomplete result) |
 
 The `email` event `status` is one of: `pass`, `warn`, `fail`, `error`, `not_applicable`.
 The `summary` event includes `not_applicable: Record<string, string>` (always present, may be empty).

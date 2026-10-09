@@ -343,6 +343,7 @@ async fn known_grade_badge_has_correct_cache_headers() {
                     hard_fail_triggered: false,
                     hard_fail_checks: vec![],
                     not_applicable: HashMap::new(),
+                    complete: true,
                 },
                 duration_ms: 1,
                 cached_at: SystemTime::now(),

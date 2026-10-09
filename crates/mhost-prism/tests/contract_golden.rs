@@ -242,6 +242,9 @@ async fn prism_check_stream_without_address_records_matches_golden() {
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let body = String::from_utf8(bytes.to_vec()).unwrap();
 
-    assert!(body.contains("NxDomain"), "stream must carry NxDomain answers");
+    assert!(
+        body.contains("NxDomain"),
+        "stream must carry NxDomain answers"
+    );
     assert_golden("prism-no-address.sse", &body);
 }

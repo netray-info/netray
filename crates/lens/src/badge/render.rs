@@ -24,7 +24,7 @@ pub fn escape_xml(s: &str) -> String {
 }
 
 pub fn svg_for_grade(label: &str, grade: &str, style: BadgeStyle) -> String {
-    let value_text = if grade == "error" || grade.is_empty() {
+    let value_text = if crate::routes::is_unscored_grade(grade) || grade.is_empty() {
         "?"
     } else {
         grade

@@ -1,0 +1,71 @@
+{
+  "summary": {
+    "grade": "incomplete",
+    "score": 31.8,
+    "overall": "error",
+    "complete": false,
+    "sections": {
+      "dns": "fail",
+      "email": "fail",
+      "http": "error",
+      "ip": "error",
+      "tls": "error"
+    },
+    "section_grades": {
+      "dns": "F",
+      "email": "D"
+    },
+    "hard_fail": false,
+    "hard_fail_checks": [],
+    "not_applicable": []
+  },
+  "sections": {
+    "dns": {
+      "status": "fail",
+      "checks": [
+        {
+          "name": "caa",
+          "verdict": "warn"
+        },
+        {
+          "name": "ns",
+          "verdict": "fail"
+        }
+      ]
+    },
+    "email": {
+      "status": "fail",
+      "grade": "D",
+      "checks": [
+        {
+          "name": "email_authentication",
+          "verdict": "fail"
+        },
+        {
+          "name": "email_infrastructure",
+          "verdict": "pass"
+        },
+        {
+          "name": "email_transport",
+          "verdict": "warn"
+        },
+        {
+          "name": "email_brand_policy",
+          "verdict": "pass"
+        }
+      ]
+    },
+    "http": {
+      "status": "error",
+      "checks": []
+    },
+    "ip": {
+      "status": "error",
+      "checks": []
+    },
+    "tls": {
+      "status": "error",
+      "checks": []
+    }
+  }
+}

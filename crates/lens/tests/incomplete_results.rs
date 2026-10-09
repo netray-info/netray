@@ -242,47 +242,47 @@ async fn incomplete_c4_email_http500_is_incomplete_unsnapshotted_and_uncached() 
     assert_eq!(second.cache, "MISS", "an incomplete result is never cached");
 }
 
-/// Replace every verdict in a beacon SSE body with `skip`, keeping its shape.
-fn all_skip(beacon: &str) -> String {
-    fn skip(v: &mut Value) {
-        if v.get("verdict").is_some() {
-            v["verdict"] = json!("skip");
-        }
-        if let Some(subs) = v.get_mut("sub_checks").and_then(Value::as_array_mut) {
-            for s in subs {
-                skip(s);
-            }
-        }
-        if let Some(map) = v.get_mut("verdicts").and_then(Value::as_object_mut) {
-            for val in map.values_mut() {
-                *val = json!("skip");
-            }
-        }
-    }
-    beacon
-        .lines()
-        .map(|line| match line.strip_prefix("data: ") {
-            Some(d) => {
-                let mut v: Value = serde_json::from_str(d).expect("beacon data line is JSON");
-                skip(&mut v);
-                format!("data: {v}")
-            }
-            None => line.to_string(),
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
+/// Control for C4: a complete result is snapshotted and cached as before.
 #[tokio::test]
-async fn incomplete_c5_email_all_skip_is_incomplete_with_error_section() {
-    let h = harness(Backends {
-        email: Answer::Body(all_skip(&golden("beacon.sse"))),
-        ..Backends::healthy()
-    })
-    .await;
-    let c = post_check(&h.app).await;
-    assert_incomplete(&c);
-    assert_eq!(c.event("email")["status"], "error");
+async fn complete_result_is_snapshotted_and_cached() {
+    let h = harness(Backends::healthy()).await;
+
+    let first = post_check(&h.app).await;
+    assert_eq!(first.event("summary")["complete"], true);
+    assert!(
+        !first.event("done")["snapshot_id"].is_null(),
+        "a complete result is snapshotted: {}",
+        first.event("done")
+    );
+    assert_eq!(first.cache, "MISS");
+
+    let second = post_check(&h.app).await;
+    assert_eq!(second.cache, "HIT", "a complete result is cached");
+
+    // Sync mode (JSON) serves the same cached result.
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/check")
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::ACCEPT, "application/json")
+        .body(Body::from(r#"{"domain":"example.com"}"#))
+        .unwrap();
+    let resp = h.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        resp.headers().get("x-cache").and_then(|v| v.to_str().ok()),
+        Some("HIT")
+    );
+    let ct = resp
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        ct.contains("application/json"),
+        "sync cache hit is JSON, got {ct}"
+    );
 }
 
 /// prism.sse with the A lookup answered NxDomain and an AAAA batch answered NxDomain.

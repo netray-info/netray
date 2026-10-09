@@ -10,7 +10,7 @@ A lens grade is never better than what lens measured. A result with an Errored s
 ## Non-goals
 
 - The dot colour and any rendering of `incomplete` in the lens frontend beyond the API (V2, SDD SC16).
-- Email scoring (SDD R4.1–R4.5). The `"Skipped"` spelling guard (`email.rs:133`) stays; R4.2 corrects it.
+- Email scoring (SDD R4.1–R4.5). The `"Skipped"` spelling guard (`email.rs:133`) stays; R4.2 corrects it. A beacon answer whose categories are all `skip` (beacon's own timeout, or a panicked task) still scores email as Pass: lens's buckets start at Pass; R4.3 owns it.
 - IP enrichment failures (one IP or all) turning into reputation Pass (`crates/lens/src/backends/ip.rs:171`): SDD R5.2.
 - A domain without address records as NotApplicable: incomplete in 0.23.0 (SDD SC14).
 - prism's nameserver queries under the target policy: SDD R5.8, its own feature.
@@ -21,7 +21,7 @@ A lens grade is never better than what lens measured. A result with an Errored s
 Line numbers at `c9a16f4`.
 
 - Scoring: `score_section` (`crates/lens/src/scoring/engine.rs:65`) returns None for Errored/NotApplicable (`:70`) and for `possible == 0` (`:103-105`); `compute_score` (`:122`) drops a None silently (`:137-141`) and returns grade `"error"` only when nothing is left (`:145-155`). Doc comments `:42`, `:64` say "100% (full credit)", the opposite of the code. `scoring_regression.rs:571` pins an Errored email section as grade A+, `:600` a NotApplicable one.
-- lens's only NotApplicable producer is the beacon guard `summary.grade == "Skipped"` (`crates/lens/src/backends/email.rs:133`); beacon serialises `skipped` (`crates/beacon/src/quality/types.rs:36`), so a real beacon timeout reaches lens as `skip` verdicts in every category, which gives `possible == 0` for email.
+- lens's only NotApplicable producer is the beacon guard `summary.grade == "Skipped"` (`crates/lens/src/backends/email.rs:133`); beacon serialises `skipped` (`crates/beacon/src/quality/types.rs:36`), so a real beacon timeout reaches lens as `skip` verdicts in every category; lens's email buckets start at Pass and rank Skip like Pass (`email.rs:362,440`), so such an answer scores email Pass today.
 - Three cache writers build `CachedResult` themselves: `/api/check` (`crates/lens/src/routes.rs:1129-1138`, snapshot first at `:1126`), the badge recompute (`routes.rs:916-934`), the OG recompute (`crates/lens/src/og/handler.rs:139-165`). Badge and OG pick the short `Cache-Control` and the `?` rendering only for grade `"error"` (`routes.rs:941`, `og/handler.rs:174`, `crates/lens/src/badge/render.rs:27`). `section_status_from_checks` (`routes.rs:1175-1190`) returns `"pass"` for an `Ok` without warn/fail. `SummaryEvent` is `routes.rs:484-497`.
 - Hard deadline 20 s, a constant (`crates/lens/src/check.rs:77`); on expiry every section becomes Timeout and finished results are discarded (`:83-96`). dns and email apply their timeout twice (send, then stream: `dns.rs:114-125,145-148`, `email.rs:87-90,107-110`); tls, http and ip bound only the send (`tls.rs:162-165,184`, `http.rs:179-182,201`, `ip.rs:156-158,176`). Email hard-codes 15 s (`crates/lens/src/state.rs:124`; `config.rs:111`); the default `timeout_ms` is 2000 (`config.rs:125-127`). `Config::validate` (`config.rs:440-455`) checks no timeouts; `--check-config` runs `Config::load` (`crates/netray/src/main.rs:98-100`). Configs that load lens: `lens.production.toml` fixture (dns/tls/http/email 20000, ip 2000), `crates/lens/lens.dev.toml` (dns/tls/http 20000, ip 2000, email without `timeout_ms`), `crates/lens/lens.example.toml` (dns/tls 20000, ip 2000); they are loaded by `repo_config_files_load` (`config.rs:692`), `tests/repo/test_smoke_services.sh:29` and the release smoke (`.github/workflows/release.yml:74`).
 - `sse::drain` (`crates/lens/src/backends/sse.rs:26-85`): `Ok` without the terminal event (`:84`), unparseable payload dropped (`:53-54`), a second `data:` line overwrites the first (`:76-77`).
@@ -74,7 +74,6 @@ Line numbers at `c9a16f4`.
 ### Test Scenarios
 
 - GIVEN the email stub returns 500 WHEN `POST /api/check` THEN `grade:"incomplete"`, `complete:false`, no snapshot id, and a second request is a cache MISS (`scoring_regression.rs:571` moves to `incomplete`).
-- GIVEN the email stub serves a beacon answer with `skip` in every category WHEN checked THEN `grade:"incomplete"` and email status `"error"`.
 - GIVEN the DNS stub answers A and AAAA with `NxDomain` and the tlsight and spectra stubs error WHEN checked THEN `grade:"incomplete"`, `complete:false`; the `no-address-records` lens golden pins it.
 - GIVEN the email stub returns 500 WHEN `GET /badge/example.com.svg` first THEN the badge shows `?` with the short `Cache-Control`, and `/api/check` afterwards is a cache MISS.
 - GIVEN the email stub returns 500 WHEN `GET /og/example.com.png` first THEN the card shows `?` with the short `Cache-Control`, and `/api/check` afterwards is a cache MISS.
@@ -153,7 +152,7 @@ tlsight's `tls/mod.rs` (error codes), `quality/mod.rs` (`assess_port`), its cont
 - Badge and OG show `?` for an incomplete result, with the short `Cache-Control` used for errors today (operator, 2026-10-09; SC12; independent reading).
 - Timeouts 15000 (dns, tls, http, email) and 2000 (ip) in the production fixture, the dev and the example config: 17 s < 20 s; argus sets the same before the deploy (operator, 2026-10-09; K2/K4). Dev and example follow, because the budget check loads them in the gate and the release smoke (independent reading).
 - The hard deadline stays a constant passed into the check function, over a config key: a key would add a path argus's key comparison must render, and the test needs only a seam (independent reading).
-- A real beacon timeout is incomplete through `possible == 0`; the `"Skipped"` guard stays for R4.2 (independent reading).
+- A beacon answer with `skip` in every category stays as today (email buckets start at Pass, `email.rs:362,440`), so it is not incomplete here; R4.2/R4.3 (email-scoring feature) make it Timeout or Errored. The earlier claim that it becomes incomplete through `possible == 0` was wrong (phase 2 reader, 2026-10-09).
 - IP enrichment failures stay as today here; R5.2 owns them (independent reading).
 - Phase 6 depends on none and may be built first.
 
