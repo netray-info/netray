@@ -32,3 +32,18 @@ One group: the engine's `complete`, the summary and the cache writer are one flo
 - One writer, e.g. `fn store_result(state, key, output) -> Option<CachedResult>` in `crates/lens/src/cache.rs` or `routes.rs`, used by `/api/check` (`:1126-1138`), the badge recompute (`:916-934`) and the OG recompute (`og/handler.rs:139-165`): it refuses an incomplete result (no cache insert); `/api/check` snapshots only a complete result (`snapshot_id` null otherwise). The moka `or_insert_with_if` coalescing in badge/OG must not insert an incomplete value (return it to the caller without caching).
 - Badge and OG: treat `"incomplete"` like `"error"` — `is_error` (`routes.rs:941`, `og/handler.rs:174`) and `badge/render.rs:27` (`?`); the OG card renders `?` in place of the letter (find where `svg_for_grade` maps `error`).
 - Review fixes: README scoring section updated in the same commit (SCORING SYNC RULE); C5 dropped (R4.3 owns all-`skip` beacon answers).
+
+## Phase 3 — Deadlines
+
+### Groups
+
+One group: `check.rs`, the backends' request paths, `state.rs` and `config.rs` share the timeout values.
+
+### Plan
+
+- `check.rs`: `pub async fn run_check_with_deadline(state, input, hard_deadline: Duration) -> CheckOutput`; `run_check_with_input` passes `HARD_DEADLINE` (a `pub const` of 20 s, used by the config check too). Run each wave-1 backend as its own task whose result is recorded as soon as it finishes (e.g. a shared `Mutex<HashMap>` or a `JoinSet` drained under `tokio::time::timeout_at(deadline)`), so on expiry the finished sections are kept and only unfinished ones become `Err(SectionError::Timeout)`; wave 2 (ip) runs within the remaining time; the score is computed from what is present (Phase 2's `compute_score` then makes it incomplete).
+- Backends (`dns.rs`, `email.rs`, `tls.rs`, `http.rs`, `ip.rs`): wrap the whole call — connect, send and body read (`collect`, `collect_until_type`, `resp.json()`) — in one `tokio::time::timeout(timeout, async { … })`; for ip, per address as today.
+- `state.rs:124`: email uses `config.backends.email.timeout_ms`; `config.rs:111` comment updated.
+- `config.rs` `validate`: reject `max(dns, tls, http, email timeout_ms) + ip timeout_ms >= HARD_DEADLINE` with a message naming the backend timeouts and the hard deadline (it must contain the words `timeout` and `deadline`); `http` and `email` count only when configured.
+- `crates/lens/tests/fixtures/lens.production.toml`, `crates/lens/lens.dev.toml`, `crates/lens/lens.example.toml`: dns, tls, http and email `timeout_ms = 15000`, ip 2000, email set explicitly.
+- Review fix: the budget sum saturates (`saturating_add`).

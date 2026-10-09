@@ -77,6 +77,7 @@ async fn check_email(
         body["dkim_selectors"] = serde_json::json!(sels);
     }
 
+    let deadline = tokio::time::Instant::now() + timeout;
     let send_fut = client
         .post(url)
         .headers(fwd.clone())
@@ -84,7 +85,7 @@ async fn check_email(
         .json(&body)
         .send();
 
-    let resp = tokio::time::timeout(timeout, send_fut)
+    let resp = tokio::time::timeout_at(deadline, send_fut)
         .await
         .map_err(|_| {
             tracing::warn!(service = "beacon", url = %url, error = "timeout", "backend call failed");
@@ -104,7 +105,7 @@ async fn check_email(
     }
 
     // Drain until the "summary" event, with the same timeout budget.
-    let events = tokio::time::timeout(timeout, super::sse::collect_until_type(resp, "summary"))
+    let events = tokio::time::timeout_at(deadline, super::sse::collect_until_type(resp, "summary"))
         .await
         .map_err(|_| {
             tracing::warn!(service = "beacon", url = %url, error = "stream timeout", "backend call failed");

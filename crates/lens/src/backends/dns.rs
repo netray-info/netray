@@ -111,8 +111,9 @@ async fn check_dns_inner(
     }
 
     // Connect and get headers — SSE stream starts immediately.
-    let resp = tokio::time::timeout(
-        timeout,
+    let deadline = tokio::time::Instant::now() + timeout;
+    let resp = tokio::time::timeout_at(
+        deadline,
         client
             .post(url)
             .headers(fwd.clone())
@@ -142,7 +143,7 @@ async fn check_dns_inner(
     }
 
     // Collect SSE events until "done" or timeout.
-    let events = tokio::time::timeout(timeout, super::sse::collect(resp, "done"))
+    let events = tokio::time::timeout_at(deadline, super::sse::collect(resp, "done"))
         .await
         .map_err(|_| {
             tracing::warn!(service = "prism", url = %url, error = "stream timeout", "backend call failed");

@@ -159,7 +159,8 @@ async fn check_tls_inner(
     timeout: Duration,
     fwd: &reqwest::header::HeaderMap,
 ) -> Result<TlsBackendResult, AppError> {
-    let resp = tokio::time::timeout(timeout, client.get(url).headers(fwd.clone()).send())
+    let deadline = tokio::time::Instant::now() + timeout;
+    let resp = tokio::time::timeout_at(deadline, client.get(url).headers(fwd.clone()).send())
         .await
         .map_err(|_| {
             tracing::warn!(service = "tlsight", url = %url, error = "timeout", "backend call failed");
@@ -181,13 +182,19 @@ async fn check_tls_inner(
         });
     }
 
-    let inspect: InspectResponse = resp.json().await.map_err(|e| {
-        tracing::warn!(service = "tlsight", url = %url, error = %e, "backend call failed");
-        AppError::BackendError {
-            backend: "tls",
-            message: format!("failed to decode tlsight response: {e}"),
-        }
-    })?;
+    let inspect: InspectResponse = tokio::time::timeout_at(deadline, resp.json())
+        .await
+        .map_err(|_| {
+            tracing::warn!(service = "tlsight", url = %url, error = "body timeout", "backend call failed");
+            AppError::Timeout
+        })?
+        .map_err(|e| {
+            tracing::warn!(service = "tlsight", url = %url, error = %e, "backend call failed");
+            AppError::BackendError {
+                backend: "tls",
+                message: format!("failed to decode tlsight response: {e}"),
+            }
+        })?;
 
     tracing::debug!(service = "tlsight", url = %url, "backend call succeeded");
     parse_inspect(inspect, domain, tls_url)

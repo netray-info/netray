@@ -80,3 +80,41 @@ Test changes beyond the baseline commit, all named in the phase commit's trailer
 ### Behavioural verification
 
 skipped: the routes are driven in-process with stubbed backends by `crates/lens/tests/incomplete_results.rs`; no deployment-shaped entry point beyond those.
+
+## Phase 3 — Deadlines
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R5: one `timeout_ms` per backend call over connect, send and body; email honours its `timeout_ms`; hard deadline keeps finished sections; deadline passed into the check function | green | crates/lens/tests/deadlines.rs |
+| C2 | R6: config load rejects `max(wave-1) + ip ≥` hard deadline; production fixture, dev and example at 15000/2000 | green | crates/lens/src/config.rs, tests/repo/test_check_config.sh |
+| C3 | 1 s deadline, 5000 ms backends, dns in 100 ms, email never → dns scored, email Timeout, incomplete, < 1.5 s | green | crates/lens/tests/deadlines.rs |
+| C4 | email headers then stall, 1000 ms → Timeout ≤ 1.2 s | green | crates/lens/tests/deadlines.rs |
+| C5 | tlsight headers then stalled body, 1000 ms → Timeout ≤ 1.2 s | green | crates/lens/tests/deadlines.rs |
+| C6 | email `timeout_ms = 3000` → client uses 3000 ms | green | crates/lens/tests/deadlines.rs |
+| C7 | `--check-config` on 20000/2000 → exit 1 naming the budget | green | tests/repo/test_check_config.sh |
+| C8 | production fixture, dev, example → exit 0 | already_implemented | tests/repo/test_check_config.sh |
+
+C8 passed at the baseline (`d55a1e1`) and guards the config edits; the others failed there.
+
+Test changes beyond the baseline commit: `crates/lens/tests/deadlines.rs` is rustfmt-formatted, and its C5 also asserts `SectionError::Timeout`; `crates/lens/src/config.rs` gains `backend_timeout_budget_edges` (sum equal to the deadline refused, 1 ms less loads, `1e20` → `u64::MAX` refused without overflow), which failed with "attempt to add with overflow" before the fix.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| deadlines | 3 | sonnet (fmt of the test file by the orchestrator) | 54988 | 145 |
+| budget overflow (review fix) | 1 | sonnet | 14692 | 25 |
+
+### Review
+
+- AMENDMENT (fixed) | the budget sum used `+`: `timeout_ms = 1e20` (u64::MAX) panicked in debug and wrapped to an accepted budget in release | affected_phase: 3 | repaired_in_phase: yes (`saturating_add`, test `backend_timeout_budget_edges`)
+- NIT | C4 cannot tell one budget from two (headers arrive at once); no test stalls the dns stream or the http body. Not acted on.
+- NIT (acted on) | C5 now asserts Timeout.
+- NIT (acted on) | budget edges (`>=`, configured email) pinned by `backend_timeout_budget_edges`.
+- Sound per the reader: `run_wave` keeps finished sections and records every registered backend once; wave 2 still gets DNS's addresses; unconfigured http/email stay out of the budget; each backend has one `timeout_at` over connect, send and body (per address for ip), mapped to `SectionError::Timeout`; no new config key; no shipped config relies on the old fixed 15 s for email.
+
+### Behavioural verification
+
+`netray lens --check-config` (via `tests/repo/test_check_config.sh`): 20000/2000 → exit 1 naming timeouts and the hard deadline; the production fixture, `lens.dev.toml` and `lens.example.toml` → exit 0. `tests/repo/test_smoke_services.sh` starts lens with `lens.dev.toml`.

@@ -59,12 +59,20 @@ async fn stub(
 ) -> String {
     let handler = move || async move {
         match behaviour {
-            Behaviour::Golden(f) => {
-                (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], golden(f)).into_response_()
-            }
+            Behaviour::Golden(f) => (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, content_type)],
+                golden(f),
+            )
+                .into_response_(),
             Behaviour::GoldenAfter(f, d) => {
                 tokio::time::sleep(d).await;
-                (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], golden(f)).into_response_()
+                (
+                    StatusCode::OK,
+                    [(header::CONTENT_TYPE, content_type)],
+                    golden(f),
+                )
+                    .into_response_()
             }
             Behaviour::Never => {
                 std::future::pending::<()>().await;
@@ -77,10 +85,11 @@ async fn stub(
                     Some(i) if content_type == "text/event-stream" => full[..i + 2].to_string(),
                     _ => full.chars().take(20).collect(),
                 };
-                let stream = futures::stream::once(async move {
-                    Ok::<Bytes, Infallible>(Bytes::from(first))
-                })
-                .chain(futures::stream::pending());
+                let stream =
+                    futures::stream::once(
+                        async move { Ok::<Bytes, Infallible>(Bytes::from(first)) },
+                    )
+                    .chain(futures::stream::pending());
                 (
                     StatusCode::OK,
                     [(header::CONTENT_TYPE, content_type)],
@@ -145,9 +154,15 @@ async fn state(s: Setup) -> AppState {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
-            dns: backend(stub("/api/check", true, "text/event-stream", s.dns).await, t[0]),
+            dns: backend(
+                stub("/api/check", true, "text/event-stream", s.dns).await,
+                t[0],
+            ),
             dns_servers: Vec::new(),
-            tls: backend(stub("/api/inspect", false, "application/json", s.tls).await, t[1]),
+            tls: backend(
+                stub("/api/inspect", false, "application/json", s.tls).await,
+                t[1],
+            ),
             ip: backend(
                 stub(
                     "/json",
@@ -220,14 +235,23 @@ async fn hard_deadline_keeps_finished_sections_and_times_out_the_stuck_one() {
 
     let (out, elapsed) = run(&st, Duration::from_secs(1), Duration::from_secs(8)).await;
 
-    assert!(out.sections["dns"].is_ok(), "dns finished before the deadline");
+    assert!(
+        out.sections["dns"].is_ok(),
+        "dns finished before the deadline"
+    );
     assert!(
         is_timeout(&out.sections["email"]),
         "email timed out: {:?}",
         out.sections["email"].as_ref().err()
     );
-    assert!(!out.score.complete, "a timed-out section makes the score incomplete");
-    assert!(elapsed < Duration::from_millis(1500), "returned in {elapsed:?}");
+    assert!(
+        !out.score.complete,
+        "a timed-out section makes the score incomplete"
+    );
+    assert!(
+        elapsed < Duration::from_millis(1500),
+        "returned in {elapsed:?}"
+    );
 }
 
 /// C4: a send that succeeds and a stream that stalls share one email budget (timeout_ms).
@@ -240,13 +264,19 @@ async fn email_send_and_stream_share_one_timeout_budget() {
 
     let (out, elapsed) = run(&st, Duration::from_secs(20), Duration::from_secs(5)).await;
 
-    assert!(out.sections["email"].is_err(), "email without summary is an error");
+    assert!(
+        out.sections["email"].is_err(),
+        "email without summary is an error"
+    );
     assert!(
         is_timeout(&out.sections["email"]),
         "email stall reports Timeout: {:?}",
         out.sections["email"].as_ref().err()
     );
-    assert!(elapsed < Duration::from_millis(1600), "email took {elapsed:?}, budget is 1 s");
+    assert!(
+        elapsed < Duration::from_millis(1600),
+        "email took {elapsed:?}, budget is 1 s"
+    );
 }
 
 /// C5: a body that stalls after the headers is bounded by the tls timeout.
@@ -260,7 +290,15 @@ async fn tls_body_that_stalls_after_headers_is_bounded_by_timeout() {
     let (out, elapsed) = run(&st, Duration::from_secs(20), Duration::from_secs(5)).await;
 
     assert!(out.sections["tls"].is_err(), "stalled tls body is an error");
-    assert!(elapsed < Duration::from_millis(1600), "tls took {elapsed:?}, budget is 1 s");
+    assert!(
+        is_timeout(&out.sections["tls"]),
+        "stalled tls body reports Timeout: {:?}",
+        out.sections["tls"].as_ref().err()
+    );
+    assert!(
+        elapsed < Duration::from_millis(1600),
+        "tls took {elapsed:?}, budget is 1 s"
+    );
 }
 
 /// C6: the email backend honours `timeout_ms` from config instead of a fixed 15 s.
