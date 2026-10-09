@@ -6,9 +6,7 @@
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | Requirement 1: `+check` queries with the DO bit set, no explicit `RRSIG` type; RRSIGs arrive with the records they cover; `CHECK_TOTAL_STEPS` follows | open | — |
 | C2 | Requirement 2: prism lints through one function over the unique records of all resolvers (one per name, type, data; highest TTL kept); identical lint lines within a category emitted once | green | crates/mhost-prism/tests/lint_results_table.rs |
-| C3 | GIVEN `CHECK_RECORD_TYPES` WHEN read THEN no `RRSIG`, `CHECK_TOTAL_STEPS` = 18, the `+check` query has the DO bit set | open | — |
 | C4 | GIVEN a signed zone whose DNSKEY answer carries its RRSIG (expiring in 3 days) WHEN prism lints it THEN mhost's near-expiry line appears | green | crates/mhost-prism/tests/lint_results_table.rs |
 | C5 | GIVEN a signed zone answered identically by two resolvers WHEN prism lints it THEN "Found 1 KSK(s) and 1 ZSK(s)" | green | crates/mhost-prism/tests/lint_results_table.rs |
 | C6 | GIVEN two resolvers returning different records for one name WHEN prism lints THEN both records count | green | crates/mhost-prism/tests/lint_results_table.rs |
@@ -16,7 +14,7 @@
 | C8 | GIVEN two identical lint lines in one category WHEN prism emits the category THEN the line appears once | green | crates/mhost-prism/tests/lint_results_table.rs |
 | C9 | GIVEN one resolver WHEN prism lints THEN the lines equal today's, except identical lines collapse (two RSASHA1 keys give one deprecation line) | green | crates/mhost-prism/tests/lint_results_table.rs |
 
-C1 and C3 (requirement 1) are held, not built: see `### Halt`.
+The table first carried requirement 1 (DO bit) and its scenario as C1 and C3. The operator dropped them on 2026-10-09: prism keeps the explicit RRSIG question for 0.23.0, because mhost 0.12.0 offers no DO bit (see `### Halt`); the spec is amended accordingly. The ids C2 and C4–C9 are kept as they appear in the commits.
 
 ### Runs
 
@@ -34,6 +32,6 @@ C1 and C3 (requirement 1) are held, not built: see `### Halt`.
 
 skipped: `POST /api/check` against a locally started `netray dns crates/mhost-prism/prism.dev.toml` returned `{"events":[],"truncated":true}`; the log shows every lookup to 8.8.8.8 and 8.8.4.4 ending in `Received Timeout error` (no outbound DNS from this sandbox).
 
-### Halt
+### Halt (resolved)
 
-Reason: open-decisions. Requirement 1 cannot be built as specified on mhost 0.12.0: mhost's `Resolver` gives no way to set the DO bit. `ResolverOpts::to_proto` (`mhost-0.12.0/src/resolver/mod.rs:427-439`) never sets hickory's `validate`, and hickory-resolver 0.26.3 sets `edns_set_dnssec_ok` only from `validate` (`hickory-resolver-0.26.3/src/resolver.rs:358-361`). mhost's public `raw_dnssec_query` is non-recursive (RD=0, `resolver/raw.rs:236-246`), meant for authoritative servers, and the constructors that would turn raw hickory records into mhost `Lookup`s (`Lookup::from_records`, `Record::from_proto`) are `pub(crate)`.
+Resolved 2026-10-09 by the operator: requirement 1 is amended to keep the RRSIG question. Reason given: open-decisions. Requirement 1 cannot be built as specified on mhost 0.12.0: mhost's `Resolver` gives no way to set the DO bit. `ResolverOpts::to_proto` (`mhost-0.12.0/src/resolver/mod.rs:427-439`) never sets hickory's `validate`, and hickory-resolver 0.26.3 sets `edns_set_dnssec_ok` only from `validate` (`hickory-resolver-0.26.3/src/resolver.rs:358-361`). mhost's public `raw_dnssec_query` is non-recursive (RD=0, `resolver/raw.rs:236-246`), meant for authoritative servers, and the constructors that would turn raw hickory records into mhost `Lookup`s (`Lookup::from_records`, `Record::from_proto`) are `pub(crate)`.

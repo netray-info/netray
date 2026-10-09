@@ -5,7 +5,7 @@ Created: 2026-10-09
 
 ## Goal
 
-prism's `+check` gets a signed zone's RRSIGs through the DO bit instead of an explicit RRSIG question and counts every record once, however many resolvers answered. lens scores IP reputation from ifconfig-rs's boolean flags, makes the section incomplete when an enrichment fails, and samples addresses deterministically across both families. Lint and check messages, which carry DNS data an attacker controls, are rendered as text everywhere: both frontends, the snapshot page and the Markdown export. prism's UI offers `@system` only when the server allows it, and the production fixture turns it off.
+prism's `+check` keeps its explicit RRSIG question for 0.23.0 and counts every record once, however many resolvers answered. lens scores IP reputation from ifconfig-rs's boolean flags, makes the section incomplete when an enrichment fails, and samples addresses deterministically across both families. Lint and check messages, which carry DNS data an attacker controls, are rendered as text everywhere: both frontends, the snapshot page and the Markdown export. prism's UI offers `@system` only when the server allows it, and the production fixture turns it off.
 
 ## Non-goals
 
@@ -24,12 +24,12 @@ Line numbers at `8eb895a`.
 - prism offers `@system` unconditionally (`QueryInput.tsx:33-41`, `App.tsx:1620`); the server refuses it when `allow_system_resolvers` is false (`crates/mhost-prism/src/security/query_policy.rs:81-91`, default true `config.rs:118-119,198`); the frontend reads only `/api/config` (`App.tsx:1099`), whose `ClientConfig` has no resolver flags (`api/meta.rs:156-167`); the production fixture sets no `allow_system_resolvers` (`crates/mhost-prism/tests/fixtures/prism.production.toml:24-25`).
 - Without the DO bit hickory 0.26.3 keeps only DNSSEC records of the queried type (`hickory-proto-0.26.3/src/op/message.rs:205`), so the explicit RRSIG question is today's only RRSIG source; mhost 0.12's `check_dnssec` reads `lookups.rrsig()` for its presence, binding, expiry and algorithm lines (`mhost-0.12.0/src/lints/dnssec_lint.rs:27`). mhost's `Record` equality ignores TTL (`resources/record.rs:31`) and `check_ttl` keeps the highest TTL per record (`lints/ttl.rs:26`). prism's own `check_dnskey_algorithms` pushes one line per key (`check.rs:719`).
 - ifconfig-rs refuses a non-global address with 400 unless `internal_mode` (`crates/ifconfig-rs/src/routes.rs:312`); lens forwards every resolved address (`ip.rs:132`). `/json` ranks internal > c2 > bot > cloud > vpn > tor > spamhaus > datacenter > residential (`backend/mod.rs:602`); `/range` classifies a CIDR's network address (`routes.rs:1755`). prism's own Markdown export escapes only `|` and newlines (`crates/mhost-prism/frontend/src/lib/export.ts:135`). prism's frontend fetches `/api/config` in `onMount` and swallows failures (`App.tsx:1099-1109`).
-- Pinned results that move, each with `ADLC-Test-Change` naming its requirement: `lint_results_table.rs` (rewired through prism's lint function; two-resolver rows), `check.rs`'s `test_check_total_steps_is_19`, the prism contract golden's batch `total`, `crates/lens/tests/unknown_verdicts.rs` ip rows, `tokenizer.test.ts:83` if `@system` handling moves. No lens golden moves through DNS (prism.sse is literal-built) or IP (every fixture serves ifconfig-json.json).
+- Pinned results that move, each with `ADLC-Test-Change` naming its requirement: `lint_results_table.rs` (rewired through prism's lint function; two-resolver rows), `crates/lens/tests/unknown_verdicts.rs` ip rows, `tokenizer.test.ts:83` if `@system` handling moves. `check.rs`'s `test_check_total_steps_is_19` and the prism contract golden's batch `total` stay, since requirement 1 keeps the RRSIG question. No lens golden moves through DNS (prism.sse is literal-built) or IP (every fixture serves ifconfig-json.json).
 - Neutral wording: R5.5 and R5.9 are hardening; no exploit strings beyond the SDD's hostile fixture.
 
 ## Requirements
 
-1. **RRSIGs through the DO bit (R5.1).** prism's `+check` queries with the DO bit set and no longer asks for `RRSIG` as an explicit type; RRSIGs arrive with the records they cover, so mhost's RRSIG lines (expiry, algorithm, binding) still run. `CHECK_TOTAL_STEPS` follows.
+1. **RRSIG question kept (R5.1).** prism keeps the explicit RRSIG question for 0.23.0 (mhost 0.12.0 offers no DO bit; amended in Phase 1). mhost's RRSIG lines (expiry, algorithm, binding) keep running on its answers; `CHECK_TOTAL_STEPS` stays 19.
 2. **Records counted once (R5.1).** prism lints through one function over the unique records of all resolvers (one record per name, type and data; of duplicates the one with the highest TTL), so a zone answered identically by two resolvers gives the same lint lines as by one; identical lint lines within a category are emitted once.
 3. **Reputation from flags (R5.2).** lens scores an address from ifconfig-rs's booleans: `is_spamhaus`, `is_c2` or `is_tor` → Fail; `is_vpn` → Warn; otherwise Pass. lens enriches only public addresses (`netray_common::target_policy`); a non-public one is not sent and counts as not checked. A public address whose enrichment failed or timed out makes the IP section Errored (the result incomplete). lens enriches at most eight public addresses, up to four IPv4 and up to four IPv6, each family sorted; when it checked fewer than it resolved, the reputation detail states "checked N of M addresses".
 4. **One classifier (R5.2).** ifconfig-rs classifies with one function, in `/json`'s priority order (internal > c2 > bot > cloud > vpn > tor > spamhaus > datacenter > residential), used by `/json`, `/network` and `/range` (which applies it to the range's network address).
@@ -43,7 +43,6 @@ Line numbers at `8eb895a`.
 
 ### Test Scenarios
 
-- GIVEN `CHECK_RECORD_TYPES` WHEN read THEN it holds no `RRSIG`, `CHECK_TOTAL_STEPS` equals its length plus the subdomain lookups (18), and the `+check` query has the DO bit set.
 - GIVEN a signed zone whose DNSKEY answer carries its RRSIG (expiring in 3 days) WHEN prism lints it THEN mhost's near-expiry line appears.
 - GIVEN a signed zone answered identically by two resolvers WHEN prism lints it THEN "Found 1 KSK(s) and 1 ZSK(s)" (the two-resolver rows of `lint_results_table.rs` move to the one-resolver lines).
 - GIVEN two resolvers returning different records for one name WHEN prism lints THEN both records count.
@@ -103,7 +102,7 @@ The hostile value is `"><img src=x onerror=alert(1)>[x](javascript:alert(1))`, c
 ## Decision log
 
 - Records deduplicated before linting, over deduplicating output lines only: the doubled KSK/ZSK count is one line, not two (lint results table, 2026-10-09).
-- `+check` uses the DO bit instead of dropping RRSIGs: the expiry and algorithm lines stay (operator, 2026-10-09; AMENDMENT to SDD R5.1).
+- `+check` keeps the explicit RRSIG question for 0.23.0, over the DO bit: mhost 0.12.0's `Resolver` cannot set DO (`ResolverOpts::to_proto` never sets hickory's `validate`, the only source of `edns_set_dnssec_ok`); the DO bit follows with a DO option in mhost (mhost-security session). The expiry and algorithm lines stay (operator, 2026-10-09, amended in Phase 1; AMENDMENT to SDD R5.1).
 - Non-public addresses are filtered before enrichment, over counting ifconfig-rs's refusal as a failure: such a domain would be incomplete forever (operator, 2026-10-09; AMENDMENT to SDD R5.2).
 - `@system` hidden until the server allows it (operator, 2026-10-09).
 - Messages and the domain as inline code in both Markdown exports, over escaping metacharacters: escaping leaves autolinks live (operator, 2026-10-09).
