@@ -2868,6 +2868,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "netray-engine"
+version = "0.23.0"
+dependencies = [
+ "netray-model",
+ "tokio",
+]
+
+[[package]]
 name = "netray-model"
 version = "0.23.0"
 dependencies = [

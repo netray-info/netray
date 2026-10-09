@@ -25,3 +25,17 @@ G1: C1, C5, C6, C7, C8 · G2: C2, C3, C9, C10, C11, C12, C13 (depends on G1) · 
 
 ### G3
 - `just adlc-verify` and `just deny`; goldens and results tables pass without `UPDATE_GOLDEN`.
+
+## Phase 2 — Engine traits
+
+## Groups
+
+G1: C1–C7 (one crate, one manifest; written by the orchestrator, no planner run: a single group)
+
+## Plan
+
+### G1
+- Root `Cargo.toml`: `netray-engine = { path = "crates/engine" }` in `[workspace.dependencies]`.
+- `crates/engine/Cargo.toml`: package `netray-engine`, workspace version and edition, `license = "MIT"`; dependencies `netray-model` (workspace) only among workspace crates; dev `tokio` (workspace, `macros`, `rt`).
+- `crates/engine/src/lib.rs`: `BoxFuture`, `Module`, `FactsProvider`, `RunContext`, `Facts`, `SectionOutcome`, `EvidencePath`, `Domain`, `ResolveError`, as the tests' contract; no orchestrator.
+- `Module::checks` returns `&'static [CheckId]` as SDD §3.6 states; a module holds its list in a `LazyLock` (phase reader: `CheckId` needs no const constructor for that).

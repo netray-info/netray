@@ -43,3 +43,35 @@ Resolved (operator, 2026-10-09): the `Skip` mapping stays for 1a; error and time
 ### Behavioural verification
 
 skipped: no entry point; nothing calls the new types or mappings yet (spec non-goal).
+
+## Phase 2 — Engine traits
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R4: `netray-engine` depends on `netray-model` only among workspace crates, defines `Module` and `FactsProvider` and the types they name; no orchestrator | green | crates/engine/tests/traits.rs |
+| C2 | R5: `tests/repo/test_engine_names_no_module.sh` fails when `crates/engine/Cargo.toml` lists a module crate as any kind of dependency | green | tests/repo/test_engine_names_no_module.sh |
+| C3 | A stub `Module` returns its `SectionOutcome`; the trait is used as `Box<dyn Module>` | green | crates/engine/tests/traits.rs |
+| C4 | A stub `FactsProvider` returns `Facts` or `ResolveError` | green | crates/engine/tests/traits.rs |
+| C5 | The committed `crates/engine/Cargo.toml` passes the repo check | green | tests/repo/test_engine_names_no_module.sh |
+| C6 | A fixture listing `beacon` under `[dependencies]`, `[dev-dependencies]` or `[build-dependencies]` fails the check, naming the crate | green | tests/repo/test_engine_names_no_module.sh |
+| C7 | A fixture listing only `netray-model` and external crates passes | green | tests/repo/test_engine_names_no_module.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 29027 | 40 |
+
+### Reader
+
+| class | at | finding | outcome |
+|---|---|---|---|
+| BLOCKER | tests/repo/test_engine_names_no_module.sh:32 | the TOML text scan missed renamed dependencies (`package = "beacon"`) | fixed: the check reads `cargo metadata` |
+| BLOCKER | tests/repo/test_engine_names_no_module.sh:23 | dotted keys before any header, inline tables under `[target.*]`, `[dependencies . beacon]` escaped the scan | fixed: same; self-test cases rename, dotted, target-inline, dev, build |
+| AMENDMENT | crates/engine/src/lib.rs:74 | `checks()` returned `Vec<CheckId>` against SDD §3.6 without need | repaired in phase: `&'static [CheckId]`, a module holds its list in a `LazyLock` |
+
+### Behavioural verification
+
+skipped: no entry point (traits only). The dependency check was sabotage-tested: adding `[dev-dependencies.b] package = "beacon"` to `crates/engine/Cargo.toml` prints `FAIL: netray-engine depends on module crate beacon`; restored, it passes.
