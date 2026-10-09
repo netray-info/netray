@@ -1,0 +1,7 @@
+[package]
+name = "netray-engine-core"
+version = "0.0.0"
+edition = "2021"
+
+[dev-dependencies]
+beacon = { path = "../beacon" }
