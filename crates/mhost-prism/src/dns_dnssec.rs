@@ -539,6 +539,10 @@ fn dedup_join(items: &[&str]) -> String {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[path = "dns_dnssec_outbound_tests.rs"]
+mod outbound_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

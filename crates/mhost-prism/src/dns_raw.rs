@@ -396,6 +396,10 @@ pub(crate) fn record_to_dns_record(record: &hickory_proto::rr::Record) -> DnsRec
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[path = "dns_raw_outbound_tests.rs"]
+pub(crate) mod outbound_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::str::FromStr;

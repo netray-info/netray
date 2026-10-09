@@ -345,6 +345,10 @@ fn compute_referral_groups(server_results: &[ServerResult]) -> Vec<ReferralGroup
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+#[path = "dns_trace_outbound_tests.rs"]
+mod outbound_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::net::Ipv4Addr;

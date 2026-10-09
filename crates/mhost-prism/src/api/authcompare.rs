@@ -593,3 +593,7 @@ pub async fn post_handler(
         )
         .into_response())
 }
+
+#[cfg(test)]
+#[path = "authcompare_outbound_tests.rs"]
+mod outbound_tests;
