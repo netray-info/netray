@@ -191,18 +191,14 @@ async fn lens_does_not_treat_mx_cname_failure_as_no_mx() {
     let res = run_backend(base, Duration::from_secs(5))
         .await
         .expect("backend result");
+    // An mx_cname failure is not "no MX": no bucket is N/A for that reason. Buckets whose
+    // categories are all Info (here transport and brand) are "not applicable" on their own
+    // (requirement 9), like brand on beacon.sse.
     assert!(
-        bucket_na(&res).is_empty(),
+        bucket_na(&res).values().all(|r| r != "no MX records"),
         "mx_cname is not 'no MX records'; got bucket_na {:?}",
         bucket_na(&res)
     );
-    for name in ["email_transport", "email_brand_policy"] {
-        let b = bucket(&res, name);
-        assert!(
-            !matches!(b.verdict, CheckVerdict::Skip),
-            "{name} must not be N/A when MX records exist"
-        );
-    }
     let infra = bucket(&res, "email_infrastructure");
     assert!(
         matches!(infra.verdict, CheckVerdict::Fail),
@@ -379,6 +375,53 @@ async fn beacon_null_mx_golden_marks_three_buckets_na_and_auth_passes() {
     assert!(
         matches!(auth.verdict, CheckVerdict::Pass),
         "auth must Pass for a Null MX domain, got {:?} {:?}",
+        auth.verdict,
+        auth.messages
+    );
+}
+
+// Requirement 9: Null MX makes the three buckets N/A for that reason, even when a
+// receiving-side check fails (a stale MTA-STS record whose policy fetch fails).
+#[tokio::test]
+async fn null_mx_keeps_transport_na_when_a_receiving_check_fails() {
+    let bytes = variant("beacon-null-mx.sse", |ev| {
+        let sts = category_mut(ev, "mta_sts");
+        sts["sub_checks"] = serde_json::json!([
+            {"detail": "policy host not reachable", "name": "https_fetch_failed", "verdict": "fail"}
+        ]);
+        sts["verdict"] = "fail".into();
+        summary_mut(ev)["verdicts"]["mta_sts"] = "fail".into();
+    });
+    let base = serve_bytes(bytes, false).await;
+    let res = run_backend(base, Duration::from_secs(5))
+        .await
+        .expect("result");
+    assert_na(&res, "email_transport");
+    assert_ne!(
+        bucket_na(&res).get("email_transport").map(String::as_str),
+        Some("not applicable"),
+        "transport is N/A because of Null MX, not because its categories are Info"
+    );
+}
+
+// Requirement 10: with sends_no_mail, spf_mx_coverage does not reach authentication.
+#[tokio::test]
+async fn sends_no_mail_excludes_spf_mx_coverage() {
+    let bytes = variant("beacon-null-mx.sse", |ev| {
+        let cv = category_mut(ev, "cross_validation");
+        let subs = cv["sub_checks"].as_array_mut().expect("sub_checks");
+        subs.push(serde_json::json!(
+            {"detail": "MX host IPs are not covered by SPF (only relevant if these MX hosts also send outbound mail)", "name": "spf_mx_coverage", "verdict": "warn"}
+        ));
+    });
+    let base = serve_bytes(bytes, false).await;
+    let res = run_backend(base, Duration::from_secs(5))
+        .await
+        .expect("result");
+    let auth = bucket(&res, "email_authentication");
+    assert!(
+        matches!(auth.verdict, CheckVerdict::Pass),
+        "spf_mx_coverage must not count for a domain that sends no mail, got {:?} {:?}",
         auth.verdict,
         auth.messages
     );

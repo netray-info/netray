@@ -1,7 +1,7 @@
 {
   "summary": {
     "grade": "incomplete",
-    "score": 31.8,
+    "score": 29.3,
     "overall": "error",
     "complete": false,
     "sections": {
@@ -13,7 +13,7 @@
     },
     "section_grades": {
       "dns": "F",
-      "email": "D"
+      "email": "F"
     },
     "hard_fail": false,
     "hard_fail_checks": [],
@@ -51,7 +51,7 @@
         },
         {
           "name": "email_brand_policy",
-          "verdict": "pass"
+          "verdict": "skip"
         }
       ]
     },

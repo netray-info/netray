@@ -1,19 +1,19 @@
 {
   "summary": {
     "grade": "B",
-    "score": 77.8,
+    "score": 82.8,
     "overall": "fail",
     "complete": true,
     "sections": {
       "dns": "warn",
-      "email": "fail",
+      "email": "pass",
       "http": "warn",
       "ip": "pass",
       "tls": "fail"
     },
     "section_grades": {
       "dns": "C",
-      "email": "C",
+      "email": "A+",
       "http": "B",
       "ip": "A+",
       "tls": "B"
@@ -37,8 +37,8 @@
       ]
     },
     "email": {
-      "status": "fail",
-      "grade": "F",
+      "status": "pass",
+      "grade": "B",
       "checks": [
         {
           "name": "email_authentication",
@@ -46,7 +46,7 @@
         },
         {
           "name": "email_infrastructure",
-          "verdict": "fail"
+          "verdict": "skip"
         },
         {
           "name": "email_transport",

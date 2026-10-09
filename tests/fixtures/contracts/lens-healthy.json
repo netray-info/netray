@@ -1,7 +1,7 @@
 {
   "summary": {
     "grade": "C",
-    "score": 73.9,
+    "score": 73.1,
     "overall": "fail",
     "complete": true,
     "sections": {
@@ -13,7 +13,7 @@
     },
     "section_grades": {
       "dns": "C",
-      "email": "D",
+      "email": "F",
       "http": "B",
       "ip": "A+",
       "tls": "B"
@@ -54,7 +54,7 @@
         },
         {
           "name": "email_brand_policy",
-          "verdict": "pass"
+          "verdict": "skip"
         }
       ]
     },
