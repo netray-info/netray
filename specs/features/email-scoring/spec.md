@@ -1,6 +1,6 @@
 # Spec: email scoring
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-09
 
 ## Goal
