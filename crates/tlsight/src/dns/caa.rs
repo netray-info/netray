@@ -108,6 +108,22 @@ async fn query_caa(resolvers: &ResolverGroup, domain: &str) -> Option<CaaLookup>
 mod tests {
     use super::*;
 
+    // --- tag case (RFC 8659 §4.1: matching of tags is case insensitive) ---
+
+    #[test]
+    fn caa_tags_match_case_insensitively() {
+        let lookup = CaaLookup {
+            records: vec![
+                caa_record("ISSUE", "digicert.com", false),
+                caa_record("IssueWild", ";", false),
+            ],
+        };
+        assert_eq!(lookup.issue_domains(), vec!["digicert.com"]);
+        assert!(lookup.issuewild_present());
+        assert_eq!(lookup.records[0].tag, "issue");
+        assert_eq!(lookup.records[1].tag, "issuewild");
+    }
+
     // --- parent_domain ---
 
     #[test]
