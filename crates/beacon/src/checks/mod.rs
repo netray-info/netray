@@ -41,6 +41,8 @@ pub mod util;
 #[cfg(test)]
 mod bimi_results_table;
 #[cfg(test)]
+mod dkim_results_table;
+#[cfg(test)]
 mod mta_sts_results_table;
 #[cfg(test)]
 mod outbound_fetch_scenarios;
