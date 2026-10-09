@@ -69,7 +69,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
     record_format.rs          # Human-readable formatting for TXT, CAA, MX, SOA, SVCB, TLSA, etc.
     telemetry.rs              # tracing-subscriber init; optional OTel OTLP export; log_format switch
     circuit_breaker.rs        # Per-provider sliding-window breaker (CircuitBreakerRegistry)
-    dns_raw.rs                # Raw UDP/TCP hickory-proto queries, glue resolution, build_server_list
+    dns_raw.rs                # Raw UDP/TCP hickory-proto queries through `RawOutbound` (one outbound policy, glue resolution, server lists)
     dns_trace.rs              # Iterative delegation walker (root → TLD → authoritative)
     dns_dnssec.rs             # DNSSEC chain-of-trust fetch helpers
     ip_enrichment.rs          # IpEnrichmentService: reqwest + moka cache, batch lookups
@@ -180,7 +180,7 @@ When modifying API endpoints or adding features, verify:
 
 - [ ] Blocked query types enforced (ANY, AXFR, IXFR)
 - [ ] Target IP validation (no RFC 1918, localhost, link-local, CGNAT, multicast, IPv6 ULA fc00::/7)
-- [ ] Glue IPs from trace delegation walk also pass `is_allowed_target` (dns_trace.rs)
+- [ ] Raw queries to addresses from the checked domain's data (NS checks, authcompare, DNSSEC walk, trace) go through `dns_raw::RawOutbound`, whose `allow` is `is_allowed_target`
 - [ ] Query limits respected (max 10 record types, max 4 servers)
 - [ ] Timeouts enforced (10s per-query, 30s stream)
 - [ ] Rate limiting applied with correct cost calculation
