@@ -427,6 +427,73 @@ mod tests {
         assert!(msg.extensions().is_some());
     }
 
+    /// Wire-encode a query exactly as `send_udp`/`send_tcp` do. Pinning tests go
+    /// through this helper so a hickory upgrade touches only this one line.
+    fn encode_query_bytes(msg: &Message) -> Vec<u8> {
+        msg.to_vec().unwrap()
+    }
+
+    /// Decode response bytes exactly as `send_udp`/`send_tcp` do.
+    fn decode_response_bytes(bytes: &[u8]) -> RawResponse {
+        RawResponse {
+            message: Message::from_vec(bytes).unwrap(),
+            latency: Duration::ZERO,
+        }
+    }
+
+    /// Pins the query wire format (C6): RD=0, one DNSKEY/IN question, OPT with DO=1.
+    /// Bytes recorded 2026-10-09 from hickory-proto 0.25; the 2-byte id is skipped.
+    #[test]
+    fn pinned_query_wire_format_dnskey_do() {
+        let name = Name::from_ascii("example.com.").unwrap();
+        let bytes = encode_query_bytes(&build_query(&name, RecordType::DNSKEY, true));
+        assert_eq!(bytes[2] & 0x01, 0, "RD bit must be off");
+        assert_eq!(bytes[2] & 0x80, 0, "QR must be query");
+        // OPT RR: root name, type 41, class = payload 4096, TTL = ext-rcode/version/flags.
+        let opt = bytes.len() - 11;
+        assert_eq!(bytes[opt], 0, "OPT owner is root");
+        assert_eq!(u16::from_be_bytes([bytes[opt + 1], bytes[opt + 2]]), 41);
+        assert_eq!(u16::from_be_bytes([bytes[opt + 7], bytes[opt + 8]]) & 0x8000, 0x8000, "DO bit");
+        assert_eq!(hex(&bytes[2..]), "00000001000000000001076578616d706c6503636f6d00003000010000291000000080000000");
+    }
+
+    fn hex(b: &[u8]) -> String {
+        b.iter().map(|x| format!("{x:02x}")).collect()
+    }
+
+    /// Pins the response decode path (C7) on a recorded referral: 0 answers,
+    /// 2 NS in authority, 2 A glue records in additional.
+    /// Bytes hand-assembled 2026-10-09 (id 0x1234, QR=1, NOERROR, compressed names).
+    #[test]
+    fn pinned_decode_recorded_referral() {
+        const REFERRAL: &str = "123480000001000000020002076578616d706c6503636f6d0000020001c00c000200010002a3000006036e7331c00cc00c000200010002a3000006036e7332c00cc029000100010002a3000004c0000201c03b000100010002a3000004c0000202";
+        let bytes: Vec<u8> = (0..REFERRAL.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&REFERRAL[i..i + 2], 16).unwrap())
+            .collect();
+        let resp = decode_response_bytes(&bytes);
+        assert_eq!(resp.response_code(), hickory_proto::op::ResponseCode::NoError);
+        assert!(!resp.is_authoritative());
+        assert!(!resp.is_truncated());
+        assert_eq!(resp.answers().len(), 0);
+        assert_eq!(resp.authority().len(), 2);
+        assert_eq!(resp.additional().len(), 2);
+        let ns: Vec<String> = resp.referral_ns_names().iter().map(|n| n.to_string()).collect();
+        assert_eq!(ns, ["ns1.example.com.", "ns2.example.com."]);
+        let glue: Vec<(String, String)> = resp
+            .glue_ips()
+            .iter()
+            .map(|(n, ip)| (n.to_string(), ip.to_string()))
+            .collect();
+        assert_eq!(
+            glue,
+            [
+                ("ns1.example.com.".to_owned(), "192.0.2.1".to_owned()),
+                ("ns2.example.com.".to_owned(), "192.0.2.2".to_owned()),
+            ]
+        );
+    }
+
     #[test]
     fn build_server_list_ipv4_only() {
         let mut ns_servers = HashMap::new();

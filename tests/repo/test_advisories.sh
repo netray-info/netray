@@ -5,6 +5,7 @@
 #   3. Cargo.lock has no rustls-pemfile package
 #   4. Cargo.lock's time package is >= 0.3.47
 #   5. crates/common declares rust-version = "1.88"
+#   7. every hickory-proto and hickory-net package in Cargo.lock is >= 0.26.1
 #   6. the comment check can fail: it is run over a fixture with one uncommented ID
 #
 # Phase 2 tightens EXPECTED_IGNORES to the three hickory/paste-free remainder;
@@ -12,7 +13,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
-EXPECTED_IGNORES="RUSTSEC-2026-0206 RUSTSEC-2026-0192 RUSTSEC-2024-0436 RUSTSEC-2026-0118 RUSTSEC-2026-0119"
+EXPECTED_IGNORES="RUSTSEC-2026-0206 RUSTSEC-2026-0192 RUSTSEC-2024-0436"
 
 fails=0
 fail() { echo "FAIL: $1"; fails=1; }
@@ -91,6 +92,19 @@ check_lock() {
   elif [ "$(printf '%s\n0.3.47\n' "$tv" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" != "0.3.47" ]; then
     echo "FAIL: $lock: time $tv is older than 0.3.47"; rc=1
   fi
+  local hv name nh=0
+  for name in hickory-proto hickory-net; do
+    while read -r hv; do
+      [ -n "$hv" ] || continue
+      nh=$((nh + 1))
+      if [ "$(printf '%s\n0.26.1\n' "$hv" | sort -t. -k1,1n -k2,2n -k3,3n | head -1)" != "0.26.1" ]; then
+        echo "FAIL: $lock: $name $hv is older than 0.26.1"; rc=1
+      fi
+    done < <(awk -v n="$name" '$0 == "name = \"" n "\"" { f = 1; next }
+      f && /^version = / { v = $3; gsub(/"/, "", v); print v; f = 0 }' "$lock")
+  done
+  echo "hickory packages in $lock: $nh"
+  [ "$nh" -gt 0 ] || { echo "FAIL: $lock has no hickory-proto or hickory-net package"; rc=1; }
   return $rc
 }
 

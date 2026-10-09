@@ -843,3 +843,100 @@ pub(crate) fn make_error_event(code: &str, message: &str) -> Event {
         .json_data(&payload)
         .unwrap_or_else(|_| Event::default().event("error").data("{}"))
 }
+
+#[cfg(test)]
+mod build_resolver_group_tests {
+    use super::*;
+    use crate::config::{
+        CircuitBreakerConfig, DnsConfig, EcosystemConfig, LimitsConfig, ServerConfig,
+        TelemetryConfig, TraceConfig,
+    };
+
+    fn config(allow_system_resolvers: bool) -> Config {
+        Config {
+            site_name: "prism".to_string(),
+            server: ServerConfig {
+                bind: ([127, 0, 0, 1], 8080).into(),
+                metrics_bind: ([127, 0, 0, 1], 9090).into(),
+                trusted_proxies: vec![],
+            },
+            limits: LimitsConfig {
+                per_ip_per_minute: 120,
+                per_ip_burst: 40,
+                per_target_per_minute: 60,
+                per_target_burst: 20,
+                global_per_minute: 1000,
+                global_burst: 50,
+                max_concurrent_connections: 256,
+                per_ip_max_streams: 10,
+                max_timeout_secs: 10,
+                max_record_types: 10,
+                max_servers: 4,
+            },
+            circuit_breaker: CircuitBreakerConfig {
+                window_secs: 60,
+                cooldown_secs: 30,
+                failure_threshold: 0.5,
+                min_requests: 5,
+            },
+            dns: DnsConfig {
+                default_servers: vec!["cloudflare".to_owned()],
+                allow_system_resolvers,
+                allow_arbitrary_servers: false,
+            },
+            trace: TraceConfig {
+                max_hops: 10,
+                query_timeout_secs: 3,
+            },
+            telemetry: TelemetryConfig::default(),
+            ecosystem: EcosystemConfig::default(),
+            backends: crate::config::BackendsConfig::default(),
+        }
+    }
+
+    fn parsed(servers: Vec<ServerSpec>) -> ParsedQuery {
+        ParsedQuery {
+            domain: "example.com".to_string(),
+            record_types: vec![RecordType::A],
+            servers,
+            transport: None,
+            dnssec: false,
+            short: false,
+            recursive: true,
+            truncated_servers: false,
+            warnings: Vec::new(),
+        }
+    }
+
+    // The parse-time policy check is bypassed by building ParsedQuery directly:
+    // build_resolver_group must itself refuse non-global addresses (second layer).
+    #[tokio::test]
+    async fn build_resolver_group_refuses_non_global_ip_servers() {
+        for ip in ["127.0.0.1", "10.0.0.1"] {
+            let q = parsed(vec![ServerSpec::Ip {
+                addr: ip.parse().unwrap(),
+                port: 53,
+            }]);
+            let res = build_resolver_group(&q, &config(true), Duration::from_secs(1)).await;
+            assert!(
+                matches!(res, Err(ApiError::BlockedTargetIp { .. })),
+                "{ip}: expected BlockedTargetIp, got {:?}",
+                res.map(|(_, keys)| keys)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn build_resolver_group_allows_system_when_configured() {
+        let q = parsed(vec![ServerSpec::System]);
+        let res = build_resolver_group(&q, &config(true), Duration::from_secs(1)).await;
+        assert!(res.is_ok(), "system resolvers: {:?}", res.err());
+    }
+
+    #[tokio::test]
+    async fn build_resolver_group_allows_predefined_public_provider() {
+        let q = parsed(vec![ServerSpec::Predefined(PredefinedProvider::Cloudflare)]);
+        let res = build_resolver_group(&q, &config(true), Duration::from_secs(1)).await;
+        assert!(res.is_ok(), "cloudflare: {:?}", res.err());
+    }
+}
