@@ -4,7 +4,8 @@ import { render } from 'solid-js/web';
 import type { InspectResponse } from '../lib/types';
 
 const copyToClipboard = vi.fn(async (_text: string) => true);
-vi.mock('@netray-info/common-frontend/utils', () => ({
+vi.mock('@netray-info/common-frontend/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@netray-info/common-frontend/utils')>()),
   copyToClipboard: (t: string) => copyToClipboard(t),
   downloadFile: vi.fn(),
 }));

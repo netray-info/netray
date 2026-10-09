@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Category, CheckResult, SummaryEvent } from '../lib/types';
 
 const copyToClipboard = vi.hoisted(() => vi.fn(async (_text: string) => true));
-vi.mock('@netray-info/common-frontend/utils', () => ({
+vi.mock('@netray-info/common-frontend/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@netray-info/common-frontend/utils')>()),
   copyToClipboard,
   downloadFile: vi.fn(),
 }));

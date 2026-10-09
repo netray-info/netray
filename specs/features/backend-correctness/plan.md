@@ -18,3 +18,15 @@ C2, C3, C4 and C9 pass at the baseline: their tests pin what holds. C1 is covere
 **G2.**
 - `crates/mhost-prism/frontend/src/lib/export.ts` `toMarkdown`: the heading becomes `inlineCode(ctx.query)`. A table-cell helper next to `mdEscape` collapses newlines, wraps the value with `inlineCode`, then escapes `|`. Name and Value cells use it.
 - Test setup already in the tree, committed with this group: prism `package.json` gains the dev deps `jsdom` and `@solidjs/testing-library`; `vitest.config.ts` includes `src/**/*.test.tsx`; `package-lock.json` is updated.
+
+### Groups (amendment, 2026-10-09)
+
+- G3: C10 (beacon) · G4: C11 (tlsight) · G5: C12 (spectra). They share no production file. Each reuses `inlineCode` from `@netray-info/common-frontend/utils`.
+
+### Plan (amendment)
+
+**G3.** In `crates/beacon/frontend/src/components/SummaryCard.tsx` `ExportButtons.copyMarkdown`, the heading domain, `result.detail` and each `sc.detail` go through `inlineCode`.
+
+**G4.** In `crates/tlsight/frontend/src/components/ExportButtons.tsx` `copyMarkdown`, the heading hostname, each chain subject, `ip.error.message` and every quality `c.detail` go through `inlineCode`.
+
+**G5.** In `crates/spectra/frontend/src/components/ExportButtons.tsx` `copyMarkdown`, the following go through `inlineCode`: the heading URL, the enrichment IP, org and threat, quality `c.message`, header values and messages, CSP issues, cookie names (which replace their hand-written single backticks), `cors.message`, and each redirect hop's URL and location. The test setup ships with this group: spectra's `package.json` gains a `test` script and the dev deps vitest, jsdom and @solidjs/testing-library, and `package-lock.json` is updated.

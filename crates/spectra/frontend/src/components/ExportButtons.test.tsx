@@ -3,7 +3,8 @@ import { render, cleanup, fireEvent } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const copyToClipboard = vi.fn(async (_text: string) => true);
-vi.mock('@netray-info/common-frontend/utils', () => ({
+vi.mock('@netray-info/common-frontend/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@netray-info/common-frontend/utils')>()),
   copyToClipboard: (text: string) => copyToClipboard(text),
   downloadFile: vi.fn(),
 }));
@@ -98,7 +99,7 @@ function hostileResult(): InspectResponse {
       coep: hdr(),
       corp: hdr(),
     },
-    cookies: [],
+    cookies: [{ name: HOSTILE, secure: false, httponly: false, samesite: HOSTILE }],
     cors: {
       status: 'warn',
       allows_any_origin: false,
