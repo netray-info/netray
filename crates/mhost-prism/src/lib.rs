@@ -14,6 +14,7 @@ pub mod reload;
 pub mod result_cache;
 pub mod security;
 
+pub use api::check::lint_status;
 pub use netray_common::middleware::RequestId;
 pub use netray_common::middleware::request_id as request_id_middleware;
 

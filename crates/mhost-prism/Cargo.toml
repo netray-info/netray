@@ -6,6 +6,7 @@ license = "MIT"
 description = "Web-based DNS debugging service powered by mhost"
 
 [dependencies]
+netray-model = { workspace = true }
 mhost = { workspace = true, features = ["dot", "doh"] }
 netray-common = { workspace = true, features = ["schema", "middleware", "telemetry", "otel", "cors", "server", "prometheus", "spa", "enrichment-cache", "backend", "fetch"] }
 

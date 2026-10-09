@@ -6,6 +6,7 @@ license = "MIT"
 description = "HTTP header inspection and security audit service for netray.info"
 
 [dependencies]
+netray-model = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json"] }
 tower = { workspace = true, features = ["limit"] }

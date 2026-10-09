@@ -376,6 +376,7 @@ dependencies = [
  "metrics",
  "mhost",
  "netray-common",
+ "netray-model",
  "percent-encoding",
  "pin-project-lite",
  "rcgen",
@@ -2407,6 +2408,7 @@ dependencies = [
  "moka",
  "nanoid",
  "netray-common",
+ "netray-model",
  "regex",
  "reqwest",
  "resvg",
@@ -2863,6 +2865,14 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "netray-model"
+version = "0.23.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3416,6 +3426,7 @@ dependencies = [
  "mime_guess",
  "moka",
  "netray-common",
+ "netray-model",
  "rand 0.10.3",
  "rcgen",
  "reqwest",
@@ -4470,6 +4481,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "mime_guess",
  "netray-common",
+ "netray-model",
  "percent-encoding",
  "reqwest",
  "rust-embed",
@@ -5022,6 +5034,7 @@ dependencies = [
  "mhost",
  "mime_guess",
  "netray-common",
+ "netray-model",
  "percent-encoding",
  "rcgen",
  "reqwest",

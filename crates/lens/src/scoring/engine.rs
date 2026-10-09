@@ -12,6 +12,19 @@ pub enum CheckVerdict {
     Skip,
 }
 
+/// Maps onto the shared model vocabulary; `NotFound` is `Fail`, `Skip` is `NotApplicable`.
+impl From<CheckVerdict> for netray_model::Status {
+    fn from(verdict: CheckVerdict) -> Self {
+        match verdict {
+            CheckVerdict::Pass => netray_model::Status::Pass,
+            CheckVerdict::Warn => netray_model::Status::Warn,
+            CheckVerdict::Fail => netray_model::Status::Fail,
+            CheckVerdict::NotFound => netray_model::Status::Fail,
+            CheckVerdict::Skip => netray_model::Status::NotApplicable,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CheckResult {
     pub name: String,
@@ -233,6 +246,20 @@ pub fn lookup_grade(
     }
 
     "F".to_string()
+}
+
+/// Parse a grade label as produced by `lookup_grade` into the shared model grade.
+pub fn parse_grade(s: &str) -> Option<netray_model::Grade> {
+    match s {
+        "A+" => Some(netray_model::Grade::APlus),
+        "A" => Some(netray_model::Grade::A),
+        "B" => Some(netray_model::Grade::B),
+        "C" => Some(netray_model::Grade::C),
+        "D" => Some(netray_model::Grade::D),
+        "F" => Some(netray_model::Grade::F),
+        "incomplete" => Some(netray_model::Grade::Incomplete),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

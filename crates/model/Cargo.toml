@@ -1,0 +1,12 @@
+[package]
+name = "netray-model"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+description = "Shared check vocabulary for the netray.info V2 suite"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }

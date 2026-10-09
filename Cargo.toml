@@ -8,6 +8,7 @@ edition = "2024"
 
 [workspace.dependencies]
 netray-common = { path = "crates/common" }
+netray-model = { path = "crates/model" }
 
 # Web framework
 axum = "0.8"

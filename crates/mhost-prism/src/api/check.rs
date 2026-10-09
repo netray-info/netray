@@ -684,6 +684,16 @@ async fn fan_out_lookup(
     merged
 }
 
+/// Maps a lint result onto the shared model status (a function: `CheckResult` is foreign).
+pub fn lint_status(r: &CheckResult) -> netray_model::Status {
+    match r {
+        CheckResult::NotFound() => netray_model::Status::Fail,
+        CheckResult::Ok(_) => netray_model::Status::Pass,
+        CheckResult::Warning(_) => netray_model::Status::Warn,
+        CheckResult::Failed(_) => netray_model::Status::Fail,
+    }
+}
+
 /// Drop repeated identical results; the first occurrence and the order are kept.
 pub fn unique_lines(results: Vec<CheckResult>) -> Vec<CheckResult> {
     let mut out: Vec<CheckResult> = Vec::with_capacity(results.len());
