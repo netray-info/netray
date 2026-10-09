@@ -35,7 +35,7 @@ Line numbers at `8eb895a`.
 4. **One classifier (R5.2).** ifconfig-rs classifies with one function, in `/json`'s priority order (internal > c2 > bot > cloud > vpn > tor > spamhaus > datacenter > residential), used by `/json`, `/network` and `/range` (which applies it to the range's network address).
 5. **Messages are text (R5.5).** A lint or check message is rendered as text in prism's and lens's frontends, in lens's snapshot HTML and in SVG/OG text; lens's and prism's Markdown exports put every message and the domain in an inline code span (a backtick fence longer than any backtick run in the value), so a copied report carries no live link, autolink or HTML. A `tests/repo` convention test fails when a frontend under `crates/*/frontend/src` or `packages/common-frontend/src` uses `innerHTML`, `outerHTML`, `insertAdjacentHTML` or `dangerouslySetInnerHTML`.
 6. **`@system` only when allowed (R5.9, SC17).** prism's `/api/config` reports whether system resolvers are allowed; the UI lists and documents `@system` only when it said so (hidden before the answer and when the request fails). The server keeps refusing it when disallowed. `crates/mhost-prism/tests/fixtures/prism.production.toml` sets `[dns] allow_system_resolvers = false` (K5).
-7. **Enrichment calls from lens are exempt from the per-client limit (R5.2).** ifconfig-rs's `[rate_limit] exempt_cidrs` lists networks, empty by default. A request whose TCP peer address lies in one of them skips the per-IP limiter; the match is on the connection's peer, never on `X-Forwarded-For` or `X-Real-IP`, so a public client cannot claim the exemption. An entry that is not a CIDR fails config validation. The per-target limiter still applies. `crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml` carries the key.
+7. **Enrichment calls from lens are exempt from the per-client limit (R5.2).** ifconfig-rs's `[rate_limit] exempt_cidrs` lists networks, empty by default. A request whose TCP peer address lies in one of them skips the per-IP limiter of the request middleware (`/batch` and `/diff` charge the per-IP limiter in their handlers and stay limited; no internal caller uses them); the match is on the connection's peer, never on `X-Forwarded-For` or `X-Real-IP`, so a public client cannot claim the exemption. An entry that is not a CIDR fails config validation. The per-target limiter still applies. `crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml` exempts the backend network lens calls from, `exempt_cidrs = ["172.30.0.0/24"]` (the subnet its `trusted_proxies` already names; Traefik has no address on it).
 
 ## Phase 1 — prism lints
 
@@ -72,7 +72,7 @@ Line numbers at `8eb895a`.
 - GIVEN the same config WHEN a peer outside the exempt networks (trusted proxy 172.31.0.2, or untrusted 203.0.113.9) sends two requests with `X-Forwarded-For: 172.30.0.5` THEN the second is refused with 429.
 - GIVEN no `exempt_cidrs` and `per_ip_burst = 1` WHEN peer 172.30.0.5 sends two requests THEN the second is refused with 429.
 - GIVEN `exempt_cidrs = ["nope"]` WHEN the config is validated THEN it fails, naming `rate_limit.exempt_cidrs`.
-- GIVEN `ifconfig.production.toml` WHEN loaded THEN it carries `rate_limit.exempt_cidrs` and validates.
+- GIVEN `ifconfig.production.toml` WHEN loaded THEN it carries `rate_limit.exempt_cidrs = ["172.30.0.0/24"]` and validates.
 
 ## Phase 3 — Messages as text
 

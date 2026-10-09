@@ -69,14 +69,20 @@ mod tests {
     #[tokio::test]
     async fn c14_forwarded_header_cannot_grant_exemption() {
         let a = app(Some(EX), TRUSTED).await;
-        assert_ne!(status(&a, "172.31.0.2", Some("172.30.0.5")).await, StatusCode::TOO_MANY_REQUESTS);
+        assert_ne!(
+            status(&a, "172.31.0.2", Some("172.30.0.5")).await,
+            StatusCode::TOO_MANY_REQUESTS
+        );
         assert_eq!(
             status(&a, "172.31.0.2", Some("172.30.0.5")).await,
             StatusCode::TOO_MANY_REQUESTS,
             "trusted, non-exempt peer"
         );
         let a = app(Some(EX), TRUSTED).await;
-        assert_ne!(status(&a, "203.0.113.9", Some("172.30.0.5")).await, StatusCode::TOO_MANY_REQUESTS);
+        assert_ne!(
+            status(&a, "203.0.113.9", Some("172.30.0.5")).await,
+            StatusCode::TOO_MANY_REQUESTS
+        );
         assert_eq!(
             status(&a, "203.0.113.9", Some("172.30.0.5")).await,
             StatusCode::TOO_MANY_REQUESTS,
@@ -89,7 +95,13 @@ mod tests {
         let a = app(None, &[]).await;
         assert_ne!(status(&a, "172.30.0.5", None).await, StatusCode::TOO_MANY_REQUESTS);
         assert_eq!(status(&a, "172.30.0.5", None).await, StatusCode::TOO_MANY_REQUESTS);
-        assert!(Config::load(Some("ifconfig.dev.toml")).unwrap().rate_limit.exempt_cidrs.is_empty());
+        assert!(
+            Config::load(Some("ifconfig.dev.toml"))
+                .unwrap()
+                .rate_limit
+                .exempt_cidrs
+                .is_empty()
+        );
     }
 
     #[test]
@@ -105,6 +117,7 @@ mod tests {
         let path = "tests/fixtures/ifconfig.production.toml";
         let config = Config::load(Some(path)).expect("fixture loads");
         config.validate().expect("fixture validates");
+        assert_eq!(config.rate_limit.exempt_cidrs, vec!["172.30.0.0/24".to_string()]);
         let raw: toml::Table = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
         let rl = raw["rate_limit"].as_table().expect("[rate_limit]");
         assert!(rl.contains_key("exempt_cidrs"), "fixture lacks rate_limit.exempt_cidrs");

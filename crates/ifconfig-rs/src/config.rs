@@ -119,6 +119,13 @@ impl ServerConfig {
     }
 }
 
+/// Parses a CIDR network, or a bare IP address as a host-only network.
+pub fn parse_network(s: &str) -> Option<ip_network::IpNetwork> {
+    s.parse::<ip_network::IpNetwork>()
+        .ok()
+        .or_else(|| s.parse::<std::net::IpAddr>().ok().map(ip_network::IpNetwork::from))
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RateLimitConfig {
@@ -130,6 +137,11 @@ pub struct RateLimitConfig {
     pub per_target_per_minute: u32,
     #[serde(default = "RateLimitConfig::default_per_target_burst")]
     pub per_target_burst: u32,
+    /// Networks whose TCP peer skips the per-IP limiter. Matched on the connection peer,
+    /// never on a forwarded header. Must contain only trusted internal callers such as
+    /// lens, never the reverse proxy.
+    #[serde(default)]
+    pub exempt_cidrs: Vec<String>,
 }
 
 impl Default for RateLimitConfig {
@@ -139,6 +151,7 @@ impl Default for RateLimitConfig {
             per_ip_burst: Self::default_per_ip_burst(),
             per_target_per_minute: Self::default_per_target_per_minute(),
             per_target_burst: Self::default_per_target_burst(),
+            exempt_cidrs: Vec::new(),
         }
     }
 }
@@ -277,6 +290,13 @@ impl Config {
                 "rate_limit.per_target_burst ({}) exceeds hard cap ({})",
                 self.rate_limit.per_target_burst, HARD_CAP_RATE_LIMIT_BURST
             )));
+        }
+        for entry in &self.rate_limit.exempt_cidrs {
+            if parse_network(entry).is_none() {
+                return Err(config::ConfigError::Message(format!(
+                    "rate_limit.exempt_cidrs entry ({entry}) is not a CIDR network or IP address"
+                )));
+            }
         }
         if self.batch.enabled && self.batch.max_size == 0 {
             return Err(config::ConfigError::Message(

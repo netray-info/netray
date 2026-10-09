@@ -1,8 +1,6 @@
 pub mod backend;
 #[cfg(test)]
 mod classify_tests;
-#[cfg(test)]
-mod rate_limit_exempt_tests;
 pub mod config;
 #[cfg(test)]
 mod contract_golden;
@@ -13,6 +11,8 @@ pub mod format;
 pub mod handlers;
 pub mod middleware;
 pub mod negotiate;
+#[cfg(test)]
+mod rate_limit_exempt_tests;
 pub mod routes;
 pub mod state;
 

@@ -32,6 +32,7 @@ per_ip_per_minute = 60
 per_ip_burst = 10
 per_target_per_minute = 120
 per_target_burst = 20
+exempt_cidrs = ["172.30.0.0/24"]
 
 [batch]
 enabled = true
