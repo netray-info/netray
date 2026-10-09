@@ -111,8 +111,9 @@ async fn check_dns_inner(
     }
 
     // Connect and get headers — SSE stream starts immediately.
-    let resp = tokio::time::timeout(
-        timeout,
+    let deadline = tokio::time::Instant::now() + timeout;
+    let resp = tokio::time::timeout_at(
+        deadline,
         client
             .post(url)
             .headers(fwd.clone())
@@ -142,7 +143,7 @@ async fn check_dns_inner(
     }
 
     // Collect SSE events until "done" or timeout.
-    let events = tokio::time::timeout(timeout, super::sse::collect(resp, "done"))
+    let events = tokio::time::timeout_at(deadline, super::sse::collect(resp, "done"))
         .await
         .map_err(|_| {
             tracing::warn!(service = "prism", url = %url, error = "stream timeout", "backend call failed");
@@ -184,7 +185,7 @@ fn parse_events(
             }
             "lint" => {
                 if let Some(data) = event.get("data")
-                    && let Some(check) = parse_lint_event(data)
+                    && let Some(check) = parse_lint_event(data)?
                 {
                     checks.push(check);
                 }
@@ -286,22 +287,31 @@ fn collect_ips_from_batch(
 /// ```json
 /// { "category": "dnssec", "results": [ {"Ok": "msg"} | {"Warning": "msg"} | {"Failed": "msg"} | {"NotFound": null} ] }
 /// ```
-fn parse_lint_event(data: &Value) -> Option<CheckResult> {
-    let category = data.get("category").and_then(|v| v.as_str())?;
+fn parse_lint_event(data: &Value) -> Result<Option<CheckResult>, AppError> {
+    let Some(category) = data.get("category").and_then(|v| v.as_str()) else {
+        return Ok(None);
+    };
+
+    let Some(results) = data.get("results").and_then(|v| v.as_array()) else {
+        return Ok(None);
+    };
+
+    // Every result is classified first, so an unknown verdict is caught in any category.
+    let classified = results
+        .iter()
+        .map(classify_lint_result)
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Email checks are owned by the email backend; skip them here.
     const EMAIL_CATEGORIES: &[&str] = &["spf", "dmarc", "mta_sts", "tlsrpt", "bimi", "mx"];
     if EMAIL_CATEGORIES.contains(&category) {
-        return None;
+        return Ok(None);
     }
-
-    let results = data.get("results").and_then(|v| v.as_array())?;
 
     let mut worst = CheckVerdict::Pass;
     let mut messages: Vec<String> = Vec::new();
 
-    for result in results {
-        let (verdict, msg) = classify_lint_result(result);
+    for (verdict, msg) in classified {
         if verdict_rank(&verdict) > verdict_rank(&worst) {
             worst = verdict.clone();
         }
@@ -319,11 +329,11 @@ fn parse_lint_event(data: &Value) -> Option<CheckResult> {
         messages.push("Not found".to_string());
     }
 
-    Some(CheckResult {
+    Ok(Some(CheckResult {
         name: category.to_string(),
         verdict: worst,
         messages,
-    })
+    }))
 }
 
 /// Rank verdicts so we can find the worst: higher rank = worse.
@@ -338,22 +348,22 @@ fn verdict_rank(v: &CheckVerdict) -> u8 {
 }
 
 /// Map a single lint result item to (CheckVerdict, optional message).
-fn classify_lint_result(result: &Value) -> (CheckVerdict, Option<String>) {
+fn classify_lint_result(result: &Value) -> Result<(CheckVerdict, Option<String>), AppError> {
     if let Some(obj) = result.as_object() {
         if obj.contains_key("Ok") {
-            return (CheckVerdict::Pass, None);
+            return Ok((CheckVerdict::Pass, None));
         }
         if let Some(msg) = obj.get("Warning").and_then(|v| v.as_str()) {
-            return (CheckVerdict::Warn, Some(msg.to_string()));
+            return Ok((CheckVerdict::Warn, Some(msg.to_string())));
         }
         if let Some(msg) = obj.get("Failed").and_then(|v| v.as_str()) {
-            return (CheckVerdict::Fail, Some(msg.to_string()));
+            return Ok((CheckVerdict::Fail, Some(msg.to_string())));
         }
         if obj.contains_key("NotFound") {
-            return (CheckVerdict::NotFound, None);
+            return Ok((CheckVerdict::NotFound, None));
         }
     }
-    (CheckVerdict::Pass, None)
+    Err(super::unknown_verdict("dns", &result.to_string()))
 }
 
 /// Build a summary headline from the collected checks.

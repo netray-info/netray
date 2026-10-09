@@ -23,7 +23,7 @@ use tlsight::validate::{CheckStatus, ValidationResult};
 
 const HOSTNAME: &str = "example.com";
 
-fn failed(ip: &str, version: &str, message: &str) -> IpInspectionResult {
+fn failed(ip: &str, version: &str, code: &str, message: &str) -> IpInspectionResult {
     IpInspectionResult {
         ip: ip.to_string(),
         ip_version: version.to_string(),
@@ -33,7 +33,7 @@ fn failed(ip: &str, version: &str, message: &str) -> IpInspectionResult {
         ct: None,
         enrichment: None,
         error: Some(InspectionError {
-            code: "HANDSHAKE_FAILED".to_string(),
+            code: code.to_string(),
             message: message.to_string(),
         }),
         raw_certs: None,
@@ -110,7 +110,7 @@ struct Row {
 }
 
 fn rows() -> Vec<Row> {
-    use CheckStatus::{Pass, Skip, Warn};
+    use CheckStatus::{Fail, Pass, Skip, Warn};
     let refused = "connection refused";
     let unreachable = "Network is unreachable (os error 51)";
     // Check ids and verdicts for a port whose first successful IP carries the chain above.
@@ -138,6 +138,10 @@ fn rows() -> Vec<Row> {
         ("alpn_consistency", Skip),
         ("ech_advertised", Skip),
     ];
+    // Contract: `tls_reachable` is the first check of every port with at least one IP.
+    let one_ok_ip: Vec<(&str, CheckStatus)> = std::iter::once(("tls_reachable", Pass))
+        .chain(one_ok_ip)
+        .collect();
     let mut two_ok_ips = one_ok_ip.clone();
     for c in &mut two_ok_ips {
         if c.0 == "alpn_consistency" {
@@ -145,22 +149,32 @@ fn rows() -> Vec<Row> {
         }
     }
     vec![
-        // C10: every IP failed on the target side.
+        // C1, C2: every IP failed on the target side, so the port is unreachable.
         Row {
-            name: "C10 every IP failed (v4 + v6 refused)",
+            name: "every IP failed target-side (v4 + v6 refused)",
             ips: vec![
-                failed("192.0.2.10", "v4", refused),
-                failed("2001:db8::10", "v6", refused),
+                failed("192.0.2.10", "v4", "HANDSHAKE_FAILED", refused),
+                failed("2001:db8::10", "v6", "HANDSHAKE_FAILED", refused),
+            ],
+            verdict: Fail,
+            checks: vec![("tls_reachable", Fail)],
+        },
+        // C3, C8: every IP failed locally, so nothing was tested.
+        Row {
+            name: "only NOT_TESTED_FROM_HERE failures",
+            ips: vec![
+                failed("192.0.2.10", "v4", "NOT_TESTED_FROM_HERE", unreachable),
+                failed("2001:db8::10", "v6", "NOT_TESTED_FROM_HERE", unreachable),
             ],
             verdict: Skip,
-            checks: vec![],
+            checks: vec![("tls_reachable", Skip)],
         },
         // C11: v6 failed locally, v4 succeeded.
         Row {
             name: "C11 v6 unreachable, v4 succeeded",
             ips: vec![
                 succeeded("192.0.2.10", "v4"),
-                failed("2001:db8::10", "v6", unreachable),
+                failed("2001:db8::10", "v6", "NOT_TESTED_FROM_HERE", unreachable),
             ],
             verdict: Warn,
             checks: one_ok_ip,

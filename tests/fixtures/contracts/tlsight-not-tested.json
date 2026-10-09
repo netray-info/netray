@@ -1,0 +1,76 @@
+{
+  "dns": {
+    "caa": {
+      "issuer_allowed": null,
+      "issuewild_present": false,
+      "records": []
+    },
+    "resolved_ips": [
+      "192.0.2.10"
+    ]
+  },
+  "duration_ms": 123,
+  "hostname": "example.com",
+  "input_mode": "hostname",
+  "ports": [
+    {
+      "ips": [
+        {
+          "error": {
+            "code": "NOT_TESTED_FROM_HERE",
+            "message": "Network is unreachable"
+          },
+          "ip": "192.0.2.10",
+          "ip_version": "v4"
+        },
+        {
+          "error": {
+            "code": "NOT_TESTED_FROM_HERE",
+            "message": "Network is unreachable"
+          },
+          "ip": "2001:db8::10",
+          "ip_version": "v6"
+        }
+      ],
+      "port": 443,
+      "quality": {
+        "checks": [
+          {
+            "category": "protocol",
+            "detail": "not tested from here: this host cannot reach the target",
+            "id": "tls_reachable",
+            "label": "TLS reachable",
+            "status": "skip"
+          }
+        ],
+        "verdict": "skip"
+      }
+    }
+  ],
+  "quality": {
+    "checks": [
+      {
+        "category": "configuration",
+        "detail": "max-age=31536000",
+        "id": "hsts",
+        "label": "HSTS",
+        "status": "pass"
+      }
+    ],
+    "verdict": "pass"
+  },
+  "request_id": "contract-golden",
+  "summary": {
+    "checks": {
+      "caa_compliant": "skip",
+      "chain_trusted": "pass",
+      "consistency": "pass",
+      "ct_logged": "skip",
+      "dane_valid": "skip",
+      "hostname_match": "pass",
+      "not_expired": "pass",
+      "ocsp_stapled": "fail"
+    },
+    "verdict": "warn"
+  }
+}

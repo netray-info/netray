@@ -20,9 +20,10 @@ dnssec_rollover   = 2
 
 [sections.tls]
 weight = 35
-hard_fail = ["chain_trusted", "not_expired"]
+hard_fail = ["chain_trusted", "not_expired", "tls_reachable"]
 
 [sections.tls.checks]
+tls_reachable = 10
 chain_trusted = 10
 not_expired = 10
 hostname_match = 10

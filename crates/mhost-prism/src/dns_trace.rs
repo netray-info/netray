@@ -17,7 +17,7 @@ use crate::dns_raw::{
     DnsRecord, ROOT_SERVERS, RawQueryResult, build_server_list, parallel_queries,
     record_to_dns_record, resolve_missing_glue,
 };
-use crate::security::query_policy::is_allowed_target;
+use crate::security::query_policy::check_target_ip;
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -173,11 +173,10 @@ pub async fn walk(
         resolve_missing_glue(&mut resolved).await;
 
         // Build next hop server list (IPv4 only — avoids IPv6 connectivity issues).
-        // Also filter through is_allowed_target so glue IPs resolved via the system
+        // Also filter through check_target_ip so glue IPs resolved via the system
         // resolver cannot point at private/loopback/internal addresses (SSRF prevention).
-        current_servers = build_server_list(&resolved, |ip| {
-            ip.is_ipv4() && is_allowed_target(ip).is_ok()
-        });
+        current_servers =
+            build_server_list(&resolved, |ip| ip.is_ipv4() && check_target_ip(ip).is_ok());
 
         current_zone = next_zone;
     }

@@ -1,0 +1,111 @@
+{
+  "summary": {
+    "grade": "F",
+    "score": 45.3,
+    "overall": "fail",
+    "complete": true,
+    "sections": {
+      "dns": "warn",
+      "email": "fail",
+      "http": "warn",
+      "ip": "pass",
+      "tls": "fail"
+    },
+    "section_grades": {
+      "dns": "C",
+      "email": "D",
+      "http": "B",
+      "ip": "A+",
+      "tls": "F"
+    },
+    "hard_fail": true,
+    "hard_fail_checks": [
+      "tls_reachable"
+    ],
+    "not_applicable": []
+  },
+  "sections": {
+    "dns": {
+      "status": "warn",
+      "checks": [
+        {
+          "name": "caa",
+          "verdict": "warn"
+        },
+        {
+          "name": "ns",
+          "verdict": "pass"
+        }
+      ]
+    },
+    "email": {
+      "status": "fail",
+      "grade": "D",
+      "checks": [
+        {
+          "name": "email_authentication",
+          "verdict": "fail"
+        },
+        {
+          "name": "email_infrastructure",
+          "verdict": "pass"
+        },
+        {
+          "name": "email_transport",
+          "verdict": "warn"
+        },
+        {
+          "name": "email_brand_policy",
+          "verdict": "pass"
+        }
+      ]
+    },
+    "http": {
+      "status": "warn",
+      "checks": [
+        {
+          "name": "https_redirect",
+          "verdict": "pass"
+        },
+        {
+          "name": "hsts",
+          "verdict": "pass"
+        },
+        {
+          "name": "security_headers",
+          "verdict": "warn"
+        },
+        {
+          "name": "cors",
+          "verdict": "pass"
+        },
+        {
+          "name": "cookie_secure",
+          "verdict": "skip"
+        },
+        {
+          "name": "hygiene",
+          "verdict": "skip"
+        }
+      ]
+    },
+    "ip": {
+      "status": "pass",
+      "checks": [
+        {
+          "name": "reputation",
+          "verdict": "pass"
+        }
+      ]
+    },
+    "tls": {
+      "status": "fail",
+      "checks": [
+        {
+          "name": "tls_reachable",
+          "verdict": "fail"
+        }
+      ]
+    }
+  }
+}

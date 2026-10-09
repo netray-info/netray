@@ -32,13 +32,20 @@ pub fn assess_port(
     let first_ok = ips.iter().find(|r| r.error.is_none());
 
     let Some(ip_result) = first_ok else {
+        if ips.is_empty() {
+            return PortQualityResult {
+                verdict: CheckStatus::Skip,
+                checks: vec![],
+            };
+        }
+        let reachable = checks::check_tls_reachable(ips);
         return PortQualityResult {
-            verdict: CheckStatus::Skip,
-            checks: vec![],
+            verdict: reachable.status,
+            checks: vec![reachable],
         };
     };
 
-    let mut all_checks = Vec::new();
+    let mut all_checks = vec![checks::check_tls_reachable(ips)];
     let mut chain_complete = false;
 
     // Certificate checks

@@ -12,11 +12,11 @@ dns_servers = ["google"]
 
 [backends.dns]
 url = "http://prism:8080"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [backends.tls]
 url = "http://tlsight:8081"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [backends.ip]
 url = "http://ifconfig-rs:8000"
@@ -24,11 +24,11 @@ timeout_ms = 2000
 
 [backends.http]
 url = "http://spectra:8082"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [backends.email]
 url = "http://beacon:8084"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [ecosystem]
 ip_base_url = "https://ip.example.com"

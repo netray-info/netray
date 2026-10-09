@@ -108,7 +108,7 @@ pub struct BackendsConfig {
 pub struct BackendConfig {
     /// Base URL of the backend service. `None` disables this backend.
     pub url: Option<String>,
-    /// Per-call timeout in milliseconds. The email backend ignores it (fixed 15 s).
+    /// Per-call timeout in milliseconds, covering connect, send and body read.
     #[serde(default = "default_backend_timeout_ms")]
     pub timeout_ms: u64,
 }
@@ -451,6 +451,27 @@ impl Config {
         reject_zero("badges.ttl_seconds", self.badges.ttl_seconds)?;
         netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
 
+        let b = &self.backends;
+        let configured = |c: &Option<BackendConfig>| {
+            c.as_ref()
+                .filter(|c| c.url.is_some())
+                .map_or(0, |c| c.timeout_ms)
+        };
+        let wave1_ms = b
+            .dns
+            .timeout_ms
+            .max(b.tls.timeout_ms)
+            .max(configured(&b.http))
+            .max(configured(&b.email));
+        let budget_ms = wave1_ms.saturating_add(b.ip.timeout_ms);
+        let deadline_ms = crate::check::HARD_DEADLINE.as_millis() as u64;
+        if budget_ms >= deadline_ms {
+            return Err(ConfigError::Message(format!(
+                "invalid configuration: backend timeouts (slowest wave-1 timeout_ms {wave1_ms} + ip timeout_ms {}) = {budget_ms} ms must stay below the {deadline_ms} ms hard deadline",
+                b.ip.timeout_ms
+            )));
+        }
+
         Ok(())
     }
 }
@@ -692,6 +713,48 @@ mod tests {
             if let Err(e) = Config::load(Some(&path)) {
                 panic!("{name} must load: {e}");
             }
+        }
+    }
+
+    fn backend_timeouts_toml(slow_ms: u64, ip_ms: u64) -> String {
+        format!(
+            "[backends.dns]\ntimeout_ms = {slow_ms}\n\
+             [backends.tls]\ntimeout_ms = {slow_ms}\n\
+             [backends.http]\ntimeout_ms = {slow_ms}\n\
+             [backends.email]\nurl = \"http://beacon:8084\"\ntimeout_ms = {slow_ms}\n\
+             [backends.ip]\ntimeout_ms = {ip_ms}\n"
+        )
+    }
+
+    #[test]
+    fn backend_timeouts_over_the_budget_are_rejected() {
+        let err = load_toml(&backend_timeouts_toml(20000, 2000)).unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("timeout") && msg.contains("deadline"),
+            "error must name the timeout budget and the deadline, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn backend_timeout_budget_edges() {
+        // The sum equal to the hard deadline is refused, one millisecond less loads.
+        assert!(load_toml(&backend_timeouts_toml(18000, 2000)).is_err());
+        assert!(load_toml(&backend_timeouts_toml(17999, 2000)).is_ok());
+        // A huge value (the config crate turns 1e20 into u64::MAX) must not overflow the sum
+        // into an accepted budget or a panic.
+        let huge = backend_timeouts_toml(15000, 2000).replace(
+            "[backends.ip]\ntimeout_ms = 2000",
+            "[backends.ip]\ntimeout_ms = 1e20",
+        );
+        assert!(huge.contains("1e20"));
+        assert!(load_toml(&huge).is_err());
+    }
+
+    #[test]
+    fn backend_timeouts_within_the_budget_load() {
+        if let Err(e) = load_toml(&backend_timeouts_toml(15000, 2000)) {
+            panic!("15000/2000 must load: {e}");
         }
     }
 

@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use crate::backends::{BackendContext, BackendExtra, BackendResult};
 use crate::scoring::engine::{OverallScore, SectionInput, SectionStatus, compute_score};
 use crate::state::AppState;
+use futures::StreamExt;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -71,66 +72,45 @@ pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
     .await
 }
 
+/// Hard deadline for a whole check. The configured backend timeouts must sum below it.
+pub const HARD_DEADLINE: Duration = Duration::from_secs(20);
+
 pub async fn run_check_with_input(state: &AppState, input: CheckInput) -> CheckOutput {
-    let domain = input.domain.clone();
-    let start = Instant::now();
-    let hard_deadline = Duration::from_secs(20);
-
-    let result = tokio::time::timeout(hard_deadline, run_backends_with_input(state, &input)).await;
-
-    match result {
-        Ok(output) => output,
-        Err(_elapsed) => {
-            // Hard deadline fired — return Timeout for all sections.
-            let score = build_score_from_errors(state);
-            let mut sections = HashMap::new();
-            for backend in state.backends.iter() {
-                sections.insert(backend.section().to_string(), Err(SectionError::Timeout));
-            }
-            CheckOutput {
-                domain,
-                sections,
-                score,
-                duration_ms: start.elapsed().as_millis() as u64,
-            }
-        }
-    }
+    run_check_with_deadline(state, input, HARD_DEADLINE).await
 }
 
-async fn run_backends_with_input(state: &AppState, input: &CheckInput) -> CheckOutput {
-    let domain = &input.domain;
+type Sections = HashMap<String, Result<BackendResult, SectionError>>;
+
+/// Run the check under `hard_deadline`. Sections that finished before it fires are kept; only
+/// the unfinished ones become `Err(SectionError::Timeout)`.
+pub async fn run_check_with_deadline(
+    state: &AppState,
+    input: CheckInput,
+    hard_deadline: Duration,
+) -> CheckOutput {
     let start = Instant::now();
-    let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
+    let deadline = tokio::time::Instant::now() + hard_deadline;
+    let domain = input.domain.clone();
+    let mut sections: Sections = HashMap::new();
 
     let forward_headers =
         crate::backends::forward_headers(input.client_ip, input.request_id.as_deref());
 
-    // Wave 1: run concurrently.
+    // Wave 1: run concurrently, each result recorded as soon as it finishes.
     let wave1_context = BackendContext {
         resolved_ips: vec![],
         dkim_selectors: input.dkim_selectors.clone(),
         forward_headers: forward_headers.clone(),
     };
-    let wave1_futures: Vec<_> = state
-        .backends
-        .iter()
-        .filter(|b| WAVE1_SECTIONS.contains(&b.section()))
-        .map(|b| {
-            let section = b.section().to_string();
-            let ctx = wave1_context.clone();
-            let domain = domain.to_string();
-            async move {
-                let result = b.run(&domain, &ctx).await;
-                (section, result)
-            }
-        })
-        .collect();
-
-    let wave1_results = futures::future::join_all(wave1_futures).await;
-
-    for (section, result) in wave1_results {
-        sections.insert(section, result);
-    }
+    run_wave(
+        state,
+        WAVE1_SECTIONS,
+        &domain,
+        &wave1_context,
+        deadline,
+        &mut sections,
+    )
+    .await;
 
     // Extract resolved IPs from DNS result.
     let resolved_ips: Vec<IpAddr> = sections
@@ -142,18 +122,21 @@ async fn run_backends_with_input(state: &AppState, input: &CheckInput) -> CheckO
         })
         .unwrap_or_default();
 
-    // Wave 2: run after wave 1.
+    // Wave 2: run after wave 1, within the remaining time.
     let wave2_context = BackendContext {
         resolved_ips,
         dkim_selectors: None,
         forward_headers,
     };
-    for backend in state.backends.iter() {
-        if WAVE2_SECTIONS.contains(&backend.section()) {
-            let result = backend.run(domain, &wave2_context).await;
-            sections.insert(backend.section().to_string(), result);
-        }
-    }
+    run_wave(
+        state,
+        WAVE2_SECTIONS,
+        &domain,
+        &wave2_context,
+        deadline,
+        &mut sections,
+    )
+    .await;
 
     // Build scoring inputs.
     let mut inputs: HashMap<String, SectionInput> = HashMap::new();
@@ -171,10 +154,51 @@ async fn run_backends_with_input(state: &AppState, input: &CheckInput) -> CheckO
     let score = compute_score(&state.scoring_profile, &inputs);
 
     CheckOutput {
-        domain: domain.to_string(),
+        domain,
         sections,
         score,
         duration_ms: start.elapsed().as_millis() as u64,
+    }
+}
+
+/// Run the backends of one wave concurrently. Each result lands in `sections` as soon as its
+/// backend finishes; when `deadline` passes, the backends still running are dropped and
+/// recorded as `Timeout`.
+async fn run_wave(
+    state: &AppState,
+    wave: &[&str],
+    domain: &str,
+    ctx: &BackendContext,
+    deadline: tokio::time::Instant,
+    sections: &mut Sections,
+) {
+    let mut pending = futures::stream::FuturesUnordered::new();
+    let mut expected: Vec<String> = Vec::new();
+    for b in state
+        .backends
+        .iter()
+        .filter(|b| wave.contains(&b.section()))
+    {
+        let section = b.section().to_string();
+        expected.push(section.clone());
+        pending.push(async move { (section, b.run(domain, ctx).await) });
+    }
+
+    while !pending.is_empty() {
+        match tokio::time::timeout_at(deadline, pending.next()).await {
+            Ok(Some((section, result))) => {
+                sections.insert(section, result);
+            }
+            Ok(None) => break,
+            Err(_elapsed) => break,
+        }
+    }
+    drop(pending);
+
+    for section in expected {
+        sections
+            .entry(section)
+            .or_insert(Err(SectionError::Timeout));
     }
 }
 
@@ -200,19 +224,4 @@ fn section_input_from_result(result: &Result<BackendResult, SectionError>) -> Se
             status: SectionStatus::Errored,
         },
     }
-}
-
-/// Build a score from all-errored sections (used when the hard deadline fires).
-fn build_score_from_errors(state: &AppState) -> OverallScore {
-    let mut inputs: HashMap<String, SectionInput> = HashMap::new();
-    for name in state.scoring_profile.sections.keys() {
-        inputs.insert(
-            name.clone(),
-            SectionInput {
-                checks: vec![],
-                status: SectionStatus::Errored,
-            },
-        );
-    }
-    compute_score(&state.scoring_profile, &inputs)
 }

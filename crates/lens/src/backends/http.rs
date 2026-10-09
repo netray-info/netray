@@ -176,7 +176,8 @@ async fn check_http_inner(
     encoded_domain: &str,
     fwd: &reqwest::header::HeaderMap,
 ) -> Result<BackendResult, AppError> {
-    let resp = tokio::time::timeout(timeout, client.get(url).headers(fwd.clone()).send())
+    let deadline = tokio::time::Instant::now() + timeout;
+    let resp = tokio::time::timeout_at(deadline, client.get(url).headers(fwd.clone()).send())
         .await
         .map_err(|_| {
             tracing::warn!(service = "spectra", url = %url, error = "timeout", "backend call failed");
@@ -198,13 +199,25 @@ async fn check_http_inner(
         });
     }
 
-    let inspect: HttpInspectResponse = resp.json().await.map_err(|e| {
-        tracing::warn!(service = "spectra", url = %url, error = %e, "backend call failed");
-        AppError::BackendError {
-            backend: "http",
-            message: format!("failed to decode spectra response: {e}"),
-        }
-    })?;
+    let inspect: HttpInspectResponse = tokio::time::timeout_at(deadline, resp.json())
+        .await
+        .map_err(|_| {
+            tracing::warn!(service = "spectra", url = %url, error = "body timeout", "backend call failed");
+            AppError::Timeout
+        })?
+        .map_err(|e| {
+            tracing::warn!(service = "spectra", url = %url, error = %e, "backend call failed");
+            let cause = std::error::Error::source(&e)
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            if cause.contains("unknown variant") {
+                return super::unknown_verdict("http", &cause);
+            }
+            AppError::BackendError {
+                backend: "http",
+                message: format!("failed to decode spectra response: {e}"),
+            }
+        })?;
 
     tracing::debug!(service = "spectra", url = %url, "backend call succeeded");
     Ok(parse_inspect(inspect, http_url, encoded_domain))

@@ -10,11 +10,11 @@ metrics_bind = "127.0.0.1:9095"
 
 [backends.dns]
 url = "https://dns.netray.info"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [backends.tls]
 url = "https://tls.netray.info"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [backends.ip]
 url = "https://ip.netray.info"
@@ -22,11 +22,11 @@ timeout_ms = 2000
 
 # [backends.http]
 # url = "https://http.netray.info"   # optional; omit to disable HTTP section
-# timeout_ms = 20000
+# timeout_ms = 15000
 
 # [backends.email]
 # url = "http://beacon:8085"         # optional; omit to disable email section
-# timeout is fixed at 15 s (load-bearing: leaves 5 s before the 20 s hard deadline)
+# timeout_ms = 15000
 # Public URL for detail_url links is sourced from [ecosystem] email_base_url, not this url.
 
 [ecosystem]

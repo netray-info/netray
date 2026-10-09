@@ -199,6 +199,7 @@ fn perfect_domain_all_pass_scores_a_plus() {
 
     assert!(!result.hard_fail_triggered);
     assert_eq!(result.grade, "A+", "all-pass should produce A+");
+    assert!(result.complete, "all sections scored → complete");
     assert!(
         (result.overall_percentage - 100.0).abs() < 0.001,
         "all-pass should yield 100% score, got {:.2}",
@@ -545,9 +546,9 @@ fn email_auth_fail_lowers_grade_not_via_dns() {
     );
 }
 
-// O1: Email backend errored → excluded from overall; not_applicable stays empty
+// O1: Email backend errored → grade is "incomplete", never a clean A+; not_applicable stays empty
 #[test]
-fn email_backend_errored_excluded_from_overall() {
+fn email_backend_errored_makes_grade_incomplete() {
     let profile = default_profile();
     let mut map = all_inputs_with_email(SectionInput {
         checks: vec![],
@@ -567,9 +568,44 @@ fn email_backend_errored_excluded_from_overall() {
         result.not_applicable.is_empty(),
         "errored section must not populate not_applicable"
     );
-    // Remaining sections all pass → A+
-    assert_eq!(result.grade, "A+");
-    assert!(result.overall_percentage > 0.0);
+    assert_eq!(
+        result.grade, "incomplete",
+        "an errored section must not be graded on the remaining sections"
+    );
+    assert!(
+        !result.complete,
+        "errored section makes the result incomplete"
+    );
+}
+
+// C4 (engine): a Scored section whose checks are all Skip (possible == 0) is incomplete
+#[test]
+fn scored_section_with_all_skip_checks_is_incomplete() {
+    let skip = |n: &str| CheckResult {
+        name: n.to_string(),
+        verdict: CheckVerdict::Skip,
+        messages: vec![],
+    };
+    let email = no_error(vec![
+        skip("email_authentication"),
+        skip("email_infrastructure"),
+        skip("email_transport"),
+        skip("email_brand_policy"),
+    ]);
+    let profile = default_profile();
+    let result = compute_score(&profile, &all_inputs_with_email(email));
+    assert_eq!(result.grade, "incomplete");
+    assert!(!result.complete);
+}
+
+// C1 (engine): a timeout reaches the engine as Errored (no Timeout status exists); dns Errored → incomplete
+#[test]
+fn errored_dns_section_makes_grade_incomplete() {
+    let profile = default_profile();
+    let (_, tls, ip) = all_pass(&profile);
+    let result = compute_score(&profile, &inputs(errored(), tls, ip));
+    assert_eq!(result.grade, "incomplete");
+    assert!(!result.complete);
 }
 
 // O2: Email NotApplicable → recorded in not_applicable; section absent from sections
@@ -598,4 +634,8 @@ fn email_not_applicable_recorded_and_excluded() {
         "not_applicable must record the reason"
     );
     assert_eq!(result.grade, "A+");
+    assert!(
+        result.complete,
+        "NotApplicable is excluded without making the result incomplete"
+    );
 }

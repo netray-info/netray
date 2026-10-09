@@ -121,7 +121,7 @@ impl AppState {
             backends.push(Box::new(EmailBackend {
                 email_url: url.clone(),
                 public_url: eco.email_base_url.clone().unwrap_or_else(|| url.clone()),
-                timeout: Duration::from_secs(15),
+                timeout: Duration::from_millis(email_cfg.timeout_ms),
                 client: http_client.clone(),
             }));
         }

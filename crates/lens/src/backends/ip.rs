@@ -153,10 +153,16 @@ async fn check_ip_inner(
             let client = client.clone();
             let fwd = fwd.clone();
             async move {
-                let result = tokio::time::timeout(timeout, client.get(&url).headers(fwd).send())
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok());
+                let result = tokio::time::timeout(timeout, async {
+                    let resp = client.get(&url).headers(fwd).send().await.ok()?;
+                    if !resp.status().is_success() {
+                        return None;
+                    }
+                    resp.json::<EnrichmentEntry>().await.ok()
+                })
+                .await
+                .ok()
+                .flatten();
                 if result.is_none() {
                     tracing::warn!(service = "ifconfig", url = %url, "enrichment call failed");
                 }
@@ -171,16 +177,11 @@ async fn check_ip_inner(
     let mut worst_verdict = CheckVerdict::Pass;
     let mut reputation_messages: Vec<String> = Vec::new();
 
-    for (ip, maybe_resp) in capped.iter().zip(responses) {
-        let entry = match maybe_resp {
-            Some(resp) if resp.status().is_success() => resp.json::<EnrichmentEntry>().await.ok(),
-            _ => None,
-        };
-
+    for (ip, entry) in capped.iter().zip(responses) {
         match entry {
             Some(e) => {
                 let network_type = e.network.network_type.clone();
-                let verdict = network_type_verdict(&network_type);
+                let verdict = network_type_verdict(&network_type)?;
                 if verdict_rank(&verdict) > verdict_rank(&worst_verdict) {
                     worst_verdict = verdict.clone();
                 }
@@ -244,16 +245,17 @@ fn verdict_rank(v: &CheckVerdict) -> u8 {
 
 /// Map a network.type value to a CheckVerdict.
 ///
-/// residential/cloud/datacenter/bot/education/government/business → Pass
+/// residential/cloud/datacenter/bot/education/government/business/internal → Pass
 /// vpn → Warn
 /// tor/spamhaus/c2 → Fail
-fn network_type_verdict(network_type: &str) -> CheckVerdict {
+/// anything else is an unknown verdict.
+fn network_type_verdict(network_type: &str) -> Result<CheckVerdict, AppError> {
     match network_type {
-        "tor" | "spamhaus" | "c2" => CheckVerdict::Fail,
-        "vpn" => CheckVerdict::Warn,
+        "tor" | "spamhaus" | "c2" => Ok(CheckVerdict::Fail),
+        "vpn" => Ok(CheckVerdict::Warn),
         "residential" | "cloud" | "datacenter" | "bot" | "education" | "government"
-        | "business" | "internal" => CheckVerdict::Pass,
-        _ => CheckVerdict::Pass,
+        | "business" | "internal" => Ok(CheckVerdict::Pass),
+        other => Err(super::unknown_verdict("ip", other)),
     }
 }
 

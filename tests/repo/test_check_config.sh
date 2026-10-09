@@ -114,5 +114,29 @@ for row in "${telemetry_rejects[@]}"; do
     grep -qF 'telemetry.otlp_endpoint' <<<"$out" || fail "$sub: invalid otlp_endpoint error does not name telemetry.otlp_endpoint ($out)"
 done
 
+# C7: backend timeouts that exceed the deadline budget (dns/tls/http/email 20000, ip 2000,
+# forced regardless of the fixture) must fail the check and name the budget.
+lens_fixture="$REPO_ROOT/crates/lens/tests/fixtures/lens.production.toml"
+perl -pe '
+    $s = $1 if /^\[backends\.(\w+)\]/;
+    $s = "" if /^\[(?!backends\.)/;
+    s/^timeout_ms = .*/"timeout_ms = " . ($s eq "ip" ? 2000 : $s ne "" ? 20000 : 0)/e if $s ne "";
+' "$lens_fixture" >"$tmp/lens.budget.toml"
+if [ "$(grep -c '^timeout_ms = 20000$' "$tmp/lens.budget.toml")" -ne 4 ] \
+    || ! grep -qx 'timeout_ms = 2000' "$tmp/lens.budget.toml"; then
+    fail "lens: budget substitution did not force 20000/2000"
+else
+    run_check lens "$tmp/lens.budget.toml"
+    [ "$rc" -eq 1 ] || fail "lens: timeouts over the deadline budget exited $rc, expected 1"
+    grep -qi 'timeout' <<<"$out" && grep -qi 'deadline' <<<"$out" \
+        || fail "lens: over-budget error does not mention timeout and deadline ($out)"
+fi
+
+# C8: the shipped lens configs stay loadable.
+for f in crates/lens/tests/fixtures/lens.production.toml crates/lens/lens.dev.toml crates/lens/lens.example.toml; do
+    run_check lens "$REPO_ROOT/$f"
+    [ "$rc" -eq 0 ] || fail "lens: $f exited $rc, expected 0 ($out)"
+done
+
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
 echo "PASS: test_check_config"

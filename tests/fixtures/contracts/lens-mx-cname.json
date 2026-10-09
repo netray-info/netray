@@ -1,8 +1,9 @@
 {
   "summary": {
     "grade": "B",
-    "score": 76.6,
+    "score": 79.4,
     "overall": "fail",
+    "complete": true,
     "sections": {
       "dns": "warn",
       "email": "fail",
@@ -15,7 +16,7 @@
       "email": "B",
       "http": "B",
       "ip": "A+",
-      "tls": "C"
+      "tls": "B"
     },
     "hard_fail": false,
     "hard_fail_checks": [],
@@ -99,6 +100,10 @@
       "status": "fail",
       "checks": [
         {
+          "name": "tls_reachable",
+          "verdict": "pass"
+        },
+        {
           "name": "chain_trusted",
           "verdict": "pass"
         },
@@ -113,10 +118,6 @@
         {
           "name": "ocsp_stapled",
           "verdict": "fail"
-        },
-        {
-          "name": "hsts",
-          "verdict": "pass"
         }
       ]
     }

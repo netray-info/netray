@@ -93,6 +93,7 @@ fn mock_check_fn(counter: Arc<AtomicUsize>, grade: &'static str) -> BadgeCheckFn
                         hard_fail_triggered: false,
                         hard_fail_checks: vec![],
                         not_applicable: HashMap::new(),
+                        complete: grade != "error" && grade != "incomplete",
                     },
                     duration_ms: 1,
                 }
@@ -205,6 +206,7 @@ async fn cache_hit_skips_run_check() {
                         hard_fail_triggered: false,
                         hard_fail_checks: vec![],
                         not_applicable: HashMap::new(),
+                        complete: true,
                     },
                     duration_ms: 1,
                     cached_at: SystemTime::now(),

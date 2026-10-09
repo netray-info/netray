@@ -1,5 +1,10 @@
 use std::collections::HashMap;
+use std::future::Future;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
+
+use moka::future::Cache;
+use moka::ops::compute::{CompResult, Op};
 
 use crate::backends::BackendResult;
 use crate::check::SectionError;
@@ -26,6 +31,63 @@ pub fn is_fresh(cached: &CachedResult, ttl_seconds: u64) -> bool {
     match cached.cached_at.elapsed() {
         Ok(age) => age < Duration::from_secs(ttl_seconds),
         Err(_) => false,
+    }
+}
+
+/// The one cache writer for `/api/check`: refuses an incomplete result.
+/// Returns whether the entry was stored.
+pub async fn store_result(
+    cache: &Cache<String, Arc<CachedResult>>,
+    key: String,
+    entry: Arc<CachedResult>,
+) -> bool {
+    if !entry.score.complete {
+        return false;
+    }
+    cache.insert(key, entry).await;
+    true
+}
+
+/// Coalesced recompute for badge and OG: concurrent callers for one key share a fresh
+/// entry. A fresh entry is returned as is; otherwise `init` runs and its result is stored
+/// only when complete. An incomplete result is returned to the caller without caching.
+pub async fn get_or_compute<F>(
+    cache: &Cache<String, Arc<CachedResult>>,
+    key: String,
+    ttl_seconds: u64,
+    init: F,
+) -> Arc<CachedResult>
+where
+    F: Future<Output = CachedResult>,
+{
+    let computed: Arc<Mutex<Option<Arc<CachedResult>>>> = Arc::new(Mutex::new(None));
+    let slot = Arc::clone(&computed);
+    let result = cache
+        .entry(key)
+        .and_compute_with(move |existing| async move {
+            if let Some(e) = existing
+                && is_fresh(e.value(), ttl_seconds)
+            {
+                return Op::Nop;
+            }
+            let value = Arc::new(init.await);
+            if let Ok(mut guard) = slot.lock() {
+                *guard = Some(Arc::clone(&value));
+            }
+            if value.score.complete {
+                Op::Put(value)
+            } else {
+                Op::Nop
+            }
+        })
+        .await;
+    let fresh = computed.lock().ok().and_then(|mut g| g.take());
+    match (fresh, result) {
+        (Some(v), _) => v,
+        (None, CompResult::Unchanged(e)) => e.into_value(),
+        (None, CompResult::Inserted(e) | CompResult::ReplacedWith(e)) => e.into_value(),
+        (None, CompResult::Removed(e)) => e.into_value(),
+        (None, CompResult::StillNone(_)) => unreachable!("init runs when no fresh entry exists"),
     }
 }
 

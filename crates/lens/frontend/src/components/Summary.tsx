@@ -81,7 +81,7 @@ interface Props {
 export default function Summary(props: Props) {
   const [showBadgeModal, setShowBadgeModal] = createSignal(false);
   const s = () => props.summary;
-  const isError = () => s().grade === 'error';
+  const isError = () => s().grade === 'error' || s().grade === 'incomplete';
   const sectionVerdict = (name: string): Verdict => s().sections[name] ?? 'error';
   const sectionGrade = (name: string): string | undefined => s().section_grades[name];
   const hasErroredSection = () =>

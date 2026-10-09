@@ -179,3 +179,72 @@ async fn prism_check_stream_matches_golden() {
     );
     assert_golden("prism.sse", &body);
 }
+
+fn nx_lookups(name: &str, record_type: &str) -> Lookups {
+    serde_json::from_value(serde_json::json!({
+        "lookups": [{
+            "query": { "name": name, "record_type": record_type },
+            "name_server": "udp:192.0.2.53:53",
+            "result": { "NxDomain": {
+                "response_time": { "secs": 0, "nanos": 12_000_000 }
+            }}
+        }]
+    }))
+    .expect("NxDomain fixture must deserialize into mhost Lookups")
+}
+
+// A domain whose A and AAAA lookups are NxDomain: lens's `no-address-records` fixture reads it.
+#[tokio::test]
+async fn prism_check_stream_without_address_records_matches_golden() {
+    let a = nx_lookups("example.com.", "A");
+    let aaaa = nx_lookups("example.com.", "AAAA");
+    let all = a.clone().merge(aaaa.clone());
+
+    let lints = [
+        ("caa", check_caa(&all)),
+        ("ns", check_ns_count(&all)),
+        ("spf", check_spf(&all)),
+    ];
+    let (mut passed, mut warnings, mut failed, mut not_found, mut total) =
+        (0u32, 0u32, 0u32, 0u32, 0u32);
+    for (_, results) in &lints {
+        for r in results {
+            total += 1;
+            match r {
+                CheckResult::Ok(_) => passed += 1,
+                CheckResult::Warning(_) => warnings += 1,
+                CheckResult::Failed(_) => failed += 1,
+                CheckResult::NotFound() => not_found += 1,
+            }
+        }
+    }
+
+    let mut events = vec![batch_event("A", &a, 1), batch_event("AAAA", &aaaa, 2)];
+    for (category, results) in lints {
+        events.push(lint_event(category, results));
+    }
+    let done = CheckDoneEvent {
+        request_id: "contract-golden".to_string(),
+        duration_ms: 1,
+        total_checks: total,
+        passed,
+        warnings,
+        failed,
+        not_found,
+        cache_key: None,
+    };
+    events.push(Event::default().event("done").json_data(&done).unwrap());
+
+    let resp = Sse::new(futures::stream::iter(
+        events.into_iter().map(Ok::<_, Infallible>),
+    ))
+    .into_response();
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let body = String::from_utf8(bytes.to_vec()).unwrap();
+
+    assert!(
+        body.contains("NxDomain"),
+        "stream must carry NxDomain answers"
+    );
+    assert_golden("prism-no-address.sse", &body);
+}

@@ -119,10 +119,14 @@ async fn lens_parses_tlsight_golden() {
         .find(|c| c.name == "ocsp_stapled")
         .expect("port quality check `ocsp_stapled` missing");
     assert_eq!(ocsp.verdict, CheckVerdict::Fail);
-    assert!(
-        result.checks.iter().any(|c| c.name == "hsts"),
-        "hostname quality check `hsts` missing"
-    );
+    // HTTP owns hsts and https_redirect; the TLS section no longer copies tlsight's
+    // hostname checks (grade-integrity requirement 9).
+    for owned_by_http in ["hsts", "https_redirect"] {
+        assert!(
+            result.checks.iter().all(|c| c.name != owned_by_http),
+            "TLS section must not carry `{owned_by_http}`"
+        );
+    }
     assert!(
         result.raw_headline.contains("TLSv1.3") && result.raw_headline.contains("60d"),
         "headline `{}` does not carry the golden's version and days remaining",

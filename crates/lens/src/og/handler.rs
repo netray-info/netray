@@ -111,7 +111,7 @@ pub async fn og_handler(
             Ok(b) => b,
             Err(e) => return render_error_from(e),
         };
-        let is_error = grade == "error";
+        let is_error = crate::routes::is_unscored_grade(&grade);
         let cache_ctrl = if is_error {
             "public, max-age=300, s-maxage=300"
         } else {
@@ -139,24 +139,18 @@ pub async fn og_handler(
     let (grade, score_pct, checked_at) = if let Some(cache) = &state.cache {
         let state_for_init = state.clone();
         let domain_for_init = domain.clone();
-        let entry = cache
-            .entry(key.clone())
-            .or_insert_with_if(
-                async move {
-                    use std::sync::Arc;
-                    let output = invoke_check(&state_for_init, &domain_for_init).await;
-                    Arc::new(CachedResult {
-                        sections: output.sections,
-                        score: output.score,
-                        duration_ms: output.duration_ms,
-                        cached_at: SystemTime::now(),
-                        snapshot_id: None,
-                    })
-                },
-                |existing| !is_fresh(existing, OG_TTL_SECONDS),
-            )
-            .await;
-        let val = entry.into_value();
+        let entry = crate::cache::get_or_compute(cache, key.clone(), OG_TTL_SECONDS, async move {
+            let output = invoke_check(&state_for_init, &domain_for_init).await;
+            CachedResult {
+                sections: output.sections,
+                score: output.score,
+                duration_ms: output.duration_ms,
+                cached_at: SystemTime::now(),
+                snapshot_id: None,
+            }
+        })
+        .await;
+        let val = entry;
         (
             val.score.grade.clone(),
             val.score.overall_percentage,
@@ -171,7 +165,7 @@ pub async fn og_handler(
         )
     };
 
-    let is_error = grade == "error";
+    let is_error = crate::routes::is_unscored_grade(&grade);
     let etag = compute_etag(&domain, &grade, &label, score_pct);
     if is_not_modified(&req_headers, &etag) {
         return StatusCode::NOT_MODIFIED.into_response();

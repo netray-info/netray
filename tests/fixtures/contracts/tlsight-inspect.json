@@ -71,6 +71,13 @@
       "quality": {
         "checks": [
           {
+            "category": "protocol",
+            "detail": "TLS handshake succeeded",
+            "id": "tls_reachable",
+            "label": "TLS reachable",
+            "status": "pass"
+          },
+          {
             "category": "certificate",
             "detail": "Chain validates to a trusted root",
             "id": "chain_trusted",

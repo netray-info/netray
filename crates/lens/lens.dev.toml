@@ -7,11 +7,11 @@ dns_servers = ["cloudflare"]
 
 [backends.dns]
 url = "https://dns.netray.info"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [backends.tls]
 url = "https://tls.netray.info"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [backends.ip]
 url = "https://ip.netray.info"
@@ -19,10 +19,11 @@ timeout_ms = 2000
 
 [backends.http]
 url = "https://http.netray.info"
-timeout_ms = 20000
+timeout_ms = 15000
 
 [backends.email]
 url = "https://email.netray.info"
+timeout_ms = 15000
 
 [ecosystem]
 ip_base_url    = "https://ip.netray.info"

@@ -1,15 +1,20 @@
-import type { DnsEvent, TlsEvent, IpEvent, SummaryEvent, DoneEvent } from './types';
+import type { DnsEvent, TlsEvent, HttpEvent, EmailEvent, IpEvent, SummaryEvent, DoneEvent } from './types';
 import { CHECK_LABELS } from './checkMeta';
 
-export function toJson(
-  domain: string,
-  dns: DnsEvent | null,
-  tls: TlsEvent | null,
-  ip: IpEvent | null,
-  summary: SummaryEvent | null,
-  done: DoneEvent | null,
-): string {
-  return JSON.stringify({ domain, dns, tls, ip, summary, done }, null, 2);
+export interface ExportInput {
+  domain: string;
+  dns: DnsEvent | null;
+  tls: TlsEvent | null;
+  http: HttpEvent | null;
+  email: EmailEvent | null;
+  ip: IpEvent | null;
+  summary: SummaryEvent | null;
+  done: DoneEvent | null;
+}
+
+export function toJson(input: ExportInput): string {
+  const { domain, dns, tls, http, email, ip, summary, done } = input;
+  return JSON.stringify({ domain, dns, tls, http, email, ip, summary, done }, null, 2);
 }
 
 function verdictSymbol(verdict: string): string {
@@ -22,14 +27,8 @@ function verdictSymbol(verdict: string): string {
   }
 }
 
-export function toMarkdown(
-  domain: string,
-  dns: DnsEvent | null,
-  tls: TlsEvent | null,
-  ip: IpEvent | null,
-  summary: SummaryEvent | null,
-  done: DoneEvent | null,
-): string {
+export function toMarkdown(input: ExportInput): string {
+  const { domain, dns, tls, http, email, ip, summary, done } = input;
   const lines: string[] = [];
 
   lines.push(`# lens report: ${domain}`);
@@ -60,9 +59,13 @@ export function toMarkdown(
   if (summary) {
     renderSection('TLS', summary.sections['tls'] ?? '', tls);
     renderSection('DNS', summary.sections['dns'] ?? '', dns);
+    renderSection('HTTP', summary.sections['http'] ?? '', http);
+    renderSection('Email', summary.sections['email'] ?? '', email);
   } else {
     renderSection('TLS', tls?.status ?? '', tls);
     renderSection('DNS', dns?.status ?? '', dns);
+    renderSection('HTTP', http?.status ?? '', http);
+    renderSection('Email', email?.status ?? '', email);
   }
 
   if (ip) {

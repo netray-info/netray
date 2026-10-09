@@ -46,6 +46,24 @@ pub struct IpInspectionResult {
     pub raw_certs: Option<Vec<rustls::pki_types::CertificateDer<'static>>>,
 }
 
+/// Map a `connect::tls_handshake` error to the code `inspect_ip` reports.
+///
+/// An error that says this host cannot reach the target at all (no route to the network, no
+/// usable source address) is not a verdict on the target: `NOT_TESTED_FROM_HERE`. A host
+/// unreachable (`EHOSTUNREACH`) is target-side: a remote ICMP reply or a firewall's
+/// admin-prohibited reject, so it stays `HANDSHAKE_FAILED`.
+pub fn error_code(err: &(dyn std::error::Error + Send + Sync + 'static)) -> &'static str {
+    if let Some(io_err) = err.downcast_ref::<std::io::Error>()
+        && matches!(
+            io_err.kind(),
+            std::io::ErrorKind::NetworkUnreachable | std::io::ErrorKind::AddrNotAvailable
+        )
+    {
+        return "NOT_TESTED_FROM_HERE";
+    }
+    "HANDSHAKE_FAILED"
+}
+
 /// Perform TLS inspection on a single IP and port.
 pub async fn inspect_ip(
     ip: IpAddr,
@@ -86,7 +104,7 @@ pub async fn inspect_ip(
             enrichment: None,
             raw_certs: None,
             error: Some(InspectionError {
-                code: "HANDSHAKE_FAILED".to_string(),
+                code: error_code(&*e).to_string(),
                 message: e.to_string(),
             }),
         },

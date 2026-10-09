@@ -39,16 +39,23 @@ pub struct SectionInput {
 pub struct SectionScore {
     pub earned: u32,
     pub possible: u32,
-    /// 0.0–100.0. If no weighted checks exist (possible == 0), returns 100.0 (full credit).
+    /// 0.0–100.0. A section with no weighted checks (possible == 0) has no score at all:
+    /// `score_section` returns `None` for it.
     pub percentage: f64,
 }
 
 #[derive(Debug, Clone)]
 pub struct OverallScore {
-    /// Per-section scores. Missing key = section errored or absent from profile.
+    /// Per-section scores of the finished sections. Missing key = section errored, not
+    /// applicable, scored with `possible == 0`, or absent from profile.
     pub sections: HashMap<String, SectionScore>,
+    /// Weighted average of the finished sections. Informational when the result is incomplete.
     pub overall_percentage: f64,
+    /// A letter grade, or `"incomplete"` when `complete` is false.
     pub grade: String,
+    /// False when any section is Errored or Scored with `possible == 0`. NotApplicable
+    /// sections are excluded without making the result incomplete.
+    pub complete: bool,
     pub hard_fail_triggered: bool,
     /// Which specific checks triggered a hard fail.
     pub hard_fail_checks: Vec<String>,
@@ -61,7 +68,7 @@ pub struct OverallScore {
 /// Checks not present in `section_checks` are ignored (unweighted).
 /// Skip verdicts are excluded from both earned and possible.
 /// Pass = full weight, Warn = weight / 2, Fail/NotFound = 0.
-/// If possible == 0 (no weighted checks at all), returns 100% (full credit).
+/// If possible == 0 (no weighted checks at all), returns None: the section carries no signal.
 pub fn score_section(
     section_checks: &HashMap<String, u32>,
     input: &SectionInput,
@@ -115,8 +122,10 @@ pub fn score_section(
 
 /// Compute the overall score across all sections.
 ///
-/// Overall percentage = weighted average of available (non-errored) section scores.
-/// Grade is determined by comparing overall_percentage against thresholds (desc order).
+/// Overall percentage = weighted average of the finished section scores.
+/// A result is incomplete when any section is Errored or Scored with `possible == 0`
+/// (NotApplicable excluded); its grade is `"incomplete"`. Otherwise the grade is determined
+/// by comparing overall_percentage against thresholds (desc order).
 /// Hard fail: if any check in `profile.hard_fail.{section}` has verdict Fail or NotFound,
 /// the grade is forced to "F" regardless of score.
 pub fn compute_score(
@@ -127,6 +136,7 @@ pub fn compute_score(
     let mut not_applicable: HashMap<String, String> = HashMap::new();
     let mut weighted_sum: f64 = 0.0;
     let mut total_weight: u32 = 0;
+    let mut complete = true;
 
     for (name, section) in &profile.sections {
         if let Some(input) = inputs.get(name) {
@@ -138,16 +148,19 @@ pub fn compute_score(
                 weighted_sum += score.percentage * section.weight as f64;
                 total_weight += section.weight;
                 sections.insert(name.clone(), score);
+            } else {
+                complete = false;
             }
         }
     }
 
-    // If all sections errored or had no weighted checks, we have no signal.
+    // No finished section: no signal.
     if total_weight == 0 {
         return OverallScore {
             sections,
             overall_percentage: 0.0,
-            grade: "error".to_string(),
+            grade: "incomplete".to_string(),
+            complete: false,
             hard_fail_triggered: false,
             hard_fail_checks: vec![],
             not_applicable,
@@ -167,7 +180,9 @@ pub fn compute_score(
 
     let hard_fail_triggered = !hard_fail_checks.is_empty();
 
-    let grade = if hard_fail_triggered {
+    let grade = if !complete {
+        "incomplete".to_string()
+    } else if hard_fail_triggered {
         "F".to_string()
     } else {
         lookup_grade(&profile.thresholds, overall_percentage)
@@ -177,6 +192,7 @@ pub fn compute_score(
         sections,
         overall_percentage,
         grade,
+        complete,
         hard_fail_triggered,
         hard_fail_checks,
         not_applicable,
@@ -422,7 +438,9 @@ mod tests {
         let profile = default_profile();
         // chain_trusted is in tls hard_fail list
         let tls_input = no_error(vec![fail("chain_trusted"), pass("not_expired")]);
-        let dns_input = no_error(vec![pass("spf"), pass("dmarc")]);
+        // dns checks that the profile weights: a section with no weighted check would make
+        // the result incomplete (grade-integrity requirement 3) instead of F.
+        let dns_input = no_error(vec![pass("caa"), pass("ns")]);
         let ip_input = no_error(vec![pass("reputation")]);
 
         let result = compute_score(&profile, &inputs(dns_input, tls_input, ip_input));

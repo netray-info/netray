@@ -79,7 +79,7 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
             Some("https://netray.info/guide/certificate-management")
         }
         // TLS — protocol & cipher suites
-        "tls_version" | "forward_secrecy" | "aead_cipher" => {
+        "tls_version" | "forward_secrecy" | "aead_cipher" | "tls_reachable" => {
             Some("https://netray.info/guide/tls-protocol")
         }
         // TLS — multi-IP consistency
@@ -259,6 +259,12 @@ fn fix_for(name: &str) -> (Option<&'static str>, Option<&'static str>) {
                 "Your servers advertise different protocols (HTTP/1.1, HTTP/2) on different IPs — align your web server configuration across all instances.",
             ),
             Some("your infrastructure team"),
+        ),
+        "tls_reachable" => (
+            Some(
+                "Serve HTTPS on port 443 with a valid certificate, and make sure the firewall allows inbound connections to port 443.",
+            ),
+            Some("the site's web server or hosting provider"),
         ),
         // TLS — advanced
         "ech_advertised" => (
@@ -486,7 +492,11 @@ pub struct SummaryEvent {
     pub sections: HashMap<String, String>,
     pub section_grades: HashMap<String, String>,
     pub overall: String,
+    /// A letter grade, or `"incomplete"` when `complete` is false.
     pub grade: String,
+    /// False when any section is errored or scored nothing possible; the grade is then
+    /// `incomplete`, and the result is neither cached nor snapshotted.
+    pub complete: bool,
     pub score: f64,
     pub hard_fail: bool,
     pub hard_fail_checks: Vec<String>,
@@ -889,7 +899,7 @@ pub async fn badge_handler(
         if badge_is_not_modified(&req_headers, &etag) {
             return axum::http::StatusCode::NOT_MODIFIED.into_response();
         }
-        let cache_ctrl = if grade == "error" {
+        let cache_ctrl = if is_unscored_grade(&grade) {
             "public, max-age=300, s-maxage=300"
         } else {
             "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
@@ -916,29 +926,24 @@ pub async fn badge_handler(
     let grade = if let Some(cache) = &state.cache {
         let state_for_init = state.clone();
         let domain_for_init = badge_req.domain.clone();
-        let entry = cache
-            .entry(key.clone())
-            .or_insert_with_if(
-                async move {
-                    let output = invoke_badge_check(&state_for_init, &domain_for_init).await;
-                    Arc::new(CachedResult {
-                        sections: output.sections,
-                        score: output.score,
-                        duration_ms: output.duration_ms,
-                        cached_at: SystemTime::now(),
-                        snapshot_id: None,
-                    })
-                },
-                |existing| !is_fresh(existing, ttl),
-            )
-            .await;
-        entry.into_value().score.grade.clone()
+        let entry = crate::cache::get_or_compute(cache, key.clone(), ttl, async move {
+            let output = invoke_badge_check(&state_for_init, &domain_for_init).await;
+            CachedResult {
+                sections: output.sections,
+                score: output.score,
+                duration_ms: output.duration_ms,
+                cached_at: SystemTime::now(),
+                snapshot_id: None,
+            }
+        })
+        .await;
+        entry.score.grade.clone()
     } else {
         let output = invoke_badge_check(&state, &badge_req.domain).await;
         output.score.grade
     };
 
-    let is_error = grade == "error";
+    let is_error = is_unscored_grade(&grade);
     let render_start = Instant::now();
     let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
     metrics::histogram!("lens_badge_render_duration_seconds")
@@ -1123,7 +1128,12 @@ async fn run_check_handler(
 
     // 5. Create snapshot before caching so the cache entry carries the
     //    snapshot_id and subsequent cache hits expose the same URL.
-    let snapshot_id = create_snapshot(&state, &domain_out, &output).await;
+    //    An incomplete result gets neither a snapshot nor a cache entry.
+    let snapshot_id = if output.score.complete {
+        create_snapshot(&state, &domain_out, &output).await
+    } else {
+        None
+    };
 
     // 6. Store in cache (with snapshot_id).
     if let Some(cache) = &state.cache {
@@ -1134,7 +1144,7 @@ async fn run_check_handler(
             cached_at: SystemTime::now(),
             snapshot_id: snapshot_id.clone(),
         });
-        cache.insert(key, entry).await;
+        crate::cache::store_result(cache, key, entry).await;
     }
 
     // 7. Return SSE stream or sync JSON.
@@ -1172,7 +1182,30 @@ fn verdict_str(verdict: &CheckVerdict) -> &'static str {
     }
 }
 
-fn section_status_from_checks(result: &Result<BackendResult, SectionError>) -> &'static str {
+/// True for the grades that render as `?` and get the short `Cache-Control`.
+pub fn is_unscored_grade(grade: &str) -> bool {
+    grade == "error" || grade == "incomplete"
+}
+
+/// Section status for a section event: `"error"` also for a Scored section whose weighted
+/// checks earn nothing possible. A section absent from the profile (no weights at all)
+/// keeps its check-derived status.
+fn section_status_from_checks(
+    result: &Result<BackendResult, SectionError>,
+    weights: &HashMap<String, u32>,
+) -> &'static str {
+    if let (Ok(r), false) = (result, weights.is_empty()) {
+        let has_possible = r.checks.iter().any(|c| {
+            c.verdict != CheckVerdict::Skip && weights.get(&c.name).is_some_and(|w| *w > 0)
+        });
+        if !has_possible {
+            return "error";
+        }
+    }
+    section_status_from_verdicts(result)
+}
+
+fn section_status_from_verdicts(result: &Result<BackendResult, SectionError>) -> &'static str {
     match result {
         Err(_) => "error",
         Ok(r) => {
@@ -1221,7 +1254,7 @@ fn dns_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> DnsEvent {
-    let status = section_status_from_checks(result);
+    let status = section_status_from_checks(result, weights);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
             let items = build_check_items(&r.checks, weights);
@@ -1249,7 +1282,7 @@ fn tls_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> TlsEvent {
-    let status = section_status_from_checks(result);
+    let status = section_status_from_checks(result, weights);
     let (headline, checks, detail_url) = match result {
         Ok(r) => {
             let items = build_check_items(&r.checks, weights);
@@ -1276,7 +1309,7 @@ fn http_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> HttpEvent {
-    let status = section_status_from_checks(result);
+    let status = section_status_from_checks(result, weights);
     let (
         headline,
         checks,
@@ -1353,7 +1386,7 @@ fn ip_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> IpEvent {
-    let status = section_status_from_checks(result);
+    let status = section_status_from_checks(result, weights);
     let (headline, checks, addresses, detail_url) = match result {
         Ok(r) => {
             let items = build_check_items(&r.checks, weights);
@@ -1399,7 +1432,7 @@ fn email_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> EmailEvent {
-    let status = section_status_from_checks(result);
+    let status = section_status_from_checks(result, weights);
     match result {
         Err(SectionError::NotApplicable { reason }) => EmailEvent {
             status,
@@ -1448,7 +1481,17 @@ fn summary_payload_from(
     let mut section_grades: HashMap<String, String> = HashMap::new();
 
     for (name, result) in sections {
-        section_statuses.insert(name.clone(), section_status_from_checks(result).to_string());
+        let status = match result {
+            Ok(_)
+                if !score.complete
+                    && !score.sections.contains_key(name)
+                    && !score.not_applicable.contains_key(name) =>
+            {
+                "error"
+            }
+            _ => section_status_from_verdicts(result),
+        };
+        section_statuses.insert(name.clone(), status.to_string());
         if let Some(s) = score.sections.get(name) {
             section_grades.insert(name.clone(), lookup_grade(thresholds, s.percentage));
         }
@@ -1480,6 +1523,7 @@ fn summary_payload_from(
         hard_fail_checks: score.hard_fail_checks.clone(),
         hard_fail_reason,
         not_applicable: score.not_applicable.clone(),
+        complete: score.complete,
     }
 }
 
@@ -2158,9 +2202,10 @@ pub mod tests {
             .map(|v| v.to_str().unwrap().to_string());
 
         assert_eq!(cache_header1.as_deref(), Some("MISS"));
-        // Note: due to timing, the second request may be MISS if cache insert
-        // hasn't completed — but with moka's async insert + await above, HIT is expected.
-        assert_eq!(cache_header2.as_deref(), Some("HIT"));
+        // The test state's backends are unreachable, so the result is incomplete and never
+        // cached (grade-integrity requirement 4); a cache HIT for a complete result is pinned
+        // by `complete_result_is_snapshotted_and_cached` in tests/incomplete_results.rs.
+        assert_eq!(cache_header2.as_deref(), Some("MISS"));
     }
 
     #[tokio::test]
@@ -2301,6 +2346,7 @@ pub mod tests {
             "ocsp_stapled",
             "dane_valid",
             "caa_compliant",
+            "tls_reachable",
             "hsts",
             "https_redirect",
             "security_headers",
@@ -2324,6 +2370,11 @@ pub mod tests {
             owner.unwrap(),
             "your hosting provider or mail administrator"
         );
+    }
+
+    #[test]
+    fn guide_url_for_tls_reachable_is_some() {
+        assert!(guide_url_for("tls_reachable").is_some());
     }
 
     #[test]
@@ -2536,6 +2587,7 @@ pub mod tests {
             hard_fail_triggered: true,
             hard_fail_checks: vec!["chain_trusted".to_string(), "cert_lifetime".to_string()],
             not_applicable: HashMap::new(),
+            complete: true,
         };
         let sections = HashMap::new();
         let thresholds = BTreeMap::new();
@@ -2562,6 +2614,7 @@ pub mod tests {
             hard_fail_triggered: false,
             hard_fail_checks: vec![],
             not_applicable: HashMap::new(),
+            complete: true,
         };
         let sections = HashMap::new();
         let thresholds = BTreeMap::new();
@@ -2585,6 +2638,7 @@ pub mod tests {
             hard_fail_triggered: true,
             hard_fail_checks: vec!["chain_trusted".to_string()],
             not_applicable: HashMap::new(),
+            complete: true,
         };
         let sections = HashMap::new();
         let thresholds = BTreeMap::new();
@@ -2886,10 +2940,11 @@ pub mod tests {
             .unwrap();
 
         assert_eq!(cache1.as_deref(), Some("MISS"));
-        assert_eq!(cache2.as_deref(), Some("HIT"));
+        // Unreachable backends: incomplete, never cached (grade-integrity requirement 4).
+        assert_eq!(cache2.as_deref(), Some("MISS"));
         assert!(
             ct.contains("application/json"),
-            "cache hit in sync mode must return JSON"
+            "a repeated check in sync mode must return JSON"
         );
     }
 
@@ -3219,6 +3274,158 @@ pub mod tests {
         assert!(
             err.contains("empty token"),
             "empty token between commas must return error, got: {err}"
+        );
+    }
+
+    // --- grade integrity: a section absent from the profile is not an error
+
+    fn grade_integrity_check(name: &str, verdict: CheckVerdict) -> CheckResult {
+        CheckResult {
+            name: name.to_string(),
+            verdict,
+            messages: vec![],
+        }
+    }
+
+    fn grade_integrity_http_ok(checks: Vec<CheckResult>) -> Result<BackendResult, SectionError> {
+        Ok(BackendResult {
+            checks,
+            extra: BackendExtra::Http {
+                raw_headline: String::new(),
+                detail_url: String::new(),
+                status_code: Some(200),
+                http_version: None,
+                response_duration_ms: None,
+                server_ip: None,
+                server_org: None,
+                server_network_type: None,
+            },
+        })
+    }
+
+    #[test]
+    fn summary_section_absent_from_profile_is_not_error() {
+        use crate::scoring::engine::{SectionInput, SectionStatus, compute_score};
+        use crate::scoring::profile::ScoringProfile;
+
+        let profile = ScoringProfile::from_toml(
+            r#"
+[meta]
+name = "no-http"
+version = 2
+
+[sections.dns]
+weight = 50
+[sections.dns.checks]
+caa = 5
+
+[sections.tls]
+weight = 50
+[sections.tls.checks]
+chain_trusted = 5
+
+[thresholds]
+"A" = 90
+"F" = 0
+"#,
+        )
+        .unwrap();
+
+        let dns_checks = vec![grade_integrity_check("caa", CheckVerdict::Pass)];
+        let tls_checks = vec![grade_integrity_check("chain_trusted", CheckVerdict::Pass)];
+        let http_checks = vec![grade_integrity_check("hsts", CheckVerdict::Warn)];
+
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "dns".to_string(),
+            SectionInput {
+                checks: dns_checks.clone(),
+                status: SectionStatus::Scored,
+            },
+        );
+        inputs.insert(
+            "tls".to_string(),
+            SectionInput {
+                checks: tls_checks.clone(),
+                status: SectionStatus::Scored,
+            },
+        );
+        inputs.insert(
+            "http".to_string(),
+            SectionInput {
+                checks: http_checks.clone(),
+                status: SectionStatus::Scored,
+            },
+        );
+        let score = compute_score(&profile, &inputs);
+        assert!(
+            score.complete,
+            "an unprofiled section must not make the score incomplete"
+        );
+
+        let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
+        for (name, checks) in [("dns", dns_checks), ("tls", tls_checks)] {
+            let extra = BackendExtra::Tls {
+                raw_headline: String::new(),
+                detail_url: String::new(),
+            };
+            sections.insert(name.to_string(), Ok(BackendResult { checks, extra }));
+        }
+        sections.insert("http".to_string(), grade_integrity_http_ok(http_checks));
+
+        let summary = summary_payload_from(&sections, &score, &profile.thresholds);
+        assert_eq!(summary.sections["http"], "warn");
+        assert_ne!(summary.overall, "error");
+        assert!(summary.complete);
+
+        // The section event status agrees, with no weights for the unprofiled section.
+        let event = http_payload_from(&sections["http"], &HashMap::new());
+        assert_eq!(event.status, "warn");
+    }
+
+    #[test]
+    fn summary_profiled_section_with_nothing_possible_stays_error() {
+        use crate::scoring::engine::{SectionInput, SectionStatus, compute_score};
+        use crate::scoring::profile::ScoringProfile;
+
+        let profile = ScoringProfile::from_toml(
+            r#"
+[meta]
+name = "http-only"
+version = 2
+
+[sections.http]
+weight = 100
+[sections.http.checks]
+hsts = 5
+
+[thresholds]
+"A" = 90
+"F" = 0
+"#,
+        )
+        .unwrap();
+        let checks = vec![grade_integrity_check("hsts", CheckVerdict::Skip)];
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "http".to_string(),
+            SectionInput {
+                checks: checks.clone(),
+                status: SectionStatus::Scored,
+            },
+        );
+        let score = compute_score(&profile, &inputs);
+        let mut sections = HashMap::new();
+        sections.insert("http".to_string(), grade_integrity_http_ok(checks));
+
+        let summary = summary_payload_from(&sections, &score, &profile.thresholds);
+        assert_eq!(summary.sections["http"], "error");
+        assert_eq!(summary.overall, "error");
+
+        let weights: HashMap<String, u32> = profile.sections["http"].checks.clone();
+        assert_eq!(
+            http_payload_from(&sections["http"], &weights).status,
+            "error"
         );
     }
 }

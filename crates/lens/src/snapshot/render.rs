@@ -743,6 +743,7 @@ fn check_label(name: &str) -> &str {
         "cert_lifetime" => "Certificate Lifetime",
         "san_quality" => "SAN Quality",
         "aia_reachability" => "AIA Reachability",
+        "tls_reachable" => "TLS Reachable",
         "tls_version" => "TLS Version",
         "forward_secrecy" => "Forward Secrecy",
         "aead_cipher" => "AEAD Cipher",
@@ -786,7 +787,7 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
         "expiry_window" | "cert_lifetime" | "san_quality" | "aia_reachability" => {
             Some("https://netray.info/guide/certificate-management")
         }
-        "tls_version" | "forward_secrecy" | "aead_cipher" => {
+        "tls_version" | "forward_secrecy" | "aead_cipher" | "tls_reachable" => {
             Some("https://netray.info/guide/tls-protocol")
         }
         "consistency" | "alpn_consistency" => Some("https://netray.info/guide/multi-ip-tls"),
@@ -812,4 +813,14 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_label;
+
+    #[test]
+    fn check_label_has_a_human_label_for_tls_reachable() {
+        assert_ne!(check_label("tls_reachable"), "tls_reachable");
+    }
 }
