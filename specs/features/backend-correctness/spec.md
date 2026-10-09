@@ -1,7 +1,8 @@
 # Spec: backend correctness
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-09
+Finished: 2026-10-09
 
 ## Goal
 
