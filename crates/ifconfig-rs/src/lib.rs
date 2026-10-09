@@ -9,6 +9,8 @@ pub mod error;
 pub mod extractors;
 pub mod format;
 pub mod handlers;
+#[cfg(test)]
+mod ip_cache_tests;
 pub mod middleware;
 pub mod negotiate;
 #[cfg(test)]
