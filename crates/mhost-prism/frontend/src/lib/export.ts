@@ -1,5 +1,6 @@
 import type { BatchEvent, Lookup, LookupResult, DoneStats } from '../components/ResultsTable';
 import { formatRecordData, formatServer } from '../components/ResultsTable';
+import { inlineCode } from '@netray-info/common-frontend/utils';
 
 // ---------------------------------------------------------------------------
 // Row extraction — flatten batches into tabular rows
@@ -106,7 +107,7 @@ export function toMarkdown(batches: BatchEvent[], ctx?: MarkdownContext): string
 
   // Header with context
   if (ctx?.query) {
-    parts.push(`# DNS Results: \`${ctx.query}\``);
+    parts.push(`# DNS Results: ${inlineCode(ctx.query)}`);
     parts.push('');
     const meta: string[] = [];
     meta.push(`**Date:** ${new Date().toISOString().replace('T', ' ').slice(0, 16)} UTC`);
@@ -133,10 +134,11 @@ export function toMarkdown(batches: BatchEvent[], ctx?: MarkdownContext): string
 
   // Table
   const mdEscape = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  const mdCode = (s: string) => inlineCode(s).replace(/\|/g, '\\|');
   parts.push('| Name | TTL | Type | Value | Server | Time |');
   parts.push('|------|-----|------|-------|--------|------|');
   for (const r of rows) {
-    parts.push(`| ${mdEscape(r.name)} | ${r.ttl} | ${r.type} | ${mdEscape(r.value)} | ${mdEscape(r.server)} | ${r.time} |`);
+    parts.push(`| ${mdCode(r.name)} | ${r.ttl} | ${r.type} | ${mdCode(r.value)} | ${mdEscape(r.server)} | ${r.time} |`);
   }
 
   return parts.join('\n');
