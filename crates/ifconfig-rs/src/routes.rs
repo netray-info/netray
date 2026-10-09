@@ -360,7 +360,9 @@ where
                 )
                 .await;
                 let arc = std::sync::Arc::new(result);
-                state.ip_cache.insert(cache_key, arc.clone()).await;
+                if !skip_dns {
+                    state.ip_cache.insert(cache_key, arc.clone()).await;
+                }
                 arc
             }
         } else {
