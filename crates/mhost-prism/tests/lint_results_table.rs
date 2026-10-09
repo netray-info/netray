@@ -168,19 +168,11 @@ fn lint_results_table() {
             "{}: dnssec",
             row.name
         );
-        assert_eq!(
-            render(category(&out, "ttl")),
-            row.ttl,
-            "{}: ttl",
-            row.name
-        );
+        assert_eq!(render(category(&out, "ttl")), row.ttl, "{}: ttl", row.name);
     }
 }
 
-fn category<'a>(
-    out: &'a [(&'static str, Vec<CheckResult>)],
-    name: &str,
-) -> &'a [CheckResult] {
+fn category<'a>(out: &'a [(&'static str, Vec<CheckResult>)], name: &str) -> &'a [CheckResult] {
     &out.iter()
         .find(|(c, _)| *c == name)
         .unwrap_or_else(|| panic!("category {name} missing"))

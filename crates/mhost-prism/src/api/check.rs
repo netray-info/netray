@@ -463,31 +463,25 @@ pub async fn post_handler(
         //             + MTA-STS policy file fetch
         // ------------------------------------------------------------------
         let query_timeout = Duration::from_secs(3);
+        let unique = unique_records(&all_lookups);
         let (lame_results, delegation_results, mta_sts_results) = tokio::join!(
-            check_ns_lame_delegation(&all_lookups, &domain, query_timeout),
-            check_ns_delegation_consistency(&all_lookups, &domain, query_timeout),
-            check_mta_sts(&mta_sts_lookups, &domain, &all_lookups, &outbound),
+            check_ns_lame_delegation(&unique, &domain, query_timeout),
+            check_ns_delegation_consistency(&unique, &domain, query_timeout),
+            check_mta_sts(&mta_sts_lookups, &domain, &unique, &outbound),
         );
-        let dnssec_rollover_results = check_dnssec_rollover(&all_lookups);
 
         // ------------------------------------------------------------------
         // Phase 2: Lint checks (synchronous, pure)
         // ------------------------------------------------------------------
-        let mut lint_checks: Vec<(&'static str, Vec<CheckResult>)> = vec![
-            ("caa", check_caa(&all_lookups)),
-            ("cname_apex", check_cname_apex(&all_lookups)),
-            ("dnssec", check_dnssec(&all_lookups)),
-            ("dnskey_algorithm", check_dnskey_algorithms(&all_lookups)),
-            ("dnssec_rollover", dnssec_rollover_results),
-            ("https_svcb", check_https_svcb_mode(&all_lookups)),
-            ("mx", check_mx_sync(&all_lookups)),
-            ("ns", check_ns_count(&all_lookups)),
-            ("ns_lame", lame_results),
-            ("ns_delegation", delegation_results),
-            ("spf", check_spf(&all_lookups)),
-            ("ttl", check_ttl(&all_lookups)),
-            ("dmarc", check_dmarc_records(&dmarc_txts)),
-        ];
+        let mut lint_checks: Vec<(&'static str, Vec<CheckResult>)> = Vec::new();
+        for (category, results) in lint_lookups(&all_lookups) {
+            lint_checks.push((category, results));
+            if category == "ns" {
+                lint_checks.push(("ns_lame", lame_results.clone()));
+                lint_checks.push(("ns_delegation", delegation_results.clone()));
+            }
+        }
+        lint_checks.push(("dmarc", check_dmarc_records(&dmarc_txts)));
         let bimi_results = check_bimi(&bimi_lookups);
         let tlsrpt_results = check_tlsrpt(&tlsrpt_lookups, &mta_sts_lookups);
         lint_checks.push(("bimi", bimi_results));
@@ -504,6 +498,7 @@ pub async fn post_handler(
         let mut not_found: u32 = 0;
 
         for (category, results) in lint_checks {
+            let results = unique_lines(results);
             for r in &results {
                 total_checks += 1;
                 match r {
@@ -686,6 +681,131 @@ async fn fan_out_lookup(
     }
 
     merged
+}
+
+/// Drop repeated identical results; the first occurrence and the order are kept.
+pub fn unique_lines(results: Vec<CheckResult>) -> Vec<CheckResult> {
+    let mut out: Vec<CheckResult> = Vec::with_capacity(results.len());
+    for r in results {
+        if !out.contains(&r) {
+            out.push(r);
+        }
+    }
+    out
+}
+
+/// One record per name, type and data across every lookup of every resolver.
+///
+/// Of duplicates the copy with the highest TTL is kept, at the position of the first
+/// occurrence (mhost's `Record` equality ignores the TTL, and `check_ttl` keeps the highest
+/// TTL the same way). mhost's `Record` constructors are crate-private, so a lookup that has to
+/// change is rewritten through its public serde form. That happens per lookup: a lookup that
+/// needs no change is kept as is, a lookup whose records all repeat earlier ones is dropped,
+/// and a lookup that does not survive the serde round trip (e.g. a name with an escaped
+/// `\000` label) is kept as is, so it can only affect its own deduplication.
+fn unique_records(lookups: &Lookups) -> Lookups {
+    use mhost::resolver::Lookup;
+    use serde_json::Value;
+    use std::collections::HashSet;
+
+    fn record_key(rec: &Value) -> String {
+        format!("{}|{}|{}", rec["name"], rec["type"], rec["data"])
+    }
+
+    fn records_of(lookup: &mut Value) -> Option<&mut Vec<Value>> {
+        lookup
+            .pointer_mut("/result/Response/records")
+            .and_then(Value::as_array_mut)
+    }
+
+    let values: Vec<Option<Value>> = lookups
+        .iter()
+        .map(|l| serde_json::to_value(l).ok())
+        .collect();
+
+    let mut max_ttl: HashMap<String, u64> = HashMap::new();
+    for value in values.iter().flatten() {
+        let mut value = value.clone();
+        if let Some(records) = records_of(&mut value) {
+            for rec in records.iter() {
+                let ttl = rec["ttl"].as_u64().unwrap_or(0);
+                let entry = max_ttl.entry(record_key(rec)).or_insert(ttl);
+                *entry = (*entry).max(ttl);
+            }
+        }
+    }
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out: Vec<Lookup> = Vec::with_capacity(values.len());
+    for (lookup, value) in lookups.iter().zip(values) {
+        let Some(mut value) = value else {
+            out.push(lookup.clone());
+            continue;
+        };
+        let Some(records) = records_of(&mut value) else {
+            out.push(lookup.clone());
+            continue;
+        };
+        if records.is_empty() {
+            out.push(lookup.clone());
+            continue;
+        }
+
+        let before = records.len();
+        let mut changed = false;
+        records.retain_mut(|rec| {
+            let key = record_key(rec);
+            if !seen.insert(key.clone()) {
+                return false;
+            }
+            if let Some(&ttl) = max_ttl.get(&key)
+                && rec["ttl"].as_u64() != Some(ttl)
+            {
+                rec["ttl"] = Value::from(ttl);
+                changed = true;
+            }
+            true
+        });
+
+        if records.is_empty() {
+            continue;
+        }
+        if !changed && records.len() == before {
+            out.push(lookup.clone());
+            continue;
+        }
+        match serde_json::from_value::<Lookup>(value) {
+            Ok(rewritten) => out.push(rewritten),
+            Err(err) => {
+                tracing::debug!(%err, "lookup does not round-trip; keeping it unchanged");
+                out.push(lookup.clone());
+            }
+        }
+    }
+
+    Lookups::new(out)
+}
+
+/// The synchronous record lints in emit order, run over the unique records of all resolvers,
+/// each category's lines deduplicated.
+pub fn lint_lookups(lookups: &Lookups) -> Vec<(&'static str, Vec<CheckResult>)> {
+    let unique = unique_records(lookups);
+    let lookups = &unique;
+    vec![
+        ("caa", check_caa(lookups)),
+        ("cname_apex", check_cname_apex(lookups)),
+        ("dnssec", check_dnssec(lookups)),
+        ("dnskey_algorithm", check_dnskey_algorithms(lookups)),
+        ("dnssec_rollover", check_dnssec_rollover(lookups)),
+        ("https_svcb", check_https_svcb_mode(lookups)),
+        ("mx", check_mx_sync(lookups)),
+        ("ns", check_ns_count(lookups)),
+        ("spf", check_spf(lookups)),
+        ("ttl", check_ttl(lookups)),
+    ]
+    .into_iter()
+    .map(|(category, results)| (category, unique_lines(results)))
+    .collect()
 }
 
 /// DNSKEY algorithm lint: warn on deprecated DNSSEC signing algorithms (RFC 8624).
