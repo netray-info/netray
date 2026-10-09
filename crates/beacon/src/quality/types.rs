@@ -183,3 +183,39 @@ pub struct MtaStsInfo {
     pub mode: Option<String>,
     pub mx_patterns: Vec<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sub(verdict: Verdict) -> SubCheck {
+        SubCheck {
+            name: "x".to_string(),
+            verdict,
+            detail: String::new(),
+        }
+    }
+
+    fn category_verdict(verdicts: &[Verdict]) -> Verdict {
+        let subs = verdicts.iter().copied().map(sub).collect();
+        CheckResult::new(Category::Spf, subs, String::new()).verdict
+    }
+
+    #[test]
+    fn c7_info_ranks_below_pass() {
+        assert!(Verdict::Info < Verdict::Pass);
+    }
+
+    #[test]
+    fn c7_category_verdict_info_does_not_outrank_pass() {
+        let rows: &[(&[Verdict], Verdict)] = &[
+            (&[Verdict::Pass, Verdict::Info], Verdict::Pass),
+            (&[Verdict::Info], Verdict::Info),
+            (&[Verdict::Info, Verdict::Warn], Verdict::Warn),
+            (&[], Verdict::Pass),
+        ];
+        for (subs, expected) in rows {
+            assert_eq!(category_verdict(subs), *expected, "sub-checks {subs:?}");
+        }
+    }
+}

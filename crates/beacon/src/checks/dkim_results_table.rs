@@ -10,9 +10,8 @@
 //! of the parked row and the MX / SPF records of the sending rows are present
 //! only so each stub looks like the kind of domain the row names.
 //!
-//! Requirement R4.5 of 0.23.0 will change rows C6 and C7 (today a key with an
-//! empty `p=` counts as a found key and fails the category); this table is
-//! updated with that change.
+//! Requirement 4 of email-scoring: a key with an empty `p=` is revoked, not
+//! found. It is Info on a parked domain (`sends_no_mail`), Warn on a sending one.
 
 use crate::checks::dkim::check_dkim;
 use crate::dns::test_support::TestDnsResolver;
@@ -27,6 +26,8 @@ struct Row {
     parked: bool,
     /// TXT at `default._domainkey.example.com`, if any (`{key}` = valid RSA p=).
     key_record: Option<&'static str>,
+    /// Extra TXT at `google._domainkey.example.com`; also makes the MX a Google host.
+    google_record: Option<&'static str>,
     verdict: Verdict,
     sub_checks: &'static [(&'static str, Verdict)],
     detail: &'static str,
@@ -35,27 +36,30 @@ struct Row {
 
 const ROWS: &[Row] = &[
     Row {
-        name: "C6 parked domain, only key has empty p=",
+        name: "C13 parked domain, only key has empty p=",
         parked: true,
         key_record: Some("v=DKIM1; k=rsa; p="),
-        verdict: Verdict::Fail,
-        sub_checks: &[("key_revoked", Verdict::Fail)],
-        detail: "DKIM key(s) found",
-        found: true,
+        google_record: None,
+        verdict: Verdict::Info,
+        sub_checks: &[("key_revoked", Verdict::Info)],
+        detail: "only revoked DKIM keys",
+        found: false,
     },
     Row {
-        name: "C7 sending domain, only key has empty p=",
+        name: "C14 sending domain, only key has empty p=",
         parked: false,
         key_record: Some("v=DKIM1; k=rsa; p="),
-        verdict: Verdict::Fail,
-        sub_checks: &[("key_revoked", Verdict::Fail)],
-        detail: "DKIM key(s) found",
-        found: true,
+        google_record: None,
+        verdict: Verdict::Warn,
+        sub_checks: &[("key_revoked", Verdict::Info)],
+        detail: "only revoked DKIM keys",
+        found: false,
     },
     Row {
-        name: "C8 sending domain, no key at any probed selector",
+        name: "C15 sending domain, no key at any probed selector",
         parked: false,
         key_record: None,
+        google_record: None,
         verdict: Verdict::Info,
         sub_checks: &[("no_dkim", Verdict::Info)],
         detail: "No DKIM keys found",
@@ -65,8 +69,22 @@ const ROWS: &[Row] = &[
         name: "C9 sending domain, one valid key",
         parked: false,
         key_record: Some("v=DKIM1; k=rsa; p={key}"),
+        google_record: None,
         verdict: Verdict::Pass,
         sub_checks: &[("rsa_key_ok", Verdict::Pass)],
+        detail: "DKIM key(s) found",
+        found: true,
+    },
+    Row {
+        name: "C17 sending domain, valid provider key plus empty p= at default",
+        parked: false,
+        key_record: Some("v=DKIM1; k=rsa; p="),
+        google_record: Some("v=DKIM1; k=rsa; p={key}"),
+        verdict: Verdict::Pass,
+        sub_checks: &[
+            ("rsa_key_ok", Verdict::Pass),
+            ("key_revoked", Verdict::Info),
+        ],
         detail: "DKIM key(s) found",
         found: true,
     },
@@ -92,7 +110,15 @@ async fn dkim_results_table() {
             resolver = resolver.with_txt("default._domainkey.example.com", vec![record.as_str()]);
         }
 
-        let (result, found) = check_dkim("example.com", &[], &[], 3, &resolver).await;
+        let mut mx_hosts: Vec<String> = Vec::new();
+        if let Some(record) = row.google_record {
+            let record = record.replace("{key}", RSA_2048_P);
+            resolver = resolver.with_txt("google._domainkey.example.com", vec![record.as_str()]);
+            mx_hosts.push("aspmx.l.google.com".to_string());
+        }
+
+        let (result, found) =
+            check_dkim("example.com", &mx_hosts, &[], 3, &resolver, row.parked).await;
         let got: Vec<(String, Verdict)> = result
             .sub_checks
             .iter()

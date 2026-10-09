@@ -275,7 +275,7 @@ mod tests {
         let mx_hosts = vec!["aspmx.l.google.com".to_string()];
         // No TXT seeded — we're only verifying the selector was attempted.
         let resolver = TestDnsResolver::new();
-        let (_result, found) = check_dkim("example.com", &mx_hosts, &[], 3, &resolver).await;
+        let (_result, found) = check_dkim("example.com", &mx_hosts, &[], 3, &resolver, false).await;
         assert!(!found, "no TXT seeded, no key should be found");
         // Provider selector for google is "google" → "google._domainkey.example.com"
         assert!(
@@ -299,7 +299,7 @@ mod tests {
                 "hop5.example.net",
                 vec![&format!("v=DKIM1; k=rsa; p={}", p_value)],
             );
-        let (result, found) = check_dkim("example.com", &[], &[], 3, &resolver).await;
+        let (result, found) = check_dkim("example.com", &[], &[], 3, &resolver, false).await;
         assert!(found, "DKIM key should be found at end of 5-hop chain");
         assert!(
             !result.sub_checks.iter().any(|s| s.name == "cname_loop"),
@@ -318,7 +318,7 @@ mod tests {
             .with_cname("hop3.example.net", vec!["hop4.example.net"])
             .with_cname("hop4.example.net", vec!["hop5.example.net"])
             .with_cname("hop5.example.net", vec!["hop6.example.net"]);
-        let (result, _found) = check_dkim("example.com", &[], &[], 3, &resolver).await;
+        let (result, _found) = check_dkim("example.com", &[], &[], 3, &resolver, false).await;
         assert!(
             result
                 .sub_checks
@@ -339,7 +339,7 @@ mod tests {
     async fn txt_missing_p_tag_no_pass_verdict() {
         let resolver = TestDnsResolver::new()
             .with_txt("default._domainkey.example.com", vec!["v=DKIM1; k=rsa;"]);
-        let (result, _found) = check_dkim("example.com", &[], &[], 3, &resolver).await;
+        let (result, _found) = check_dkim("example.com", &[], &[], 3, &resolver, false).await;
         assert!(
             !result.sub_checks.iter().any(|s| s.verdict == Verdict::Pass),
             "expected no Pass verdict when p= is missing; got {:?}",
@@ -347,32 +347,37 @@ mod tests {
         );
     }
 
-    /// Empty p= (revoked key) surfaces as key_revoked Fail.
+    /// Empty p= (revoked key) surfaces as key_revoked Info.
     #[tokio::test]
     async fn empty_p_value_reports_key_revoked() {
         let resolver = TestDnsResolver::new()
             .with_txt("default._domainkey.example.com", vec!["v=DKIM1; k=rsa; p="]);
-        let (result, _found) = check_dkim("example.com", &[], &[], 3, &resolver).await;
+        let (result, _found) = check_dkim("example.com", &[], &[], 3, &resolver, false).await;
         assert!(
             result
                 .sub_checks
                 .iter()
-                .any(|s| s.name == "key_revoked" && s.verdict == Verdict::Fail),
-            "expected key_revoked Fail; got {:?}",
+                .any(|s| s.name == "key_revoked" && s.verdict == Verdict::Info),
+            "expected key_revoked Info; got {:?}",
             result.sub_checks
         );
+    }
+
+    /// C16: the helper's key must decode as 2048 bits.
+    #[test]
+    fn make_valid_rsa_p_value_decodes_as_2048_bits() {
+        assert_eq!(check_rsa_key_size(&make_valid_rsa_p_value()), Some(2048));
     }
 
     /// Build a syntactically-valid SPKI-encoded RSA public key (2048-bit),
     /// base64-encoded, for use in DKIM `p=` test values.
     fn make_valid_rsa_p_value() -> String {
-        use base64::Engine;
         // This is a real 2048-bit RSA SPKI (SubjectPublicKeyInfo) encoded as
         // base64. The key itself is throwaway — generated once for testing.
         // We only need x509-parser to decode it and report key_size() = 2048.
         // The value below is the SPKI of a freshly-generated keypair committed
         // to test data; it is NOT used to sign anything.
-        let spki_der = b"0\x82\x01\"0\r\x06\t*\x86H\x86\xf7\r\x01\x01\x01\x05\x00\x03\x82\x01\x0f\x000\x82\x01\n\x02\x82\x01\x01\x00\xc1\x9f\xbc\x13s\x9f\xd4y\x8d\xe2\x99\xf6\x8e\x0e\xbd\xe2\xfbOO\xccl\xb5\xaa\x1b\xac\xd8\xa2\xf1\x9e\x80\xdb\x14!%^A\xfe\xe8\xee\xf0J\xcd\xa1\x8b\xf0v\\m\x80L\xbd\x96\xa3\xfb\x91\x89\xe4`\xb1 \x8f\x98\xf1\xf9\x95W<\x9cO\xab\xb0J\xe6\xb6\x8fA\xbaG\x91\xc4\xa5\x95\xe2T\xb7\xdek\x0e\xd9\x9a.#u\xc2K\x83\xae\x04\xbc\xb5\xbe\x9bJ\x83\xc7}\x94\xc6S\xa2\x82\xdb\xb6\xa5\x9a(\xcb\xbbT\xbc`Z,\xebe\xa3q\x84\x1f>\xba\x19\xefN5/A\xd5\xb7K/\x07\xed\xa0\xfa2\x9b\xeb\\\xda\xcf\x8c]\x7f\x18\xed\xf1\x9e\xd0I\x12\xef\xc8\x87I\x91\x99\x8b\xe9\xb2\xd2\xf3\\\xa0dl-?\x85\xff\xd3\xd2\xcau\x14\xdb\xe4\xbbK\x89\x81)\xa1\x91\x06\xbe\x01\x06I\x82\x0c\xe3\x9c\xb9\xd7\xc3cgX\xd4d\x0c\x94\xa7aT\xf4%@\xa2V3T\xca\x1a\x9b\xfc\xba\x02Q\x9d\x9an\xf1\xddL\xa14\x1b\xd0\xe4Z\xc7\xa2G\x16Xj\x93:\x1f5r\x9e\xf8\xdb\xdb\x9d\x02\x03\x01\x00\x01";
-        base64::engine::general_purpose::STANDARD.encode(spki_der)
+        // Throwaway 2048-bit RSA SPKI (same key as RSA_2048_P in dkim_results_table.rs).
+        "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv06e3j461rNqkC2J1zvYTmm2ttXIUL3plNVJDrUdqHnB14KnAbMOz2RCdBwdDEi1BZ6uESPzTkKSz/EdkDHRSaULx6XzgEGhAfXiXiVgWeh5e+fhNjVkFSquPx57PuYZAnaotyNi9ppQs/MyF+XTdHTl4GQfJG0y8Wyaj6gndzGubPaoZq3gI5j0hoqsVDpwzraw9BtWZVUMhhhIhDrITiJCY8PCmqFcFCOH22T+0zFFEor+mfkagBUOfF6cw/QVD/6MLxK/Ull2Tvi8xtW0crx5YHACMZDedLfVkCX6JokHCFHu2fSem/2T/HxQn1MD73uW2ZKTsgGJ3cWZsHYC/QIDAQAB".to_string()
     }
 }

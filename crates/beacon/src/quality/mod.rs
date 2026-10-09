@@ -102,4 +102,21 @@ mod tests {
         v.push(Verdict::Warn);
         assert_eq!(compute_grade(&v), Grade::B);
     }
+
+    #[test]
+    fn c8_grade_pinned_info_pass_mixes() {
+        use Verdict::*;
+        let rows: &[(&[Verdict], Grade)] = &[
+            (&[Pass, Pass, Info, Info], Grade::A),
+            (&[Info, Pass], Grade::A),
+            (&[Info, Warn], Grade::B),
+            (&[Pass, Info, Warn, Warn], Grade::B),
+            (&[Info, Warn, Warn, Warn], Grade::C),
+            (&[Pass, Info, Fail], Grade::D),
+            (&[Info, Fail, Fail], Grade::F),
+        ];
+        for (v, expected) in rows {
+            assert_eq!(compute_grade(v), *expected, "verdicts {v:?}");
+        }
+    }
 }

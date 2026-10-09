@@ -798,4 +798,287 @@ mod tests {
             );
         }
     }
+
+    // ---- email-scoring Phase 1 ------------------------------------------
+
+    use crate::dns::TlsaRecord;
+    use std::future::Future;
+    use std::net::Ipv4Addr;
+
+    /// Wraps a `TestDnsResolver` and panics on any lookup under `_domainkey`,
+    /// so the DKIM task panics while every other task finishes normally.
+    struct PanicOnDkim(TestDnsResolver);
+
+    impl DnsLookup for PanicOnDkim {
+        fn lookup_txt(&self, name: &str) -> impl Future<Output = Vec<String>> + Send {
+            let name = name.to_string();
+            async move {
+                if name.contains("._domainkey.") {
+                    panic!("injected DKIM task panic");
+                }
+                self.0.lookup_txt(&name).await
+            }
+        }
+        fn lookup_mx(&self, name: &str) -> impl Future<Output = Vec<(u16, String)>> + Send {
+            self.0.lookup_mx(name)
+        }
+        fn lookup_ips(&self, name: &str) -> impl Future<Output = Vec<IpAddr>> + Send {
+            self.0.lookup_ips(name)
+        }
+        fn lookup_cname(&self, name: &str) -> impl Future<Output = Vec<String>> + Send {
+            self.0.lookup_cname(name)
+        }
+        fn lookup_ptr(&self, ip: IpAddr) -> impl Future<Output = Vec<String>> + Send {
+            self.0.lookup_ptr(ip)
+        }
+        fn lookup_a(&self, name: &str) -> impl Future<Output = Vec<Ipv4Addr>> + Send {
+            self.0.lookup_a(name)
+        }
+        fn lookup_tlsa(&self, name: &str) -> impl Future<Output = Vec<TlsaRecord>> + Send {
+            self.0.lookup_tlsa(name)
+        }
+        fn lookup_exists(&self, name: &str) -> impl Future<Output = bool> + Send {
+            self.0.lookup_exists(name)
+        }
+        fn check_dnssec_signed(&self, name: &str) -> impl Future<Output = bool> + Send {
+            self.0.check_dnssec_signed(name)
+        }
+    }
+
+    /// Run the whole pipeline for `example.com` and collect every event sent.
+    async fn run_events<R: DnsLookup + 'static>(dns: R) -> Vec<SseEvent> {
+        let dns = Arc::new(dns);
+        let fetch = crate::state::OutboundFetch::new(
+            5_000,
+            Arc::new(crate::dns::FetchResolver(dns.clone())),
+        );
+        let (tx, mut rx) = mpsc::channel::<SseEvent>(64);
+        let handle = tokio::spawn(run_all_checks(
+            "example.com".to_string(),
+            Vec::new(),
+            Arc::new(test_config()),
+            dns.clone(),
+            dns,
+            fetch,
+            None,
+            tx,
+        ));
+        let mut events = Vec::new();
+        while let Some(ev) = rx.recv().await {
+            events.push(ev);
+        }
+        handle.await.unwrap();
+        events
+    }
+
+    fn category_event(events: &[SseEvent], category: Category) -> Option<&CheckResult> {
+        events.iter().find_map(|e| match e {
+            SseEvent::Category(c) if c.category == category => Some(c),
+            _ => None,
+        })
+    }
+
+    fn summary_grade(events: &[SseEvent]) -> Grade {
+        events
+            .iter()
+            .find_map(|e| match e {
+                SseEvent::Summary { grade, .. } => Some(*grade),
+                _ => None,
+            })
+            .expect("a Summary event")
+    }
+
+    /// C9/C2: a DKIM task that panics still yields a `dkim` category event whose
+    /// only sub-check is `skipped`, sent before the Summary; every category is sent.
+    #[tokio::test(start_paused = true)]
+    async fn panicking_dkim_task_sends_skipped_category_before_summary() {
+        let dns = TestDnsResolver::new()
+            .with_mx("example.com", vec![(10, "mail.example.com")])
+            .with_txt("example.com", vec!["v=spf1 -all"]);
+        let events = run_events(PanicOnDkim(dns)).await;
+
+        let summary_pos = events
+            .iter()
+            .position(|e| matches!(e, SseEvent::Summary { .. }))
+            .expect("a Summary event");
+        let dkim_pos = events
+            .iter()
+            .position(|e| matches!(e, SseEvent::Category(c) if c.category == Category::Dkim))
+            .expect("a dkim Category event must be sent even when its task panics");
+        assert!(
+            dkim_pos < summary_pos,
+            "dkim event must precede the Summary"
+        );
+
+        let dkim = category_event(&events, Category::Dkim).unwrap();
+        assert_eq!(dkim.sub_checks.len(), 1);
+        assert_eq!(dkim.sub_checks[0].name, SKIPPED);
+        assert_eq!(dkim.sub_checks[0].verdict, Verdict::Skip);
+
+        for cat in Category::ALL.iter() {
+            let pos = events
+                .iter()
+                .position(|e| matches!(e, SseEvent::Category(c) if c.category == *cat))
+                .unwrap_or_else(|| panic!("no Category event for {cat:?}"));
+            assert!(pos < summary_pos, "{cat:?} must precede the Summary");
+        }
+    }
+
+    /// C10/C11/C12: `sends_no_mail` is an Info cross-validation sub-check that
+    /// does not count as an issue.
+    #[tokio::test(start_paused = true)]
+    async fn sends_no_mail_rows() {
+        // (label, MX records, SPF, expect sends_no_mail)
+        let rows: [(&str, Vec<(u16, &str)>, &str, bool); 3] = [
+            ("null MX", vec![(0, ".")], "v=spf1 -all", true),
+            (
+                "-all only, normal MX",
+                vec![(10, "mail.example.com")],
+                "v=spf1 -all",
+                true,
+            ),
+            (
+                "include before -all",
+                vec![(10, "mail.example.com")],
+                "v=spf1 include:_spf.example.com -all",
+                false,
+            ),
+        ];
+        for (label, mx, spf, expect) in rows {
+            let dns = TestDnsResolver::new()
+                .with_mx("example.com", mx)
+                .with_txt("example.com", vec![spf]);
+            let events = run_events(dns).await;
+            if label == "null MX" {
+                let mx = category_event(&events, Category::Mx).expect("mx event");
+                assert!(mx.sub_checks.iter().any(|s| s.name == mx::NULL_MX));
+            }
+            let cross = category_event(&events, Category::CrossValidation)
+                .unwrap_or_else(|| panic!("{label}: no cross_validation event"));
+            let sc = cross
+                .sub_checks
+                .iter()
+                .find(|s| s.name == cross_validation::SENDS_NO_MAIL);
+            assert_eq!(
+                sc.is_some(),
+                expect,
+                "{label}: sub-checks {:?}",
+                cross.sub_checks
+            );
+            if let Some(sc) = sc {
+                assert_eq!(sc.verdict, Verdict::Info, "{label}");
+                // It alone is not an issue: detail and verdict are what they are without it.
+                assert_eq!(cross.sub_checks.len(), 1, "{label}: {:?}", cross.sub_checks);
+                assert_eq!(
+                    cross.detail, "all cross-validation checks passed",
+                    "{label}"
+                );
+                assert_eq!(cross.verdict, Verdict::Pass, "{label}");
+            }
+        }
+    }
+
+    /// C18: a revoked DKIM key on a parked domain does not lower the grade.
+    #[tokio::test(start_paused = true)]
+    async fn parked_domain_revoked_key_keeps_grade() {
+        let parked = |with_revoked_key: bool| {
+            let mut dns = TestDnsResolver::new()
+                .with_mx("example.com", vec![(0, ".")])
+                .with_txt("example.com", vec!["v=spf1 -all"])
+                .with_txt(
+                    "_dmarc.example.com",
+                    vec!["v=DMARC1; p=reject; rua=mailto:d@example.com"],
+                );
+            if with_revoked_key {
+                dns = dns.with_txt("default._domainkey.example.com", vec!["v=DKIM1; k=rsa; p="]);
+            }
+            dns
+        };
+        let without = summary_grade(&run_events(parked(false)).await);
+        let with = summary_grade(&run_events(parked(true)).await);
+        assert_eq!(
+            with, without,
+            "a revoked key must not move the parked domain's grade"
+        );
+    }
+
+    fn canonical(v: serde_json::Value) -> serde_json::Value {
+        use serde_json::Value;
+        match v {
+            Value::Object(m) => {
+                let mut keys: Vec<String> = m.keys().cloned().collect();
+                keys.sort();
+                let mut out = serde_json::Map::new();
+                for k in keys {
+                    let child = canonical(m[&k].clone());
+                    out.insert(k, child);
+                }
+                Value::Object(out)
+            }
+            Value::Array(a) => Value::Array(a.into_iter().map(canonical).collect()),
+            other => other,
+        }
+    }
+
+    /// C20: the real `run_all_checks` timeout path, encoded as on the wire
+    /// (`From<SseEvent> for Event` through axum's `Sse`), against
+    /// `tests/fixtures/contracts/beacon-timeout.sse`.
+    /// Regenerate: `UPDATE_GOLDEN=1 cargo test -p beacon --lib timeout_golden`.
+    #[tokio::test(start_paused = true)]
+    async fn timeout_golden() {
+        use axum::response::IntoResponse;
+        use axum::response::sse::{Event, Sse};
+        use http_body_util::BodyExt;
+
+        let dns = TestDnsResolver::new().with_delay(Duration::from_secs(40));
+        let events = run_events(dns).await;
+        assert!(
+            matches!(summary_grade(&events), Grade::Skipped),
+            "timeout summary grade must be skipped"
+        );
+
+        let stream = futures::stream::iter(events.into_iter().map(|e| {
+            let ev: Event = e.into();
+            Ok::<_, std::convert::Infallible>(ev)
+        }));
+        let bytes = Sse::new(stream)
+            .into_response()
+            .into_body()
+            .collect()
+            .await
+            .expect("body")
+            .to_bytes();
+        let wire: String = std::str::from_utf8(&bytes)
+            .expect("utf-8")
+            .split_inclusive('\n')
+            .map(|line| match line.strip_prefix("data: ") {
+                Some(rest) => {
+                    let v: serde_json::Value =
+                        serde_json::from_str(rest.trim_end()).expect("data is JSON");
+                    format!("data: {}\n", serde_json::to_string(&canonical(v)).unwrap())
+                }
+                None => line.to_string(),
+            })
+            .collect();
+
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/fixtures/contracts/beacon-timeout.sse");
+        if std::env::var("UPDATE_GOLDEN").as_deref() == Ok("1") {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, &wire).unwrap();
+            return;
+        }
+        let golden = std::fs::read_to_string(&path).unwrap_or_else(|_| {
+            panic!(
+                "golden {} is missing; run `UPDATE_GOLDEN=1 cargo test -p beacon --lib timeout_golden`",
+                path.display()
+            )
+        });
+        assert_eq!(
+            golden,
+            wire,
+            "timeout wire output differs from {}",
+            path.display()
+        );
+    }
 }
