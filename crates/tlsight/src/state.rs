@@ -280,4 +280,70 @@ mod tests {
         assert_eq!(root_store.len(), before);
         std::fs::remove_dir_all(&dir).unwrap();
     }
+
+    fn ca_pem(name: &str) -> String {
+        let key = rcgen::KeyPair::generate().unwrap();
+        let mut params = rcgen::CertificateParams::new(Vec::<String>::new()).unwrap();
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, name);
+        params.self_signed(&key).unwrap().pem()
+    }
+
+    fn unique_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "tlsight_{tag}_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// C11: one PEM file holding two distinct CA certificates loads both.
+    #[test]
+    fn load_custom_cas_multi_cert_pem_loads_every_cert() {
+        ensure_crypto_provider();
+        let dir = unique_dir("c11");
+        let bundle = format!("{}{}", ca_pem("Test CA One"), ca_pem("Test CA Two"));
+        std::fs::write(dir.join("bundle.pem"), bundle).unwrap();
+
+        let mut root_store = rustls::RootCertStore::empty();
+        load_custom_cas(&mut root_store, dir.to_str().unwrap());
+        let loaded = root_store.len();
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        assert_eq!(loaded, 2);
+    }
+
+    /// C12: a file without any PEM certificate is refused without panic and
+    /// does not stop a neighbouring valid file from loading.
+    #[test]
+    fn load_custom_cas_file_without_cert_is_refused_neighbour_still_loads() {
+        ensure_crypto_provider();
+        let key_only = rcgen::KeyPair::generate().unwrap().serialize_pem();
+        let cases = [
+            ("plain text", "this is not a certificate\n".to_string()),
+            ("private key only", key_only),
+        ];
+        for (label, content) in cases {
+            let dir = unique_dir("c12");
+            std::fs::write(dir.join("bad.pem"), &content).unwrap();
+
+            let mut root_store = rustls::RootCertStore::empty();
+            load_custom_cas(&mut root_store, dir.to_str().unwrap());
+            assert_eq!(root_store.len(), 0, "{label}: nothing must load");
+
+            std::fs::write(dir.join("good.crt"), ca_pem("Test CA Good")).unwrap();
+            let mut root_store = rustls::RootCertStore::empty();
+            load_custom_cas(&mut root_store, dir.to_str().unwrap());
+            let loaded = root_store.len();
+            std::fs::remove_dir_all(&dir).unwrap();
+            assert_eq!(loaded, 1, "{label}: neighbouring valid file must load");
+        }
+    }
 }

@@ -713,6 +713,34 @@ pub async fn get_ifconfig(param: &IfconfigParam<'_>) -> Ifconfig {
 mod tests {
     use super::*;
 
+    /// Pins the DNS cache's LRU behaviour (advisories C13); must hold across the `lru` bump.
+    #[test]
+    fn dns_cache_capacity_and_lru_eviction() {
+        let cache = new_dns_cache();
+        let mut guard = cache.lock().unwrap();
+        assert_eq!(guard.cap().get(), 1024);
+
+        let addr = |i: u32| IpAddr::from(std::net::Ipv4Addr::from(0xC000_0200u32 + i));
+        let now = std::time::Instant::now();
+
+        // #0 is a cached failed lookup (None name).
+        guard.put(addr(0), (None, now));
+        for i in 1..1024 {
+            guard.put(addr(i), (Some(format!("h{i}.example.com")), now));
+        }
+        assert_eq!(guard.len(), 1024);
+
+        // Touch #0 so #1 becomes least recently used, then overflow by one.
+        let entry = guard.get(&addr(0)).cloned().expect("#0 cached");
+        assert_eq!(entry.0, None, "failed lookup is returned as cached");
+        guard.put(addr(1024), (Some("h1024.example.com".into()), now));
+
+        assert_eq!(guard.len(), 1024);
+        assert!(guard.peek(&addr(1)).is_none(), "LRU entry #1 evicted");
+        assert!(guard.peek(&addr(0)).is_some(), "touched entry #0 kept");
+        assert!(guard.peek(&addr(1024)).is_some());
+    }
+
     #[test]
     fn is_global_ip_public_v4() {
         assert!(is_global_ip("203.0.113.1".parse().unwrap()));

@@ -1,0 +1,13 @@
+# Fixture for test_advisories.sh: the right IDs, but RUSTSEC-2024-0436 has no
+# comment of its own (a blank line cuts it off from the comment above).
+[advisories]
+ignore = [
+    # rustybuzz and ttf-parser unmaintained; arrive via resvg for the label crate.
+    "RUSTSEC-2026-0206",
+    "RUSTSEC-2026-0192",
+
+    "RUSTSEC-2024-0436",
+    # hickory-proto 0.26.1 is fixed upstream; arrives via mhost.
+    "RUSTSEC-2026-0118",
+    "RUSTSEC-2026-0119",
+]
