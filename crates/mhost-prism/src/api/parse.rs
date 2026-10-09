@@ -1,8 +1,9 @@
 //! Parse endpoint: tokenize partial input and return context-aware completions.
 //!
 //! `POST /api/parse` accepts `{"input": "...", "cursor_pos": N}` and returns
-//! classified tokens with character ranges plus completions relevant to the
-//! cursor position. This powers server-side autocomplete — the frontend can
+//! classified tokens with byte ranges plus completions relevant to the
+//! cursor position. `cursor_pos` and token ranges are UTF-8 byte offsets; a
+//! cursor inside a multi-byte character rounds down to the previous boundary. This powers server-side autocomplete — the frontend can
 //! show static completions immediately and replace them when this endpoint
 //! responds.
 
@@ -24,7 +25,7 @@ use crate::api::AppState;
 pub struct ParseRequest {
     /// The query input string to tokenize.
     input: String,
-    /// Cursor position within the input (defaults to end of input).
+    /// Cursor byte offset within the input (defaults to end of input).
     #[serde(default)]
     cursor_pos: Option<usize>,
 }
@@ -128,7 +129,10 @@ pub async fn parse_handler(
     Json(body): Json<ParseRequest>,
 ) -> Json<ParseResponse> {
     let input = &body.input;
-    let cursor_pos = body.cursor_pos.unwrap_or(input.len()).min(input.len());
+    let mut cursor_pos = body.cursor_pos.unwrap_or(input.len()).min(input.len());
+    while !input.is_char_boundary(cursor_pos) {
+        cursor_pos -= 1;
+    }
 
     let tokens = tokenize(input);
     let mut completions = completions_at(input, cursor_pos, &tokens);
