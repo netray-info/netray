@@ -13,7 +13,7 @@ No production behaviour changes. Every test here is a pinning test: green at its
 
 1. **lens result goldens.** `crates/lens/tests/lens_golden.rs` starts local stub servers that serve the committed backend goldens from `tests/fixtures/contracts/` at the paths and methods lens calls (the pattern of `crates/lens/tests/contract_backends.rs`). lens runs with the backend and scoring settings of `crates/lens/tests/fixtures/lens.production.toml`, the backend URLs pointed at the stubs. The test drives `POST /api/check` through lens's router in-process and reads the SSE events. For each fixture it compares a projection with `tests/fixtures/contracts/lens-<fixture>.json`, and rewrites that file when `UPDATE_GOLDEN=1` is set.
 2. **Projection.** The golden records:
-   - the summary: `grade`, `score`, `overall`, `sections` (status per section), `section_grades`, `hard_fail`, `hard_fail_checks`, `not_applicable`;
+   - the summary: `grade`, `score`, `overall`, `sections` (status per section), `section_grades`, `hard_fail`, `hard_fail_checks`, and the section names in `not_applicable` (the reason is prose);
    - per section event: its status, its grade if present, and every check as `name` plus `verdict`.
 
    Check messages, durations, the cache flag, the snapshot id and the domain-independent metadata are not recorded. Maps are written in sorted key order and lists in emitted order, so the file is byte-stable across runs. Completeness is recorded in today's shape (`overall` and the section statuses); a later `complete` field adds to the projection when it exists.
@@ -37,7 +37,7 @@ No production behaviour changes. Every test here is a pinning test: green at its
 ### Test Scenarios
 
 - GIVEN the stubs serve the `healthy` goldens WHEN `POST /api/check` runs for `example.com` THEN the projection equals `lens-healthy.json`.
-- GIVEN the stubs serve the `no-mx` goldens WHEN the check runs THEN the projection equals `lens-no-mx.json`, and its `not_applicable` names the mail buckets lens marks N/A today.
+- GIVEN the stubs serve the `no-mx` goldens WHEN the check runs THEN the projection equals `lens-no-mx.json`; today lens marks the no-MX mail buckets `skip` and `not_applicable` stays empty (amended in Phase 1, see the report).
 - GIVEN the stubs serve the `mx-cname` goldens WHEN the check runs THEN the projection equals `lens-mx-cname.json`.
 - GIVEN any fixture WHEN the test runs twice THEN both runs write byte-identical files.
 - GIVEN `UPDATE_GOLDEN` unset and a golden that differs from the projection WHEN the test runs THEN it fails and prints the differing fields.
