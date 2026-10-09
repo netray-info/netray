@@ -8,7 +8,7 @@ description = "Web-based TLS certificate inspection and diagnostics service"
 [dependencies]
 # TLS
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
-rustls-pemfile = "2"
+rustls-pki-types = "1"
 tokio-rustls = "0.26"
 webpki-roots = "1"
 x509-parser = { version = "0.18", features = ["verify"] }

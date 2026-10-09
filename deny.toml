@@ -20,31 +20,25 @@ multiple-versions = "warn"
 
 [advisories]
 ignore = [
-    # rustls-pemfile is unmaintained (RUSTSEC-2025-0134); no safe upgrade available,
-    # it is a transitive dependency via the rustls ecosystem. Tracked for removal.
-    "RUSTSEC-2025-0134",
-    # paste is unmaintained (RUSTSEC-2024-0436); transitive dependency, no
-    # drop-in replacement available yet. Tracked for future removal.
-    "RUSTSEC-2024-0436",
-    # rsa Marvin Attack timing sidechannel (RUSTSEC-2023-0071); transitive via
-    # sqlx-mysql, pulled into the lockfile by sqlx's macros/migrate features
-    # even though we only use the sqlite backend. No patched rsa release
-    # available; the rsa code is never executed at runtime.
-    "RUSTSEC-2023-0071",
-    # Deferred by operator decision on 2026-10-08: ship 0.22.x first, fix these next.
-    # Recorded in the planning repo's SDD (monorepo, Phase 4 progress). Remove each line
-    # with its fix.
-    # hickory-proto NSEC3 unbounded loop (no fixed release) and O(n²) name compression
-    # (fixed in 0.26); arrives via mhost 0.11.3, which pins hickory 0.25.
-    "RUSTSEC-2026-0118",
-    "RUSTSEC-2026-0119",
-    # time stack exhaustion; fixed in 0.3.47 (cargo update -p time).
-    "RUSTSEC-2026-0009",
-    # lru LruCache::pop unsound; fixed in 0.18.2 (direct dependency of ifconfig-rs).
-    "RUSTSEC-2026-0253",
-    # rustybuzz and ttf-parser unmaintained; no replacement crate.
+    # rustybuzz and ttf-parser are unmaintained. They arrive via usvg/resvg 0.45 and
+    # fontdb 0.23, used only by lens's OG renderer (crates/lens/src/og/) with bundled
+    # fonts; rustybuzz shapes the rendered text. The caller-controlled text is the
+    # domain, validated by lens's input parser, and the OG `label` query parameter
+    # (printable ASCII 0x20-0x7E, at most 32 bytes; crates/lens/src/og/handler.rs,
+    # pinned by crates/lens/tests/og_label_bounds.rs). resvg 0.48 and fontdb 0.24 drop
+    # both crates; the bump follows in this feature's Phase 3.
     "RUSTSEC-2026-0206",
     "RUSTSEC-2026-0192",
+    # paste is unmaintained; it arrives via utoipa-axum, used by lens, and is a
+    # build-time proc-macro only.
+    "RUSTSEC-2024-0436",
+    # hickory-proto is fixed in hickory-proto and hickory-net 0.26.1 and later; we wait
+    # for mhost 0.12.0 (next phase). The NSEC3 loop (RUSTSEC-2026-0118) needs a
+    # validating DnssecDnsHandle, which mhost does not configure and prism's raw DNSSEC
+    # queries do not use. The name compression issue (RUSTSEC-2026-0119) hits encoding,
+    # and only our own small queries are encoded.
+    "RUSTSEC-2026-0118",
+    "RUSTSEC-2026-0119",
 ]
 
 [sources]

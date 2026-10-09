@@ -8,7 +8,7 @@ repository = "https://github.com/netray-info/netray-common"
 homepage = "https://netray.info"
 keywords = ["networking", "security", "middleware", "axum"]
 categories = ["web-programming::http-server"]
-rust-version = "1.85"
+rust-version = "1.88"
 
 [features]
 schema = ["dep:utoipa"]

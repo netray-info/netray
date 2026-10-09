@@ -9,6 +9,8 @@ use crate::dns::DnsResolver;
 use crate::security::{IpExtractor, RateLimitState};
 use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
 use rustls::client::danger::ServerCertVerifier;
+use rustls_pki_types::CertificateDer;
+use rustls_pki_types::pem::PemObject;
 use tokio::sync::Semaphore;
 
 #[derive(Clone)]
@@ -111,7 +113,7 @@ fn load_custom_cas(root_store: &mut rustls::RootCertStore, ca_dir: &str) {
             }
         };
 
-        let certs: Vec<_> = rustls_pemfile::certs(&mut data.as_slice())
+        let certs: Vec<_> = CertificateDer::pem_slice_iter(&data)
             .filter_map(|r| match r {
                 Ok(cert) => Some(cert),
                 Err(e) => {
