@@ -33,7 +33,7 @@ Line numbers at `8eb895a`.
 2. **Records counted once (R5.1).** prism lints through one function over the unique records of all resolvers (one record per name, type and data; of duplicates the one with the highest TTL), so a zone answered identically by two resolvers gives the same lint lines as by one; identical lint lines within a category are emitted once.
 3. **Reputation from flags (R5.2).** lens scores an address from ifconfig-rs's booleans: `is_spamhaus`, `is_c2` or `is_tor` → Fail; `is_vpn` → Warn; otherwise Pass. lens enriches only public addresses (`netray_common::target_policy`); a non-public one is not sent and counts as not checked. A public address whose enrichment failed or timed out makes the IP section Errored (the result incomplete). lens enriches at most eight public addresses, up to four IPv4 and up to four IPv6, each family sorted; when it checked fewer than it resolved, the reputation detail states "checked N of M addresses".
 4. **One classifier (R5.2).** ifconfig-rs classifies with one function, in `/json`'s priority order (internal > c2 > bot > cloud > vpn > tor > spamhaus > datacenter > residential), used by `/json`, `/network` and `/range` (which applies it to the range's network address).
-5. **Messages are text (R5.5).** A lint or check message is rendered as text in prism's and lens's frontends, in lens's snapshot HTML and in SVG/OG text; lens's and prism's Markdown exports put every message and the domain in an inline code span (a backtick fence longer than any backtick run in the value), so a copied report carries no live link, autolink or HTML. A `tests/repo` convention test fails when a frontend under `crates/*/frontend/src` or `packages/common-frontend/src` uses `innerHTML`, `outerHTML`, `insertAdjacentHTML` or `dangerouslySetInnerHTML`.
+5. **Messages are text (R5.5).** A lint or check message is rendered as text in prism's and lens's frontends, in lens's snapshot HTML and in SVG/OG text; the Markdown exports of lens, prism, beacon, tlsight and spectra put every message, every value read from the target (record data, check details, certificate subjects, header values, redirect URLs, cookie names) and the domain or target in an inline code span (a backtick fence longer than any backtick run in the value), so a copied report carries no live link, autolink or HTML. A `tests/repo` convention test fails when a frontend under `crates/*/frontend/src` or `packages/common-frontend/src` uses `innerHTML`, `outerHTML`, `insertAdjacentHTML` or `dangerouslySetInnerHTML`.
 6. **`@system` only when allowed (R5.9, SC17).** prism's `/api/config` reports whether system resolvers are allowed; the UI lists and documents `@system` only when it said so (hidden before the answer and when the request fails). The server keeps refusing it when disallowed. `crates/mhost-prism/tests/fixtures/prism.production.toml` sets `[dns] allow_system_resolvers = false` (K5).
 
 ## Phase 1 — prism lints
@@ -84,6 +84,9 @@ The hostile value is `"><img src=x onerror=alert(1)>[x](javascript:alert(1))`, c
 - GIVEN a message `MX www.example.com. has no A/AAAA records` WHEN exported THEN the host is inside a code span, so it is not autolinked (fails today).
 - GIVEN a message containing a backtick WHEN exported THEN the code span's fence is longer and the message survives verbatim.
 - GIVEN the hostile value in a TXT record WHEN prism's Markdown export runs THEN it appears only inside a code span (fails today).
+- GIVEN the hostile value as a category detail and a sub-check detail WHEN beacon's Markdown export runs THEN it appears only inside code spans, and so does the domain (fails today).
+- GIVEN the hostile value as a quality check detail, a certificate subject and an error message WHEN tlsight's Markdown export runs THEN it appears only inside code spans, and so does the hostname (fails today).
+- GIVEN the hostile value as a quality check message, a header value, a redirect location and a CORS message WHEN spectra's Markdown export runs THEN it appears only inside code spans, and so does the URL (fails today).
 - GIVEN a frontend file assigning `innerHTML` WHEN the convention test runs THEN it fails; GIVEN the tree THEN it passes (its self-test fixture fails today).
 
 ## Phase 4 — `@system`
@@ -107,6 +110,7 @@ The hostile value is `"><img src=x onerror=alert(1)>[x](javascript:alert(1))`, c
 - Non-public addresses are filtered before enrichment, over counting ifconfig-rs's refusal as a failure: such a domain would be incomplete forever (operator, 2026-10-09; AMENDMENT to SDD R5.2).
 - `@system` hidden until the server allows it (operator, 2026-10-09).
 - Messages and the domain as inline code in both Markdown exports, over escaping metacharacters: escaping leaves autolinks live (operator, 2026-10-09).
+- beacon's, tlsight's and spectra's Markdown exports join requirement 5, after the Phase 3 reading found them inserting details raw (operator, 2026-10-09; AMENDMENT).
 - Duplicates keep the highest TTL, as mhost's `check_ttl` does; one classifier in `/json`'s order, applied to a range's network address (independent reading).
 - prism's frontend gains jsdom and `@solidjs/testing-library` as dev dependencies for its rendering test, matching lens's setup.
 - Phases are independent; built in order 1–4.
