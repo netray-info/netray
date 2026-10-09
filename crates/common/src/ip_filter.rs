@@ -1,97 +1,11 @@
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
+
+use crate::target_policy;
 
 /// Returns true if the IP address should be blocked for outbound requests
-/// (SSRF prevention). Covers all address families and special ranges.
+/// (SSRF prevention). The complement of [`target_policy::is_allowed_target`].
 pub fn is_blocked_ip(ip: IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => is_blocked_v4(v4),
-        IpAddr::V6(v6) => {
-            // IPv4-mapped: ::ffff:x.x.x.x — delegate to IPv4 check
-            if let Some(v4) = v6.to_ipv4_mapped() {
-                return is_blocked_v4(v4);
-            }
-            is_blocked_v6(v6)
-        }
-    }
-}
-
-fn is_blocked_v4(v4: Ipv4Addr) -> bool {
-    if v4.is_loopback() {
-        return true;
-    }
-    if v4.is_unspecified() {
-        return true;
-    }
-    if v4.is_multicast() {
-        return true;
-    }
-    // RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-    if v4.is_private() {
-        return true;
-    }
-    // Link-local: 169.254.0.0/16
-    if v4.is_link_local() {
-        return true;
-    }
-    // CGNAT: 100.64.0.0/10 (RFC 6598)
-    let o = v4.octets();
-    if o[0] == 100 && (o[1] & 0xC0) == 64 {
-        return true;
-    }
-    // Documentation: 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 (RFC 5737)
-    if (o[0] == 192 && o[1] == 0 && o[2] == 2)
-        || (o[0] == 198 && o[1] == 51 && o[2] == 100)
-        || (o[0] == 203 && o[1] == 0 && o[2] == 113)
-    {
-        return true;
-    }
-    false
-}
-
-fn is_blocked_v6(v6: std::net::Ipv6Addr) -> bool {
-    if v6.is_loopback() {
-        return true;
-    }
-    if v6.is_unspecified() {
-        return true;
-    }
-    if v6.is_multicast() {
-        return true;
-    }
-    let segs = v6.segments();
-    // Link-local: fe80::/10
-    if (segs[0] & 0xFFC0) == 0xFE80 {
-        return true;
-    }
-    // ULA: fc00::/7
-    if (segs[0] & 0xFE00) == 0xFC00 {
-        return true;
-    }
-    // Documentation: 2001:db8::/32
-    if segs[0] == 0x2001 && segs[1] == 0x0DB8 {
-        return true;
-    }
-    // 6to4: 2002::/16 — check embedded IPv4
-    if segs[0] == 0x2002 {
-        let embedded = Ipv4Addr::new(
-            (segs[1] >> 8) as u8,
-            (segs[1] & 0xFF) as u8,
-            (segs[2] >> 8) as u8,
-            (segs[2] & 0xFF) as u8,
-        );
-        return is_blocked_v4(embedded);
-    }
-    // NAT64 well-known prefix: 64:ff9b::/96
-    if segs[0] == 0x0064
-        && segs[1] == 0xFF9B
-        && segs[2] == 0
-        && segs[3] == 0
-        && segs[4] == 0
-        && segs[5] == 0
-    {
-        return true;
-    }
-    false
+    !target_policy::is_allowed_target(ip)
 }
 
 #[cfg(test)]
@@ -280,7 +194,10 @@ mod tests {
             "198.18.0.1",
             "192.0.0.8",
         ] {
-            assert!(is_blocked_ip(addr.parse().unwrap()), "{addr} should be blocked");
+            assert!(
+                is_blocked_ip(addr.parse().unwrap()),
+                "{addr} should be blocked"
+            );
         }
         assert!(!is_blocked_ip("8.8.8.8".parse().unwrap()));
     }

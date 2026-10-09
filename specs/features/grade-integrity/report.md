@@ -189,3 +189,38 @@ C1–C3 failed at the baseline. The lens goldens drop `hsts` from the TLS check 
 ### Behavioural verification
 
 skipped: covered by the contract and golden tests and the frontend export tests.
+
+## Phase 6 — One blocklist
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R10: `target_policy` refuses the union (0/8, 240/4, 198.18/15, 192.0.0/24, all 2002::/16); `ip_filter` delegates; tlsight calls it with `allow_blocked`; lens copy deleted; prism wrapper `check_target_ip`; convention test | green | crates/common/tests/target_policy_results_table.rs, tests/repo/test_one_blocklist.sh |
+| C2 | the five new addresses refused (table moves) | green | crates/common/tests/target_policy_results_table.rs |
+| C3 | 8.8.8.8, 1.1.1.1, 2606:4700:: allowed | already_implemented | crates/common/tests/target_policy_results_table.rs |
+| C4 | prism `ip_filter::is_blocked_ip` blocks 255.255.255.255 and fec0::1 | green | crates/common/src/ip_filter.rs |
+| C5 | tlsight's check answers as `target_policy`; `allow_blocked = true` allows 10.0.0.1 | green | crates/tlsight/src/security/target_policy.rs |
+| C6 | convention test passes after, fails today | green | tests/repo/test_one_blocklist.sh |
+| C7 | beacon, spectra, prism results tables green unchanged | already_implemented | (existing) |
+
+C3 and C7 passed at the baseline (`364587c`); the others failed there. `target_policy::refusal_reason(ip)` names the range of a refused address; `is_allowed_target` is `refusal_reason(ip).is_none()`, and tlsight returns that reason (the coder's first draft returned one string listing every range to satisfy the tests' keyword checks; replaced).
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| one blocklist | 2 | sonnet | 52522 | 223 |
+
+### Review
+
+- AMENDMENT | spectra refuses the whole target when any resolved address is refused (`crates/spectra/src/input.rs:58`, SC3's "any address" rule), so a domain with public addresses plus one in a newly refused range (198.18/15, 240/4, 0/8, 192.0.0/24, public 6to4) now gets HTTP Errored and lens `incomplete`; tlsight drops only the bad address. SDD R3.7 names only domains whose *only* addresses are newly refused; the 0.23.0 changelog must name the mixed case too (for the planning session) | affected_phase: 6 | repaired_in_phase: no — behaviour kept (SC3), changelog wording owed
+- AMENDMENT (fixed) | prism's `compare_post_with_non_global_server_returns_blocked_target_ip` used 198.18.0.1, now refused by prism's own check before mhost; it moves to `2001:2::1` (IPv6 benchmarking), which only mhost refuses, so it again covers `compare.rs:130` | affected_phase: 6 | repaired_in_phase: yes
+- DEFERRED | the shared enrichment client (`crates/common/src/enrichment.rs:196`) no longer looks up public 6to4 addresses (prism, beacon MX, spectra).
+- DEFERRED | still allowed, as by every old copy: 64:ff9b:1::/48 (local NAT64), IPv4-compatible ::/96 and ::ffff:0:0:0/96, 2001:2::/48, Teredo 2001::/32, ORCHID, 3fff::/20, 100::/64, 5f00::/16. The module doc's "every reserved or special-purpose range" overstates it. For a later widening (mhost already refuses them for nameservers).
+- NIT (acted on) | deleting lens's `security/target_policy.rs` removes baseline tests; the phase commit names it in `ADLC-Test-Change`.
+- Sound per the reader: the new policy is a strict superset of the four old copies; nothing public outside the spec's ranges is refused; tlsight's `allow_blocked` still bypasses (dev config and integration tests only); no beacon, spectra, tlsight or lens fixture uses a newly refused address.
+
+### Behavioural verification
+
+`bash tests/repo/test_one_blocklist.sh` → `PASS` (174 files scanned; its self-tests fire on fixtures).

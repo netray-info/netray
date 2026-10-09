@@ -105,7 +105,7 @@ impl<'a> QueryPolicy<'a> {
     fn check_server_ips(&self, query: &ParsedQuery) -> Result<(), ApiError> {
         for server in &query.servers {
             if let ServerSpec::Ip { addr, .. } = server {
-                is_allowed_target(*addr)?;
+                check_target_ip(*addr)?;
             }
         }
         Ok(())
@@ -118,7 +118,7 @@ impl<'a> QueryPolicy<'a> {
 /// CGNAT (RFC 6598), documentation, IPv6 unique-local (ULA), IPv4-mapped private
 /// addresses, 6to4 addresses embedding private IPv4, and NAT64 addresses.
 /// This prevents the service from being used to probe internal networks.
-pub(crate) fn is_allowed_target(ip: IpAddr) -> Result<(), ApiError> {
+pub(crate) fn check_target_ip(ip: IpAddr) -> Result<(), ApiError> {
     if netray_common::ip_filter::is_blocked_ip(ip) {
         return Err(ApiError::BlockedTargetIp {
             ip: ip.to_string(),

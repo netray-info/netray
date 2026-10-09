@@ -6,16 +6,19 @@
 //!
 //! - Loopback (127.0.0.0/8, ::1)
 //! - Unspecified (0.0.0.0, ::)
+//! - "This network" (0.0.0.0/8)
 //! - RFC 1918 private (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
 //! - Link-local (169.254.0.0/16, fe80::/10)
 //! - CGNAT (100.64.0.0/10, RFC 6598)
 //! - Multicast (224.0.0.0/4, ff00::/8)
-//! - Broadcast (255.255.255.255)
+//! - Reserved (240.0.0.0/4, includes the broadcast address 255.255.255.255)
+//! - Benchmarking (198.18.0.0/15, RFC 2544)
+//! - IETF protocol assignments (192.0.0.0/24, RFC 6890)
 //! - Documentation (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24, 2001:db8::/32)
 //! - IPv6 ULA (fc00::/7)
 //! - IPv6 deprecated site-local (fec0::/10)
 //! - IPv4-mapped IPv6 (::ffff:x.x.x.x — delegates to IPv4 check)
-//! - 6to4 (2002::/16 — checks embedded IPv4)
+//! - 6to4 (2002::/16, the whole range)
 //! - NAT64 well-known prefix (64:ff9b::/96)
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -25,93 +28,111 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 /// Returns `false` for any reserved, private, or special-purpose address
 /// as listed in the module documentation.
 pub fn is_allowed_target(ip: IpAddr) -> bool {
-    !is_blocked_target(ip)
+    refusal_reason(ip).is_none()
 }
 
-fn is_blocked_target(ip: IpAddr) -> bool {
+/// Returns the name of the range that makes `ip` a refused target, or `None`
+/// if the address is allowed.
+///
+/// IPv4-mapped IPv6 addresses (`::ffff:x.x.x.x`) report the reason of the
+/// embedded IPv4 address.
+pub fn refusal_reason(ip: IpAddr) -> Option<&'static str> {
     match ip {
-        IpAddr::V4(v4) => is_blocked_v4(v4),
+        IpAddr::V4(v4) => refusal_reason_v4(v4),
         IpAddr::V6(v6) => {
             if let Some(v4) = v6.to_ipv4_mapped() {
-                return is_blocked_v4(v4);
+                return refusal_reason_v4(v4);
             }
-            is_blocked_v6(v6)
+            refusal_reason_v6(v6)
         }
     }
 }
 
-fn is_blocked_v4(v4: Ipv4Addr) -> bool {
+fn refusal_reason_v4(v4: Ipv4Addr) -> Option<&'static str> {
     if v4.is_loopback() {
-        return true;
+        return Some("loopback address");
     }
     if v4.is_unspecified() {
-        return true;
+        return Some("unspecified address");
     }
     if v4.is_multicast() {
-        return true;
+        return Some("multicast address");
     }
     if v4.is_broadcast() {
-        return true;
+        return Some("broadcast address");
+    }
+    let o = v4.octets();
+    // "This network": 0.0.0.0/8
+    if o[0] == 0 {
+        return Some("this-network address (0.0.0.0/8)");
+    }
+    // Reserved: 240.0.0.0/4 (255.255.255.255 is reported as broadcast above)
+    if o[0] >= 240 {
+        return Some("reserved address (240.0.0.0/4)");
     }
     // RFC 1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
     if v4.is_private() {
-        return true;
+        return Some("private address (RFC 1918)");
     }
     // Link-local: 169.254.0.0/16
     if v4.is_link_local() {
-        return true;
+        return Some("link-local address");
     }
-    let o = v4.octets();
     // CGNAT: 100.64.0.0/10 (RFC 6598)
     if o[0] == 100 && (o[1] & 0xC0) == 64 {
-        return true;
+        return Some("CGNAT address (100.64.0.0/10)");
+    }
+    // Benchmarking: 198.18.0.0/15 (RFC 2544)
+    if o[0] == 198 && (o[1] & 0xFE) == 18 {
+        return Some("benchmarking address (198.18.0.0/15)");
+    }
+    // IETF protocol assignments: 192.0.0.0/24 (RFC 6890)
+    if o[0] == 192 && o[1] == 0 && o[2] == 0 {
+        return Some("IETF protocol assignments address (192.0.0.0/24)");
     }
     // Documentation: 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 (RFC 5737)
-    if (o[0] == 192 && o[1] == 0 && o[2] == 2)
-        || (o[0] == 198 && o[1] == 51 && o[2] == 100)
-        || (o[0] == 203 && o[1] == 0 && o[2] == 113)
-    {
-        return true;
+    if o[0] == 192 && o[1] == 0 && o[2] == 2 {
+        return Some("documentation address (192.0.2.0/24)");
     }
-    false
+    if o[0] == 198 && o[1] == 51 && o[2] == 100 {
+        return Some("documentation address (198.51.100.0/24)");
+    }
+    if o[0] == 203 && o[1] == 0 && o[2] == 113 {
+        return Some("documentation address (203.0.113.0/24)");
+    }
+    None
 }
 
-fn is_blocked_v6(v6: Ipv6Addr) -> bool {
+fn refusal_reason_v6(v6: Ipv6Addr) -> Option<&'static str> {
     if v6.is_loopback() {
-        return true;
+        return Some("loopback address");
     }
     if v6.is_unspecified() {
-        return true;
+        return Some("unspecified address");
     }
     if v6.is_multicast() {
-        return true;
+        return Some("multicast address");
     }
     let segs = v6.segments();
     // Link-local: fe80::/10
     if (segs[0] & 0xFFC0) == 0xFE80 {
-        return true;
+        return Some("link-local address");
     }
     // ULA: fc00::/7
     if (segs[0] & 0xFE00) == 0xFC00 {
-        return true;
+        return Some("unique local address (fc00::/7)");
     }
     // Deprecated site-local: fec0::/10
     if (segs[0] & 0xFFC0) == 0xFEC0 {
-        return true;
+        return Some("deprecated site-local address (fec0::/10)");
     }
     // Documentation: 2001:db8::/32
     if segs[0] == 0x2001 && segs[1] == 0x0DB8 {
-        return true;
+        return Some("documentation address (2001:db8::/32)");
     }
-    // 6to4: 2002::/16 — check embedded IPv4
+    // 6to4: 2002::/16, the whole range
     if segs[0] == 0x2002 {
-        let embedded = Ipv4Addr::new(
-            (segs[1] >> 8) as u8,
-            (segs[1] & 0xFF) as u8,
-            (segs[2] >> 8) as u8,
-            (segs[2] & 0xFF) as u8,
-        );
-        return is_blocked_v4(embedded);
+        return Some("6to4 address (2002::/16)");
     }
     // NAT64 well-known prefix: 64:ff9b::/96
     if segs[0] == 0x0064
@@ -121,9 +142,9 @@ fn is_blocked_v6(v6: Ipv6Addr) -> bool {
         && segs[4] == 0
         && segs[5] == 0
     {
-        return true;
+        return Some("NAT64 address (64:ff9b::/96)");
     }
-    false
+    None
 }
 
 #[cfg(test)]

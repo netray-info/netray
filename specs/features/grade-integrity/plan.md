@@ -63,3 +63,18 @@ One group: `check.rs`, the backends' request paths, `state.rs` and `config.rs` s
 
 - `crates/lens/src/backends/tls.rs` `parse_inspect`: delete the loop that copies tlsight's top-level `quality.checks` (`hsts`, `https_redirect`) into the TLS section; the top-level checks are no longer read. Then regenerate the lens goldens (`UPDATE_GOLDEN=1 cargo test -p lens --test lens_golden`), which drop the two names from the TLS list; the orchestrator commits them with `ADLC-Test-Change` naming requirement 9.
 - Review fix: the lens export includes HTTP and email.
+
+## Phase 6 — One blocklist
+
+### Groups
+
+One group: the policy, its delegates and the convention share `crates/common`.
+
+### Plan
+
+- `crates/common/src/target_policy.rs`: refuse all of `0.0.0.0/8`, `240.0.0.0/4` (broadcast included), `198.18.0.0/15`, `192.0.0.0/24`, and all of `2002::/16` (replacing the embedded-IPv4 judgement); keep everything it refuses today. Doc comments name each range.
+- `crates/common/src/ip_filter.rs`: `is_blocked_ip(ip) = !target_policy::is_allowed_target(ip)`; delete its own range code.
+- `crates/tlsight/src/security/target_policy.rs`: `check_allowed_with_policy(ip, allow_blocked)` returns Ok when `allow_blocked`, else maps `target_policy::is_allowed_target` to its existing `Err(&'static str)` (one neutral reason string is fine); delete its range code and the `#[cfg(test)] pub fn check_allowed` helper; its test module's calls of `check_allowed(ip)` become `check_allowed_with_policy(ip, false)` (mechanical rename, test-change trailer by the orchestrator).
+- `crates/lens/src/security/target_policy.rs`: delete, and its `pub mod` line; delete `security/` if empty.
+- `crates/mhost-prism/src/security/query_policy.rs`: rename `is_allowed_target` to `check_target_ip` and its two callers (`:108`, `dns_trace.rs:179`).
+- Review fixes: `refusal_reason` per range instead of one catch-all string; prism compare test moves to `2001:2::1`.

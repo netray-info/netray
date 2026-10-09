@@ -460,8 +460,9 @@ mod tests {
 
     #[tokio::test]
     async fn compare_post_with_non_global_server_returns_blocked_target_ip() {
-        // 198.18.0.1 passes prism's own address check today; mhost's non-global
-        // refusal must surface as BLOCKED_TARGET_IP, not as a resolver error.
+        // 2001:2::1 (IPv6 benchmarking) passes prism's own address check; only mhost's
+        // non-global refusal catches it, which must surface as BLOCKED_TARGET_IP, not as
+        // a resolver error.
         let mut state = default_state();
         let mut config = (*state.config).clone();
         config.dns.allow_arbitrary_servers = true;
@@ -470,7 +471,7 @@ mod tests {
         let resp = router
             .oneshot(post_json(
                 "/api/compare",
-                r#"{"domain":"example.com","servers":["198.18.0.1"]}"#,
+                r#"{"domain":"example.com","servers":["2001:2::1"]}"#,
             ))
             .await
             .unwrap();
