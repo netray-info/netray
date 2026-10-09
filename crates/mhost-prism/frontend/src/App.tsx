@@ -1,4 +1,4 @@
-import { createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import { createSignal, createEffect, onMount, onCleanup, Show, For } from 'solid-js';
 import { QueryInput } from './components/QueryInput';
 import { ResultsTable, parseBatchEvent, groupByRecordType, lookupsAgree, hasDeviation, type BatchEvent, type DoneStats } from './components/ResultsTable';
 import { LintTab, type LintCategory, type CheckDoneStats } from './components/LintTab';
@@ -8,6 +8,7 @@ import { TransportComparison } from './components/TransportComparison';
 import { AuthComparison } from './components/AuthComparison';
 import SuiteNav from '@netray-info/common-frontend/components/SuiteNav';
 import { DnsCrossLinks } from './components/DnsCrossLinks';
+import { helpServerRows, systemResolversAllowed } from './lib/servers';
 import { toMarkdown, toCsv, toJson, downloadFile, copyToClipboard, type MarkdownContext } from './lib/export';
 import { createTheme } from '@netray-info/common-frontend/theme';
 import { createKeyboardShortcuts } from '@netray-info/common-frontend/keyboard';
@@ -184,6 +185,7 @@ async function readPostStream(
 // ---------------------------------------------------------------------------
 
 export default function App() {
+  const [allowSystem, setAllowSystem] = createSignal(false);
   const [query, setQuery] = createSignal('');
   const [results, setResults] = createSignal<BatchEvent[]>([]);
   const [status, setStatus] = createSignal<Status>('idle');
@@ -1098,13 +1100,14 @@ export default function App() {
     // Fetch client config (site name, version, ifconfig URL for IP links).
     fetch('/api/config')
       .then((r) => r.json())
-      .then((cfg: { site_name?: string; version?: string; ifconfig_url?: string; tls_url?: string }) => {
+      .then((cfg: { site_name?: string; version?: string; ifconfig_url?: string; tls_url?: string; allow_system_resolvers?: boolean }) => {
         if (cfg.site_name) {
           setSiteName(cfg.site_name);
         }
         if (cfg.version) setSiteVersion(cfg.version);
         if (cfg.ifconfig_url) setIfconfigUrl(cfg.ifconfig_url);
         if (cfg.tls_url) setTlsUrl(cfg.tls_url);
+        setAllowSystem(systemResolversAllowed(cfg));
       })
       .catch(() => { /* non-critical */ });
 
@@ -1222,6 +1225,7 @@ export default function App() {
           onReady={(api) => { focusEditor = api.focus; clearEditor = api.clear; setEditorValue = api.setValue; }}
           shareLabel={status() === 'done' && cacheKey() ? (shareMessage() ?? 'Share') : undefined}
           onShare={copyShareLink}
+          allowSystemResolvers={allowSystem()}
         />
 
         {/* Empty state — shown on landing before any query */}
@@ -1611,14 +1615,7 @@ export default function App() {
           <div class="help-section-title">Predefined servers</div>
           <table class="help-ref-table">
             <tbody>
-              <tr><td class="help-token">@cloudflare</td><td>1.1.1.1 / 1.0.0.1</td></tr>
-              <tr><td class="help-token">@google</td><td>8.8.8.8 / 8.8.4.4</td></tr>
-              <tr><td class="help-token">@quad9</td><td>9.9.9.9</td></tr>
-              <tr><td class="help-token">@mullvad</td><td>Mullvad DNS</td></tr>
-              <tr><td class="help-token">@wikimedia</td><td>Wikimedia DNS</td></tr>
-              <tr><td class="help-token">@dns4eu</td><td>DNS4EU</td></tr>
-              <tr><td class="help-token">@system</td><td>/etc/resolv.conf</td></tr>
-              <tr><td class="help-token">@1.2.3.4</td><td>Custom IP (if enabled by operator)</td></tr>
+              <For each={helpServerRows(allowSystem())}>{(r) => <tr><td class="help-token">{r.token}</td><td>{r.desc}</td></tr>}</For>
             </tbody>
           </table>
         </div>

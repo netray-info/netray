@@ -23,6 +23,7 @@ max_servers = 4
 
 [dns]
 default_servers = ["google"]
+allow_system_resolvers = false
 
 [telemetry]
 log_format = "json"

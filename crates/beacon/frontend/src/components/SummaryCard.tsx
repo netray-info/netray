@@ -1,5 +1,5 @@
 import { createSignal, Show } from 'solid-js';
-import { copyToClipboard, downloadFile } from '@netray-info/common-frontend/utils';
+import { copyToClipboard, downloadFile, inlineCode } from '@netray-info/common-frontend/utils';
 import GradeDisplay from './GradeDisplay';
 import { durationClass } from './helpers';
 import type {
@@ -45,7 +45,7 @@ function ExportButtons(props: {
 
   const copyMarkdown = async () => {
     const lines: string[] = [
-      `# Email Security: ${props.domain}`,
+      `# Email Security: ${inlineCode(props.domain)}`,
       '',
       `**Verdict**: ${Object.values(props.summary.verdicts).reduce((w, v) =>
         VERDICT_ORDER[v as Verdict] > VERDICT_ORDER[w as Verdict] ? v : w,
@@ -60,9 +60,9 @@ function ExportButtons(props: {
         const result = props.categories.get(cat);
         if (!result) continue;
         lines.push(`### ${CATEGORY_LABELS[cat]} — ${result.verdict}`);
-        if (result.detail) lines.push(result.detail, '');
+        if (result.detail) lines.push(inlineCode(result.detail), '');
         for (const sc of result.sub_checks) {
-          lines.push(`- **${sc.verdict.toUpperCase()}** ${subCheckLabel(sc.name)}${sc.detail ? ` — ${sc.detail}` : ''}`);
+          lines.push(`- **${sc.verdict.toUpperCase()}** ${subCheckLabel(sc.name)}${sc.detail ? ` — ${inlineCode(sc.detail)}` : ''}`);
         }
         lines.push('');
       }

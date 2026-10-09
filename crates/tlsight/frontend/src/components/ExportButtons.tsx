@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import type { InspectResponse } from '../lib/types';
-import { downloadFile, copyToClipboard } from '@netray-info/common-frontend/utils';
+import { downloadFile, copyToClipboard, inlineCode } from '@netray-info/common-frontend/utils';
 
 interface Props {
   result: InspectResponse;
@@ -20,7 +20,7 @@ export default function ExportButtons(props: Props) {
   const copyMarkdown = async () => {
     const r = props.result;
     const lines: string[] = [
-      `# TLS Inspection: ${r.hostname}`,
+      `# TLS Inspection: ${inlineCode(r.hostname)}`,
       '',
       `**Verdict**: ${r.summary.verdict}`,
       '',
@@ -37,10 +37,10 @@ export default function ExportButtons(props: Props) {
           lines.push(`- TLS: ${ip.tls.version}, ${ip.tls.cipher_suite}`);
         }
         if (ip.chain) {
-          lines.push('- Chain: ' + ip.chain.map(c => c.subject).join(' \u2192 '));
+          lines.push('- Chain: ' + ip.chain.map(c => inlineCode(c.subject)).join(' \u2192 '));
         }
         if (ip.error) {
-          lines.push(`- Error: ${ip.error.message}`);
+          lines.push(`- Error: ${inlineCode(ip.error.message)}`);
         }
       }
       lines.push('');
@@ -50,14 +50,14 @@ export default function ExportButtons(props: Props) {
       lines.push('## Detailed Checks');
       if (r.quality) {
         for (const c of r.quality.checks) {
-          lines.push(`- ${c.status}: ${c.label} — ${c.detail}`);
+          lines.push(`- ${c.status}: ${c.label} — ${inlineCode(c.detail)}`);
         }
       }
       for (const port of r.ports) {
         if (port.quality) {
           if (r.ports.length > 1) lines.push(`### Port ${port.port}`);
           for (const c of port.quality.checks) {
-            lines.push(`- ${c.status}: ${c.label} — ${c.detail}`);
+            lines.push(`- ${c.status}: ${c.label} — ${inlineCode(c.detail)}`);
           }
         }
       }

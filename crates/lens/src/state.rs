@@ -130,6 +130,7 @@ impl AppState {
             public_url: eco.ip_base_url.clone().unwrap_or_default(),
             timeout: Duration::from_millis(config.backends.ip.timeout_ms),
             client: http_client.clone(),
+            allow: netray_common::target_policy::is_allowed_target,
         }));
 
         let rendered_html = Assets::get("index.html").map(|f| {

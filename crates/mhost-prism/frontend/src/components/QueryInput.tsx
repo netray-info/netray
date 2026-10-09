@@ -3,6 +3,7 @@ import { EditorView, keymap, placeholder as cmPlaceholder, ViewPlugin, Decoratio
 import { EditorState } from '@codemirror/state';
 import { acceptCompletion, autocompletion, startCompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { tokenize, TokenType } from '../lib/tokenizer';
+import { serverSuggestions } from '../lib/servers';
 
 // ---------------------------------------------------------------------------
 // Autocomplete data
@@ -30,16 +31,6 @@ const RECORD_TYPES = [
   { label: 'DS', detail: 'Delegation signer' },
 ];
 
-const SERVERS = [
-  { label: '@cloudflare', detail: '1.1.1.1 / 1.0.0.1' },
-  { label: '@google', detail: '8.8.8.8 / 8.8.4.4' },
-  { label: '@quad9', detail: '9.9.9.9' },
-  { label: '@mullvad', detail: 'Mullvad DNS' },
-  { label: '@wikimedia', detail: 'Wikimedia DNS' },
-  { label: '@dns4eu', detail: 'DNS4EU' },
-  { label: '@system', detail: 'System resolvers (/etc/resolv.conf)' },
-];
-
 const FLAGS = [
   { label: '+udp', detail: 'UDP transport (default)' },
   { label: '+tcp', detail: 'TCP transport' },
@@ -52,47 +43,49 @@ const FLAGS = [
   { label: '+auth', detail: 'Authoritative vs recursive comparison' },
 ];
 
-function prismCompletions(context: CompletionContext): CompletionResult | null {
-  // Match the current word being typed. We look for word chars, @, or +.
-  const word = context.matchBefore(/[@+]?\w*/);
-  if (!word || (word.from === word.to && !context.explicit)) return null;
+function makePrismCompletions(getAllowSystem: () => boolean | undefined) {
+  return function prismCompletions(context: CompletionContext): CompletionResult | null {
+    // Match the current word being typed. We look for word chars, @, or +.
+    const word = context.matchBefore(/[@+]?\w*/);
+    if (!word || (word.from === word.to && !context.explicit)) return null;
 
-  const text = word.text;
-  const options: Array<{ label: string; detail: string; type: string }> = [];
+    const text = word.text;
+    const options: Array<{ label: string; detail: string; type: string }> = [];
 
-  if (text.startsWith('@')) {
-    for (const s of SERVERS) {
-      options.push({ ...s, type: 'variable' });
-    }
-  } else if (text.startsWith('+')) {
-    for (const f of FLAGS) {
-      options.push({ ...f, type: 'keyword' });
-    }
-  } else {
-    // Offer record types (only after the first token — the domain)
-    const fullLine = context.state.doc.toString();
-    const beforeCursor = fullLine.slice(0, word.from);
-    const hasDomain = /\S/.test(beforeCursor);
-    if (hasDomain) {
-      for (const rt of RECORD_TYPES) {
-        options.push({ ...rt, type: 'type' });
-      }
-    }
-    // Also offer servers and flags after domain
-    if (hasDomain) {
-      for (const s of SERVERS) {
+    if (text.startsWith('@')) {
+      for (const s of serverSuggestions(getAllowSystem())) {
         options.push({ ...s, type: 'variable' });
       }
+    } else if (text.startsWith('+')) {
       for (const f of FLAGS) {
         options.push({ ...f, type: 'keyword' });
       }
+    } else {
+      // Offer record types (only after the first token — the domain)
+      const fullLine = context.state.doc.toString();
+      const beforeCursor = fullLine.slice(0, word.from);
+      const hasDomain = /\S/.test(beforeCursor);
+      if (hasDomain) {
+        for (const rt of RECORD_TYPES) {
+          options.push({ ...rt, type: 'type' });
+        }
+      }
+      // Also offer servers and flags after domain
+      if (hasDomain) {
+        for (const s of serverSuggestions(getAllowSystem())) {
+          options.push({ ...s, type: 'variable' });
+        }
+        for (const f of FLAGS) {
+          options.push({ ...f, type: 'keyword' });
+        }
+      }
     }
-  }
 
-  return {
-    from: word.from,
-    options,
-    validFor: /^[@+]?\w*$/,
+    return {
+      from: word.from,
+      options,
+      validFor: /^[@+]?\w*$/,
+    };
   };
 }
 
@@ -267,6 +260,7 @@ interface QueryInputProps {
   onReady?: (api: { focus: () => void; clear: () => void; setValue: (v: string) => void }) => void;
   shareLabel?: string;
   onShare?: () => void;
+  allowSystemResolvers?: boolean;
 }
 
 export function QueryInput(props: QueryInputProps) {
@@ -393,7 +387,7 @@ export function QueryInput(props: QueryInputProps) {
         editorTheme,
         highlightPlugin,
         autocompletion({
-          override: [prismCompletions],
+          override: [makePrismCompletions(() => props.allowSystemResolvers)],
           activateOnTyping: true,
           defaultKeymap: true,
         }),

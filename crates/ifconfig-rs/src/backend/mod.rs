@@ -39,6 +39,43 @@ pub fn new_dns_cache() -> DnsCache {
     std::sync::Mutex::new(LruCache::new(capacity))
 }
 
+/// Membership flags of one address or prefix, input to [`classify_network_type`].
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NetworkFlags {
+    pub is_internal: bool,
+    pub is_c2: bool,
+    pub is_bot: bool,
+    pub is_cloud: bool,
+    pub is_vpn: bool,
+    pub is_tor: bool,
+    pub is_spamhaus: bool,
+    pub is_datacenter: bool,
+}
+
+/// Primary network type; the first set flag wins:
+/// internal > c2 > bot > cloud > vpn > tor > spamhaus > datacenter > residential.
+pub fn classify_network_type(flags: NetworkFlags) -> &'static str {
+    if flags.is_internal {
+        "internal"
+    } else if flags.is_c2 {
+        "c2"
+    } else if flags.is_bot {
+        "bot"
+    } else if flags.is_cloud {
+        "cloud"
+    } else if flags.is_vpn {
+        "vpn"
+    } else if flags.is_tor {
+        "tor"
+    } else if flags.is_spamhaus {
+        "spamhaus"
+    } else if flags.is_datacenter {
+        "datacenter"
+    } else {
+        "residential"
+    }
+}
+
 /// Returns `true` if `ip` is a publicly routable address.
 /// Returns `false` for loopback, unspecified, RFC 1918 private, link-local,
 /// IPv6 ULA (fc00::/7), multicast, and IPv4-mapped private addresses.
@@ -603,25 +640,16 @@ pub async fn get_ifconfig(param: &IfconfigParam<'_>) -> Ifconfig {
     let network = {
         let is_internal = !is_global_ip(param.remote.ip());
 
-        let network_type = if is_internal {
-            "internal"
-        } else if is_botnet_c2 {
-            "c2"
-        } else if is_bot {
-            "bot"
-        } else if cloud_info.is_some() {
-            "cloud"
-        } else if is_vpn {
-            "vpn"
-        } else if is_tor {
-            "tor"
-        } else if is_threat {
-            "spamhaus"
-        } else if is_datacenter {
-            "datacenter"
-        } else {
-            "residential"
-        }
+        let network_type = classify_network_type(NetworkFlags {
+            is_internal,
+            is_c2: is_botnet_c2,
+            is_bot,
+            is_cloud: cloud_info.is_some(),
+            is_vpn,
+            is_tor,
+            is_spamhaus: is_threat,
+            is_datacenter,
+        })
         .to_string();
 
         let infra_type = if is_internal {

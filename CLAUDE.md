@@ -26,6 +26,8 @@ carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
 All verbs live in the root `justfile`; no crate or package has its own `justfile` or `Makefile`.
 
 - `just adlc-setup` first in a fresh checkout: the crates embed `frontend/dist` and do not compile without it.
+- `just adlc-verify` does not type-check the frontends; run `npx tsc --noEmit` in a frontend you changed.
+- Shared frontend types are generated (`npm run build:types -w @netray-info/common-frontend`, run by `just adlc-setup`); a fresh checkout needs it before `tsc`.
 - `just adlc-verify` is the gate: offline, no browser. `just check` adds the full Rust suite.
 - `just build`, `just image`, `just acceptance` (network + browser), `just release X.Y.Z` (never pushes).
 - The published image never contains data files (GeoLite2 licence); `netray ip` gets `/netray/data` from the deployment's mount.

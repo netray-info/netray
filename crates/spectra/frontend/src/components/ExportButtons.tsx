@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import type { InspectResponse } from '../lib/types';
-import { downloadFile, copyToClipboard } from '@netray-info/common-frontend/utils';
+import { downloadFile, copyToClipboard, inlineCode } from '@netray-info/common-frontend/utils';
 
 interface Props {
   result: InspectResponse;
@@ -18,24 +18,24 @@ export default function ExportButtons(props: Props) {
   const copyMarkdown = async () => {
     const r = props.result;
     const lines: string[] = [
-      `# HTTP Inspection: ${r.url}`,
+      `# HTTP Inspection: ${inlineCode(r.url)}`,
       '',
       `**Verdict**: ${r.quality.verdict}  `,
       `**Status**: ${r.status} ${r.http_version}  `,
       `**Duration**: ${r.duration_ms}ms  `,
-      `**IP**: ${r.enrichment.ip}`,
+      `**IP**: ${inlineCode(r.enrichment.ip)}`,
     ];
 
-    if (r.enrichment.org) lines.push(`**Org**: ${r.enrichment.org}  `);
+    if (r.enrichment.org) lines.push(`**Org**: ${inlineCode(r.enrichment.org)}  `);
     if (r.enrichment.ip_type) {
       const cat = r.enrichment.ip_type.charAt(0).toUpperCase() + r.enrichment.ip_type.slice(1);
       lines.push(`**Category**: ${cat}  `);
     }
-    if (r.enrichment.threat) lines.push(`**Threat**: ${r.enrichment.threat}  `);
+    if (r.enrichment.threat) lines.push(`**Threat**: ${inlineCode(r.enrichment.threat)}  `);
 
     lines.push('', '## Quality Checks', '');
     for (const c of r.quality.checks) {
-      const msg = c.message ? ` — ${c.message}` : '';
+      const msg = c.message ? ` — ${inlineCode(c.message)}` : '';
       lines.push(`- **${c.status.toUpperCase()}** ${c.label}${msg}`);
     }
 
@@ -55,12 +55,12 @@ export default function ExportButtons(props: Props) {
       ['CORP', sec.corp],
     ] as const) {
       const val = check.value ?? check.message ?? '';
-      lines.push(`- **${check.status.toUpperCase()}** ${label}${val ? `: ${val}` : ''}`);
+      lines.push(`- **${check.status.toUpperCase()}** ${label}${val ? `: ${inlineCode(val)}` : ''}`);
     }
 
     if (r.security.csp.issues.length > 0) {
       lines.push('', '## CSP Issues', '');
-      for (const issue of r.security.csp.issues) lines.push(`- ${issue}`);
+      for (const issue of r.security.csp.issues) lines.push(`- ${inlineCode(issue)}`);
     }
 
     if (r.cookies.length > 0) {
@@ -69,9 +69,9 @@ export default function ExportButtons(props: Props) {
         const flags = [
           c.secure ? 'Secure' : '**NO Secure**',
           c.httponly ? 'HttpOnly' : 'no HttpOnly',
-          c.samesite ? `SameSite=${c.samesite}` : 'no SameSite',
+          c.samesite ? `SameSite=${inlineCode(c.samesite)}` : 'no SameSite',
         ].join(', ');
-        lines.push(`- \`${c.name}\`: ${flags}`);
+        lines.push(`- ${inlineCode(c.name)}: ${flags}`);
       }
     }
 
@@ -80,13 +80,13 @@ export default function ExportButtons(props: Props) {
     lines.push(`- Reflects origin: ${r.cors.reflects_origin ? 'yes' : 'no'}`);
     lines.push(`- Allows credentials: ${r.cors.allows_credentials ? 'yes' : 'no'}`);
     lines.push(`- Status: ${r.cors.status}`);
-    lines.push(`- ${r.cors.message}`);
+    lines.push(`- ${inlineCode(r.cors.message)}`);
 
     if (r.redirects.length > 0) {
       lines.push('', '## Redirects', '');
       for (const hop of r.redirects) {
-        const loc = hop.location ? ` → ${hop.location}` : '';
-        lines.push(`- [${hop.status}] ${hop.url}${loc}`);
+        const loc = hop.location ? ` → ${inlineCode(hop.location)}` : '';
+        lines.push(`- [${hop.status}] ${inlineCode(hop.url)}${loc}`);
       }
     }
 
