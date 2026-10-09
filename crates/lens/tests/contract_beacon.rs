@@ -370,6 +370,13 @@ async fn beacon_null_mx_golden_marks_three_buckets_na_and_auth_passes() {
         "email_brand_policy",
     ] {
         assert_na(&res, name);
+        // The domain publishes `MX 0 .`: the message must say Null MX, not "No MX records".
+        let msgs = &bucket(&res, name).messages;
+        assert!(
+            msgs.iter().any(|m| m.contains("Null MX"))
+                && msgs.iter().all(|m| !m.contains("No MX records")),
+            "{name}: Null MX message expected, got {msgs:?}"
+        );
     }
     let auth = bucket(&res, "email_authentication");
     assert!(
