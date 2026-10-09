@@ -9,9 +9,12 @@
 use std::str::FromStr;
 
 use axum::Json;
+use axum::extract::State;
 use mhost::RecordType;
 use mhost::nameserver::predefined::PredefinedProvider;
 use serde::{Deserialize, Serialize};
+
+use crate::api::AppState;
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -111,6 +114,7 @@ const FLAG_INFO: &[(&str, &str)] = &[
 ///
 /// Powers the editor's autocomplete. Classifies each token (domain, record type,
 /// server, flag) and returns completions relevant to the cursor position.
+/// `@system` is offered only when the server allows system resolvers.
 #[utoipa::path(
     post, path = "/api/parse",
     tag = "Query",
@@ -119,12 +123,18 @@ const FLAG_INFO: &[(&str, &str)] = &[
         (status = 200, description = "Tokenized input with completions", body = ParseResponse),
     )
 )]
-pub async fn parse_handler(Json(body): Json<ParseRequest>) -> Json<ParseResponse> {
+pub async fn parse_handler(
+    State(state): State<AppState>,
+    Json(body): Json<ParseRequest>,
+) -> Json<ParseResponse> {
     let input = &body.input;
     let cursor_pos = body.cursor_pos.unwrap_or(input.len()).min(input.len());
 
     let tokens = tokenize(input);
-    let completions = completions_at(input, cursor_pos, &tokens);
+    let mut completions = completions_at(input, cursor_pos, &tokens);
+    if !state.config.dns.allow_system_resolvers {
+        completions.retain(|c| c.label != "@system");
+    }
 
     Json(ParseResponse {
         tokens,

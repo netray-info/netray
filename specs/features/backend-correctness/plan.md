@@ -19,5 +19,8 @@ G1: C2 · G2: C7 · G3: C3, C4, C5 · G4: C1, C6 (no production change, only rep
 - `crates/mhost-prism/frontend/src/components/QueryInput.tsx` — `SERVERS` removed; `prismCompletions` becomes a factory over a getter of the new optional prop `allowSystemResolvers`, so a later config answer takes effect without remounting. `tokenizer.ts` unchanged.
 - `crates/mhost-prism/frontend/src/App.tsx` — signal `allowSystem` (starts false), set from `systemResolversAllowed(cfg)` in the `onMount` `/api/config` fetch; failures leave it false; passed to `<QueryInput>`; the help modal's "Predefined servers" rows come from `helpServerRows(allowSystem())`.
 
+#### G5 (C8, added by the operator's amendment of req 6)
+- `crates/mhost-prism/src/api/parse.rs` — `parse_handler` takes `State<AppState>` and, after `completions_at`, drops the `@system` completion when `!state.config.dns.allow_system_resolvers`; `completions_at`'s signature stays (its unit tests call it).
+
 #### G4 (C1, C6)
 - Report statuses only: C6 already holds (`QueryPolicy::check_system_resolvers`).
