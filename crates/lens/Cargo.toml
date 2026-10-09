@@ -66,8 +66,8 @@ regex = { workspace = true }
 chrono = { workspace = true, features = ["serde", "clock", "std", "oldtime"] }
 
 # OG cards: SVG→PNG rasterization and deterministic ETag hashing
-resvg = { version = "0.45", default-features = false, features = ["text"] }
-fontdb = "0.23"
+resvg = { version = "0.48", default-features = false, features = ["text"] }
+fontdb = "0.24"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [dev-dependencies]

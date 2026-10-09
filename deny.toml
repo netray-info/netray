@@ -20,15 +20,6 @@ multiple-versions = "warn"
 
 [advisories]
 ignore = [
-    # rustybuzz and ttf-parser are unmaintained. They arrive via usvg/resvg 0.45 and
-    # fontdb 0.23, used only by lens's OG renderer (crates/lens/src/og/) with bundled
-    # fonts; rustybuzz shapes the rendered text. The caller-controlled text is the
-    # domain, validated by lens's input parser, and the OG `label` query parameter
-    # (printable ASCII 0x20-0x7E, at most 32 bytes; crates/lens/src/og/handler.rs,
-    # pinned by crates/lens/tests/og_label_bounds.rs). resvg 0.48 and fontdb 0.24 drop
-    # both crates; the bump follows in this feature's Phase 3.
-    "RUSTSEC-2026-0206",
-    "RUSTSEC-2026-0192",
     # paste is unmaintained; it arrives via utoipa-axum, used by lens, and is a
     # build-time proc-macro only.
     "RUSTSEC-2024-0436",

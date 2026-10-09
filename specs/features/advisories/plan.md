@@ -33,3 +33,15 @@ One group: the bump moves `Cargo.lock` and every prism file that touches hickory
 - `deny.toml`: remove RUSTSEC-2026-0118/-0119 and their comment.
 - Pinned rows: `crates/mhost-prism/tests/lint_results_table.rs` moves to mhost 0.12's output (signed-zone row loses "DNSKEY present but no RRSIG"; TTL duplicate rows as 0.12 emits them) and to 0.12's serde form if it changed; the lens goldens are regenerated only if a row moves. Both are test changes the orchestrator commits with `ADLC-Test-Change` naming requirement 7, not the coder.
 - Review fix: `api/compare.rs`'s transport probe returns a `BlockedTargetIp` from `build_resolver_group` instead of dropping it.
+
+## Phase 3 — OG renderer on resvg 0.48
+
+### Groups
+
+One group: `crates/lens` and `Cargo.lock`.
+
+### Plan
+
+- `crates/lens/Cargo.toml`: `resvg = { version = "0.48", default-features = false, features = ["text"] }`, `fontdb = "0.24"`.
+- `crates/lens/src/og/render.rs` and font loading in `crates/lens/src/state.rs` (and wherever the compiler names): follow the 0.48 / fontdb 0.24 API; bundled fonts only, no system fonts.
+- `deny.toml`: remove RUSTSEC-2026-0206 and RUSTSEC-2026-0192 and their comment block.

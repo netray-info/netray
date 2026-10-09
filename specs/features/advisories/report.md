@@ -88,3 +88,33 @@ Pinned rows moved (`ADLC-Test-Change`, requirement 7): `crates/mhost-prism/tests
 - `… @127.0.0.1` → `ARBITRARY_SERVERS_DISABLED`, the first layer as before.
 
 `cargo deny check advisories` → `advisories ok`. `Cargo.lock`: hickory-proto, hickory-net, hickory-resolver all 0.26.3.
+
+## Phase 3 — OG renderer on resvg 0.48
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R12: lens on resvg/usvg 0.48 and fontdb 0.24; no `rustybuzz`/`ttf-parser` in `Cargo.lock`; only RUSTSEC-2024-0436 ignored; OG size, label bounds and bundled fonts kept | green | tests/repo/test_advisories.sh |
+| C2 | ignore list exactly RUSTSEC-2024-0436, no `rustybuzz`/`ttf-parser` in `Cargo.lock` (fails at Phase 2's end) | green | tests/repo/test_advisories.sh |
+| C3 | OG image is a valid 1200×630 PNG, as today | already_implemented | crates/lens/tests/og_render.rs (`png_is_1200x630`) |
+| C4 | label bounds: 33 bytes and non-ASCII → 400, 32 printable → 200, unchanged | already_implemented | crates/lens/tests/og_label_bounds.rs |
+
+C1 and C2 failed at the baseline (`8ae09d8`); C3 and C4 are existing pinning tests, green before and after. No lens source changed: `render.rs`, `fonts.rs` and `state.rs` compile unchanged on usvg/resvg 0.48.1 and fontdb 0.24.0.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| resvg 0.48 | 1 | sonnet | 33053 | 107 |
+
+### Review
+
+- No BLOCKER, no AMENDMENT. The reader rendered 29 cases on both versions from the real renderer: pixel-identical except three scripts Inter lacks (ZWJ emoji, Devanagari, Thai), where 0.48 draws one more missing-glyph box; no panic on any input; `usvg::Options` defaults identical; both bundled Inter faces load. PNG files are about 2.6× smaller (png 0.18), same pixels. The OG ETag derives from domain, grade, label and score (`crates/lens/src/og/handler.rs:21`), not from bytes.
+- DEFERRED | no OG test asserts that text is drawn; a card whose font family does not match renders blank and passes every OG test (`crates/lens/tests/og_render.rs:199`).
+- DEFERRED | `validate_domain` (`crates/lens/src/input.rs:17`) accepts C0 controls and non-characters; `GET /og/%01.example.com.png` gives 500 `RENDER_FAILED` instead of 400. Same on 0.45 and 0.48.
+- NIT | `fontdb = "0.24"` keeps default features (memmap, fontconfig), which adds fontconfig-parser and a second roxmltree (0.20 beside 0.21); no runtime effect, nothing loads system fonts. `default-features = false, features = ["std"]` would drop them.
+
+### Behavioural verification
+
+Rendered `example.com`, grade A, 91.7 %, label "lens" before and after the bump (scratch PNGs, not committed): visually identical at 1200×630, every text element present. `cargo deny check advisories` → `advisories ok`; `deny.toml` ignores only RUSTSEC-2024-0436.
