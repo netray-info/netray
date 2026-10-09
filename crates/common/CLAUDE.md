@@ -5,7 +5,7 @@
 **netray-common** is a shared utility crate for the [netray.info](https://netray.info) service ecosystem. It provides cross-cutting concerns (IP extraction, error formatting, rate limiting, security headers) used by multiple backend services.
 
 - **Author**: Lukas Pustina | **License**: MIT
-- **MSRV**: 1.85 (edition 2024)
+- **MSRV**: 1.88 (edition 2024)
 
 ## CI/CD
 
