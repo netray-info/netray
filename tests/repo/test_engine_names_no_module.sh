@@ -59,6 +59,7 @@ case_flags() {
 }
 for c in rename dotted target-inline dev build renamed-package; do case_flags "$c" beacon; done
 case_flags member netray-common
+case_flags module-external netray-dns
 
 if [ -f "$fixdir/good.toml" ]; then
     out=$(refused "$(workspace good)" engine/Cargo.toml netray-model) || fail "cargo metadata failed on fixture good"
