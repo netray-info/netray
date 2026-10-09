@@ -163,6 +163,8 @@ pub struct ClientConfig {
     ifconfig_url: Option<String>,
     /// Public TLS inspector URL for cross-links, or null if not configured.
     tls_url: Option<String>,
+    /// Whether the server accepts `@system` (system resolvers); the UI offers it only when true.
+    allow_system_resolvers: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     ecosystem: Option<netray_common::ecosystem::EcosystemConfig>,
 }
@@ -237,6 +239,7 @@ pub async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> 
         version: env!("CARGO_PKG_VERSION"),
         ifconfig_url: eco.ip_base_url.clone(),
         tls_url: eco.tls_base_url.clone(),
+        allow_system_resolvers: state.config.dns.allow_system_resolvers,
         ecosystem,
     })
 }
