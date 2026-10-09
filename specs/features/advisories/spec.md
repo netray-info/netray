@@ -43,6 +43,7 @@ Created: 2026-10-09
 9. A repository check `tests/repo/test_advisories.sh` pins the advisory state offline from `deny.toml` and `Cargo.lock`: the ignore list is exactly the three IDs of requirement 5 plus RUSTSEC-2026-0118 and RUSTSEC-2026-0119, each preceded by a comment naming its dependency path; `Cargo.lock` has no package `rustls-pemfile`; `time` in `Cargo.lock` is ≥ 0.3.47.
 10. After requirement 7 the repository check allows only the three IDs of requirement 5, and every `hickory-proto` and `hickory-net` package in `Cargo.lock` is ≥ 0.26.1.
 11. prism's raw DNS queries (`dns_raw.rs`) use hickory-proto 0.26's API with today's wire behaviour: a query for a fixed id, name, type, RD and DO bit encodes to the same bytes as on 0.25, and a recorded response decodes to the same answer, authority and additional records and response code.
+12. lens renders OG images with resvg/usvg 0.48 and fontdb 0.24, so neither `rustybuzz` nor `ttf-parser` is in `Cargo.lock`; RUSTSEC-2026-0206 and RUSTSEC-2026-0192 are not ignored, and the repository check allows only RUSTSEC-2024-0436. OG images keep their size (1200×630), the label bounds of requirement 5 and the bundled fonts.
 
 ## Phase 1 — Fixable advisories
 
@@ -81,7 +82,22 @@ Workspace and prism manifests, `Cargo.lock`, `authcompare.rs:373`, `dns_raw.rs` 
 - GIVEN the lint results table WHEN it runs on mhost 0.12.0 THEN the signed-zone row no longer carries "DNSKEY present but no RRSIG", and every moved row carries `ADLC-Test-Change` naming requirement 7.
 - GIVEN the lens goldens WHEN they run on mhost 0.12.0 THEN they are green unchanged, or each moved row carries `ADLC-Test-Change` naming requirement 7.
 
+## Phase 3 — OG renderer on resvg 0.48
+
+**Depends on:** Phase 2
+**Requirements:** 12
+
+`crates/lens/Cargo.toml` (resvg 0.48, fontdb 0.24), the OG renderer and font loading in lens where the API moved, `Cargo.lock`, `deny.toml`, the repository check's expected set.
+
+### Test Scenarios
+
+- GIVEN the tree WHEN the repository check runs THEN the ignore list is exactly RUSTSEC-2024-0436 and `Cargo.lock` has no `rustybuzz` or `ttf-parser` (fails at Phase 2's end).
+- GIVEN a grade and a domain WHEN lens renders the OG image THEN it is a valid 1200×630 PNG, as today.
+- GIVEN the label bounds tests WHEN they run THEN 33 bytes and non-ASCII give 400 and 32 printable bytes give 200, unchanged.
+
 ## Decision log
+
+- resvg 0.48 and fontdb 0.24 in this feature (Phase 3, requirement 12) over keeping the two unmaintained ignores: 0.48 replaces rustybuzz/ttf-parser with harfrust/skrifa, and SC10 fixes what has a fix (Phase 1 reader, operator, 2026-10-09).
 
 - `rust-version` 1.88 in Phase 1 over Phase 2 (SDD puts it with mhost): `time` 0.3.47 requires 1.88 and the resolver is MSRV-aware (independent reading, 2026-10-09).
 - Advisory state read from `Cargo.lock` over `cargo tree -i`: `cargo tree -i <absent>` exits 101, so an absence check on its output cannot tell absent from broken (independent reading, 2026-10-09).
