@@ -1188,12 +1188,13 @@ pub fn is_unscored_grade(grade: &str) -> bool {
 }
 
 /// Section status for a section event: `"error"` also for a Scored section whose weighted
-/// checks earn nothing possible.
+/// checks earn nothing possible. A section absent from the profile (no weights at all)
+/// keeps its check-derived status.
 fn section_status_from_checks(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> &'static str {
-    if let Ok(r) = result {
+    if let (Ok(r), false) = (result, weights.is_empty()) {
         let has_possible = r.checks.iter().any(|c| {
             c.verdict != CheckVerdict::Skip && weights.get(&c.name).is_some_and(|w| *w > 0)
         });
@@ -1482,7 +1483,8 @@ fn summary_payload_from(
     for (name, result) in sections {
         let status = match result {
             Ok(_)
-                if !score.sections.contains_key(name)
+                if !score.complete
+                    && !score.sections.contains_key(name)
                     && !score.not_applicable.contains_key(name) =>
             {
                 "error"
@@ -3336,22 +3338,37 @@ chain_trusted = 5
         let mut inputs = HashMap::new();
         inputs.insert(
             "dns".to_string(),
-            SectionInput { checks: dns_checks.clone(), status: SectionStatus::Scored },
+            SectionInput {
+                checks: dns_checks.clone(),
+                status: SectionStatus::Scored,
+            },
         );
         inputs.insert(
             "tls".to_string(),
-            SectionInput { checks: tls_checks.clone(), status: SectionStatus::Scored },
+            SectionInput {
+                checks: tls_checks.clone(),
+                status: SectionStatus::Scored,
+            },
         );
         inputs.insert(
             "http".to_string(),
-            SectionInput { checks: http_checks.clone(), status: SectionStatus::Scored },
+            SectionInput {
+                checks: http_checks.clone(),
+                status: SectionStatus::Scored,
+            },
         );
         let score = compute_score(&profile, &inputs);
-        assert!(score.complete, "an unprofiled section must not make the score incomplete");
+        assert!(
+            score.complete,
+            "an unprofiled section must not make the score incomplete"
+        );
 
         let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
         for (name, checks) in [("dns", dns_checks), ("tls", tls_checks)] {
-            let extra = BackendExtra::Tls { raw_headline: String::new(), detail_url: String::new() };
+            let extra = BackendExtra::Tls {
+                raw_headline: String::new(),
+                detail_url: String::new(),
+            };
             sections.insert(name.to_string(), Ok(BackendResult { checks, extra }));
         }
         sections.insert("http".to_string(), grade_integrity_http_ok(http_checks));
@@ -3392,7 +3409,10 @@ hsts = 5
         let mut inputs = HashMap::new();
         inputs.insert(
             "http".to_string(),
-            SectionInput { checks: checks.clone(), status: SectionStatus::Scored },
+            SectionInput {
+                checks: checks.clone(),
+                status: SectionStatus::Scored,
+            },
         );
         let score = compute_score(&profile, &inputs);
         let mut sections = HashMap::new();
@@ -3403,6 +3423,9 @@ hsts = 5
         assert_eq!(summary.overall, "error");
 
         let weights: HashMap<String, u32> = profile.sections["http"].checks.clone();
-        assert_eq!(http_payload_from(&sections["http"], &weights).status, "error");
+        assert_eq!(
+            http_payload_from(&sections["http"], &weights).status,
+            "error"
+        );
     }
 }

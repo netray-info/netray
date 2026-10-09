@@ -4,7 +4,7 @@ interface Props {
 }
 
 export default function GradeBadgePreview(props: Props) {
-  const text = () => (props.grade === 'error' ? '?' : props.grade);
+  const text = () => (props.grade === 'error' || props.grade === 'incomplete' ? '?' : props.grade);
   const labelW = 38; // "lens" = 4 chars × 7 + 10
   const valueW = () => text().length * 7 + 10;
   const totalW = () => labelW + valueW();
