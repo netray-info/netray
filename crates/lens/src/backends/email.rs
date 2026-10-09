@@ -131,7 +131,7 @@ async fn check_email(
     let summary = parse_summary(&events)?;
 
     let no_mx_reason = no_mx_reason(&summary);
-    let checks = map_buckets(&summary, no_mx_reason.is_some());
+    let checks = map_buckets(&summary, no_mx_reason);
 
     let bucket_na: HashMap<String, String> = checks
         .iter()
@@ -360,12 +360,14 @@ fn parse_sub_checks(category_event: &Value) -> Vec<SubCheck> {
         .unwrap_or_default()
 }
 
+const NULL_MX_REASON: &str = "null MX";
+
 /// Why the receiving buckets do not apply: beacon's `mx` category carries the `no_mx` or the
 /// `null_mx` sub-check. Other `mx` failures (`mx_cname`, `mx_no_addr`, ...) mean MX records exist.
 fn no_mx_reason(summary: &BeaconSummary) -> Option<&'static str> {
     let mx = summary.categories.iter().find(|c| c.name == "mx")?;
     if mx.sub_checks.iter().any(|s| s.name == BEACON_NULL_MX) {
-        Some("null MX")
+        Some(NULL_MX_REASON)
     } else if mx.sub_checks.iter().any(|s| s.name == "no_mx") {
         Some("no MX records")
     } else {
@@ -383,12 +385,17 @@ pub fn detect_no_mx(summary: &BeaconSummary) -> bool {
 // ---------------------------------------------------------------------------
 
 /// Map beacon's per-category verdicts into four scored CheckResults.
-pub fn map_buckets(summary: &BeaconSummary, no_mx: bool) -> Vec<CheckResult> {
+pub fn map_buckets(summary: &BeaconSummary, no_mx: Option<&str>) -> Vec<CheckResult> {
     BUCKET_NAMES
         .iter()
         .map(|&name| {
-            if no_mx && name != AUTH {
-                let na_msg = "No MX records — email receiving not configured".to_string();
+            if let Some(reason) = no_mx.filter(|_| name != AUTH) {
+                let na_msg = if reason == NULL_MX_REASON {
+                    "Null MX (RFC 7505) — domain does not accept mail"
+                } else {
+                    "No MX records — email receiving not configured"
+                }
+                .to_string();
                 return CheckResult {
                     name: name.to_string(),
                     verdict: CheckVerdict::Skip,
