@@ -98,5 +98,8 @@ async fn cursor_at_end_of_ascii_input_completes_as_before() {
 
 #[tokio::test]
 async fn cursor_beyond_input_is_clamped() {
-    completion_labels("example.com @sy", 999).await;
+    // Clamped to the end: the same completions as a cursor at byte 15.
+    let beyond = completion_labels("example.com @sy", 999).await;
+    let at_end = completion_labels("example.com @sy", 15).await;
+    assert_eq!(beyond, at_end);
 }
