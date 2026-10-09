@@ -24,7 +24,8 @@ fi
 [ -f rust-toolchain.toml ] || fail "C1: root rust-toolchain.toml is missing"
 
 for m in crates/*/Cargo.toml; do
-    [ "$m" = crates/common/Cargo.toml ] && continue
+    # The V2 core crates depend on no workspace crate (model) or on model only (engine).
+    case "$m" in crates/common/Cargo.toml|crates/model/Cargo.toml|crates/engine/Cargo.toml) continue ;; esac
     grep -Eq '^netray-common *=.*path *= *"[./]*crates/common"|^netray-common *=.*path *= *"\.\./common"|^netray-common *= *\{ *workspace *= *true' "$m" \
         || fail "C1: $m does not depend on netray-common by path"
     grep -Eq '^netray-common *=.*version *=' "$m" && fail "C1: $m has a version dependency on netray-common"
