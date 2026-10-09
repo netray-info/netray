@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# specs/features/v2-model: crates/engine names no module crate. Its Cargo.toml lists no module
-# crate in [dependencies], [dev-dependencies], [build-dependencies] or their [target.*]
-# variants; netray-model and external crates only. The scan is a text scan of the TOML. A
-# self-test runs it on fixtures: three bad manifests it must flag, one good manifest (with
-# lookalikes) it must pass.
+# specs/features/v2-model: crates/engine names no module crate. Cargo is asked, not the TOML:
+# `cargo metadata --no-deps` lists the dependencies of netray-engine by real package name, whatever
+# the rename, key syntax or kind (normal, dev, build, target). netray-model and external crates
+# only. A self-test runs the same query on tiny offline workspaces built from fixtures: five bad
+# manifests it must flag, one good manifest (with lookalikes) it must pass.
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
@@ -12,50 +12,65 @@ fail() { echo "FAIL: $1"; fails=1; }
 
 modules='beacon tlsight spectra prism ifconfig-rs lens netray-dns netray-tls netray-http netray-email netray-ip'
 
-# scan <manifest>: print each module crate listed as a dependency, one per line.
-scan() {
-    awk -v mods="$modules" '
-        BEGIN { n = split(mods, a, " "); for (i = 1; i <= n; i++) mod[a[i]] = 1 }
-        function strip(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); gsub(/^["\047]|["\047]$/, "", s); return s }
-        /^[ \t]*\[/ {
-            h = $0; sub(/^[ \t]*\[/, "", h); sub(/\][ \t]*(#.*)?$/, "", h); h = strip(h)
-            mode = 0
-            if (h ~ /(^|\.)(dev-|build-)?dependencies$/) mode = 1
-            else if (match(h, /(^|\.)(dev-|build-)?dependencies\.[^.]+$/)) {
-                name = substr(h, RSTART, RLENGTH); sub(/^.*dependencies\./, "", name)
-                name = strip(name); if (name in mod) print name
-            }
-            next
-        }
-        mode == 1 && /^[ \t]*[A-Za-z0-9_"\047-]+[ \t]*(=|\.)/ {
-            k = $0; sub(/^[ \t]+/, "", k); sub(/[ \t]*(=|\.).*$/, "", k); k = strip(k)
-            if (k in mod) print k
-        }
-    ' "$1" | sort -u
+# engine_deps <workspace-dir>: print the package name of each dependency of netray-engine.
+engine_deps() {
+    local json
+    json=$(cd "$1" && cargo metadata --no-deps --offline --format-version 1) || return 1
+    printf '%s' "$json" | python3 -I -c '
+import json, sys
+for p in json.load(sys.stdin)["packages"]:
+    if p["name"] == "netray-engine":
+        for d in p["dependencies"]:
+            print(d["name"])
+' | sort -u
+}
+
+# module_deps <workspace-dir>: print each module crate netray-engine depends on; return 1 if
+# the query itself failed.
+module_deps() {
+    local deps
+    deps=$(engine_deps "$1") || return 1
+    local m
+    for m in $modules; do
+        printf '%s\n' "$deps" | grep -qx -- "$m" && echo "$m"
+    done
+    return 0
 }
 
 fixdir=tests/repo/fixtures/engine-deps
-for f in bad-deps bad-dev bad-build; do
-    p=$fixdir/$f.toml
-    if [ -f "$p" ]; then
-        scan "$p" | grep -qx beacon || fail "scanner does not report beacon in $p"
-    else
-        fail "$p missing"
-    fi
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# workspace <case>: build a temp workspace with the case as engine/Cargo.toml; print its path.
+workspace() {
+    local w="$tmp/$1"
+    mkdir -p "$w/engine/src" "$w/beacon"
+    printf '[workspace]\nmembers = ["engine", "beacon"]\nresolver = "3"\n' > "$w/Cargo.toml"
+    cp -R "$fixdir/beacon/." "$w/beacon/"
+    cp "$fixdir/$1.toml" "$w/engine/Cargo.toml"
+    : > "$w/engine/src/lib.rs"
+    echo "$w"
+}
+
+for c in rename dotted target-inline dev build; do
+    if [ ! -f "$fixdir/$c.toml" ]; then fail "$fixdir/$c.toml missing"; continue; fi
+    out=$(module_deps "$(workspace "$c")") || { fail "cargo metadata failed on fixture $c"; continue; }
+    printf '%s\n' "$out" | grep -qx beacon || fail "self-test: fixture $c not reported"
 done
 if [ -f "$fixdir/good.toml" ]; then
-    [ -z "$(scan "$fixdir/good.toml")" ] || fail "scanner flags $fixdir/good.toml"
+    out=$(module_deps "$(workspace good)") || fail "cargo metadata failed on fixture good"
+    [ -z "$out" ] || fail "self-test: fixture good flagged: $out"
 else
     fail "$fixdir/good.toml missing"
 fi
 
-manifest=crates/engine/Cargo.toml
-if [ -f "$manifest" ]; then
+if [ -f crates/engine/Cargo.toml ]; then
+    out=$(module_deps .) || fail "cargo metadata failed on the repo"
     while IFS= read -r name; do
-        [ -n "$name" ] && fail "$manifest depends on module crate $name"
-    done < <(scan "$manifest")
+        [ -n "$name" ] && fail "netray-engine depends on module crate $name"
+    done <<< "$out"
 else
-    fail "$manifest missing"
+    fail "crates/engine/Cargo.toml missing"
 fi
 
 [ "$fails" -eq 0 ] || exit 1

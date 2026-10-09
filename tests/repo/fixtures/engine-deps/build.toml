@@ -4,4 +4,5 @@ version = "0.0.0"
 edition = "2021"
 description = "uses beacon, tlsight and lens"
 
-[dependencies]
+[build-dependencies]
+beacon = { path = "../beacon" }

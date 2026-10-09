@@ -1,8 +1,0 @@
-[package]
-name = "engine"
-
-[dependencies]
-netray-model = { workspace = true }
-
-[dev-dependencies]
-beacon = { workspace = true }

@@ -2,6 +2,7 @@
 //! exercised through stubs behind trait objects, using only `netray_engine` and `netray_model`.
 
 use std::net::Ipv4Addr;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use netray_engine::{
@@ -25,14 +26,16 @@ fn result() -> CheckResult {
     }
 }
 
+static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| vec![tls_reachable()]);
+
 struct StubModule;
 
 impl Module for StubModule {
     fn protocol(&self) -> Protocol {
         Protocol::Tls
     }
-    fn checks(&self) -> Vec<CheckId> {
-        vec![tls_reachable()]
+    fn checks(&self) -> &'static [CheckId] {
+        &CHECKS
     }
     fn volatile(&self) -> &'static [EvidencePath] {
         &VOLATILE
@@ -73,7 +76,7 @@ fn ctx() -> RunContext {
 async fn boxed_module_declares_and_returns_its_outcome() {
     let module: Box<dyn Module> = Box::new(StubModule);
     assert_eq!(module.protocol(), Protocol::Tls);
-    assert_eq!(module.checks(), vec![tls_reachable()]);
+    assert_eq!(module.checks(), [tls_reachable()].as_slice());
     assert_eq!(module.volatile(), &[EvidencePath("tls.handshake_ms")]);
 
     let outcome = module.run(&ctx(), &Facts::default()).await;

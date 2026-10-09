@@ -4,4 +4,5 @@ version = "0.0.0"
 edition = "2021"
 description = "uses beacon, tlsight and lens"
 
-[dependencies]
+[target."cfg(unix)"]
+dependencies = { beacon = { path = "../beacon" } }
