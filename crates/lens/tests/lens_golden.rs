@@ -83,6 +83,14 @@ const FIXTURES: &[Fixture] = &[
         email: "beacon.sse",
         ip: "ifconfig-json.json",
     },
+    Fixture {
+        name: "null-mx",
+        dns: "prism.sse",
+        tls: Some("tlsight-inspect.json"),
+        http: Some("spectra-inspect.json"),
+        email: "beacon-null-mx.sse",
+        ip: "ifconfig-json.json",
+    },
 ];
 
 fn fixture(name: &str) -> &'static Fixture {
@@ -410,6 +418,43 @@ async fn lens_golden_no_mx() {
         .filter(|c| c["verdict"] == "skip")
         .count();
     assert!(skipped > 0, "no-mx must skip the mail buckets");
+}
+
+/// A null MX domain sends no mail: infrastructure, transport and brand are skipped, the
+/// authentication bucket is still scored, and the verdict is complete.
+#[tokio::test]
+async fn lens_golden_null_mx() {
+    let projection: Value = serde_json::from_str(&run_fixture("null-mx").await).unwrap();
+    assert_no_error_section("null-mx", &projection);
+    let summary = &projection["summary"];
+    assert_eq!(
+        summary["complete"], true,
+        "null-mx: the verdict is complete; summary: {summary}"
+    );
+    let checks = projection["sections"]["email"]["checks"]
+        .as_array()
+        .unwrap();
+    let verdict = |name: &str| {
+        checks
+            .iter()
+            .find(|c| c["name"] == name)
+            .unwrap_or_else(|| panic!("null-mx: no email check {name}; checks: {checks:?}"))["verdict"]
+            .clone()
+    };
+    for bucket in [
+        "email_infrastructure",
+        "email_transport",
+        "email_brand_policy",
+    ] {
+        assert_eq!(verdict(bucket), "skip", "null-mx: {bucket} is skipped");
+    }
+    assert_eq!(
+        verdict("email_authentication"),
+        "pass",
+        "null-mx: authentication is scored"
+    );
+    assert_lens_golden_exists("null-mx");
+    check_golden("null-mx").await;
 }
 
 #[tokio::test]

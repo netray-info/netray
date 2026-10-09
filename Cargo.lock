@@ -2392,6 +2392,7 @@ version = "0.22.2"
 dependencies = [
  "axum",
  "axum-extra",
+ "beacon",
  "chrono",
  "config",
  "fontdb",
