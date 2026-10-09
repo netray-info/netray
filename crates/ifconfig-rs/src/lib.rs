@@ -1,6 +1,8 @@
 pub mod backend;
 pub mod config;
 #[cfg(test)]
+mod classify_tests;
+#[cfg(test)]
 mod contract_golden;
 pub mod enrichment;
 pub mod error;

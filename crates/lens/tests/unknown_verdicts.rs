@@ -25,6 +25,13 @@ use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
 const TIMEOUT: Duration = Duration::from_secs(5);
 const COUNTER: &str = "lens_unknown_verdict_total";
 
+fn public_or_documentation(ip: std::net::IpAddr) -> bool {
+    match netray_common::target_policy::refusal_reason(ip) {
+        None => true,
+        Some(r) => r.starts_with("documentation"),
+    }
+}
+
 fn golden(name: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/contracts")
@@ -125,7 +132,7 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
         "ip" => {
             let url = stub("/json", false, "application/json", body).await;
             let ip: std::net::IpAddr = "203.0.113.42".parse().unwrap();
-            check_ip(&client, &url, &[ip], TIMEOUT, &fwd)
+            check_ip(&client, &url, &[ip], TIMEOUT, &fwd, public_or_documentation)
                 .await
                 .map(|r| pairs(&r.checks))
                 .map_err(|e| format!("{e:?}"))
@@ -203,11 +210,6 @@ async fn unknown_verdict_errors_section_and_counts() {
         (
             "email",
             renamed("beacon.sse", r#""spf":"pass""#, r#""spf":"passed""#),
-        ),
-        // C7: ifconfig network type -> a value the vocabulary does not hold
-        (
-            "ip",
-            json_with("ifconfig-json.json", "/network/type", "passed"),
         ),
         // C8: spectra check status `pass` -> `passed` (decode failure today)
         (
