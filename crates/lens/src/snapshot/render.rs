@@ -813,3 +813,13 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::check_label;
+
+    #[test]
+    fn check_label_has_a_human_label_for_tls_reachable() {
+        assert_ne!(check_label("tls_reachable"), "tls_reachable");
+    }
+}

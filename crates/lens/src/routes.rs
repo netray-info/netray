@@ -2338,6 +2338,7 @@ pub mod tests {
             "ocsp_stapled",
             "dane_valid",
             "caa_compliant",
+            "tls_reachable",
             "hsts",
             "https_redirect",
             "security_headers",
@@ -2361,6 +2362,11 @@ pub mod tests {
             owner.unwrap(),
             "your hosting provider or mail administrator"
         );
+    }
+
+    #[test]
+    fn guide_url_for_tls_reachable_is_some() {
+        assert!(guide_url_for("tls_reachable").is_some());
     }
 
     #[test]
