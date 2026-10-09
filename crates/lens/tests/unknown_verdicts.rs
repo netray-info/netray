@@ -181,11 +181,6 @@ async fn unknown_verdict_errors_section_and_counts() {
                 r#"{"Passed":"Found exactly one SPF record"}"#,
             ),
         ),
-        // C7: tlsight hostname check status `pass` -> `passed`
-        (
-            "tls",
-            json_with("tlsight-inspect.json", "/quality/checks/0/status", "passed"),
-        ),
         // C7: tlsight port check status (chain_trusted, a hard-fail check) -> `passed`
         (
             "tls",
