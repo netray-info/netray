@@ -11,8 +11,23 @@ fn check_id_parses_protocol_and_name() {
 
 #[test]
 fn check_id_refuses_malformed_input() {
-    for bad in ["chain_trusted", "smtp.x", "tls."] {
+    for bad in [
+        "chain_trusted",
+        "smtp.x",
+        "tls.",
+        "tls.a.b",
+        "tls.Chain",
+        "tls.chain trusted",
+        "tls.1chain",
+    ] {
         assert!(CheckId::parse(bad).is_err(), "{bad:?} must be refused");
+    }
+}
+
+#[test]
+fn check_id_accepts_snake_case_names() {
+    for good in ["tls.tls_reachable", "dns.caa", "email.mta_sts", "http.x2"] {
+        assert!(CheckId::parse(good).is_ok(), "{good:?} must parse");
     }
 }
 
