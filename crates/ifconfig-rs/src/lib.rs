@@ -1,6 +1,8 @@
 pub mod backend;
 #[cfg(test)]
 mod classify_tests;
+#[cfg(test)]
+mod rate_limit_exempt_tests;
 pub mod config;
 #[cfg(test)]
 mod contract_golden;
