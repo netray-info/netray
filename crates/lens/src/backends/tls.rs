@@ -29,8 +29,6 @@ pub struct TlsBackendResult {
 struct InspectResponse {
     #[serde(default)]
     ports: Vec<PortResult>,
-    #[serde(default)]
-    quality: Option<QualityResult>,
 }
 
 #[derive(Deserialize)]
@@ -60,12 +58,6 @@ struct TlsParams {
 #[derive(Deserialize)]
 struct CertInfo {
     days_remaining: Option<i64>,
-}
-
-#[derive(Deserialize, Default)]
-struct QualityResult {
-    #[serde(default)]
-    checks: Vec<HealthCheck>,
 }
 
 #[derive(Deserialize)]
@@ -211,8 +203,6 @@ fn parse_inspect(
 ) -> Result<TlsBackendResult, AppError> {
     let mut checks: Vec<CheckResult> = Vec::new();
 
-    let quality = inspect.quality.unwrap_or_default();
-
     // Collect per-port quality checks (cert, protocol, config) from the first port.
     // These are in ports[0].quality.checks (PortQualityResult).
     if let Some(port_quality) = inspect.ports.first().and_then(|p| p.quality.as_ref()) {
@@ -225,20 +215,6 @@ fn parse_inspect(
                 messages,
             });
         }
-    }
-
-    // Collect hostname-scoped quality checks (hsts, https_redirect) from top-level quality.checks.
-    for hc in &quality.checks {
-        if checks.iter().any(|c| c.name == hc.id) {
-            continue;
-        }
-        let verdict = check_status_verdict(&hc.status)?;
-        let messages = tls_check_messages(&verdict, &hc.detail);
-        checks.push(CheckResult {
-            name: hc.id.clone(),
-            verdict,
-            messages,
-        });
     }
 
     let raw_headline = build_headline(&inspect.ports);

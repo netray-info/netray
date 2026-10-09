@@ -118,10 +118,6 @@
         {
           "name": "ocsp_stapled",
           "verdict": "fail"
-        },
-        {
-          "name": "hsts",
-          "verdict": "pass"
         }
       ]
     }

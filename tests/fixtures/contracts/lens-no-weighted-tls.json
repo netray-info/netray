@@ -101,10 +101,6 @@
         {
           "name": "tls_reachable",
           "verdict": "skip"
-        },
-        {
-          "name": "hsts",
-          "verdict": "pass"
         }
       ]
     }

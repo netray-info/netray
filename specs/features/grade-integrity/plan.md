@@ -56,3 +56,10 @@ One group: `check.rs`, the backends' request paths, `state.rs` and `config.rs` s
 2. lens: `crates/lens/profiles/default.toml` `tls_reachable = 10` under `[sections.tls.checks]`, `hard_fail = ["chain_trusted", "not_expired", "tls_reachable"]`; the README scoring tables if they list TLS weights (SCORING SYNC RULE).
 3. Goldens, after 1 and 2 are green: `UPDATE_GOLDEN=1 cargo test -p tlsight --test contract_golden` (tlsight-inspect.json gains `tls_reachable`; tlsight-unreachable.json and tlsight-not-tested.json are written), then `UPDATE_GOLDEN=1 cargo test -p lens --test lens_golden` (lens-http-only.json, lens-no-weighted-tls.json written; the existing lens goldens move in their TLS score). The orchestrator commits the regenerated goldens with `ADLC-Test-Change` naming requirement 7.
 - Review fixes: `EHOSTUNREACH` → `HANDSHAKE_FAILED`; tlsight `qualityVerdict` all-skip → skip; `tls_reachable` texts, labels and docs.
+
+## Phase 5 — HSTS owned by HTTP
+
+### Plan
+
+- `crates/lens/src/backends/tls.rs` `parse_inspect`: delete the loop that copies tlsight's top-level `quality.checks` (`hsts`, `https_redirect`) into the TLS section; the top-level checks are no longer read. Then regenerate the lens goldens (`UPDATE_GOLDEN=1 cargo test -p lens --test lens_golden`), which drop the two names from the TLS list; the orchestrator commits them with `ADLC-Test-Change` naming requirement 9.
+- Review fix: the lens export includes HTTP and email.

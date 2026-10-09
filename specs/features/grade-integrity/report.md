@@ -160,3 +160,32 @@ C9 passed at the baseline (`3425629`); the others failed there. Goldens regenera
 ### Behavioural verification
 
 skipped: the TLS paths are driven by `assess_port` tables, the closed-port `inspect_ip` test and the lens goldens; a live HTTPS-less target is not reachable offline.
+
+## Phase 5 — HSTS owned by HTTP
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R9: lens no longer copies tlsight's `hsts` and `https_redirect` into TLS | green | crates/lens/tests/contract_backends.rs |
+| C2 | tlsight golden with hostname checks → no TLS check `hsts`/`https_redirect` (`contract_backends.rs` moves) | green | crates/lens/tests/contract_backends.rs |
+| C3 | healthy fixture → `hsts`/`https_redirect` once, in HTTP; lens goldens move in the TLS list | green | crates/lens/tests/lens_golden.rs |
+
+C1–C3 failed at the baseline. The lens goldens drop `hsts` from the TLS check list; no grade or score moves, because the TLS profile never weighted `hsts` (the spec's "and the TLS scores" was wrong; the output is right).
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| tls.rs + goldens | 1 | sonnet | 20029 | 54 |
+| export (review fix) | 1 | sonnet | n/a | n/a |
+
+### Review
+
+- AMENDMENT (fixed) | the lens frontend export (`crates/lens/frontend/src/lib/export.ts`) covered dns, tls and ip only, so with `hsts`/`https_redirect` owned by HTTP neither JSON nor Markdown carried them; the export now takes one object and includes HTTP and email (`export.test.ts`) | affected_phase: 5 | repaired_in_phase: yes
+- NIT | the tlsight golden's top-level checks hold only `hsts`, so the `https_redirect` half of the new `contract_backends.rs` assertion cannot fail. Not acted on.
+- Sound per the reader: lens read nothing else from tlsight's top level; per-port checks and the headline are unchanged; http.rs always emits both checks when spectra is configured; without spectra the two were never weighted in TLS.
+
+### Behavioural verification
+
+skipped: covered by the contract and golden tests and the frontend export tests.

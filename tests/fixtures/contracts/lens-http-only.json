@@ -104,10 +104,6 @@
         {
           "name": "tls_reachable",
           "verdict": "fail"
-        },
-        {
-          "name": "hsts",
-          "verdict": "pass"
         }
       ]
     }

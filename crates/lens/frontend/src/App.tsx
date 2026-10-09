@@ -149,7 +149,7 @@ export default function App() {
   }
 
   function handleCopyMd() {
-    const md = toMarkdown(currentDomain(), dns(), tls(), ip(), summary(), done());
+    const md = toMarkdown({ domain: currentDomain(), dns: dns(), tls: tls(), http: http(), email: email(), ip: ip(), summary: summary(), done: done() });
     navigator.clipboard.writeText(md).then(() => {
       setToastMsg('Copied!');
       setTimeout(() => setToastMsg(null), 2000);
@@ -158,7 +158,7 @@ export default function App() {
 
   function handleDownloadJson() {
     const blob = new Blob(
-      [toJson(currentDomain(), dns(), tls(), ip(), summary(), done())],
+      [toJson({ domain: currentDomain(), dns: dns(), tls: tls(), http: http(), email: email(), ip: ip(), summary: summary(), done: done() })],
       { type: 'application/json' },
     );
     const url = URL.createObjectURL(blob);
