@@ -51,3 +51,25 @@ C8 and C15 passed at the baseline (`bbcb603`) and pin today's behaviour; the oth
 ### Behavioural verification
 
 skipped: driven by beacon's pipeline tests (`run_events` with `TestDnsResolver`) and the timeout golden from `run_all_checks`.
+
+## Phase 2 — lens
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R7: no `email_fixtures`, no `run_fixture`; one contract test per beacon golden | open | crates/lens/tests/contract_beacon.rs |
+| C2 | R8: guard matches `skipped` from beacon's export; timeout → `SectionError::Timeout` | open | crates/lens/tests/contract_beacon.rs |
+| C3 | R9: `null_mx` N/A; `info` neutral; bucket = worst of categories and routed findings; none → Skip "not applicable"; `skipped` or verdict without event → Errored | open | crates/lens/tests/contract_beacon.rs |
+| C4 | R10: `dnssec` excluded; cross_validation routed; unrouted → Errored + counter; no-mail excludes `reject_no_dkim` and `spf_mx_coverage` | open | crates/lens/tests/contract_beacon.rs |
+| C5 | `rg email_fixtures crates/*/src crates/*/tests` finds nothing | open | tests/repo or crates/lens/tests/contract_beacon.rs |
+| C6 | `beacon-timeout.sse` → Timeout; route → `incomplete` | open | crates/lens/tests/contract_beacon.rs, crates/lens/tests/incomplete_results.rs |
+| C7 | `beacon-null-mx.sse` → three N/A buckets; authentication Pass | open | crates/lens/tests/contract_beacon.rs |
+| C8 | `beacon-no-mx.sse` → three N/A buckets, as today | open | crates/lens/tests/contract_beacon.rs |
+| C9 | `beacon.sse` → brand Skip "not applicable" (goldens move) | open | crates/lens/tests/contract_beacon.rs, unknown_verdicts.rs, lens goldens |
+| C10 | BIMI Info only + routed `bimi_dmarc_policy` Warn → brand Warn | open | crates/lens/tests/contract_beacon.rs |
+| C11 | `beacon-partial.sse` → Errored, incomplete | open | crates/lens/tests/contract_beacon.rs |
+| C12 | summary verdict without category event → Errored | open | crates/lens/tests/contract_beacon.rs |
+| C13 | `beacon-sending-no-dkim.sse` → authentication Warn with `reject_no_dkim`'s detail | open | crates/lens/tests/contract_beacon.rs |
+| C14 | every `Category::ALL` bucketed/excluded; every `CROSS_VALIDATION_CHECKS` routed | open | crates/lens/tests/contract_beacon.rs |
+| C15 | unrouted cross-validation name → Errored, counter +1 | open | crates/lens/tests/contract_beacon.rs |
