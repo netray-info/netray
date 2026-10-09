@@ -1,7 +1,8 @@
 # Spec: lens result goldens and backend results tables
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-09
+Finished: 2026-10-09
 
 Nothing pins lens's whole result today. `tests/fixtures/contracts/` holds the backends' goldens but no lens golden, so a change in scoring, in a backend's mapping or in a backend's own checks can move a grade without any test noticing. The backend contract goldens are built from literals (`crates/tlsight/tests/contract_golden.rs`, `crates/beacon/tests/contract_golden.rs`), so they cannot show a change inside a backend's check code either.
 
