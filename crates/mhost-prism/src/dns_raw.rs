@@ -6,11 +6,14 @@
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures::stream::{self, StreamExt};
 use hickory_proto::op::{Message, MessageType, OpCode, Query};
 use hickory_proto::rr::{DNSClass, Name, RData, RecordType};
+use netray_common::fetch::{Resolve, SystemResolver};
+use netray_common::target_policy::is_allowed_target;
 use serde::Serialize;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, UdpSocket};
@@ -153,58 +156,153 @@ pub struct DnsRecord {
 // Raw DNS queries
 // ---------------------------------------------------------------------------
 
-pub(crate) async fn parallel_queries(
-    servers: &[SocketAddr],
-    name: &Name,
-    record_type: RecordType,
-    timeout: Duration,
-) -> Vec<RawQueryResult> {
-    let futures = servers.iter().copied().map(|server| {
-        let name = name.clone();
-        async move {
-            let result = raw_query(server, &name, record_type, timeout).await;
-            RawQueryResult { server, result }
-        }
-    });
-    stream::iter(futures)
-        .buffer_unordered(MAX_CONCURRENT)
-        .collect()
-        .await
+pub(crate) type SendFuture =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<RawResponse, RawError>> + Send>>;
+
+/// Sends one raw (RD=0) query. Production: UDP with TCP fallback on truncation.
+pub(crate) trait RawSend: Send + Sync + 'static {
+    fn send(
+        &self,
+        server: SocketAddr,
+        name: Name,
+        record_type: RecordType,
+        dnssec_ok: bool,
+        timeout: Duration,
+    ) -> SendFuture;
 }
 
-/// Send a non-recursive DNS query over UDP, with TCP fallback on truncation.
-pub(crate) async fn raw_query(
-    server: SocketAddr,
-    name: &Name,
-    record_type: RecordType,
-    timeout: Duration,
-) -> Result<RawResponse, RawError> {
-    let msg = build_query(name, record_type, false);
-    let response = send_udp(server, &msg, timeout).await?;
-    if response.is_truncated() {
-        tracing::debug!(%server, "UDP response truncated, retrying over TCP");
-        let msg = build_query(name, record_type, false);
-        send_tcp(server, &msg, timeout).await
-    } else {
-        Ok(response)
+/// Message for an address the outbound policy refused.
+pub(crate) const NOT_PUBLIC: &str = "nameserver address not public, not queried";
+
+/// IPv4 servers that may be queried, and how many IPv4 addresses the policy refused.
+pub(crate) struct ServerList {
+    pub(crate) servers: Vec<(SocketAddr, Option<String>)>,
+    pub(crate) refused: usize,
+}
+
+/// The outbound context for raw queries to domain-derived addresses.
+#[derive(Clone)]
+pub(crate) struct RawOutbound {
+    pub(crate) allow: fn(IpAddr) -> bool,
+    pub(crate) resolver: Arc<dyn Resolve>,
+    pub(crate) sender: Arc<dyn RawSend>,
+}
+
+struct UdpTcpSender;
+
+impl RawSend for UdpTcpSender {
+    fn send(
+        &self,
+        server: SocketAddr,
+        name: Name,
+        record_type: RecordType,
+        dnssec_ok: bool,
+        timeout: Duration,
+    ) -> SendFuture {
+        Box::pin(async move {
+            let msg = build_query(&name, record_type, dnssec_ok);
+            let response = send_udp(server, &msg, timeout).await?;
+            if response.is_truncated() {
+                tracing::debug!(%server, "UDP response truncated, retrying over TCP");
+                let msg = build_query(&name, record_type, dnssec_ok);
+                send_tcp(server, &msg, timeout).await
+            } else {
+                Ok(response)
+            }
+        })
     }
 }
 
-/// Send a non-recursive DNS query with the DO (DNSSEC OK) bit set.
-pub(crate) async fn raw_query_dnssec(
-    server: SocketAddr,
-    name: &Name,
-    record_type: RecordType,
-    timeout: Duration,
-) -> Result<RawResponse, RawError> {
-    let msg = build_query(name, record_type, true);
-    let response = send_udp(server, &msg, timeout).await?;
-    if response.is_truncated() {
-        tracing::debug!(%server, "UDP response truncated, retrying over TCP");
-        let msg = build_query(name, record_type, true);
-        send_tcp(server, &msg, timeout).await
-    } else {
-        Ok(response)
+impl RawOutbound {
+    pub(crate) fn production() -> Self {
+        Self {
+            allow: is_allowed_target,
+            resolver: Arc::new(SystemResolver),
+            sender: Arc::new(UdpTcpSender),
+        }
+    }
+
+    /// Every query goes through the sender; no policy check here (root servers pass).
+    pub(crate) async fn parallel_queries(
+        &self,
+        servers: &[SocketAddr],
+        name: &Name,
+        record_type: RecordType,
+        timeout: Duration,
+    ) -> Vec<RawQueryResult> {
+        let futures = servers.iter().copied().map(|server| {
+            let name = name.clone();
+            let sender = self.sender.clone();
+            async move {
+                let result = sender.send(server, name, record_type, false, timeout).await;
+                RawQueryResult { server, result }
+            }
+        });
+        stream::iter(futures)
+            .buffer_unordered(MAX_CONCURRENT)
+            .collect()
+            .await
+    }
+
+    /// Send a non-recursive DNS query with the DO (DNSSEC OK) bit set.
+    pub(crate) async fn raw_query_dnssec(
+        &self,
+        server: SocketAddr,
+        name: &Name,
+        record_type: RecordType,
+        timeout: Duration,
+    ) -> Result<RawResponse, RawError> {
+        self.sender
+            .send(server, name.clone(), record_type, true, timeout)
+            .await
+    }
+
+    /// Resolve NS names with no glue IPs through the resolver, keeping IPv4. A name
+    /// with any glue, refused glue included, is not resolved again.
+    pub(crate) async fn resolve_missing_glue(&self, ns_servers: &mut HashMap<String, Vec<IpAddr>>) {
+        let missing: Vec<String> = ns_servers
+            .iter()
+            .filter(|(_, ips)| ips.is_empty())
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        if missing.is_empty() {
+            return;
+        }
+
+        tracing::debug!(count = missing.len(), "resolving NS names without glue");
+
+        for ns_name in missing {
+            let host = ns_name.trim_end_matches('.');
+            let addrs = self.resolver.resolve(host).await;
+            let entry = ns_servers.entry(ns_name.clone()).or_default();
+            for ip in addrs {
+                if ip.is_ipv4() && !entry.contains(&ip) {
+                    entry.push(ip);
+                }
+            }
+            if entry.is_empty() {
+                tracing::debug!(ns = %ns_name, "glue resolution returned no IPv4 addresses");
+            }
+        }
+    }
+
+    /// IPv4 only, port 53, `allow` applied; `refused` counts refused IPv4 addresses.
+    pub(crate) fn build_server_list(
+        &self,
+        ns_servers: &HashMap<String, Vec<IpAddr>>,
+    ) -> ServerList {
+        let allow = self.allow;
+        let servers = build_server_list(ns_servers, |ip| ip.is_ipv4() && allow(ip));
+        let ipv4_total = ns_servers
+            .values()
+            .flatten()
+            .filter(|ip| ip.is_ipv4())
+            .count();
+        ServerList {
+            refused: ipv4_total - servers.len(),
+            servers,
+        }
     }
 }
 
@@ -342,42 +440,6 @@ pub(crate) fn build_server_list(
     servers
 }
 
-/// Resolve NS names with no glue IPs using the system resolver.
-pub(crate) async fn resolve_missing_glue(ns_servers: &mut HashMap<String, Vec<IpAddr>>) {
-    let missing: Vec<String> = ns_servers
-        .iter()
-        .filter(|(_, ips)| ips.is_empty())
-        .map(|(name, _)| name.clone())
-        .collect();
-
-    if missing.is_empty() {
-        return;
-    }
-
-    tracing::debug!(count = missing.len(), "resolving NS names without glue");
-
-    for ns_name in missing {
-        let host = ns_name.trim_end_matches('.');
-        match tokio::net::lookup_host(format!("{host}:53")).await {
-            Ok(addrs) => {
-                let entry = ns_servers.entry(ns_name.clone()).or_default();
-                for addr in addrs {
-                    let ip = addr.ip();
-                    if ip.is_ipv4() && !entry.contains(&ip) {
-                        entry.push(ip);
-                    }
-                }
-                if entry.is_empty() {
-                    tracing::debug!(ns = %ns_name, "glue resolution returned no IPv4 addresses");
-                }
-            }
-            Err(e) => {
-                tracing::warn!(ns = %ns_name, error = %e, "glue resolution failed");
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Record conversion
 // ---------------------------------------------------------------------------
@@ -394,6 +456,10 @@ pub(crate) fn record_to_dns_record(record: &hickory_proto::rr::Record) -> DnsRec
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+#[path = "dns_raw_outbound_tests.rs"]
+pub(crate) mod outbound_tests;
 
 #[cfg(test)]
 mod tests {

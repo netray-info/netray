@@ -15,10 +15,7 @@ use hickory_proto::dnssec::{Algorithm, Verifier};
 use hickory_proto::rr::{Name, RData, Record, RecordType};
 use serde::Serialize;
 
-use crate::dns_raw::{
-    DnsRecord, ROOT_SERVERS, build_server_list, parallel_queries, raw_query_dnssec,
-    record_to_dns_record, resolve_missing_glue,
-};
+use crate::dns_raw::{DnsRecord, NOT_PUBLIC, ROOT_SERVERS, RawOutbound, record_to_dns_record};
 
 // ---------------------------------------------------------------------------
 // Public data model (serialised into SSE events)
@@ -61,6 +58,16 @@ pub fn parse_name(domain: &str) -> Result<Name, String> {
 /// records returned alongside DNSKEY. Validates the cryptographic chain of
 /// trust at each level.
 pub async fn walk_chain(name: Name, max_hops: usize, query_timeout: Duration) -> Vec<ChainLevel> {
+    walk_chain_with(&RawOutbound::production(), name, max_hops, query_timeout).await
+}
+
+/// [`walk_chain`] through the given outbound context.
+pub(crate) async fn walk_chain_with(
+    raw: &RawOutbound,
+    name: Name,
+    max_hops: usize,
+    query_timeout: Duration,
+) -> Vec<ChainLevel> {
     // Start with all IPv4 root servers.
     let mut current_servers: Vec<(SocketAddr, Option<String>)> = ROOT_SERVERS
         .iter()
@@ -70,6 +77,8 @@ pub async fn walk_chain(name: Name, max_hops: usize, query_timeout: Duration) ->
     let mut levels = Vec::new();
     // Track parent servers for DS queries at child zones.
     let mut parent_servers: Vec<SocketAddr> = Vec::new();
+    // IPv4 addresses the outbound policy refused for the next level's servers.
+    let mut refused = 0usize;
 
     // Build the zone labels we need to visit: root → TLD → ... → target
     let zone_labels = build_zone_labels(&name);
@@ -82,6 +91,22 @@ pub async fn walk_chain(name: Name, max_hops: usize, query_timeout: Duration) ->
 
         if current_servers.is_empty() {
             tracing::warn!(level, zone = %target_zone, "no servers for DNSSEC chain level");
+            if refused > 0 {
+                levels.push(ChainLevel {
+                    level,
+                    zone: target_zone.clone(),
+                    servers_queried: 0,
+                    dnskey_records: Vec::new(),
+                    ds_records: Vec::new(),
+                    rrsig_records: Vec::new(),
+                    findings: vec![ChainFinding {
+                        severity: "warning".to_owned(),
+                        message: NOT_PUBLIC.to_owned(),
+                    }],
+                    latency_ms: 0.0,
+                    is_final: idx == zone_labels.len() - 1,
+                });
+            }
             break;
         }
 
@@ -100,14 +125,25 @@ pub async fn walk_chain(name: Name, max_hops: usize, query_timeout: Duration) ->
         let zone_name = Name::from_str(target_zone).unwrap_or_else(|_| Name::root());
 
         // Query DNSKEY at this zone's servers (with DO bit).
-        let dnskey_raw =
-            query_record_type_dnssec(&server_addrs, &zone_name, RecordType::DNSKEY, query_timeout)
-                .await;
+        let dnskey_raw = query_record_type_dnssec(
+            raw,
+            &server_addrs,
+            &zone_name,
+            RecordType::DNSKEY,
+            query_timeout,
+        )
+        .await;
 
         // Query DS at parent servers (not for root).
         let ds_response = if !parent_servers.is_empty() && target_zone != "." {
-            query_record_type_dnssec(&parent_servers, &zone_name, RecordType::DS, query_timeout)
-                .await
+            query_record_type_dnssec(
+                raw,
+                &parent_servers,
+                &zone_name,
+                RecordType::DS,
+                query_timeout,
+            )
+            .await
         } else {
             Vec::new()
         };
@@ -172,8 +208,9 @@ pub async fn walk_chain(name: Name, max_hops: usize, query_timeout: Duration) ->
             let next_name = Name::from_str(next).unwrap_or_else(|_| Name::root());
             parent_servers = server_addrs.clone();
 
-            let ns_results =
-                parallel_queries(&server_addrs, &next_name, RecordType::NS, query_timeout).await;
+            let ns_results = raw
+                .parallel_queries(&server_addrs, &next_name, RecordType::NS, query_timeout)
+                .await;
 
             let mut next_ns: HashMap<String, Vec<IpAddr>> = HashMap::new();
             for rqr in &ns_results {
@@ -203,8 +240,10 @@ pub async fn walk_chain(name: Name, max_hops: usize, query_timeout: Duration) ->
                 }
             }
 
-            resolve_missing_glue(&mut next_ns).await;
-            current_servers = build_server_list(&next_ns, |ip| ip.is_ipv4());
+            raw.resolve_missing_glue(&mut next_ns).await;
+            let list = raw.build_server_list(&next_ns);
+            refused = list.refused;
+            current_servers = list.servers;
         }
     }
 
@@ -238,6 +277,7 @@ fn build_zone_labels(name: &Name) -> Vec<String> {
 /// Query a specific record type at the given servers with the DO bit set,
 /// returning raw hickory-proto Record objects for typed analysis.
 async fn query_record_type_dnssec(
+    raw: &RawOutbound,
     servers: &[SocketAddr],
     name: &Name,
     record_type: RecordType,
@@ -254,7 +294,10 @@ async fn query_record_type_dnssec(
     let mut seen = std::collections::HashSet::new();
 
     for &server in query_servers {
-        match raw_query_dnssec(server, name, record_type, timeout).await {
+        match raw
+            .raw_query_dnssec(server, name, record_type, timeout)
+            .await
+        {
             Ok(response) => {
                 for record in response.answers() {
                     // Deduplicate by (record_type, rdata display).
@@ -537,6 +580,10 @@ fn dedup_join(items: &[&str]) -> String {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+#[path = "dns_dnssec_outbound_tests.rs"]
+mod outbound_tests;
 
 #[cfg(test)]
 mod tests {
