@@ -127,6 +127,7 @@ pub async fn post_handler(
             Ok((rg, _)) if !rg.resolvers().is_empty() => {
                 available_transports.push(t);
             }
+            Err(e @ ApiError::BlockedTargetIp { .. }) => return Err(e),
             _ => {}
         }
     }

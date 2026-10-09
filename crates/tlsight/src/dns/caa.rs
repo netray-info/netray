@@ -26,7 +26,7 @@ impl CaaLookup {
     pub fn issue_domains(&self) -> Vec<&str> {
         self.records
             .iter()
-            .filter(|r| r.tag == "issue")
+            .filter(|r| r.tag.eq_ignore_ascii_case("issue"))
             .map(|r| {
                 // Strip parameters: "letsencrypt.org; accounturi=..." → "letsencrypt.org"
                 // Strip surrounding double quotes: some DNS editors produce "\"letsencrypt.org\""
@@ -41,7 +41,19 @@ impl CaaLookup {
     }
 
     pub fn issuewild_present(&self) -> bool {
-        self.records.iter().any(|r| r.tag == "issuewild")
+        self.records
+            .iter()
+            .any(|r| r.tag.eq_ignore_ascii_case("issuewild"))
+    }
+}
+
+/// Build a record with its tag lowercased: RFC 8659 §4.1 matches tags case-insensitively,
+/// and hickory 0.26 keeps the tag's wire case.
+fn caa_record(tag: &str, value: &str, issuer_critical: bool) -> CaaRecord {
+    CaaRecord {
+        tag: tag.to_ascii_lowercase(),
+        value: value.to_string(),
+        issuer_critical,
     }
 }
 
@@ -88,13 +100,9 @@ async fn query_caa(resolvers: &ResolverGroup, domain: &str) -> Option<CaaLookup>
         .caa()
         .into_iter()
         .filter_map(|caa| {
-            let key = (caa.tag().to_string(), caa.value().to_string());
-            if seen.insert(key) {
-                Some(CaaRecord {
-                    tag: caa.tag().to_string(),
-                    value: caa.value().to_string(),
-                    issuer_critical: caa.issuer_critical(),
-                })
+            let record = caa_record(caa.tag(), caa.value(), caa.issuer_critical());
+            if seen.insert((record.tag.clone(), record.value.clone())) {
+                Some(record)
             } else {
                 None
             }
@@ -107,6 +115,22 @@ async fn query_caa(resolvers: &ResolverGroup, domain: &str) -> Option<CaaLookup>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- tag case (RFC 8659 §4.1: matching of tags is case insensitive) ---
+
+    #[test]
+    fn caa_tags_match_case_insensitively() {
+        let lookup = CaaLookup {
+            records: vec![
+                caa_record("ISSUE", "digicert.com", false),
+                caa_record("IssueWild", ";", false),
+            ],
+        };
+        assert_eq!(lookup.issue_domains(), vec!["digicert.com"]);
+        assert!(lookup.issuewild_present());
+        assert_eq!(lookup.records[0].tag, "issue");
+        assert_eq!(lookup.records[1].tag, "issuewild");
+    }
 
     // --- parent_domain ---
 

@@ -195,7 +195,7 @@ pub async fn walk_chain(name: Name, max_hops: usize, query_timeout: Duration) ->
                     }
                     for record in response.answers() {
                         if record.record_type() == RecordType::NS
-                            && let RData::NS(ns) = record.data()
+                            && let RData::NS(ns) = &record.data
                         {
                             next_ns.entry(ns.0.to_ascii()).or_default();
                         }
@@ -258,7 +258,7 @@ async fn query_record_type_dnssec(
             Ok(response) => {
                 for record in response.answers() {
                     // Deduplicate by (record_type, rdata display).
-                    let key = format!("{}:{}", record.record_type(), record.data());
+                    let key = format!("{}:{}", record.record_type(), record.data);
                     if seen.insert(key) {
                         records.push(record.clone());
                     }
@@ -326,7 +326,7 @@ fn analyze_level(
     // Extract typed DNSKEY records.
     let dnskeys: Vec<&DNSKEY> = raw_dnskeys
         .iter()
-        .filter_map(|r| match r.data() {
+        .filter_map(|r| match &r.data {
             RData::DNSSEC(DNSSECRData::DNSKEY(dk)) => Some(dk),
             _ => None,
         })
@@ -335,7 +335,7 @@ fn analyze_level(
     // Extract typed DS records.
     let ds_list: Vec<&DS> = raw_ds
         .iter()
-        .filter_map(|r| match r.data() {
+        .filter_map(|r| match &r.data {
             RData::DNSSEC(DNSSECRData::DS(ds)) => Some(ds),
             _ => None,
         })
@@ -344,7 +344,7 @@ fn analyze_level(
     // Extract typed RRSIG records (RRSIG derefs to SIG).
     let rrsigs: Vec<&RRSIG> = raw_rrsigs
         .iter()
-        .filter_map(|r| match r.data() {
+        .filter_map(|r| match &r.data {
             RData::DNSSEC(DNSSECRData::RRSIG(sig)) => Some(sig),
             _ => None,
         })
@@ -407,7 +407,7 @@ fn analyze_level(
     let dnskey_rrsigs: Vec<&RRSIG> = rrsigs
         .iter()
         .copied()
-        .filter(|sig| sig.type_covered() == RecordType::DNSKEY)
+        .filter(|sig| sig.input().type_covered == RecordType::DNSKEY)
         .collect();
 
     if dnskey_rrsigs.is_empty() {
@@ -418,9 +418,9 @@ fn analyze_level(
     } else {
         let now = current_unix_time();
         for sig in &dnskey_rrsigs {
-            let expiration = sig.sig_expiration().get();
-            let inception = sig.sig_inception().get();
-            let key_tag = sig.key_tag();
+            let expiration = sig.input().sig_expiration.get();
+            let inception = sig.input().sig_inception.get();
+            let key_tag = sig.input().key_tag;
 
             if now > expiration {
                 findings.push(ChainFinding {

@@ -24,7 +24,7 @@ netray-common = { workspace = true, features = ["schema", "middleware", "server"
 httpdate = "1"
 ip_network = { workspace = true }
 ip_network_table = "0.2"
-lru = "0.16"
+lru = "0.18"
 moka = { workspace = true, features = ["future"] }
 maxminddb = "0.27"
 notify = "8"

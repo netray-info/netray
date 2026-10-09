@@ -229,18 +229,18 @@ impl BackendClient {
         let body = resp.bytes().await.map_err(BackendError::Network)?;
 
         // Cache only 2xx responses
-        if status.is_success() {
-            if let Some(ref cache) = self.cache {
-                cache
-                    .insert(
-                        path.to_owned(),
-                        CachedResponse {
-                            status: status.as_u16(),
-                            body: body.clone(),
-                        },
-                    )
-                    .await;
-            }
+        if status.is_success()
+            && let Some(ref cache) = self.cache
+        {
+            cache
+                .insert(
+                    path.to_owned(),
+                    CachedResponse {
+                        status: status.as_u16(),
+                        body: body.clone(),
+                    },
+                )
+                .await;
         }
 
         if status.is_success() || status.is_redirection() {
