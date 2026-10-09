@@ -1,0 +1,9 @@
+[package]
+name = "engine"
+description = "uses beacon"
+
+[dependencies]
+netray-model = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+beacon-like = "1"
