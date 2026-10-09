@@ -1,0 +1,2 @@
+data: {"duration_ms":30000,"grade":"skipped","type":"summary","verdicts":{"bimi":"skip","cross_validation":"skip","dane":"skip","dkim":"skip","dmarc":"skip","dnsbl":"skip","dnssec":"skip","fcrdns":"skip","mta_sts":"skip","mx":"skip","spf":"skip","tls_rpt":"skip"}}
+

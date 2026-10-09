@@ -1,0 +1,26 @@
+data: {"category":"mx","detail":"Null MX: domain does not accept mail","sub_checks":[{"detail":"Null MX (RFC 7505): domain does not accept mail","name":"null_mx","verdict":"info"}],"title":"MX","type":"category","verdict":"info"}
+
+data: {"category":"spf","detail":"SPF record: v=spf1 -all","sub_checks":[{"detail":"valid SPF with 0 authorized prefix(es)","name":"spf_ok","verdict":"pass"}],"title":"SPF","type":"category","verdict":"pass"}
+
+data: {"category":"dkim","detail":"No DKIM keys found","sub_checks":[{"detail":"no DKIM keys found for any selector","name":"no_dkim","verdict":"info"}],"title":"DKIM","type":"category","verdict":"info"}
+
+data: {"category":"dmarc","detail":"DMARC: v=DMARC1; p=reject; rua=mailto:d@example.com","sub_checks":[{"detail":"p=reject","name":"policy_reject","verdict":"pass"},{"detail":"no forensic reports configured","name":"no_ruf","verdict":"info"}],"title":"DMARC","type":"category","verdict":"pass"}
+
+data: {"category":"mta_sts","detail":"No MTA-STS record","sub_checks":[{"detail":"no MTA-STS DNS record","name":"absent","verdict":"info"}],"title":"MTA-STS","type":"category","verdict":"info"}
+
+data: {"category":"tls_rpt","detail":"No TLS-RPT record","sub_checks":[{"detail":"no TLS-RPT record","name":"absent","verdict":"info"}],"title":"TLS-RPT","type":"category","verdict":"info"}
+
+data: {"category":"dane","detail":"No MX hosts","sub_checks":[{"detail":"no MX hosts to check for DANE","name":"absent","verdict":"info"}],"title":"DANE","type":"category","verdict":"info"}
+
+data: {"category":"dnssec","detail":"DNSSEC not validated","sub_checks":[{"detail":"DNSSEC not validated","name":"ad_not_set","verdict":"info"}],"title":"DNSSEC","type":"category","verdict":"info"}
+
+data: {"category":"bimi","detail":"No BIMI record","sub_checks":[{"detail":"no BIMI record","name":"absent","verdict":"info"}],"title":"BIMI","type":"category","verdict":"info"}
+
+data: {"category":"fcrdns","detail":"No MX IPs","sub_checks":[{"detail":"no MX IPs to check","name":"no_ips","verdict":"info"}],"title":"FCrDNS","type":"category","verdict":"info"}
+
+data: {"category":"dnsbl","detail":"No MX IPs","sub_checks":[{"detail":"no MX IPs to check","name":"no_ips","verdict":"info"}],"title":"DNSBL","type":"category","verdict":"info"}
+
+data: {"category":"cross_validation","detail":"1 cross-validation issue(s)","sub_checks":[{"detail":"domain declares it sends no mail (Null MX or SPF -all only)","name":"sends_no_mail","verdict":"info"},{"detail":"DMARC p=reject and SPF -all but no DKIM keys found","name":"reject_no_dkim","verdict":"warn"}],"title":"Cross-Validation","type":"category","verdict":"warn"}
+
+data: {"duration_ms":1234,"grade":"B","type":"summary","verdicts":{"bimi":"info","cross_validation":"warn","dane":"info","dkim":"info","dmarc":"pass","dnsbl":"info","dnssec":"info","fcrdns":"info","mta_sts":"info","mx":"info","spf":"pass","tls_rpt":"info"}}
+

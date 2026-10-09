@@ -141,8 +141,8 @@ export const CATEGORY_EXPLANATIONS: Record<Category, { summary: string; guideUrl
 
 export const VERDICT_ORDER: Record<Verdict, number> = {
   skip: 0,
-  pass: 1,
-  info: 2,
+  info: 1,
+  pass: 2,
   warn: 3,
   fail: 4,
 };

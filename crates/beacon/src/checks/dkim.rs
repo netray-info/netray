@@ -44,7 +44,7 @@ fn provider_selectors(mx_hosts: &[String]) -> Vec<String> {
 }
 
 /// Check DKIM for the domain.
-/// Returns (CheckResult, dkim_found).
+/// Returns (CheckResult, dkim_found). A revoked key (empty `p=`) is not a usable key.
 #[tracing::instrument(skip_all, fields(category = "dkim", domain = %domain))]
 pub async fn check_dkim(
     domain: &str,
@@ -52,6 +52,7 @@ pub async fn check_dkim(
     user_selectors: &[String],
     max_user_selectors: usize,
     resolver: &impl DnsLookup,
+    sends_no_mail: bool,
 ) -> (CheckResult, bool) {
     // The route layer (`validate_and_rate_limit` in `src/routes.rs`) rejects
     // requests where `user_selectors.len() > max_user_selectors` with
@@ -117,6 +118,7 @@ pub async fn check_dkim(
     let results = join_all(lookup_futures).await;
 
     let mut found_any = false;
+    let mut revoked_any = false;
 
     for (selector, source, hops, txt_records) in results {
         if hops > 5 {
@@ -141,8 +143,6 @@ pub async fn check_dkim(
             continue;
         }
 
-        found_any = true;
-
         // Parse DKIM key record
         for record in &txt_records {
             let tags = parse_dkim_tags(record);
@@ -150,13 +150,15 @@ pub async fn check_dkim(
             // Check for revoked key
             if let Some(p_val) = tags.get("p") {
                 if p_val.is_empty() {
+                    revoked_any = true;
                     sub_checks.push(SubCheck {
                         name: "key_revoked".to_string(),
-                        verdict: Verdict::Fail,
+                        verdict: Verdict::Info,
                         detail: format!("selector '{}': key revoked (p= empty)", selector),
                     });
                     continue;
                 }
+                found_any = true;
 
                 // Parse key type
                 let key_type = tags.get("k").map(|s| s.as_str()).unwrap_or("rsa");
@@ -206,11 +208,13 @@ pub async fn check_dkim(
                         }
                     }
                 }
+            } else {
+                found_any = true;
             }
         }
     }
 
-    if !found_any {
+    if !found_any && !revoked_any {
         sub_checks.push(SubCheck {
             name: "no_dkim".to_string(),
             verdict: Verdict::Info,
@@ -218,13 +222,19 @@ pub async fn check_dkim(
         });
     }
 
+    let revoked_only = !found_any && revoked_any;
     let detail = if found_any {
         "DKIM key(s) found".to_string()
+    } else if revoked_only {
+        "only revoked DKIM keys".to_string()
     } else {
         "No DKIM keys found".to_string()
     };
 
-    let result = CheckResult::new(Category::Dkim, sub_checks, detail);
+    let mut result = CheckResult::new(Category::Dkim, sub_checks, detail);
+    if revoked_only && result.verdict < Verdict::Warn && !sends_no_mail {
+        result.verdict = Verdict::Warn;
+    }
     (result, found_any)
 }
 

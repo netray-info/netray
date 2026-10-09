@@ -470,11 +470,11 @@ fn scenario_sending_no_dkim() -> Vec<CheckResult> {
         ),
         cat(
             Category::Spf,
-            "SPF record: v=spf1 ip4:192.0.2.0/24 -all",
+            "SPF record: v=spf1 ip4:192.0.2.0/24 ip6:2001:db8::/32 -all",
             vec![sub(
                 "spf_ok",
                 Verdict::Pass,
-                "valid SPF with 1 authorized prefix(es)",
+                "valid SPF with 2 authorized prefix(es)",
             )],
         ),
         cat(
@@ -530,11 +530,28 @@ fn scenario_sending_no_dkim() -> Vec<CheckResult> {
         cat(
             Category::Fcrdns,
             "FCrDNS checked for 4 IP(s)",
-            vec![sub(
-                "fcrdns_pass",
-                Verdict::Pass,
-                "FCrDNS confirmed for 192.0.2.10",
-            )],
+            vec![
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 192.0.2.10",
+                ),
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 2001:db8::10",
+                ),
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 192.0.2.11",
+                ),
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 2001:db8::11",
+                ),
+            ],
         ),
         cat(
             Category::Dnsbl,

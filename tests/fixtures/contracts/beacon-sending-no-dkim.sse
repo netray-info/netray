@@ -1,0 +1,26 @@
+data: {"category":"mx","detail":"2 MX record(s), 4 IP(s)","sub_checks":[{"detail":"2 MX record(s), 4 IP(s) resolved","name":"mx_ok","verdict":"pass"}],"title":"MX","type":"category","verdict":"pass"}
+
+data: {"category":"spf","detail":"SPF record: v=spf1 ip4:192.0.2.0/24 ip6:2001:db8::/32 -all","sub_checks":[{"detail":"valid SPF with 2 authorized prefix(es)","name":"spf_ok","verdict":"pass"}],"title":"SPF","type":"category","verdict":"pass"}
+
+data: {"category":"dkim","detail":"No DKIM keys found","sub_checks":[{"detail":"no DKIM keys found for any selector","name":"no_dkim","verdict":"info"}],"title":"DKIM","type":"category","verdict":"info"}
+
+data: {"category":"dmarc","detail":"DMARC: v=DMARC1; p=reject; rua=mailto:dmarc@example.com","sub_checks":[{"detail":"p=reject","name":"policy_reject","verdict":"pass"},{"detail":"no forensic reports configured","name":"no_ruf","verdict":"info"}],"title":"DMARC","type":"category","verdict":"pass"}
+
+data: {"category":"mta_sts","detail":"MTA-STS id=20260101","sub_checks":[{"detail":"mode: enforce","name":"mode","verdict":"pass"}],"title":"MTA-STS","type":"category","verdict":"pass"}
+
+data: {"category":"tls_rpt","detail":"TLS-RPT: v=TLSRPTv1; rua=mailto:tls@example.com","sub_checks":[{"detail":"valid TLS-RPT record","name":"valid","verdict":"pass"}],"title":"TLS-RPT","type":"category","verdict":"pass"}
+
+data: {"category":"dane","detail":"No DANE TLSA records","sub_checks":[{"detail":"no TLSA records on any MX host","name":"absent","verdict":"info"}],"title":"DANE","type":"category","verdict":"info"}
+
+data: {"category":"dnssec","detail":"DNSSEC signed","sub_checks":[{"detail":"DNSSEC signed (DNSKEY records present)","name":"ad_set","verdict":"pass"}],"title":"DNSSEC","type":"category","verdict":"pass"}
+
+data: {"category":"bimi","detail":"No BIMI record","sub_checks":[{"detail":"no BIMI record","name":"absent","verdict":"info"}],"title":"BIMI","type":"category","verdict":"info"}
+
+data: {"category":"fcrdns","detail":"FCrDNS checked for 4 IP(s)","sub_checks":[{"detail":"FCrDNS confirmed for 192.0.2.10","name":"fcrdns_pass","verdict":"pass"},{"detail":"FCrDNS confirmed for 2001:db8::10","name":"fcrdns_pass","verdict":"pass"},{"detail":"FCrDNS confirmed for 192.0.2.11","name":"fcrdns_pass","verdict":"pass"},{"detail":"FCrDNS confirmed for 2001:db8::11","name":"fcrdns_pass","verdict":"pass"}],"title":"FCrDNS","type":"category","verdict":"pass"}
+
+data: {"category":"dnsbl","detail":"checked 3 zone(s) for 4 IP(s)","sub_checks":[{"detail":"not listed in any DNSBL","name":"clean","verdict":"pass"}],"title":"DNSBL","type":"category","verdict":"pass"}
+
+data: {"category":"cross_validation","detail":"1 cross-validation issue(s)","sub_checks":[{"detail":"DMARC p=reject and SPF -all but no DKIM keys found","name":"reject_no_dkim","verdict":"warn"}],"title":"Cross-Validation","type":"category","verdict":"warn"}
+
+data: {"duration_ms":1234,"grade":"B","type":"summary","verdicts":{"bimi":"info","cross_validation":"warn","dane":"info","dkim":"info","dmarc":"pass","dnsbl":"pass","dnssec":"pass","fcrdns":"pass","mta_sts":"pass","mx":"pass","spf":"pass","tls_rpt":"pass"}}
+

@@ -18,9 +18,9 @@ data: {"category":"bimi","detail":"No BIMI record","sub_checks":[{"detail":"no B
 
 data: {"category":"fcrdns","detail":"FCrDNS checked for 4 IP(s)","sub_checks":[{"detail":"FCrDNS confirmed for 192.0.2.10","name":"fcrdns_pass","verdict":"pass"}],"title":"FCrDNS","type":"category","verdict":"pass"}
 
-data: {"category":"dnsbl","detail":"checked 3 zone(s) for 4 IP(s)","sub_checks":[{"detail":"not listed in any DNSBL","name":"clean","verdict":"pass"}],"title":"DNSBL","type":"category","verdict":"pass"}
+data: {"category":"dnsbl","detail":"skipped","sub_checks":[{"detail":"check did not complete in time","name":"skipped","verdict":"skip"}],"title":"DNSBL","type":"category","verdict":"skip"}
 
 data: {"category":"cross_validation","detail":"all cross-validation checks passed","sub_checks":[],"title":"Cross-Validation","type":"category","verdict":"pass"}
 
-data: {"duration_ms":1234,"grade":"D","type":"summary","verdicts":{"bimi":"info","cross_validation":"pass","dane":"info","dkim":"fail","dmarc":"warn","dnsbl":"pass","dnssec":"pass","fcrdns":"pass","mta_sts":"warn","mx":"pass","spf":"pass","tls_rpt":"pass"}}
+data: {"duration_ms":1234,"grade":"D","type":"summary","verdicts":{"bimi":"info","cross_validation":"pass","dane":"info","dkim":"fail","dmarc":"warn","dnsbl":"skip","dnssec":"pass","fcrdns":"pass","mta_sts":"warn","mx":"pass","spf":"pass","tls_rpt":"pass"}}
 

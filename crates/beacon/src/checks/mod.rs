@@ -133,6 +133,7 @@ enum Phase0Result {
         result: CheckResult,
         flat: Option<crate::quality::SpfFlat>,
         has_dash_all: bool,
+        only_dash_all: bool,
     },
     Dmarc {
         result: CheckResult,
@@ -196,11 +197,14 @@ impl Phase1Result {
     }
 }
 
+/// Sub-check name of a category that did not run; lens relies on it.
+pub const SKIPPED: &str = "skipped";
+
 fn skip_result(category: Category) -> CheckResult {
     CheckResult::new(
         category,
         vec![crate::quality::SubCheck {
-            name: "skipped".to_string(),
+            name: SKIPPED.to_string(),
             verdict: Verdict::Skip,
             detail: "check did not complete in time".to_string(),
         }],
@@ -229,6 +233,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     let mut spf_result: Option<CheckResult> = None;
     let mut spf_flat: Option<crate::quality::SpfFlat> = None;
     let mut spf_has_dash_all = false;
+    let mut spf_only_dash_all = false;
     let mut dmarc_result: Option<CheckResult> = None;
     let mut dmarc_policy: Option<String> = None;
     let mut dmarc_sp: Option<String> = None;
@@ -274,7 +279,8 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, flat, dash_all) = spf::check_spf(&domain, dns.as_ref()).await;
+                let (result, flat, dash_all, only_dash_all) =
+                    spf::check_spf_detailed(&domain, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "spf")
                     .record(elapsed);
@@ -282,6 +288,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     result,
                     flat,
                     has_dash_all: dash_all,
+                    only_dash_all,
                 }
             }
             .instrument(tracing::Span::current()),
@@ -394,10 +401,12 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                         result,
                         flat,
                         has_dash_all,
+                        only_dash_all,
                     } => {
                         spf_result = Some(result);
                         spf_flat = flat;
                         spf_has_dash_all = has_dash_all;
+                        spf_only_dash_all = only_dash_all;
                     }
                     Phase0Result::Dmarc {
                         result,
@@ -441,6 +450,8 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         }
     }
 
+    let sends_no_mail = null_mx || spf_only_dash_all;
+
     // Accumulated phase-1 data
     let mut dkim_result: Option<CheckResult> = None;
     let mut dkim_found = false;
@@ -465,9 +476,15 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, found) =
-                    dkim::check_dkim(&domain, &mx_hosts_clone, &selectors, max_sels, dns.as_ref())
-                        .await;
+                let (result, found) = dkim::check_dkim(
+                    &domain,
+                    &mx_hosts_clone,
+                    &selectors,
+                    max_sels,
+                    dns.as_ref(),
+                    sends_no_mail,
+                )
+                .await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dkim")
                     .record(elapsed);
@@ -615,18 +632,33 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         }
     }
 
-    // Phase 2: sequential cross-validation and grade
-    let mx_r = mx_result.unwrap_or_else(|| skip_result(Category::Mx));
-    let spf_r = spf_result.unwrap_or_else(|| skip_result(Category::Spf));
-    let dkim_r = dkim_result.unwrap_or_else(|| skip_result(Category::Dkim));
-    let dmarc_r = dmarc_result.unwrap_or_else(|| skip_result(Category::Dmarc));
-    let mta_sts_r = mta_sts_result.unwrap_or_else(|| skip_result(Category::MtaSts));
-    let tls_rpt_r = tls_rpt_result.unwrap_or_else(|| skip_result(Category::TlsRpt));
-    let dane_r = dane_result.unwrap_or_else(|| skip_result(Category::Dane));
-    let dnssec_r = dnssec_result.unwrap_or_else(|| skip_result(Category::Dnssec));
-    let bimi_r = bimi_result.unwrap_or_else(|| skip_result(Category::Bimi));
-    let fcrdns_r = fcrdns_result.unwrap_or_else(|| skip_result(Category::Fcrdns));
-    let dnsbl_r = dnsbl_result.unwrap_or_else(|| skip_result(Category::Dnsbl));
+    // Phase 2: sequential cross-validation and grade. A category whose task did
+    // not finish falls back to `skip_result`, and its event is sent too.
+    let mut skipped: Vec<CheckResult> = Vec::new();
+    let mut or_skip = |result: Option<CheckResult>, category: Category| {
+        result.unwrap_or_else(|| {
+            let r = skip_result(category);
+            skipped.push(r.clone());
+            r
+        })
+    };
+    let mx_r = or_skip(mx_result, Category::Mx);
+    let spf_r = or_skip(spf_result, Category::Spf);
+    let dkim_r = or_skip(dkim_result, Category::Dkim);
+    let dmarc_r = or_skip(dmarc_result, Category::Dmarc);
+    let mta_sts_r = or_skip(mta_sts_result, Category::MtaSts);
+    let tls_rpt_r = or_skip(tls_rpt_result, Category::TlsRpt);
+    let dane_r = or_skip(dane_result, Category::Dane);
+    let dnssec_r = or_skip(dnssec_result, Category::Dnssec);
+    let bimi_r = or_skip(bimi_result, Category::Bimi);
+    let fcrdns_r = or_skip(fcrdns_result, Category::Fcrdns);
+    let dnsbl_r = or_skip(dnsbl_result, Category::Dnsbl);
+
+    for result in skipped {
+        if tx.send(SseEvent::Category(result)).await.is_err() {
+            return;
+        }
+    }
 
     let fcrdns_all_pass = fcrdns_r
         .sub_checks
@@ -638,6 +670,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         mx_hosts,
         mx_ips,
         null_mx,
+        sends_no_mail,
         spf: spf_r,
         spf_flat,
         spf_has_dash_all,
@@ -995,7 +1028,14 @@ mod tests {
             dns
         };
         let without = summary_grade(&run_events(parked(false)).await);
-        let with = summary_grade(&run_events(parked(true)).await);
+        let with_events = run_events(parked(true)).await;
+        let with = summary_grade(&with_events);
+        let dkim = category_event(&with_events, Category::Dkim).expect("a dkim category event");
+        assert_eq!(
+            dkim.verdict,
+            Verdict::Info,
+            "sends_no_mail must reach DKIM: revoked-only on a parked domain is Info"
+        );
         assert_eq!(
             with, without,
             "a revoked key must not move the parked domain's grade"

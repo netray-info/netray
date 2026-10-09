@@ -1,7 +1,7 @@
 //! Pinning table for today's `check_dkim` results.
 //!
 //! Each row builds one stub resolver and drives the real `check_dkim` with no
-//! user selectors and no provider MX host, so the only probed selector is
+//! user selectors and no provider MX host (except where a row names one), so the only probed selector is
 //! `default`. Per row it asserts the category verdict, every sub-check name and
 //! verdict, the category detail and the returned `dkim_found` flag, all
 //! recorded literally from today's behaviour.
@@ -28,6 +28,8 @@ struct Row {
     key_record: Option<&'static str>,
     /// Extra TXT at `google._domainkey.example.com`; also makes the MX a Google host.
     google_record: Option<&'static str>,
+    /// User selector `s1` whose record is a 6-hop CNAME chain (`cname_loop` Fail).
+    looping_selector: bool,
     verdict: Verdict,
     sub_checks: &'static [(&'static str, Verdict)],
     detail: &'static str,
@@ -40,6 +42,7 @@ const ROWS: &[Row] = &[
         parked: true,
         key_record: Some("v=DKIM1; k=rsa; p="),
         google_record: None,
+        looping_selector: false,
         verdict: Verdict::Info,
         sub_checks: &[("key_revoked", Verdict::Info)],
         detail: "only revoked DKIM keys",
@@ -50,6 +53,7 @@ const ROWS: &[Row] = &[
         parked: false,
         key_record: Some("v=DKIM1; k=rsa; p="),
         google_record: None,
+        looping_selector: false,
         verdict: Verdict::Warn,
         sub_checks: &[("key_revoked", Verdict::Info)],
         detail: "only revoked DKIM keys",
@@ -60,6 +64,7 @@ const ROWS: &[Row] = &[
         parked: false,
         key_record: None,
         google_record: None,
+        looping_selector: false,
         verdict: Verdict::Info,
         sub_checks: &[("no_dkim", Verdict::Info)],
         detail: "No DKIM keys found",
@@ -70,6 +75,7 @@ const ROWS: &[Row] = &[
         parked: false,
         key_record: Some("v=DKIM1; k=rsa; p={key}"),
         google_record: None,
+        looping_selector: false,
         verdict: Verdict::Pass,
         sub_checks: &[("rsa_key_ok", Verdict::Pass)],
         detail: "DKIM key(s) found",
@@ -80,6 +86,7 @@ const ROWS: &[Row] = &[
         parked: false,
         key_record: Some("v=DKIM1; k=rsa; p="),
         google_record: Some("v=DKIM1; k=rsa; p={key}"),
+        looping_selector: false,
         verdict: Verdict::Pass,
         sub_checks: &[
             ("rsa_key_ok", Verdict::Pass),
@@ -87,6 +94,34 @@ const ROWS: &[Row] = &[
         ],
         detail: "DKIM key(s) found",
         found: true,
+    },
+    Row {
+        name: "C19 sending domain, looping user selector plus empty p= at default",
+        parked: false,
+        key_record: Some("v=DKIM1; k=rsa; p="),
+        google_record: None,
+        looping_selector: true,
+        verdict: Verdict::Fail,
+        sub_checks: &[
+            ("cname_loop", Verdict::Fail),
+            ("key_revoked", Verdict::Info),
+        ],
+        detail: "only revoked DKIM keys",
+        found: false,
+    },
+    Row {
+        name: "C20 parked domain, looping user selector plus empty p= at default",
+        parked: true,
+        key_record: Some("v=DKIM1; k=rsa; p="),
+        google_record: None,
+        looping_selector: true,
+        verdict: Verdict::Fail,
+        sub_checks: &[
+            ("cname_loop", Verdict::Fail),
+            ("key_revoked", Verdict::Info),
+        ],
+        detail: "only revoked DKIM keys",
+        found: false,
     },
 ];
 
@@ -117,8 +152,27 @@ async fn dkim_results_table() {
             mx_hosts.push("aspmx.l.google.com".to_string());
         }
 
-        let (result, found) =
-            check_dkim("example.com", &mx_hosts, &[], 3, &resolver, row.parked).await;
+        let mut user_selectors: Vec<String> = Vec::new();
+        if row.looping_selector {
+            resolver = resolver
+                .with_cname("s1._domainkey.example.com", vec!["hop1.example.net"])
+                .with_cname("hop1.example.net", vec!["hop2.example.net"])
+                .with_cname("hop2.example.net", vec!["hop3.example.net"])
+                .with_cname("hop3.example.net", vec!["hop4.example.net"])
+                .with_cname("hop4.example.net", vec!["hop5.example.net"])
+                .with_cname("hop5.example.net", vec!["hop6.example.net"]);
+            user_selectors.push("s1".to_string());
+        }
+
+        let (result, found) = check_dkim(
+            "example.com",
+            &mx_hosts,
+            &user_selectors,
+            3,
+            &resolver,
+            row.parked,
+        )
+        .await;
         let got: Vec<(String, Verdict)> = result
             .sub_checks
             .iter()

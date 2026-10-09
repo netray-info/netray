@@ -9,6 +9,9 @@ use crate::quality::{Category, CheckResult, IpEnrichment, SubCheck, Verdict};
 /// Sub-check name emitted when the domain has no MX records; lens relies on it.
 pub const NO_MX: &str = "no_mx";
 
+/// Sub-check name emitted for a Null MX (RFC 7505); lens relies on it.
+pub const NULL_MX: &str = "null_mx";
+
 /// Check MX records for the domain.
 /// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag).
 #[tracing::instrument(skip_all, fields(category = "mx", domain = %domain))]
@@ -42,7 +45,7 @@ pub async fn check_mx(
         && mx_records[0].1.trim_end_matches('.').is_empty()
     {
         sub_checks.push(SubCheck {
-            name: "null_mx".to_string(),
+            name: NULL_MX.to_string(),
             verdict: Verdict::Info,
             detail: "Null MX (RFC 7505): domain does not accept mail".to_string(),
         });

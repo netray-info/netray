@@ -1,5 +1,25 @@
 use crate::quality::{AllResults, Category, CheckResult, SubCheck, Verdict};
 
+/// Sub-check name emitted when the domain declares it sends no mail; lens relies on it.
+pub const SENDS_NO_MAIL: &str = "sends_no_mail";
+
+/// Every sub-check name `cross_validate` can emit.
+pub const CROSS_VALIDATION_CHECKS: &[&str] = &[
+    SENDS_NO_MAIL,
+    "dane_without_dnssec",
+    "mta_sts_without_tls_rpt",
+    "dane_without_tls_rpt",
+    "spf_mx_coverage",
+    "bimi_dmarc_policy",
+    "null_mx_spf",
+    "reject_no_dkim",
+    "mta_sts_id_mismatch",
+    "mta_sts_mx_coverage",
+    "dmarc_rua_auth",
+    "dmarc_sp_gap",
+    "fcrdns_mismatch",
+];
+
 /// Run all cross-validation rules against collected results.
 #[tracing::instrument(skip_all, fields(category = "cross_validation"))]
 pub fn cross_validate(results: &AllResults) -> CheckResult {
@@ -48,7 +68,18 @@ pub fn cross_validate(results: &AllResults) -> CheckResult {
         format!("{} cross-validation issue(s)", sub_checks.len())
     };
 
-    CheckResult::new(Category::CrossValidation, sub_checks, detail)
+    let mut result = CheckResult::new(Category::CrossValidation, sub_checks, detail);
+    if results.sends_no_mail {
+        result.sub_checks.insert(
+            0,
+            SubCheck {
+                name: SENDS_NO_MAIL.to_string(),
+                verdict: Verdict::Info,
+                detail: "domain declares it sends no mail (Null MX or SPF -all only)".to_string(),
+            },
+        );
+    }
+    result
 }
 
 fn check_dane_without_dnssec(r: &AllResults) -> Option<SubCheck> {
