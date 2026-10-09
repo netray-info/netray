@@ -49,6 +49,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Contract goldens.** `tests/fixtures/contracts/` holds each backend's response as written by its own tests (`contract_golden`); lens's tests parse them. A backend shape change fails its golden test: regenerate with `UPDATE_GOLDEN=1 cargo test -p <crate> --test contract_golden` (ifconfig-rs: `--lib contract_golden`), commit, and keep lens green.
 - **lens goldens.** `tests/fixtures/contracts/lens-*.json` pin lens's whole result; `UPDATE_GOLDEN=1 cargo test -p lens --test lens_golden` rewrites them, and a moved row needs `ADLC-Test-Change` naming its requirement.
 - **prism's package is `prism`.** Run `cargo test -p prism`, not `-p mhost-prism`.
+- **A new check id needs its texts in lens**: `fix_for` and `guide_url_for` (`routes.rs`), the snapshot labels (`snapshot/render.rs`) and `CHECK_LABELS`/`CHECK_DESCRIPTIONS` (frontend `checkMeta.ts`); the `fix_for` test lists names by hand.
+- **report.md criteria statuses** are `green`, `already_implemented` or `test-unwritable`; any other keeps `adlc next` on implement. Drop a criterion whose scenario left the spec.
 - **Startup rejects are checked.** A new startup `.expect`/`panic!` on a config value needs a `validate()` rule and a `startup_rejects` row in `tests/repo/test_check_config.sh`.
 - **Layer order**, outermost first: concurrency limit, `request_id`, security headers, CORS, body limit, trace, compression — so preflights and 413s carry the request id and headers.
 - **`start_bg` never in a subshell**: the EXIT trap of `tests/repo/lib/netray.sh` kills only PIDs recorded in the parent shell.
