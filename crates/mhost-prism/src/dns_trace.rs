@@ -258,7 +258,7 @@ fn process_hop(
                         .authority()
                         .iter()
                         .find(|r| r.record_type() == RecordType::NS)
-                        .map(|r| r.name().to_ascii());
+                        .map(|r| r.name.to_ascii());
 
                     // Collect glue IPs per NS name (empty Vec = needs resolution).
                     for ns_name in &ns_names {

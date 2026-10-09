@@ -21,7 +21,7 @@ http-body-util = "0.1"
 reqwest = { version = "0.13", default-features = false }
 
 # DNS
-mhost = { version = "0.11", default-features = false }
+mhost = { version = "=0.12.0", default-features = false }
 
 # Async runtime
 tokio = "1"

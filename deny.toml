@@ -32,13 +32,6 @@ ignore = [
     # paste is unmaintained; it arrives via utoipa-axum, used by lens, and is a
     # build-time proc-macro only.
     "RUSTSEC-2024-0436",
-    # hickory-proto is fixed in hickory-proto and hickory-net 0.26.1 and later; we wait
-    # for mhost 0.12.0 (next phase). The NSEC3 loop (RUSTSEC-2026-0118) needs a
-    # validating DnssecDnsHandle, which mhost does not configure and prism's raw DNSSEC
-    # queries do not use. The name compression issue (RUSTSEC-2026-0119) hits encoding,
-    # and only our own small queries are encoded.
-    "RUSTSEC-2026-0118",
-    "RUSTSEC-2026-0119",
 ]
 
 [sources]

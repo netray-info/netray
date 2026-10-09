@@ -370,7 +370,7 @@ pub async fn post_handler(
                         let tx_err = tx_err.clone();
                         async move {
                             // Convert mhost RecordType to hickory RecordType.
-                            let hickory_rt: RecordType = hickory_proto::rr::RecordType::from(rt);
+                            let hickory_rt: RecordType = hickory_proto::rr::RecordType::from(u16::from(rt));
 
                             let results = dns_raw::parallel_queries(
                                 &auth_servers,

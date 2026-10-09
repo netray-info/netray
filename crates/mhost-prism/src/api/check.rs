@@ -931,7 +931,7 @@ async fn check_ns_delegation_consistency(
     for qr in &results_raw {
         if let Ok(resp) = &qr.result {
             for record in resp.answers() {
-                if let hickory_proto::rr::RData::NS(ns) = record.data() {
+                if let hickory_proto::rr::RData::NS(ns) = &record.data {
                     let name = ns.0.to_ascii().to_ascii_lowercase();
                     if !auth_ns.contains(&name) {
                         auth_ns.push(name);

@@ -80,27 +80,27 @@ pub(crate) struct RawResponse {
 
 impl RawResponse {
     pub(crate) fn answers(&self) -> &[hickory_proto::rr::Record] {
-        self.message.answers()
+        &self.message.answers
     }
 
     pub(crate) fn authority(&self) -> &[hickory_proto::rr::Record] {
-        self.message.name_servers()
+        &self.message.authorities
     }
 
     pub(crate) fn additional(&self) -> &[hickory_proto::rr::Record] {
-        self.message.additionals()
+        &self.message.additionals
     }
 
     pub(crate) fn is_authoritative(&self) -> bool {
-        self.message.authoritative()
+        self.message.metadata.authoritative
     }
 
     pub(crate) fn is_truncated(&self) -> bool {
-        self.message.truncated()
+        self.message.metadata.truncation
     }
 
     pub(crate) fn response_code(&self) -> hickory_proto::op::ResponseCode {
-        self.message.response_code()
+        self.message.metadata.response_code
     }
 
     /// NS names from the authority section.
@@ -108,7 +108,7 @@ impl RawResponse {
         self.authority()
             .iter()
             .filter(|r| r.record_type() == RecordType::NS)
-            .filter_map(|r| match r.data() {
+            .filter_map(|r| match &r.data {
                 RData::NS(ns) => Some(ns.0.clone()),
                 _ => None,
             })
@@ -119,9 +119,9 @@ impl RawResponse {
     pub(crate) fn glue_ips(&self) -> Vec<(Name, IpAddr)> {
         self.additional()
             .iter()
-            .filter_map(|r| match r.data() {
-                RData::A(a) => Some((r.name().clone(), IpAddr::V4(a.0))),
-                RData::AAAA(aaaa) => Some((r.name().clone(), IpAddr::V6(aaaa.0))),
+            .filter_map(|r| match &r.data {
+                RData::A(a) => Some((r.name.clone(), IpAddr::V4(a.0))),
+                RData::AAAA(aaaa) => Some((r.name.clone(), IpAddr::V6(aaaa.0))),
                 _ => None,
             })
             .collect()
@@ -210,11 +210,8 @@ pub(crate) async fn raw_query_dnssec(
 
 /// Build a non-recursive (RD=0) DNS query message, optionally with the DO bit.
 pub(crate) fn build_query(name: &Name, record_type: RecordType, dnssec_ok: bool) -> Message {
-    let mut msg = Message::new();
-    msg.set_id(rand::random::<u16>());
-    msg.set_message_type(MessageType::Query);
-    msg.set_op_code(OpCode::Query);
-    msg.set_recursion_desired(false);
+    let mut msg = Message::new(rand::random::<u16>(), MessageType::Query, OpCode::Query);
+    msg.metadata.recursion_desired = false;
     let mut query = Query::new();
     query.set_name(name.clone());
     query.set_query_type(record_type);
@@ -224,7 +221,7 @@ pub(crate) fn build_query(name: &Name, record_type: RecordType, dnssec_ok: bool)
         let mut edns = hickory_proto::op::Edns::new();
         edns.set_dnssec_ok(true);
         edns.set_max_payload(4096);
-        msg.set_edns(edns);
+        msg.edns = Some(edns);
     }
     msg
 }
@@ -235,7 +232,7 @@ pub(crate) async fn send_udp(
     timeout: Duration,
 ) -> Result<RawResponse, RawError> {
     let msg_bytes = msg.to_vec().map_err(|e| RawError::Decode(e.to_string()))?;
-    let expected_id = msg.id();
+    let expected_id = msg.metadata.id;
 
     let bind_addr: SocketAddr = if server.is_ipv6() {
         "[::]:0".parse().unwrap()
@@ -256,10 +253,10 @@ pub(crate) async fn send_udp(
     let latency = start.elapsed();
 
     let response = Message::from_vec(&buf[..len]).map_err(|e| RawError::Decode(e.to_string()))?;
-    if response.id() != expected_id {
+    if response.metadata.id != expected_id {
         return Err(RawError::IdMismatch {
             expected: expected_id,
-            got: response.id(),
+            got: response.metadata.id,
         });
     }
 
@@ -275,7 +272,7 @@ pub(crate) async fn send_tcp(
     timeout: Duration,
 ) -> Result<RawResponse, RawError> {
     let msg_bytes = msg.to_vec().map_err(|e| RawError::Decode(e.to_string()))?;
-    let expected_id = msg.id();
+    let expected_id = msg.metadata.id;
 
     let start = Instant::now();
     let mut stream = match tokio::time::timeout(timeout, TcpStream::connect(server)).await {
@@ -312,10 +309,10 @@ pub(crate) async fn send_tcp(
     let latency = start.elapsed();
 
     let response = Message::from_vec(&buf).map_err(|e| RawError::Decode(e.to_string()))?;
-    if response.id() != expected_id {
+    if response.metadata.id != expected_id {
         return Err(RawError::IdMismatch {
             expected: expected_id,
-            got: response.id(),
+            got: response.metadata.id,
         });
     }
 
@@ -387,10 +384,10 @@ pub(crate) async fn resolve_missing_glue(ns_servers: &mut HashMap<String, Vec<Ip
 
 pub(crate) fn record_to_dns_record(record: &hickory_proto::rr::Record) -> DnsRecord {
     DnsRecord {
-        name: record.name().to_ascii(),
-        ttl: record.ttl(),
+        name: record.name.to_ascii(),
+        ttl: record.ttl,
         record_type: record.record_type().to_string(),
-        rdata: format!("{}", record.data()),
+        rdata: format!("{}", record.data),
     }
 }
 
@@ -412,19 +409,19 @@ mod tests {
     fn build_query_sets_rd_false() {
         let name = Name::from_str("example.com.").unwrap();
         let msg = build_query(&name, RecordType::A, false);
-        assert!(!msg.recursion_desired());
-        assert_eq!(msg.queries().len(), 1);
-        assert_eq!(msg.queries()[0].query_type(), RecordType::A);
-        assert!(msg.extensions().is_none());
+        assert!(!msg.metadata.recursion_desired);
+        assert_eq!(msg.queries.len(), 1);
+        assert_eq!(msg.queries[0].query_type(), RecordType::A);
+        assert!(msg.edns.is_none());
     }
 
     #[test]
     fn build_query_with_dnssec_ok_sets_do_bit() {
         let name = Name::from_str("example.com.").unwrap();
         let msg = build_query(&name, RecordType::DNSKEY, true);
-        assert!(!msg.recursion_desired());
+        assert!(!msg.metadata.recursion_desired);
         // EDNS should be present when DO bit is requested.
-        assert!(msg.extensions().is_some());
+        assert!(msg.edns.is_some());
     }
 
     /// Wire-encode a query exactly as `send_udp`/`send_tcp` do. Pinning tests go
@@ -453,8 +450,15 @@ mod tests {
         let opt = bytes.len() - 11;
         assert_eq!(bytes[opt], 0, "OPT owner is root");
         assert_eq!(u16::from_be_bytes([bytes[opt + 1], bytes[opt + 2]]), 41);
-        assert_eq!(u16::from_be_bytes([bytes[opt + 7], bytes[opt + 8]]) & 0x8000, 0x8000, "DO bit");
-        assert_eq!(hex(&bytes[2..]), "00000001000000000001076578616d706c6503636f6d00003000010000291000000080000000");
+        assert_eq!(
+            u16::from_be_bytes([bytes[opt + 7], bytes[opt + 8]]) & 0x8000,
+            0x8000,
+            "DO bit"
+        );
+        assert_eq!(
+            hex(&bytes[2..]),
+            "00000001000000000001076578616d706c6503636f6d00003000010000291000000080000000"
+        );
     }
 
     fn hex(b: &[u8]) -> String {
@@ -472,13 +476,20 @@ mod tests {
             .map(|i| u8::from_str_radix(&REFERRAL[i..i + 2], 16).unwrap())
             .collect();
         let resp = decode_response_bytes(&bytes);
-        assert_eq!(resp.response_code(), hickory_proto::op::ResponseCode::NoError);
+        assert_eq!(
+            resp.response_code(),
+            hickory_proto::op::ResponseCode::NoError
+        );
         assert!(!resp.is_authoritative());
         assert!(!resp.is_truncated());
         assert_eq!(resp.answers().len(), 0);
         assert_eq!(resp.authority().len(), 2);
         assert_eq!(resp.additional().len(), 2);
-        let ns: Vec<String> = resp.referral_ns_names().iter().map(|n| n.to_string()).collect();
+        let ns: Vec<String> = resp
+            .referral_ns_names()
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
         assert_eq!(ns, ["ns1.example.com.", "ns2.example.com."]);
         let glue: Vec<(String, String)> = resp
             .glue_ips()

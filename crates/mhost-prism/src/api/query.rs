@@ -767,6 +767,9 @@ pub(crate) async fn build_resolver_group(
     let servers = effective_server_specs(parsed, config);
 
     let mut builder = ResolverGroupBuilder::new().timeout(timeout);
+    if !servers.iter().any(|s| matches!(s, ServerSpec::System)) {
+        builder = builder.deny_non_global(true);
+    }
     let mut breaker_keys: Vec<String> = Vec::new();
 
     for server in &servers {
@@ -803,10 +806,13 @@ pub(crate) async fn build_resolver_group(
         }
     }
 
-    let group = builder
-        .build()
-        .await
-        .map_err(|e| ApiError::ResolverError(e.to_string()))?;
+    let group = builder.build().await.map_err(|e| match e {
+        mhost::Error::NameServerNotGlobal { name_server } => ApiError::BlockedTargetIp {
+            ip: name_server,
+            reason: "blocked address range".to_string(),
+        },
+        e => ApiError::ResolverError(e.to_string()),
+    })?;
 
     Ok((group, breaker_keys))
 }

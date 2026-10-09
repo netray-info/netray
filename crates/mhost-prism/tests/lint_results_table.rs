@@ -1,10 +1,11 @@
-// Pinning table: the lint results mhost 0.11.3 emits for lookups shaped like the ones prism's
+// Pinning table: the lint results mhost 0.12.0 emits for lookups shaped like the ones prism's
 // `+check` collects, recorded literally (variant and message, in emitted order).
 //
 // Spec: specs/features/lens-goldens/spec.md, Phase 2, requirement 6, scenarios C3, C14-C16.
 //
-// mhost 0.12.0 (Phase 2b of 0.23.0) changes the lint output and possibly the construction API.
-// This file moves with it, under an `ADLC-Test-Change` trailer, when that upgrade lands.
+// Moved from mhost 0.11.3 to 0.12.0 by specs/features/advisories requirement 7: the signed-zone
+// rows no longer carry "DNSKEY present but no RRSIG records found", and `check_ttl` lists a record
+// answered by two nameservers once. The KSK/ZSK count still doubles over two nameservers.
 //
 // Construction: mhost's `Lookup::new_for_test` is `#[cfg(test)]` inside mhost and not reachable
 // from here, so the lookups are built through their public serde form (`Lookups` is
@@ -96,8 +97,6 @@ struct Row {
 }
 
 const NO_DNSSEC: &str = "Warning: No DNSSEC records found: domain is not DNSSEC-signed, DNS responses cannot be authenticated";
-const NO_RRSIG: &str =
-    "Warning: DNSKEY present but no RRSIG records found: DNSSEC signatures may be missing";
 const NS_MX_OK: &str = "Ok: No NS/MX records with excessively high TTL";
 
 #[test]
@@ -117,7 +116,6 @@ fn lint_results_table() {
             lookups: lookups(signed_zone(one)),
             dnssec: &[
                 "Ok: Domain has DNSSEC records: DNSKEY",
-                NO_RRSIG,
                 "Ok: Found 1 KSK(s) and 1 ZSK(s)",
                 "Ok: Algorithm ECDSA P-256/SHA-256 is secure",
             ],
@@ -133,13 +131,12 @@ fn lint_results_table() {
                 NS_MX_OK,
             ],
         },
-        // C16: identical answers from two nameservers; duplicates are not collapsed.
+        // C16: identical answers from two nameservers.
         Row {
             name: "C16 signed zone answered identically by two nameservers",
             lookups: both(signed_zone),
             dnssec: &[
                 "Ok: Domain has DNSSEC records: DNSKEY",
-                NO_RRSIG,
                 "Ok: Found 2 KSK(s) and 2 ZSK(s)",
                 "Ok: Algorithm ECDSA P-256/SHA-256 is secure",
             ],
@@ -150,7 +147,7 @@ fn lint_results_table() {
             lookups: both(differing_ttls),
             dnssec: &[NO_DNSSEC],
             ttl: &[
-                "Warning: Records with very low TTL (<60s): example.com. (30s, A), example.com. (30s, A). This causes excessive query load",
+                "Warning: Records with very low TTL (<60s): example.com. (30s, A). This causes excessive query load",
                 NS_MX_OK,
             ],
         },
