@@ -27,7 +27,7 @@ Two new crates exist without changing any result: `netray-model` holds V2's chec
 
 ## Requirements
 
-1. `crates/model` (package `netray-model`, no I/O, no dependency on another workspace crate) holds `CheckId` (`<protocol>.<name>`, parsed and refused otherwise), `Protocol` (`dns tls http email ip`), `Status` (`pass warn fail not_applicable not_tested unmeasured`), `Severity` (`critical high medium low`), `FixOwner` (`dns_provider registrar certificate_provider web_server mail_provider hosting`), `CheckResult` (`id`, `status`, `findings`, `evidence` as a list of block IDs) and `Grade` (`A+ A B C D F` or `Incomplete`). Each serialises in snake_case as listed, `Grade` as the letter or `incomplete`.
+1. `crates/model` (package `netray-model`, no I/O, no dependency on another workspace crate) holds `CheckId` (`<protocol>.<name>`, the name matching `[a-z][a-z0-9_]*`, refused otherwise), `Protocol` (`dns tls http email ip`), `Status` (`pass warn fail not_applicable not_tested unmeasured`), `Severity` (`critical high medium low`), `FixOwner` (`dns_provider registrar certificate_provider web_server mail_provider hosting`), `CheckResult` (`id`, `status`, `findings`, `evidence` as a list of block IDs) and `Grade` (`A+ A B C D F` or `Incomplete`). Each serialises in snake_case as listed, `Grade` as the letter or `incomplete`.
 2. Each V1 crate with a status word maps it once onto `netray_model::Status`: a `From` impl where the type is the crate's own (tlsight, spectra, beacon, lens), a function where the orphan rule forbids it (prism over mhost's `CheckResult`; tlsight's `NOT_TESTED_FROM_HERE` code). Beacon's `Info` maps to `pass`; the caller keeps the message as a finding. lens maps its grade strings onto `Grade` and refuses any other string.
 3. A test in each mapping crate covers every variant of the V1 type, with an exhaustive `match` so a new variant fails to compile.
 4. `crates/engine` (package `netray-engine`) depends on `netray-model` only, among workspace crates, and defines `Module` and `FactsProvider` with the signatures of SDD §3.6, plus the types they name (`RunContext`, `Facts`, `SectionOutcome`, `EvidencePath`, `Domain`, `ResolveError`) as far as the signatures need them. No orchestrator.
@@ -42,7 +42,7 @@ Two new crates exist without changing any result: `netray-model` holds V2's chec
 ### Test Scenarios
 
 - GIVEN `"tls.chain_trusted"` WHEN parsed as `CheckId` THEN protocol `tls`, name `chain_trusted`.
-- GIVEN `"chain_trusted"`, `"smtp.x"` or `"tls."` WHEN parsed as `CheckId` THEN refused.
+- GIVEN `"chain_trusted"`, `"smtp.x"`, `"tls."`, `"tls.a.b"`, `"tls.Chain"`, `"tls.chain trusted"` or `"tls.1chain"` WHEN parsed as `CheckId` THEN refused; `"tls.tls_reachable"` and `"http.x2"` parse.
 - GIVEN each `Status` variant WHEN serialised THEN `pass`, `warn`, `fail`, `not_applicable`, `not_tested`, `unmeasured`.
 - GIVEN `Grade::Incomplete` and `Grade` A+ WHEN serialised THEN `"incomplete"` and `"A+"`.
 - GIVEN tlsight `Skip`, spectra `Skip`, beacon `Skip` WHEN mapped THEN `not_applicable`.
@@ -71,6 +71,9 @@ Two new crates exist without changing any result: `netray-model` holds V2's chec
 - The V1 mapping lives in the V1 crates as `From` impls, over mirror enums in `netray-model`: modules depend on the model (§3.1), no second copy drifts (P26), and V1.3 carries the impls along with the renames (operator, 2026-10-09).
 - A function instead of `From` where the orphan rule forbids it (prism over mhost; a string code in tlsight): forced by Rust, not a choice.
 - `HANDSHAKE_FAILED` and other connect errors map to `unmeasured`, over `fail`: they say the check could not be measured; security-correctness R5.3 keeps EHOSTUNREACH target-side as HANDSHAKE_FAILED, and V2's model separates "broken" from "could not check" (S13), and `tls.tls_reachable` carries unreachability (S28) (operator, 2026-10-09).
+
+- Check names match `[a-z][a-z0-9_]*`, over any non-empty name: every V1 check name is snake_case, and the phase reader found `tls.a.b` accepted (operator, 2026-10-09).
+- Every V1 `Skip` maps to `not_applicable` in 1a, over splitting error skips now: V1.4 needs results equal to `0.23.x`; the V1 `Skip`s that stand for errors or timeouts (tlsight `quality/http.rs:133`, beacon's pipeline timeout `checks/mod.rs:111`) become `unmeasured` in Phase 1b with S13, as a stated grade change (operator, 2026-10-09).
 
 ## Open decisions
 

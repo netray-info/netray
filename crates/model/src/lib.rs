@@ -48,7 +48,8 @@ pub struct CheckId {
 }
 
 impl CheckId {
-    /// Parses `<protocol>.<name>`; refuses a missing dot, an unknown protocol or an empty name.
+    /// Parses `<protocol>.<name>`; refuses a missing dot, an unknown protocol or a name that is
+    /// not `[a-z][a-z0-9_]*`.
     pub fn parse(s: &str) -> Result<CheckId, CheckIdError> {
         let (prefix, name) = s
             .split_once('.')
@@ -56,8 +57,13 @@ impl CheckId {
         let protocol = Protocol::from_prefix(prefix).ok_or_else(|| {
             CheckIdError(format!("check id {s:?} has unknown protocol {prefix:?}"))
         })?;
-        if name.is_empty() {
-            return Err(CheckIdError(format!("check id {s:?} has an empty name")));
+        let mut chars = name.chars();
+        let valid = chars.next().is_some_and(|c| c.is_ascii_lowercase())
+            && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+        if !valid {
+            return Err(CheckIdError(format!(
+                "check id {s:?} needs a name matching [a-z][a-z0-9_]*"
+            )));
         }
         Ok(CheckId {
             protocol,

@@ -38,6 +38,8 @@ RED: every new test fails because `crates/model` has no manifest yet (`failed to
 | AMENDMENT | crates/tlsight/src/validate/mod.rs:26 (and spectra types.rs:18, beacon types.rs:34, lens engine.rs:23) | V1 `Skip` is overloaded: by design (not applicable) and for errors/timeouts (tlsight `quality/http.rs:133`, beacon's pipeline timeout `checks/mod.rs:111`). Spec R2 and SDD §3.5 map every `Skip` to `not_applicable`; the error cases are `unmeasured` by §3.5's own definition. affected_phase: 1, repaired_in_phase: no |
 | AMENDMENT | crates/model/src/lib.rs:59 | R1 does not define a check name's characters: `tls.a.b`, `tls.chain trusted`, `tls.Chain` parse. affected_phase: 1, repaired_in_phase: no |
 
+Resolved (operator, 2026-10-09): the `Skip` mapping stays for 1a; error and timeout `Skip`s become `unmeasured` in V2 Phase 1b with S13 (an SDD amendment for the planning session). Check names are `[a-z][a-z0-9_]*`; R1 amended and fixed in this phase.
+
 ### Behavioural verification
 
 skipped: no entry point; nothing calls the new types or mappings yet (spec non-goal).
