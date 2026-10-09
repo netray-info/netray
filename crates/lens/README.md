@@ -280,6 +280,7 @@ These conditions force an **F** regardless of the numeric score:
 |---|---|
 | Untrusted TLS chain | Certificate not signed by a trusted CA — browsers reject it |
 | Expired certificate | Any certificate in the chain |
+| TLS unreachable | No address completed a TLS handshake (`tls_reachable`) — a target-side failure |
 
 ### Check weight tiers
 
@@ -320,9 +321,10 @@ version = 2
 
 [sections.tls]
 weight = 35
-hard_fail = ["chain_trusted", "not_expired"]
+hard_fail = ["chain_trusted", "not_expired", "tls_reachable"]
 
 [sections.tls.checks]
+tls_reachable    = 10
 chain_trusted    = 10
 not_expired      = 10
 hostname_match   = 10

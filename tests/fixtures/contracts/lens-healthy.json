@@ -1,7 +1,7 @@
 {
   "summary": {
     "grade": "C",
-    "score": 71.2,
+    "score": 73.9,
     "overall": "fail",
     "complete": true,
     "sections": {
@@ -16,7 +16,7 @@
       "email": "D",
       "http": "B",
       "ip": "A+",
-      "tls": "C"
+      "tls": "B"
     },
     "hard_fail": false,
     "hard_fail_checks": [],
@@ -99,6 +99,10 @@
     "tls": {
       "status": "fail",
       "checks": [
+        {
+          "name": "tls_reachable",
+          "verdict": "pass"
+        },
         {
           "name": "chain_trusted",
           "verdict": "pass"

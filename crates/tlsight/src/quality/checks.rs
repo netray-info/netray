@@ -246,6 +246,40 @@ pub fn check_cert_lifetime(chain: &[CertInfo]) -> HealthCheck {
 // Protocol checks
 // ---------------------------------------------------------------------------
 
+pub fn check_tls_reachable(ips: &[IpInspectionResult]) -> HealthCheck {
+    let failures: Vec<&IpInspectionResult> = ips.iter().filter(|r| r.error.is_some()).collect();
+    let (status, detail) = if failures.len() < ips.len() {
+        (CheckStatus::Pass, "TLS handshake succeeded".to_string())
+    } else if failures.iter().all(|r| {
+        r.error
+            .as_ref()
+            .is_some_and(|e| e.code == "NOT_TESTED_FROM_HERE")
+    }) {
+        (
+            CheckStatus::Skip,
+            "not tested from here: this host cannot reach the target".to_string(),
+        )
+    } else {
+        let message = failures
+            .iter()
+            .filter_map(|r| r.error.as_ref())
+            .find(|e| e.code != "NOT_TESTED_FROM_HERE")
+            .map(|e| e.message.as_str())
+            .unwrap_or_default();
+        (
+            CheckStatus::Fail,
+            format!("TLS handshake failed on every address: {message}"),
+        )
+    };
+    HealthCheck {
+        id: "tls_reachable".to_string(),
+        category: Category::Protocol,
+        status,
+        label: "TLS reachable".to_string(),
+        detail,
+    }
+}
+
 pub fn check_tls_version(version: &str) -> HealthCheck {
     let (status, detail) = match version {
         "TLSv1.3" => (CheckStatus::Pass, "TLS 1.3".to_string()),

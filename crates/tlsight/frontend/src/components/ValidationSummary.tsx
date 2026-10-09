@@ -113,7 +113,7 @@ function qualityVerdict(quality?: QualityResult, portQualities?: { port: number;
   const checks = allQualityChecks(quality, portQualities);
   if (checks.some(c => c.status === 'fail')) return 'fail';
   if (checks.some(c => c.status === 'warn')) return 'warn';
-  if (checks.length > 0) return 'pass';
+  if (checks.some(c => c.status === 'pass')) return 'pass';
   return 'skip';
 }
 

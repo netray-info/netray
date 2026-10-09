@@ -11,14 +11,14 @@ use std::path::PathBuf;
 use axum::Json;
 use axum::response::IntoResponse;
 use http_body_util::BodyExt;
+use tlsight::quality::assess_port;
 use tlsight::quality::types::Category;
 use tlsight::quality::{HealthCheck, PortQualityResult, QualityResult};
 use tlsight::routes::{CaaInfo, DnsContext, InspectResponse, PortResult};
-use tlsight::quality::assess_port;
-use tlsight::tls::{InspectionError, IpInspectionResult};
 use tlsight::tls::chain::CertInfo;
 use tlsight::tls::ocsp::OcspInfo;
 use tlsight::tls::params::TlsParams;
+use tlsight::tls::{InspectionError, IpInspectionResult};
 use tlsight::validate::{CheckStatus, Summary, SummaryChecks, ValidationResult};
 
 fn golden_path(name: &str) -> PathBuf {

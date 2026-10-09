@@ -183,11 +183,11 @@ curl -s 'https://tls.netray.info/api/inspect?h=example.com' | jq '{
 
 ### Health checks
 
-22 checks across four categories:
+23 checks across four categories:
 
-**Certificate** — `chain_trusted`, `not_expired`, `hostname_match`, `chain_complete`, `strong_signature`, `key_strength`, `expiry_window`, `cert_lifetime`
+**Certificate** — `chain_trusted`, `not_expired`, `hostname_match`, `chain_complete`, `strong_signature`, `key_strength`, `expiry_window`, `cert_lifetime`, `san_quality`, `aia_reachability`
 
-**Protocol** — `tls_version`, `forward_secrecy`, `aead_cipher`, `ocsp_stapled`, `ct_logged`
+**Protocol** — `tls_reachable` (Pass when an address completed the handshake, Fail when every address failed at the target, Skip with code `NOT_TESTED_FROM_HERE` when every failure was local), `tls_version`, `forward_secrecy`, `aead_cipher`, `ocsp_stapled`, `ct_logged`
 
 **Configuration** — `caa_compliant`, `dane_valid`, `ech_advertised`, `consistency`, `alpn_consistency`
 

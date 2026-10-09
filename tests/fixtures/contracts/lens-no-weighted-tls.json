@@ -1,22 +1,21 @@
 {
   "summary": {
-    "grade": "B",
-    "score": 79.4,
-    "overall": "fail",
-    "complete": true,
+    "grade": "incomplete",
+    "score": 69.7,
+    "overall": "error",
+    "complete": false,
     "sections": {
       "dns": "warn",
       "email": "fail",
       "http": "warn",
       "ip": "pass",
-      "tls": "fail"
+      "tls": "error"
     },
     "section_grades": {
       "dns": "C",
-      "email": "B",
+      "email": "D",
       "http": "B",
-      "ip": "A+",
-      "tls": "B"
+      "ip": "A+"
     },
     "hard_fail": false,
     "hard_fail_checks": [],
@@ -38,19 +37,19 @@
     },
     "email": {
       "status": "fail",
-      "grade": "F",
+      "grade": "D",
       "checks": [
         {
           "name": "email_authentication",
-          "verdict": "pass"
-        },
-        {
-          "name": "email_infrastructure",
           "verdict": "fail"
         },
         {
-          "name": "email_transport",
+          "name": "email_infrastructure",
           "verdict": "pass"
+        },
+        {
+          "name": "email_transport",
+          "verdict": "warn"
         },
         {
           "name": "email_brand_policy",
@@ -97,27 +96,11 @@
       ]
     },
     "tls": {
-      "status": "fail",
+      "status": "error",
       "checks": [
         {
           "name": "tls_reachable",
-          "verdict": "pass"
-        },
-        {
-          "name": "chain_trusted",
-          "verdict": "pass"
-        },
-        {
-          "name": "expiry_window",
-          "verdict": "warn"
-        },
-        {
-          "name": "tls_version",
-          "verdict": "pass"
-        },
-        {
-          "name": "ocsp_stapled",
-          "verdict": "fail"
+          "verdict": "skip"
         },
         {
           "name": "hsts",

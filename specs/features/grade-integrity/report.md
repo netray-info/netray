@@ -118,3 +118,45 @@ Test changes beyond the baseline commit: `crates/lens/tests/deadlines.rs` is rus
 ### Behavioural verification
 
 `netray lens --check-config` (via `tests/repo/test_check_config.sh`): 20000/2000 → exit 1 naming timeouts and the hard deadline; the production fixture, `lens.dev.toml` and `lens.example.toml` → exit 0. `tests/repo/test_smoke_services.sh` starts lens with `lens.dev.toml`.
+
+## Phase 4 — TLS reachability
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R7: tlsight `tls_reachable` Pass/Fail/Skip; lens weight 10 and hard-fail | green | crates/tlsight/tests/port_results_table.rs, crates/lens/tests/lens_golden.rs |
+| C2 | R8: local connect errors → `NOT_TESTED_FROM_HERE`, not counted for `tls_reachable` | green | crates/tlsight/src/tls/mod.rs |
+| C3 | R12: lens goldens `http-only` and `no-weighted-tls` from real tlsight output | green | crates/tlsight/tests/contract_golden.rs, crates/lens/tests/lens_golden.rs |
+| C4 | every IP refused → `tls_reachable` Fail | green | crates/tlsight/tests/port_results_table.rs |
+| C5 | IPv6 `NOT_TESTED_FROM_HERE`, IPv4 ok → Pass, verdict from IPv4 | green | crates/tlsight/tests/port_results_table.rs |
+| C6 | every IP ok → Pass; the table's three rows move | green | crates/tlsight/tests/port_results_table.rs |
+| C7 | only `NOT_TESTED_FROM_HERE` → Skip | green | crates/tlsight/tests/port_results_table.rs |
+| C8 | ENETUNREACH/EHOSTUNREACH/EADDRNOTAVAIL → `NOT_TESTED_FROM_HERE`; refused stays `HANDSHAKE_FAILED` | green | crates/tlsight/src/tls/mod.rs |
+| C9 | closed local port → `HANDSHAKE_FAILED`, as today | already_implemented | crates/tlsight/tests/port_results_table.rs |
+| C10 | `tlsight-unreachable.json` → lens grade F, `hard_fail_checks` has `tls_reachable`; `http-only` golden | green | crates/lens/tests/lens_golden.rs |
+| C11 | `no-weighted-tls` → incomplete, TLS `"error"` | green | crates/lens/tests/lens_golden.rs |
+| C12 | healthy tlsight golden with `tls_reachable` Pass → lens goldens' TLS scores move | green | crates/lens/tests/lens_golden.rs |
+
+C9 passed at the baseline (`3425629`); the others failed there. Goldens regenerated from the producers after the code was green: `tlsight-inspect.json` (gains `tls_reachable` Pass), `tlsight-unreachable.json` and `tlsight-not-tested.json` (new, from the real `assess_port`), `lens-healthy.json` C 71.2 → C 73.9 (TLS C → B), `lens-no-mx.json` C 65.0 → 67.8, `lens-mx-cname.json` B 76.6 → 79.4, `lens-http-only.json` F 45.3 with `tls_reachable` in `hard_fail_checks`, `lens-no-weighted-tls.json` incomplete with TLS `"error"`.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| tlsight + lens profile + goldens | 2 | sonnet (fmt of a test file by the orchestrator) | 48684 | 148 |
+| review fixes | 1 | sonnet | n/a | n/a |
+
+### Review
+
+- BLOCKER (fixed, second pass) | `EHOSTUNREACH` was mapped to `NOT_TESTED_FROM_HERE`; Linux raises it in SYN_SENT for an incoming ICMP host-unreachable, host-prohibited or packet-filtered (`icmp_err_convert`), so an HTTPS-less host behind firewalld's default reject would read Skip → incomplete instead of F. Now `HANDSHAKE_FAILED`; spec requirement 8 amended; SDD R5.3 lists it wrongly (AMENDMENT for the planning session) | affected_phase: 4 | repaired_in_phase: yes
+- AMENDMENT (fixed) | tlsight's `ValidationSummary` showed "pass" for a port whose only check is `tls_reachable: skip`; `qualityVerdict` now needs a pass to say pass (vitest added) | affected_phase: 4 | repaired_in_phase: yes
+- AMENDMENT (fixed) | lens README "Hard failures" table lacked `tls_reachable` (SCORING SYNC RULE) | affected_phase: 4 | repaired_in_phase: yes
+- NIT (acted on) | `tls_reachable` had no fix text, guide link or label in lens (`fix_for`, `guide_url_for`, snapshot labels, frontend `CHECK_LABELS`/`CHECK_DESCRIPTIONS`); now covered, and the hard-coded list test includes it.
+- NIT (acted on) | `site/api/lens.html` and `crates/tlsight/README.md` name the new check (the README also gains the two certificate checks it was missing; count 23).
+- NIT (acted on) | a pinning test now fails if connect.rs stops boxing the `io::Error`.
+- Sound per the reader: nothing reads the dropped "connection failed:" prefix; refused, timeouts and TLS alerts stay `HANDSHAKE_FAILED`; `assess_port` keeps `compute_verdict` and consistency for reachable ports; http-only → F needs both weight and hard-fail; Skip-only → incomplete as intended.
+
+### Behavioural verification
+
+skipped: the TLS paths are driven by `assess_port` tables, the closed-port `inspect_ip` test and the lens goldens; a live HTTPS-less target is not reachable offline.

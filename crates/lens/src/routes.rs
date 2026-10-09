@@ -79,7 +79,7 @@ fn guide_url_for(name: &str) -> Option<&'static str> {
             Some("https://netray.info/guide/certificate-management")
         }
         // TLS — protocol & cipher suites
-        "tls_version" | "forward_secrecy" | "aead_cipher" => {
+        "tls_version" | "forward_secrecy" | "aead_cipher" | "tls_reachable" => {
             Some("https://netray.info/guide/tls-protocol")
         }
         // TLS — multi-IP consistency
@@ -259,6 +259,12 @@ fn fix_for(name: &str) -> (Option<&'static str>, Option<&'static str>) {
                 "Your servers advertise different protocols (HTTP/1.1, HTTP/2) on different IPs — align your web server configuration across all instances.",
             ),
             Some("your infrastructure team"),
+        ),
+        "tls_reachable" => (
+            Some(
+                "Serve HTTPS on port 443 with a valid certificate, and make sure the firewall allows inbound connections to port 443.",
+            ),
+            Some("the site's web server or hosting provider"),
         ),
         // TLS — advanced
         "ech_advertised" => (

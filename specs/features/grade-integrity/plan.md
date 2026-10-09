@@ -47,3 +47,12 @@ One group: `check.rs`, the backends' request paths, `state.rs` and `config.rs` s
 - `config.rs` `validate`: reject `max(dns, tls, http, email timeout_ms) + ip timeout_ms >= HARD_DEADLINE` with a message naming the backend timeouts and the hard deadline (it must contain the words `timeout` and `deadline`); `http` and `email` count only when configured.
 - `crates/lens/tests/fixtures/lens.production.toml`, `crates/lens/lens.dev.toml`, `crates/lens/lens.example.toml`: dns, tls, http and email `timeout_ms = 15000`, ip 2000, email set explicitly.
 - Review fix: the budget sum saturates (`saturating_add`).
+
+## Phase 4 — TLS reachability
+
+### Groups
+
+1. tlsight: `tls/connect.rs` (keep the `io::Error` in the boxed error), `tls/mod.rs` (`pub fn error_code`, used by `inspect_ip`), `quality/mod.rs` (`assess_port` emits `tls_reachable` first: Pass when an IP succeeded; Fail when every IP failed and at least one failure is not `NOT_TESTED_FROM_HERE`; Skip when every failure is `NOT_TESTED_FROM_HERE`; with no successful IP, the checks are `[tls_reachable]` only), the check's label and category (`Protocol`, as the golden test pins).
+2. lens: `crates/lens/profiles/default.toml` `tls_reachable = 10` under `[sections.tls.checks]`, `hard_fail = ["chain_trusted", "not_expired", "tls_reachable"]`; the README scoring tables if they list TLS weights (SCORING SYNC RULE).
+3. Goldens, after 1 and 2 are green: `UPDATE_GOLDEN=1 cargo test -p tlsight --test contract_golden` (tlsight-inspect.json gains `tls_reachable`; tlsight-unreachable.json and tlsight-not-tested.json are written), then `UPDATE_GOLDEN=1 cargo test -p lens --test lens_golden` (lens-http-only.json, lens-no-weighted-tls.json written; the existing lens goldens move in their TLS score). The orchestrator commits the regenerated goldens with `ADLC-Test-Change` naming requirement 7.
+- Review fixes: `EHOSTUNREACH` → `HANDSHAKE_FAILED`; tlsight `qualityVerdict` all-skip → skip; `tls_reachable` texts, labels and docs.

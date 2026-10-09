@@ -207,7 +207,7 @@ pub async fn tls_handshake(
     })
     .await
     .map_err(|_| "handshake timed out")?
-    .map_err(|e| format!("connection failed: {e}"))?;
+    .map_err(|e: io::Error| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
 
     let handshake_ms = start.elapsed().as_millis() as u32;
 

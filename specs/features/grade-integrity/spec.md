@@ -41,7 +41,7 @@ Line numbers at `c9a16f4`.
 5. **One deadline per backend call (R3.3, SC8).** Each backend's connect, send and body read (stream or JSON) run under one `timeout_ms`. Email honours `config.backends.email.timeout_ms`. On the hard deadline, finished sections are kept and only unfinished ones become Timeout. The hard deadline stays 20 s; the check function takes it as a parameter so a test can shorten it.
 6. **Budget check (R3.3, K2).** Config load rejects `max(dns, tls, http, email timeout_ms) + ip timeout_ms ≥` the hard deadline, so `netray lens --check-config` exits 1 for it. `lens.production.toml` (fixture), `lens.dev.toml` and `lens.example.toml` set dns, tls, http and email to 15000 and ip to 2000, email included explicitly.
 7. **TLS reachability (R3.1).** tlsight emits a `tls_reachable` port check: Pass when at least one IP completed the handshake; Fail when every IP failed with a target-side error (refused, reset, TLS alert, handshake timeout); Skip when the only failures are local (requirement 8). lens weights `tls_reachable` with 10 and adds it to `[sections.tls] hard_fail`.
-8. **Not tested from here (R5.3).** A connect error raised locally before any packet reaches the target (`ENETUNREACH`, `EHOSTUNREACH`, `EADDRNOTAVAIL`) gets code `NOT_TESTED_FROM_HERE`; such IPs do not count for `tls_reachable` (consistency already ignores them).
+8. **Not tested from here (R5.3).** A connect error raised locally before any packet reaches the target (`ENETUNREACH`, `EADDRNOTAVAIL`) gets code `NOT_TESTED_FROM_HERE`; `EHOSTUNREACH` stays `HANDSHAKE_FAILED`, because Linux also raises it for a remote ICMP host-unreachable or a firewall's admin-prohibited reject (amended in Phase 4); such IPs do not count for `tls_reachable` (consistency already ignores them).
 9. **HSTS once (R3.6).** lens no longer copies tlsight's `hsts` and `https_redirect` into the TLS section; HTTP owns them.
 10. **One blocklist (R3.7, SC4).** `netray_common::target_policy` refuses the union of today's copies: in addition all of `0.0.0.0/8`, `240.0.0.0/4`, `198.18.0.0/15`, `192.0.0.0/24` and all of `2002::/16`. `ip_filter::is_blocked_ip` delegates to it (so prism also refuses broadcast and `fec0::/10`). tlsight calls it and keeps its `allow_blocked` switch; lens's copy is deleted; prism's wrapper is renamed `check_target_ip`. A convention test in `tests/repo/` fails when a Rust source under `crates/*/src/` outside `crates/common` defines `fn is_allowed_target(`, `fn is_blocked_ip(` or `fn check_allowed(`, or calls `is_private()`/`is_loopback()` in a `security/` module.
 11. **Lens golden projection (R3.8).** The lens golden projection records `complete`; fixture `no-address-records` (prism answering A and AAAA with `NxDomain`, tlsight and spectra erroring) is added.
@@ -110,7 +110,7 @@ tlsight's `tls/mod.rs` (error codes), `quality/mod.rs` (`assess_port`), its cont
 - GIVEN IPv6 `NOT_TESTED_FROM_HERE` and IPv4 ok WHEN `assess_port` runs THEN `tls_reachable` Pass and the port verdict comes from IPv4 only.
 - GIVEN every IP ok WHEN `assess_port` runs THEN `tls_reachable` Pass (the port results table's three rows move, `ADLC-Test-Change` naming requirement 7).
 - GIVEN only `NOT_TESTED_FROM_HERE` failures WHEN `assess_port` runs THEN `tls_reachable` Skip.
-- GIVEN each of `ENETUNREACH`, `EHOSTUNREACH`, `EADDRNOTAVAIL`, `ECONNREFUSED` WHEN mapped THEN the first three are `NOT_TESTED_FROM_HERE` and refused stays `HANDSHAKE_FAILED`.
+- GIVEN each of `ENETUNREACH`, `EADDRNOTAVAIL`, `EHOSTUNREACH`, `ECONNREFUSED` WHEN mapped THEN the first two are `NOT_TESTED_FROM_HERE` and the last two stay `HANDSHAKE_FAILED`.
 - GIVEN a closed local port WHEN inspected THEN `HANDSHAKE_FAILED`, as today.
 - GIVEN `tlsight-unreachable.json` WHEN lens scores it THEN grade `F` and `hard_fail_checks` contains `tls_reachable`; the `http-only` lens golden pins it.
 - GIVEN the `no-weighted-tls` tlsight answer WHEN lens scores it THEN `grade:"incomplete"` and TLS status `"error"`.
@@ -154,6 +154,7 @@ tlsight's `tls/mod.rs` (error codes), `quality/mod.rs` (`assess_port`), its cont
 - The hard deadline stays a constant passed into the check function, over a config key: a key would add a path argus's key comparison must render, and the test needs only a seam (independent reading).
 - A beacon answer with `skip` in every category stays as today (email buckets start at Pass, `email.rs:362,440`), so it is not incomplete here; R4.2/R4.3 (email-scoring feature) make it Timeout or Errored. The earlier claim that it becomes incomplete through `possible == 0` was wrong (phase 2 reader, 2026-10-09).
 - IP enrichment failures stay as today here; R5.2 owns them (independent reading).
+- `EHOSTUNREACH` is target-side, over SDD R5.3's list: Linux maps an incoming ICMP host-unreachable, host-prohibited or packet-filtered to it, so a firewalled HTTPS-less host would read as not tested and come out incomplete instead of F (phase 4 reader, 2026-10-09; AMENDMENT for the planning session).
 - Phase 6 depends on none and may be built first.
 
 ## Open decisions
