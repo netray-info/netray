@@ -84,6 +84,17 @@ pub fn forward_headers(
     headers
 }
 
+/// A verdict value lens does not know: count it, log it, and return the error that makes the
+/// section Errored instead of scoring it.
+pub(crate) fn unknown_verdict(section: &'static str, value: &str) -> crate::error::AppError {
+    metrics::counter!("lens_unknown_verdict_total", "section" => section).increment(1);
+    tracing::warn!(section, value, "unknown verdict from backend");
+    crate::error::AppError::BackendError {
+        backend: section,
+        message: format!("unknown verdict `{value}`"),
+    }
+}
+
 /// Minimal percent-encoding for query string values (RFC 3986 unreserved set).
 pub(crate) fn percent_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

@@ -190,14 +190,18 @@ async fn check_tls_inner(
     })?;
 
     tracing::debug!(service = "tlsight", url = %url, "backend call succeeded");
-    Ok(parse_inspect(inspect, domain, tls_url))
+    parse_inspect(inspect, domain, tls_url)
 }
 
 // ---------------------------------------------------------------------------
 // Parsing
 // ---------------------------------------------------------------------------
 
-fn parse_inspect(inspect: InspectResponse, domain: &str, tls_url: &str) -> TlsBackendResult {
+fn parse_inspect(
+    inspect: InspectResponse,
+    domain: &str,
+    tls_url: &str,
+) -> Result<TlsBackendResult, AppError> {
     let mut checks: Vec<CheckResult> = Vec::new();
 
     let quality = inspect.quality.unwrap_or_default();
@@ -206,13 +210,7 @@ fn parse_inspect(inspect: InspectResponse, domain: &str, tls_url: &str) -> TlsBa
     // These are in ports[0].quality.checks (PortQualityResult).
     if let Some(port_quality) = inspect.ports.first().and_then(|p| p.quality.as_ref()) {
         for hc in &port_quality.checks {
-            let verdict = match hc.status.as_str() {
-                "pass" => CheckVerdict::Pass,
-                "warn" => CheckVerdict::Warn,
-                "fail" => CheckVerdict::Fail,
-                "skip" => CheckVerdict::Skip,
-                _ => CheckVerdict::Skip,
-            };
+            let verdict = check_status_verdict(&hc.status)?;
             let messages = tls_check_messages(&verdict, &hc.detail);
             checks.push(CheckResult {
                 name: hc.id.clone(),
@@ -227,13 +225,7 @@ fn parse_inspect(inspect: InspectResponse, domain: &str, tls_url: &str) -> TlsBa
         if checks.iter().any(|c| c.name == hc.id) {
             continue;
         }
-        let verdict = match hc.status.as_str() {
-            "pass" => CheckVerdict::Pass,
-            "warn" => CheckVerdict::Warn,
-            "fail" => CheckVerdict::Fail,
-            "skip" => CheckVerdict::Skip,
-            _ => CheckVerdict::Skip,
-        };
+        let verdict = check_status_verdict(&hc.status)?;
         let messages = tls_check_messages(&verdict, &hc.detail);
         checks.push(CheckResult {
             name: hc.id.clone(),
@@ -249,10 +241,21 @@ fn parse_inspect(inspect: InspectResponse, domain: &str, tls_url: &str) -> TlsBa
         percent_encode(domain),
     );
 
-    TlsBackendResult {
+    Ok(TlsBackendResult {
         checks,
         raw_headline,
         detail_url,
+    })
+}
+
+/// Map tlsight's `CheckStatus` serde values; anything else is an unknown verdict.
+fn check_status_verdict(status: &str) -> Result<CheckVerdict, AppError> {
+    match status {
+        "pass" => Ok(CheckVerdict::Pass),
+        "warn" => Ok(CheckVerdict::Warn),
+        "fail" => Ok(CheckVerdict::Fail),
+        "skip" => Ok(CheckVerdict::Skip),
+        other => Err(super::unknown_verdict("tls", other)),
     }
 }
 

@@ -240,7 +240,13 @@ pub fn parse_summary(events: &[Value]) -> Result<BeaconSummary, SectionError> {
         .filter_map(|d| Some((d.get("category")?.as_str()?, d)))
         .collect();
 
-    let categories = data
+    for d in category_events.values() {
+        if let Some(v) = d.get("verdict").and_then(|v| v.as_str()) {
+            check_known_verdict(v)?;
+        }
+    }
+
+    let categories: Vec<CategoryVerdict> = data
         .get("verdicts")
         .and_then(|v| v.as_object())
         .map(|obj| {
@@ -259,6 +265,13 @@ pub fn parse_summary(events: &[Value]) -> Result<BeaconSummary, SectionError> {
                 .collect()
         })
         .unwrap_or_default();
+
+    for cat in &categories {
+        check_known_verdict(&cat.verdict)?;
+        for sub in &cat.sub_checks {
+            check_known_verdict(&sub.verdict)?;
+        }
+    }
 
     Ok(BeaconSummary { grade, categories })
 }
@@ -397,14 +410,29 @@ fn category_messages(cat: &CategoryVerdict) -> Vec<String> {
     }
 }
 
-fn parse_beacon_verdict(s: &str) -> CheckVerdict {
+/// Beacon's `Verdict` serde values; `info` is not scored and maps like `skip`.
+fn beacon_verdict(s: &str) -> Option<CheckVerdict> {
     match s {
-        "Pass" | "pass" => CheckVerdict::Pass,
-        "Warn" | "warn" => CheckVerdict::Warn,
-        "Fail" | "fail" => CheckVerdict::Fail,
-        "Skip" | "skip" | "Skipped" => CheckVerdict::Skip,
-        _ => CheckVerdict::Skip,
+        "Pass" | "pass" => Some(CheckVerdict::Pass),
+        "Warn" | "warn" => Some(CheckVerdict::Warn),
+        "Fail" | "fail" => Some(CheckVerdict::Fail),
+        "Skip" | "skip" | "Skipped" | "Info" | "info" => Some(CheckVerdict::Skip),
+        _ => None,
     }
+}
+
+/// Map a verdict `parse_summary` has already checked against `beacon_verdict`.
+fn parse_beacon_verdict(s: &str) -> CheckVerdict {
+    beacon_verdict(s).unwrap_or(CheckVerdict::Skip)
+}
+
+fn check_known_verdict(s: &str) -> Result<(), SectionError> {
+    if beacon_verdict(s).is_none() {
+        return Err(SectionError::BackendError(
+            super::unknown_verdict("email", s).to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn verdict_rank(v: &CheckVerdict) -> u8 {

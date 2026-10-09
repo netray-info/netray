@@ -200,6 +200,12 @@ async fn check_http_inner(
 
     let inspect: HttpInspectResponse = resp.json().await.map_err(|e| {
         tracing::warn!(service = "spectra", url = %url, error = %e, "backend call failed");
+        let cause = std::error::Error::source(&e)
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+        if cause.contains("unknown variant") {
+            return super::unknown_verdict("http", &cause);
+        }
         AppError::BackendError {
             backend: "http",
             message: format!("failed to decode spectra response: {e}"),

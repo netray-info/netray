@@ -4,9 +4,9 @@ use serde_json::Value;
 /// Drain an SSE byte-stream from a reqwest Response into a Vec of JSON events.
 ///
 /// Each event is returned as `{"type": "<event-name>", "data": <parsed-json>}`.
-/// Reading stops when an event matching `terminal_event` is dispatched, or when
-/// the stream ends. Returns Err on a chunk read error or when a complete line is
-/// not valid UTF-8.
+/// Reading stops when an event matching `terminal_event` is dispatched. Returns Err
+/// when the stream ends without it, on a chunk read error, when a complete line is
+/// not valid UTF-8, or when an event's data is not JSON.
 pub async fn collect(resp: reqwest::Response, terminal_event: &str) -> Result<Vec<Value>, String> {
     drain(resp, terminal_event, false).await
 }
@@ -15,7 +15,7 @@ pub async fn collect(resp: reqwest::Response, terminal_event: &str) -> Result<Ve
 ///
 /// The event type is the `type` field of the JSON payload (an `event:` line, if
 /// present, is ignored). Reading stops at the first event whose type equals
-/// `terminal_type`, or when the stream ends.
+/// `terminal_type`; a stream that ends without it is an error.
 pub async fn collect_until_type(
     resp: reqwest::Response,
     terminal_type: &str,
@@ -50,9 +50,9 @@ async fn drain(
 
                     if line.is_empty() {
                         // Blank line = dispatch current event.
-                        if !cur_data.is_empty()
-                            && let Ok(data) = serde_json::from_str::<Value>(&cur_data)
-                        {
+                        if !cur_data.is_empty() {
+                            let data = serde_json::from_str::<Value>(&cur_data)
+                                .map_err(|e| format!("invalid JSON in SSE event: {e}"))?;
                             if type_from_data {
                                 cur_type = data
                                     .get("type")
@@ -74,14 +74,17 @@ async fn drain(
                     } else if let Some(rest) = line.strip_prefix("event: ") {
                         cur_type = rest.to_string();
                     } else if let Some(rest) = line.strip_prefix("data: ") {
-                        cur_data = rest.to_string();
+                        if !cur_data.is_empty() {
+                            cur_data.push('\n');
+                        }
+                        cur_data.push_str(rest);
                     }
                 }
             }
         }
     }
 
-    Ok(events)
+    Err(format!("stream ended without {terminal}"))
 }
 
 #[cfg(test)]
@@ -115,6 +118,10 @@ mod tests {
         let body = "event: batch\ndata: {\"a\":\ndata: 1}\n\nevent: done\ndata: {}\n\n";
         let ev = collect(resp(body), "done").await.expect("ok");
         assert_eq!(ev[0]["data"], serde_json::json!({"a":1}));
+        // The separator is a newline, not nothing: `[1` + `0]` would read as [10] without
+        // one, and is two values (invalid) with it.
+        let merged = "event: batch\ndata: [1\ndata: 0]\n\nevent: done\ndata: {}\n\n";
+        assert!(collect(resp(merged), "done").await.is_err());
     }
 
     #[tokio::test]

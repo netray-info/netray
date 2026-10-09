@@ -181,10 +181,19 @@ async fn unknown_verdict_errors_section_and_counts() {
                 r#"{"Passed":"Found exactly one SPF record"}"#,
             ),
         ),
-        // C7: tlsight check status `pass` -> `passed`
+        // C7: tlsight hostname check status `pass` -> `passed`
         (
             "tls",
             json_with("tlsight-inspect.json", "/quality/checks/0/status", "passed"),
+        ),
+        // C7: tlsight port check status (chain_trusted, a hard-fail check) -> `passed`
+        (
+            "tls",
+            json_with(
+                "tlsight-inspect.json",
+                "/ports/0/quality/checks/0/status",
+                "passed",
+            ),
         ),
         // C7: beacon category verdict `pass` -> `passed`
         (
@@ -194,6 +203,11 @@ async fn unknown_verdict_errors_section_and_counts() {
                 r#""title":"SPF","type":"category","verdict":"pass""#,
                 r#""title":"SPF","type":"category","verdict":"passed""#,
             ),
+        ),
+        // C7: beacon summary verdict (the scored map) `spf: pass` -> `passed`
+        (
+            "email",
+            renamed("beacon.sse", r#""spf":"pass""#, r#""spf":"passed""#),
         ),
         // C7: ifconfig network type -> a value the vocabulary does not hold
         (
