@@ -443,7 +443,7 @@ fn scenario_null_mx() -> Vec<CheckResult> {
                 sub(
                     SENDS_NO_MAIL,
                     Verdict::Info,
-                    "Null MX and SPF -all: the domain neither sends nor receives mail",
+                    "domain declares it sends no mail (Null MX or SPF -all only)",
                 ),
                 sub(
                     "reject_no_dkim",
