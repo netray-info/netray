@@ -30,7 +30,11 @@ fn lint_status_maps_every_check_result_variant() {
     ];
 
     for (input, want) in rows {
-        assert_eq!(expected(&input), want, "table disagrees with exhaustive match for {input:?}");
+        assert_eq!(
+            expected(&input),
+            want,
+            "table disagrees with exhaustive match for {input:?}"
+        );
         assert_eq!(lint_status(&input), want, "wrong status for {input:?}");
     }
 }

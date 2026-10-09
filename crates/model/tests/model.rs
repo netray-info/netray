@@ -1,7 +1,5 @@
 //! Contract tests for the shared check model (V2 SDD).
-use netray_model::{
-    CheckId, CheckResult, FixOwner, Grade, Protocol, Severity, Status,
-};
+use netray_model::{CheckId, CheckResult, FixOwner, Grade, Protocol, Severity, Status};
 use serde_json::{json, to_value};
 
 #[test]
