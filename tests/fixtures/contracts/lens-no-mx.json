@@ -3,6 +3,7 @@
     "grade": "C",
     "score": 65.0,
     "overall": "fail",
+    "complete": true,
     "sections": {
       "dns": "warn",
       "email": "fail",

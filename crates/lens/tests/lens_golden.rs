@@ -23,12 +23,13 @@ use serde::Serialize;
 use serde_json::Value;
 use tower::ServiceExt;
 
-/// One fixture: a name and the golden file each backend serves.
+/// One fixture: a name and the golden file each backend serves. `None` for tls or http means
+/// that backend answers HTTP 500.
 struct Fixture {
     name: &'static str,
     dns: &'static str,
-    tls: &'static str,
-    http: &'static str,
+    tls: Option<&'static str>,
+    http: Option<&'static str>,
     email: &'static str,
     ip: &'static str,
 }
@@ -37,25 +38,33 @@ const FIXTURES: &[Fixture] = &[
     Fixture {
         name: "healthy",
         dns: "prism.sse",
-        tls: "tlsight-inspect.json",
-        http: "spectra-inspect.json",
+        tls: Some("tlsight-inspect.json"),
+        http: Some("spectra-inspect.json"),
         email: "beacon.sse",
         ip: "ifconfig-json.json",
     },
     Fixture {
         name: "no-mx",
         dns: "prism.sse",
-        tls: "tlsight-inspect.json",
-        http: "spectra-inspect.json",
+        tls: Some("tlsight-inspect.json"),
+        http: Some("spectra-inspect.json"),
         email: "beacon-no-mx.sse",
         ip: "ifconfig-json.json",
     },
     Fixture {
         name: "mx-cname",
         dns: "prism.sse",
-        tls: "tlsight-inspect.json",
-        http: "spectra-inspect.json",
+        tls: Some("tlsight-inspect.json"),
+        http: Some("spectra-inspect.json"),
         email: "beacon-mx-cname.sse",
+        ip: "ifconfig-json.json",
+    },
+    Fixture {
+        name: "no-address-records",
+        dns: "prism-no-address.sse",
+        tls: None,
+        http: None,
+        email: "beacon.sse",
         ip: "ifconfig-json.json",
     },
 ];
@@ -106,20 +115,37 @@ async fn stub(
     serve(Router::new().route(path, route)).await
 }
 
+/// A stub answering HTTP 500 at `path`.
+async fn failing_stub(path: &'static str, post_method: bool) -> String {
+    let handler = || async { StatusCode::INTERNAL_SERVER_ERROR };
+    let route = if post_method {
+        post(handler)
+    } else {
+        get(handler)
+    };
+    serve(Router::new().route(path, route)).await
+}
+
 async fn production_config(f: &Fixture) -> Config {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
 
     config.backends.dns.url = Some(stub("/api/check", true, "text/event-stream", f.dns).await);
-    config.backends.tls.url = Some(stub("/api/inspect", false, "application/json", f.tls).await);
+    config.backends.tls.url = Some(match f.tls {
+        Some(file) => stub("/api/inspect", false, "application/json", file).await,
+        None => failing_stub("/api/inspect", false).await,
+    });
     config.backends.ip.url = Some(stub("/json", false, "application/json", f.ip).await);
     config
         .backends
         .http
         .as_mut()
         .expect("http backend configured")
-        .url = Some(stub("/api/inspect", false, "application/json", f.http).await);
+        .url = Some(match f.http {
+        Some(file) => stub("/api/inspect", false, "application/json", file).await,
+        None => failing_stub("/api/inspect", false).await,
+    });
     config
         .backends
         .email
@@ -138,6 +164,7 @@ struct Summary {
     grade: String,
     score: f64,
     overall: String,
+    complete: Option<bool>,
     sections: BTreeMap<String, String>,
     section_grades: BTreeMap<String, String>,
     hard_fail: bool,
@@ -212,6 +239,7 @@ fn project(events: &[(String, Value)]) -> Projection {
                     grade: str_of(data, "grade"),
                     score: data["score"].as_f64().expect("summary score"),
                     overall: str_of(data, "overall"),
+                    complete: data["complete"].as_bool(),
                     sections: string_map(&data["sections"]),
                     section_grades: string_map(&data["section_grades"]),
                     hard_fail: data["hard_fail"].as_bool().expect("hard_fail"),
@@ -372,6 +400,31 @@ async fn lens_golden_no_mx() {
 async fn lens_golden_mx_cname() {
     let p = check_golden("mx-cname").await;
     assert_no_error_section("mx-cname", &p);
+}
+
+/// Phase 2 decides these fields; they are asserted before the golden file is compared, so the
+/// test fails on them while the verdict is still a letter grade.
+#[tokio::test]
+async fn lens_golden_no_address_records() {
+    let projection: Value = serde_json::from_str(&run_fixture("no-address-records").await).unwrap();
+    let summary = &projection["summary"];
+    assert_eq!(
+        summary["grade"], "incomplete",
+        "no-address-records: tlsight and spectra error, so the grade is `incomplete`; summary: {summary}"
+    );
+    assert_eq!(
+        summary["complete"], false,
+        "no-address-records: the summary must say `complete: false`; summary: {summary}"
+    );
+    // The full projection is pinned by lens-no-address-records.json, generated with
+    // UPDATE_GOLDEN=1 once Phase 2's code lands.
+    let path = contracts_dir().join("lens-no-address-records.json");
+    assert!(
+        path.exists(),
+        "golden {} is missing (UPDATE_GOLDEN=1 writes it after Phase 2)",
+        path.display()
+    );
+    check_golden("no-address-records").await;
 }
 
 #[tokio::test]

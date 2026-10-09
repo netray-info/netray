@@ -1,0 +1,18 @@
+event: batch
+data: {"completed":1,"lookups":{"lookups":[{"name_server":"udp:192.0.2.53:53","query":{"name":"example.com.","record_type":"A"},"result":{"NxDomain":{"response_time":{"nanos":12000000,"secs":0}}}}]},"record_type":"A","request_id":"contract-golden","total":19}
+
+event: batch
+data: {"completed":2,"lookups":{"lookups":[{"name_server":"udp:192.0.2.53:53","query":{"name":"example.com.","record_type":"AAAA"},"result":{"NxDomain":{"response_time":{"nanos":12000000,"secs":0}}}}]},"record_type":"AAAA","request_id":"contract-golden","total":19}
+
+event: lint
+data: {"request_id":"contract-golden","category":"caa","results":[{"Warning":"No CAA records found: any Certificate Authority can issue certificates for this domain; cf. RFC 8659"}]}
+
+event: lint
+data: {"request_id":"contract-golden","category":"ns","results":[{"NotFound":[]}]}
+
+event: lint
+data: {"request_id":"contract-golden","category":"spf","results":[{"NotFound":[]}]}
+
+event: done
+data: {"request_id":"contract-golden","duration_ms":1,"total_checks":3,"passed":0,"warnings":1,"failed":0,"not_found":2}
+
