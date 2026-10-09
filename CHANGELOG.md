@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `SECURITY.md`: report vulnerabilities privately through GitHub.
 
+### Security
+
+- Server-side request forgery in five outbound fetches, fixed in 0.22.2. Each fetched a URL that a checked domain's DNS records, its certificate or its redirects control:
+  - beacon's MTA-STS policy fetch;
+  - beacon's BIMI logo fetch;
+  - spectra's redirect following;
+  - tlsight's live OCSP request;
+  - prism's MTA-STS policy fetch.
+
+  Before 0.22.2 such a URL could make the service connect to a non-public address, through DNS, an IP literal, userinfo, a bracketed IPv6 host, DNS rebinding or a redirect. Parts of the response came back in the result. Every such fetch now resolves through one checking resolver, connects only to the checked public addresses, and re-checks every redirect hop. A refused target is never contacted, and its response is never echoed. Found in an internal review. Every earlier release is affected; upgrade to 0.22.2.
+
 ## [0.22.1] - 2026-10-08
 
 ### Changed
