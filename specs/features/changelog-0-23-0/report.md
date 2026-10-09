@@ -34,4 +34,6 @@ The diff adds lines only, so the 0.22.2 section is unchanged. Each entry was che
 
 ### Amendments
 
-- The scratchpad draft said `netray lens --check-config` refuses a timeout budget; no such flag exists, and lens refuses the configuration when it loads. Corrected in the entry.
+- The scratchpad draft named only `netray lens --check-config` for the timeout-budget refusal; `Config::load` refuses it at every load, `--check-config` included (`crates/netray/src/main.rs:100`). The entry says "refuses to load".
+- Review 71f239c..e314332 found two wrong claims (truncated streams are not counted in `lens_unknown_verdict_total`; a domain with no A/AAAA gets an errored IP section, not N/A). Both entries corrected.
+- For the planning session: a domain with no A or AAAA record (a mail-only apex) now grades `incomplete`, because the IP section errors with `NoDnsResults` (`crates/lens/src/backends/ip.rs:85`) and R3.2 makes an errored section incomplete. The SDD is silent on whether that case should be not applicable instead.
