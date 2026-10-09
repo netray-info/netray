@@ -265,9 +265,24 @@ mod tests {
     }
 
     #[test]
-    fn allows_6to4_public() {
-        // 2002:0101:0101:: embeds 1.1.1.1
-        assert!(!is_blocked_ip("2002:0101:0101::".parse().unwrap()));
+    fn blocks_6to4_public() {
+        // 2002:0101:0101:: embeds 1.1.1.1; the whole 2002::/16 range is blocked
+        assert!(is_blocked_ip("2002:0101:0101::".parse().unwrap()));
+    }
+
+    #[test]
+    fn blocks_ranges_shared_with_target_policy() {
+        for addr in [
+            "255.255.255.255",
+            "fec0::1",
+            "0.1.2.3",
+            "240.0.0.1",
+            "198.18.0.1",
+            "192.0.0.8",
+        ] {
+            assert!(is_blocked_ip(addr.parse().unwrap()), "{addr} should be blocked");
+        }
+        assert!(!is_blocked_ip("8.8.8.8".parse().unwrap()));
     }
 
     // ---- NAT64 ----

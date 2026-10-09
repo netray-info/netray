@@ -219,179 +219,179 @@ mod tests {
 
     #[test]
     fn rejects_ipv4_loopback() {
-        assert!(is_allowed_target(IpAddr::V4(Ipv4Addr::LOCALHOST)).is_err());
-        assert!(is_allowed_target("127.0.0.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("127.0.0.2".parse().unwrap()).is_err());
-        assert!(is_allowed_target("127.255.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip(IpAddr::V4(Ipv4Addr::LOCALHOST)).is_err());
+        assert!(check_target_ip("127.0.0.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("127.0.0.2".parse().unwrap()).is_err());
+        assert!(check_target_ip("127.255.255.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_ipv6_loopback() {
-        assert!(is_allowed_target(IpAddr::V6(Ipv6Addr::LOCALHOST)).is_err());
+        assert!(check_target_ip(IpAddr::V6(Ipv6Addr::LOCALHOST)).is_err());
     }
 
     #[test]
     fn rejects_ipv4_unspecified() {
-        assert!(is_allowed_target(IpAddr::V4(Ipv4Addr::UNSPECIFIED)).is_err());
+        assert!(check_target_ip(IpAddr::V4(Ipv4Addr::UNSPECIFIED)).is_err());
     }
 
     #[test]
     fn rejects_ipv6_unspecified() {
-        assert!(is_allowed_target(IpAddr::V6(Ipv6Addr::UNSPECIFIED)).is_err());
+        assert!(check_target_ip(IpAddr::V6(Ipv6Addr::UNSPECIFIED)).is_err());
     }
 
     #[test]
     fn rejects_ipv4_multicast() {
-        assert!(is_allowed_target("224.0.0.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("239.255.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("224.0.0.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("239.255.255.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_ipv6_multicast() {
-        assert!(is_allowed_target("ff02::1".parse().unwrap()).is_err());
+        assert!(check_target_ip("ff02::1".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_rfc1918_10_slash_8() {
-        assert!(is_allowed_target("10.0.0.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("10.0.0.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("10.255.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("10.0.0.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("10.0.0.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("10.255.255.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_rfc1918_172_16_slash_12() {
-        assert!(is_allowed_target("172.16.0.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("172.16.0.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("172.31.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("172.16.0.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("172.16.0.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("172.31.255.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn allows_172_outside_rfc1918() {
         // 172.15.x.x is below the /12 range
-        assert!(is_allowed_target("172.15.255.255".parse().unwrap()).is_ok());
+        assert!(check_target_ip("172.15.255.255".parse().unwrap()).is_ok());
         // 172.32.x.x is above the /12 range
-        assert!(is_allowed_target("172.32.0.0".parse().unwrap()).is_ok());
+        assert!(check_target_ip("172.32.0.0".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn rejects_rfc1918_192_168_slash_16() {
-        assert!(is_allowed_target("192.168.0.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("192.168.0.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("192.168.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("192.168.0.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("192.168.0.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("192.168.255.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_ipv4_link_local() {
-        assert!(is_allowed_target("169.254.0.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("169.254.0.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("169.254.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("169.254.0.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("169.254.0.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("169.254.255.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_ipv6_link_local() {
-        assert!(is_allowed_target("fe80::1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("fe80::ffff:ffff:ffff:ffff".parse().unwrap()).is_err());
+        assert!(check_target_ip("fe80::1".parse().unwrap()).is_err());
+        assert!(check_target_ip("fe80::ffff:ffff:ffff:ffff".parse().unwrap()).is_err());
         // febf:: is still within fe80::/10 (first 10 bits = 1111_1110_10)
-        assert!(is_allowed_target("febf::1".parse().unwrap()).is_err());
+        assert!(check_target_ip("febf::1".parse().unwrap()).is_err());
     }
 
     #[test]
-    fn allows_ipv6_outside_link_local() {
-        // fec0:: has first 10 bits = 1111_1110_11, outside fe80::/10
-        assert!(is_allowed_target("fec0::1".parse().unwrap()).is_ok());
+    fn refuses_ipv6_site_local() {
+        // fec0::/10 is deprecated site-local space, refused by the shared policy
+        assert!(check_target_ip("fec0::1".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_cgnat() {
-        assert!(is_allowed_target("100.64.0.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("100.64.0.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("100.127.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("100.64.0.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("100.64.0.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("100.127.255.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn allows_100_outside_cgnat() {
         // 100.63.x.x is below the /10 range
-        assert!(is_allowed_target("100.63.255.255".parse().unwrap()).is_ok());
+        assert!(check_target_ip("100.63.255.255".parse().unwrap()).is_ok());
         // 100.128.x.x is above the /10 range
-        assert!(is_allowed_target("100.128.0.0".parse().unwrap()).is_ok());
+        assert!(check_target_ip("100.128.0.0".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn rejects_documentation_test_net_1() {
-        assert!(is_allowed_target("192.0.2.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("192.0.2.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("192.0.2.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("192.0.2.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("192.0.2.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("192.0.2.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_documentation_test_net_2() {
-        assert!(is_allowed_target("198.51.100.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("198.51.100.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("198.51.100.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("198.51.100.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("198.51.100.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("198.51.100.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_documentation_test_net_3() {
-        assert!(is_allowed_target("203.0.113.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("203.0.113.1".parse().unwrap()).is_err());
-        assert!(is_allowed_target("203.0.113.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("203.0.113.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("203.0.113.1".parse().unwrap()).is_err());
+        assert!(check_target_ip("203.0.113.255".parse().unwrap()).is_err());
     }
 
     #[test]
     fn rejects_documentation_ipv6() {
-        assert!(is_allowed_target("2001:db8::1".parse().unwrap()).is_err());
+        assert!(check_target_ip("2001:db8::1".parse().unwrap()).is_err());
         assert!(
-            is_allowed_target("2001:db8:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
+            check_target_ip("2001:db8:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
         );
     }
 
     #[test]
     fn rejects_ipv6_ula_fc00() {
-        assert!(is_allowed_target("fc00::1".parse().unwrap()).is_err());
+        assert!(check_target_ip("fc00::1".parse().unwrap()).is_err());
         assert!(
-            is_allowed_target("fc00:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
+            check_target_ip("fc00:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
         );
     }
 
     #[test]
     fn rejects_ipv6_ula_fd00() {
-        assert!(is_allowed_target("fd00::1".parse().unwrap()).is_err());
+        assert!(check_target_ip("fd00::1".parse().unwrap()).is_err());
         assert!(
-            is_allowed_target("fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
+            check_target_ip("fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
         );
     }
 
     #[test]
     fn allows_ipv6_outside_ula() {
         // fe00:: has first 7 bits = 1111_111x, outside fc00::/7
-        assert!(is_allowed_target("fe00::1".parse().unwrap()).is_ok());
+        assert!(check_target_ip("fe00::1".parse().unwrap()).is_ok());
         // fb00:: has first 7 bits = 1111_101x, outside fc00::/7
-        assert!(is_allowed_target("fb00::1".parse().unwrap()).is_ok());
+        assert!(check_target_ip("fb00::1".parse().unwrap()).is_ok());
     }
 
     // ---- is_allowed_target: allowed public IPs ----
 
     #[test]
     fn allows_cloudflare_dns() {
-        assert!(is_allowed_target("1.1.1.1".parse().unwrap()).is_ok());
-        assert!(is_allowed_target("1.0.0.1".parse().unwrap()).is_ok());
+        assert!(check_target_ip("1.1.1.1".parse().unwrap()).is_ok());
+        assert!(check_target_ip("1.0.0.1".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn allows_google_dns() {
-        assert!(is_allowed_target("8.8.8.8".parse().unwrap()).is_ok());
-        assert!(is_allowed_target("8.8.4.4".parse().unwrap()).is_ok());
+        assert!(check_target_ip("8.8.8.8".parse().unwrap()).is_ok());
+        assert!(check_target_ip("8.8.4.4".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn allows_quad9() {
-        assert!(is_allowed_target("9.9.9.9".parse().unwrap()).is_ok());
+        assert!(check_target_ip("9.9.9.9".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn allows_public_ipv6() {
-        assert!(is_allowed_target("2606:4700:4700::1111".parse().unwrap()).is_ok());
-        assert!(is_allowed_target("2001:4860:4860::8888".parse().unwrap()).is_ok());
+        assert!(check_target_ip("2606:4700:4700::1111".parse().unwrap()).is_ok());
+        assert!(check_target_ip("2001:4860:4860::8888".parse().unwrap()).is_ok());
     }
 
     // ---- is_allowed_target: boundary edge cases ----
@@ -399,78 +399,78 @@ mod tests {
     #[test]
     fn boundary_rfc1918_172_range() {
         // Last address inside 172.16.0.0/12
-        assert!(is_allowed_target("172.31.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("172.31.255.255".parse().unwrap()).is_err());
         // First address outside 172.16.0.0/12
-        assert!(is_allowed_target("172.32.0.0".parse().unwrap()).is_ok());
+        assert!(check_target_ip("172.32.0.0".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn boundary_cgnat_range() {
         // Last address inside 100.64.0.0/10
-        assert!(is_allowed_target("100.127.255.255".parse().unwrap()).is_err());
+        assert!(check_target_ip("100.127.255.255".parse().unwrap()).is_err());
         // First address outside 100.64.0.0/10
-        assert!(is_allowed_target("100.128.0.0".parse().unwrap()).is_ok());
+        assert!(check_target_ip("100.128.0.0".parse().unwrap()).is_ok());
         // Address just before CGNAT range
-        assert!(is_allowed_target("100.63.255.255".parse().unwrap()).is_ok());
+        assert!(check_target_ip("100.63.255.255".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn boundary_documentation_ranges() {
         // Just before TEST-NET-1
-        assert!(is_allowed_target("192.0.1.255".parse().unwrap()).is_ok());
+        assert!(check_target_ip("192.0.1.255".parse().unwrap()).is_ok());
         // Just after TEST-NET-1
-        assert!(is_allowed_target("192.0.3.0".parse().unwrap()).is_ok());
+        assert!(check_target_ip("192.0.3.0".parse().unwrap()).is_ok());
 
         // Just before TEST-NET-2
-        assert!(is_allowed_target("198.51.99.255".parse().unwrap()).is_ok());
+        assert!(check_target_ip("198.51.99.255".parse().unwrap()).is_ok());
         // Just after TEST-NET-2
-        assert!(is_allowed_target("198.51.101.0".parse().unwrap()).is_ok());
+        assert!(check_target_ip("198.51.101.0".parse().unwrap()).is_ok());
 
         // Just before TEST-NET-3
-        assert!(is_allowed_target("203.0.112.255".parse().unwrap()).is_ok());
+        assert!(check_target_ip("203.0.112.255".parse().unwrap()).is_ok());
         // Just after TEST-NET-3
-        assert!(is_allowed_target("203.0.114.0".parse().unwrap()).is_ok());
+        assert!(check_target_ip("203.0.114.0".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn boundary_ipv6_link_local() {
         // fe80::/10 ends at febf:ffff:...:ffff
         assert!(
-            is_allowed_target("febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
+            check_target_ip("febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
         );
-        // fec0:: is outside fe80::/10
-        assert!(is_allowed_target("fec0::".parse().unwrap()).is_ok());
+        // fec0:: is site-local, refused by the shared policy
+        assert!(check_target_ip("fec0::".parse().unwrap()).is_err());
         // fe7f:: is outside fe80::/10 (first 10 bits = 1111_1110_01)
-        assert!(is_allowed_target("fe7f::1".parse().unwrap()).is_ok());
+        assert!(check_target_ip("fe7f::1".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn boundary_ipv6_documentation() {
         // 2001:db8::/32 — last address in range
         assert!(
-            is_allowed_target("2001:0db8:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
+            check_target_ip("2001:0db8:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_err()
         );
         // First address outside the /32
-        assert!(is_allowed_target("2001:0db9::1".parse().unwrap()).is_ok());
+        assert!(check_target_ip("2001:0db9::1".parse().unwrap()).is_ok());
         // Just before the range
         assert!(
-            is_allowed_target("2001:0db7:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_ok()
+            check_target_ip("2001:0db7:ffff:ffff:ffff:ffff:ffff:ffff".parse().unwrap()).is_ok()
         );
     }
 
     #[test]
     fn boundary_loopback_v4() {
         // 127.0.0.0/8 — first address
-        assert!(is_allowed_target("127.0.0.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("127.0.0.0".parse().unwrap()).is_err());
         // Just outside
-        assert!(is_allowed_target("126.255.255.255".parse().unwrap()).is_ok());
-        assert!(is_allowed_target("128.0.0.0".parse().unwrap()).is_ok());
+        assert!(check_target_ip("126.255.255.255".parse().unwrap()).is_ok());
+        assert!(check_target_ip("128.0.0.0".parse().unwrap()).is_ok());
     }
 
     #[test]
     fn boundary_multicast_v4() {
         // 224.0.0.0/4 (224.0.0.0 - 239.255.255.255)
-        assert!(is_allowed_target("224.0.0.0".parse().unwrap()).is_err());
-        assert!(is_allowed_target("223.255.255.255".parse().unwrap()).is_ok());
+        assert!(check_target_ip("224.0.0.0".parse().unwrap()).is_err());
+        assert!(check_target_ip("223.255.255.255".parse().unwrap()).is_ok());
     }
 }

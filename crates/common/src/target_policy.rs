@@ -271,9 +271,9 @@ mod tests {
     }
 
     #[test]
-    fn allows_6to4_public() {
-        // 2002:0101:0101:: embeds 1.1.1.1
-        assert!(is_allowed_target("2002:0101:0101::".parse().unwrap()));
+    fn refuses_6to4_public() {
+        // 2002:0101:0101:: embeds 1.1.1.1; the whole 2002::/16 range is refused
+        assert!(!is_allowed_target("2002:0101:0101::".parse().unwrap()));
     }
 
     // ---- NAT64 ----

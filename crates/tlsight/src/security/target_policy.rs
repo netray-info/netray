@@ -371,4 +371,42 @@ mod tests {
         let ip: IpAddr = "2001:4860:4860::8888".parse().unwrap();
         assert!(check_allowed(&ip).is_ok());
     }
+
+    // ---- agreement with the shared policy ----
+
+    #[test]
+    fn agrees_with_shared_target_policy() {
+        let addrs = [
+            "10.0.0.1",
+            "127.0.0.1",
+            "::1",
+            "fe80::1",
+            "fc00::1",
+            "100.64.0.1",
+            "0.1.2.3",
+            "240.0.0.1",
+            "198.18.0.1",
+            "192.0.0.8",
+            "2002:808:808::1",
+            "2002:a00:1::",
+            "64:ff9b::a00:1",
+            "::ffff:10.0.0.1",
+            "8.8.8.8",
+            "2606:4700::",
+        ];
+        for a in addrs {
+            let ip: IpAddr = a.parse().unwrap();
+            assert_eq!(
+                check_allowed_with_policy(&ip, false).is_err(),
+                !netray_common::target_policy::is_allowed_target(ip),
+                "tlsight and shared policy disagree on {a}"
+            );
+        }
+    }
+
+    #[test]
+    fn policy_flag_allows_private_target() {
+        let ip: IpAddr = "10.0.0.1".parse().unwrap();
+        assert!(check_allowed_with_policy(&ip, true).is_ok());
+    }
 }
