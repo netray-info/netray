@@ -37,11 +37,8 @@ async fn serve(app: axum::Router) -> String {
 }
 
 async fn all_500() -> String {
-    serve(axum::Router::new().route(
-        "/json",
-        get(|| async { StatusCode::INTERNAL_SERVER_ERROR }),
-    ))
-    .await
+    serve(axum::Router::new().route("/json", get(|| async { StatusCode::INTERNAL_SERVER_ERROR })))
+        .await
 }
 
 /// `HEALTHY` gets the golden at once; every other address sleeps past any timeout.
@@ -79,7 +76,10 @@ fn context(ips: &[&str]) -> BackendContext {
 }
 
 fn is_errored<T>(r: &Result<T, SectionError>) -> bool {
-    matches!(r, Err(SectionError::BackendError(_) | SectionError::Timeout))
+    matches!(
+        r,
+        Err(SectionError::BackendError(_) | SectionError::Timeout)
+    )
 }
 
 #[tokio::test]
@@ -96,7 +96,10 @@ async fn c5_every_enrichment_answering_500_errors_the_ip_section() {
         public_or_documentation,
     )
     .await;
-    assert!(direct.is_err(), "check_ip must be Err when every enrichment fails");
+    assert!(
+        direct.is_err(),
+        "check_ip must be Err when every enrichment fails"
+    );
 
     let run = backend(url, Duration::from_secs(5))
         .run("example.com", &context(&[HEALTHY, OTHER]))
@@ -119,7 +122,10 @@ async fn c6_one_timed_out_enrichment_errors_the_ip_section() {
         public_or_documentation,
     )
     .await;
-    assert!(direct.is_err(), "check_ip must be Err when one enrichment times out");
+    assert!(
+        direct.is_err(),
+        "check_ip must be Err when one enrichment times out"
+    );
 
     let run = backend(url, timeout)
         .run("example.com", &context(&[HEALTHY, OTHER]))

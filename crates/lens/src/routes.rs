@@ -1207,6 +1207,7 @@ fn section_status_from_checks(
 
 fn section_status_from_verdicts(result: &Result<BackendResult, SectionError>) -> &'static str {
     match result {
+        Err(SectionError::NotApplicable { .. }) => "skip",
         Err(_) => "error",
         Ok(r) => {
             let mut has_warn = false;
@@ -3145,7 +3146,7 @@ pub mod tests {
                         let ip = params.get("ip").cloned().unwrap_or_default();
                         *path_ref.lock().await = format!("/json?ip={ip}");
                         axum::Json(serde_json::json!({
-                            "network": { "type": "cloud", "org": "Example Corp" },
+                            "network": { "type": "cloud", "org": "Example Corp", "is_spamhaus": false, "is_c2": false, "is_tor": false, "is_vpn": false },
                             "location": { "city": "Berlin", "country": "Germany" }
                         }))
                     }
@@ -3167,6 +3168,7 @@ pub mod tests {
             &[ip],
             std::time::Duration::from_secs(5),
             &Default::default(),
+            netray_common::target_policy::is_allowed_target,
         )
         .await;
 
@@ -3427,5 +3429,65 @@ hsts = 5
             http_payload_from(&sections["http"], &weights).status,
             "error"
         );
+    }
+
+    #[test]
+    fn not_applicable_ip_section_is_skip_and_not_overall_error() {
+        use crate::scoring::engine::{SectionInput, SectionStatus, compute_score};
+        use crate::scoring::profile::ScoringProfile;
+
+        let profile = ScoringProfile::from_toml(
+            r#"
+[meta]
+name = "http-only"
+version = 2
+
+[sections.http]
+weight = 100
+[sections.http.checks]
+hsts = 5
+
+[thresholds]
+"A" = 90
+"F" = 0
+"#,
+        )
+        .unwrap();
+        let checks = vec![grade_integrity_check("hsts", CheckVerdict::Pass)];
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "http".to_string(),
+            SectionInput {
+                checks: checks.clone(),
+                status: SectionStatus::Scored,
+            },
+        );
+        inputs.insert(
+            "ip".to_string(),
+            SectionInput {
+                checks: vec![],
+                status: SectionStatus::NotApplicable {
+                    reason: "no public addresses".to_string(),
+                },
+            },
+        );
+        let score = compute_score(&profile, &inputs);
+        assert!(score.complete);
+
+        let ip_result: Result<BackendResult, SectionError> = Err(SectionError::NotApplicable {
+            reason: "no public addresses".to_string(),
+        });
+        let mut sections = HashMap::new();
+        sections.insert("http".to_string(), grade_integrity_http_ok(checks));
+        sections.insert("ip".to_string(), ip_result);
+
+        let summary = summary_payload_from(&sections, &score, &profile.thresholds);
+        assert_eq!(summary.sections["ip"], "skip");
+        assert_eq!(summary.sections["http"], "pass");
+        assert_ne!(summary.overall, "error");
+        assert_eq!(summary.overall, "pass");
+
+        let weights = HashMap::new();
+        assert_eq!(ip_payload_from(&sections["ip"], &weights).status, "skip");
     }
 }

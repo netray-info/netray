@@ -32,7 +32,12 @@ async fn reputation(body: String) -> Result<CheckVerdict, String> {
         "/json",
         axum::routing::get(move || {
             let body = body.clone();
-            async move { ([(axum::http::header::CONTENT_TYPE, "application/json")], body) }
+            async move {
+                (
+                    [(axum::http::header::CONTENT_TYPE, "application/json")],
+                    body,
+                )
+            }
         }),
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -51,8 +56,7 @@ async fn reputation(body: String) -> Result<CheckVerdict, String> {
     )
     .await
     .map_err(|e| format!("{e:?}"))?;
-    Ok(r
-        .checks
+    Ok(r.checks
         .iter()
         .find(|c| c.name == "reputation")
         .expect("reputation check")
@@ -66,12 +70,32 @@ async fn reputation_is_scored_from_ifconfig_flags() {
     let t = json!(true);
     let rows: Vec<(&str, String, Result<CheckVerdict, ()>)> = vec![
         ("golden unchanged", golden_with(&[]), Ok(CheckVerdict::Pass)),
-        ("is_spamhaus", golden_with(&[("is_spamhaus", t.clone())]), Ok(CheckVerdict::Fail)),
-        ("is_c2", golden_with(&[("is_c2", t.clone())]), Ok(CheckVerdict::Fail)),
-        ("is_tor", golden_with(&[("is_tor", t.clone())]), Ok(CheckVerdict::Fail)),
-        ("is_vpn", golden_with(&[("is_vpn", t.clone())]), Ok(CheckVerdict::Warn)),
+        (
+            "is_spamhaus",
+            golden_with(&[("is_spamhaus", t.clone())]),
+            Ok(CheckVerdict::Fail),
+        ),
+        (
+            "is_c2",
+            golden_with(&[("is_c2", t.clone())]),
+            Ok(CheckVerdict::Fail),
+        ),
+        (
+            "is_tor",
+            golden_with(&[("is_tor", t.clone())]),
+            Ok(CheckVerdict::Fail),
+        ),
+        (
+            "is_vpn",
+            golden_with(&[("is_vpn", t.clone())]),
+            Ok(CheckVerdict::Warn),
+        ),
         // type is display only: "tor" with every flag false is Pass
-        ("type tor, no flags", golden_with(&[("type", json!("tor"))]), Ok(CheckVerdict::Pass)),
+        (
+            "type tor, no flags",
+            golden_with(&[("type", json!("tor"))]),
+            Ok(CheckVerdict::Pass),
+        ),
         // a body without the boolean flags must not pass
         (
             "no flags",

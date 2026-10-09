@@ -87,9 +87,20 @@ mod tests {
     }
 
     async fn get_json(app: &axum::Router, uri: &str) -> serde_json::Value {
-        let mut req = Request::builder().uri(uri).body(Body::empty()).unwrap();
-        req.extensions_mut()
-            .insert(ConnectInfo("198.18.0.1:4000".parse::<SocketAddr>().unwrap()));
+        let mut req = Request::builder()
+            .uri(uri)
+            .header("accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+        let peer = "198.18.0.1:4000".parse::<SocketAddr>().unwrap();
+        req.extensions_mut().insert(ConnectInfo(peer));
+        // What `requester_info_middleware` inserts in the full app; the bare router has no
+        // such layer, so without it the handlers see `/` and ignore `?ip=`.
+        req.extensions_mut().insert(crate::extractors::RequesterInfo {
+            remote: peer,
+            user_agent: None,
+            uri: uri.to_string(),
+        });
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK, "GET {uri}");
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
