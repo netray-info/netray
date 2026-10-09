@@ -67,6 +67,22 @@ const FIXTURES: &[Fixture] = &[
         email: "beacon.sse",
         ip: "ifconfig-json.json",
     },
+    Fixture {
+        name: "http-only",
+        dns: "prism.sse",
+        tls: Some("tlsight-unreachable.json"),
+        http: Some("spectra-inspect.json"),
+        email: "beacon.sse",
+        ip: "ifconfig-json.json",
+    },
+    Fixture {
+        name: "no-weighted-tls",
+        dns: "prism.sse",
+        tls: Some("tlsight-not-tested.json"),
+        http: Some("spectra-inspect.json"),
+        email: "beacon.sse",
+        ip: "ifconfig-json.json",
+    },
 ];
 
 fn fixture(name: &str) -> &'static Fixture {
@@ -425,6 +441,73 @@ async fn lens_golden_no_address_records() {
         path.display()
     );
     check_golden("no-address-records").await;
+}
+
+/// The tlsight goldens of these fixtures come from the tlsight producer test; a missing one
+/// fails with the producer command instead of a bare read error.
+fn require_tlsight_golden(name: &str) {
+    let file = fixture(name).tls.expect("fixture has a tls golden");
+    let path = contracts_dir().join(file);
+    assert!(
+        path.exists(),
+        "tlsight golden {} is missing; write it with `UPDATE_GOLDEN=1 cargo test -p tlsight --test contract_golden`",
+        path.display()
+    );
+}
+
+fn assert_lens_golden_exists(name: &str) {
+    let path = contracts_dir().join(format!("lens-{name}.json"));
+    assert!(
+        path.exists(),
+        "golden {} is missing (UPDATE_GOLDEN=1 writes it after the code lands)",
+        path.display()
+    );
+}
+
+/// A host that answers HTTP but not TLS is a hard fail: grade F, `tls_reachable` named,
+/// and the verdict is complete (tlsight answered).
+#[tokio::test]
+async fn lens_golden_http_only() {
+    require_tlsight_golden("http-only");
+    let projection: Value = serde_json::from_str(&run_fixture("http-only").await).unwrap();
+    let summary = &projection["summary"];
+    assert_eq!(
+        summary["grade"], "F",
+        "http-only: an unreachable TLS endpoint grades F; summary: {summary}"
+    );
+    let checks = summary["hard_fail_checks"].as_array().unwrap();
+    assert!(
+        checks.iter().any(|c| c == "tls_reachable"),
+        "http-only: hard_fail_checks must contain tls_reachable; summary: {summary}"
+    );
+    assert_eq!(
+        summary["complete"], true,
+        "http-only: the verdict is complete; summary: {summary}"
+    );
+    assert_lens_golden_exists("http-only");
+    check_golden("http-only").await;
+}
+
+/// tlsight answered but tested nothing: no weighted TLS check, so the verdict is incomplete.
+#[tokio::test]
+async fn lens_golden_no_weighted_tls() {
+    require_tlsight_golden("no-weighted-tls");
+    let projection: Value = serde_json::from_str(&run_fixture("no-weighted-tls").await).unwrap();
+    let summary = &projection["summary"];
+    assert_eq!(
+        summary["grade"], "incomplete",
+        "no-weighted-tls: no weighted TLS check ran; summary: {summary}"
+    );
+    assert_eq!(
+        summary["complete"], false,
+        "no-weighted-tls: the summary must say `complete: false`; summary: {summary}"
+    );
+    assert_eq!(
+        summary["sections"]["tls"], "error",
+        "no-weighted-tls: the tls section must be `error`; summary: {summary}"
+    );
+    assert_lens_golden_exists("no-weighted-tls");
+    check_golden("no-weighted-tls").await;
 }
 
 #[tokio::test]

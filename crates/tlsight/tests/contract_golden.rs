@@ -14,7 +14,8 @@ use http_body_util::BodyExt;
 use tlsight::quality::types::Category;
 use tlsight::quality::{HealthCheck, PortQualityResult, QualityResult};
 use tlsight::routes::{CaaInfo, DnsContext, InspectResponse, PortResult};
-use tlsight::tls::IpInspectionResult;
+use tlsight::quality::assess_port;
+use tlsight::tls::{InspectionError, IpInspectionResult};
 use tlsight::tls::chain::CertInfo;
 use tlsight::tls::ocsp::OcspInfo;
 use tlsight::tls::params::TlsParams;
@@ -124,6 +125,13 @@ fn response() -> InspectResponse {
     };
     let port_checks = vec![
         check(
+            "tls_reachable",
+            Category::Protocol,
+            CheckStatus::Pass,
+            "TLS reachable",
+            "TLS handshake succeeded",
+        ),
+        check(
             "chain_trusted",
             Category::Certificate,
             CheckStatus::Pass,
@@ -215,4 +223,77 @@ async fn tlsight_inspect_response_matches_golden() {
     let mut body = serde_json::to_string_pretty(&value).unwrap();
     body.push('\n');
     assert_golden("tlsight-inspect.json", &body);
+}
+
+/// Wraps a port assessed by the real `assess_port` over failed IPs in the response lens reads.
+fn failed_response(code: &str, message: &str) -> InspectResponse {
+    let ips: Vec<IpInspectionResult> = [("192.0.2.10", "v4"), ("2001:db8::10", "v6")]
+        .into_iter()
+        .map(|(ip, v)| IpInspectionResult {
+            ip: ip.to_string(),
+            ip_version: v.to_string(),
+            tls: None,
+            chain: None,
+            validation: None,
+            ct: None,
+            enrichment: None,
+            error: Some(InspectionError {
+                code: code.to_string(),
+                message: message.to_string(),
+            }),
+            raw_certs: None,
+        })
+        .collect();
+    let quality = assess_port(
+        &ips,
+        443,
+        true,
+        CheckStatus::Skip,
+        CheckStatus::Skip,
+        false,
+        None,
+        false,
+        "example.com",
+    );
+    let mut resp = response();
+    resp.ports = vec![PortResult {
+        port: 443,
+        ips,
+        consistency: None,
+        validation: None,
+        tlsa: None,
+        quality: Some(quality),
+        error: None,
+    }];
+    resp
+}
+
+async fn body_of(resp: InspectResponse) -> String {
+    let bytes = Json(resp)
+        .into_response()
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let mut body = serde_json::to_string_pretty(&value).unwrap();
+    body.push('\n');
+    body
+}
+
+#[tokio::test]
+async fn tlsight_unreachable_response_matches_golden() {
+    let body = body_of(failed_response("HANDSHAKE_FAILED", "connection refused")).await;
+    assert_golden("tlsight-unreachable.json", &body);
+}
+
+#[tokio::test]
+async fn tlsight_not_tested_response_matches_golden() {
+    let body = body_of(failed_response(
+        "NOT_TESTED_FROM_HERE",
+        "Network is unreachable",
+    ))
+    .await;
+    assert_golden("tlsight-not-tested.json", &body);
 }
