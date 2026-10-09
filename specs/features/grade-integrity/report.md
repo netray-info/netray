@@ -45,7 +45,6 @@ skipped: no entry point changes in this phase; the backends are driven by the co
 | C2 | R4: one cache writer refusing incomplete; no snapshot; badge and OG `?` with the short `Cache-Control` | green | crates/lens/tests/incomplete_results.rs |
 | C3 | R11: golden projection records `complete`; fixture `no-address-records` | green | crates/lens/tests/lens_golden.rs |
 | C4 | email 500 → `incomplete`, `complete:false`, no snapshot id, second request MISS; `scoring_regression.rs:571` moves | green | crates/lens/tests/incomplete_results.rs, scoring_regression.rs |
-| C5 | beacon answer with `skip` everywhere → `incomplete`, email status `"error"` | moved: email-scoring (R4.3) | crates/lens/tests/incomplete_results.rs |
 | C6 | A/AAAA `NxDomain`, tlsight and spectra error → `incomplete`; `no-address-records` golden | green | crates/lens/tests/incomplete_results.rs, lens_golden.rs |
 | C7 | badge first with email 500 → `?`, short `Cache-Control`, then `/api/check` MISS | green | crates/lens/tests/incomplete_results.rs |
 | C8 | OG first with email 500 → `?`, short `Cache-Control`, then `/api/check` MISS | green | crates/lens/tests/incomplete_results.rs |
@@ -53,7 +52,7 @@ skipped: no entry point changes in this phase; the backends are driven by the co
 | C10 | email NotApplicable, others scored → letter, complete | already_implemented | crates/lens/tests/scoring_regression.rs |
 | C11 | committed lens goldens gain `complete:true`, otherwise unchanged | green | crates/lens/tests/lens_golden.rs |
 
-C9 and C10 passed at the baseline (`b486ead`); the others failed there. C5 is dropped from this feature (below).
+C9 and C10 passed at the baseline (`b486ead`); the others failed there. C5 (a beacon answer with `skip` everywhere → incomplete) is no longer a criterion: its scenario left the spec and R4.3 owns it (below).
 
 Test changes beyond the baseline commit, all named in the phase commit's trailers:
 - `OverallScore` literals in `routes.rs` tests, `og_routes.rs`, `badge_routes.rs`, `sdd_lens_badges_p1_c11_cache_coalesce.rs`, `og_label_bounds.rs` gain `complete` (true, or false for a stubbed `error`/`incomplete` grade).
