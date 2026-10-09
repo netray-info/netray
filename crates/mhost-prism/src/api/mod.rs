@@ -459,6 +459,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn compare_post_with_non_global_server_returns_blocked_target_ip() {
+        // 198.18.0.1 passes prism's own address check today; mhost's non-global
+        // refusal must surface as BLOCKED_TARGET_IP, not as a resolver error.
+        let mut state = default_state();
+        let mut config = (*state.config).clone();
+        config.dns.allow_arbitrary_servers = true;
+        state.config = Arc::new(config);
+        let router = test_router(state);
+        let resp = router
+            .oneshot(post_json(
+                "/api/compare",
+                r#"{"domain":"example.com","servers":["198.18.0.1"]}"#,
+            ))
+            .await
+            .unwrap();
+        let status = resp.status();
+        let body = body_string(resp.into_body()).await;
+        let json: serde_json::Value = serde_json::from_str(&body).expect("valid JSON");
+        assert_eq!(
+            json["error"]["code"].as_str(),
+            Some("BLOCKED_TARGET_IP"),
+            "status {status}, body {body}"
+        );
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
     async fn query_post_with_too_many_record_types_returns_422() {
         // Default max_record_types = 10; send 11.
         let types = r#"["A","AAAA","MX","TXT","NS","SOA","CNAME","CAA","SRV","HTTPS","SVCB"]"#;
