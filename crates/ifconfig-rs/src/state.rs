@@ -30,6 +30,7 @@ pub struct AppState {
     pub target_rate_limiter: Arc<KeyedRateLimiter>,
     pub header_filters: Arc<RegexSet>,
     pub trusted_proxies: Arc<Vec<IpNetwork>>,
+    pub rate_limit_exempt: Arc<Vec<IpNetwork>>,
     pub dns_cache: Arc<DnsCache>,
     pub ip_cache: IpCache,
 }
@@ -164,6 +165,22 @@ impl AppState {
             info!("Trusted proxies loaded: {} entries", trusted_proxies.len());
         }
 
+        let rate_limit_exempt: Vec<IpNetwork> = config
+            .rate_limit
+            .exempt_cidrs
+            .iter()
+            .filter_map(|s| {
+                let net = crate::config::parse_network(s);
+                if net.is_none() {
+                    warn!("Invalid rate_limit.exempt_cidrs entry '{}'", s);
+                }
+                net
+            })
+            .collect();
+        if !rate_limit_exempt.is_empty() {
+            info!("Rate-limit exempt networks loaded: {} entries", rate_limit_exempt.len());
+        }
+
         let ip_cache = Cache::builder()
             .max_capacity(config.cache.max_entries)
             .time_to_live(Duration::from_secs(config.cache.ttl_secs))
@@ -177,6 +194,7 @@ impl AppState {
             target_rate_limiter,
             header_filters: Arc::new(header_filters),
             trusted_proxies: Arc::new(trusted_proxies),
+            rate_limit_exempt: Arc::new(rate_limit_exempt),
             dns_cache: Arc::new(new_dns_cache()),
             ip_cache,
         }

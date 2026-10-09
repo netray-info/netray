@@ -4,6 +4,13 @@
 
 use lens::backends::ip::check_ip;
 
+fn public_or_documentation(ip: std::net::IpAddr) -> bool {
+    match netray_common::target_policy::refusal_reason(ip) {
+        None => true,
+        Some(r) => r.starts_with("documentation"),
+    }
+}
+
 const GOLDEN: &str = include_str!("../../../tests/fixtures/contracts/ifconfig-json.json");
 
 #[tokio::test]
@@ -43,6 +50,7 @@ async fn check_ip_reads_real_ifconfig_json_body() {
         &[ip],
         std::time::Duration::from_secs(5),
         &Default::default(),
+        public_or_documentation,
     )
     .await
     .expect("check_ip");

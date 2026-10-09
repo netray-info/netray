@@ -1802,6 +1802,9 @@ async fn range_handler(State(state): State<AppState>, Query(params): Query<Range
 
     let asn_class =
         crate::backend::asn_heuristic::classify_asn(asn_number, asn_org.as_deref(), ctx.asn_patterns.as_ref());
+    let asn_hosting = asn_number
+        .and_then(|n| ctx.asn_info.as_deref().and_then(|db| db.lookup(n)))
+        .is_some_and(|m| m.category == crate::backend::asn_info::AsnCategory::Hosting);
     let is_datacenter = is_cloud
         || ctx
             .datacenter_ranges
@@ -1811,21 +1814,24 @@ async fn range_handler(State(state): State<AppState>, Query(params): Query<Range
         || matches!(
             asn_class,
             crate::backend::asn_heuristic::AsnClassification::Hosting { .. }
-        );
+        )
+        || asn_hosting;
 
-    let network_type = if is_botnet_c2 {
-        "c2"
-    } else if is_cloud {
-        "cloud"
-    } else if is_vpn || matches!(asn_class, crate::backend::asn_heuristic::AsnClassification::Vpn { .. }) {
-        "vpn"
-    } else if is_threat {
-        "spamhaus"
-    } else if is_datacenter {
-        "datacenter"
-    } else {
-        "residential"
-    }
+    let is_tor = ctx.tor_exit_nodes.lookup(&network_addr).unwrap_or(false);
+    let is_bot = ctx.bot_db.as_deref().and_then(|db| db.lookup(network_addr)).is_some();
+    let is_internal = !is_global_ip(network_addr);
+    let is_vpn = is_vpn || matches!(asn_class, crate::backend::asn_heuristic::AsnClassification::Vpn { .. });
+
+    let network_type = crate::backend::classify_network_type(NetworkFlags {
+        is_internal,
+        is_c2: is_botnet_c2,
+        is_bot,
+        is_cloud,
+        is_vpn,
+        is_tor,
+        is_spamhaus: is_threat,
+        is_datacenter,
+    })
     .to_string();
 
     let response = RangeResponse {
@@ -1834,7 +1840,7 @@ async fn range_handler(State(state): State<AppState>, Query(params): Query<Range
         org: asn_org,
         network_type,
         is_cloud,
-        is_vpn: is_vpn || matches!(asn_class, crate::backend::asn_heuristic::AsnClassification::Vpn { .. }),
+        is_vpn,
         is_datacenter,
         is_spamhaus: is_threat,
         is_c2: is_botnet_c2,

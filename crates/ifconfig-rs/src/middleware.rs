@@ -22,6 +22,15 @@ pub async fn rate_limit(State(state): State<AppState>, req: Request<axum::body::
         return next.run(req).await;
     }
 
+    if let Some(peer) = req
+        .extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| c.0.ip())
+        && state.rate_limit_exempt.iter().any(|net| net.contains(peer))
+    {
+        return next.run(req).await;
+    }
+
     let ip = match req.extensions().get::<RequesterInfo>() {
         Some(info) => info.remote.ip(),
         None => return next.run(req).await,

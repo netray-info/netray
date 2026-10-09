@@ -145,6 +145,12 @@ per_ip_burst = 10
 # Default: 20
 # per_target_burst = 20
 
+# Networks whose TCP peer skips the per-IP limiter. Matched on the connection
+# peer address, never on a forwarded header. List only trusted internal callers
+# (for example lens), never the reverse proxy.
+# Default: [] (no exemption)
+# exempt_cidrs = ["172.30.0.0/24"]
+
 [batch]
 # Enable the POST /batch endpoint for bulk IP lookups.
 # Default: false (disabled)

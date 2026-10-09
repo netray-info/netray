@@ -35,6 +35,7 @@ Line numbers at `8eb895a`.
 4. **One classifier (R5.2).** ifconfig-rs classifies with one function, in `/json`'s priority order (internal > c2 > bot > cloud > vpn > tor > spamhaus > datacenter > residential), used by `/json`, `/network` and `/range` (which applies it to the range's network address).
 5. **Messages are text (R5.5).** A lint or check message is rendered as text in prism's and lens's frontends, in lens's snapshot HTML and in SVG/OG text; the Markdown exports of lens, prism, beacon, tlsight and spectra put every message, every value read from the target (record data, check details, certificate subjects, header values, redirect URLs, cookie names) and the domain or target in an inline code span (a backtick fence longer than any backtick run in the value), so a copied report carries no live link, autolink or HTML. A `tests/repo` convention test fails when a frontend under `crates/*/frontend/src` or `packages/common-frontend/src` uses `innerHTML`, `outerHTML`, `insertAdjacentHTML` or `dangerouslySetInnerHTML`.
 6. **`@system` only when allowed (R5.9, SC17).** prism's `/api/config` reports whether system resolvers are allowed; the UI lists and documents `@system` only when it said so (hidden before the answer and when the request fails). `POST /api/parse` offers `@system` as a completion only when allowed. The server keeps refusing it when disallowed. `crates/mhost-prism/tests/fixtures/prism.production.toml` sets `[dns] allow_system_resolvers = false` (K5).
+7. **Enrichment calls from lens are exempt from the per-client limit (R5.2).** ifconfig-rs's `[rate_limit] exempt_cidrs` lists networks, empty by default. A request whose TCP peer address lies in one of them skips the per-IP limiter of the request middleware (`/batch` and `/diff` charge the per-IP limiter in their handlers and stay limited; no internal caller uses them); the match is on the connection's peer, never on `X-Forwarded-For` or `X-Real-IP`, so a public client cannot claim the exemption. An entry that is not a CIDR fails config validation. The per-target limiter still applies. `crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml` exempts the backend network lens calls from, `exempt_cidrs = ["172.30.0.0/24"]` (the subnet its `trusted_proxies` already names; Traefik has no address on it).
 
 ## Phase 1 — prism lints
 
@@ -53,7 +54,7 @@ Line numbers at `8eb895a`.
 ## Phase 2 — IP reputation
 
 **Depends on:** none
-**Requirements:** 3, 4
+**Requirements:** 3, 4, 7
 
 ### Test Scenarios
 
@@ -66,6 +67,11 @@ Line numbers at `8eb895a`.
 - GIVEN three A addresses WHEN lens enriches THEN all three, no "checked" detail.
 - GIVEN A 198.51.100.7 and A 10.0.0.5 WHEN lens enriches THEN only 198.51.100.7 is sent, the section is scored (not Errored), detail "checked 1 of 2 addresses".
 - GIVEN one fixture address WHEN ifconfig-rs answers `/json`, `/network` and `/range` for `<addr>/32` THEN all three report the same type.
+- GIVEN `exempt_cidrs = ["172.30.0.0/24"]`, `172.30.0.0/24` a trusted proxy and `per_ip_burst = 1` WHEN peer 172.30.0.5 sends three requests with `X-Forwarded-For: 198.51.100.1` THEN none is refused with 429.
+- GIVEN the same config WHEN a peer outside the exempt networks (trusted proxy 172.31.0.2, or untrusted 203.0.113.9) sends two requests with `X-Forwarded-For: 172.30.0.5` THEN the second is refused with 429.
+- GIVEN no `exempt_cidrs` and `per_ip_burst = 1` WHEN peer 172.30.0.5 sends two requests THEN the second is refused with 429.
+- GIVEN `exempt_cidrs = ["nope"]` WHEN the config is validated THEN it fails, naming `rate_limit.exempt_cidrs`.
+- GIVEN `ifconfig.production.toml` WHEN loaded THEN it carries `rate_limit.exempt_cidrs = ["172.30.0.0/24"]` and validates.
 
 ## Phase 3 — Messages as text
 
@@ -114,6 +120,7 @@ The hostile value is `"><img src=x onerror=alert(1)>[x](javascript:alert(1))`, c
 - beacon's, tlsight's and spectra's Markdown exports join requirement 5, after the Phase 3 reading found them inserting details raw (operator, 2026-10-09; AMENDMENT).
 - Duplicates keep the highest TTL, as mhost's `check_ttl` does; one classifier in `/json`'s order, applied to a range's network address (independent reading).
 - prism's frontend gains jsdom and `@solidjs/testing-library` as dev dependencies for its rendering test, matching lens's setup.
+- lens's enrichment calls exempt from ifconfig-rs's per-client limit through `[rate_limit] exempt_cidrs`, matched on the TCP peer: lens sends the visitor's IP as `X-Forwarded-For` from the trusted backend network, so up to eight calls per check counted against the visitor's 10-burst, 60-a-minute budget, and a 429 now errors the IP section; matching the peer, not a forwarded header, keeps the exemption unspoofable (operator, 2026-10-09; AMENDMENT from the Phase 2 reader).
 - Phases are independent; built in order 1–4.
 
 ## Open decisions

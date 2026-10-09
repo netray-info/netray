@@ -119,6 +119,12 @@ async fn serve(app: Router) -> String {
     format!("http://{addr}")
 }
 
+/// The DNS golden's A record (192.0.2.10) is a documentation address, which lens's production
+/// address policy does not enrich (spec backend-correctness, requirement 3). The harness
+/// serves it with a public stand-in so the IP section stays scored.
+const DNS_DOCUMENTATION_A: &str = r#"{"A":"192.0.2.10"}"#;
+const DNS_PUBLIC_A: &str = r#"{"A":"1.1.1.1"}"#;
+
 /// A stub serving `file` at `path`, with the given content type and method.
 async fn stub(
     path: &'static str,
@@ -126,7 +132,16 @@ async fn stub(
     content_type: &'static str,
     file: &str,
 ) -> String {
-    let body = golden(file);
+    stub_body(path, post_method, content_type, golden(file)).await
+}
+
+/// A stub serving `body` at `path`, with the given content type and method.
+async fn stub_body(
+    path: &'static str,
+    post_method: bool,
+    content_type: &'static str,
+    body: String,
+) -> String {
     let handler = move || {
         let body = body.clone();
         async move { ([(header::CONTENT_TYPE, content_type)], body) }
@@ -155,7 +170,8 @@ async fn production_config(f: &Fixture) -> Config {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
 
-    config.backends.dns.url = Some(stub("/api/check", true, "text/event-stream", f.dns).await);
+    let dns = golden(f.dns).replace(DNS_DOCUMENTATION_A, DNS_PUBLIC_A);
+    config.backends.dns.url = Some(stub_body("/api/check", true, "text/event-stream", dns).await);
     config.backends.tls.url = Some(match f.tls {
         Some(file) => stub("/api/inspect", false, "application/json", file).await,
         None => failing_stub("/api/inspect", false).await,
