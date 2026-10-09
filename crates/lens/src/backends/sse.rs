@@ -83,3 +83,44 @@ async fn drain(
 
     Ok(events)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn resp(body: &str) -> reqwest::Response {
+        reqwest::Response::from(axum::http::Response::new(body.to_string()))
+    }
+
+    #[tokio::test]
+    async fn c3_stream_without_terminal_event_is_an_error() {
+        let r = collect(resp("event: batch\ndata: {\"a\":1}\n\n"), "done").await;
+        assert!(r.is_err(), "truncated stream must be Err, got {r:?}");
+        let r = collect_until_type(resp("data: {\"type\":\"batch\"}\n\n"), "done").await;
+        assert!(r.is_err(), "truncated stream must be Err, got {r:?}");
+    }
+
+    #[tokio::test]
+    async fn c4_stream_with_terminal_event_returns_all_events() {
+        let body = "event: batch\ndata: {\"a\":1}\n\nevent: done\ndata: {}\n\n";
+        let ev = collect(resp(body), "done").await.expect("ok");
+        assert_eq!(ev.len(), 2);
+        assert_eq!(ev[0]["type"], "batch");
+        assert_eq!(ev[0]["data"], serde_json::json!({"a":1}));
+        assert_eq!(ev[1]["type"], "done");
+    }
+
+    #[tokio::test]
+    async fn c5_multiline_data_is_joined_with_newline() {
+        let body = "event: batch\ndata: {\"a\":\ndata: 1}\n\nevent: done\ndata: {}\n\n";
+        let ev = collect(resp(body), "done").await.expect("ok");
+        assert_eq!(ev[0]["data"], serde_json::json!({"a":1}));
+    }
+
+    #[tokio::test]
+    async fn c6_unparseable_data_is_an_error() {
+        let body = "event: batch\ndata: not-json\n\nevent: done\ndata: {}\n\n";
+        let r = collect(resp(body), "done").await;
+        assert!(r.is_err(), "bad JSON must be Err, got {r:?}");
+    }
+}
