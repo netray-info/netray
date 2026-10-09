@@ -695,6 +695,33 @@ mod tests {
         }
     }
 
+    fn backend_timeouts_toml(slow_ms: u64, ip_ms: u64) -> String {
+        format!(
+            "[backends.dns]\ntimeout_ms = {slow_ms}\n\
+             [backends.tls]\ntimeout_ms = {slow_ms}\n\
+             [backends.http]\ntimeout_ms = {slow_ms}\n\
+             [backends.email]\nurl = \"http://beacon:8084\"\ntimeout_ms = {slow_ms}\n\
+             [backends.ip]\ntimeout_ms = {ip_ms}\n"
+        )
+    }
+
+    #[test]
+    fn backend_timeouts_over_the_budget_are_rejected() {
+        let err = load_toml(&backend_timeouts_toml(20000, 2000)).unwrap_err();
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains("timeout") && msg.contains("deadline"),
+            "error must name the timeout budget and the deadline, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn backend_timeouts_within_the_budget_load() {
+        if let Err(e) = load_toml(&backend_timeouts_toml(15000, 2000)) {
+            panic!("15000/2000 must load: {e}");
+        }
+    }
+
     #[test]
     fn production_fixture_values() {
         let path = format!(
