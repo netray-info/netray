@@ -1,6 +1,6 @@
 # Spec: v2 model
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-09
 
 ## Goal
@@ -70,7 +70,7 @@ Two new crates exist without changing any result: `netray-model` holds V2's chec
 - Four features for Phase 1a, this one first (V1.1, V1.2), then `v2-modules`, `v2-engine-in-process`, `v2-metrics` (operator, 2026-10-09).
 - The V1 mapping lives in the V1 crates as `From` impls, over mirror enums in `netray-model`: modules depend on the model (§3.1), no second copy drifts (P26), and V1.3 carries the impls along with the renames (operator, 2026-10-09).
 - A function instead of `From` where the orphan rule forbids it (prism over mhost; a string code in tlsight): forced by Rust, not a choice.
-- `HANDSHAKE_FAILED` and other connect errors map to `unmeasured`, over `fail`: they say the check could not be measured; security-correctness R5.3 keeps EHOSTUNREACH target-side as HANDSHAKE_FAILED, and V2's model separates "broken" from "could not check" (S13). Revisit in 1b if a module needs `fail` there.
+- `HANDSHAKE_FAILED` and other connect errors map to `unmeasured`, over `fail`: they say the check could not be measured; security-correctness R5.3 keeps EHOSTUNREACH target-side as HANDSHAKE_FAILED, and V2's model separates "broken" from "could not check" (S13), and `tls.tls_reachable` carries unreachability (S28) (operator, 2026-10-09).
 
 ## Open decisions
 
