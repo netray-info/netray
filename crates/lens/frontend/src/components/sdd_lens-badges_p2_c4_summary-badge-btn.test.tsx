@@ -87,3 +87,20 @@ describe('Summary — grade badge embed button (SDD §10 step 17)', () => {
     expect(queryByRole('button', { name: /share/i })).toBeNull();
   });
 });
+
+describe('Summary — incomplete grade renders like the unscored state', () => {
+  it('shows "?" and no share button when grade is incomplete', () => {
+    const incomplete = { ...SUMMARY, grade: 'incomplete', complete: false, score: 0 } as SummaryEvent;
+    const { queryByRole, container } = render(() => (
+      <Summary
+        summary={incomplete}
+        done={DONE}
+        domain="example.com"
+        badgesEnabled={true}
+      />
+    ));
+    expect(container.textContent).toContain('?');
+    expect(container.textContent).not.toContain('incomplete');
+    expect(queryByRole('button', { name: /share/i })).toBeNull();
+  });
+});

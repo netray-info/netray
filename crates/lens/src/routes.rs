@@ -3274,4 +3274,135 @@ pub mod tests {
             "empty token between commas must return error, got: {err}"
         );
     }
+
+    // --- grade integrity: a section absent from the profile is not an error
+
+    fn grade_integrity_check(name: &str, verdict: CheckVerdict) -> CheckResult {
+        CheckResult {
+            name: name.to_string(),
+            verdict,
+            messages: vec![],
+        }
+    }
+
+    fn grade_integrity_http_ok(checks: Vec<CheckResult>) -> Result<BackendResult, SectionError> {
+        Ok(BackendResult {
+            checks,
+            extra: BackendExtra::Http {
+                raw_headline: String::new(),
+                detail_url: String::new(),
+                status_code: Some(200),
+                http_version: None,
+                response_duration_ms: None,
+                server_ip: None,
+                server_org: None,
+                server_network_type: None,
+            },
+        })
+    }
+
+    #[test]
+    fn summary_section_absent_from_profile_is_not_error() {
+        use crate::scoring::engine::{SectionInput, SectionStatus, compute_score};
+        use crate::scoring::profile::ScoringProfile;
+
+        let profile = ScoringProfile::from_toml(
+            r#"
+[meta]
+name = "no-http"
+version = 2
+
+[sections.dns]
+weight = 50
+[sections.dns.checks]
+caa = 5
+
+[sections.tls]
+weight = 50
+[sections.tls.checks]
+chain_trusted = 5
+
+[thresholds]
+"A" = 90
+"F" = 0
+"#,
+        )
+        .unwrap();
+
+        let dns_checks = vec![grade_integrity_check("caa", CheckVerdict::Pass)];
+        let tls_checks = vec![grade_integrity_check("chain_trusted", CheckVerdict::Pass)];
+        let http_checks = vec![grade_integrity_check("hsts", CheckVerdict::Warn)];
+
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "dns".to_string(),
+            SectionInput { checks: dns_checks.clone(), status: SectionStatus::Scored },
+        );
+        inputs.insert(
+            "tls".to_string(),
+            SectionInput { checks: tls_checks.clone(), status: SectionStatus::Scored },
+        );
+        inputs.insert(
+            "http".to_string(),
+            SectionInput { checks: http_checks.clone(), status: SectionStatus::Scored },
+        );
+        let score = compute_score(&profile, &inputs);
+        assert!(score.complete, "an unprofiled section must not make the score incomplete");
+
+        let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
+        for (name, checks) in [("dns", dns_checks), ("tls", tls_checks)] {
+            let extra = BackendExtra::Tls { raw_headline: String::new(), detail_url: String::new() };
+            sections.insert(name.to_string(), Ok(BackendResult { checks, extra }));
+        }
+        sections.insert("http".to_string(), grade_integrity_http_ok(http_checks));
+
+        let summary = summary_payload_from(&sections, &score, &profile.thresholds);
+        assert_eq!(summary.sections["http"], "warn");
+        assert_ne!(summary.overall, "error");
+        assert!(summary.complete);
+
+        // The section event status agrees, with no weights for the unprofiled section.
+        let event = http_payload_from(&sections["http"], &HashMap::new());
+        assert_eq!(event.status, "warn");
+    }
+
+    #[test]
+    fn summary_profiled_section_with_nothing_possible_stays_error() {
+        use crate::scoring::engine::{SectionInput, SectionStatus, compute_score};
+        use crate::scoring::profile::ScoringProfile;
+
+        let profile = ScoringProfile::from_toml(
+            r#"
+[meta]
+name = "http-only"
+version = 2
+
+[sections.http]
+weight = 100
+[sections.http.checks]
+hsts = 5
+
+[thresholds]
+"A" = 90
+"F" = 0
+"#,
+        )
+        .unwrap();
+        let checks = vec![grade_integrity_check("hsts", CheckVerdict::Skip)];
+        let mut inputs = HashMap::new();
+        inputs.insert(
+            "http".to_string(),
+            SectionInput { checks: checks.clone(), status: SectionStatus::Scored },
+        );
+        let score = compute_score(&profile, &inputs);
+        let mut sections = HashMap::new();
+        sections.insert("http".to_string(), grade_integrity_http_ok(checks));
+
+        let summary = summary_payload_from(&sections, &score, &profile.thresholds);
+        assert_eq!(summary.sections["http"], "error");
+        assert_eq!(summary.overall, "error");
+
+        let weights: HashMap<String, u32> = profile.sections["http"].checks.clone();
+        assert_eq!(http_payload_from(&sections["http"], &weights).status, "error");
+    }
 }
