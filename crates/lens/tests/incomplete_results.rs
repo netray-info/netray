@@ -1,9 +1,9 @@
 //! Incomplete results (spec grade-integrity, Phase 2, requirements 3 and 4).
 //!
-//! A real stub server serves the committed DNS golden (or a rewritten variant of it; the TLS,
-//! HTTP, email and IP sections come from golden modules of the engine
-//! registry, or from ones that are incomplete); lens runs with `tests/fixtures/lens.production.toml` (the DNS URL
-//! pointed at the stub), the cache enabled and a temp-file snapshot store. The routers are driven
+//! The DNS module runs the committed DNS golden (or a rewritten variant of it); the TLS, HTTP,
+//! email and IP sections come from golden modules of the engine registry, or from ones that are
+//! incomplete; lens runs with `tests/fixtures/lens.production.toml`, the cache enabled and a
+//! temp-file snapshot store. The routers are driven
 //! in-process. A result with an Errored section is `incomplete`: never cached, never
 //! snapshotted, never badged or rendered as a letter.
 
@@ -16,8 +16,10 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
-use axum::routing::{get, post};
-use common::{email_golden, email_incomplete, http_module, ip_golden, registry_with, tls_module};
+use common::{
+    dns_golden_raw, dns_with_body, email_golden, email_incomplete, http_module, ip_golden,
+    registry_with, tls_module,
+};
 use lens::config::Config;
 use lens::routes::{api_router, badge_router, og_router};
 use lens::snapshot::SnapshotStore;
@@ -26,7 +28,7 @@ use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 use tower::ServiceExt;
 
-/// What the DNS stub answers.
+/// What the DNS module runs.
 #[derive(Clone)]
 enum Answer {
     Golden(&'static str),
@@ -41,37 +43,6 @@ fn golden(name: &str) -> String {
     let path = contracts_dir().join(name);
     std::fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
-}
-
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    format!("http://{addr}")
-}
-
-async fn stub(
-    path: &'static str,
-    post_method: bool,
-    content_type: &'static str,
-    answer: Answer,
-) -> String {
-    let body = match &answer {
-        Answer::Golden(f) => golden(f),
-        Answer::Body(b) => b.clone(),
-    };
-    let handler = move || {
-        let body = body.clone();
-        async move { (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], body) }
-    };
-    let route = if post_method {
-        post(handler)
-    } else {
-        get(handler)
-    };
-    serve(Router::new().route(path, route)).await
 }
 
 struct Backends {
@@ -100,12 +71,11 @@ struct Harness {
     _db: NamedTempFile,
 }
 
-/// Production config on stubs, cache enabled, snapshot store on a temp sqlite file.
+/// Production config, cache enabled, snapshot store on a temp sqlite file.
 async fn harness(b: Backends) -> Harness {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
-    config.backends.dns.url = Some(stub("/api/check", true, "text/event-stream", b.dns).await);
     assert!(config.cache.enabled, "production config enables the cache");
     config.snapshots.enabled = true;
 
@@ -118,7 +88,12 @@ async fn harness(b: Backends) -> Harness {
         Some(file) => email_golden(file),
         None => email_incomplete(),
     };
+    let dns = match &b.dns {
+        Answer::Golden(file) => dns_golden_raw(file),
+        Answer::Body(body) => dns_with_body(body),
+    };
     let registry = registry_with(
+        dns,
         http_module(b.http),
         email,
         ip_golden("ifconfig-json.json"),

@@ -36,11 +36,9 @@ fn make_state_with_cache(ttl_seconds: u64) -> AppState {
         },
         backends: BackendsConfig {
             dns: lens::config::BackendConfig {
-                url: Some("http://127.0.0.1:19999".to_string()),
                 timeout_ms: 100,
                 ..Default::default()
             },
-            dns_servers: Vec::new(),
             tls: lens::config::BackendConfig {
                 url: Some("http://127.0.0.1:19998".to_string()),
                 timeout_ms: 100,

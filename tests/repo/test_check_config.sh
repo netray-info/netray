@@ -38,6 +38,10 @@ grep -q '^geoip_city_db = "/netray/data/' "$lens_fixture" || fail "lens: [module
 sed -n '/^\[backends\.ip\]/,/^\[/p' "$lens_fixture" | grep -q '^url' && fail "lens: [backends.ip] still carries url"
 sed -n '/^\[backends\.tls\]/,/^\[/p' "$lens_fixture" | grep -q '^url' && fail "lens: [backends.tls] still carries url"
 grep -q '^\[modules\.tls\.limits\]' "$lens_fixture" || fail "lens: production fixture has no [modules.tls.limits]"
+sed -n '/^\[backends\.dns\]/,/^\[/p' "$lens_fixture" | grep -q '^url' && fail "lens: [backends.dns] still carries url"
+grep -q '^dns_servers' "$lens_fixture" && fail "lens: production fixture still carries [backends] dns_servers"
+grep -q '^\[modules\.dns\]' "$lens_fixture" || fail "lens: production fixture has no [modules.dns]"
+sed -n '/^\[modules\.dns\.dns\]/,/^\[/p' "$lens_fixture" | grep -q '^allow_system_resolvers = false' || fail "lens: [modules.dns.dns] does not carry allow_system_resolvers = false"
 
 # sub:fixture:bad-value sed expression ("" = validate() has no rejecting rule to exercise)
 table=(
@@ -153,7 +157,7 @@ for f in "$lens_nodata" "$REPO_ROOT/crates/lens/lens.dev.toml" "$REPO_ROOT/crate
     [ "$rc" -eq 0 ] || fail "lens: $f exited $rc, expected 0 ($out)"
 done
 
-# V2 Phases 1 to 4: the HTTP, email, IP and TLS sections are modules. A leftover `[backends.<x>] url`
+# V2 Phases 1 to 5: the HTTP, email, IP, TLS and DNS sections are modules. A leftover `[backends.<x>] url`
 # and an unknown `[modules.<x>]` key both fail the check and the output names the offending key.
 module_rejects=(
     "backends.http url:url:s|^\\[backends\\.http\\]\$|[backends.http]\\nurl = 'http://spectra:8082'|"
@@ -164,6 +168,9 @@ module_rejects=(
     "modules.ip bogus:bogus:s|^\\[modules\\.ip\\]\$|[modules.ip]\\nbogus = 1|"
     "backends.tls url:url:s|^\\[backends\\.tls\\]\$|[backends.tls]\\nurl = 'http://tlsight:8081'|"
     "modules.tls bogus:bogus:s|^\\[modules\\.tls\\.limits\\]\$|[modules.tls]\\nbogus = 1\\n\\n[modules.tls.limits]|"
+    "backends.dns url:url:s|^\\[backends\\.dns\\]\$|[backends.dns]\\nurl = 'http://prism:8080'|"
+    "backends dns_servers:dns_servers:s|^\\[backends\\.dns\\]\$|[backends]\\ndns_servers = ['google']\\n\\n[backends.dns]|"
+    "modules.dns bogus:bogus:s|^servers = .*\$|servers = ['google']\\nbogus = 1|"
 )
 n=0
 for row in "${module_rejects[@]}"; do

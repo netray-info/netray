@@ -1,24 +1,19 @@
-// Contract test: lens parses the golden its DNS backend writes; the TLS module (`netray_tls`)
-// and `netray_http` translate the TLS and HTTP goldens (both sections run in-process).
+// Contract test: lens runs the DNS module (`netray_dns`) on the golden its prism writes; the TLS
+// module (`netray_tls`) and `netray_http` translate the TLS and HTTP goldens (all sections run
+// in-process).
 //
 // Each backend's own `tests/contract_golden.rs` writes its golden under
-// `tests/fixtures/contracts/` from its real response types. Here a local HTTP server
-// serves the DNS golden at the path and method lens calls, and lens's public `check_dns` must
-// produce checks and no error; the TLS module runs the tlsight golden through lens's
-// `ModuleSection`. Both must carry values that come from the golden rather than defaults.
+// `tests/fixtures/contracts/` from its real response types. Here the DNS and TLS modules run
+// the goldens through lens's `ModuleSection`; both must produce checks and no error and carry
+// values that come from the golden rather than defaults.
 
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
 mod common;
 
-use axum::Router;
-use axum::http::header;
-use axum::routing::post;
-use common::{run_tls, tls_golden};
+use common::{dns_golden_raw, run_dns, run_tls, tls_golden};
 use lens::backends::BackendExtra;
-use lens::backends::dns::check_dns;
 use lens::scoring::engine::CheckVerdict;
 use netray_engine::SectionOutcome;
 use netray_http::inspect::assembler::InspectResponse;
@@ -35,37 +30,11 @@ fn golden(name: &str) -> String {
         .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
 }
 
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    });
-    format!("http://{addr}")
-}
-
 #[tokio::test]
 async fn lens_parses_prism_golden() {
-    let body = golden("prism.sse");
-    let app = Router::new().route(
-        "/api/check",
-        post(move || {
-            let body = body.clone();
-            async move { ([(header::CONTENT_TYPE, "text/event-stream")], body) }
-        }),
-    );
-    let url = serve(app).await;
-
-    let result = check_dns(
-        &reqwest::Client::new(),
-        &url,
-        "example.com",
-        &[],
-        TIMEOUT,
-        &reqwest::header::HeaderMap::new(),
-    )
-    .await
-    .expect("lens must parse prism's golden without a section error");
+    let result = run_dns(dns_golden_raw("prism.sse"), TIMEOUT)
+        .await
+        .expect("lens must run the DNS module on prism's golden without a section error");
 
     assert!(
         !result.checks.is_empty(),
@@ -83,13 +52,12 @@ async fn lens_parses_prism_golden() {
         .find(|c| c.name == "caa")
         .expect("lint finding `caa` missing");
     assert_eq!(caa.verdict, CheckVerdict::Warn);
+    let BackendExtra::Dns { resolved_ips, .. } = &result.extra else {
+        panic!("expected BackendExtra::Dns");
+    };
     assert!(
-        result
-            .resolved_ips
-            .iter()
-            .any(|ip| ip.to_string() == "192.0.2.10"),
-        "resolved IPs {:?} do not come from the golden's A batch",
-        result.resolved_ips
+        resolved_ips.iter().any(|ip| ip.to_string() == "192.0.2.10"),
+        "resolved IPs {resolved_ips:?} do not come from the golden's A batch",
     );
 }
 

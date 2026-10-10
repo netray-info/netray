@@ -50,7 +50,7 @@ fetch() {
 # sub | crate dir | config | http bind var | metrics bind var | extra env | HSTS
 rows=(
   "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db|max-age=31536000; includeSubDomains; preload"
-  "dns|dns|prism.dev.toml|PRISM_SERVER__BIND|PRISM_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
+  "dns|dns|prism.dev.toml|NETRAY_DNS_SERVER__BIND|NETRAY_DNS_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
   "tls|tls|tlsight.dev.toml|NETRAY_TLS_SERVER__BIND|NETRAY_TLS_SERVER__METRICS_BIND|NETRAY_TLS_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas|max-age=31536000; includeSubDomains; preload"
   "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
   "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"

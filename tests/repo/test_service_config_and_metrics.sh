@@ -65,6 +65,6 @@ check_metrics() {
 }
 
 check_metrics http NETRAY_HTTP_ spectra
-check_metrics dns PRISM_ prism
+check_metrics dns NETRAY_DNS_ prism
 
 echo "PASS"

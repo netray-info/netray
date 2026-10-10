@@ -1,9 +1,9 @@
 //! V2 Phase 2, requirement 8 (criterion C6): lens takes the email section from the engine
 //! registry, and the DKIM selectors on a check request reach the module. With a stub email
 //! module in the registry that records `ctx.options.dkim_selectors`, `POST /api/check` with
-//! `dkim_selectors` runs it in-process with them; without, the module sees `None`. The other
-//! backends point at a closed port and there is no `[backends.email] url`, so the section
-//! cannot have come from a request.
+//! `dkim_selectors` runs it in-process with them; without, the module sees `None`. There is no
+//! `[backends.email] url` and no other section's module in the registry, so the section cannot
+//! have come from a request.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -64,9 +64,6 @@ fn app() -> (Router, Arc<Mutex<Vec<Option<Vec<String>>>>>) {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
-    // Refused connections at once: no backend answers, so only the module can supply email.
-    let closed = || Some("http://127.0.0.1:1".to_string());
-    config.backends.dns.url = closed();
     config.cache.enabled = false;
     config.snapshots.enabled = false;
 

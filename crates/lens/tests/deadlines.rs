@@ -1,24 +1,17 @@
 //! Deadlines (spec grade-integrity, Phase 3, requirement 5; criteria C1, C3-C6).
 //!
-//! A real axum stub serves the committed DNS golden, or stalls on purpose; the TLS and email
-//! modules answer their golden at once, after a delay, or never. `AppState` is
+//! The DNS, TLS and email modules answer their committed golden at once, after a delay, or never. `AppState` is
 //! built from a `Config` constructed here (not `Config::load`), the check is driven through
 //! `run_check_with_deadline`. A timed-out section is `Err(SectionError::Timeout)` and makes
 //! the score incomplete.
 
-use std::convert::Infallible;
-use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 mod common;
 
-use axum::Router;
-use axum::body::{Body, Bytes};
-use axum::http::{StatusCode, header};
-use axum::routing::{get, post};
-use common::{email_golden, http_module, ip_golden, registry_with, slow, tls_golden};
-use futures::StreamExt;
+use common::{
+    dns_golden_raw, email_golden, http_module, ip_golden, registry_with, slow, tls_golden,
+};
 use lens::check::{CheckInput, CheckOutput, SectionError, run_check_with_deadline};
 use lens::config::{
     BackendConfig, BackendsConfig, BadgesConfig, CacheConfig, Config, EcosystemConfig,
@@ -29,97 +22,14 @@ use netray_engine::Module;
 
 #[derive(Clone, Copy)]
 enum Behaviour {
-    /// Serve the golden at once.
+    /// Answer with the golden at once.
     Golden(&'static str),
-    /// Serve the golden after a delay.
+    /// Answer with the golden after a delay.
     GoldenAfter(&'static str, Duration),
-    /// Never answer: no headers either.
+    /// Never answer.
     Never,
-    /// Send headers and a first chunk, then stall forever.
+    /// Never finish.
     Stall(&'static str),
-}
-
-fn golden(name: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/contracts")
-        .join(name);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
-}
-
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    format!("http://{addr}")
-}
-
-async fn stub(
-    path: &'static str,
-    post_method: bool,
-    content_type: &'static str,
-    behaviour: Behaviour,
-) -> String {
-    let handler = move || async move {
-        match behaviour {
-            Behaviour::Golden(f) => (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, content_type)],
-                golden(f),
-            )
-                .into_response_(),
-            Behaviour::GoldenAfter(f, d) => {
-                tokio::time::sleep(d).await;
-                (
-                    StatusCode::OK,
-                    [(header::CONTENT_TYPE, content_type)],
-                    golden(f),
-                )
-                    .into_response_()
-            }
-            Behaviour::Never => {
-                std::future::pending::<()>().await;
-                unreachable!()
-            }
-            Behaviour::Stall(f) => {
-                let full = golden(f);
-                // Only a prefix: the first event (SSE) or the first bytes (JSON).
-                let first: String = match full.find("\n\n") {
-                    Some(i) if content_type == "text/event-stream" => full[..i + 2].to_string(),
-                    _ => full.chars().take(20).collect(),
-                };
-                let stream =
-                    futures::stream::once(
-                        async move { Ok::<Bytes, Infallible>(Bytes::from(first)) },
-                    )
-                    .chain(futures::stream::pending());
-                (
-                    StatusCode::OK,
-                    [(header::CONTENT_TYPE, content_type)],
-                    Body::from_stream(stream),
-                )
-                    .into_response_()
-            }
-        }
-    };
-    let route = if post_method {
-        post(handler)
-    } else {
-        get(handler)
-    };
-    serve(Router::new().route(path, route)).await
-}
-
-/// Tiny shim so all arms return the same type.
-trait IntoResponse_ {
-    fn into_response_(self) -> axum::response::Response;
-}
-impl<T: axum::response::IntoResponse> IntoResponse_ for T {
-    fn into_response_(self) -> axum::response::Response {
-        axum::response::IntoResponse::into_response(self)
-    }
 }
 
 struct Setup {
@@ -140,15 +50,7 @@ impl Setup {
     }
 }
 
-fn backend(url: String, timeout_ms: u64) -> BackendConfig {
-    BackendConfig {
-        url: Some(url),
-        timeout_ms,
-        ..Default::default()
-    }
-}
-
-async fn state(s: Setup) -> AppState {
+fn state(s: Setup) -> AppState {
     let t = s.timeouts_ms;
     let config = Config {
         server: ServerConfig {
@@ -157,11 +59,11 @@ async fn state(s: Setup) -> AppState {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
-            dns: backend(
-                stub("/api/check", true, "text/event-stream", s.dns).await,
-                t[0],
-            ),
-            dns_servers: Vec::new(),
+            // The DNS section runs in-process; only its deadline comes from the config.
+            dns: BackendConfig {
+                timeout_ms: t[0],
+                ..Default::default()
+            },
             // The TLS section runs in-process; only its deadline comes from the config.
             tls: BackendConfig {
                 timeout_ms: t[1],
@@ -210,6 +112,7 @@ async fn state(s: Setup) -> AppState {
         Behaviour::Stall(f) => slow(golden(f), None),
     };
     let registry = registry_with(
+        module(s.dns, "prism.sse", dns_golden_raw),
         http_module(Some("spectra-inspect.json")),
         module(s.email, "beacon.sse", email_golden),
         ip_golden("ifconfig-json.json"),
@@ -246,7 +149,7 @@ async fn hard_deadline_keeps_finished_sections_and_times_out_the_stuck_one() {
     let mut s = Setup::fast();
     s.dns = Behaviour::GoldenAfter("prism.sse", Duration::from_millis(100));
     s.email = Behaviour::Never;
-    let st = state(s).await;
+    let st = state(s);
 
     let (out, elapsed) = run(&st, Duration::from_secs(1), Duration::from_secs(8)).await;
 
@@ -275,7 +178,7 @@ async fn email_send_and_stream_share_one_timeout_budget() {
     let mut s = Setup::fast();
     s.timeouts_ms[3] = 1000;
     s.email = Behaviour::Stall("beacon.sse");
-    let st = state(s).await;
+    let st = state(s);
 
     let (out, elapsed) = run(&st, Duration::from_secs(20), Duration::from_secs(5)).await;
 
@@ -300,7 +203,7 @@ async fn tls_module_that_never_finishes_is_bounded_by_timeout() {
     let mut s = Setup::fast();
     s.timeouts_ms[1] = 1000;
     s.tls = Behaviour::Stall("tlsight-inspect.json");
-    let st = state(s).await;
+    let st = state(s);
 
     let (out, elapsed) = run(&st, Duration::from_secs(20), Duration::from_secs(5)).await;
 
@@ -325,7 +228,7 @@ async fn email_backend_honours_configured_timeout_instead_of_fixed_15s() {
     let mut s = Setup::fast();
     s.timeouts_ms[3] = 1000;
     s.email = Behaviour::GoldenAfter("beacon.sse", Duration::from_secs(2));
-    let st = state(s).await;
+    let st = state(s);
 
     let (out, elapsed) = run(&st, Duration::from_secs(20), Duration::from_secs(8)).await;
 

@@ -1,7 +1,7 @@
 //! V2 Phase 1, requirement 5: lens takes the HTTP section from the engine registry. With a
 //! stub HTTP module in the registry, lens's check path runs it in-process and the section's
-//! checks are the module's; there is no `http_url` to call, and the other backends point at a
-//! closed port, so the section cannot have come from a request.
+//! checks are the module's; there is no `http_url` to call and no other section's module in the
+//! registry, so the section cannot have come from a request.
 
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
@@ -55,9 +55,6 @@ async fn lens_runs_the_registry_http_module_in_process() {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
-    // Refused connections at once: no backend answers, so only the module can supply HTTP.
-    let closed = || Some("http://127.0.0.1:1".to_string());
-    config.backends.dns.url = closed();
     config.cache.enabled = false;
     config.snapshots.enabled = false;
 

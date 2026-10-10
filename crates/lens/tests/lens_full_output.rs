@@ -7,7 +7,7 @@
 //! Volatile keys removed before comparison, at any depth: `duration_ms` (`done`),
 //! `response_duration_ms` (http section), `request_id`, `snapshot_id` (`done`, absent while
 //! snapshots are disabled), `cached_at`, `timestamp`, and any key ending in `_at`. The
-//! `detail_url` fields embed only the domain, never a stub port or an id, and stay.
+//! `detail_url` fields embed only the domain, never a port or an id, and stay.
 
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
@@ -19,8 +19,7 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
-use axum::routing::{get, post};
-use common::{email_golden, http_module, ip_golden, registry_with, tls_module};
+use common::{dns_golden, email_golden, http_module, ip_golden, registry_with, tls_module};
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -103,53 +102,10 @@ fn contracts_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/contracts")
 }
 
-fn golden(name: &str) -> String {
-    let path = contracts_dir().join(name);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
-}
-
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    format!("http://{addr}")
-}
-
-/// The DNS golden's A record (192.0.2.10) is a documentation address, which lens's production
-/// address policy does not enrich. The harness serves it with a public stand-in so the IP
-/// section stays scored (same as `lens_golden`).
-const DNS_DOCUMENTATION_A: &str = r#"{"A":"192.0.2.10"}"#;
-const DNS_PUBLIC_A: &str = r#"{"A":"1.1.1.1"}"#;
-
-/// A stub serving `body` at `path`, with the given content type and method.
-async fn stub_body(
-    path: &'static str,
-    post_method: bool,
-    content_type: &'static str,
-    body: String,
-) -> String {
-    let handler = move || {
-        let body = body.clone();
-        async move { ([(header::CONTENT_TYPE, content_type)], body) }
-    };
-    let route = if post_method {
-        post(handler)
-    } else {
-        get(handler)
-    };
-    serve(Router::new().route(path, route)).await
-}
-
 async fn production_config(f: &Fixture) -> Config {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
-
-    let dns = golden(f.dns).replace(DNS_DOCUMENTATION_A, DNS_PUBLIC_A);
-    config.backends.dns.url = Some(stub_body("/api/check", true, "text/event-stream", dns).await);
 
     config.snapshots.enabled = false;
     // Every run computes the verdict afresh instead of answering from the cache.
@@ -199,6 +155,7 @@ async fn run_full(f: &Fixture) -> Value {
     let state = AppState::with_registry(
         config,
         registry_with(
+            dns_golden(f.dns),
             http_module(f.http),
             email_golden(f.email),
             ip_golden(f.ip),

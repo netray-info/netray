@@ -1,22 +1,17 @@
-// Contract: a verdict value lens does not know makes its section Errored and increments
-// `lens_unknown_verdict_total{section}`; the unchanged goldens stay Ok and count nothing.
+// Contract: a verdict value lens does not know makes its section Errored; the unchanged goldens
+// stay Ok and count nothing in `lens_unknown_verdict_total{section}`.
 // (specs/features/grade-integrity/spec.md, Phase 1, requirement 2: C2, C7, C8, C9.)
 //
-// Each row serves a committed golden from `tests/fixtures/contracts/`, with at most one
-// verdict renamed, on a local stub (or a golden module) and runs the section. The
-// counter is read from a per-test local recorder, so tests do not interfere.
+// Each row runs a committed golden from `tests/fixtures/contracts/`, with at most one verdict
+// renamed, through a golden module and runs the section. The counter is read from a per-test
+// local recorder, so tests do not interfere.
 
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 mod common;
 
-use axum::Router;
-use axum::http::header;
-use axum::routing::{get, post};
-use lens::backends::dns::check_dns;
 use lens::backends::{Backend, BackendContext};
 use lens::modules::ModuleSection;
 use lens::scoring::engine::CheckVerdict;
@@ -57,28 +52,8 @@ fn json_with(name: &str, pointer: &str, to: &str) -> String {
     v.to_string()
 }
 
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    });
-    format!("http://{addr}")
-}
-
-/// Serve `body` at `path` with the given method and content type.
-async fn stub(path: &str, is_post: bool, content_type: &'static str, body: String) -> String {
-    let handler = move || {
-        let body = body.clone();
-        async move { ([(header::CONTENT_TYPE, content_type)], body) }
-    };
-    let route = if is_post { post(handler) } else { get(handler) };
-    serve(Router::new().route(path, route)).await
-}
-
 /// Run one section against `body`; the checks as (name, verdict), or the error text.
 async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>, String> {
-    let client = reqwest::Client::new();
     let fwd = reqwest::header::HeaderMap::new();
     let pairs = |checks: &[lens::scoring::engine::CheckResult]| {
         checks
@@ -87,13 +62,10 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
             .collect::<Vec<_>>()
     };
     match section {
-        "dns" => {
-            let url = stub("/api/check", true, "text/event-stream", body).await;
-            check_dns(&client, &url, "example.com", &[], TIMEOUT, &fwd)
-                .await
-                .map(|r| pairs(&r.checks))
-                .map_err(|e| format!("{e:?}"))
-        }
+        "dns" => common::run_dns(netray_dns::testing::golden_module(&body), TIMEOUT)
+            .await
+            .map(|r| pairs(&r.checks))
+            .map_err(|e| format!("{e:?}")),
         "tls" => common::run_tls(netray_tls::testing::golden_module(&body), TIMEOUT)
             .await
             .map(|r| pairs(&r.checks))
@@ -138,26 +110,6 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
         }
         other => panic!("unknown section {other}"),
     }
-}
-
-/// Sum of `lens_unknown_verdict_total` with label `section = <section>`.
-fn unknown_count(snapshotter: &Snapshotter, section: &str) -> u64 {
-    snapshotter
-        .snapshot()
-        .into_vec()
-        .into_iter()
-        .filter(|(key, ..)| {
-            key.key().name() == COUNTER
-                && key
-                    .key()
-                    .labels()
-                    .any(|l| l.key() == "section" && l.value() == section)
-        })
-        .map(|(_, _, _, value)| match value {
-            DebugValue::Counter(n) => n,
-            _ => 0,
-        })
-        .sum()
 }
 
 fn unknown_total(snapshotter: &Snapshotter) -> u64 {
@@ -231,42 +183,27 @@ async fn tls_unknown_status_is_refused_at_decode() {
     }
 }
 
-// Local recorders are thread-local: a current-thread runtime keeps lens on this thread.
-#[tokio::test(flavor = "current_thread")]
-async fn unknown_verdict_errors_section_and_counts() {
-    // (section, body with one verdict renamed to an unknown value)
-    let rows: Vec<(&str, String)> = vec![
-        // C7: prism lint `Ok` -> `Passed`
-        (
-            "dns",
-            renamed(
-                "prism.sse",
-                r#"{"Ok":"Found exactly one SPF record"}"#,
-                r#"{"Passed":"Found exactly one SPF record"}"#,
-            ),
-        ),
-    ];
-
-    let mut failures: Vec<String> = Vec::new();
-    for (section, body) in rows {
-        let recorder = DebuggingRecorder::new();
-        let snapshotter = recorder.snapshotter();
-        let _guard = metrics::set_default_local_recorder(&recorder);
-
-        let outcome = run(section, body).await;
-        if outcome.is_ok() {
-            failures.push(format!(
-                "{section}: an unknown verdict must make the section Errored, got {outcome:?}"
-            ));
-        }
-        let counted = unknown_count(&snapshotter, section);
-        if counted != 1 {
-            failures.push(format!(
-                "{section}: {COUNTER}{{section=\"{section}\"}} must increment by 1, got {counted}"
-            ));
-        }
+// C7 for DNS: in-process the verdicts are typed. A prism lint verdict lens does not know
+// (`Ok` -> `Passed`) is refused when `netray_dns` decodes the stream, or makes the section
+// Errored; it is never translated into a verdict. The `lens_unknown_verdict_total{section}`
+// counter is not asserted for DNS: the decode lives outside lens's metrics, as for TLS, HTTP and
+// email.
+#[tokio::test]
+async fn dns_unknown_verdict_is_refused_at_decode() {
+    let body = renamed(
+        "prism.sse",
+        r#"{"Ok":"Found exactly one SPF record"}"#,
+        r#"{"Passed":"Found exactly one SPF record"}"#,
+    );
+    let built = std::panic::catch_unwind(|| netray_dns::testing::golden_module(&body));
+    if let Ok(module) = built {
+        let outcome = common::run_dns(module, TIMEOUT).await;
+        assert!(
+            outcome.is_err(),
+            "an unknown prism verdict must be refused, got {:?}",
+            outcome.map(|r| r.checks.len())
+        );
     }
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
 // C9: the unchanged goldens stay Ok, scored as before, and count nothing.

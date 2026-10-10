@@ -7,11 +7,7 @@ bind = "0.0.0.0:8082"
 metrics_bind = "0.0.0.0:9090"
 trusted_proxies = ["172.31.0.0/24", "172.30.0.0/24"]
 
-[backends]
-dns_servers = ["google"]
-
 [backends.dns]
-url = "http://prism:8080"
 timeout_ms = 15000
 
 [backends.tls]
@@ -53,6 +49,29 @@ service_name = "lens"
 
 [site]
 og_image = "https://example.com/og/landing.png"
+
+# The DNS section runs in-process; the check values are those of the production prism.toml
+# (crates/dns/tests/fixtures/prism.production.toml) under the module's section names, `servers`
+# is what lens sent as `[backends] dns_servers`.
+[modules.dns]
+servers = ["google"]
+
+[modules.dns.dns]
+default_servers = ["google"]
+allow_system_resolvers = false
+
+[modules.dns.limits]
+per_target_per_minute = 120
+per_target_burst = 40
+max_timeout_secs = 10
+max_servers = 4
+
+[modules.dns.backends.ip]
+url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+max_concurrent = 20
+cache_ttl_secs = 300
+cache_capacity = 1024
 
 # The TLS section runs in-process; the check values are those of the production tlsight.toml
 # (crates/tls/tests/fixtures/tlsight.production.toml) under the module's section names.

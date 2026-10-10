@@ -31,11 +31,9 @@ fn live_state() -> AppState {
         },
         backends: BackendsConfig {
             dns: lens::config::BackendConfig {
-                url: Some("https://dns.netray.info".to_string()),
                 timeout_ms: 20000,
                 ..Default::default()
             },
-            dns_servers: Vec::new(),
             tls: lens::config::BackendConfig {
                 url: Some("https://tls.netray.info".to_string()),
                 timeout_ms: 20000,

@@ -13,7 +13,6 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
-use axum::routing::{get, post};
 use common::registry;
 use lens::config::Config;
 use lens::metrics::{ClientRunCounter, HISTOGRAM_BUCKETS, init_zero_series};
@@ -123,41 +122,10 @@ fn client_runs_c6_help_text_names_restart_and_partial_hour() {
 
 // Router-driven criterion, modelled on admission_metrics.rs.
 
-fn golden(name: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/contracts")
-        .join(name);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
-}
-
-async fn stub(
-    path: &'static str,
-    is_post: bool,
-    content_type: &'static str,
-    golden_name: &'static str,
-) -> String {
-    let body = golden(golden_name);
-    let handler = move || {
-        let body = body.clone();
-        async move { ([(header::CONTENT_TYPE, content_type)], body) }
-    };
-    let route = if is_post { post(handler) } else { get(handler) };
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    let app = Router::new().route(path, route);
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    format!("http://{addr}")
-}
-
-async fn app(per_ip: u32) -> (Router, AppState) {
+fn app(per_ip: u32) -> (Router, AppState) {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
-    config.backends.dns.url =
-        Some(stub("/api/check", true, "text/event-stream", "prism.sse").await);
     assert!(config.cache.enabled, "production config enables the cache");
     config.rate_limit.per_ip_per_minute = per_ip;
     config.rate_limit.per_ip_burst = per_ip;
@@ -191,7 +159,7 @@ async fn client_runs_c4_only_the_fresh_run_counts() {
     let handle = recorder.handle();
     let _guard = metrics::set_default_local_recorder(&recorder);
     // Burst of 2: the fresh run and the cached repeat pass, the third request is limited.
-    let (app, state) = app(2).await;
+    let (app, state) = app(2);
 
     assert_eq!(post_check(&app, "example.com").await, StatusCode::OK);
     assert_eq!(post_check(&app, "example.com").await, StatusCode::OK); // cache hit
