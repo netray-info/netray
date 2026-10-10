@@ -98,7 +98,7 @@ async fn check(app: &Router, body: &str) -> Vec<String> {
     assert_eq!(resp.status(), StatusCode::OK);
     let bytes = to_bytes(resp.into_body(), 4 * 1024 * 1024).await.unwrap();
     let v: serde_json::Value = serde_json::from_slice(&bytes).expect("sync body is JSON");
-    v["sections"]["email"]["checks"]
+    v["email"]["checks"]
         .as_array()
         .unwrap_or_else(|| panic!("no email section in {v}"))
         .iter()
