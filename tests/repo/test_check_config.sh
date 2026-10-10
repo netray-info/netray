@@ -150,13 +150,14 @@ else
         || fail "lens: over-budget error does not mention timeout and deadline ($out)"
 fi
 
-# V2 Phase 6: the resolve stage has its own budget; resolve_timeout_ms plus the IP backend's
-# timeout must stay under the 20000 ms hard deadline, and the error names resolve_timeout_ms.
-perl -pe 's/^resolve_timeout_ms = .*/resolve_timeout_ms = 18500/' "$lens_nodata" >"$tmp/lens.resolve.toml"
-grep -qx 'resolve_timeout_ms = 18500' "$tmp/lens.resolve.toml" \
+# V2 Phase 6: the resolve stage has its own budget inside the IP section's window (both count
+# from the run start), so resolve_timeout_ms must stay below [backends.ip] timeout_ms; the error
+# names resolve_timeout_ms.
+perl -pe 's/^resolve_timeout_ms = .*/resolve_timeout_ms = 2000/' "$lens_nodata" >"$tmp/lens.resolve.toml"
+grep -qx 'resolve_timeout_ms = 2000' "$tmp/lens.resolve.toml" \
     || fail "lens: resolve_timeout_ms substitution did not change the data-free copy"
 run_check lens "$tmp/lens.resolve.toml"
-[ "$rc" -eq 1 ] || fail "lens: resolve_timeout_ms 18500 + ip 2000 exited $rc, expected 1 ($out)"
+[ "$rc" -eq 1 ] || fail "lens: resolve_timeout_ms 2000 >= ip 2000 exited $rc, expected 1 ($out)"
 grep -qF 'resolve_timeout_ms' <<<"$out" || fail "lens: over-budget resolve error does not name resolve_timeout_ms ($out)"
 
 # C8: the shipped lens configs stay loadable.
@@ -178,7 +179,7 @@ module_rejects=(
     "backends.tls url:url:s|^\\[backends\\.tls\\]\$|[backends.tls]\\nurl = 'http://tlsight:8081'|"
     "modules.tls bogus:bogus:s|^\\[modules\\.tls\\.limits\\]\$|[modules.tls]\\nbogus = 1\\n\\n[modules.tls.limits]|"
     "backends.dns url:url:s|^\\[backends\\.dns\\]\$|[backends.dns]\\nurl = 'http://prism:8080'|"
-    "backends dns_servers:dns_servers:s|^resolve_timeout_ms = .*\$|resolve_timeout_ms = 2000\\ndns_servers = ['google']|"
+    "backends dns_servers:dns_servers:s|^resolve_timeout_ms = .*\$|resolve_timeout_ms = 1500\\ndns_servers = ['google']|"
     "modules.dns bogus:bogus:s|^servers = .*\$|servers = ['google']\\nbogus = 1|"
 )
 n=0
@@ -201,7 +202,7 @@ done
 # copy with a `[modules.ip]` appended. ("A missing optional list only warns" is the unit test
 # crates/ip/tests/module_data.rs: a config naming both GeoIP databases cannot load offline.)
 ip_data_rows=(
-    "missing city db|geoip_city_db = \"/nonexistent.mmdb\""
+    "missing city db|geoip_city_db = \"/nonexistent.mmdb\"\ngeoip_asn_db = \"/nonexistent-asn.mmdb\""
     "list only|feodo_botnet_ips = \"/nonexistent.txt\""
     "empty table|"
 )

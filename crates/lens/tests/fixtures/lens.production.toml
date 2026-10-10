@@ -8,7 +8,7 @@ metrics_bind = "0.0.0.0:9090"
 trusted_proxies = ["172.31.0.0/24", "172.30.0.0/24"]
 
 [backends]
-resolve_timeout_ms = 2000
+resolve_timeout_ms = 1500
 
 [backends.dns]
 timeout_ms = 15000
