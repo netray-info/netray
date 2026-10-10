@@ -175,25 +175,40 @@ for row in "${module_rejects[@]}"; do
     grep -qF "$key" <<<"$out" || fail "lens: $label error does not name '$key' ($out)"
 done
 
-# V2 Phase 3, C5: `[modules.ip]` loads its data at `--check-config`. A missing city database
-# refuses, a missing reputation list only warns. Both run on the data-free copy with a
-# `[modules.ip]` that names only the file under test, so the verdict is the module's alone.
+# V2 Phase 3, C5: `[modules.ip]` loads its data at `--check-config`. A configured IP section
+# must name `geoip_city_db` or `geoip_asn_db`: a missing database file, a list-only section and
+# an empty table all refuse and the output names `geoip_city_db`. All rows run on the data-free
+# copy with a `[modules.ip]` appended. ("A missing optional list only warns" is the unit test
+# crates/ip/tests/module_data.rs: a config naming both GeoIP databases cannot load offline.)
 ip_data_rows=(
-    "geoip_city_db:/nonexistent.mmdb:1"
-    "feodo_botnet_ips:/nonexistent.txt:0"
+    "missing city db|geoip_city_db = \"/nonexistent.mmdb\""
+    "list only|feodo_botnet_ips = \"/nonexistent.txt\""
+    "empty table|"
 )
+n=0
 for row in "${ip_data_rows[@]}"; do
-    IFS=: read -r key path want <<<"$row"
-    # The file name must not carry the key: the output names the file.
-    ipdata="$tmp/lens.ipdata.exit$want.toml"
-    { cat "$lens_nodata"; printf '\n[modules.ip]\n%s = "%s"\n' "$key" "$path"; } >"$ipdata"
+    IFS='|' read -r label body <<<"$row"
+    n=$((n + 1))
+    ipdata="$tmp/lens.ipdata$n.toml"
+    { cat "$lens_nodata"; printf '\n[modules.ip]\n'; [ -n "$body" ] && printf '%b\n' "$body"; } >"$ipdata"
     run_check lens "$ipdata"
-    [ "$rc" -eq "$want" ] || fail "lens: [modules.ip] $key = $path exited $rc, expected $want ($out)"
-    if [ "$want" -eq 1 ]; then
-        grep -qF "$key" <<<"$out" || grep -qF "$path" <<<"$out" \
-            || fail "lens: [modules.ip] $key error names neither the key nor the path ($out)"
-    fi
+    [ "$rc" -eq 1 ] || fail "lens: [modules.ip] $label exited $rc, expected 1 ($out)"
+    grep -qF 'geoip_city_db' <<<"$out" || fail "lens: [modules.ip] $label error does not name geoip_city_db ($out)"
 done
+
+# V2 Phase 3: an unconfigured section is off, and --check-config says so (exit stays 0).
+run_check lens "$lens_nodata"
+[ "$rc" -eq 0 ] || fail "lens: config without [modules.ip] exited $rc, expected 0 ($out)"
+grep -qF 'modules.ip is not configured: the IP section is off' <<<"$out" \
+    || fail "lens: config without [modules.ip] does not warn that the IP section is off ($out)"
+
+# Without `[modules.http.enrichment] ip_url` the check warns (exit stays 0).
+perl -ne 'if (/^\[/) { $skip = /^\[modules\.http\.enrichment\]\s*$/ } print unless $skip' "$lens_nodata" >"$tmp/lens.noipurl.toml"
+cmp -s "$lens_nodata" "$tmp/lens.noipurl.toml" && fail "lens: ip_url removal did not change the data-free copy"
+run_check lens "$tmp/lens.noipurl.toml"
+[ "$rc" -eq 0 ] || fail "lens: config without enrichment ip_url exited $rc, expected 0 ($out)"
+grep -qF 'modules.http.enrichment.ip_url is not set' <<<"$out" \
+    || fail "lens: config without enrichment ip_url does not warn ($out)"
 
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
 echo "PASS: test_check_config"
