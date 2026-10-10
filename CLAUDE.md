@@ -12,7 +12,7 @@ carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
 
 | Path | What |
 |---|---|
-| `crates/{lens,mhost-prism,tlsight,http,beacon,ifconfig-rs}` | the services; each a library with its frontend in `frontend/` |
+| `crates/{lens,mhost-prism,tlsight,http,email,ifconfig-rs}` | the services; each a library with its frontend in `frontend/` |
 | `crates/common` | `netray-common`, shared Rust (workspace member, not published) |
 | `crates/{model,engine}` | V2 core (planning SDD `v2.md` §3): `netray-model` the check vocabulary, no workspace dependency; `netray-engine` the `Module`/`FactsProvider` traits, depends on `netray-model` only (`tests/repo/test_engine_names_no_module.sh`). Each V1 crate maps its status word onto `netray_model::Status` once |
 | `crates/netray` | the binary: subcommands `lens dns tls http email ip site`; all but `site` take `--check-config <path>` (exit 0 `config ok: <path>`, exit 1 with the error) |

@@ -56,7 +56,7 @@ pub async fn run(config_arg: Option<String>) -> anyhow::Result<()> {
     let telemetry_config = netray_common::telemetry::TelemetryConfig::from(&config.telemetry);
     netray_common::telemetry::init_subscriber(
         &telemetry_config,
-        "info,beacon=debug,hyper=warn,h2=warn",
+        "info,netray_email=debug,hyper=warn,h2=warn",
     );
 
     metrics::describe_gauge!("beacon_sse_clients_active", "Active SSE inspection streams");

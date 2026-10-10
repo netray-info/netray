@@ -139,7 +139,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Email {
             check_config: Some(path),
             ..
-        } => check_config(&path, beacon::config::Config::load),
+        } => check_config(&path, netray_email::config::Config::load),
         Command::Ip {
             check_config: Some(path),
             ..
@@ -154,7 +154,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Dns { config, .. } => prism::run(config).await,
         Command::Tls { config, .. } => tlsight::run(config).await,
         Command::Http { config, .. } => netray_http::run(config).await,
-        Command::Email { config, .. } => beacon::run(config).await?,
+        Command::Email { config, .. } => netray_email::run(config).await?,
         Command::Ip {
             config,
             check,

@@ -362,43 +362,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
-name = "beacon"
-version = "0.23.1"
-dependencies = [
- "anyhow",
- "axum",
- "base64 0.22.1",
- "config",
- "futures",
- "governor",
- "http-body-util",
- "ipnet",
- "metrics",
- "mhost",
- "netray-common",
- "netray-model",
- "percent-encoding",
- "pin-project-lite",
- "rcgen",
- "reqwest",
- "rust-embed",
- "rustls",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tower",
- "tower-http",
- "tracing",
- "url",
- "utoipa",
- "wiremock",
- "x509-parser 0.17.0",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2393,7 +2356,6 @@ version = "0.23.1"
 dependencies = [
  "axum",
  "axum-extra",
- "beacon",
  "chrono",
  "config",
  "fontdb",
@@ -2408,6 +2370,7 @@ dependencies = [
  "moka",
  "nanoid",
  "netray-common",
+ "netray-email",
  "netray-engine",
  "netray-http",
  "netray-model",
@@ -2817,12 +2780,12 @@ version = "0.23.1"
 dependencies = [
  "anyhow",
  "axum",
- "beacon",
  "clap",
  "ifconfig-rs",
  "lens",
  "mime_guess",
  "netray-common",
+ "netray-email",
  "netray-engine",
  "netray-http",
  "percent-encoding",
@@ -2869,6 +2832,43 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "netray-email"
+version = "0.23.1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "config",
+ "futures",
+ "governor",
+ "http-body-util",
+ "ipnet",
+ "metrics",
+ "mhost",
+ "netray-common",
+ "netray-model",
+ "percent-encoding",
+ "pin-project-lite",
+ "rcgen",
+ "reqwest",
+ "rust-embed",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tower",
+ "tower-http",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "x509-parser 0.17.0",
 ]
 
 [[package]]

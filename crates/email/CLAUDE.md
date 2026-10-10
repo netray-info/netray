@@ -50,9 +50,9 @@ The verbs live in the root `justfile` (see the root `README.md`); run them from 
 
 ```sh
 just adlc-verify                     # the gate, offline
-cargo test -p beacon                 # this crate's tests only
+cargo test -p netray-email                 # this crate's tests only
 npm run dev -w beacon-frontend       # Vite dev server on :5176
-netray email crates/beacon/beacon.dev.toml   # run the service (after `just build`)
+netray email crates/email/beacon.dev.toml   # run the service (after `just build`)
 ```
 
 The Rust build embeds `frontend/dist` via RustEmbed and does not compile without

@@ -12,7 +12,7 @@ DNS-only email security inspector for the [netray.info](https://netray.info) sui
 
 ```sh
 # Backend (from the repository root, after `just build`)
-netray email crates/beacon/beacon.dev.toml
+netray email crates/email/beacon.dev.toml
 
 # Frontend (separate terminal)
 npm run dev -w beacon-frontend   # Vite dev server on :5176
@@ -26,7 +26,7 @@ Beacon loads configuration from a TOML file and allows every value to be overrid
 
 - **`beacon.toml.example`** — template, committed to the repo. Copy this as a starting point.
 - **`beacon.toml`** — production config. Deployed to the server, not checked into the repo with real values.
-- **`beacon.dev.toml`** — local development config. Used with `netray email crates/beacon/beacon.dev.toml`.
+- **`beacon.dev.toml`** — local development config. Used with `netray email crates/email/beacon.dev.toml`.
 
 ### Environment variables
 
@@ -65,7 +65,7 @@ Each category emits its own SSE event as it completes; a final `summary` event c
 The verbs live in the root `justfile`; see the root `README.md`. For this crate alone:
 
 ```sh
-cargo test -p beacon               # Rust tests
+cargo test -p netray-email               # Rust tests
 npm test -w beacon-frontend        # frontend tests
 ```
 

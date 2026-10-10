@@ -42,7 +42,7 @@ check_precedence() {
     fi
 }
 
-check_precedence email BEACON_CONFIG crates/beacon/beacon.dev.toml yes
+check_precedence email BEACON_CONFIG crates/email/beacon.dev.toml yes
 # http: argument, then NETRAY_HTTP_CONFIG (no config_source log field)
 check_precedence http NETRAY_HTTP_CONFIG crates/http/spectra.dev.toml no
 

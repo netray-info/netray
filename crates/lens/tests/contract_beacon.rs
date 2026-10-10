@@ -1,6 +1,6 @@
 //! Contract: lens's email backend must parse the SSE stream beacon actually sends
 //! (golden: `tests/fixtures/contracts/beacon.sse`, produced by
-//! `crates/beacon/tests/contract_golden.rs`).
+//! `crates/email/tests/contract_golden.rs`).
 
 use std::time::Duration;
 
@@ -594,7 +594,7 @@ async fn unknown_cross_validation_sub_check_errors_and_counts() {
 fn lens_routing_covers_beacon_vocabulary() {
     use lens::backends::email as e;
     let mut problems = Vec::new();
-    for c in beacon::quality::types::Category::ALL {
+    for c in netray_email::quality::types::Category::ALL {
         let name = serde_json::to_value(&c)
             .unwrap()
             .as_str()
@@ -608,16 +608,16 @@ fn lens_routing_covers_beacon_vocabulary() {
             ));
         }
     }
-    for name in beacon::checks::cross_validation::CROSS_VALIDATION_CHECKS {
+    for name in netray_email::checks::cross_validation::CROSS_VALIDATION_CHECKS {
         if e::route_cross_validation(name).is_none() {
             problems.push(format!("cross-validation check `{name}` has no bucket"));
         }
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));
-    assert_eq!(e::BEACON_SKIPPED, beacon::checks::SKIPPED);
-    assert_eq!(e::BEACON_NULL_MX, beacon::checks::mx::NULL_MX);
+    assert_eq!(e::BEACON_SKIPPED, netray_email::checks::SKIPPED);
+    assert_eq!(e::BEACON_NULL_MX, netray_email::checks::mx::NULL_MX);
     assert_eq!(
         e::BEACON_SENDS_NO_MAIL,
-        beacon::checks::cross_validation::SENDS_NO_MAIL
+        netray_email::checks::cross_validation::SENDS_NO_MAIL
     );
 }

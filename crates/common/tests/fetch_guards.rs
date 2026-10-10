@@ -115,7 +115,7 @@ fn serve(
 }
 
 /// A TLS listener on 127.0.0.1 with a self-signed certificate (as in
-/// `crates/beacon/src/checks/mta_sts_results_table.rs`), counting connections on accept.
+/// `crates/email/src/checks/mta_sts_results_table.rs`), counting connections on accept.
 async fn serve_tls(
     names: Vec<String>,
     handler: impl Fn(&str) -> String + Send + Sync + 'static,

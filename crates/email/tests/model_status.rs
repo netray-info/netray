@@ -3,7 +3,7 @@
 //! The `match` over `Verdict` has no wildcard arm: adding a variant breaks compilation here
 //! until its mapping is decided and asserted.
 
-use beacon::quality::Verdict;
+use netray_email::quality::Verdict;
 use netray_model::Status;
 
 fn expected(verdict: Verdict) -> Status {

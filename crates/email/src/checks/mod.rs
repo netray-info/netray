@@ -1063,7 +1063,7 @@ mod tests {
     /// C20: the real `run_all_checks` timeout path, encoded as on the wire
     /// (`From<SseEvent> for Event` through axum's `Sse`), against
     /// `tests/fixtures/contracts/beacon-timeout.sse`.
-    /// Regenerate: `UPDATE_GOLDEN=1 cargo test -p beacon --lib timeout_golden`.
+    /// Regenerate: `UPDATE_GOLDEN=1 cargo test -p netray-email --lib timeout_golden`.
     #[tokio::test(start_paused = true)]
     async fn timeout_golden() {
         use axum::response::IntoResponse;
@@ -1110,7 +1110,7 @@ mod tests {
         }
         let golden = std::fs::read_to_string(&path).unwrap_or_else(|_| {
             panic!(
-                "golden {} is missing; run `UPDATE_GOLDEN=1 cargo test -p beacon --lib timeout_golden`",
+                "golden {} is missing; run `UPDATE_GOLDEN=1 cargo test -p netray-email --lib timeout_golden`",
                 path.display()
             )
         });

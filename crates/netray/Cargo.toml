@@ -9,7 +9,7 @@ description = "The netray.info suite as one binary: six services and the static 
 netray-common = { workspace = true, features = ["server"] }
 netray-engine = { workspace = true }
 
-beacon = { path = "../beacon" }
+netray-email = { path = "../email" }
 ifconfig-rs = { path = "../ifconfig-rs" }
 lens = { path = "../lens" }
 prism = { path = "../mhost-prism" }

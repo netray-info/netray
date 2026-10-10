@@ -74,7 +74,7 @@ xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [dev-dependencies]
 netray-http = { path = "../http", features = ["testing"] }
-beacon = { path = "../beacon" }
+netray-email = { path = "../email" }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 serde_json = { workspace = true }

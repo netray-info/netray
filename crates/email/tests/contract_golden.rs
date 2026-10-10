@@ -5,7 +5,7 @@
 //! then axum's `Sse` response body), so framing is exactly what a client receives.
 //! Only JSON key order is canonicalised (`verdicts` is a `HashMap`, whose order is random).
 //!
-//! `UPDATE_GOLDEN=1 cargo test -p beacon --test contract_golden` rewrites beacon.sse,
+//! `UPDATE_GOLDEN=1 cargo test -p netray-email --test contract_golden` rewrites beacon.sse,
 //! beacon-no-mx.sse, beacon-mx-cname.sse, beacon-null-mx.sse, beacon-sending-no-dkim.sse and
 //! beacon-partial.sse.
 
@@ -15,11 +15,11 @@ use std::path::PathBuf;
 
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
-use beacon::checks::SKIPPED;
-use beacon::checks::cross_validation::SENDS_NO_MAIL;
-use beacon::checks::mx::{NO_MX, NULL_MX};
-use beacon::quality::{Category, CheckResult, SseEvent, SubCheck, Verdict, compute_grade};
 use http_body_util::BodyExt;
+use netray_email::checks::SKIPPED;
+use netray_email::checks::cross_validation::SENDS_NO_MAIL;
+use netray_email::checks::mx::{NO_MX, NULL_MX};
+use netray_email::quality::{Category, CheckResult, SseEvent, SubCheck, Verdict, compute_grade};
 use serde_json::{Map, Value};
 
 fn fixture_path(name: &str) -> PathBuf {
@@ -71,7 +71,7 @@ fn cat(category: Category, detail: &str, subs: Vec<SubCheck>) -> CheckResult {
 }
 
 /// Sub-checks, verdicts and details below are the ones the check code in
-/// `crates/beacon/src/checks/*.rs` emits; the category `detail` is the status line the same
+/// `crates/email/src/checks/*.rs` emits; the category `detail` is the status line the same
 /// code attaches. Beacon puts the reason in `sub_checks[].detail`, not in the category detail.
 ///
 /// A healthy MX; DKIM fails (weak key), DMARC and MTA-STS warn.
@@ -647,7 +647,7 @@ async fn sse_wire_format_matches_golden() {
 
         let golden = std::fs::read_to_string(&path).unwrap_or_else(|_| {
             panic!(
-                "golden {} is missing; run `UPDATE_GOLDEN=1 cargo test -p beacon --test contract_golden`",
+                "golden {} is missing; run `UPDATE_GOLDEN=1 cargo test -p netray-email --test contract_golden`",
                 path.display()
             )
         });
@@ -655,7 +655,7 @@ async fn sse_wire_format_matches_golden() {
             golden,
             produced,
             "beacon's SSE output differs from {}; if the change is intended, regenerate with \
-             `UPDATE_GOLDEN=1 cargo test -p beacon --test contract_golden` and check lens still parses it",
+             `UPDATE_GOLDEN=1 cargo test -p netray-email --test contract_golden` and check lens still parses it",
             path.display()
         );
     }

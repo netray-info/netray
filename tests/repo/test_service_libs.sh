@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.." || exit 1
 fails=()
 fail() { fails+=("$1"); }
 
-for s in ifconfig-rs mhost-prism tlsight http beacon lens; do
+for s in ifconfig-rs mhost-prism tlsight http email lens; do
     m="crates/$s/Cargo.toml"
     if [ ! -f "$m" ]; then
         fail "$m is missing"
