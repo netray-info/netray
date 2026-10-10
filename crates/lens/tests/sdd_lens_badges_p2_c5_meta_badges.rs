@@ -14,6 +14,7 @@ fn make_state(badges_enabled: bool) -> AppState {
         ServerConfig, SiteConfig,
     };
     let config = Config {
+        modules: Default::default(),
         server: ServerConfig {
             bind: ([127, 0, 0, 1], 0).into(),
             metrics_bind: ([127, 0, 0, 1], 0).into(),

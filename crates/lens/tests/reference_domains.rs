@@ -23,6 +23,7 @@ fn live_tests_enabled() -> bool {
 
 fn live_state() -> AppState {
     let config = Config {
+        modules: Default::default(),
         server: ServerConfig {
             bind: ([0, 0, 0, 0], 8082).into(),
             metrics_bind: ([127, 0, 0, 1], 8090).into(),

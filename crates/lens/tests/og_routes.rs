@@ -26,6 +26,7 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
         SiteConfig,
     };
     let config = Config {
+        modules: Default::default(),
         server: ServerConfig {
             bind: ([127, 0, 0, 1], 0).into(),
             metrics_bind: ([127, 0, 0, 1], 0).into(),

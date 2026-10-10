@@ -23,6 +23,7 @@ use lens::state::AppState;
 
 fn base_config() -> Config {
     Config {
+        modules: Default::default(),
         server: ServerConfig {
             bind: ([127, 0, 0, 1], 0).into(),
             metrics_bind: ([127, 0, 0, 1], 0).into(),
