@@ -2,9 +2,9 @@
 #
 # All values shown are the built-in defaults. Uncomment and edit to override.
 # Environment variables take precedence over this file:
-#   PRISM_SERVER__BIND=0.0.0.0:8080
-#   PRISM_LIMITS__PER_IP_PER_MINUTE=200
-#   PRISM_DNS__ALLOW_ARBITRARY_SERVERS=true
+#   NETRAY_DNS_SERVER__BIND=0.0.0.0:8080
+#   NETRAY_DNS_LIMITS__PER_IP_PER_MINUTE=200
+#   NETRAY_DNS_DNS__ALLOW_ARBITRARY_SERVERS=true
 
 # Display name shown in the UI header, footer, and page title.
 # Default: "prism"
@@ -144,7 +144,7 @@
 # Log output format.
 #   "text" — human-readable, colour-coded (default; best for terminals)
 #   "json" — structured JSON lines (best for log aggregators: Loki, Datadog, etc.)
-# Also configurable via: PRISM_TELEMETRY__LOG_FORMAT=json
+# Also configurable via: NETRAY_DNS_TELEMETRY__LOG_FORMAT=json
 #log_format = "text"
 
 # Enable OpenTelemetry distributed tracing (OTLP/HTTP export).

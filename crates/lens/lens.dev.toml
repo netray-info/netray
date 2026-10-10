@@ -2,12 +2,23 @@
 bind = "127.0.0.1:8085"
 metrics_bind = "127.0.0.1:9095"
 
-[backends]
-dns_servers = ["cloudflare"]
-
 [backends.dns]
-url = "https://dns.netray.info"
 timeout_ms = 15000
+
+# The DNS section runs in-process (module `netray-dns`); `url` and `[backends] dns_servers` are
+# refused. Check values as in crates/dns/prism.dev.toml; `servers` is what lens sent as
+# `dns_servers`.
+[modules.dns]
+servers = ["cloudflare"]
+
+[modules.dns.dns]
+default_servers = ["google"]
+allow_system_resolvers = true
+allow_arbitrary_servers = true
+
+[modules.dns.limits]
+per_target_per_minute = 300
+per_target_burst = 50
 
 [backends.tls]
 timeout_ms = 15000

@@ -16,11 +16,11 @@ use axum::Router;
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use mhost::resolver::Lookups;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 use utoipa::OpenApi;
 
-pub use check::{CheckDoneEvent, LintEvent};
+pub use check::{CheckDoneEvent, CheckEvent, LintEvent};
 
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
@@ -34,7 +34,7 @@ use netray_common::enrichment::EnrichmentClient;
 pub const STREAM_TIMEOUT_SECS: u64 = 30;
 
 /// SSE batch event emitted once per record type as DNS results arrive.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct BatchEvent {
     pub request_id: String,
     pub record_type: String,

@@ -64,7 +64,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
                               #   Server group aliases: @public → Google+Cloudflare+Quad9,
                               #   @cloudflare → 1.1.1.1+1.0.0.1, @google → 8.8.8.8+8.8.4.4,
                               #   @quad9 → 9.9.9.9+149.112.112.112, @all → all public (capped to 4)
-    config.rs                 # netray_common::config::load: TOML + env vars (PRISM_ prefix), unknown keys rejected
+    config.rs                 # netray_common::config::load: TOML + env vars (NETRAY_DNS_ prefix; PRISM_ refused), unknown keys rejected
     error.rs                  # thiserror ApiError enum → HTTP status + error codes
     record_format.rs          # Human-readable formatting for TXT, CAA, MX, SOA, SVCB, TLSA, etc.
     telemetry.rs              # tracing-subscriber init; optional OTel OTLP export; log_format switch
@@ -129,7 +129,7 @@ mhost-prism/                  # standalone crate (not a workspace member)
 - **No server-side DNS caching**: Debugging tool = fresh results. Upstream resolvers cache per TTL.
 - **Query cost model**: Rate limit tokens = `record_types * servers`. Pre-check enforcement before execution. Check endpoint cost = `16 * server_count` (16 steps × number of servers). Trace endpoint cost = flat 16 tokens. Compare endpoint cost = `record_types * servers * 4` (4 transports). Auth compare cost = `record_types * servers + 16` (recursive + NS discovery + auth queries).
 - **Circuit breaker**: Per-provider, shared via `Arc<CircuitBreakerRegistry>` in axum app state.
-- **Config precedence**: `PRISM_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`PRISM_` prefix, `__` section separator). Hardcoded caps are upper bounds that config cannot exceed. Notable options: `PRISM_SERVER__TRUSTED_PROXIES` accepts individual IPs and CIDR ranges (e.g. `["10.0.0.1", "172.16.0.0/12"]`); invalid entries are skipped with a warning at startup. Every config struct is `deny_unknown_fields`; `netray dns --check-config <path>` validates a file and exits 0 (`config ok: <path>`) or 1 with the error.
+- **Config precedence**: `NETRAY_DNS_CONFIG` env var or CLI arg > TOML file > built-in defaults. Env vars override TOML (`NETRAY_DNS_` prefix, `__` section separator; a `PRISM_` variable is refused at load, naming the new prefix). Hardcoded caps are upper bounds that config cannot exceed. Notable options: `NETRAY_DNS_SERVER__TRUSTED_PROXIES` accepts individual IPs and CIDR ranges (e.g. `["10.0.0.1", "172.16.0.0/12"]`); invalid entries are skipped with a warning at startup. Every config struct is `deny_unknown_fields`; `netray dns --check-config <path>` validates a file and exits 0 (`config ok: <path>`) or 1 with the error.
 - **Routing flags**: `+check`, `+trace`, `+compare`, and `+auth` in a query string are routing hints — the frontend detects them and calls the dedicated endpoint. The backend parser accepts them silently; they do not affect query execution at `/api/query`.
 - **Query flags**: `+norecurse` sets RD=0 (non-recursive query, stored as `recursive: false` on `ParsedQuery`). `+short` suppresses TTL display in output.
 
@@ -160,7 +160,7 @@ Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rule
 
 Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
-Default filter: `info,netray_dns=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `PRISM_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "prism"`.
+Default filter: `info,netray_dns=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `NETRAY_DNS_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "prism"`.
 
 ## CI/CD
 

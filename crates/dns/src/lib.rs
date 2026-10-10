@@ -8,13 +8,18 @@ pub mod dns_dnssec;
 pub mod dns_raw;
 pub mod dns_trace;
 pub mod error;
+pub mod module;
 pub mod parser;
 pub mod record_format;
 pub mod reload;
 pub mod result_cache;
 pub mod security;
+#[cfg(feature = "testing")]
+pub mod testing;
 
-pub use api::check::lint_status;
+pub use api::check::{CheckEvent, lint_status};
+pub use config::ModuleConfig;
+pub use module::{DnsModule, facts_from_lookups, translate};
 pub use netray_common::middleware::RequestId;
 pub use netray_common::middleware::request_id as request_id_middleware;
 
@@ -40,7 +45,7 @@ struct Assets;
 
 pub async fn run(config_arg: Option<String>) {
     // 1. Load configuration (before tracing, since telemetry config controls subscriber setup).
-    let config_path = config_arg.or_else(|| std::env::var("PRISM_CONFIG").ok());
+    let config_path = config_arg.or_else(|| std::env::var("NETRAY_DNS_CONFIG").ok());
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
@@ -76,21 +81,7 @@ pub async fn run(config_arg: Option<String>) {
     // 3. Build shared application state.
     let hot_state = reload::HotState::new(&config);
 
-    let ip_enrichment = config.backends.ip.as_ref().and_then(|ip_cfg| {
-        ip_cfg.url.as_ref().map(|url| {
-            let timeout_ms = ip_cfg.timeout_ms;
-            tracing::info!(url = %url, timeout_ms, "IP enrichment enabled");
-            Arc::new(netray_common::enrichment::EnrichmentClient::new(
-                url,
-                std::time::Duration::from_millis(timeout_ms),
-                "prism",
-                Some("prism"),
-                netray_common::enrichment::EnrichmentMode::Backend {
-                    cache_ttl_secs: 300,
-                },
-            ))
-        })
-    });
+    let ip_enrichment = ip_enrichment(&config.backends);
 
     let state = api::AppState {
         circuit_breakers: Arc::new(circuit_breaker::CircuitBreakerRegistry::new(
@@ -208,6 +199,27 @@ pub async fn run(config_arg: Option<String>) {
 
     // Flush pending OTel spans on shutdown.
     netray_common::telemetry::shutdown();
+}
+
+/// The IP enrichment client `[backends.ip]` configures, if it names a URL.
+pub(crate) fn ip_enrichment(
+    backends: &config::BackendsConfig,
+) -> Option<Arc<netray_common::enrichment::EnrichmentClient>> {
+    backends.ip.as_ref().and_then(|ip_cfg| {
+        ip_cfg.url.as_ref().map(|url| {
+            let timeout_ms = ip_cfg.timeout_ms;
+            tracing::info!(url = %url, timeout_ms, "IP enrichment enabled");
+            Arc::new(netray_common::enrichment::EnrichmentClient::new(
+                url,
+                std::time::Duration::from_millis(timeout_ms),
+                "prism",
+                Some("prism"),
+                netray_common::enrichment::EnrichmentMode::Backend {
+                    cache_ttl_secs: 300,
+                },
+            ))
+        })
+    })
 }
 
 async fn robots_txt() -> impl axum::response::IntoResponse {

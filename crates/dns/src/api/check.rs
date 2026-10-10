@@ -37,8 +37,9 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::RequestId;
 use crate::api::query::{
-    StreamParams, build_resolver_group, effective_server_specs, extract_ips_from_cached_events,
-    make_error_event, parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
+    EnrichmentEvent, StreamParams, build_resolver_group, effective_server_specs,
+    extract_ips_from_cached_events, make_error_event, parse_server_spec, record_breaker_outcomes,
+    target_keys_from_servers,
 };
 use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
@@ -48,7 +49,7 @@ use crate::parser::ParsedQuery;
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::security::QueryPolicy;
-use netray_common::enrichment::IpInfo;
+use netray_common::enrichment::{EnrichmentClient, IpInfo};
 
 // ---------------------------------------------------------------------------
 // Record types queried for the base domain (15 types)
@@ -73,11 +74,32 @@ const CHECK_RECORD_TYPES: [RecordType; 15] = [
 ];
 
 // Total SSE batch steps = 15 base types + 4 subdomain TXT lookups (DMARC, BIMI, MTA-STS, TLSRPT).
-const CHECK_TOTAL_STEPS: u32 = 19;
+pub(crate) const CHECK_TOTAL_STEPS: u32 = 19;
 
 // ---------------------------------------------------------------------------
 // SSE event payloads
 // ---------------------------------------------------------------------------
+
+/// The lint categories the pipeline emits; a decoded [`LintEvent`] names one of them.
+const LINT_CATEGORIES: &[&str] = &[
+    "caa",
+    "cname_apex",
+    "dnssec",
+    "dnskey_algorithm",
+    "dnssec_rollover",
+    "https_svcb",
+    "mx",
+    "ns",
+    "ns_lame",
+    "ns_delegation",
+    "spf",
+    "ttl",
+    "dmarc",
+    "bimi",
+    "mta_sts",
+    "tlsrpt",
+    "infrastructure",
+];
 
 #[derive(Serialize)]
 pub struct LintEvent {
@@ -86,7 +108,50 @@ pub struct LintEvent {
     pub results: Vec<CheckResult>,
 }
 
-#[derive(Serialize)]
+impl<'de> Deserialize<'de> for LintEvent {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        enum WireResult {
+            NotFound(),
+            Ok(String),
+            Warning(String),
+            Failed(String),
+        }
+
+        #[derive(Deserialize)]
+        struct Wire {
+            request_id: String,
+            category: String,
+            results: Vec<WireResult>,
+        }
+
+        let wire = Wire::deserialize(deserializer)?;
+        let category = LINT_CATEGORIES
+            .iter()
+            .copied()
+            .find(|c| *c == wire.category)
+            .ok_or_else(|| {
+                serde::de::Error::custom(format!("unknown lint category `{}`", wire.category))
+            })?;
+        let results = wire
+            .results
+            .into_iter()
+            .map(|r| match r {
+                WireResult::NotFound() => CheckResult::NotFound(),
+                WireResult::Ok(m) => CheckResult::Ok(m),
+                WireResult::Warning(m) => CheckResult::Warning(m),
+                WireResult::Failed(m) => CheckResult::Failed(m),
+            })
+            .collect();
+        Ok(LintEvent {
+            request_id: wire.request_id,
+            category,
+            results,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct CheckDoneEvent {
     pub request_id: String,
     pub duration_ms: u64,
@@ -97,6 +162,32 @@ pub struct CheckDoneEvent {
     pub not_found: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_key: Option<String>,
+}
+
+/// One event of the check pipeline, in stream order.
+pub enum CheckEvent {
+    Batch(BatchEvent),
+    /// IP enrichment by address, before the lints.
+    Enrichment(HashMap<String, IpInfo>),
+    Lint(LintEvent),
+    /// A non-fatal error; the stream goes on unless it is the stream timeout.
+    Error {
+        code: &'static str,
+        message: String,
+    },
+    Done(CheckDoneEvent),
+}
+
+/// What one check run needs: the domain, the resolvers and their circuit breaker keys (one per
+/// resolver), the breakers, the query semaphore and the optional IP enrichment.
+pub struct CheckRun {
+    pub request_id: String,
+    pub domain: String,
+    pub resolvers: Vec<Resolver>,
+    pub breaker_keys: Vec<String>,
+    pub circuit_breakers: Arc<CircuitBreakerRegistry>,
+    pub query_semaphore: Arc<Semaphore>,
+    pub ip_enrichment: Option<Arc<EnrichmentClient>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -147,30 +238,8 @@ pub async fn post_handler(
     Query(stream_params): Query<StreamParams>,
     Json(body): Json<CheckRequest>,
 ) -> Result<Response, ApiError> {
-    let domain = body.domain.to_ascii_lowercase();
-    if domain.is_empty() {
-        return Err(ApiError::InvalidDomain("empty domain".into()));
-    }
-
-    let mut servers = Vec::new();
-    for name in &body.servers {
-        let server = parse_server_spec(name)?;
-        servers.push(server);
-    }
-
-    // Build a ParsedQuery for policy validation and resolver construction.
-    // record_types is empty — validate_for_check skips the type-count check.
-    let parsed = ParsedQuery {
-        domain: domain.clone(),
-        record_types: Vec::new(),
-        servers,
-        transport: None,
-        dnssec: false,
-        short: false,
-        recursive: true,
-        truncated_servers: false,
-        warnings: Vec::new(),
-    };
+    let parsed = check_query(&body.domain, &body.servers)?;
+    let domain = parsed.domain.clone();
 
     let client_ip = state.ip_extractor.extract(&headers, peer_addr);
     tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
@@ -201,7 +270,6 @@ pub async fn post_handler(
     let (resolver_group, breaker_keys) =
         build_resolver_group(&parsed, &state.config, timeout).await?;
 
-    let resolvers = resolver_group.resolvers().to_vec();
     let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
     let (done_tx, done_rx) = if !stream_params.stream {
         let (s, r) = tokio::sync::oneshot::channel::<Vec<crate::result_cache::CachedEvent>>();
@@ -211,378 +279,24 @@ pub async fn post_handler(
     };
 
     let rid = request_id.0;
-    let circuit_breakers = state.circuit_breakers.clone();
+    let run = CheckRun {
+        request_id: rid.clone(),
+        domain: domain.clone(),
+        resolvers: resolver_group.resolvers().to_vec(),
+        breaker_keys,
+        circuit_breakers: state.circuit_breakers.clone(),
+        query_semaphore: state.query_semaphore.clone(),
+        ip_enrichment: state.ip_enrichment.clone(),
+    };
     let result_cache = state.result_cache.clone();
-    let query_string = domain.clone();
-    let enrichment_svc = state.ip_enrichment.clone();
-    let query_semaphore = state.query_semaphore.clone();
-    let outbound = Outbound::production();
-    let raw_outbound = RawOutbound::production();
 
     tokio::spawn(async move {
         let _stream_guard = stream_guard;
-        metrics::gauge!("prism_active_checks").increment(1.0);
-        let start = Instant::now();
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
-        let mut cached_events: Vec<CachedEvent> = Vec::new();
-
-        // ------------------------------------------------------------------
-        // Phase 1: DNS lookups — all 16 types in parallel (FuturesUnordered)
-        // ------------------------------------------------------------------
-        let dmarc_domain = format!("_dmarc.{domain}");
-        let bimi_domain = format!("default._bimi.{domain}");
-        let mta_sts_domain = format!("_mta-sts.{domain}");
-        let tlsrpt_domain = format!("_smtp._tls.{domain}");
-
-        #[derive(Clone, Copy)]
-        enum LookupKind {
-            Base,
-            Dmarc,
-            Bimi,
-            MtaSts,
-            Tlsrpt,
-        }
-
-        type LookupFut = std::pin::Pin<
-            Box<dyn std::future::Future<Output = (String, Lookups, LookupKind)> + Send>,
-        >;
-        let futs: FuturesUnordered<LookupFut> = FuturesUnordered::new();
-        for rt in CHECK_RECORD_TYPES.iter() {
-            let rt = *rt;
-            let domain = domain.clone();
-            let resolvers = resolvers.clone();
-            let breaker_keys = breaker_keys.clone();
-            let circuit_breakers = Arc::clone(&circuit_breakers);
-            let tx_err = tx.clone();
-            let semaphore = Arc::clone(&query_semaphore);
-            futs.push(Box::pin(async move {
-                let lookups = fan_out_lookup(
-                    &domain,
-                    rt,
-                    &resolvers,
-                    &breaker_keys,
-                    &circuit_breakers,
-                    &tx_err,
-                    &semaphore,
-                )
-                .await;
-                (rt.to_string(), lookups, LookupKind::Base)
-            }));
-        }
-        {
-            let resolvers = resolvers.clone();
-            let breaker_keys = breaker_keys.clone();
-            let circuit_breakers = Arc::clone(&circuit_breakers);
-            let tx_err = tx.clone();
-            let semaphore = Arc::clone(&query_semaphore);
-            futs.push(Box::pin(async move {
-                let lookups = fan_out_lookup(
-                    &dmarc_domain,
-                    RecordType::TXT,
-                    &resolvers,
-                    &breaker_keys,
-                    &circuit_breakers,
-                    &tx_err,
-                    &semaphore,
-                )
-                .await;
-                ("_dmarc".to_string(), lookups, LookupKind::Dmarc)
-            }));
-        }
-        {
-            let resolvers = resolvers.clone();
-            let breaker_keys = breaker_keys.clone();
-            let circuit_breakers = Arc::clone(&circuit_breakers);
-            let tx_err = tx.clone();
-            let semaphore = Arc::clone(&query_semaphore);
-            futs.push(Box::pin(async move {
-                let lookups = fan_out_lookup(
-                    &bimi_domain,
-                    RecordType::TXT,
-                    &resolvers,
-                    &breaker_keys,
-                    &circuit_breakers,
-                    &tx_err,
-                    &semaphore,
-                )
-                .await;
-                ("_bimi".to_string(), lookups, LookupKind::Bimi)
-            }));
-        }
-        {
-            let resolvers = resolvers.clone();
-            let breaker_keys = breaker_keys.clone();
-            let circuit_breakers = Arc::clone(&circuit_breakers);
-            let tx_err = tx.clone();
-            let semaphore = Arc::clone(&query_semaphore);
-            futs.push(Box::pin(async move {
-                let lookups = fan_out_lookup(
-                    &mta_sts_domain,
-                    RecordType::TXT,
-                    &resolvers,
-                    &breaker_keys,
-                    &circuit_breakers,
-                    &tx_err,
-                    &semaphore,
-                )
-                .await;
-                ("_mta-sts".to_string(), lookups, LookupKind::MtaSts)
-            }));
-        }
-        {
-            let resolvers = resolvers.clone();
-            let breaker_keys = breaker_keys.clone();
-            let circuit_breakers = Arc::clone(&circuit_breakers);
-            let tx_err = tx.clone();
-            let semaphore = Arc::clone(&query_semaphore);
-            futs.push(Box::pin(async move {
-                let lookups = fan_out_lookup(
-                    &tlsrpt_domain,
-                    RecordType::TXT,
-                    &resolvers,
-                    &breaker_keys,
-                    &circuit_breakers,
-                    &tx_err,
-                    &semaphore,
-                )
-                .await;
-                ("_tlsrpt".to_string(), lookups, LookupKind::Tlsrpt)
-            }));
-        }
-
-        tokio::pin!(futs);
-        let mut all_lookups = Lookups::empty();
-        let mut dmarc_lookups = Lookups::empty();
-        let mut bimi_lookups = Lookups::empty();
-        let mut mta_sts_lookups = Lookups::empty();
-        let mut tlsrpt_lookups = Lookups::empty();
-        let mut completed: u32 = 0;
-
-        loop {
-            tokio::select! {
-                maybe = futs.next() => {
-                    match maybe {
-                        None => break,
-                        Some((label, lookups, kind)) => {
-                            completed += 1;
-                            let batch = BatchEvent {
-                                request_id: rid.clone(),
-                                record_type: label,
-                                lookups: lookups.clone(),
-                                completed,
-                                total: CHECK_TOTAL_STEPS,
-                                transport: None,
-                                source: None,
-                            };
-                            if let Ok(json_val) = serde_json::to_value(&batch) {
-                                cached_events.push(CachedEvent {
-                                    event_type: "batch".to_owned(),
-                                    data: json_val,
-                                });
-                            }
-                            let event = {
-                                let mut v = serde_json::to_value(&batch)
-                                    .unwrap_or(serde_json::Value::Null);
-                                record_format::enrich_lookups_json(&mut v, &batch.record_type);
-                                Event::default()
-                                    .event("batch")
-                                    .json_data(&v)
-                                    .unwrap_or_else(|_| Event::default().event("batch").data("{}"))
-                            };
-                            if tx.send(Ok(event)).await.is_err() {
-                                metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
-                                metrics::gauge!("prism_active_checks").decrement(1.0);
-                                return;
-                            }
-                            match kind {
-                                LookupKind::Dmarc => dmarc_lookups = lookups,
-                                LookupKind::Bimi => bimi_lookups = lookups,
-                                LookupKind::MtaSts => mta_sts_lookups = lookups,
-                                LookupKind::Tlsrpt => tlsrpt_lookups = lookups,
-                                LookupKind::Base => all_lookups = all_lookups.merge(lookups),
-                            }
-                        }
-                    }
-                }
-                _ = tokio::time::sleep_until(deadline) => {
-                    let _ = tx
-                        .send(Ok(make_error_event(
-                            "STREAM_TIMEOUT",
-                            "stream deadline exceeded",
-                        )))
-                        .await;
-                    metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
-                    metrics::gauge!("prism_active_checks").decrement(1.0);
-                    return;
-                }
-            }
-        }
-
-        // Extract DMARC TXT strings for the dmarc lint.
-        let dmarc_txt_vec = dmarc_lookups.txt();
-        let unique_dmarc = dmarc_txt_vec.unique();
-        let dmarc_txts: Vec<String> = unique_dmarc
-            .iter()
-            .map(TXT::as_string)
-            .filter(|s| is_dmarc(s))
-            .collect();
-
-        // ------------------------------------------------------------------
-        // Phase 1.5: IP enrichment (non-blocking, before lint)
-        // ------------------------------------------------------------------
-        let enrichment_map = if let Some(ref svc) = enrichment_svc {
-            let ips = extract_ips_from_cached_events(&cached_events);
-            let map = svc.lookup_batch(&ips, Some(&rid)).await;
-            if !map.is_empty() {
-                use crate::api::query::EnrichmentEvent;
-                let enrichment_event = EnrichmentEvent {
-                    request_id: rid.clone(),
-                    enrichments: map
-                        .iter()
-                        .map(|(ip, info)| (ip.to_string(), info.clone()))
-                        .collect(),
-                };
-                if let Ok(json_val) = serde_json::to_value(&enrichment_event) {
-                    cached_events.push(CachedEvent {
-                        event_type: "enrichment".to_owned(),
-                        data: json_val,
-                    });
-                }
-                let event = Event::default()
-                    .event("enrichment")
-                    .json_data(&enrichment_event)
-                    .unwrap_or_else(|_| Event::default().event("enrichment").data("{}"));
-                let _ = tx.send(Ok(event)).await;
-            }
-            map
-        } else {
-            std::collections::HashMap::new()
-        };
-
-        // ------------------------------------------------------------------
-        // Phase 1.75: Async NS checks (lame delegation + delegation consistency)
-        //             + MTA-STS policy file fetch
-        // ------------------------------------------------------------------
-        let query_timeout = Duration::from_secs(3);
-        let unique = unique_records(&all_lookups);
-        let (lame_results, delegation_results, mta_sts_results) = tokio::join!(
-            check_ns_lame_delegation(&unique, &domain, query_timeout, &raw_outbound),
-            check_ns_delegation_consistency(&unique, &domain, query_timeout, &raw_outbound),
-            check_mta_sts(&mta_sts_lookups, &domain, &unique, &outbound),
+        let (events_tx, events_rx) = mpsc::channel::<CheckEvent>(32);
+        tokio::join!(
+            run_check(run, events_tx),
+            stream_check_events(events_rx, tx, rid, result_cache, domain, done_tx),
         );
-
-        // ------------------------------------------------------------------
-        // Phase 2: Lint checks (synchronous, pure)
-        // ------------------------------------------------------------------
-        let mut lint_checks: Vec<(&'static str, Vec<CheckResult>)> = Vec::new();
-        for (category, results) in lint_lookups(&all_lookups) {
-            lint_checks.push((category, results));
-            if category == "ns" {
-                lint_checks.push(("ns_lame", lame_results.clone()));
-                lint_checks.push(("ns_delegation", delegation_results.clone()));
-            }
-        }
-        lint_checks.push(("dmarc", check_dmarc_records(&dmarc_txts)));
-        let bimi_results = check_bimi(&bimi_lookups);
-        let tlsrpt_results = check_tlsrpt(&tlsrpt_lookups, &mta_sts_lookups);
-        lint_checks.push(("bimi", bimi_results));
-        lint_checks.push(("mta_sts", mta_sts_results));
-        lint_checks.push(("tlsrpt", tlsrpt_results));
-        if !enrichment_map.is_empty() {
-            lint_checks.push(("infrastructure", check_infrastructure(&enrichment_map)));
-        }
-
-        let mut total_checks: u32 = 0;
-        let mut passed: u32 = 0;
-        let mut lint_warnings: u32 = 0;
-        let mut failed: u32 = 0;
-        let mut not_found: u32 = 0;
-
-        for (category, results) in lint_checks {
-            let results = unique_lines(results);
-            for r in &results {
-                total_checks += 1;
-                match r {
-                    CheckResult::Ok(_) => passed += 1,
-                    CheckResult::Warning(_) => lint_warnings += 1,
-                    CheckResult::Failed(_) => failed += 1,
-                    CheckResult::NotFound() => not_found += 1,
-                }
-            }
-
-            let lint_event = LintEvent {
-                request_id: rid.clone(),
-                category,
-                results,
-            };
-            if let Ok(json_val) = serde_json::to_value(&lint_event) {
-                cached_events.push(CachedEvent {
-                    event_type: "lint".to_owned(),
-                    data: json_val,
-                });
-            }
-            let event = Event::default()
-                .event("lint")
-                .json_data(&lint_event)
-                .unwrap_or_else(|_| Event::default().event("lint").data("{}"));
-            if tx.send(Ok(event)).await.is_err() {
-                metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
-                return;
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Phase 3: Done event
-        // ------------------------------------------------------------------
-        let elapsed = start.elapsed();
-        tracing::info!(
-            request_id = %rid,
-            domain = %domain,
-            duration_ms = elapsed.as_millis(),
-            "check completed"
-        );
-        let cache_key = ResultCache::generate_key();
-        let done = CheckDoneEvent {
-            request_id: rid,
-            duration_ms: elapsed.as_millis() as u64,
-            total_checks,
-            passed,
-            warnings: lint_warnings,
-            failed,
-            not_found,
-            cache_key: Some(cache_key.clone()),
-        };
-        if let Ok(done_val) = serde_json::to_value(&done) {
-            cached_events.push(CachedEvent {
-                event_type: "done".to_owned(),
-                data: done_val,
-            });
-        }
-        result_cache
-            .insert(
-                cache_key,
-                CachedResult {
-                    query: query_string,
-                    mode: "check".to_owned(),
-                    events: cached_events.clone(),
-                },
-            )
-            .await;
-
-        if let Some(dtx) = done_tx {
-            let _ = dtx.send(cached_events);
-        }
-
-        let event = Event::default()
-            .event("done")
-            .json_data(&done)
-            .unwrap_or_else(|_| Event::default().event("done").data("{}"));
-        let _ = tx.send(Ok(event)).await;
-
-        metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "ok")
-            .increment(1);
-        metrics::histogram!("prism_check_duration_seconds").record(elapsed.as_secs_f64());
-        metrics::gauge!("prism_active_checks").decrement(1.0);
     });
 
     if let Some(drx) = done_rx {
@@ -611,6 +325,391 @@ pub async fn post_handler(
         .into_response())
 }
 
+/// The check's query for `domain` and `servers`: the domain lowercased and refused when empty,
+/// each server parsed. `record_types` is empty — `validate_for_check` skips the type count.
+pub(crate) fn check_query(domain: &str, servers: &[String]) -> Result<ParsedQuery, ApiError> {
+    let domain = domain.to_ascii_lowercase();
+    if domain.is_empty() {
+        return Err(ApiError::InvalidDomain("empty domain".into()));
+    }
+
+    let servers = servers
+        .iter()
+        .map(|name| parse_server_spec(name))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(ParsedQuery {
+        domain,
+        record_types: Vec::new(),
+        servers,
+        transport: None,
+        dnssec: false,
+        short: false,
+        recursive: true,
+        truncated_servers: false,
+        warnings: Vec::new(),
+    })
+}
+
+/// Maps the pipeline's events onto the SSE frames of `/api/check`, collects them for the result
+/// cache and, on `done`, stores the result and hands the events to `done_tx`.
+async fn stream_check_events(
+    mut events: mpsc::Receiver<CheckEvent>,
+    tx: mpsc::Sender<Result<Event, Infallible>>,
+    request_id: String,
+    result_cache: Arc<ResultCache>,
+    query_string: String,
+    mut done_tx: Option<tokio::sync::oneshot::Sender<Vec<CachedEvent>>>,
+) {
+    let mut cached_events: Vec<CachedEvent> = Vec::new();
+    while let Some(event) = events.recv().await {
+        let event = match event {
+            CheckEvent::Batch(batch) => {
+                push_cached(&mut cached_events, "batch", &batch);
+                let mut v = serde_json::to_value(&batch).unwrap_or(serde_json::Value::Null);
+                record_format::enrich_lookups_json(&mut v, &batch.record_type);
+                Event::default()
+                    .event("batch")
+                    .json_data(&v)
+                    .unwrap_or_else(|_| Event::default().event("batch").data("{}"))
+            }
+            CheckEvent::Enrichment(enrichments) => {
+                let enrichment_event = EnrichmentEvent {
+                    request_id: request_id.clone(),
+                    enrichments,
+                };
+                push_cached(&mut cached_events, "enrichment", &enrichment_event);
+                Event::default()
+                    .event("enrichment")
+                    .json_data(&enrichment_event)
+                    .unwrap_or_else(|_| Event::default().event("enrichment").data("{}"))
+            }
+            CheckEvent::Lint(lint_event) => {
+                push_cached(&mut cached_events, "lint", &lint_event);
+                Event::default()
+                    .event("lint")
+                    .json_data(&lint_event)
+                    .unwrap_or_else(|_| Event::default().event("lint").data("{}"))
+            }
+            CheckEvent::Error { code, message } => make_error_event(code, &message),
+            CheckEvent::Done(mut done) => {
+                let cache_key = ResultCache::generate_key();
+                done.cache_key = Some(cache_key.clone());
+                push_cached(&mut cached_events, "done", &done);
+                result_cache
+                    .insert(
+                        cache_key,
+                        CachedResult {
+                            query: query_string.clone(),
+                            mode: "check".to_owned(),
+                            events: cached_events.clone(),
+                        },
+                    )
+                    .await;
+                if let Some(dtx) = done_tx.take() {
+                    let _ = dtx.send(cached_events.clone());
+                }
+                Event::default()
+                    .event("done")
+                    .json_data(&done)
+                    .unwrap_or_else(|_| Event::default().event("done").data("{}"))
+            }
+        };
+        if tx.send(Ok(event)).await.is_err() {
+            return;
+        }
+    }
+}
+
+fn push_cached(cached: &mut Vec<CachedEvent>, event_type: &str, payload: &impl Serialize) {
+    if let Ok(data) = serde_json::to_value(payload) {
+        cached.push(CachedEvent {
+            event_type: event_type.to_owned(),
+            data,
+        });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Check pipeline
+// ---------------------------------------------------------------------------
+
+/// The check: the lookups of every record type and subdomain, the IP enrichment, the NS and
+/// MTA-STS checks and the lints, sent on `tx` in stream order and closed by a `done` event
+/// (no `done` after the stream deadline). Stops when `tx` is closed.
+pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
+    let CheckRun {
+        request_id: rid,
+        domain,
+        resolvers,
+        breaker_keys,
+        circuit_breakers,
+        query_semaphore,
+        ip_enrichment: enrichment_svc,
+    } = run;
+    let outbound = Outbound::production();
+    let raw_outbound = RawOutbound::production();
+
+    let _active = ActiveCheck::new();
+    let start = Instant::now();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(STREAM_TIMEOUT_SECS);
+    let mut batch_events: Vec<CachedEvent> = Vec::new();
+
+    // ------------------------------------------------------------------
+    // Phase 1: DNS lookups — all 16 types in parallel (FuturesUnordered)
+    // ------------------------------------------------------------------
+    let dmarc_domain = format!("_dmarc.{domain}");
+    let bimi_domain = format!("default._bimi.{domain}");
+    let mta_sts_domain = format!("_mta-sts.{domain}");
+    let tlsrpt_domain = format!("_smtp._tls.{domain}");
+
+    #[derive(Clone, Copy)]
+    enum LookupKind {
+        Base,
+        Dmarc,
+        Bimi,
+        MtaSts,
+        Tlsrpt,
+    }
+
+    type LookupFut =
+        std::pin::Pin<Box<dyn std::future::Future<Output = (String, Lookups, LookupKind)> + Send>>;
+    let futs: FuturesUnordered<LookupFut> = FuturesUnordered::new();
+    for rt in CHECK_RECORD_TYPES.iter() {
+        let rt = *rt;
+        let domain = domain.clone();
+        let resolvers = resolvers.clone();
+        let breaker_keys = breaker_keys.clone();
+        let circuit_breakers = Arc::clone(&circuit_breakers);
+        let tx_err = tx.clone();
+        let semaphore = Arc::clone(&query_semaphore);
+        futs.push(Box::pin(async move {
+            let lookups = fan_out_lookup(
+                &domain,
+                rt,
+                &resolvers,
+                &breaker_keys,
+                &circuit_breakers,
+                &tx_err,
+                &semaphore,
+            )
+            .await;
+            (rt.to_string(), lookups, LookupKind::Base)
+        }));
+    }
+    for (sub_domain, label, kind) in [
+        (dmarc_domain, "_dmarc", LookupKind::Dmarc),
+        (bimi_domain, "_bimi", LookupKind::Bimi),
+        (mta_sts_domain, "_mta-sts", LookupKind::MtaSts),
+        (tlsrpt_domain, "_tlsrpt", LookupKind::Tlsrpt),
+    ] {
+        let resolvers = resolvers.clone();
+        let breaker_keys = breaker_keys.clone();
+        let circuit_breakers = Arc::clone(&circuit_breakers);
+        let tx_err = tx.clone();
+        let semaphore = Arc::clone(&query_semaphore);
+        futs.push(Box::pin(async move {
+            let lookups = fan_out_lookup(
+                &sub_domain,
+                RecordType::TXT,
+                &resolvers,
+                &breaker_keys,
+                &circuit_breakers,
+                &tx_err,
+                &semaphore,
+            )
+            .await;
+            (label.to_string(), lookups, kind)
+        }));
+    }
+
+    tokio::pin!(futs);
+    let mut all_lookups = Lookups::empty();
+    let mut dmarc_lookups = Lookups::empty();
+    let mut bimi_lookups = Lookups::empty();
+    let mut mta_sts_lookups = Lookups::empty();
+    let mut tlsrpt_lookups = Lookups::empty();
+    let mut completed: u32 = 0;
+
+    loop {
+        tokio::select! {
+            maybe = futs.next() => {
+                match maybe {
+                    None => break,
+                    Some((label, lookups, kind)) => {
+                        completed += 1;
+                        let batch = BatchEvent {
+                            request_id: rid.clone(),
+                            record_type: label,
+                            lookups: lookups.clone(),
+                            completed,
+                            total: CHECK_TOTAL_STEPS,
+                            transport: None,
+                            source: None,
+                        };
+                        if enrichment_svc.is_some() {
+                            push_cached(&mut batch_events, "batch", &batch);
+                        }
+                        if tx.send(CheckEvent::Batch(batch)).await.is_err() {
+                            metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
+                            return;
+                        }
+                        match kind {
+                            LookupKind::Dmarc => dmarc_lookups = lookups,
+                            LookupKind::Bimi => bimi_lookups = lookups,
+                            LookupKind::MtaSts => mta_sts_lookups = lookups,
+                            LookupKind::Tlsrpt => tlsrpt_lookups = lookups,
+                            LookupKind::Base => all_lookups = all_lookups.merge(lookups),
+                        }
+                    }
+                }
+            }
+            _ = tokio::time::sleep_until(deadline) => {
+                let _ = tx
+                    .send(CheckEvent::Error {
+                        code: "STREAM_TIMEOUT",
+                        message: "stream deadline exceeded".to_owned(),
+                    })
+                    .await;
+                metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
+                return;
+            }
+        }
+    }
+
+    // Extract DMARC TXT strings for the dmarc lint.
+    let dmarc_txt_vec = dmarc_lookups.txt();
+    let unique_dmarc = dmarc_txt_vec.unique();
+    let dmarc_txts: Vec<String> = unique_dmarc
+        .iter()
+        .map(TXT::as_string)
+        .filter(|s| is_dmarc(s))
+        .collect();
+
+    // ------------------------------------------------------------------
+    // Phase 1.5: IP enrichment (non-blocking, before lint)
+    // ------------------------------------------------------------------
+    let enrichment_map = if let Some(ref svc) = enrichment_svc {
+        let ips = extract_ips_from_cached_events(&batch_events);
+        let map = svc.lookup_batch(&ips, Some(&rid)).await;
+        if !map.is_empty() {
+            let enrichments = map
+                .iter()
+                .map(|(ip, info)| (ip.to_string(), info.clone()))
+                .collect();
+            let _ = tx.send(CheckEvent::Enrichment(enrichments)).await;
+        }
+        map
+    } else {
+        HashMap::new()
+    };
+
+    // ------------------------------------------------------------------
+    // Phase 1.75: Async NS checks (lame delegation + delegation consistency)
+    //             + MTA-STS policy file fetch
+    // ------------------------------------------------------------------
+    let query_timeout = Duration::from_secs(3);
+    let unique = unique_records(&all_lookups);
+    let (lame_results, delegation_results, mta_sts_results) = tokio::join!(
+        check_ns_lame_delegation(&unique, &domain, query_timeout, &raw_outbound),
+        check_ns_delegation_consistency(&unique, &domain, query_timeout, &raw_outbound),
+        check_mta_sts(&mta_sts_lookups, &domain, &unique, &outbound),
+    );
+
+    // ------------------------------------------------------------------
+    // Phase 2: Lint checks (synchronous, pure)
+    // ------------------------------------------------------------------
+    let mut lint_checks: Vec<(&'static str, Vec<CheckResult>)> = Vec::new();
+    for (category, results) in lint_lookups(&all_lookups) {
+        lint_checks.push((category, results));
+        if category == "ns" {
+            lint_checks.push(("ns_lame", lame_results.clone()));
+            lint_checks.push(("ns_delegation", delegation_results.clone()));
+        }
+    }
+    lint_checks.push(("dmarc", check_dmarc_records(&dmarc_txts)));
+    let bimi_results = check_bimi(&bimi_lookups);
+    let tlsrpt_results = check_tlsrpt(&tlsrpt_lookups, &mta_sts_lookups);
+    lint_checks.push(("bimi", bimi_results));
+    lint_checks.push(("mta_sts", mta_sts_results));
+    lint_checks.push(("tlsrpt", tlsrpt_results));
+    if !enrichment_map.is_empty() {
+        lint_checks.push(("infrastructure", check_infrastructure(&enrichment_map)));
+    }
+
+    let mut total_checks: u32 = 0;
+    let mut passed: u32 = 0;
+    let mut lint_warnings: u32 = 0;
+    let mut failed: u32 = 0;
+    let mut not_found: u32 = 0;
+
+    for (category, results) in lint_checks {
+        let results = unique_lines(results);
+        for r in &results {
+            total_checks += 1;
+            match r {
+                CheckResult::Ok(_) => passed += 1,
+                CheckResult::Warning(_) => lint_warnings += 1,
+                CheckResult::Failed(_) => failed += 1,
+                CheckResult::NotFound() => not_found += 1,
+            }
+        }
+
+        let lint_event = LintEvent {
+            request_id: rid.clone(),
+            category,
+            results,
+        };
+        if tx.send(CheckEvent::Lint(lint_event)).await.is_err() {
+            metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
+                .increment(1);
+            return;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 3: Done event
+    // ------------------------------------------------------------------
+    let elapsed = start.elapsed();
+    tracing::info!(
+        request_id = %rid,
+        domain = %domain,
+        duration_ms = elapsed.as_millis(),
+        "check completed"
+    );
+    let done = CheckDoneEvent {
+        request_id: rid,
+        duration_ms: elapsed.as_millis() as u64,
+        total_checks,
+        passed,
+        warnings: lint_warnings,
+        failed,
+        not_found,
+        cache_key: None,
+    };
+    let _ = tx.send(CheckEvent::Done(done)).await;
+
+    metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "ok").increment(1);
+    metrics::histogram!("prism_check_duration_seconds").record(elapsed.as_secs_f64());
+}
+
+/// Counts a running check in `prism_active_checks` until dropped, so a check cancelled mid-way
+/// (stream deadline, closed client) does not leak its increment.
+struct ActiveCheck;
+
+impl ActiveCheck {
+    fn new() -> Self {
+        metrics::gauge!("prism_active_checks").increment(1.0);
+        Self
+    }
+}
+
+impl Drop for ActiveCheck {
+    fn drop(&mut self) {
+        metrics::gauge!("prism_active_checks").decrement(1.0);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -623,7 +722,7 @@ async fn fan_out_lookup(
     resolvers: &[Resolver],
     breaker_keys: &[String],
     circuit_breakers: &Arc<CircuitBreakerRegistry>,
-    tx: &mpsc::Sender<Result<Event, Infallible>>,
+    tx: &mpsc::Sender<CheckEvent>,
     semaphore: &Arc<Semaphore>,
 ) -> Lookups {
     let query = match MultiQuery::single(domain, rt) {
@@ -631,7 +730,10 @@ async fn fan_out_lookup(
         Err(e) => {
             tracing::warn!(domain = %domain, record_type = %rt, error = %e, "check query build failed");
             let _ = tx
-                .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
+                .send(CheckEvent::Error {
+                    code: "RESOLVER_ERROR",
+                    message: e.to_string(),
+                })
                 .await;
             return Lookups::empty();
         }
@@ -643,10 +745,10 @@ async fn fan_out_lookup(
         if let Err(BreakerState::Open) = circuit_breakers.check(breaker_key) {
             tracing::warn!(domain = %domain, record_type = %rt, provider = %breaker_key, "circuit breaker open, skipping provider");
             let _ = tx
-                .send(Ok(make_error_event(
-                    "PROVIDER_DEGRADED",
-                    &format!("circuit breaker open for {breaker_key} ({rt}), skipping"),
-                )))
+                .send(CheckEvent::Error {
+                    code: "PROVIDER_DEGRADED",
+                    message: format!("circuit breaker open for {breaker_key} ({rt}), skipping"),
+                })
                 .await;
             continue;
         }
@@ -669,13 +771,19 @@ async fn fan_out_lookup(
             Ok(Err(e)) => {
                 tracing::warn!(domain = %domain, record_type = %rt, error = %e, "resolver lookup failed");
                 let _ = tx
-                    .send(Ok(make_error_event("RESOLVER_ERROR", &e.to_string())))
+                    .send(CheckEvent::Error {
+                        code: "RESOLVER_ERROR",
+                        message: e.to_string(),
+                    })
                     .await;
             }
             Err(e) => {
                 tracing::error!(domain = %domain, record_type = %rt, error = %e, "resolver task panicked");
                 let _ = tx
-                    .send(Ok(make_error_event("INTERNAL_ERROR", &e.to_string())))
+                    .send(CheckEvent::Error {
+                        code: "INTERNAL_ERROR",
+                        message: e.to_string(),
+                    })
                     .await;
             }
         }
@@ -1655,6 +1763,18 @@ mod ns_outbound_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn active_check_guard_decrements_gauge_when_dropped_early() {
+        let recorder = metrics_exporter_prometheus::PrometheusBuilder::new().build_recorder();
+        let handle = recorder.handle();
+        let _local = metrics::set_default_local_recorder(&recorder);
+
+        let guard = ActiveCheck::new();
+        assert!(handle.render().contains("prism_active_checks 1"));
+        drop(guard);
+        assert!(handle.render().contains("prism_active_checks 0"));
+    }
 
     /// Build a `Lookups` containing TXT records via JSON deserialization.
     /// The mhost crate's `new_for_test` constructors are `#[cfg(test)]`-gated

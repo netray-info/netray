@@ -238,11 +238,38 @@ RED (a5c39db): the new and rewired tests failed against the missing module API; 
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R15: crates/dns is netray-dns, NETRAY_DNS_ / NETRAY_DNS_CONFIG, PRISM_ refused naming the new prefix | open | tests/repo/test_env_prefixes.sh |
-| C2 | R16: pipeline extracted and shared; prism's event stream unchanged; ModuleConfig; Module (dns.<v1>) with domain/server validation, @system policy, per-target cost, circuit breakers, semaphore; translate moved; FactsProvider; golden_module | open | crates/dns/tests/module.rs, crates/dns/tests/*.rs |
-| C3 | R17: lens takes DNS from the registry; backends/dns.rs, [backends.dns] url and [backends] dns_servers gone; goldens unchanged | open | crates/lens/tests/*.rs |
-| C4 | prism.sse, prism-no-address.sse translated equal the DNS section of their full-output goldens | open | crates/dns/tests/module.rs |
-| C5 | facts_from_lookups on the golden's lookups holds its A, AAAA, MX, CAA, NS (and HTTPS when present) | open | crates/dns/tests/module.rs |
-| C6 | PRISM_CONFIG set → netray dns refused naming NETRAY_DNS_CONFIG | open | tests/repo/test_env_prefixes.sh |
-| C7 | `@system` in `servers` with `allow_system_resolvers = false` → Incomplete with prism's refusal; an invalid domain → Incomplete | open | crates/dns/tests/module_input.rs |
-| C8 | full-output and lens_golden unchanged; `crates/lens/src/backends/` holds no section file | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+| C1 | R15: crates/dns is netray-dns, NETRAY_DNS_ / NETRAY_DNS_CONFIG, PRISM_ refused naming the new prefix | green | tests/repo/test_env_prefixes.sh |
+| C2 | R16: pipeline extracted and shared; prism's event stream unchanged; ModuleConfig; Module (dns.<v1>) with domain/server validation, @system policy, per-target cost, circuit breakers, semaphore; translate moved; FactsProvider; golden_module | green | crates/dns/tests/module.rs, crates/dns/tests/*.rs |
+| C3 | R17: lens takes DNS from the registry; backends/dns.rs, [backends.dns] url and [backends] dns_servers gone; goldens unchanged | green | crates/lens/tests/*.rs |
+| C4 | prism.sse, prism-no-address.sse translated equal the DNS section of their full-output goldens | green | crates/dns/tests/module.rs |
+| C5 | facts_from_lookups on the golden's lookups holds its A, AAAA, MX, CAA, NS (and HTTPS when present) | green | crates/dns/tests/module.rs |
+| C6 | PRISM_CONFIG set → netray dns refused naming NETRAY_DNS_CONFIG | green | tests/repo/test_env_prefixes.sh |
+| C7 | `@system` in `servers` with `allow_system_resolvers = false` → Incomplete with prism's refusal; an invalid domain → Incomplete | green | crates/dns/tests/module_input.rs |
+| C8 | full-output and lens_golden unchanged; `crates/lens/src/backends/` holds no section file | green | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+
+RED (195c89d): the new and rewired tests failed against the missing module API; the dns row of `test_env_prefixes.sh` on the `PRISM_` loader.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| rename | 1 (general-purpose, mechanical) | sonnet | 90829 | 486 |
+| G1 netray-dns (pipeline extracted from `post_handler`) | 1 | opus (chosen up front) | 183946 | 714 |
+| G2 lens + binary | 1 | sonnet | 95380 | 372 |
+| reader repairs | 1 | sonnet | — | — |
+
+### Reader
+
+| class | at | finding | outcome |
+|---|---|---|---|
+| DEFERRED → repaired | crates/netray/src/main.rs:168 | a `[modules.dns]` without `backends.ip` dropped the infrastructure check silently | startup warning "modules.dns.backends.ip is not set: the infrastructure check is absent" |
+| NIT → repaired | crates/dns/src/module.rs:198 | a run dropped by the deadline leaked `prism_active_checks` +1 | RAII guard; in-src unit test |
+| DEFERRED | crates/dns/src/module.rs:56 | the `FactsProvider` does not resolve the HTTPS RR; engine `Facts` has no field for it | Phase 6 (R18) |
+| DEFERRED | crates/dns/src/module.rs:149 | fact lookups skip the per-target charge, breakers and semaphore that `measure` applies | Phase 6, when the provider is wired |
+| NIT | crates/dns/src/module.rs:82 | no `startup_rejects` row for `[modules.dns.limits] per_target_burst = 0` (refused by `into_config`) | accepted; the value is refused |
+| AMENDMENT | spec R17 | `Facts` for the IP section still come from the DNS section's `resolved_ips` in this phase; the provider is wired in Phase 6 | Phase 6 |
+| NOTE | crates/lens/src/routes.rs | `/ready` no longer probes a backend and answers 200; argus checks lens on `/health` | by design: no backend remains |
+
+### Behavioural verification
+
+`just adlc-verify` green; `tests/fixtures/contracts/` unchanged; prism's `/api/check` stream unchanged (reader traced frames, order, error frames, cache key); `crates/lens/src/backends/` holds only `mod.rs`.

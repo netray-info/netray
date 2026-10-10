@@ -728,71 +728,14 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
     path = "/ready",
     tag = "health",
     responses(
-        (status = 200, description = "All backends reachable", body = ReadyResponse),
-        (status = 503, description = "One or more backends unreachable", body = ReadyResponse)
+        (status = 200, description = "Ready", body = ReadyResponse)
     )
 )]
-pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
-    let client = &state.http_client;
-    let config = &state.config;
-    let mut down: Vec<String> = Vec::new();
-
-    // Build list of required backends to probe (3 s timeout each).
-    let probes: Vec<(String, String)> = vec![(
-        "dns".to_string(),
-        config.backends.dns.url.clone().unwrap_or_default(),
-    )];
-
-    let futures: Vec<_> = probes
-        .into_iter()
-        .map(|(name, url)| {
-            let client = client.clone();
-            async move {
-                if url.is_empty() {
-                    return Some(name);
-                }
-                let health_url = format!("{}/health", url.trim_end_matches('/'));
-                let ok = tokio::time::timeout(
-                    std::time::Duration::from_secs(3),
-                    client.get(&health_url).send(),
-                )
-                .await
-                .ok()
-                .and_then(|r| r.ok())
-                .map(|r| r.status().is_success())
-                .unwrap_or(false);
-                if !ok { Some(name) } else { None }
-            }
-        })
-        .collect();
-
-    for name in futures::future::join_all(futures)
-        .await
-        .into_iter()
-        .flatten()
-    {
-        down.push(name);
-    }
-
-    if down.is_empty() {
-        (
-            StatusCode::OK,
-            Json(ReadyResponse {
-                status: "ok",
-                down: vec![],
-            }),
-        )
-            .into_response()
-    } else {
-        (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ReadyResponse {
-                status: "degraded",
-                down,
-            }),
-        )
-            .into_response()
-    }
+pub async fn ready_handler() -> impl IntoResponse {
+    Json(ReadyResponse {
+        status: "ok",
+        down: vec![],
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1956,11 +1899,9 @@ pub mod tests {
             },
             backends: BackendsConfig {
                 dns: crate::config::BackendConfig {
-                    url: Some("http://127.0.0.1:19999".to_string()),
                     timeout_ms: 1000,
                     ..Default::default()
                 },
-                dns_servers: Vec::new(),
                 tls: crate::config::BackendConfig {
                     url: Some("http://127.0.0.1:19998".to_string()),
                     timeout_ms: 1000,
@@ -2767,84 +2708,6 @@ pub mod tests {
         assert_eq!(r2.status(), StatusCode::TOO_MANY_REQUESTS);
     }
 
-    // --- Backend calls carry the client IP and request ID ---
-
-    #[tokio::test]
-    async fn backend_requests_carry_forwarded_for_and_request_id() {
-        use std::sync::{Arc, Mutex};
-
-        type Seen = Arc<Mutex<Vec<(String, axum::http::HeaderMap)>>>;
-        let seen: Seen = Arc::new(Mutex::new(Vec::new()));
-        let seen_ref = seen.clone();
-
-        // The mock serves prism, the one HTTP backend left; prism (POST /api/check) answers with an A record.
-        let mock = Router::new().fallback(move |req: Request<Body>| {
-            let seen_ref = seen_ref.clone();
-            async move {
-                let path = req.uri().path().to_string();
-                seen_ref
-                    .lock()
-                    .unwrap()
-                    .push((req.uri().to_string(), req.headers().clone()));
-                if path == "/api/check" {
-                    let batch = serde_json::json!({
-                        "record_type": "A",
-                        "lookups": { "lookups": [ { "result": { "Response": { "records": [
-                            { "name": "example.com.", "type": "A", "data": { "A": "93.184.215.14" } }
-                        ] } } } ] }
-                    });
-                    let body = format!("event: batch\ndata: {batch}\n\nevent: done\ndata: {{}}\n\n");
-                    ([("content-type", "text/event-stream")], body).into_response()
-                } else {
-                    StatusCode::SERVICE_UNAVAILABLE.into_response()
-                }
-            }
-        });
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
-        tokio::spawn(async move {
-            axum::serve(listener, mock).await.ok();
-        });
-
-        let mut config = test_config_with_rate_limit(60, 10);
-        config.server.trusted_proxies = vec!["172.31.0.0/24".to_string()];
-        config.cache.enabled = false;
-        config.backends.dns.url = Some(base.clone());
-        let state = AppState::new(config).unwrap();
-        let app = Router::new()
-            .route("/api/check/{domain}", get(check_get_handler))
-            .with_state(state);
-
-        let mut req = req_from("172.31.0.5:40000", Some("203.0.113.7"));
-        req.headers_mut()
-            .insert("x-request-id", "req-abc-123".parse().unwrap());
-        let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-
-        let seen = seen.lock().unwrap();
-        for (prefix, label) in [("/api/check", "prism")] {
-            let (uri, headers) = seen
-                .iter()
-                .find(|(uri, _)| uri.starts_with(prefix))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{label} was not called; saw {:?}",
-                        seen.iter().map(|(u, _)| u).collect::<Vec<_>>()
-                    )
-                });
-            assert_eq!(
-                headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()),
-                Some("203.0.113.7"),
-                "{label} ({uri}) must carry X-Forwarded-For"
-            );
-            assert_eq!(
-                headers.get("x-request-id").and_then(|v| v.to_str().ok()),
-                Some("req-abc-123"),
-                "{label} ({uri}) must carry X-Request-Id"
-            );
-        }
-    }
-
     #[tokio::test]
     async fn rate_limit_uses_peer_ip_without_trusted_proxies() {
         let app = app_with_real_handler(&[]);
@@ -3063,12 +2926,6 @@ pub mod tests {
             dns_base_url: Some("https://dns.example.com".to_string()),
             ..Default::default()
         };
-        // Set backend to internal URL
-        config.backends.dns = crate::config::BackendConfig {
-            url: Some("http://127.0.0.1:19997".to_string()),
-            timeout_ms: 1000,
-            ..Default::default()
-        };
         let state = AppState::new(config).unwrap();
 
         // Meta endpoint should return the public ecosystem URL
@@ -3087,12 +2944,8 @@ pub mod tests {
             "ecosystem should use public URL"
         );
 
-        // The backend config should use the internal URL
-        assert_eq!(
-            state.config.backends.dns.url.as_deref(),
-            Some("http://127.0.0.1:19997"),
-            "backend should use internal URL"
-        );
+        // The DNS section runs in-process: the backend config carries no URL
+        assert_eq!(state.config.backends.dns.url, None);
     }
 
     // --- dkim_selectors validation ---

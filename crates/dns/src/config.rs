@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::net::SocketAddr;
 
 use serde::Deserialize;
@@ -42,6 +43,74 @@ pub struct Config {
     pub ecosystem: EcosystemConfig,
     #[serde(default)]
     pub backends: BackendsConfig,
+}
+
+/// The check sections the DNS module reads from a `[modules.dns]` table; prism's key names and
+/// defaults, plus the servers every check queries.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleConfig {
+    #[serde(default)]
+    pub servers: Vec<String>,
+    #[serde(default = "default_dns")]
+    pub dns: DnsConfig,
+    #[serde(default)]
+    pub limits: ModuleLimits,
+    #[serde(default = "default_circuit_breaker")]
+    pub circuit_breaker: CircuitBreakerConfig,
+    #[serde(default)]
+    pub backends: BackendsConfig,
+}
+
+/// The subset of `[limits]` that applies to the module: no per-client or global limit.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleLimits {
+    #[serde(default = "default_per_target_per_minute")]
+    pub per_target_per_minute: u32,
+    #[serde(default = "default_per_target_burst")]
+    pub per_target_burst: u32,
+    #[serde(default = "default_max_timeout")]
+    pub max_timeout_secs: u64,
+    #[serde(default = "default_max_servers")]
+    pub max_servers: usize,
+}
+
+impl Default for ModuleLimits {
+    fn default() -> Self {
+        Self {
+            per_target_per_minute: default_per_target_per_minute(),
+            per_target_burst: default_per_target_burst(),
+            max_timeout_secs: default_max_timeout(),
+            max_servers: default_max_servers(),
+        }
+    }
+}
+
+impl ModuleConfig {
+    /// The service `Config` these sections stand for, validated and clamped as at startup.
+    pub fn into_config(self) -> Result<Config, ConfigError> {
+        let l = self.limits;
+        let mut cfg = Config {
+            site_name: default_site_name(),
+            server: default_server(),
+            limits: LimitsConfig {
+                per_target_per_minute: l.per_target_per_minute,
+                per_target_burst: l.per_target_burst,
+                max_timeout_secs: l.max_timeout_secs,
+                max_servers: l.max_servers,
+                ..default_limits()
+            },
+            circuit_breaker: self.circuit_breaker,
+            dns: self.dns,
+            trace: default_trace(),
+            telemetry: TelemetryConfig::default(),
+            ecosystem: EcosystemConfig::default(),
+            backends: self.backends,
+        };
+        cfg.validate()?;
+        Ok(cfg)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -293,10 +362,14 @@ fn default_true() -> bool {
 impl Config {
     /// Load configuration from an optional TOML file path and environment variables.
     ///
-    /// Precedence (highest first): env vars (PRISM_ prefix) > TOML file > built-in defaults.
+    /// Precedence (highest first): env vars (NETRAY_DNS_ prefix) > TOML file > built-in defaults.
+    /// A `PRISM_` variable is refused.
     pub fn load(config_path: Option<&str>) -> Result<Self, ConfigError> {
-        // e.g. PRISM_LIMITS__PER_IP_PER_MINUTE=60 maps to limits.per_ip_per_minute.
-        let mut cfg: Config = netray_common::config::load(config_path, "PRISM_")?;
+        let env: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+        netray_common::config::refuse_legacy_prefix("PRISM_", "NETRAY_DNS_", &env)?;
+        // e.g. NETRAY_DNS_LIMITS__PER_IP_PER_MINUTE=60 maps to limits.per_ip_per_minute.
+        let mut cfg: Config =
+            netray_common::config::load_with_env(config_path, "NETRAY_DNS_", env)?;
         cfg.validate()?;
 
         Ok(cfg)

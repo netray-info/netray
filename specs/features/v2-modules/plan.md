@@ -96,3 +96,21 @@ G1: C1, C2, C4, C5, C6 (netray-tls) · G2: C3, C7 (lens and the binary). Orchest
 ### G2 — lens and the binary
 - `crates/lens/src/modules.rs`: TLS presentation → `BackendExtra::Tls`, `detail_url` as before; `config.rs` refuses `backends.tls.url`; `state.rs` TLS from the registry; delete `backends/tls.rs`; lens dev/example configs; dev-dep `netray-tls` with `testing`; justfile tls row crate dir.
 - `crates/netray`: `lens_registry` builds `TlsModule` from `[modules.tls]`.
+
+## Phase 5 — DNS module
+
+## Groups
+
+G1: C1, C2, C4–C7 (netray-dns) · G2: C3, C8 (lens and the binary). Orchestrator-written, the Phase 1 shape.
+
+## Plan
+
+### G1 — netray-dns
+- `crates/dns/src/config.rs`: refuse `PRISM_`, load `NETRAY_DNS_`; `ModuleConfig` (`servers`, `dns`, `limits`, `circuit_breaker`, `backends`).
+- `crates/dns/src/api/check.rs`: the pipeline leaves `post_handler` as a pub fn emitting `CheckEvent { Batch, Lint, Done }` on a channel; the route maps them to the same SSE frames; the event types derive `Deserialize` (`LintEvent.category` owned) without changing serialized output.
+- `crates/dns/src/module.rs`: `translate` ported verbatim from `crates/lens/src/backends/dns.rs` (presentation incl. `resolved_ips`); `facts_from_lookups`; `DnsModule` (domain check, `parse_server_spec` + `validate_for_check`, per-target cost, circuit breakers, semaphore, pipeline, translate) and `impl FactsProvider` (A, AAAA, MX, CAA, NS, HTTPS through the resolver group).
+- `crates/dns/src/testing.rs`, exports, `run()` reads `NETRAY_DNS_CONFIG`; Cargo: feature `testing`, `[[test]] module`.
+
+### G2 — lens and the binary
+- `crates/lens/src/modules.rs`: DNS presentation → `BackendExtra::Dns`; `config.rs` drops `dns_servers` (refused) and refuses `backends.dns.url`; `state.rs` DNS from the registry; delete `backends/dns.rs`, `sse.rs` and whatever is left of the HTTP backend plumbing that nothing uses; lens dev/example configs; dev-dep `netray-dns` with `testing`.
+- `crates/netray`: `lens_registry` builds `DnsModule` from `[modules.dns]` (warns when absent, as the others).

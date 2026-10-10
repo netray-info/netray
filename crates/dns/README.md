@@ -269,7 +269,7 @@ ttl_seconds = 300
 # url = "https://ip.netray.info"   # enables IP badges in results
 ```
 
-Override any value with `PRISM_` env vars (`__` for nested sections): `PRISM_SERVER__BIND=0.0.0.0:8080`.
+Override any value with `NETRAY_DNS_` env vars (`__` for nested sections): `NETRAY_DNS_SERVER__BIND=0.0.0.0:8080`. The config file comes from `NETRAY_DNS_CONFIG`; a `PRISM_` variable is refused.
 
 ### Build targets
 

@@ -3,14 +3,23 @@ bind = "0.0.0.0:8085"
 metrics_bind = "127.0.0.1:9095"
 # trusted_proxies = ["10.0.0.0/8"]
 
-[backends]
-# DNS server names to pass to mhost-prism (predefined provider names).
-# Empty = use prism's default. Single server recommended for reliable scoring.
-#dns_servers = ["cloudflare"]
-
+# The DNS section runs in-process (module `netray-dns`); `url` and `[backends] dns_servers` are refused.
 [backends.dns]
-url = "https://dns.netray.info"
 timeout_ms = 15000
+
+# [modules.dns]                      # optional; without it DNS runs on prism's defaults. Sections `dns`, `limits`, `circuit_breaker` and `backends`, see crates/dns
+# servers = ["cloudflare"]           # DNS server names every check queries (predefined provider names); a single server is recommended for reliable scoring
+#
+# [modules.dns.dns]
+# default_servers = ["google"]
+# allow_system_resolvers = false
+#
+# [modules.dns.limits]
+# per_target_per_minute = 120
+# per_target_burst = 40
+#
+# [modules.dns.backends.ip]
+# url = "https://ip.netray.info"     # enrichment for the resolved addresses
 
 # The TLS section runs in-process (module `netray-tls`); `url` is refused.
 [backends.tls]

@@ -50,7 +50,6 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
 
     tracing::info!(
         bind = %config.server.bind,
-        dns_url = config.backends.dns.url.as_deref().unwrap_or("disabled"),
         http_module = config.backends.http.is_some(),
         per_ip_rate = config.rate_limit.per_ip_per_minute,
         per_ip_burst = config.rate_limit.per_ip_burst,

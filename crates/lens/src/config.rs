@@ -90,10 +90,6 @@ pub use netray_common::ecosystem::EcosystemConfig;
 pub struct BackendsConfig {
     #[serde(default)]
     pub dns: BackendConfig,
-    /// DNS server names to pass to mhost-prism (e.g. `["cloudflare"]`).
-    /// When non-empty, sent as the `servers` field in the CheckRequest body.
-    #[serde(default)]
-    pub dns_servers: Vec<String>,
     #[serde(default)]
     pub tls: BackendConfig,
     #[serde(default)]
@@ -432,7 +428,17 @@ impl Config {
         env: impl IntoIterator<Item = (OsString, OsString)>,
     ) -> Result<Self, ConfigError> {
         let env = env.into_iter().filter(|(k, _)| k != "LENS_LIVE_TESTS");
-        let mut cfg: Config = netray_common::config::load_with_env(config_path, "LENS_", env)?;
+        let mut cfg: Config = netray_common::config::load_with_env(config_path, "LENS_", env)
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("`dns_servers`") {
+                    ConfigError::Message(format!(
+                        "invalid configuration: backends.dns_servers is no longer read; the DNS section runs in-process, configure [modules.dns] servers ({msg})"
+                    ))
+                } else {
+                    e
+                }
+            })?;
         cfg.validate()?;
 
         Ok(cfg)
@@ -456,6 +462,11 @@ impl Config {
         netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
 
         let b = &self.backends;
+        if b.dns.url.is_some() {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.dns.url is no longer read; the DNS section runs in-process, configure it in [modules.dns]".to_string(),
+            ));
+        }
         if b.http.as_ref().is_some_and(|h| h.url.is_some()) {
             return Err(ConfigError::Message(
                 "invalid configuration: backends.http.url is no longer read; the HTTP section runs in-process, configure it in [modules.http]".to_string(),
@@ -512,11 +523,7 @@ mod tests {
         Config {
             server: default_server(),
             backends: BackendsConfig {
-                dns: crate::config::BackendConfig {
-                    url: Some("http://localhost:8080".to_string()),
-                    ..Default::default()
-                },
-                dns_servers: Vec::new(),
+                dns: crate::config::BackendConfig::default(),
                 tls: crate::config::BackendConfig::default(),
                 ip: crate::config::BackendConfig::default(),
                 http: None,
@@ -689,6 +696,21 @@ mod tests {
     }
 
     #[test]
+    fn backends_dns_url_is_rejected() {
+        let err = load_toml("[backends.dns]\nurl = \"http://dns.example.com\"\n").unwrap_err();
+        assert!(err.to_string().contains("backends.dns.url"), "got: {err}");
+    }
+
+    #[test]
+    fn backends_dns_servers_is_rejected() {
+        let err = load_toml("[backends]\ndns_servers = [\"google\"]\n").unwrap_err();
+        assert!(
+            err.to_string().contains("[modules.dns] servers"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
     fn backends_tls_url_is_rejected() {
         let err = load_toml("[backends.tls]\nurl = \"http://tls.example.com\"\n").unwrap_err();
         assert!(err.to_string().contains("backends.tls.url"), "got: {err}");
@@ -701,7 +723,7 @@ mod tests {
             "cache_ttl_secs = 300",
             "cache_capacity = 1024",
         ] {
-            let toml = format!("[backends.dns]\nurl = \"http://dns.example.com\"\n{key}\n");
+            let toml = format!("[backends.dns]\n{key}\n");
             assert!(load_toml(&toml).is_err(), "{key} must be rejected");
         }
     }

@@ -117,8 +117,8 @@ impl Module for SharedIp {
 }
 
 /// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
-/// does not know is refused, and an absent `[modules.http]`, `[modules.email]` or `[modules.tls]`
-/// builds the module on its defaults. The IP module needs data: an absent `[modules.ip]` leaves the IP section off
+/// does not know is refused, and an absent `[modules.http]`, `[modules.email]`, `[modules.tls]` or
+/// `[modules.dns]` builds the module on its defaults. The IP module needs data: an absent `[modules.ip]` leaves the IP section off
 /// (with a warning), a present one must name `geoip_city_db` and `geoip_asn_db`. The IP module is
 /// returned as well, for its data reload.
 async fn lens_registry(
@@ -127,7 +127,7 @@ async fn lens_registry(
     if let Some(name) = cfg
         .modules
         .keys()
-        .find(|k| !matches!(k.as_str(), "http" | "email" | "ip" | "tls"))
+        .find(|k| !matches!(k.as_str(), "http" | "email" | "ip" | "tls" | "dns"))
     {
         return Err(format!("modules.{name}: unknown module"));
     }
@@ -162,7 +162,23 @@ async fn lens_registry(
     let tls = netray_tls::TlsModule::new(tls_config)
         .await
         .map_err(|e| format!("modules.tls: {e}"))?;
+    let table = match cfg.modules.get("dns") {
+        Some(table) => table.clone(),
+        None => {
+            tracing::warn!("modules.dns is not configured: DNS runs on prism's defaults");
+            Default::default()
+        }
+    };
+    let dns_config: netray_dns::ModuleConfig =
+        table.try_into().map_err(|e| format!("modules.dns: {e}"))?;
+    if cfg.modules.contains_key("dns") && dns_config.backends.ip.is_none() {
+        tracing::warn!("modules.dns.backends.ip is not set: the infrastructure check is absent");
+    }
+    let dns = netray_dns::DnsModule::new(dns_config)
+        .await
+        .map_err(|e| format!("modules.dns: {e}"))?;
     let mut registry = Registry::new()
+        .with(Box::new(dns))
         .with(Box::new(module))
         .with(Box::new(email))
         .with(Box::new(tls));

@@ -93,14 +93,11 @@ pub async fn run_check_with_deadline(
     let domain = input.domain.clone();
     let mut sections: Sections = HashMap::new();
 
-    let forward_headers =
-        crate::backends::forward_headers(input.client_ip, input.request_id.as_deref());
-
     // Wave 1: run concurrently, each result recorded as soon as it finishes.
     let wave1_context = BackendContext {
         resolved_ips: vec![],
         dkim_selectors: input.dkim_selectors.clone(),
-        forward_headers: forward_headers.clone(),
+        forward_headers: Default::default(),
     };
     run_wave(
         state,
@@ -126,7 +123,7 @@ pub async fn run_check_with_deadline(
     let wave2_context = BackendContext {
         resolved_ips,
         dkim_selectors: None,
-        forward_headers,
+        forward_headers: Default::default(),
     };
     run_wave(
         state,
