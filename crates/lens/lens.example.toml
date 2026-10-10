@@ -3,6 +3,9 @@ bind = "0.0.0.0:8085"
 metrics_bind = "127.0.0.1:9095"
 # trusted_proxies = ["10.0.0.0/8"]
 
+# [backends]
+# resolve_timeout_ms = 2000          # budget of the resolve stage from the start of a check; plus [backends.ip] timeout_ms it must stay below the 20 s hard deadline
+
 # The DNS section runs in-process (module `netray-dns`); `url` and `[backends] dns_servers` are refused.
 [backends.dns]
 timeout_ms = 15000
@@ -14,9 +17,9 @@ timeout_ms = 15000
 # default_servers = ["google"]
 # allow_system_resolvers = false
 #
-# [modules.dns.limits]
-# per_target_per_minute = 120
-# per_target_burst = 40
+# [modules.dns.limits]                # a check charges 25 per target: 19 for the DNS check, 6 for the resolve stage's facts
+# per_target_per_minute = 160
+# per_target_burst = 53
 #
 # [modules.dns.backends.ip]
 # url = "https://ip.netray.info"     # enrichment for the resolved addresses

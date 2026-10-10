@@ -13,7 +13,6 @@ use netray_common::rate_limit::KeyedLimiter;
 use netray_engine::Registry;
 use netray_model::Protocol;
 
-use crate::backends::Backend;
 use crate::cache::CachedResult;
 use crate::check::CheckOutput;
 use crate::config::Config;
@@ -42,8 +41,10 @@ pub struct AppState {
     pub badge_recompute_limiter: Arc<BadgeRecomputeLimiter>,
     pub cache: Option<Arc<Cache<String, Arc<CachedResult>>>>,
     pub scoring_profile: Arc<ScoringProfile>,
-    /// Ordered: WAVE1_SECTIONS order, then WAVE2_SECTIONS order.
-    pub backends: Arc<Vec<Box<dyn Backend + Send + Sync>>>,
+    /// The modules and the resolve stage a check runs through.
+    pub registry: Arc<Registry>,
+    /// The configured sections, one per registered module.
+    pub backends: Arc<Vec<ModuleSection>>,
     /// SPA HTML shell with `[site]` placeholders substituted once at startup.
     /// `None` when the embedded `frontend/dist` has no `index.html` (test
     /// builds with a `.gitkeep`-only dist).
@@ -95,50 +96,50 @@ impl AppState {
 
         let eco = &config.ecosystem;
 
-        let mut backends: Vec<Box<dyn Backend + Send + Sync>> = Vec::new();
+        let mut backends: Vec<ModuleSection> = Vec::new();
         if registry.module(Protocol::Dns).is_some() {
-            backends.push(Box::new(ModuleSection {
+            backends.push(ModuleSection {
                 registry: registry.clone(),
                 protocol: Protocol::Dns,
                 timeout: Duration::from_millis(config.backends.dns.timeout_ms),
                 public_url: eco.dns_base_url.clone().unwrap_or_default(),
-            }));
+            });
         }
         if registry.module(Protocol::Tls).is_some() {
-            backends.push(Box::new(ModuleSection {
+            backends.push(ModuleSection {
                 registry: registry.clone(),
                 protocol: Protocol::Tls,
                 timeout: Duration::from_millis(config.backends.tls.timeout_ms),
                 public_url: eco.tls_base_url.clone().unwrap_or_default(),
-            }));
+            });
         }
         if let Some(ref http_cfg) = config.backends.http
             && registry.module(Protocol::Http).is_some()
         {
-            backends.push(Box::new(ModuleSection {
+            backends.push(ModuleSection {
                 registry: registry.clone(),
                 protocol: Protocol::Http,
                 timeout: Duration::from_millis(http_cfg.timeout_ms),
                 public_url: eco.http_base_url.clone().unwrap_or_default(),
-            }));
+            });
         }
         if let Some(ref email_cfg) = config.backends.email
             && registry.module(Protocol::Email).is_some()
         {
-            backends.push(Box::new(ModuleSection {
+            backends.push(ModuleSection {
                 registry: registry.clone(),
                 protocol: Protocol::Email,
                 timeout: Duration::from_millis(email_cfg.timeout_ms),
                 public_url: eco.email_base_url.clone().unwrap_or_default(),
-            }));
+            });
         }
         if registry.module(Protocol::Ip).is_some() {
-            backends.push(Box::new(ModuleSection {
+            backends.push(ModuleSection {
                 registry: registry.clone(),
                 protocol: Protocol::Ip,
                 timeout: Duration::from_millis(config.backends.ip.timeout_ms),
                 public_url: eco.ip_base_url.clone().unwrap_or_default(),
-            }));
+            });
         }
 
         let rendered_html = Assets::get("index.html").map(|f| {
@@ -156,6 +157,7 @@ impl AppState {
             badge_recompute_limiter,
             cache,
             scoring_profile,
+            registry,
             backends: Arc::new(backends),
             rendered_html,
             font_db,
@@ -185,6 +187,7 @@ mod tests {
         BackendsConfig, BadgesConfig, CacheConfig, EcosystemConfig, RateLimitConfig, ScoringConfig,
         ServerConfig, SiteConfig,
     };
+    use crate::modules::Backend;
 
     fn test_config() -> Config {
         Config {
@@ -194,6 +197,7 @@ mod tests {
                 trusted_proxies: Vec::new(),
             },
             backends: BackendsConfig {
+                resolve_timeout_ms: 2000,
                 dns: crate::config::BackendConfig::default(),
                 tls: crate::config::BackendConfig::default(),
                 ip: crate::config::BackendConfig::default(),

@@ -85,9 +85,12 @@ pub struct ServerConfig {
 
 pub use netray_common::ecosystem::EcosystemConfig;
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendsConfig {
+    /// Budget of the resolve stage in milliseconds, counted from the start of a check.
+    #[serde(default = "default_resolve_timeout_ms")]
+    pub resolve_timeout_ms: u64,
     #[serde(default)]
     pub dns: BackendConfig,
     #[serde(default)]
@@ -98,6 +101,23 @@ pub struct BackendsConfig {
     pub http: Option<BackendConfig>,
     #[serde(default)]
     pub email: Option<BackendConfig>,
+}
+
+impl Default for BackendsConfig {
+    fn default() -> Self {
+        Self {
+            resolve_timeout_ms: default_resolve_timeout_ms(),
+            dns: BackendConfig::default(),
+            tls: BackendConfig::default(),
+            ip: BackendConfig::default(),
+            http: None,
+            email: None,
+        }
+    }
+}
+
+fn default_resolve_timeout_ms() -> u64 {
+    2000
 }
 
 /// One backend service. lens calls backends with its own reqwest client, so
@@ -501,6 +521,13 @@ impl Config {
                 b.ip.timeout_ms
             )));
         }
+        let resolve_ms = b.resolve_timeout_ms.saturating_add(b.ip.timeout_ms);
+        if resolve_ms >= deadline_ms {
+            return Err(ConfigError::Message(format!(
+                "invalid configuration: backends.resolve_timeout_ms {} + ip timeout_ms {} = {resolve_ms} ms must stay below the {deadline_ms} ms hard deadline",
+                b.resolve_timeout_ms, b.ip.timeout_ms
+            )));
+        }
 
         Ok(())
     }
@@ -523,6 +550,7 @@ mod tests {
         Config {
             server: default_server(),
             backends: BackendsConfig {
+                resolve_timeout_ms: default_resolve_timeout_ms(),
                 dns: crate::config::BackendConfig::default(),
                 tls: crate::config::BackendConfig::default(),
                 ip: crate::config::BackendConfig::default(),

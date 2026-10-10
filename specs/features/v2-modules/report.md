@@ -289,12 +289,35 @@ RED (195c89d): the new and rewired tests failed against the missing module API; 
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R18: engine run — one resolve stage, concurrent modules under section/hard deadlines, sections sent as they finish, overrun → TimedOut, failed resolve → address sections Incomplete; lens's check path calls it | open | crates/engine/tests/run.rs |
-| C2 | R19: no module crate builds its own reqwest client outside netray_common | open | tests/repo/test_module_no_own_http_client.sh |
-| C3 | R20: crates/lens/src/backends/ gone; lens [dependencies] names no module crate; goldens unchanged | open | tests/repo/test_lens_names_no_module.sh, crates/lens/tests/*.rs |
-| C4 | counting stub FactsProvider + modules reading Facts → each of A, AAAA, MX, CAA, NS, HTTPS resolved once per name | open | crates/engine/tests/run.rs |
-| C5 | stub modules finishing after 10, 50, 100 ms → sections arrive in that order, each before the slower finish | open | crates/engine/tests/run.rs |
-| C6 | a stub module overrunning its section deadline → TimedOut, the others keep their results | open | crates/engine/tests/run.rs |
-| C7 | fixture `use reqwest::Client as C; C::new()` → the repo check fails; module crates pass | open | tests/repo/test_module_no_own_http_client.sh |
-| C8 | lens built: backends/ absent, [dependencies] without module crates | open | tests/repo/test_lens_names_no_module.sh |
-| C9 | full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+| C1 | R18: engine run — one resolve stage, concurrent modules under section/hard deadlines, sections sent as they finish, overrun → TimedOut, failed resolve → address sections Incomplete; lens's check path calls it | green | crates/engine/tests/run.rs |
+| C2 | R19: no module crate builds its own reqwest client outside netray_common | already_implemented | tests/repo/test_module_no_own_http_client.sh |
+| C3 | R20: crates/lens/src/backends/ gone; lens [dependencies] names no module crate; goldens unchanged | green | tests/repo/test_lens_names_no_module.sh, crates/lens/tests/*.rs |
+| C4 | counting stub FactsProvider + modules reading Facts → each of A, AAAA, MX, CAA, NS, HTTPS resolved once per name | green | crates/engine/tests/run.rs |
+| C5 | stub modules finishing after 10, 50, 100 ms → sections arrive in that order, each before the slower finish | green | crates/engine/tests/run.rs |
+| C6 | a stub module overrunning its section deadline → TimedOut, the others keep their results | green | crates/engine/tests/run.rs |
+| C7 | fixture `use reqwest::Client as C; C::new()` → the repo check fails; module crates pass | already_implemented | tests/repo/test_module_no_own_http_client.sh |
+| C8 | lens built: backends/ absent, [dependencies] without module crates | green | tests/repo/test_lens_names_no_module.sh |
+| C9 | full-output and lens_golden unchanged | green | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+
+RED (f85098f): `run.rs` failed to compile against the missing `netray_engine::run`; `test_lens_names_no_module.sh` failed on the tracked `crates/lens/src/backends/mod.rs`; `test_module_no_own_http_client.sh` passed at once (C2/C7 already_implemented: no module crate builds a reqwest client — V1.7 holds in 1a).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 engine run + DNS provider | 1 | opus | 73508 | 279 |
+| G2 lens through the engine, `backends/` deleted | 1 | opus | 104348 | 443 |
+| reader repairs (timing, needs_addresses, resolve budget) | 3 (two committed-test conflicts fixed by the orchestrator) | opus | 214883 | 674 |
+
+### Reader
+
+| class | at | finding | outcome |
+|---|---|---|---|
+| BLOCKER | crates/dns/src/module.rs:158 | the facts stage charged the resolver key 6 on top of the check's 19: 25 per check against production's burst 40 let one check through where 0.23.1 let two; from the 4th back-to-back check the facts charge failed and took HTTP, TLS and IP with it | operator 2026-10-10: count honestly, raise production `[modules.dns.limits]` by 25:19 to 160/53 (fixture and K item); HTTP/TLS no longer depend on the resolve (next row) |
+| BLOCKER | crates/engine/src/lib.rs:204 | section windows started after the resolve stage, bounded only by the hard deadline: a 10 s resolve left 10 s per section, a 20 s one lost all five | operator 2026-10-10: windows count from the run start; the resolve has its own budget (`[backends] resolve_timeout_ms`, default 2000; `validate()` refuses resolve + ip ≥ hard deadline) |
+| AMENDMENT | crates/engine/src/lib.rs:212 | a failed resolve skipped HTTP and TLS although both do their own lookups in 1a | repaired: only IP declares `needs_addresses`; HTTP and TLS start at the run start |
+| NIT | crates/lens/src/modules.rs:286 | a failed resolve had no log line of its own | repaired: WARN "address resolution failed" |
+
+### Behavioural verification
+
+`just adlc-verify` green; `tests/fixtures/contracts/` unchanged; `crates/lens/src/backends/` gone; `crates/lens/Cargo.toml` `[dependencies]` names no module crate (`test_lens_names_no_module.sh`).

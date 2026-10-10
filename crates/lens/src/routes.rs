@@ -15,12 +15,12 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
-use crate::backends::{BackendExtra, BackendResult};
 use crate::badge::render::svg_for_grade;
 use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
 use crate::cache::{CachedResult, cache_key, is_fresh};
 use crate::check::{CheckInput, CheckOutput, SectionError, run_check, run_check_with_input};
 use crate::input::validate_domain;
+use crate::modules::{BackendExtra, BackendResult};
 use crate::scoring::engine::{CheckResult, CheckVerdict, OverallScore};
 use crate::security::check_rate_limit;
 use crate::state::AppState;
@@ -1898,6 +1898,7 @@ pub mod tests {
                 trusted_proxies: Vec::new(),
             },
             backends: BackendsConfig {
+                resolve_timeout_ms: 2000,
                 dns: crate::config::BackendConfig {
                     timeout_ms: 1000,
                     ..Default::default()

@@ -112,6 +112,10 @@ impl Module for IpModule {
         &[]
     }
 
+    fn needs_addresses(&self) -> bool {
+        true
+    }
+
     fn run<'a>(&'a self, _ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
         Box::pin(async move {
             let (sample, total) = sample(facts);

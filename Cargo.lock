@@ -2877,6 +2877,7 @@ dependencies = [
 name = "netray-engine"
 version = "0.23.1"
 dependencies = [
+ "futures",
  "netray-model",
  "serde_json",
  "tokio",

@@ -114,3 +114,21 @@ G1: C1, C2, C4–C7 (netray-dns) · G2: C3, C8 (lens and the binary). Orchestrat
 ### G2 — lens and the binary
 - `crates/lens/src/modules.rs`: DNS presentation → `BackendExtra::Dns`; `config.rs` drops `dns_servers` (refused) and refuses `backends.dns.url`; `state.rs` DNS from the registry; delete `backends/dns.rs`, `sse.rs` and whatever is left of the HTTP backend plumbing that nothing uses; lens dev/example configs; dev-dep `netray-dns` with `testing`.
 - `crates/netray`: `lens_registry` builds `DnsModule` from `[modules.dns]` (warns when absent, as the others).
+
+## Phase 6 — Engine run
+
+## Groups
+
+G1: C1 (engine half), C4–C6 (netray-engine run; netray-dns provider and `golden_facts`; `needs_addresses` on http, tls, ip) · G2: C1 (lens half), C2, C3, C7–C9 (lens through the engine, `backends/` deleted, the binary wires `with_facts`). C2/C7 are already green (no module builds a reqwest client). Orchestrator-written.
+
+## Plan
+
+### G1 — engine and the DNS provider
+- `crates/engine/src/lib.rs` (or `run.rs`): `Facts.https`, `Module::needs_addresses` (default false), `SectionEvent`, `RunReport`, `run(registry, base, sections, tx)`; tokio `sync`, `time` features.
+- `crates/{http,tls,ip}/src/module.rs`: `needs_addresses() = true`.
+- `crates/dns/src/module.rs`: the provider resolves HTTPS too, under the per-target charge, breakers and semaphore; `testing::golden_facts`.
+
+### G2 — lens and the binary
+- `crates/lens/src/check.rs`: the check path calls `netray_engine::run`; sections map to V1 sections in the adapter; the hard deadline as today.
+- `crates/lens/src/modules.rs` takes the adapter types from `backends/mod.rs`; `backends/` deleted; `BackendContext.resolved_ips` removed; IP reads `Facts`.
+- `crates/netray/src/main.rs`: the registry gets `with_facts` from the DNS module (shared `Arc`).

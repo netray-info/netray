@@ -21,9 +21,11 @@ use tokio::sync::{Semaphore, mpsc};
 use crate::api::check::{
     CHECK_TOTAL_STEPS, CheckEvent, CheckRun, LintEvent, check_query, run_check,
 };
-use crate::api::query::{build_resolver_group, effective_server_specs, target_keys_from_servers};
+use crate::api::query::{
+    build_resolver_group, effective_server_specs, record_breaker_outcomes, target_keys_from_servers,
+};
 use crate::api::{BatchEvent, QUERY_SEMAPHORE_PERMITS};
-use crate::circuit_breaker::CircuitBreakerRegistry;
+use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::config::{Config, ConfigError, ModuleConfig};
 use crate::error::ApiError;
 use crate::parser::ParsedQuery;
@@ -53,12 +55,13 @@ pub(crate) fn dns_checks() -> &'static [CheckId] {
 }
 
 /// The record types of the shared DNS facts.
-const FACT_RECORD_TYPES: [RecordType; 5] = [
+const FACT_RECORD_TYPES: [RecordType; 6] = [
     RecordType::A,
     RecordType::AAAA,
     RecordType::MX,
     RecordType::CAA,
     RecordType::NS,
+    RecordType::HTTPS,
 ];
 
 /// The DNS check as an engine module: prism's check-route input policy (domain, servers,
@@ -101,10 +104,11 @@ impl DnsModule {
         Ok(parsed)
     }
 
-    /// The per-target part of the check route's cost: each server pays the check's steps.
-    fn charge_targets(&self, parsed: &ParsedQuery) -> Result<(), ApiError> {
+    /// The per-target part of a route's cost: each server pays `cost` (the check's steps, or the
+    /// record types of a query).
+    fn charge_targets(&self, parsed: &ParsedQuery, cost: u32) -> Result<(), ApiError> {
         let servers = effective_server_specs(parsed, &self.config);
-        let cost = NonZeroU32::new(CHECK_TOTAL_STEPS).expect("non-zero step count");
+        let cost = NonZeroU32::new(cost).expect("non-zero cost");
         for key in target_keys_from_servers(&servers) {
             check_keyed_cost(&self.per_target, &key, cost, "per_target", "prism").map_err(|r| {
                 ApiError::RateLimited {
@@ -122,7 +126,7 @@ impl DnsModule {
 
     async fn measure(&self, ctx: &RunContext) -> Result<Vec<CheckEvent>, ApiError> {
         let parsed = self.query(ctx.domain.as_str())?;
-        self.charge_targets(&parsed)?;
+        self.charge_targets(&parsed, CHECK_TOTAL_STEPS)?;
         let (group, breaker_keys) =
             build_resolver_group(&parsed, &self.config, self.timeout()).await?;
         let run = CheckRun {
@@ -146,35 +150,47 @@ impl DnsModule {
         Ok(events)
     }
 
+    /// The fact records through the resolver group, as prism's query route asks them: the
+    /// per-target charge for the record types, a server whose circuit breaker is open skipped,
+    /// each lookup under the query semaphore, its outcome recorded on the breakers.
     async fn fact_lookups(&self, domain: &str) -> Result<Lookups, ApiError> {
         let parsed = self.query(domain)?;
-        let (group, _) = build_resolver_group(&parsed, &self.config, self.timeout()).await?;
+        self.charge_targets(&parsed, FACT_RECORD_TYPES.len() as u32)?;
+        let (group, breaker_keys) =
+            build_resolver_group(&parsed, &self.config, self.timeout()).await?;
         let query = MultiQuery::multi_record(parsed.domain.as_str(), FACT_RECORD_TYPES)
             .map_err(|e| ApiError::ResolverError(e.to_string()))?;
-        // Per resolver: the group's own lookup future is not `Send`.
-        let results = futures::future::join_all(
-            group
-                .resolvers()
-                .iter()
-                .map(|resolver| resolver.lookup(query.clone())),
-        )
-        .await;
-        let mut merged: Option<Lookups> = None;
         let mut error = None;
+        let mut lookups = Vec::new();
+        for (resolver, key) in group.resolvers().iter().zip(&breaker_keys) {
+            if let Err(BreakerState::Open) = self.circuit_breakers.check(key) {
+                error = Some(format!("circuit breaker open for {key}, skipping"));
+                continue;
+            }
+            let query = query.clone();
+            lookups.push(async move {
+                let _permit = self.query_semaphore.acquire().await;
+                resolver.lookup(query).await
+            });
+        }
+        // Per resolver: the group's own lookup future is not `Send`.
+        let results = futures::future::join_all(lookups).await;
+        let mut merged: Option<Lookups> = None;
         for result in results {
             match result {
                 Ok(lookups) => {
+                    record_breaker_outcomes(&self.circuit_breakers, &lookups);
                     merged = Some(match merged {
                         Some(m) => m.merge(lookups),
                         None => lookups,
                     });
                 }
-                Err(e) => error = Some(e),
+                Err(e) => error = Some(e.to_string()),
             }
         }
         match (merged, error) {
             (Some(lookups), _) => Ok(lookups),
-            (None, Some(e)) => Err(ApiError::ResolverError(e.to_string())),
+            (None, Some(e)) => Err(ApiError::ResolverError(e)),
             (None, None) => Ok(Lookups::empty()),
         }
     }
@@ -223,8 +239,8 @@ impl FactsProvider for DnsModule {
     }
 }
 
-/// The A, AAAA, MX (exchange), CAA (presentation form) and NS records of `lookups`, each once,
-/// in lookup order.
+/// The A, AAAA, MX (exchange), CAA (presentation form), NS and HTTPS (presentation form)
+/// records of `lookups`, each once, in lookup order.
 pub fn facts_from_lookups(lookups: &Lookups) -> Facts {
     Facts {
         a: first_seen(lookups.a().into_iter().copied()),
@@ -235,6 +251,17 @@ pub fn facts_from_lookups(lookups: &Lookups) -> Facts {
             format!("{flags} {} \"{}\"", caa.tag(), caa.value())
         })),
         ns: first_seen(lookups.ns().into_iter().map(ToString::to_string)),
+        https: first_seen(lookups.https().into_iter().map(|svcb| {
+            let mut rr = format!("{} {}", svcb.svc_priority(), svcb.target_name());
+            for param in svcb.svc_params() {
+                rr.push_str(&format!(
+                    " {}={}",
+                    param.key(),
+                    param.value().trim_end_matches(',')
+                ));
+            }
+            rr
+        })),
     }
 }
 

@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use netray_engine::{BoxFuture, EvidencePath, Facts, Module, Registry, RunContext, SectionOutcome};
+use netray_engine::{
+    BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, Registry, ResolveError,
+    RunContext, SectionOutcome,
+};
 use netray_model::{CheckId, Protocol};
 
 mod site;
@@ -94,11 +97,11 @@ fn check_config<T, E: std::fmt::Display>(
     }
 }
 
-/// The IP module behind a shared handle: the registry owns one reference, the SIGHUP task the
-/// other.
-struct SharedIp(Arc<netray_ip::IpModule>);
+/// A module behind a shared handle: the IP module is shared by the registry and the SIGHUP
+/// task, the DNS module by the registry's module and its resolve stage.
+struct Shared<T>(Arc<T>);
 
-impl Module for SharedIp {
+impl<T: Module> Module for Shared<T> {
     fn protocol(&self) -> Protocol {
         self.0.protocol()
     }
@@ -111,8 +114,22 @@ impl Module for SharedIp {
         self.0.volatile()
     }
 
+    fn needs_addresses(&self) -> bool {
+        self.0.needs_addresses()
+    }
+
     fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
         self.0.run(ctx, facts)
+    }
+}
+
+impl<T: FactsProvider> FactsProvider for Shared<T> {
+    fn resolve<'a>(
+        &'a self,
+        ctx: &'a RunContext,
+        domain: &'a Domain,
+    ) -> BoxFuture<'a, Result<Facts, ResolveError>> {
+        self.0.resolve(ctx, domain)
     }
 }
 
@@ -174,11 +191,14 @@ async fn lens_registry(
     if cfg.modules.contains_key("dns") && dns_config.backends.ip.is_none() {
         tracing::warn!("modules.dns.backends.ip is not set: the infrastructure check is absent");
     }
-    let dns = netray_dns::DnsModule::new(dns_config)
-        .await
-        .map_err(|e| format!("modules.dns: {e}"))?;
+    let dns = Arc::new(
+        netray_dns::DnsModule::new(dns_config)
+            .await
+            .map_err(|e| format!("modules.dns: {e}"))?,
+    );
     let mut registry = Registry::new()
-        .with(Box::new(dns))
+        .with(Box::new(Shared(dns.clone())))
+        .with_facts(Box::new(Shared(dns)))
         .with(Box::new(module))
         .with(Box::new(email))
         .with(Box::new(tls));
@@ -199,7 +219,7 @@ async fn lens_registry(
             .await
             .map_err(|e| format!("modules.ip: {e}"))?,
     );
-    registry = registry.with(Box::new(SharedIp(ip.clone())));
+    registry = registry.with(Box::new(Shared(ip.clone())));
     Ok((registry, Some(ip)))
 }
 
