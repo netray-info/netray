@@ -87,3 +87,27 @@ COUNTS blockers=0 amendments=0 deferred=1 nits=4. v3.toml weights exactly the 54
 ### Behavioural verification
 
 skipped: library-only phase; lens still scores through its own module until phase 3.
+
+## Phase 3 — Switch to v3
+
+### API contract
+
+- `netray_engine::Module::wants_facts(&self) -> bool` (default `false`; TLS `true`). `run` lets such a module wait for the resolve inside its own window; on a resolve error it runs with empty `Facts` (not `Incomplete`). `needs_addresses()` keeps its meaning (IP).
+- Every module's `checks()` returns exactly its protocol's catalogue IDs (`netray_engine::catalogue()`), and every `Measured` outcome carries each of them exactly once. Missing results are `Status::NotApplicable` with the reason as the only finding: DNS/HTTP `"not reported"`, TLS `"no TLS handshake"` (when `tls.tls_reachable` fails), beacon `info`/`skip` messages, the MX-dependent email IDs `"no MX"` / `"Null MX"`.
+- lens: `crates/lens/src/scoring/` is removed; lens calls `netray_engine::score(netray_engine::profile::Profiles::current(), …)`. JSON/SSE/snapshot shapes unchanged; check names are the v3 names without protocol prefix as today's shape uses them; titles, fix hints, owners and guide URLs from `netray_engine::catalogue()`; snapshot `earned` is a decimal and old integer entries still deserialize; old snapshots' V1 names render through a V1 label table.
+- `tests/repo/test_checkmeta_catalogue.sh`: fails when `crates/lens/frontend/src/lib/checkMeta.ts` names or titles differ from `checks.toml`.
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R3(a) DNS: `prism.sse` → exactly the 10 `dns.*` IDs, unreported ones `not_applicable` "not reported", no `dns.infrastructure` | open | crates/dns/tests/module_v3.rs |
+| C2 | R3(a) IP: loading the module logs no "user_agent_regexes" line; it emits only `ip.reputation` | open | crates/ip/tests/module_v3.rs |
+| C3 | R3(b) HTTP: `spectra-inspect.json` → 12 `http.*` IDs; reported ones carry spectra's status, others "not reported"; `redirect_limit_reached` → finding on `http.https_redirect`, no `redirect_limit` check | open | crates/http/tests/module_v3.rs |
+| C4 | R3(c) Email: 10 IDs; routing of `dane_without_tls_rpt`/`mta_sts_without_tls_rpt` → tls_rpt, `dane_without_dnssec` → dane; null/no MX → 7 MX-dependent N/A, spf+dmarc measured; dkim info → N/A with its message | open | crates/email/tests/module_v3.rs |
+| C5 | R3(d) TLS: 21 IDs every run; worst-of over handshake addresses naming the failing address; reachable rule; all-fail → 20 N/A "no TLS handshake"; aia N/A on complete chain; consistency/alpn N/A with one address | open | crates/tls/tests/module_v3.rs |
+| C6 | R3(d) engine: a `wants_facts` module sees the resolved Facts; on resolve error it runs with empty Facts | open | crates/engine/tests/wants_facts.rs |
+| C7 | R3(e) every module's golden: IDs within its protocol, none twice, none missing, no ID from two modules | open | crates/lens/tests/catalogue_emitters.rs |
+| C8 | R3(f) lens renders v3 names with catalogue texts and scores via the engine; a 0.24.0 snapshot with `email_authentication` renders its V1 label and guide link; integer `earned` still reads | open | crates/lens/tests/v3_render.rs |
+| C9 | R3(f) checkMeta guard fails on a differing name or title | open | tests/repo/test_checkmeta_catalogue.sh |
+| C10 | R3(f) regenerated goldens; the report explains each grade change | open | (report) |
