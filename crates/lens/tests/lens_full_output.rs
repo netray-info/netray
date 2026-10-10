@@ -20,15 +20,15 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
-use common::{email_golden, http_module, ip_golden, registry_with};
+use common::{email_golden, http_module, ip_golden, registry_with, tls_module};
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
 use serde_json::Value;
 use tower::ServiceExt;
 
-/// One fixture: a name and the golden file each backend serves. `None` for tls means that
-/// backend answers HTTP 500; `None` for http means the HTTP module is incomplete.
+/// One fixture: a name and the golden file each backend or module serves. `None` for tls or http
+/// means that module is incomplete.
 #[derive(Clone)]
 struct Fixture {
     name: &'static str,
@@ -124,16 +124,6 @@ async fn serve(app: Router) -> String {
 const DNS_DOCUMENTATION_A: &str = r#"{"A":"192.0.2.10"}"#;
 const DNS_PUBLIC_A: &str = r#"{"A":"1.1.1.1"}"#;
 
-/// A stub serving `file` at `path`, with the given content type and method.
-async fn stub(
-    path: &'static str,
-    post_method: bool,
-    content_type: &'static str,
-    file: &str,
-) -> String {
-    stub_body(path, post_method, content_type, golden(file)).await
-}
-
 /// A stub serving `body` at `path`, with the given content type and method.
 async fn stub_body(
     path: &'static str,
@@ -153,17 +143,6 @@ async fn stub_body(
     serve(Router::new().route(path, route)).await
 }
 
-/// A stub answering HTTP 500 at `path`.
-async fn failing_stub(path: &'static str, post_method: bool) -> String {
-    let handler = || async { StatusCode::INTERNAL_SERVER_ERROR };
-    let route = if post_method {
-        post(handler)
-    } else {
-        get(handler)
-    };
-    serve(Router::new().route(path, route)).await
-}
-
 async fn production_config(f: &Fixture) -> Config {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
@@ -171,10 +150,6 @@ async fn production_config(f: &Fixture) -> Config {
 
     let dns = golden(f.dns).replace(DNS_DOCUMENTATION_A, DNS_PUBLIC_A);
     config.backends.dns.url = Some(stub_body("/api/check", true, "text/event-stream", dns).await);
-    config.backends.tls.url = Some(match f.tls {
-        Some(file) => stub("/api/inspect", false, "application/json", file).await,
-        None => failing_stub("/api/inspect", false).await,
-    });
 
     config.snapshots.enabled = false;
     // Every run computes the verdict afresh instead of answering from the cache.
@@ -223,7 +198,12 @@ async fn run_full(f: &Fixture) -> Value {
     let config = production_config(f).await;
     let state = AppState::with_registry(
         config,
-        registry_with(http_module(f.http), email_golden(f.email), ip_golden(f.ip)),
+        registry_with(
+            http_module(f.http),
+            email_golden(f.email),
+            ip_golden(f.ip),
+            tls_module(f.tls),
+        ),
     )
     .unwrap();
     let (routes, _) = api_router().split_for_parts();

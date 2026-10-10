@@ -1,9 +1,9 @@
 //! Incomplete results (spec grade-integrity, Phase 2, requirements 3 and 4).
 //!
-//! Real stub servers serve the committed backend goldens (or a failure, or a rewritten
-//! variant of a golden; the HTTP, email and IP sections come from golden modules of the engine
-//! registry, or from ones that are incomplete); lens runs with `tests/fixtures/lens.production.toml` (URLs pointed
-//! at the stubs), the cache enabled and a temp-file snapshot store. The routers are driven
+//! A real stub server serves the committed DNS golden (or a rewritten variant of it; the TLS,
+//! HTTP, email and IP sections come from golden modules of the engine
+//! registry, or from ones that are incomplete); lens runs with `tests/fixtures/lens.production.toml` (the DNS URL
+//! pointed at the stub), the cache enabled and a temp-file snapshot store. The routers are driven
 //! in-process. A result with an Errored section is `incomplete`: never cached, never
 //! snapshotted, never badged or rendered as a letter.
 
@@ -17,7 +17,7 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
-use common::{email_golden, email_incomplete, http_module, ip_golden, registry_with};
+use common::{email_golden, email_incomplete, http_module, ip_golden, registry_with, tls_module};
 use lens::config::Config;
 use lens::routes::{api_router, badge_router, og_router};
 use lens::snapshot::SnapshotStore;
@@ -26,12 +26,11 @@ use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 use tower::ServiceExt;
 
-/// What one backend stub answers.
+/// What the DNS stub answers.
 #[derive(Clone)]
 enum Answer {
     Golden(&'static str),
     Body(String),
-    Http500,
 }
 
 fn contracts_dir() -> PathBuf {
@@ -60,22 +59,12 @@ async fn stub(
     answer: Answer,
 ) -> String {
     let body = match &answer {
-        Answer::Golden(f) => Some(golden(f)),
-        Answer::Body(b) => Some(b.clone()),
-        Answer::Http500 => None,
+        Answer::Golden(f) => golden(f),
+        Answer::Body(b) => b.clone(),
     };
     let handler = move || {
         let body = body.clone();
-        async move {
-            match body {
-                Some(b) => (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], b),
-                None => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    [(header::CONTENT_TYPE, "text/plain")],
-                    "backend broke".to_string(),
-                ),
-            }
-        }
+        async move { (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], body) }
     };
     let route = if post_method {
         post(handler)
@@ -87,7 +76,8 @@ async fn stub(
 
 struct Backends {
     dns: Answer,
-    tls: Answer,
+    /// The tlsight golden the TLS module runs; `None` makes the TLS section incomplete.
+    tls: Option<&'static str>,
     /// The spectra golden the HTTP module runs; `None` makes the HTTP section incomplete.
     http: Option<&'static str>,
     /// The beacon golden the email module runs; `None` makes the email section incomplete.
@@ -98,7 +88,7 @@ impl Backends {
     fn healthy() -> Self {
         Self {
             dns: Answer::Golden("prism.sse"),
-            tls: Answer::Golden("tlsight-inspect.json"),
+            tls: Some("tlsight-inspect.json"),
             http: Some("spectra-inspect.json"),
             email: Some("beacon.sse"),
         }
@@ -116,7 +106,6 @@ async fn harness(b: Backends) -> Harness {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
     config.backends.dns.url = Some(stub("/api/check", true, "text/event-stream", b.dns).await);
-    config.backends.tls.url = Some(stub("/api/inspect", false, "application/json", b.tls).await);
     assert!(config.cache.enabled, "production config enables the cache");
     config.snapshots.enabled = true;
 
@@ -129,7 +118,12 @@ async fn harness(b: Backends) -> Harness {
         Some(file) => email_golden(file),
         None => email_incomplete(),
     };
-    let registry = registry_with(http_module(b.http), email, ip_golden("ifconfig-json.json"));
+    let registry = registry_with(
+        http_module(b.http),
+        email,
+        ip_golden("ifconfig-json.json"),
+        tls_module(b.tls),
+    );
     let mut state = AppState::with_registry(config, registry).unwrap();
     state.snapshot_store = Some(std::sync::Arc::new(store));
     assert!(state.badge_check_fn.is_none(), "use the real check");
@@ -324,7 +318,7 @@ fn prism_nxdomain(prism: &str) -> String {
 async fn incomplete_c6_no_address_records_and_failed_tls_http_is_incomplete() {
     let h = harness(Backends {
         dns: Answer::Body(prism_nxdomain(&golden("prism.sse"))),
-        tls: Answer::Http500,
+        tls: None,
         http: None,
         ..Backends::healthy()
     })

@@ -15,7 +15,6 @@ url = "http://prism:8080"
 timeout_ms = 15000
 
 [backends.tls]
-url = "http://tlsight:8081"
 timeout_ms = 15000
 
 [backends.ip]
@@ -54,6 +53,38 @@ service_name = "lens"
 
 [site]
 og_image = "https://example.com/og/landing.png"
+
+# The TLS section runs in-process; the check values are those of the production tlsight.toml
+# (crates/tls/tests/fixtures/tlsight.production.toml) under the module's section names.
+[modules.tls.limits]
+per_target_per_minute = 60
+per_target_burst = 20
+max_concurrent_handshakes = 10
+max_ports = 5
+max_ips_per_hostname = 10
+handshake_timeout_secs = 5
+request_timeout_secs = 15
+
+[modules.tls.dns]
+timeout_secs = 3
+
+[modules.tls.validation]
+expiry_warning_days = 30
+expiry_critical_days = 14
+check_dane = true
+check_caa = true
+check_ct = true
+
+[modules.tls.quality]
+enabled = true
+http_check_timeout_secs = 5
+
+[modules.tls.backends.ip]
+url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+max_concurrent = 20
+cache_ttl_secs = 300
+cache_capacity = 1024
 
 [modules.http.enrichment]
 ip_url = "http://ifconfig-rs:8000"

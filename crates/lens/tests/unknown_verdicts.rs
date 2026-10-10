@@ -17,7 +17,6 @@ use axum::Router;
 use axum::http::header;
 use axum::routing::{get, post};
 use lens::backends::dns::check_dns;
-use lens::backends::tls::check_tls;
 use lens::backends::{Backend, BackendContext};
 use lens::modules::ModuleSection;
 use lens::scoring::engine::CheckVerdict;
@@ -95,13 +94,10 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
                 .map(|r| pairs(&r.checks))
                 .map_err(|e| format!("{e:?}"))
         }
-        "tls" => {
-            let url = stub("/api/inspect", false, "application/json", body).await;
-            check_tls(&client, &url, "example.com", TIMEOUT, &fwd)
-                .await
-                .map(|r| pairs(&r.checks))
-                .map_err(|e| format!("{e:?}"))
-        }
+        "tls" => common::run_tls(netray_tls::testing::golden_module(&body), TIMEOUT)
+            .await
+            .map(|r| pairs(&r.checks))
+            .map_err(|e| format!("{e:?}")),
         "email" => {
             let module = netray_email::testing::golden_module(&body);
             let section = ModuleSection {
@@ -212,6 +208,29 @@ fn email_unknown_verdict_is_refused_at_decode() {
     );
 }
 
+// C7 for TLS: in-process the verdicts are typed. A tlsight check status lens does not know
+// (`fail` -> `passed` on a port quality check) is refused when `netray_tls` decodes the golden,
+// or makes the section Errored; it is never translated into a verdict. The
+// `lens_unknown_verdict_total{section}` counter is not asserted for TLS: the decode lives
+// outside lens's metrics, as for HTTP and email.
+#[tokio::test]
+async fn tls_unknown_status_is_refused_at_decode() {
+    let body = json_with(
+        "tlsight-inspect.json",
+        "/ports/0/quality/checks/0/status",
+        "passed",
+    );
+    let built = std::panic::catch_unwind(|| netray_tls::testing::golden_module(&body));
+    if let Ok(module) = built {
+        let outcome = common::run_tls(module, TIMEOUT).await;
+        assert!(
+            outcome.is_err(),
+            "an unknown tlsight status must be refused, got {:?}",
+            outcome.map(|r| r.checks.len())
+        );
+    }
+}
+
 // Local recorders are thread-local: a current-thread runtime keeps lens on this thread.
 #[tokio::test(flavor = "current_thread")]
 async fn unknown_verdict_errors_section_and_counts() {
@@ -224,15 +243,6 @@ async fn unknown_verdict_errors_section_and_counts() {
                 "prism.sse",
                 r#"{"Ok":"Found exactly one SPF record"}"#,
                 r#"{"Passed":"Found exactly one SPF record"}"#,
-            ),
-        ),
-        // C7: tlsight port check status (chain_trusted, a hard-fail check) -> `passed`
-        (
-            "tls",
-            json_with(
-                "tlsight-inspect.json",
-                "/ports/0/quality/checks/0/status",
-                "passed",
             ),
         ),
     ];

@@ -67,7 +67,6 @@ fn app() -> (Router, Arc<Mutex<Vec<Option<Vec<String>>>>>) {
     // Refused connections at once: no backend answers, so only the module can supply email.
     let closed = || Some("http://127.0.0.1:1".to_string());
     config.backends.dns.url = closed();
-    config.backends.tls.url = closed();
     config.cache.enabled = false;
     config.snapshots.enabled = false;
 

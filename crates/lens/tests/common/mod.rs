@@ -1,4 +1,5 @@
-//! Shared by the lens tests that run the HTTP, email and IP sections through the engine registry:
+//! Shared by the lens tests that run the TLS, HTTP, email and IP sections through the engine
+//! registry: the TLS module is `netray_tls::testing::golden_module` on a tlsight contract golden,
 //! the HTTP module is `netray_http::testing::golden_module` on a spectra contract golden, the
 //! email module `netray_email::testing::golden_module` on a beacon `.sse` golden, the IP module
 //! `netray_ip::testing::golden_module` on the ifconfig contract golden; for a scenario where a
@@ -96,6 +97,25 @@ pub fn email_incomplete() -> Box<dyn Module> {
     Box::new(Incomplete(Protocol::Email))
 }
 
+/// A TLS module that runs the tlsight contract golden `file` (a `tlsight-*.json`); `None` makes
+/// it incomplete: what lens saw as "tlsight answered HTTP 500".
+pub fn tls_module(file: Option<&str>) -> Box<dyn Module> {
+    match file {
+        Some(name) => netray_tls::testing::golden_module(&golden(name)),
+        None => Box::new(Incomplete(Protocol::Tls)),
+    }
+}
+
+/// A TLS module that runs the tlsight contract golden `file`.
+pub fn tls_golden(file: &str) -> Box<dyn Module> {
+    tls_module(Some(file))
+}
+
+/// A TLS module whose run is incomplete.
+pub fn tls_incomplete() -> Box<dyn Module> {
+    Box::new(Incomplete(Protocol::Tls))
+}
+
 /// An HTTP module that runs the spectra contract golden `file`; `None` makes it incomplete.
 pub fn http_module(file: Option<&str>) -> Box<dyn Module> {
     match file {
@@ -142,22 +162,45 @@ pub async fn run_ip(
     section.run("example.com", &ctx).await
 }
 
-/// A registry with the given HTTP, email and IP modules.
+/// Run the TLS section of lens over `module`: the section needs no addresses from DNS. `Err` is
+/// what lens turns into an Errored section.
+pub async fn run_tls(
+    module: Box<dyn Module>,
+    timeout: Duration,
+) -> Result<BackendResult, SectionError> {
+    let section = ModuleSection {
+        registry: Arc::new(Registry::new().with(module)),
+        protocol: Protocol::Tls,
+        timeout,
+        public_url: String::new(),
+    };
+    let ctx = BackendContext {
+        resolved_ips: vec![],
+        dkim_selectors: None,
+        forward_headers: Default::default(),
+    };
+    section.run("example.com", &ctx).await
+}
+
+/// A registry with the given HTTP, email, IP and TLS modules.
 pub fn registry_with(
     http: Box<dyn Module>,
     email: Box<dyn Module>,
     ip: Box<dyn Module>,
+    tls: Box<dyn Module>,
 ) -> Registry {
-    Registry::new().with(http).with(email).with(ip)
+    Registry::new().with(http).with(email).with(ip).with(tls)
 }
 
 /// A registry whose HTTP module runs the spectra golden `http` and whose email module runs the
-/// beacon golden `email` and whose IP module answers the ifconfig golden (all from
-/// `tests/fixtures/contracts/`); `None` for `http` makes the HTTP section incomplete.
+/// beacon golden `email` and whose IP module answers the ifconfig golden and whose TLS module
+/// runs the tlsight golden `tlsight-inspect.json` (all from `tests/fixtures/contracts/`); `None`
+/// for `http` makes the HTTP section incomplete.
 pub fn registry(http: Option<&str>, email: &str) -> Registry {
     registry_with(
         http_module(http),
         email_golden(email),
         ip_golden("ifconfig-json.json"),
+        tls_golden("tlsight-inspect.json"),
     )
 }

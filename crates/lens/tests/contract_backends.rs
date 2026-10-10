@@ -1,21 +1,24 @@
-// Contract test: lens parses the goldens its DNS and TLS backends write; `netray_http`
-// translates the HTTP golden (the HTTP section runs in-process).
+// Contract test: lens parses the golden its DNS backend writes; the TLS module (`netray_tls`)
+// and `netray_http` translate the TLS and HTTP goldens (both sections run in-process).
 //
 // Each backend's own `tests/contract_golden.rs` writes its golden under
 // `tests/fixtures/contracts/` from its real response types. Here a local HTTP server
-// serves the committed golden at the path and method lens calls, and lens's public
-// `check_dns` / `check_tls` must produce checks and no error, with values
-// that come from the golden rather than defaults.
+// serves the DNS golden at the path and method lens calls, and lens's public `check_dns` must
+// produce checks and no error; the TLS module runs the tlsight golden through lens's
+// `ModuleSection`. Both must carry values that come from the golden rather than defaults.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
+mod common;
+
 use axum::Router;
 use axum::http::header;
-use axum::routing::{get, post};
+use axum::routing::post;
+use common::{run_tls, tls_golden};
+use lens::backends::BackendExtra;
 use lens::backends::dns::check_dns;
-use lens::backends::tls::check_tls;
 use lens::scoring::engine::CheckVerdict;
 use netray_engine::SectionOutcome;
 use netray_http::inspect::assembler::InspectResponse;
@@ -92,29 +95,13 @@ async fn lens_parses_prism_golden() {
 
 #[tokio::test]
 async fn lens_parses_tlsight_golden() {
-    let body = golden("tlsight-inspect.json");
-    let app = Router::new().route(
-        "/api/inspect",
-        get(move || {
-            let body = body.clone();
-            async move { ([(header::CONTENT_TYPE, "application/json")], body) }
-        }),
-    );
-    let url = serve(app).await;
-
-    let result = check_tls(
-        &reqwest::Client::new(),
-        &url,
-        "example.com",
-        TIMEOUT,
-        &reqwest::header::HeaderMap::new(),
-    )
-    .await
-    .expect("lens must parse tlsight's golden without a section error");
+    let result = run_tls(tls_golden("tlsight-inspect.json"), TIMEOUT)
+        .await
+        .expect("lens must run the TLS module on tlsight's golden without a section error");
 
     assert!(
         !result.checks.is_empty(),
-        "no checks parsed from tlsight's golden"
+        "no checks translated from tlsight's golden"
     );
     let ocsp = result
         .checks
@@ -130,10 +117,12 @@ async fn lens_parses_tlsight_golden() {
             "TLS section must not carry `{owned_by_http}`"
         );
     }
+    let BackendExtra::Tls { raw_headline, .. } = &result.extra else {
+        panic!("expected BackendExtra::Tls");
+    };
     assert!(
-        result.raw_headline.contains("TLSv1.3") && result.raw_headline.contains("60d"),
-        "headline `{}` does not carry the golden's version and days remaining",
-        result.raw_headline
+        raw_headline.contains("TLSv1.3") && raw_headline.contains("60d"),
+        "headline `{raw_headline}` does not carry the golden's version and days remaining",
     );
 }
 

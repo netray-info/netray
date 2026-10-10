@@ -14,6 +14,7 @@ trap '_netray_cleanup; rm -rf "$TMP"' EXIT
 
 # sub | dev config | new prefix | legacy prefix | legacy config var | second bind key
 rows=(
+  "tls|crates/tls/tlsight.dev.toml|NETRAY_TLS_|TLSIGHT_|TLSIGHT_CONFIG|METRICS_BIND"
   "http|crates/http/spectra.dev.toml|NETRAY_HTTP_|SPECTRA__|SPECTRA_CONFIG|METRICS_BIND"
   "email|crates/email/beacon.dev.toml|NETRAY_EMAIL_|BEACON__|BEACON_CONFIG|METRICS_BIND"
   "ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_|IFCONFIG_|IFCONFIG_CONFIG|ADMIN_BIND"
@@ -76,6 +77,10 @@ fi
 
 if git ls-files | grep -q '^crates/ifconfig-rs/'; then
     fail "files under crates/ifconfig-rs/ are still tracked"
+fi
+
+if git ls-files | grep -q '^crates/tlsight/'; then
+    fail "files under crates/tlsight/ are still tracked"
 fi
 
 echo "PASS"

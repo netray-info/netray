@@ -158,15 +158,6 @@ async fn app(per_ip: u32) -> (Router, AppState) {
     let mut config = Config::load(path.to_str()).expect("production config loads");
     config.backends.dns.url =
         Some(stub("/api/check", true, "text/event-stream", "prism.sse").await);
-    config.backends.tls.url = Some(
-        stub(
-            "/api/inspect",
-            false,
-            "application/json",
-            "tlsight-inspect.json",
-        )
-        .await,
-    );
     assert!(config.cache.enabled, "production config enables the cache");
     config.rate_limit.per_ip_per_minute = per_ip;
     config.rate_limit.per_ip_burst = per_ip;

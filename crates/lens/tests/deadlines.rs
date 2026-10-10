@@ -1,7 +1,7 @@
 //! Deadlines (spec grade-integrity, Phase 3, requirement 5; criteria C1, C3-C6).
 //!
-//! Real axum stubs serve the committed backend goldens, or stall on purpose; the email module
-//! answers its golden at once, after a delay, or never. `AppState` is
+//! A real axum stub serves the committed DNS golden, or stalls on purpose; the TLS and email
+//! modules answer their golden at once, after a delay, or never. `AppState` is
 //! built from a `Config` constructed here (not `Config::load`), the check is driven through
 //! `run_check_with_deadline`. A timed-out section is `Err(SectionError::Timeout)` and makes
 //! the score incomplete.
@@ -17,7 +17,7 @@ use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::http::{StatusCode, header};
 use axum::routing::{get, post};
-use common::{email_golden, http_module, ip_golden, registry_with, slow};
+use common::{email_golden, http_module, ip_golden, registry_with, slow, tls_golden};
 use futures::StreamExt;
 use lens::check::{CheckInput, CheckOutput, SectionError, run_check_with_deadline};
 use lens::config::{
@@ -25,6 +25,7 @@ use lens::config::{
     OgCardsConfig, RateLimitConfig, ScoringConfig, ServerConfig, SiteConfig, SnapshotsConfig,
 };
 use lens::state::AppState;
+use netray_engine::Module;
 
 #[derive(Clone, Copy)]
 enum Behaviour {
@@ -161,10 +162,11 @@ async fn state(s: Setup) -> AppState {
                 t[0],
             ),
             dns_servers: Vec::new(),
-            tls: backend(
-                stub("/api/inspect", false, "application/json", s.tls).await,
-                t[1],
-            ),
+            // The TLS section runs in-process; only its deadline comes from the config.
+            tls: BackendConfig {
+                timeout_ms: t[1],
+                ..Default::default()
+            },
             // The IP section runs in-process; only its deadline comes from the config.
             ip: BackendConfig {
                 timeout_ms: t[4],
@@ -200,17 +202,18 @@ async fn state(s: Setup) -> AppState {
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),
     };
-    let email = match s.email {
-        Behaviour::Golden(f) => email_golden(f),
-        Behaviour::GoldenAfter(f, d) => slow(email_golden(f), Some(d)),
-        Behaviour::Never => slow(email_golden("beacon.sse"), None),
+    let module = |b: Behaviour, never: &str, golden: fn(&str) -> Box<dyn Module>| match b {
+        Behaviour::Golden(f) => golden(f),
+        Behaviour::GoldenAfter(f, d) => slow(golden(f), Some(d)),
+        Behaviour::Never => slow(golden(never), None),
         // In-process there is no first chunk: a stalled stream is a module that never finishes.
-        Behaviour::Stall(f) => slow(email_golden(f), None),
+        Behaviour::Stall(f) => slow(golden(f), None),
     };
     let registry = registry_with(
         http_module(Some("spectra-inspect.json")),
-        email,
+        module(s.email, "beacon.sse", email_golden),
         ip_golden("ifconfig-json.json"),
+        module(s.tls, "tlsight-inspect.json", tls_golden),
     );
     AppState::with_registry(config, registry).expect("state builds")
 }
@@ -291,9 +294,9 @@ async fn email_send_and_stream_share_one_timeout_budget() {
     );
 }
 
-/// C5: a body that stalls after the headers is bounded by the tls timeout.
+/// C5: a TLS module that never finishes is bounded by the tls timeout.
 #[tokio::test]
-async fn tls_body_that_stalls_after_headers_is_bounded_by_timeout() {
+async fn tls_module_that_never_finishes_is_bounded_by_timeout() {
     let mut s = Setup::fast();
     s.timeouts_ms[1] = 1000;
     s.tls = Behaviour::Stall("tlsight-inspect.json");
@@ -301,10 +304,13 @@ async fn tls_body_that_stalls_after_headers_is_bounded_by_timeout() {
 
     let (out, elapsed) = run(&st, Duration::from_secs(20), Duration::from_secs(5)).await;
 
-    assert!(out.sections["tls"].is_err(), "stalled tls body is an error");
+    assert!(
+        out.sections["tls"].is_err(),
+        "a stalled tls module is an error"
+    );
     assert!(
         is_timeout(&out.sections["tls"]),
-        "stalled tls body reports Timeout: {:?}",
+        "a stalled tls module reports Timeout: {:?}",
         out.sections["tls"].as_ref().err()
     );
     assert!(
