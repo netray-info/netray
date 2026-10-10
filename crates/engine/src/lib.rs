@@ -2,6 +2,10 @@
 //! the protocol modules, the `Registry` that hands them out by protocol, and [`run`], which
 //! drives one check through them. The engine never names a module crate (P40).
 
+pub mod catalogue;
+
+pub use catalogue::catalogue;
+
 use std::error::Error;
 use std::fmt;
 use std::future::Future;

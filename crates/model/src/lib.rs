@@ -4,10 +4,10 @@
 
 use std::fmt;
 
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// The protocol a check belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     Dns,
@@ -92,6 +92,13 @@ impl Serialize for CheckId {
     }
 }
 
+impl<'de> Deserialize<'de> for CheckId {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        CheckId::parse(&s).map_err(serde::de::Error::custom)
+    }
+}
+
 /// Why a string is not a valid [`CheckId`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CheckIdError(String);
@@ -117,7 +124,7 @@ pub enum Status {
 }
 
 /// How serious a failed check is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     Critical,
@@ -127,7 +134,7 @@ pub enum Severity {
 }
 
 /// Who can fix a failed check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FixOwner {
     DnsProvider,
