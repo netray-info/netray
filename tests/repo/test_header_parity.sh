@@ -50,11 +50,11 @@ fetch() {
 # sub | crate dir | config | http bind var | metrics bind var | extra env | HSTS
 rows=(
   "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db|max-age=31536000; includeSubDomains; preload"
-  "dns|mhost-prism|prism.dev.toml|PRISM_SERVER__BIND|PRISM_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
-  "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas|max-age=31536000; includeSubDomains; preload"
-  "http|spectra|spectra.dev.toml|SPECTRA__SERVER__BIND|SPECTRA__SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
-  "email|beacon|beacon.dev.toml|BEACON__SERVER__BIND|BEACON__SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
-  "ip|ifconfig-rs|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND||max-age=63072000; includeSubDomains; preload"
+  "dns|dns|prism.dev.toml|NETRAY_DNS_SERVER__BIND|NETRAY_DNS_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
+  "tls|tls|tlsight.dev.toml|NETRAY_TLS_SERVER__BIND|NETRAY_TLS_SERVER__METRICS_BIND|NETRAY_TLS_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas|max-age=31536000; includeSubDomains; preload"
+  "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
+  "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
+  "ip|ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_SERVER__BIND|NETRAY_IP_SERVER__ADMIN_BIND||max-age=63072000; includeSubDomains; preload"
 )
 
 for row in "${rows[@]}"; do
@@ -174,9 +174,9 @@ fi
 # R7 / C7: HSTS and CSP live in netray-common, not in ifconfig-rs
 # Header names as strings and as axum/http constants, in every source file of the crate.
 hits=$(grep -rniE 'strict-transport-security|content-security-policy|STRICT_TRANSPORT_SECURITY|CONTENT_SECURITY_POLICY' \
-    "$REPO_ROOT/crates/ifconfig-rs/src" 2>/dev/null)
+    "$REPO_ROOT/crates/ip/src" 2>/dev/null)
 [ -z "$hits" ] || bad "R7: ifconfig-rs sets HSTS/CSP itself: $(head -n1 <<<"$hits")"
-[ -n "$(find "$REPO_ROOT/crates/ifconfig-rs/src" -name '*.rs' | head -n1)" ] || bad "R7: no ifconfig-rs sources found"
+[ -n "$(find "$REPO_ROOT/crates/ip/src" -name '*.rs' | head -n1)" ] || bad "R7: no ifconfig-rs sources found"
 awk '/pub struct SecurityHeadersConfig/,/^}/' "$REPO_ROOT/crates/common/src/security_headers.rs" | grep -qi 'hsts' \
     || bad "R7: SecurityHeadersConfig has no hsts field"
 

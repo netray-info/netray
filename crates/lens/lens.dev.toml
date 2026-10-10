@@ -2,28 +2,97 @@
 bind = "127.0.0.1:8085"
 metrics_bind = "127.0.0.1:9095"
 
-[backends]
-dns_servers = ["cloudflare"]
+# [backends]
+# resolve_timeout_ms = 1500          # budget of the resolve stage from the start of a check; must stay below [backends.ip] timeout_ms, whose window also counts from the start and holds the resolve
 
 [backends.dns]
-url = "https://dns.netray.info"
 timeout_ms = 15000
+
+# The DNS section runs in-process (module `netray-dns`); `url` and `[backends] dns_servers` are
+# refused. Check values as in crates/dns/prism.dev.toml; `servers` is what lens sent as
+# `dns_servers`.
+[modules.dns]
+servers = ["cloudflare"]
+
+[modules.dns.dns]
+default_servers = ["google"]
+allow_system_resolvers = true
+allow_arbitrary_servers = true
+
+[modules.dns.limits]
+per_target_per_minute = 300
+per_target_burst = 50
 
 [backends.tls]
-url = "https://tls.netray.info"
 timeout_ms = 15000
+
+# The TLS section runs in-process (module `netray-tls`); `url` is refused. Check values as in
+# crates/tls/tlsight.dev.toml; `custom_ca_dir` is left out because it must exist at startup.
+[modules.tls.limits]
+per_target_per_minute = 600
+per_target_burst = 100
+
+[modules.tls.validation]
+check_ct = true
+
+[modules.tls.quality]
+enabled = true
+
+[modules.tls.backends.ip]
+url = "https://ip.netray.info"
 
 [backends.ip]
-url = "https://ip.netray.info"
 timeout_ms = 2000
 
+# The IP section runs in-process (module `netray-ip`); `url` is refused. A checkout has no data, so
+# there is no `[modules.ip]` and the IP section is off. To enable it, fetch the data with
+# `just ifconfig-data` into crates/ip/data and uncomment the table below; once `[modules.ip]` is
+# set, it must name `geoip_city_db` and `geoip_asn_db`, and a missing file refuses startup.
+# [modules.ip]
+# geoip_city_db = "crates/ip/data/GeoLite2-City.mmdb"
+# geoip_asn_db = "crates/ip/data/GeoLite2-ASN.mmdb"
+# tor_exit_nodes = "crates/ip/data/tor_exit_nodes.txt"
+# cloud_provider_ranges = "crates/ip/data/cloud_provider_ranges.jsonl"
+# feodo_botnet_ips = "crates/ip/data/feodo_botnet_ips.txt"
+# vpn_ranges = "crates/ip/data/vpn_ranges.txt"
+# datacenter_ranges = "crates/ip/data/datacenter_ranges.txt"
+# bot_ranges = "crates/ip/data/bot_ranges.jsonl"
+# spamhaus_drop = "crates/ip/data/spamhaus_drop.txt"
+# cins_army_ips = "crates/ip/data/cins_army_ips.txt"
+# asn_patterns = "crates/ip/data/asn_patterns.toml"
+# asn_info = "crates/ip/data/as_metadata.jsonl"
+
 [backends.http]
-url = "https://http.netray.info"
 timeout_ms = 15000
 
+[modules.http.enrichment]
+ip_url = "https://ip.netray.info"
+
 [backends.email]
-url = "https://email.netray.info"
 timeout_ms = 15000
+
+[modules.email.dns]
+resolvers = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"]
+timeout_ms = 5000
+
+[modules.email.dnsbl]
+zones = [
+  "zen.spamhaus.org",
+  "b.barracudacentral.org",
+  "bl.spamcop.net",
+  "dbl.spamhaus.org",
+]
+timeout_ms = 2000
+resolvers = ["system"]
+
+[modules.email.http]
+timeout_ms = 10000
+
+[modules.email.dkim]
+max_user_selectors = 5
+
+[modules.email.backends]
+ip_url = "https://ip.netray.info"
 
 [ecosystem]
 ip_base_url    = "https://ip.netray.info"

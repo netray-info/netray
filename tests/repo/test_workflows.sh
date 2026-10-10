@@ -61,7 +61,7 @@ elsif ci
   co = (ci["jobs"] || {}).values.flat_map { |j| Array(j["steps"]) }.find { |s| s["uses"].to_s.start_with?("actions/checkout@") }
   fails << "ci.yml: checkout does not fetch the full history (fetch-depth: 0)" unless co && co.dig("with", "fetch-depth").to_s == "0"
   # The data image also carries tracked files (asn_patterns.toml); CI must test the committed ones.
-  fails << "ci.yml: GeoIP data copy may overwrite tracked files (copy without clobbering)" if raw =~ %r{docker cp \S+ crates/ifconfig-rs/data} || raw !~ /cp (-n|--no-clobber|--update=none)/
+  fails << "ci.yml: GeoIP data copy may overwrite tracked files (copy without clobbering)" if raw =~ %r{docker cp \S+ crates/ip/data} || raw !~ /cp (-n|--no-clobber|--update=none)/
 end
 
 # C9 / C2: release.yml

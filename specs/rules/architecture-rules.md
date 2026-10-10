@@ -7,7 +7,7 @@ Cross-service conventions for the netray.info suite. Apply when adding or modify
 ## Configuration
 
 - Format: TOML file + environment variable overrides.
-- Per-tool env prefix: `IFCONFIG_`, `PRISM_`, `TLSIGHT_`, `LENS_`; `SPECTRA__` and `BEACON__` with a double underscore. `<TOOL>_CONFIG` names the file and is never a key.
+- Per-tool env prefix: `PRISM_`, `TLSIGHT_`, `LENS_`; `BEACON__` with a double underscore. A module converted to the V2 engine uses `NETRAY_<P>_` instead (http: `NETRAY_HTTP_`, `NETRAY_HTTP_CONFIG`; ip: `NETRAY_IP_`, `NETRAY_IP_CONFIG`) and refuses its old prefix at load via `netray_common::config::refuse_legacy_prefix`. `<TOOL>_CONFIG` names the file and is never a key.
 - Nested sections use double-underscore: `PRISM_LIMITS__PER_IP_PER_MINUTE=60`. Every config struct denies unknown keys, so an unknown variable under the prefix fails startup (enforced: `tests/repo/test_config_strict.sh`, `netray <sub> --check-config`).
 - Every config value exposed through env must also have a TOML counterpart; do not add env-only knobs.
 

@@ -5,7 +5,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 root=$PWD
-src=crates/ifconfig-rs/data/fetch.sh
+src=crates/ip/data/fetch.sh
 
 fails=0
 fail() { echo "FAIL: $1"; fails=1; }
@@ -262,8 +262,8 @@ rc=0
 [ "$rc" -eq 0 ] || fail "C13: a stale .fetch.<own pid> made the run fail (rc=$rc): $(tail -n1 "$d.out")"
 ls -d "$d"/.fetch.* >/dev/null 2>&1 && fail "C13: the stale per-run directory was left behind"
 # Killed runs leave .fetch.<pid>/ behind; it must stay out of git.
-grep -qxF '.fetch.*/' "$root/crates/ifconfig-rs/data/.gitignore" \
-    || fail "C13: crates/ifconfig-rs/data/.gitignore does not ignore .fetch.*/"
+grep -qxF '.fetch.*/' "$root/crates/ip/data/.gitignore" \
+    || fail "C13: crates/ip/data/.gitignore does not ignore .fetch.*/"
 
 [ "$fails" -eq 0 ] || exit 1
 echo "PASS: test_fetch_fail_closed"

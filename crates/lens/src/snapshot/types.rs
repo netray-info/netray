@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::store::MAX_FINDINGS_PER_SECTION;
-use crate::backends::{BackendExtra, BackendResult};
 use crate::check::SectionError;
+use crate::modules::{BackendExtra, BackendResult};
 use crate::scoring::engine::{CheckVerdict, OverallScore};
 use crate::scoring::profile::ScoringProfile;
 

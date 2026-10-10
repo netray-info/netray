@@ -1,8 +1,11 @@
 //! Golden test: the verdict lens computes from the committed backend goldens.
 //!
-//! Local stub servers serve the backend goldens from `tests/fixtures/contracts/` at the
-//! paths and methods lens calls. lens runs with the backend and scoring settings of
-//! `tests/fixtures/lens.production.toml` (backend URLs pointed at the stubs), and
+//! The DNS, TLS, HTTP, email and IP sections come from `netray_dns`'s, `netray_tls`'s,
+//! `netray_http`'s, `netray_email`'s and `netray_ip`'s `golden_module` through the engine registry
+//! (`AppState::with_registry`) on the goldens in `tests/fixtures/contracts/`; the IP module
+//! samples the addresses the DNS module's presentation carries.
+//! lens runs with the backend and scoring settings of
+//! `tests/fixtures/lens.production.toml` (no DNS, TLS, HTTP, email or IP backend URL), and
 //! `POST /api/check` is driven through its router in-process. A projection of the SSE
 //! events (grades, statuses, check verdicts; no prose, durations or ids) is compared with
 //! `tests/fixtures/contracts/lens-<fixture>.json`. `UPDATE_GOLDEN=1` rewrites those files.
@@ -11,11 +14,15 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+mod common;
+
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
-use axum::routing::{get, post};
+use common::{
+    dns_golden, email_golden, facts_golden, http_module, ip_golden, registry_with, tls_module,
+};
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -23,8 +30,8 @@ use serde::Serialize;
 use serde_json::Value;
 use tower::ServiceExt;
 
-/// One fixture: a name and the golden file each backend serves. `None` for tls or http means
-/// that backend answers HTTP 500.
+/// One fixture: a name and the golden file each backend or module serves. `None` for tls or http
+/// means that module is incomplete.
 struct Fixture {
     name: &'static str,
     dns: &'static str,
@@ -104,94 +111,10 @@ fn contracts_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/contracts")
 }
 
-fn golden(name: &str) -> String {
-    let path = contracts_dir().join(name);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
-}
-
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    format!("http://{addr}")
-}
-
-/// The DNS golden's A record (192.0.2.10) is a documentation address, which lens's production
-/// address policy does not enrich (spec backend-correctness, requirement 3). The harness
-/// serves it with a public stand-in so the IP section stays scored.
-const DNS_DOCUMENTATION_A: &str = r#"{"A":"192.0.2.10"}"#;
-const DNS_PUBLIC_A: &str = r#"{"A":"1.1.1.1"}"#;
-
-/// A stub serving `file` at `path`, with the given content type and method.
-async fn stub(
-    path: &'static str,
-    post_method: bool,
-    content_type: &'static str,
-    file: &str,
-) -> String {
-    stub_body(path, post_method, content_type, golden(file)).await
-}
-
-/// A stub serving `body` at `path`, with the given content type and method.
-async fn stub_body(
-    path: &'static str,
-    post_method: bool,
-    content_type: &'static str,
-    body: String,
-) -> String {
-    let handler = move || {
-        let body = body.clone();
-        async move { ([(header::CONTENT_TYPE, content_type)], body) }
-    };
-    let route = if post_method {
-        post(handler)
-    } else {
-        get(handler)
-    };
-    serve(Router::new().route(path, route)).await
-}
-
-/// A stub answering HTTP 500 at `path`.
-async fn failing_stub(path: &'static str, post_method: bool) -> String {
-    let handler = || async { StatusCode::INTERNAL_SERVER_ERROR };
-    let route = if post_method {
-        post(handler)
-    } else {
-        get(handler)
-    };
-    serve(Router::new().route(path, route)).await
-}
-
 async fn production_config(f: &Fixture) -> Config {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
-
-    let dns = golden(f.dns).replace(DNS_DOCUMENTATION_A, DNS_PUBLIC_A);
-    config.backends.dns.url = Some(stub_body("/api/check", true, "text/event-stream", dns).await);
-    config.backends.tls.url = Some(match f.tls {
-        Some(file) => stub("/api/inspect", false, "application/json", file).await,
-        None => failing_stub("/api/inspect", false).await,
-    });
-    config.backends.ip.url = Some(stub("/json", false, "application/json", f.ip).await);
-    config
-        .backends
-        .http
-        .as_mut()
-        .expect("http backend configured")
-        .url = Some(match f.http {
-        Some(file) => stub("/api/inspect", false, "application/json", file).await,
-        None => failing_stub("/api/inspect", false).await,
-    });
-    config
-        .backends
-        .email
-        .as_mut()
-        .expect("email backend configured")
-        .url = Some(stub("/inspect", true, "text/event-stream", f.email).await);
 
     config.snapshots.enabled = false;
     // Every run computes the verdict afresh instead of answering from the cache.
@@ -323,7 +246,19 @@ fn project(events: &[(String, Value)]) -> Projection {
 /// Run one fixture through `POST /api/check` and return the serialised projection.
 async fn run_fixture(name: &str) -> String {
     let config = production_config(fixture(name)).await;
-    let state = AppState::new(config).unwrap();
+    let f = fixture(name);
+    let state = AppState::with_registry(
+        config,
+        registry_with(
+            dns_golden(f.dns),
+            facts_golden(f.dns),
+            http_module(f.http),
+            email_golden(f.email),
+            ip_golden(f.ip),
+            tls_module(f.tls),
+        ),
+    )
+    .unwrap();
     let (routes, _) = api_router().split_for_parts();
     let app = Router::new()
         .merge(routes.with_state(state))
@@ -511,7 +446,7 @@ fn require_tlsight_golden(name: &str) {
     let path = contracts_dir().join(file);
     assert!(
         path.exists(),
-        "tlsight golden {} is missing; write it with `UPDATE_GOLDEN=1 cargo test -p tlsight --test contract_golden`",
+        "tlsight golden {} is missing; write it with `UPDATE_GOLDEN=1 cargo test -p netray-tls --test contract_golden`",
         path.display()
     );
 }

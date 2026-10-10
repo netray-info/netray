@@ -1,79 +1,23 @@
 //! Enrichment failures must not score as healthy (spec grade-integrity; criteria C5, C6).
 //!
-//! A failed or timed-out ifconfig-rs enrichment call makes the IP section Errored
+//! A failed or stalled IP lookup makes the IP section Errored
 //! (`Err(SectionError::BackendError | Timeout)`), which is what makes the overall result
-//! incomplete. Asserted through `IpBackend::run` and `check_ip`; the scoring engine is not driven.
+//! incomplete. In-process the lookup failure is the module's `Incomplete` outcome and a stall
+//! is a module that does not finish within lens's section timeout; both are asserted through
+//! `ModuleSection`, with small local modules in place of the 500 and the sleeping stub.
+//!
+//! Not kept at lens level: C5/C6 "one of two lookups fails" (a golden module answers every
+//! address alike, so one of two cannot fail here); `netray_ip`'s `translate` test
+//! (`translate_failed_lookup_is_incomplete`) owns that rule.
 
-use std::net::IpAddr;
+mod common;
+
 use std::time::Duration;
 
-use axum::extract::Query;
-use axum::http::{StatusCode, header};
-use axum::response::IntoResponse;
-use axum::routing::get;
-use lens::backends::ip::{IpBackend, check_ip};
-use lens::backends::{Backend, BackendContext};
+use common::{ip_golden, ip_incomplete, run_ip, slow};
 use lens::check::SectionError;
-use std::collections::HashMap;
 
-const GOLDEN: &str = include_str!("../../../tests/fixtures/contracts/ifconfig-json.json");
-const HEALTHY: &str = "203.0.113.42";
-const OTHER: &str = "198.51.100.7";
-
-fn public_or_documentation(ip: IpAddr) -> bool {
-    match netray_common::target_policy::refusal_reason(ip) {
-        None => true,
-        Some(r) => r.starts_with("documentation"),
-    }
-}
-
-async fn serve(app: axum::Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    format!("http://{addr}")
-}
-
-async fn all_500() -> String {
-    serve(axum::Router::new().route("/json", get(|| async { StatusCode::INTERNAL_SERVER_ERROR })))
-        .await
-}
-
-/// `HEALTHY` gets the golden at once; every other address sleeps past any timeout.
-async fn one_stalls() -> String {
-    serve(axum::Router::new().route(
-        "/json",
-        get(|Query(q): Query<HashMap<String, String>>| async move {
-            if q.get("ip").map(String::as_str) == Some(HEALTHY) {
-                ([(header::CONTENT_TYPE, "application/json")], GOLDEN).into_response()
-            } else {
-                tokio::time::sleep(Duration::from_secs(30)).await;
-                StatusCode::OK.into_response()
-            }
-        }),
-    ))
-    .await
-}
-
-fn backend(url: String, timeout: Duration) -> IpBackend {
-    IpBackend {
-        ip_url: url.clone(),
-        public_url: url,
-        timeout,
-        client: reqwest::Client::new(),
-        allow: public_or_documentation,
-    }
-}
-
-fn context(ips: &[&str]) -> BackendContext {
-    BackendContext {
-        resolved_ips: ips.iter().map(|s| s.parse().unwrap()).collect(),
-        dkim_selectors: None,
-        forward_headers: Default::default(),
-    }
-}
+const PUBLIC: [&str; 2] = ["1.1.1.1", "8.8.8.8"];
 
 fn is_errored<T>(r: &Result<T, SectionError>) -> bool {
     matches!(
@@ -83,52 +27,28 @@ fn is_errored<T>(r: &Result<T, SectionError>) -> bool {
 }
 
 #[tokio::test]
-async fn c5_every_enrichment_answering_500_errors_the_ip_section() {
-    let url = all_500().await;
-    let ips: Vec<IpAddr> = vec![HEALTHY.parse().unwrap(), OTHER.parse().unwrap()];
-
-    let direct = check_ip(
-        &reqwest::Client::new(),
-        &url,
-        &ips,
-        Duration::from_secs(5),
-        &Default::default(),
-        public_or_documentation,
-    )
-    .await;
-    assert!(
-        direct.is_err(),
-        "check_ip must be Err when every enrichment fails"
-    );
-
-    let run = backend(url, Duration::from_secs(5))
-        .run("example.com", &context(&[HEALTHY, OTHER]))
-        .await;
-    assert!(is_errored(&run), "IP section must be Errored, got {run:?}");
+async fn c5_a_failed_enrichment_errors_the_ip_section() {
+    let run = run_ip(ip_incomplete(), Duration::from_secs(5), &PUBLIC).await;
+    assert!(is_errored(&run), "IP section must be Errored");
 }
 
 #[tokio::test]
-async fn c6_one_timed_out_enrichment_errors_the_ip_section() {
-    let url = one_stalls().await;
-    let timeout = Duration::from_millis(300);
-    let ips: Vec<IpAddr> = vec![HEALTHY.parse().unwrap(), OTHER.parse().unwrap()];
+async fn c6_a_stalled_enrichment_errors_the_ip_section() {
+    let stalled = slow(ip_golden("ifconfig-json.json"), None);
+    let run = run_ip(stalled, Duration::from_millis(300), &PUBLIC).await;
+    assert!(
+        matches!(run, Err(SectionError::Timeout)),
+        "IP section must be Errored by timeout"
+    );
+}
 
-    let direct = check_ip(
-        &reqwest::Client::new(),
-        &url,
-        &ips,
-        timeout,
-        &Default::default(),
-        public_or_documentation,
+#[tokio::test]
+async fn a_healthy_enrichment_does_not_error_the_ip_section() {
+    let run = run_ip(
+        ip_golden("ifconfig-json.json"),
+        Duration::from_secs(5),
+        &PUBLIC,
     )
     .await;
-    assert!(
-        direct.is_err(),
-        "check_ip must be Err when one enrichment times out"
-    );
-
-    let run = backend(url, timeout)
-        .run("example.com", &context(&[HEALTHY, OTHER]))
-        .await;
-    assert!(is_errored(&run), "IP section must be Errored, got {run:?}");
+    assert!(run.is_ok(), "the golden module answers every address");
 }

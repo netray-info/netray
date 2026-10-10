@@ -19,19 +19,19 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # sub | crate dir | config (relative to the crate dir) | env var holding the HTTP bind
 # | env var holding the metrics bind | extra env (space separated KEY=VALUE)
 #
-# Env syntax differs per service: LENS_/PRISM_/TLSIGHT_/IFCONFIG_ use a single
-# underscore after the prefix, SPECTRA__/BEACON__ a double one.
+# Env syntax differs per service: LENS_ uses a single
+# underscore after the prefix, NETRAY_DNS_, NETRAY_TLS_, NETRAY_EMAIL_, NETRAY_HTTP_ and NETRAY_IP_ a double one.
 # Offline start-up needs two overrides and one fixture:
 #   lens     snapshot DB path (dev config's data/ directory does not exist)
 #   tls      custom_ca_dir    (dev config's custom_cas/ directory does not exist)
 #   ip       fixture config   (the dev config needs the GeoIP .mmdb files, which are not in the tree)
 rows=(
   "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db"
-  "dns|mhost-prism|prism.dev.toml|PRISM_SERVER__BIND|PRISM_SERVER__METRICS_BIND|"
-  "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
-  "http|spectra|spectra.dev.toml|SPECTRA__SERVER__BIND|SPECTRA__SERVER__METRICS_BIND|"
-  "email|beacon|beacon.dev.toml|BEACON__SERVER__BIND|BEACON__SERVER__METRICS_BIND|"
-  "ip|ifconfig-rs|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND|"
+  "dns|dns|prism.dev.toml|NETRAY_DNS_SERVER__BIND|NETRAY_DNS_SERVER__METRICS_BIND|"
+  "tls|tls|tlsight.dev.toml|NETRAY_TLS_SERVER__BIND|NETRAY_TLS_SERVER__METRICS_BIND|NETRAY_TLS_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
+  "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND|"
+  "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND|"
+  "ip|ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_SERVER__BIND|NETRAY_IP_SERVER__ADMIN_BIND|"
 )
 
 for row in "${rows[@]}"; do

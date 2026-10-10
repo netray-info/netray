@@ -1,7 +1,7 @@
 //! Admission metrics of the check path (specs/features/lens-admission-metrics/spec.md, R1, R2;
 //! criteria C6 to C11).
 //!
-//! Stub backends serve the committed goldens; lens runs with `tests/fixtures/lens.production.toml`
+//! The modules answer the committed goldens; lens runs with `tests/fixtures/lens.production.toml`
 //! on them, the cache enabled, driven in-process. The metrics are read from a per-test local
 //! recorder; a current-thread runtime keeps the handler on the recording thread.
 
@@ -12,11 +12,16 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod common;
+
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
-use axum::routing::{get, post};
+use common::{
+    dns_golden_raw, email_golden, facts_golden_raw, gated, http_module, ip_golden, registry_with,
+    tls_golden,
+};
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -28,100 +33,29 @@ const REQUESTS: &str = "lens_check_requests_total";
 const IN_FLIGHT: &str = "lens_runs_in_flight";
 const DURATION: &str = "lens_run_duration_seconds";
 
-fn golden(name: &str) -> String {
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/contracts")
-        .join(name);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
-}
-
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    format!("http://{addr}")
-}
-
-/// A stub answering the golden; when `gate` is set it announces the request on `.0` and
-/// holds the answer until `.1` is notified.
-async fn stub(
-    path: &'static str,
-    is_post: bool,
-    content_type: &'static str,
-    golden_name: &'static str,
-    gate: Option<(Arc<Notify>, Arc<Notify>)>,
-) -> String {
-    let body = golden(golden_name);
-    let handler = move || {
-        let body = body.clone();
-        let gate = gate.clone();
-        async move {
-            if let Some((entered, release)) = gate {
-                entered.notify_one();
-                release.notified().await;
-            }
-            ([(header::CONTENT_TYPE, content_type)], body)
-        }
-    };
-    let route = if is_post { post(handler) } else { get(handler) };
-    serve(Router::new().route(path, route)).await
-}
-
-/// Production config on stubs, cache enabled; per-IP limit as given (burst equals limit).
-async fn app(per_ip: u32, dns_gate: Option<(Arc<Notify>, Arc<Notify>)>) -> Router {
+/// Production config, cache enabled; per-IP limit as given (burst equals limit).
+fn app(per_ip: u32, dns_gate: Option<(Arc<Notify>, Arc<Notify>)>) -> Router {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
-    config.backends.dns.url = Some(
-        stub(
-            "/api/check",
-            true,
-            "text/event-stream",
-            "prism.sse",
-            dns_gate,
-        )
-        .await,
-    );
-    config.backends.tls.url = Some(
-        stub(
-            "/api/inspect",
-            false,
-            "application/json",
-            "tlsight-inspect.json",
-            None,
-        )
-        .await,
-    );
-    config.backends.ip.url = Some(
-        stub(
-            "/json",
-            false,
-            "application/json",
-            "ifconfig-json.json",
-            None,
-        )
-        .await,
-    );
-    config.backends.http.as_mut().unwrap().url = Some(
-        stub(
-            "/api/inspect",
-            false,
-            "application/json",
-            "spectra-inspect.json",
-            None,
-        )
-        .await,
-    );
-    config.backends.email.as_mut().unwrap().url =
-        Some(stub("/inspect", true, "text/event-stream", "beacon.sse", None).await);
     assert!(config.cache.enabled, "production config enables the cache");
     config.rate_limit.per_ip_per_minute = per_ip;
     config.rate_limit.per_ip_burst = per_ip;
 
-    let state = AppState::new(config).unwrap();
+    // The DNS module is the one held open when a gate is given.
+    let dns = match dns_gate {
+        Some((entered, release)) => gated(dns_golden_raw("prism.sse"), entered, release),
+        None => dns_golden_raw("prism.sse"),
+    };
+    let registry = registry_with(
+        dns,
+        facts_golden_raw("prism.sse"),
+        http_module(Some("spectra-inspect.json")),
+        email_golden("beacon.sse"),
+        ip_golden("ifconfig-json.json"),
+        tls_golden("tlsight-inspect.json"),
+    );
+    let state = AppState::with_registry(config, registry).unwrap();
     let (api, _) = api_router().split_for_parts();
     Router::new()
         .merge(api.with_state(state))
@@ -240,7 +174,7 @@ async fn admission_c6_fresh_run_counts_fresh_only() {
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
-    let app = app(10, None).await;
+    let app = app(10, None);
 
     assert_eq!(post_check(&app, "example.com").await, StatusCode::OK);
 
@@ -254,7 +188,7 @@ async fn admission_c7_repeat_within_ttl_counts_cache_hit() {
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
-    let app = app(10, None).await;
+    let app = app(10, None);
 
     post_check(&app, "example.com").await;
     post_check(&app, "example.com").await;
@@ -268,7 +202,7 @@ async fn admission_c8_second_request_over_per_ip_limit_counts_rate_limited() {
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
-    let app = app(1, None).await;
+    let app = app(1, None);
 
     assert_eq!(post_check(&app, "example.com").await, StatusCode::OK);
     assert_eq!(
@@ -285,7 +219,7 @@ async fn admission_c9_invalid_domain_increments_no_request_series() {
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
-    let app = app(10, None).await;
+    let app = app(10, None);
 
     assert_eq!(
         post_check(&app, "*.example.com").await,
@@ -306,7 +240,7 @@ async fn admission_c10_in_flight_gauge_is_1_during_run_and_0_after_return() {
     let _guard = metrics::set_default_local_recorder(&recorder);
     let entered = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
-    let app = app(10, Some((entered.clone(), release.clone()))).await;
+    let app = app(10, Some((entered.clone(), release.clone())));
 
     let run = post_check(&app, "example.com");
     let observe = async {
@@ -318,7 +252,7 @@ async fn admission_c10_in_flight_gauge_is_1_during_run_and_0_after_return() {
     let (status, during) = tokio::join!(run, observe);
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(during, Some(1.0), "one run is held open by the stub");
+    assert_eq!(during, Some(1.0), "one run is held open by the DNS module");
     assert_eq!(in_flight(&snap), Some(0.0), "the run returned");
 }
 
@@ -328,18 +262,18 @@ async fn admission_c10_in_flight_gauge_is_0_after_handler_future_is_dropped() {
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let entered = Arc::new(Notify::new());
-    // Never released: the stub does not answer before the timeout fires.
+    // Never released: the DNS module does not answer before the timeout fires.
     let release = Arc::new(Notify::new());
-    let app = app(10, Some((entered.clone(), release))).await;
+    let app = app(10, Some((entered.clone(), release)));
 
     let outcome =
         tokio::time::timeout(Duration::from_millis(500), post_check(&app, "example.com")).await;
 
     assert!(outcome.is_err(), "the handler future is dropped mid-run");
-    // The stub was reached, so the run was in flight when the future was dropped.
+    // The DNS module was reached, so the run was in flight when the future was dropped.
     tokio::time::timeout(Duration::from_secs(1), entered.notified())
         .await
-        .expect("the run reached the backend stub");
+        .expect("the run reached the DNS module");
     assert_eq!(
         in_flight(&snap),
         Some(0.0),
@@ -352,7 +286,7 @@ async fn admission_c11_one_fresh_run_observes_one_duration() {
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
-    let app = app(10, None).await;
+    let app = app(10, None);
 
     post_check(&app, "example.com").await;
     post_check(&app, "example.com").await; // cache hit: no run, no observation

@@ -362,43 +362,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
-name = "beacon"
-version = "0.23.1"
-dependencies = [
- "anyhow",
- "axum",
- "base64 0.22.1",
- "config",
- "futures",
- "governor",
- "http-body-util",
- "ipnet",
- "metrics",
- "mhost",
- "netray-common",
- "netray-model",
- "percent-encoding",
- "pin-project-lite",
- "rcgen",
- "reqwest",
- "rust-embed",
- "rustls",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tower",
- "tower-http",
- "tracing",
- "url",
- "utoipa",
- "wiremock",
- "x509-parser 0.17.0",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2038,49 +2001,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ifconfig-rs"
-version = "0.23.1"
-dependencies = [
- "arc-swap",
- "axum",
- "axum-extra",
- "config",
- "criterion",
- "governor",
- "http-body-util",
- "httpdate",
- "hyper-util",
- "insta",
- "ip_network",
- "ip_network_table",
- "lru",
- "maxminddb",
- "metrics",
- "metrics-exporter-prometheus",
- "metrics-process",
- "mhost",
- "mime_guess",
- "moka",
- "netray-common",
- "notify",
- "pretty_assertions",
- "regex",
- "rust-embed",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "subtle",
- "thiserror 2.0.21",
- "tokio",
- "toml",
- "tower",
- "tower-http",
- "tracing",
- "uaparser",
- "utoipa",
-]
-
-[[package]]
 name = "image"
 version = "0.25.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2393,7 +2313,6 @@ version = "0.23.1"
 dependencies = [
  "axum",
  "axum-extra",
- "beacon",
  "chrono",
  "config",
  "fontdb",
@@ -2408,7 +2327,13 @@ dependencies = [
  "moka",
  "nanoid",
  "netray-common",
+ "netray-dns",
+ "netray-email",
+ "netray-engine",
+ "netray-http",
+ "netray-ip",
  "netray-model",
+ "netray-tls",
  "regex",
  "reqwest",
  "resvg",
@@ -2815,17 +2740,21 @@ version = "0.23.1"
 dependencies = [
  "anyhow",
  "axum",
- "beacon",
  "clap",
- "ifconfig-rs",
  "lens",
  "mime_guess",
  "netray-common",
+ "netray-dns",
+ "netray-email",
+ "netray-engine",
+ "netray-http",
+ "netray-ip",
+ "netray-model",
+ "netray-tls",
  "percent-encoding",
- "prism",
- "spectra",
- "tlsight",
  "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2868,11 +2797,167 @@ dependencies = [
 ]
 
 [[package]]
+name = "netray-dns"
+version = "0.23.1"
+dependencies = [
+ "arc-swap",
+ "axum",
+ "config",
+ "futures",
+ "governor",
+ "hickory-proto",
+ "http-body-util",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "mhost",
+ "mime_guess",
+ "moka",
+ "netray-common",
+ "netray-engine",
+ "netray-model",
+ "rand 0.10.3",
+ "rcgen",
+ "reqwest",
+ "rust-embed",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "toml",
+ "tower",
+ "tower-http",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "netray-email"
+version = "0.23.1"
+dependencies = [
+ "anyhow",
+ "axum",
+ "base64 0.22.1",
+ "config",
+ "futures",
+ "governor",
+ "http-body-util",
+ "ipnet",
+ "metrics",
+ "mhost",
+ "netray-common",
+ "netray-engine",
+ "netray-model",
+ "percent-encoding",
+ "pin-project-lite",
+ "rcgen",
+ "reqwest",
+ "rust-embed",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "toml",
+ "tower",
+ "tower-http",
+ "tracing",
+ "url",
+ "utoipa",
+ "wiremock",
+ "x509-parser 0.17.0",
+]
+
+[[package]]
 name = "netray-engine"
 version = "0.23.1"
 dependencies = [
+ "futures",
  "netray-model",
+ "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "netray-http"
+version = "0.23.1"
+dependencies = [
+ "axum",
+ "chrono",
+ "config",
+ "governor",
+ "http-body-util",
+ "indexmap",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "mime_guess",
+ "netray-common",
+ "netray-engine",
+ "netray-model",
+ "percent-encoding",
+ "reqwest",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "tower",
+ "tower-http",
+ "tracing",
+ "url",
+ "utoipa",
+]
+
+[[package]]
+name = "netray-ip"
+version = "0.23.1"
+dependencies = [
+ "arc-swap",
+ "axum",
+ "axum-extra",
+ "config",
+ "criterion",
+ "futures",
+ "governor",
+ "http-body-util",
+ "httpdate",
+ "hyper-util",
+ "insta",
+ "ip_network",
+ "ip_network_table",
+ "lru",
+ "maxminddb",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "metrics-process",
+ "mhost",
+ "mime_guess",
+ "moka",
+ "netray-common",
+ "netray-engine",
+ "netray-model",
+ "notify",
+ "pretty_assertions",
+ "regex",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "subtle",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "tower",
+ "tower-http",
+ "tracing",
+ "uaparser",
+ "utoipa",
 ]
 
 [[package]]
@@ -2881,6 +2966,50 @@ version = "0.23.1"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "netray-tls"
+version = "0.23.1"
+dependencies = [
+ "arc-swap",
+ "axum",
+ "chrono",
+ "config",
+ "der",
+ "governor",
+ "http-body-util",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "mhost",
+ "mime_guess",
+ "netray-common",
+ "netray-engine",
+ "netray-model",
+ "percent-encoding",
+ "rcgen",
+ "reqwest",
+ "rust-embed",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "sha1 0.11.0",
+ "sha2 0.11.0",
+ "spki",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-rustls",
+ "toml",
+ "tower",
+ "tower-http",
+ "tracing",
+ "utoipa",
+ "webpki-roots",
+ "x509-cert",
+ "x509-ocsp",
+ "x509-parser 0.18.1",
 ]
 
 [[package]]
@@ -3415,42 +3544,6 @@ checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
 dependencies = [
  "diff",
  "yansi",
-]
-
-[[package]]
-name = "prism"
-version = "0.23.1"
-dependencies = [
- "arc-swap",
- "axum",
- "config",
- "futures",
- "governor",
- "hickory-proto",
- "http-body-util",
- "metrics",
- "metrics-exporter-prometheus",
- "mhost",
- "mime_guess",
- "moka",
- "netray-common",
- "netray-model",
- "rand 0.10.3",
- "rcgen",
- "reqwest",
- "rust-embed",
- "rustls",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tower",
- "tower-http",
- "tracing",
- "utoipa",
- "uuid",
 ]
 
 [[package]]
@@ -4476,35 +4569,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spectra"
-version = "0.23.1"
-dependencies = [
- "axum",
- "chrono",
- "config",
- "governor",
- "http-body-util",
- "indexmap",
- "metrics",
- "metrics-exporter-prometheus",
- "mime_guess",
- "netray-common",
- "netray-model",
- "percent-encoding",
- "reqwest",
- "rust-embed",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "url",
- "utoipa",
-]
-
-[[package]]
 name = "spin"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5024,48 +5088,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "tlsight"
-version = "0.23.1"
-dependencies = [
- "arc-swap",
- "axum",
- "chrono",
- "config",
- "der",
- "governor",
- "http-body-util",
- "metrics",
- "metrics-exporter-prometheus",
- "mhost",
- "mime_guess",
- "netray-common",
- "netray-model",
- "percent-encoding",
- "rcgen",
- "reqwest",
- "rust-embed",
- "rustls",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "sha1 0.11.0",
- "sha2 0.11.0",
- "spki",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "tokio-rustls",
- "tower",
- "tower-http",
- "tracing",
- "utoipa",
- "webpki-roots",
- "x509-cert",
- "x509-ocsp",
- "x509-parser 0.18.1",
 ]
 
 [[package]]

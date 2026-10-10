@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::net::SocketAddr;
 
@@ -28,6 +29,9 @@ pub struct Config {
     pub og_cards: OgCardsConfig,
     #[serde(default)]
     pub snapshots: SnapshotsConfig,
+    /// Per-module tables (`[modules.http]`), read by the binary that builds the modules.
+    #[serde(default)]
+    pub modules: BTreeMap<String, toml::Table>,
     #[serde(default)]
     pub telemetry: netray_common::telemetry::TelemetryConfig,
 }
@@ -81,15 +85,14 @@ pub struct ServerConfig {
 
 pub use netray_common::ecosystem::EcosystemConfig;
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BackendsConfig {
+    /// Budget of the resolve stage in milliseconds, counted from the start of a check.
+    #[serde(default = "default_resolve_timeout_ms")]
+    pub resolve_timeout_ms: u64,
     #[serde(default)]
     pub dns: BackendConfig,
-    /// DNS server names to pass to mhost-prism (e.g. `["cloudflare"]`).
-    /// When non-empty, sent as the `servers` field in the CheckRequest body.
-    #[serde(default)]
-    pub dns_servers: Vec<String>,
     #[serde(default)]
     pub tls: BackendConfig,
     #[serde(default)]
@@ -98,6 +101,23 @@ pub struct BackendsConfig {
     pub http: Option<BackendConfig>,
     #[serde(default)]
     pub email: Option<BackendConfig>,
+}
+
+impl Default for BackendsConfig {
+    fn default() -> Self {
+        Self {
+            resolve_timeout_ms: default_resolve_timeout_ms(),
+            dns: BackendConfig::default(),
+            tls: BackendConfig::default(),
+            ip: BackendConfig::default(),
+            http: None,
+            email: None,
+        }
+    }
+}
+
+fn default_resolve_timeout_ms() -> u64 {
+    1500
 }
 
 /// One backend service. lens calls backends with its own reqwest client, so
@@ -428,7 +448,17 @@ impl Config {
         env: impl IntoIterator<Item = (OsString, OsString)>,
     ) -> Result<Self, ConfigError> {
         let env = env.into_iter().filter(|(k, _)| k != "LENS_LIVE_TESTS");
-        let mut cfg: Config = netray_common::config::load_with_env(config_path, "LENS_", env)?;
+        let mut cfg: Config = netray_common::config::load_with_env(config_path, "LENS_", env)
+            .map_err(|e| {
+                let msg = e.to_string();
+                if msg.contains("`dns_servers`") {
+                    ConfigError::Message(format!(
+                        "invalid configuration: backends.dns_servers is no longer read; the DNS section runs in-process, configure [modules.dns] servers ({msg})"
+                    ))
+                } else {
+                    e
+                }
+            })?;
         cfg.validate()?;
 
         Ok(cfg)
@@ -452,23 +482,49 @@ impl Config {
         netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
 
         let b = &self.backends;
-        let configured = |c: &Option<BackendConfig>| {
-            c.as_ref()
-                .filter(|c| c.url.is_some())
-                .map_or(0, |c| c.timeout_ms)
-        };
+        if b.dns.url.is_some() {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.dns.url is no longer read; the DNS section runs in-process, configure it in [modules.dns]".to_string(),
+            ));
+        }
+        if b.http.as_ref().is_some_and(|h| h.url.is_some()) {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.http.url is no longer read; the HTTP section runs in-process, configure it in [modules.http]".to_string(),
+            ));
+        }
+        if b.email.as_ref().is_some_and(|e| e.url.is_some()) {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.email.url is no longer read; the email section runs in-process, configure it in [modules.email]".to_string(),
+            ));
+        }
+        if b.ip.url.is_some() {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.ip.url is no longer read; the IP section runs in-process, configure it in [modules.ip]".to_string(),
+            ));
+        }
+        if b.tls.url.is_some() {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.tls.url is no longer read; the TLS section runs in-process, configure it in [modules.tls]".to_string(),
+            ));
+        }
         let wave1_ms = b
             .dns
             .timeout_ms
             .max(b.tls.timeout_ms)
-            .max(configured(&b.http))
-            .max(configured(&b.email));
+            .max(b.http.as_ref().map_or(0, |h| h.timeout_ms))
+            .max(b.email.as_ref().map_or(0, |e| e.timeout_ms));
         let budget_ms = wave1_ms.saturating_add(b.ip.timeout_ms);
         let deadline_ms = crate::check::HARD_DEADLINE.as_millis() as u64;
         if budget_ms >= deadline_ms {
             return Err(ConfigError::Message(format!(
                 "invalid configuration: backend timeouts (slowest wave-1 timeout_ms {wave1_ms} + ip timeout_ms {}) = {budget_ms} ms must stay below the {deadline_ms} ms hard deadline",
                 b.ip.timeout_ms
+            )));
+        }
+        if b.resolve_timeout_ms >= b.ip.timeout_ms {
+            return Err(ConfigError::Message(format!(
+                "invalid configuration: backends.resolve_timeout_ms {} must stay below [backends.ip] timeout_ms {}: the IP section waits for the resolve inside its own window, both counted from the start of a check",
+                b.resolve_timeout_ms, b.ip.timeout_ms
             )));
         }
 
@@ -493,19 +549,10 @@ mod tests {
         Config {
             server: default_server(),
             backends: BackendsConfig {
-                dns: crate::config::BackendConfig {
-                    url: Some("http://localhost:8080".to_string()),
-                    ..Default::default()
-                },
-                dns_servers: Vec::new(),
-                tls: crate::config::BackendConfig {
-                    url: Some("http://localhost:8081".to_string()),
-                    ..Default::default()
-                },
-                ip: crate::config::BackendConfig {
-                    url: Some("http://localhost:8082".to_string()),
-                    ..Default::default()
-                },
+                resolve_timeout_ms: default_resolve_timeout_ms(),
+                dns: crate::config::BackendConfig::default(),
+                tls: crate::config::BackendConfig::default(),
+                ip: crate::config::BackendConfig::default(),
                 http: None,
                 email: None,
             },
@@ -517,6 +564,7 @@ mod tests {
             badges: BadgesConfig::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: SnapshotsConfig::default(),
+            modules: Default::default(),
             telemetry: Default::default(),
         }
     }
@@ -669,13 +717,40 @@ mod tests {
     }
 
     #[test]
+    fn backends_ip_url_is_rejected() {
+        let err = load_toml("[backends.ip]\nurl = \"http://ip.example.com\"\n").unwrap_err();
+        assert!(err.to_string().contains("backends.ip.url"), "got: {err}");
+    }
+
+    #[test]
+    fn backends_dns_url_is_rejected() {
+        let err = load_toml("[backends.dns]\nurl = \"http://dns.example.com\"\n").unwrap_err();
+        assert!(err.to_string().contains("backends.dns.url"), "got: {err}");
+    }
+
+    #[test]
+    fn backends_dns_servers_is_rejected() {
+        let err = load_toml("[backends]\ndns_servers = [\"google\"]\n").unwrap_err();
+        assert!(
+            err.to_string().contains("[modules.dns] servers"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn backends_tls_url_is_rejected() {
+        let err = load_toml("[backends.tls]\nurl = \"http://tls.example.com\"\n").unwrap_err();
+        assert!(err.to_string().contains("backends.tls.url"), "got: {err}");
+    }
+
+    #[test]
     fn unread_backend_keys_are_rejected() {
         for key in [
             "max_concurrent = 10",
             "cache_ttl_secs = 300",
             "cache_capacity = 1024",
         ] {
-            let toml = format!("[backends.ip]\nurl = \"http://ip.example.com\"\n{key}\n");
+            let toml = format!("[backends.dns]\n{key}\n");
             assert!(load_toml(&toml).is_err(), "{key} must be rejected");
         }
     }
@@ -721,7 +796,7 @@ mod tests {
             "[backends.dns]\ntimeout_ms = {slow_ms}\n\
              [backends.tls]\ntimeout_ms = {slow_ms}\n\
              [backends.http]\ntimeout_ms = {slow_ms}\n\
-             [backends.email]\nurl = \"http://beacon:8084\"\ntimeout_ms = {slow_ms}\n\
+             [backends.email]\ntimeout_ms = {slow_ms}\n\
              [backends.ip]\ntimeout_ms = {ip_ms}\n"
         )
     }
@@ -768,8 +843,8 @@ mod tests {
         assert_eq!(cfg.server.trusted_proxies.len(), 2);
         assert_eq!(cfg.backends.ip.timeout_ms, 2000);
         assert_eq!(
-            cfg.backends.email.as_ref().and_then(|e| e.url.as_deref()),
-            Some("http://beacon:8084")
+            cfg.backends.email.as_ref().map(|e| e.timeout_ms),
+            Some(15000)
         );
     }
 

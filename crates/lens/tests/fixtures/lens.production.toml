@@ -8,26 +8,21 @@ metrics_bind = "0.0.0.0:9090"
 trusted_proxies = ["172.31.0.0/24", "172.30.0.0/24"]
 
 [backends]
-dns_servers = ["google"]
+resolve_timeout_ms = 1500
 
 [backends.dns]
-url = "http://prism:8080"
 timeout_ms = 15000
 
 [backends.tls]
-url = "http://tlsight:8081"
 timeout_ms = 15000
 
 [backends.ip]
-url = "http://ifconfig-rs:8000"
 timeout_ms = 2000
 
 [backends.http]
-url = "http://spectra:8082"
 timeout_ms = 15000
 
 [backends.email]
-url = "http://beacon:8084"
 timeout_ms = 15000
 
 [ecosystem]
@@ -57,3 +52,101 @@ service_name = "lens"
 
 [site]
 og_image = "https://example.com/og/landing.png"
+
+# The DNS section runs in-process; the check values are those of the production prism.toml
+# (crates/dns/tests/fixtures/prism.production.toml) under the module's section names, `servers`
+# is what lens sent as `[backends] dns_servers`.
+[modules.dns]
+servers = ["google"]
+
+[modules.dns.dns]
+default_servers = ["google"]
+allow_system_resolvers = false
+
+[modules.dns.limits]
+per_target_per_minute = 160
+per_target_burst = 53
+max_timeout_secs = 10
+max_servers = 4
+
+[modules.dns.backends.ip]
+url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+max_concurrent = 20
+cache_ttl_secs = 300
+cache_capacity = 1024
+
+# The TLS section runs in-process; the check values are those of the production tlsight.toml
+# (crates/tls/tests/fixtures/tlsight.production.toml) under the module's section names.
+[modules.tls.limits]
+per_target_per_minute = 60
+per_target_burst = 20
+max_concurrent_handshakes = 10
+max_ports = 5
+max_ips_per_hostname = 10
+handshake_timeout_secs = 5
+request_timeout_secs = 15
+
+[modules.tls.dns]
+timeout_secs = 3
+
+[modules.tls.validation]
+expiry_warning_days = 30
+expiry_critical_days = 14
+check_dane = true
+check_caa = true
+check_ct = true
+
+[modules.tls.quality]
+enabled = true
+http_check_timeout_secs = 5
+
+[modules.tls.backends.ip]
+url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+max_concurrent = 20
+cache_ttl_secs = 300
+cache_capacity = 1024
+
+[modules.http.enrichment]
+ip_url = "http://ifconfig-rs:8000"
+
+[modules.email.dns]
+resolvers = ["cloudflare"]
+timeout_ms = 5000
+
+[modules.email.dnsbl]
+zones = [
+  "zen.spamhaus.org",
+  "b.barracudacentral.org",
+  "bl.spamcop.net",
+  "dbl.spamhaus.org",
+]
+resolvers = ["system"]
+timeout_ms = 2000
+
+[modules.email.http]
+timeout_ms = 10000
+
+[modules.email.dkim]
+max_user_selectors = 5
+
+[modules.email.backends]
+ip_url = "http://ifconfig-rs:8000"
+timeout_ms = 500
+
+# The IP section runs in-process; the data paths are those of the production ifconfig.toml
+# (crates/ip/tests/fixtures/ifconfig.production.toml) under the image's data mount.
+[modules.ip]
+geoip_city_db = "/netray/data/GeoLite2-City.mmdb"
+geoip_asn_db = "/netray/data/GeoLite2-ASN.mmdb"
+tor_exit_nodes = "/netray/data/tor_exit_nodes.txt"
+cloud_provider_ranges = "/netray/data/cloud_provider_ranges.jsonl"
+feodo_botnet_ips = "/netray/data/feodo_botnet_ips.txt"
+vpn_ranges = "/netray/data/vpn_ranges.txt"
+datacenter_ranges = "/netray/data/datacenter_ranges.txt"
+bot_ranges = "/netray/data/bot_ranges.jsonl"
+spamhaus_drop = "/netray/data/spamhaus_drop.txt"
+cins_army_ips = "/netray/data/cins_army_ips.txt"
+asn_patterns = "/netray/data/asn_patterns.toml"
+asn_info = "/netray/data/as_metadata.jsonl"

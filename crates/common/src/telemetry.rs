@@ -143,7 +143,7 @@ pub fn validate(config: &TelemetryConfig) -> Result<(), String> {
 /// Initialise the tracing subscriber with an optional OpenTelemetry layer.
 ///
 /// `default_filter` is used as the fallback when `RUST_LOG` is not set
-/// (e.g. `"prism=info,tower_http=info"`).
+/// (e.g. `"netray_dns=info,tower_http=info"`).
 ///
 /// The caller is responsible for calling [`shutdown`] on graceful shutdown
 /// to flush pending spans.

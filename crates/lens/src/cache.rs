@@ -6,8 +6,8 @@ use std::time::{Duration, SystemTime};
 use moka::future::Cache;
 use moka::ops::compute::{CompResult, Op};
 
-use crate::backends::BackendResult;
 use crate::check::SectionError;
+use crate::modules::BackendResult;
 use crate::scoring::engine::OverallScore;
 
 /// Cached check result stored in the moka cache.

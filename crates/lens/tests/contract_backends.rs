@@ -1,23 +1,24 @@
-// Contract test: lens parses the goldens its DNS, TLS and HTTP backends write.
+// Contract test: lens runs the DNS module (`netray_dns`) on the golden its prism writes; the TLS
+// module (`netray_tls`) and `netray_http` translate the TLS and HTTP goldens (all sections run
+// in-process).
 //
 // Each backend's own `tests/contract_golden.rs` writes its golden under
-// `tests/fixtures/contracts/` from its real response types. Here a local HTTP server
-// serves the committed golden at the path and method lens calls, and lens's public
-// `check_dns` / `check_tls` / `check_http` must produce checks and no error, with values
-// that come from the golden rather than defaults.
+// `tests/fixtures/contracts/` from its real response types. Here the DNS and TLS modules run
+// the goldens through lens's `ModuleSection`; both must produce checks and no error and carry
+// values that come from the golden rather than defaults.
 
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use axum::Router;
-use axum::http::header;
-use axum::routing::{get, post};
-use lens::backends::BackendExtra;
-use lens::backends::dns::check_dns;
-use lens::backends::http::check_http;
-use lens::backends::tls::check_tls;
+mod common;
+
+use common::{dns_golden_raw, run_dns, run_tls, tls_golden};
+use lens::modules::BackendExtra;
 use lens::scoring::engine::CheckVerdict;
+use netray_engine::SectionOutcome;
+use netray_http::inspect::assembler::InspectResponse;
+use netray_http::translate;
+use netray_model::Status;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -29,37 +30,11 @@ fn golden(name: &str) -> String {
         .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
 }
 
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    });
-    format!("http://{addr}")
-}
-
 #[tokio::test]
 async fn lens_parses_prism_golden() {
-    let body = golden("prism.sse");
-    let app = Router::new().route(
-        "/api/check",
-        post(move || {
-            let body = body.clone();
-            async move { ([(header::CONTENT_TYPE, "text/event-stream")], body) }
-        }),
-    );
-    let url = serve(app).await;
-
-    let result = check_dns(
-        &reqwest::Client::new(),
-        &url,
-        "example.com",
-        &[],
-        TIMEOUT,
-        &reqwest::header::HeaderMap::new(),
-    )
-    .await
-    .expect("lens must parse prism's golden without a section error");
+    let result = run_dns(dns_golden_raw("prism.sse"), TIMEOUT)
+        .await
+        .expect("lens must run the DNS module on prism's golden without a section error");
 
     assert!(
         !result.checks.is_empty(),
@@ -77,41 +52,24 @@ async fn lens_parses_prism_golden() {
         .find(|c| c.name == "caa")
         .expect("lint finding `caa` missing");
     assert_eq!(caa.verdict, CheckVerdict::Warn);
+    let BackendExtra::Dns { resolved_ips, .. } = &result.extra else {
+        panic!("expected BackendExtra::Dns");
+    };
     assert!(
-        result
-            .resolved_ips
-            .iter()
-            .any(|ip| ip.to_string() == "192.0.2.10"),
-        "resolved IPs {:?} do not come from the golden's A batch",
-        result.resolved_ips
+        resolved_ips.iter().any(|ip| ip.to_string() == "192.0.2.10"),
+        "resolved IPs {resolved_ips:?} do not come from the golden's A batch",
     );
 }
 
 #[tokio::test]
 async fn lens_parses_tlsight_golden() {
-    let body = golden("tlsight-inspect.json");
-    let app = Router::new().route(
-        "/api/inspect",
-        get(move || {
-            let body = body.clone();
-            async move { ([(header::CONTENT_TYPE, "application/json")], body) }
-        }),
-    );
-    let url = serve(app).await;
-
-    let result = check_tls(
-        &reqwest::Client::new(),
-        &url,
-        "example.com",
-        TIMEOUT,
-        &reqwest::header::HeaderMap::new(),
-    )
-    .await
-    .expect("lens must parse tlsight's golden without a section error");
+    let result = run_tls(tls_golden("tlsight-inspect.json"), TIMEOUT)
+        .await
+        .expect("lens must run the TLS module on tlsight's golden without a section error");
 
     assert!(
         !result.checks.is_empty(),
-        "no checks parsed from tlsight's golden"
+        "no checks translated from tlsight's golden"
     );
     let ocsp = result
         .checks
@@ -127,68 +85,49 @@ async fn lens_parses_tlsight_golden() {
             "TLS section must not carry `{owned_by_http}`"
         );
     }
+    let BackendExtra::Tls { raw_headline, .. } = &result.extra else {
+        panic!("expected BackendExtra::Tls");
+    };
     assert!(
-        result.raw_headline.contains("TLSv1.3") && result.raw_headline.contains("60d"),
-        "headline `{}` does not carry the golden's version and days remaining",
-        result.raw_headline
+        raw_headline.contains("TLSv1.3") && raw_headline.contains("60d"),
+        "headline `{raw_headline}` does not carry the golden's version and days remaining",
     );
 }
 
-#[tokio::test]
-async fn lens_parses_spectra_golden() {
-    let body = golden("spectra-inspect.json");
-    let app = Router::new().route(
-        "/api/inspect",
-        get(move || {
-            let body = body.clone();
-            async move { ([(header::CONTENT_TYPE, "application/json")], body) }
-        }),
-    );
-    let url = serve(app).await;
+#[test]
+fn netray_http_translates_spectra_golden() {
+    let resp: InspectResponse = serde_json::from_str(&golden("spectra-inspect.json"))
+        .expect("netray-http must decode spectra's golden");
 
-    let result = check_http(
-        &reqwest::Client::new(),
-        &url,
-        "example.com",
-        TIMEOUT,
-        &reqwest::header::HeaderMap::new(),
-    )
-    .await
-    .expect("lens must parse spectra's golden without a section error");
+    let (checks, presentation) = match translate(&resp) {
+        SectionOutcome::Measured {
+            checks,
+            presentation,
+        } => (checks, presentation),
+        other => panic!("expected Measured, got {other:?}"),
+    };
 
     assert!(
-        !result.checks.is_empty(),
-        "no checks parsed from spectra's golden"
+        !checks.is_empty(),
+        "no checks translated from spectra's golden"
     );
-    let redirect = result
-        .checks
-        .iter()
-        .find(|c| c.name == "https_redirect")
-        .unwrap();
-    assert_eq!(redirect.verdict, CheckVerdict::Pass);
-    let headers = result
-        .checks
-        .iter()
-        .find(|c| c.name == "security_headers")
-        .unwrap();
-    assert_eq!(headers.verdict, CheckVerdict::Warn);
+    let check = |id: &str| {
+        checks
+            .iter()
+            .find(|c| c.id.to_string() == id)
+            .unwrap_or_else(|| panic!("check {id} missing"))
+    };
+    assert_eq!(check("http.https_redirect").status, Status::Pass);
+    let headers = check("http.security_headers");
+    assert_eq!(headers.status, Status::Warn);
     assert!(
         headers
-            .messages
+            .findings
             .iter()
             .any(|m| m.contains("Content-Security-Policy")),
-        "messages {:?} do not come from the golden's csp check",
-        headers.messages
+        "findings {:?} do not come from the golden's csp check",
+        headers.findings
     );
-    match result.extra {
-        BackendExtra::Http {
-            status_code,
-            server_org,
-            ..
-        } => {
-            assert_eq!(status_code, Some(200));
-            assert_eq!(server_org.as_deref(), Some("Example Hosting"));
-        }
-        _ => panic!("expected BackendExtra::Http"),
-    }
+    assert_eq!(presentation["status_code"], 200);
+    assert_eq!(presentation["server_org"], "Example Hosting");
 }

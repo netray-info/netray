@@ -13,10 +13,32 @@ pub use ::config::ConfigError;
 /// Load configuration from an optional TOML file and the process environment.
 ///
 /// `prefix` is the full variable prefix including its separator: `"PRISM_"` for
-/// `PRISM_SERVER__BIND`, `"SPECTRA__"` for `SPECTRA__SERVER__BIND`. `<NAME>_CONFIG`
+/// `PRISM_SERVER__BIND`, `"NETRAY_HTTP_"` for `NETRAY_HTTP_SERVER__BIND`. `<NAME>_CONFIG`
 /// (NAME = prefix without trailing underscores) names the config file, not a key.
 pub fn load<T: DeserializeOwned>(path: Option<&str>, prefix: &str) -> Result<T, ConfigError> {
     load_with_env(path, prefix, std::env::vars_os())
+}
+
+/// Fails when `env` holds a variable of the retired prefix `legacy` (ASCII case-insensitive),
+/// naming that variable, the `new` prefix and `<new>CONFIG`.
+pub fn refuse_legacy_prefix(
+    legacy: &str,
+    new: &str,
+    env: &[(OsString, OsString)],
+) -> Result<(), ConfigError> {
+    let found = env.iter().find_map(|(k, _)| {
+        let name = k.to_string_lossy();
+        name.as_bytes()
+            .get(..legacy.len())
+            .is_some_and(|head| head.eq_ignore_ascii_case(legacy.as_bytes()))
+            .then(|| name.into_owned())
+    });
+    match found {
+        Some(var) => Err(ConfigError::Message(format!(
+            "{var} is set: these variables are now {new}* (config file: {new}CONFIG)"
+        ))),
+        None => Ok(()),
+    }
 }
 
 /// Like [`load`], reading variables from `env` instead of the process environment.

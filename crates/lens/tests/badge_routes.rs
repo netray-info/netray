@@ -7,6 +7,9 @@ use tower::ServiceExt;
 use lens::config::{BadgesConfig, CacheConfig};
 use lens::routes::badge_router;
 use lens::state::AppState;
+use netray_engine::Registry;
+
+mod common;
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -18,25 +21,24 @@ fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
         ServerConfig, SiteConfig,
     };
     let config = Config {
+        modules: Default::default(),
         server: ServerConfig {
             bind: ([127, 0, 0, 1], 0).into(),
             metrics_bind: ([127, 0, 0, 1], 0).into(),
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
+            resolve_timeout_ms: 2000,
             dns: lens::config::BackendConfig {
-                url: Some("http://127.0.0.1:19999".to_string()),
                 timeout_ms: 1000,
                 ..Default::default()
             },
-            dns_servers: Vec::new(),
             tls: lens::config::BackendConfig {
                 url: Some("http://127.0.0.1:19998".to_string()),
                 timeout_ms: 1000,
                 ..Default::default()
             },
             ip: lens::config::BackendConfig {
-                url: Some("http://127.0.0.1:19997".to_string()),
                 timeout_ms: 1000,
                 ..Default::default()
             },
@@ -61,7 +63,9 @@ fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
     };
-    AppState::new(config).unwrap()
+    // The DNS module fails: what the unreachable backends were before, so a real run ends in an
+    // error grade.
+    AppState::with_registry(config, Registry::new().with(common::dns_incomplete())).unwrap()
 }
 
 fn default_badges_state() -> AppState {
@@ -286,7 +290,7 @@ async fn badge_returns_svg_content_type() {
 
 #[tokio::test]
 async fn error_grade_badge_has_short_cache_control() {
-    // Backends are unreachable (127.0.0.1:1999x), so run_check returns error grade.
+    // The DNS module fails, so run_check returns error grade.
     let app = badge_app(default_badges_state());
     let req = Request::builder()
         .uri("/badge/example.com.svg")

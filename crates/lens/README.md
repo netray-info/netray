@@ -162,7 +162,7 @@ curl -s -X POST -H 'Content-Type: application/json' \
 |---|---|
 | `dns` | DNS findings, resolved IPs, per-check results |
 | `tls` | Certificate chain, quality checks, grade |
-| `http` | HTTP security headers, HTTPS redirect, CORS, cookie posture (omitted when `http_url` not configured) |
+| `http` | HTTP security headers, HTTPS redirect, CORS, cookie posture (omitted when `[backends.http]` is not configured) |
 | `ip` | Per-IP classification: network type, ASN, geo |
 | `summary` | Overall grade, score, section grades, `hard_fail`, `hard_fail_reason` |
 | `done` | Domain, duration_ms, cached flag |
@@ -240,10 +240,10 @@ Each backend returns a set of named checks. Every check has a status: `pass`, `w
 
 | Section | Weight | Notes |
 |---|---|---|
-| TLS   | 35% | Certificate validity and transport security are foundational |
-| DNS   | 20% | DNS infrastructure health (DNSSEC, CAA, NS delegation) |
-| HTTP  | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (requires spectra backend) |
-| Email | 15% | Email authentication (SPF, DKIM, DMARC) and receiving infrastructure (requires beacon backend) |
+| TLS   | 35% | Certificate validity and transport security are foundational (runs in-process as the `netray-tls` module, configured in `[modules.tls]`) |
+| DNS   | 20% | DNS infrastructure health (DNSSEC, CAA, NS delegation); runs in-process as the `netray-dns` module, configured in `[modules.dns]` |
+| HTTP  | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (runs in-process as the `netray-http` module, enabled by `[backends.http]`) |
+| Email | 15% | Email authentication (SPF, DKIM, DMARC) and receiving infrastructure (runs in-process as the `netray-email` module, enabled by `[backends.email]`) |
 | IP    | 10% | Reputation informs risk but is beyond the domain owner's direct control |
 
 The HTTP and Email sections are optional. When not configured, the scoring engine rebalances proportionally across active sections (weights are relative, not fixed-sum).
@@ -309,8 +309,8 @@ These conditions force an **F** regardless of the numeric score:
 
 | Event | When emitted | Key fields |
 |---|---|---|
-| `dns` | After DNS backend | `status`, `headline`, `checks`, `detail_url` |
-| `tls` | After TLS backend | `status`, `headline`, `checks`, `detail_url` |
+| `dns` | After DNS module | `status`, `headline`, `checks`, `detail_url` |
+| `tls` | After TLS module | `status`, `headline`, `checks`, `detail_url` |
 | `http` | After HTTP backend (optional) | `status`, `headline`, `checks`, `detail_url` |
 | `email` | After email backend (optional) | `status`, `grade`, `buckets`, `headline`, `detail_url` |
 | `ip` | After IP backend | `status`, `headline`, `checks`, `addresses`, `detail_url` |
@@ -414,11 +414,16 @@ bind = "0.0.0.0:8082"
 metrics_bind = "127.0.0.1:9090"
 # trusted_proxies = ["10.0.0.0/8"]
 
-[backends]
-dns_url = "https://dns.netray.info"
-tls_url = "https://tls.netray.info"
-ip_url  = "https://ip.netray.info"
-# backend_timeout_secs = 20
+# The DNS section runs in-process; `[backends.dns] url` and `[backends] dns_servers` are refused.
+# [backends.dns]
+# timeout_ms = 15000
+# [modules.dns]                      # optional, see crates/dns
+# servers = ["cloudflare"]
+
+# The TLS section runs in-process; `[backends.tls] url` is refused.
+# [backends.tls]
+# timeout_ms = 15000
+# [modules.tls]                      # optional, see crates/tls
 
 [cache]
 enabled = true

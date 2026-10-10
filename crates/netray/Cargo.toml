@@ -7,17 +7,21 @@ description = "The netray.info suite as one binary: six services and the static 
 
 [dependencies]
 netray-common = { workspace = true, features = ["server"] }
+netray-engine = { workspace = true }
+netray-model = { workspace = true }
 
-beacon = { path = "../beacon" }
-ifconfig-rs = { path = "../ifconfig-rs" }
+netray-email = { path = "../email" }
+netray-ip = { path = "../ip" }
 lens = { path = "../lens" }
-prism = { path = "../mhost-prism" }
-spectra = { path = "../spectra" }
-tlsight = { path = "../tlsight" }
+netray-dns = { path = "../dns" }
+netray-http = { path = "../http" }
+netray-tls = { path = "../tls" }
 
 axum = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs", "signal"] }
 mime_guess = { workspace = true }
 percent-encoding = { workspace = true }
 anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = "0.3"
 clap = { version = "4", features = ["derive"] }

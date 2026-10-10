@@ -1,19 +1,25 @@
 //! Incomplete results (spec grade-integrity, Phase 2, requirements 3 and 4).
 //!
-//! Real stub servers serve the committed backend goldens (or a failure, or a rewritten
-//! variant of a golden); lens runs with `tests/fixtures/lens.production.toml` (URLs pointed
-//! at the stubs), the cache enabled and a temp-file snapshot store. The routers are driven
+//! The DNS module runs the committed DNS golden (or a rewritten variant of it); the TLS, HTTP,
+//! email and IP sections come from golden modules of the engine registry, or from ones that are
+//! incomplete; lens runs with `tests/fixtures/lens.production.toml`, the cache enabled and a
+//! temp-file snapshot store. The routers are driven
 //! in-process. A result with an Errored section is `incomplete`: never cached, never
 //! snapshotted, never badged or rendered as a letter.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+mod common;
+
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
-use axum::routing::{get, post};
+use common::{
+    dns_golden_raw, dns_with_body, email_golden, email_incomplete, facts_golden_raw,
+    facts_with_body, http_module, ip_golden, registry_with, tls_module,
+};
 use lens::config::Config;
 use lens::routes::{api_router, badge_router, og_router};
 use lens::snapshot::SnapshotStore;
@@ -22,12 +28,11 @@ use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 use tower::ServiceExt;
 
-/// What one backend stub answers.
+/// What the DNS module runs.
 #[derive(Clone)]
 enum Answer {
     Golden(&'static str),
     Body(String),
-    Http500,
 }
 
 fn contracts_dir() -> PathBuf {
@@ -40,61 +45,23 @@ fn golden(name: &str) -> String {
         .unwrap_or_else(|e| panic!("golden {} unreadable: {e}", path.display()))
 }
 
-async fn serve(app: Router) -> String {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr: SocketAddr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    format!("http://{addr}")
-}
-
-async fn stub(
-    path: &'static str,
-    post_method: bool,
-    content_type: &'static str,
-    answer: Answer,
-) -> String {
-    let body = match &answer {
-        Answer::Golden(f) => Some(golden(f)),
-        Answer::Body(b) => Some(b.clone()),
-        Answer::Http500 => None,
-    };
-    let handler = move || {
-        let body = body.clone();
-        async move {
-            match body {
-                Some(b) => (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], b),
-                None => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    [(header::CONTENT_TYPE, "text/plain")],
-                    "backend broke".to_string(),
-                ),
-            }
-        }
-    };
-    let route = if post_method {
-        post(handler)
-    } else {
-        get(handler)
-    };
-    serve(Router::new().route(path, route)).await
-}
-
 struct Backends {
     dns: Answer,
-    tls: Answer,
-    http: Answer,
-    email: Answer,
+    /// The tlsight golden the TLS module runs; `None` makes the TLS section incomplete.
+    tls: Option<&'static str>,
+    /// The spectra golden the HTTP module runs; `None` makes the HTTP section incomplete.
+    http: Option<&'static str>,
+    /// The beacon golden the email module runs; `None` makes the email section incomplete.
+    email: Option<&'static str>,
 }
 
 impl Backends {
     fn healthy() -> Self {
         Self {
             dns: Answer::Golden("prism.sse"),
-            tls: Answer::Golden("tlsight-inspect.json"),
-            http: Answer::Golden("spectra-inspect.json"),
-            email: Answer::Golden("beacon.sse"),
+            tls: Some("tlsight-inspect.json"),
+            http: Some("spectra-inspect.json"),
+            email: Some("beacon.sse"),
         }
     }
 }
@@ -104,26 +71,11 @@ struct Harness {
     _db: NamedTempFile,
 }
 
-/// Production config on stubs, cache enabled, snapshot store on a temp sqlite file.
+/// Production config, cache enabled, snapshot store on a temp sqlite file.
 async fn harness(b: Backends) -> Harness {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
-    config.backends.dns.url = Some(stub("/api/check", true, "text/event-stream", b.dns).await);
-    config.backends.tls.url = Some(stub("/api/inspect", false, "application/json", b.tls).await);
-    config.backends.ip.url = Some(
-        stub(
-            "/json",
-            false,
-            "application/json",
-            Answer::Golden("ifconfig-json.json"),
-        )
-        .await,
-    );
-    config.backends.http.as_mut().unwrap().url =
-        Some(stub("/api/inspect", false, "application/json", b.http).await);
-    config.backends.email.as_mut().unwrap().url =
-        Some(stub("/inspect", true, "text/event-stream", b.email).await);
     assert!(config.cache.enabled, "production config enables the cache");
     config.snapshots.enabled = true;
 
@@ -132,7 +84,27 @@ async fn harness(b: Backends) -> Harness {
     let store = SnapshotStore::new(db.path()).await.unwrap();
     store.migrate().await.unwrap();
 
-    let mut state = AppState::new(config).unwrap();
+    let email = match b.email {
+        Some(file) => email_golden(file),
+        None => email_incomplete(),
+    };
+    let dns = match &b.dns {
+        Answer::Golden(file) => dns_golden_raw(file),
+        Answer::Body(body) => dns_with_body(body),
+    };
+    let facts = match &b.dns {
+        Answer::Golden(file) => facts_golden_raw(file),
+        Answer::Body(body) => facts_with_body(body),
+    };
+    let registry = registry_with(
+        dns,
+        facts,
+        http_module(b.http),
+        email,
+        ip_golden("ifconfig-json.json"),
+        tls_module(b.tls),
+    );
+    let mut state = AppState::with_registry(config, registry).unwrap();
     state.snapshot_store = Some(std::sync::Arc::new(store));
     assert!(state.badge_check_fn.is_none(), "use the real check");
 
@@ -224,7 +196,7 @@ fn assert_incomplete(c: &Checked) {
 #[tokio::test]
 async fn incomplete_c4_email_http500_is_incomplete_unsnapshotted_and_uncached() {
     let h = harness(Backends {
-        email: Answer::Http500,
+        email: None,
         ..Backends::healthy()
     })
     .await;
@@ -326,8 +298,8 @@ fn prism_nxdomain(prism: &str) -> String {
 async fn incomplete_c6_no_address_records_and_failed_tls_http_is_incomplete() {
     let h = harness(Backends {
         dns: Answer::Body(prism_nxdomain(&golden("prism.sse"))),
-        tls: Answer::Http500,
-        http: Answer::Http500,
+        tls: None,
+        http: None,
         ..Backends::healthy()
     })
     .await;
@@ -340,7 +312,7 @@ async fn incomplete_c6_no_address_records_and_failed_tls_http_is_incomplete() {
 #[tokio::test]
 async fn incomplete_email_all_skipped_summary_is_incomplete() {
     let h = harness(Backends {
-        email: Answer::Golden("beacon-timeout.sse"),
+        email: Some("beacon-timeout.sse"),
         ..Backends::healthy()
     })
     .await;
@@ -351,7 +323,7 @@ async fn incomplete_email_all_skipped_summary_is_incomplete() {
 #[tokio::test]
 async fn incomplete_c7_badge_first_shows_question_mark_and_leaves_check_uncached() {
     let h = harness(Backends {
-        email: Answer::Http500,
+        email: None,
         ..Backends::healthy()
     })
     .await;
@@ -371,7 +343,7 @@ async fn incomplete_c7_badge_first_shows_question_mark_and_leaves_check_uncached
 #[tokio::test]
 async fn incomplete_c8_og_first_shows_unknown_card_and_leaves_check_uncached() {
     let h = harness(Backends {
-        email: Answer::Http500,
+        email: None,
         ..Backends::healthy()
     })
     .await;

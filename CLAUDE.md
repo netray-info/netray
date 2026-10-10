@@ -12,7 +12,7 @@ carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
 
 | Path | What |
 |---|---|
-| `crates/{lens,mhost-prism,tlsight,spectra,beacon,ifconfig-rs}` | the services; each a library with its frontend in `frontend/` |
+| `crates/{lens,dns,tls,http,email,ip}` | the services; each a library with its frontend in `frontend/` |
 | `crates/common` | `netray-common`, shared Rust (workspace member, not published) |
 | `crates/{model,engine}` | V2 core (planning SDD `v2.md` §3): `netray-model` the check vocabulary, no workspace dependency; `netray-engine` the `Module`/`FactsProvider` traits, depends on `netray-model` only (`tests/repo/test_engine_names_no_module.sh`). Each V1 crate maps its status word onto `netray_model::Status` once |
 | `crates/netray` | the binary: subcommands `lens dns tls http email ip site`; all but `site` take `--check-config <path>` (exit 0 `config ok: <path>`, exit 1 with the error) |
@@ -41,8 +41,10 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - The gate's clippy runs without `--all-targets`; a narrower command with `--all-targets` hits old test-code lints the gate never sees.
 - `metrics_util` 0.20's `Snapshotter::snapshot()` swaps every value to 0 on read: read once, accumulate across reads, or render a `PrometheusRecorder`.
 - A `describe_*!` alone renders no HELP line: also register the metric at startup.
+- A service moved in-process keeps every check its route applied to lens's calls (input validation, per-target limits, policy); only per-client limits go.
+- hickory 0.26 `Name::eq` compares `is_fqdn`: a live query name without the trailing dot never equals a wire record name; never compare owners against the query name.
 - `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.
-- The `ifconfig-rs-data` image also carries tracked files (`asn_patterns.toml`): never copy it over `crates/ifconfig-rs/data/`.
+- The `ifconfig-rs-data` image also carries tracked files (`asn_patterns.toml`): never copy it over `crates/ip/data/`.
 - `adlc feature start` branches from `origin/main`: with unpushed commits on local `main`, fast-forward the new feature branch to `main` before writing the spec.
 
 The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
@@ -51,11 +53,11 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 
 - **One workspace version.** Every crate inherits `[workspace.package] version`; only `just release` changes it.
 - **Services are libraries.** Each service crate exposes an async `run(config)` and has no `main.rs` or `[[bin]]`; `crates/netray` only parses arguments and dispatches.
-- **Config stays per service.** Config keys, the `*_CONFIG` variable and the env prefix (`LENS_`, `PRISM_`, `TLSIGHT_`, `IFCONFIG_`; `SPECTRA__` and `BEACON__` with a double underscore), metrics names and log targets are unchanged by the merge; do not unify them.
+- **Config stays per service.** Config keys, the `*_CONFIG` variable and the env prefix (`LENS_`), metrics names and log targets are unchanged by the merge; do not unify them. A module converted to the V2 engine switches hard to `NETRAY_<P>_` (`NETRAY_<P>_CONFIG` for the file, `NETRAY_<P>_SECTION__KEY` for keys) with no fallback, and refuses its old prefix at load (`netray_common::config::refuse_legacy_prefix`), naming the new one. Converted so far: http (`NETRAY_HTTP_`, was `SPECTRA__`), email (`NETRAY_EMAIL_`, was `BEACON__`; `BEACON_CONFIG` too), ip (`NETRAY_IP_`, was `IFCONFIG_`; `IFCONFIG_CONFIG` too), tls (`NETRAY_TLS_`, was `TLSIGHT_`; `TLSIGHT_CONFIG` too), dns (`NETRAY_DNS_`, was `PRISM_`; `PRISM_CONFIG` too).
 - **One config loader.** Config loads only through `netray_common::config::load`; every config struct carries `deny_unknown_fields` (`tests/repo/test_config_strict.sh`).
 - **Contract goldens.** `tests/fixtures/contracts/` holds each backend's response as written by its own tests (`contract_golden`); lens's tests parse them. A backend shape change fails its golden test: regenerate with `UPDATE_GOLDEN=1 cargo test -p <crate> --test contract_golden` (ifconfig-rs: `--lib contract_golden`), commit, and keep lens green.
 - **lens goldens.** `tests/fixtures/contracts/lens-*.json` pin lens's whole result; `UPDATE_GOLDEN=1 cargo test -p lens --test lens_golden` rewrites them, and a moved row needs `ADLC-Test-Change` naming its requirement.
-- **prism's package is `prism`.** Run `cargo test -p prism`, not `-p mhost-prism`.
+- **prism's package is `netray-dns`.** Run `cargo test -p netray-dns`, not `-p prism` or `-p mhost-prism`.
 - **beacon orders verdicts** Skip < Info < Pass < Warn < Fail; a category with only Info sub-checks is not applicable to lens.
 - **beacon goldens are literal scenarios**: a new one must carry every sub-check the checks emit for its records (FCrDNS one per IP, `single_mx`, `no_ipv6`, DMARC `no_ruf`).
 - **A new check id needs its texts in lens**: `fix_for` and `guide_url_for` (`routes.rs`), the snapshot labels (`snapshot/render.rs`) and `CHECK_LABELS`/`CHECK_DESCRIPTIONS` (frontend `checkMeta.ts`); the `fix_for` test lists names by hand.

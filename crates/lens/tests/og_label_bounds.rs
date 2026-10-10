@@ -21,24 +21,25 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
         SiteConfig,
     };
     let config = Config {
+        modules: Default::default(),
         server: ServerConfig {
             bind: ([127, 0, 0, 1], 0).into(),
             metrics_bind: ([127, 0, 0, 1], 0).into(),
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
+            resolve_timeout_ms: 2000,
             dns: lens::config::BackendConfig {
-                url: Some("http://127.0.0.1:19999".to_string()),
                 timeout_ms: 100,
+                ..Default::default()
             },
-            dns_servers: Vec::new(),
             tls: lens::config::BackendConfig {
                 url: Some("http://127.0.0.1:19998".to_string()),
                 timeout_ms: 100,
             },
             ip: lens::config::BackendConfig {
-                url: Some("http://127.0.0.1:19997".to_string()),
                 timeout_ms: 100,
+                ..Default::default()
             },
             http: None,
             email: None,

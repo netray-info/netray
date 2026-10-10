@@ -37,14 +37,14 @@ check_precedence() {
         sed $'s/\x1b\\[[0-9;]*m//g' "$TMP/$sub-prec.log" > "$TMP/$sub-prec.plain"
         grep -Eq 'config_source[^A-Za-z]{1,12}argv' "$TMP/$sub-prec.plain" \
             || fail "netray $sub startup log lacks config_source=argv"
-        grep -Eq 'config_source[^A-Za-z]{1,12}BEACON_CONFIG' "$TMP/$sub-prec.plain" \
-            && fail "netray $sub startup log reports config_source=BEACON_CONFIG"
+        grep -Eq 'config_source[^A-Za-z]{1,12}NETRAY_EMAIL_CONFIG' "$TMP/$sub-prec.plain" \
+            && fail "netray $sub startup log reports config_source=NETRAY_EMAIL_CONFIG"
     fi
 }
 
-check_precedence email BEACON_CONFIG crates/beacon/beacon.dev.toml yes
-# spectra: argument, then SPECTRA_CONFIG (no config_source log field)
-check_precedence http SPECTRA_CONFIG crates/spectra/spectra.dev.toml no
+check_precedence email NETRAY_EMAIL_CONFIG crates/email/beacon.dev.toml yes
+# http: argument, then NETRAY_HTTP_CONFIG (no config_source log field)
+check_precedence http NETRAY_HTTP_CONFIG crates/http/spectra.dev.toml no
 
 # --- C9: metric names keep the service prefix ------------------------------
 # check_metrics <subcommand> <ENV_PREFIX> <metric prefix>
@@ -64,7 +64,7 @@ check_metrics() {
         || fail "netray $sub: metric ${prefix}_http_request_duration_seconds missing"
 }
 
-check_metrics http SPECTRA__ spectra
-check_metrics dns PRISM_ prism
+check_metrics http NETRAY_HTTP_ spectra
+check_metrics dns NETRAY_DNS_ prism
 
 echo "PASS"

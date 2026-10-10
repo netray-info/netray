@@ -2,10 +2,13 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
-use crate::backends::{BackendContext, BackendExtra, BackendResult};
+use netray_engine::{Domain, RunContext, RunOptions};
+use netray_model::Protocol;
+use tokio::sync::mpsc;
+
+use crate::modules::{Backend, BackendResult};
 use crate::scoring::engine::{OverallScore, SectionInput, SectionStatus, compute_score};
 use crate::state::AppState;
-use futures::StreamExt;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -38,27 +41,17 @@ pub struct CheckOutput {
 }
 
 // ---------------------------------------------------------------------------
-// Wave scheduling
-// ---------------------------------------------------------------------------
-
-/// Wave 1: run concurrently. No cross-section data dependencies.
-const WAVE1_SECTIONS: &[&str] = &["dns", "tls", "http", "email"];
-
-/// Wave 2: run after wave 1. IP backend needs resolved IPs from DNS.
-const WAVE2_SECTIONS: &[&str] = &["ip"];
-
-// ---------------------------------------------------------------------------
 // Orchestration
 // ---------------------------------------------------------------------------
 
 /// Run a full domain health check against the configured backends.
 ///
 /// Flow:
-/// 1. DNS and TLS run concurrently (wave 1) with `tokio::join!`.
-/// 2. Resolved IPs from DNS are passed to the IP backend (wave 2).
-/// 3. A 20-second hard deadline wraps everything.
-/// 4. Each section independently captures errors — one failure never aborts the others.
-/// 5. Score is computed from whatever results are available.
+/// 1. One engine run: the registry's resolve stage under `[backends] resolve_timeout_ms`,
+///    concurrently with every configured section.
+/// 2. A 20-second hard deadline wraps everything.
+/// 3. Each section independently captures errors — one failure never aborts the others.
+/// 4. Score is computed from whatever results are available.
 pub async fn run_check(state: &AppState, domain: &str) -> CheckOutput {
     run_check_with_input(
         state,
@@ -89,54 +82,51 @@ pub async fn run_check_with_deadline(
     hard_deadline: Duration,
 ) -> CheckOutput {
     let start = Instant::now();
-    let deadline = tokio::time::Instant::now() + hard_deadline;
     let domain = input.domain.clone();
+    let base = RunContext {
+        deadline: start + hard_deadline,
+        domain: Domain::new(domain.as_str()),
+        options: RunOptions {
+            dkim_selectors: input.dkim_selectors.clone(),
+        },
+    };
+    let plan: Vec<(Protocol, Duration)> = state
+        .backends
+        .iter()
+        .map(|s| (s.protocol, s.timeout))
+        .collect();
+
+    let resolve_budget = Duration::from_millis(state.config.backends.resolve_timeout_ms);
+
+    let (tx, mut rx) = mpsc::channel(plan.len().max(1));
+    let mut events = Vec::new();
+    let (report, ()) = tokio::join!(
+        netray_engine::run(&state.registry, base, &plan, resolve_budget, tx),
+        async {
+            while let Some(event) = rx.recv().await {
+                events.push(event);
+            }
+        }
+    );
+
+    if let Some(e) = &report.resolve_error {
+        tracing::warn!(error = %e, "address resolution failed");
+    }
+
     let mut sections: Sections = HashMap::new();
-
-    let forward_headers =
-        crate::backends::forward_headers(input.client_ip, input.request_id.as_deref());
-
-    // Wave 1: run concurrently, each result recorded as soon as it finishes.
-    let wave1_context = BackendContext {
-        resolved_ips: vec![],
-        dkim_selectors: input.dkim_selectors.clone(),
-        forward_headers: forward_headers.clone(),
-    };
-    run_wave(
-        state,
-        WAVE1_SECTIONS,
-        &domain,
-        &wave1_context,
-        deadline,
-        &mut sections,
-    )
-    .await;
-
-    // Extract resolved IPs from DNS result.
-    let resolved_ips: Vec<IpAddr> = sections
-        .get("dns")
-        .and_then(|r| r.as_ref().ok())
-        .and_then(|br| match &br.extra {
-            BackendExtra::Dns { resolved_ips, .. } => Some(resolved_ips.clone()),
-            _ => None,
-        })
-        .unwrap_or_default();
-
-    // Wave 2: run after wave 1, within the remaining time.
-    let wave2_context = BackendContext {
-        resolved_ips,
-        dkim_selectors: None,
-        forward_headers,
-    };
-    run_wave(
-        state,
-        WAVE2_SECTIONS,
-        &domain,
-        &wave2_context,
-        deadline,
-        &mut sections,
-    )
-    .await;
+    for event in events {
+        if let Some(s) = state.backends.iter().find(|s| s.protocol == event.protocol) {
+            sections.insert(
+                s.section().to_string(),
+                s.adapt(&domain, event.outcome, &report),
+            );
+        }
+    }
+    for s in state.backends.iter() {
+        sections
+            .entry(s.section().to_string())
+            .or_insert(Err(SectionError::Timeout));
+    }
 
     // Build scoring inputs.
     let mut inputs: HashMap<String, SectionInput> = HashMap::new();
@@ -158,47 +148,6 @@ pub async fn run_check_with_deadline(
         sections,
         score,
         duration_ms: start.elapsed().as_millis() as u64,
-    }
-}
-
-/// Run the backends of one wave concurrently. Each result lands in `sections` as soon as its
-/// backend finishes; when `deadline` passes, the backends still running are dropped and
-/// recorded as `Timeout`.
-async fn run_wave(
-    state: &AppState,
-    wave: &[&str],
-    domain: &str,
-    ctx: &BackendContext,
-    deadline: tokio::time::Instant,
-    sections: &mut Sections,
-) {
-    let mut pending = futures::stream::FuturesUnordered::new();
-    let mut expected: Vec<String> = Vec::new();
-    for b in state
-        .backends
-        .iter()
-        .filter(|b| wave.contains(&b.section()))
-    {
-        let section = b.section().to_string();
-        expected.push(section.clone());
-        pending.push(async move { (section, b.run(domain, ctx).await) });
-    }
-
-    while !pending.is_empty() {
-        match tokio::time::timeout_at(deadline, pending.next()).await {
-            Ok(Some((section, result))) => {
-                sections.insert(section, result);
-            }
-            Ok(None) => break,
-            Err(_elapsed) => break,
-        }
-    }
-    drop(pending);
-
-    for section in expected {
-        sections
-            .entry(section)
-            .or_insert(Err(SectionError::Timeout));
     }
 }
 

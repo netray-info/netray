@@ -1,61 +1,43 @@
 // Contract: lens must understand the real ifconfig-rs `/json?ip=` body.
-// The golden is written by `cargo test -p ifconfig-rs --lib contract_golden`
-// (UPDATE_GOLDEN=1 regenerates it).
+// The golden is written by `cargo test -p netray-ip --lib contract_golden`
+// (UPDATE_GOLDEN=1 regenerates it). The IP section comes from `netray_ip`'s `golden_module`
+// through the registry; the address reaches it from the DNS section's result.
 
-use lens::backends::ip::check_ip;
+mod common;
 
-fn public_or_documentation(ip: std::net::IpAddr) -> bool {
-    match netray_common::target_policy::refusal_reason(ip) {
-        None => true,
-        Some(r) => r.starts_with("documentation"),
-    }
-}
+use std::time::Duration;
 
-const GOLDEN: &str = include_str!("../../../tests/fixtures/contracts/ifconfig-json.json");
+use common::{golden, ip_golden, run_ip};
+use lens::modules::BackendExtra;
 
 #[tokio::test]
-async fn check_ip_reads_real_ifconfig_json_body() {
-    let golden: serde_json::Value = serde_json::from_str(GOLDEN).unwrap();
-    let want_type = golden["network"]["type"].as_str().unwrap().to_string();
-    let want_org = golden["network"]["org"].as_str().unwrap().to_string();
+async fn ip_module_reads_real_ifconfig_json_body() {
+    let body: serde_json::Value = serde_json::from_str(&golden("ifconfig-json.json")).unwrap();
+    let want_type = body["network"]["type"].as_str().unwrap().to_string();
+    let want_org = body["network"]["org"].as_str().unwrap().to_string();
     let want_geo = format!(
         "{}, {}",
-        golden["location"]["city"].as_str().unwrap(),
-        golden["location"]["country"].as_str().unwrap()
+        body["location"]["city"].as_str().unwrap(),
+        body["location"]["country"].as_str().unwrap()
     );
     assert_ne!(
         want_type, "residential",
         "golden must carry a meaningful type"
     );
 
-    let app = axum::Router::new().route(
-        "/json",
-        axum::routing::get(|| async {
-            (
-                [(axum::http::header::CONTENT_TYPE, "application/json")],
-                GOLDEN,
-            )
-        }),
-    );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-
-    let ip: std::net::IpAddr = "203.0.113.42".parse().unwrap();
-    let result = check_ip(
-        &reqwest::Client::new(),
-        &format!("http://{addr}"),
-        &[ip],
-        std::time::Duration::from_secs(5),
-        &Default::default(),
-        public_or_documentation,
+    // A public address: the module refuses documentation ranges.
+    let result = run_ip(
+        ip_golden("ifconfig-json.json"),
+        Duration::from_secs(5),
+        &["1.1.1.1"],
     )
     .await
-    .expect("check_ip");
+    .expect("ip section");
 
-    let info = &result.addresses[0];
+    let BackendExtra::Ip { addresses, .. } = result.extra else {
+        panic!("the IP section must carry the IP extras");
+    };
+    let info = &addresses[0];
     assert_eq!(
         info.network_type, want_type,
         "network_type must come from the golden"

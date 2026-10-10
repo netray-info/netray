@@ -45,6 +45,6 @@ jobs:
           docker create --name ifconfig-data ghcr.io/netray-info/ifconfig-rs-data:latest /noop
           docker cp ifconfig-data:/data/. "$RUNNER_TEMP/ifconfig-data"
           docker rm ifconfig-data
-          cp -n "$RUNNER_TEMP"/ifconfig-data/* crates/ifconfig-rs/data/
+          cp -n "$RUNNER_TEMP"/ifconfig-data/* crates/ip/data/
       - run: just adlc-setup
       - run: just check

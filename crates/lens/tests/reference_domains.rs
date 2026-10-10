@@ -23,18 +23,18 @@ fn live_tests_enabled() -> bool {
 
 fn live_state() -> AppState {
     let config = Config {
+        modules: Default::default(),
         server: ServerConfig {
             bind: ([0, 0, 0, 0], 8082).into(),
             metrics_bind: ([127, 0, 0, 1], 8090).into(),
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
+            resolve_timeout_ms: 2000,
             dns: lens::config::BackendConfig {
-                url: Some("https://dns.netray.info".to_string()),
                 timeout_ms: 20000,
                 ..Default::default()
             },
-            dns_servers: Vec::new(),
             tls: lens::config::BackendConfig {
                 url: Some("https://tls.netray.info".to_string()),
                 timeout_ms: 20000,
