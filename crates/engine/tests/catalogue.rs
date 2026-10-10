@@ -8,19 +8,59 @@ use netray_engine::catalogue::Catalogue;
 use netray_model::{CheckId, Protocol};
 
 const IDS: &[&str] = &[
-    "dns.dnssec", "dns.dnskey_algorithm", "dns.dnssec_rollover", "dns.caa", "dns.ns",
-    "dns.ns_lame", "dns.ns_delegation", "dns.cname_apex", "dns.https_svcb", "dns.ttl",
-    "tls.tls_reachable", "tls.chain_trusted", "tls.not_expired", "tls.hostname_match",
-    "tls.chain_complete", "tls.strong_signature", "tls.key_strength", "tls.expiry_window",
-    "tls.cert_lifetime", "tls.san_quality", "tls.aia_reachability", "tls.tls_version",
-    "tls.forward_secrecy", "tls.aead_cipher", "tls.ocsp_stapled", "tls.ct_logged",
-    "tls.caa_compliant", "tls.dane_valid", "tls.consistency", "tls.alpn_consistency",
+    "dns.dnssec",
+    "dns.dnskey_algorithm",
+    "dns.dnssec_rollover",
+    "dns.caa",
+    "dns.ns",
+    "dns.ns_lame",
+    "dns.ns_delegation",
+    "dns.cname_apex",
+    "dns.https_svcb",
+    "dns.ttl",
+    "tls.tls_reachable",
+    "tls.chain_trusted",
+    "tls.not_expired",
+    "tls.hostname_match",
+    "tls.chain_complete",
+    "tls.strong_signature",
+    "tls.key_strength",
+    "tls.expiry_window",
+    "tls.cert_lifetime",
+    "tls.san_quality",
+    "tls.aia_reachability",
+    "tls.tls_version",
+    "tls.forward_secrecy",
+    "tls.aead_cipher",
+    "tls.ocsp_stapled",
+    "tls.ct_logged",
+    "tls.caa_compliant",
+    "tls.dane_valid",
+    "tls.consistency",
+    "tls.alpn_consistency",
     "tls.ech_advertised",
-    "http.https_redirect", "http.hsts", "http.cors", "http.cookie_secure", "http.csp",
-    "http.x_frame_options", "http.x_content_type_options", "http.referrer_policy",
-    "http.permissions_policy", "http.deprecated_headers", "http.info_leakage", "http.caching",
-    "email.mx", "email.spf", "email.dkim", "email.dmarc", "email.mta_sts", "email.tls_rpt",
-    "email.bimi", "email.dane", "email.dnsbl", "email.fcrdns",
+    "http.https_redirect",
+    "http.hsts",
+    "http.cors",
+    "http.cookie_secure",
+    "http.csp",
+    "http.x_frame_options",
+    "http.x_content_type_options",
+    "http.referrer_policy",
+    "http.permissions_policy",
+    "http.deprecated_headers",
+    "http.info_leakage",
+    "http.caching",
+    "email.mx",
+    "email.spf",
+    "email.dkim",
+    "email.dmarc",
+    "email.mta_sts",
+    "email.tls_rpt",
+    "email.bimi",
+    "email.dane",
+    "email.dnsbl",
+    "email.fcrdns",
     "ip.reputation",
 ];
 
@@ -46,7 +86,11 @@ fn embedded_catalogue_holds_the_54_checks_of_the_sdd() {
         let id = e.id.to_string();
         assert!(seen.insert(id.clone()), "duplicate id {id}");
         assert_eq!(e.id.protocol(), e.protocol, "{id}: prefix vs protocol");
-        assert!(!e.short.is_empty() && e.short.chars().count() <= 8, "{id}: short {:?}", e.short);
+        assert!(
+            !e.short.is_empty() && e.short.chars().count() <= 8,
+            "{id}: short {:?}",
+            e.short
+        );
         for (name, v) in [
             ("title", &e.title),
             ("finding", &e.finding),
@@ -70,7 +114,9 @@ fn embedded_catalogue_holds_the_54_checks_of_the_sdd() {
 }
 
 fn entry(id: &str, short: &str, impact: Option<&str>, owner: &str) -> String {
-    let impact = impact.map(|i| format!("impact = \"{i}\"\n")).unwrap_or_default();
+    let impact = impact
+        .map(|i| format!("impact = \"{i}\"\n"))
+        .unwrap_or_default();
     format!(
         "[[check]]\nid = \"{id}\"\nprotocol = \"tls\"\ntitle = \"Chain trusted\"\n\
          finding = \"The chain does not validate.\"\n{impact}fix_hint = \"Install the intermediate.\"\n\
@@ -81,20 +127,32 @@ fn entry(id: &str, short: &str, impact: Option<&str>, owner: &str) -> String {
 
 #[test]
 fn from_toml_accepts_a_valid_single_entry() {
-    let cat = Catalogue::from_toml(&entry("tls.chain_trusted", "chain", Some("Browsers warn."), "web_server"))
-        .expect("valid fixture");
+    let cat = Catalogue::from_toml(&entry(
+        "tls.chain_trusted",
+        "chain",
+        Some("Browsers warn."),
+        "web_server",
+    ))
+    .expect("valid fixture");
     assert_eq!(cat.entries().len(), 1);
-    assert!(cat.get(&CheckId::parse("tls.chain_trusted").unwrap()).is_some());
+    assert!(
+        cat.get(&CheckId::parse("tls.chain_trusted").unwrap())
+            .is_some()
+    );
 }
 
 #[test]
 fn from_toml_refuses_malformed_entries_naming_the_id() {
     let long = entry("tls.chain_trusted", "123456789", Some("x"), "web_server");
-    let msg = Catalogue::from_toml(&long).expect_err("9-char short").to_string();
+    let msg = Catalogue::from_toml(&long)
+        .expect_err("9-char short")
+        .to_string();
     assert!(msg.contains("tls.chain_trusted"), "{msg}");
 
     let missing = entry("tls.chain_trusted", "chain", None, "web_server");
-    let msg = Catalogue::from_toml(&missing).expect_err("missing impact").to_string();
+    let msg = Catalogue::from_toml(&missing)
+        .expect_err("missing impact")
+        .to_string();
     assert!(msg.contains("tls.chain_trusted"), "{msg}");
 
     let dup = format!(
@@ -102,7 +160,9 @@ fn from_toml_refuses_malformed_entries_naming_the_id() {
         entry("tls.chain_trusted", "chain", Some("x"), "web_server"),
         entry("tls.chain_trusted", "chain", Some("x"), "web_server")
     );
-    let msg = Catalogue::from_toml(&dup).expect_err("duplicate").to_string();
+    let msg = Catalogue::from_toml(&dup)
+        .expect_err("duplicate")
+        .to_string();
     assert!(msg.contains("tls.chain_trusted"), "{msg}");
 
     let owner = entry("tls.chain_trusted", "chain", Some("x"), "nobody");
