@@ -121,3 +121,28 @@ RED (ea02272): the new and rewired tests failed against the missing module API; 
 ### Behavioural verification
 
 `just adlc-verify` green; `tests/fixtures/contracts/` unchanged; `test_env_prefixes.sh` refuses `BEACON__SERVER__BIND` and `BEACON_CONFIG` naming `NETRAY_EMAIL_`; `email_in_process.rs` sees the request's DKIM selectors in the module.
+
+## Phase 3 — IP module
+
+### API contract (fixed before the test writers)
+
+- `netray_ip`: `ModuleConfig` (`deny_unknown_fields`) with ifconfig-rs's data path keys (`geoip_city_db`, `geoip_asn_db`, `user_agent_regexes`, `tor_exit_nodes`, `feodo_botnet_ips`, `cins_army_ips`, `cloud_provider_ranges`, `vpn_ranges`, `datacenter_ranges`, `bot_ranges`, `spamhaus_drop`, `asn_patterns`, `asn_info`) — same names, same load semantics (city, ASN, user-agent regexes refuse; the others warn); `IpModule::new(ModuleConfig) -> Result<IpModule, _>` is `async` (loads `EnrichmentContext`); `IpModule::reload(&self)` reloads the data (`ArcSwap`, as ifconfig-rs's SIGHUP); `impl Module` with ids `ip.<v1 name>`; `run()` samples up to four IPv4 and four IPv6 public addresses from `Facts.a`/`aaaa` (sorted, `is_allowed_target`), looks each up in-process (`get_ifconfig`, no reverse DNS), translates.
+- `translate(lookups: &[(IpAddr, Result<Ifconfig, String>)], total_public: usize) -> SectionOutcome` (pure, moved from `crates/lens/src/backends/ip.rs`: reputation check, geo, headline, sampling note; a failed lookup → `Incomplete`; no public address → `NotApplicable`).
+- Feature `testing`: `testing::golden_module(contract_json: &str) -> Box<dyn Module>` (every sampled address answers the decoded golden `Ifconfig`).
+- The per-target limiter of ifconfig-rs's route is not carried over: it protects the ifconfig service, and an in-process lookup reaches no target.
+- lens: the adapter fills `Facts.a`/`aaaa` from the DNS section's resolved addresses (wave 2 as today); IP presentation → `BackendExtra::Ip`; `[backends.ip] url` refused.
+- `crates/netray`: `lens_registry` builds `IpModule` from `[modules.ip]` and keeps a handle; on SIGHUP it calls `reload()`.
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R9: crates/ip is netray-ip (data/ moved), NETRAY_IP_ / NETRAY_IP_CONFIG, IFCONFIG_ refused; data image, no-data check, paths, docs follow | open | tests/repo/test_env_prefixes.sh, test_image_data.sh |
+| C2 | R10: ModuleConfig with the data paths, same load semantics, --check-config loads them with a startup_rejects row; Module samples 4+4 sorted public addresses from Facts; translate moved; golden_module; SIGHUP reload | open | crates/ip/tests/module.rs, tests/repo/test_check_config.sh |
+| C3 | R11: lens takes IP from the registry with Facts from the DNS backend; backends/ip.rs and [backends.ip] url gone; goldens unchanged | open | crates/lens/tests/*.rs |
+| C4 | ifconfig-json.json translated equals the IP section of its full-output golden; 9 public + 2 private → 4 IPv4 + 4 IPv6 public sorted | open | crates/ip/tests/module.rs |
+| C5 | [modules.ip] geoip_city_db missing → --check-config and startup refuse; feodo_botnet_ips missing → both start with a warning | open | tests/repo/test_check_config.sh |
+| C6 | IFCONFIG_CONFIG set → netray ip refused naming NETRAY_IP_CONFIG | open | tests/repo/test_env_prefixes.sh |
+| C7 | the release image carries no data file | open | tests/repo/test_image_data.sh |
+| C8 | data file replaced + reload → the next lookup uses the new data | open | crates/ip/tests/module.rs |
+| C9 | full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
