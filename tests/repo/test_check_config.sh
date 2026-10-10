@@ -227,6 +227,15 @@ startup_rc=$?
 [ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with missing GeoIP files did not refuse (rc $startup_rc)"
 grep -qF 'geoip_city_db' <<<"$startup_out" || fail "lens: startup refusal does not name geoip_city_db ($startup_out)"
 
+# A GeoIP file that exists but does not parse: startup refuses and names the key too.
+: >"$tmp/empty-city.mmdb"; : >"$tmp/empty-asn.mmdb"
+ipbad="$tmp/lens.ipbad.toml"
+{ cat "$lens_nodata"; printf '\n[modules.ip]\ngeoip_city_db = "%s"\ngeoip_asn_db = "%s"\n' "$tmp/empty-city.mmdb" "$tmp/empty-asn.mmdb"; } >"$ipbad"
+startup_out=$(perl -e 'alarm 20; exec @ARGV' "$bin" lens "$ipbad" 2>&1 </dev/null)
+startup_rc=$?
+[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with an unparsable GeoIP file did not refuse (rc $startup_rc)"
+grep -qF 'geoip_city_db' <<<"$startup_out" || fail "lens: unparsable GeoIP refusal does not name geoip_city_db ($startup_out)"
+
 # V2 Phase 3: an unconfigured section is off, and --check-config says so (exit stays 0).
 run_check lens "$lens_nodata"
 [ "$rc" -eq 0 ] || fail "lens: config without [modules.ip] exited $rc, expected 0 ($out)"
