@@ -74,3 +74,25 @@ $ SPECTRA__SERVER__BIND=127.0.0.1:1 netray http crates/http/spectra.dev.toml
 SPECTRA__SERVER__BIND is set: these variables are now NETRAY_HTTP_* (config file: NETRAY_HTTP_CONFIG)
 ```
 `just adlc-verify` green; `tests/fixtures/contracts/` unchanged.
+
+## Phase 2 — Email module
+
+### API contract (fixed before the test writers)
+
+- `netray_engine::SectionOutcome` gains `TimedOut` (a module whose own deadline fired; lens renders it as its V1 timeout). Phase 6's engine uses it for overruns too.
+- `netray_email`: `ModuleConfig` (`deny_unknown_fields`; sections `dns`, `dnsbl`, `http`, `dkim`, `backends` (the enrichment `ip_url`) and `inspections` (`max_concurrent`) with beacon's key names and defaults); `EmailModule::new(ModuleConfig) -> Result<EmailModule, _>` is `async` (beacon's resolvers); `impl Module` with ids `email.<v1 name>`; `translate(&[SseEvent]) -> SectionOutcome` (pure, moved from `crates/lens/src/backends/email.rs`: a `skipped` summary → `TimedOut`, otherwise `Measured { checks, presentation }`); feature `testing`: `testing::golden_module(contract_sse: &str) -> Box<dyn Module>` (parses the `data:` lines of a `beacon-*.sse` golden).
+- The module passes `ctx.options.dkim_selectors` to `run_all_checks`.
+- lens: the adapter becomes generic over the protocol (`ModuleSection` for http and email, `BackendExtra::Email` from presentation); `[backends.email] url` refused; `TimedOut` → lens's timeout.
+- `crates/netray`: `lens_registry` builds `EmailModule` from `[modules.email]` too; unknown tables still refused.
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6: crates/email is netray-email, NETRAY_EMAIL_ / NETRAY_EMAIL_CONFIG, BEACON_ refused naming the new prefix; paths, checks, docs follow | open | tests/repo/test_env_prefixes.sh |
+| C2 | R7: ModuleConfig, Module (email.<v1>) running run_all_checks in-process with the request's selectors, translate moved from lens, golden_module, inspection semaphore kept | open | crates/email/tests/module.rs |
+| C3 | R8: lens takes email from the registry; backends/email.rs and [backends.email] url gone; full-output goldens unchanged incl. the three beacon-only | open | crates/lens/tests/*.rs |
+| C4 | BEACON__SERVER__BIND or BEACON_CONFIG set → netray email refused naming NETRAY_EMAIL_ | open | tests/repo/test_env_prefixes.sh |
+| C5 | each beacon-*.sse translated equals the email section of its full-output golden (Null MX, no MX, timeout, partial, cross-validation) | open | crates/email/tests/module.rs |
+| C6 | DKIM selectors on a lens request reach the email module | open | crates/lens/tests/email_in_process.rs |
+| C7 | full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
