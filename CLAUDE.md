@@ -41,6 +41,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - The gate's clippy runs without `--all-targets`; a narrower command with `--all-targets` hits old test-code lints the gate never sees.
 - `metrics_util` 0.20's `Snapshotter::snapshot()` swaps every value to 0 on read: read once, accumulate across reads, or render a `PrometheusRecorder`.
 - A `describe_*!` alone renders no HELP line: also register the metric at startup.
+- A service moved in-process keeps every check its route applied to lens's calls (input validation, per-target limits, policy); only per-client limits go.
+- hickory 0.26 `Name::eq` compares `is_fqdn`: a live query name without the trailing dot never equals a wire record name; never compare owners against the query name.
 - `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.
 - The `ifconfig-rs-data` image also carries tracked files (`asn_patterns.toml`): never copy it over `crates/ip/data/`.
 - `adlc feature start` branches from `origin/main`: with unpushed commits on local `main`, fast-forward the new feature branch to `main` before writing the spec.
