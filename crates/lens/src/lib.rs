@@ -6,6 +6,7 @@ pub mod check;
 pub mod config;
 pub mod error;
 pub mod input;
+pub mod metrics;
 pub mod og;
 pub mod routes;
 pub mod scoring;
@@ -189,7 +190,14 @@ pub async fn run(config_arg: Option<String>) {
         "metrics server starting — ensure this address is NOT publicly reachable"
     );
     tokio::spawn(async move {
-        if let Err(e) = netray_common::server::serve_metrics(metrics_addr, metrics_shutdown).await {
+        if let Err(e) = netray_common::server::serve_metrics_with(
+            metrics_addr,
+            metrics_shutdown,
+            crate::metrics::HISTOGRAM_BUCKETS,
+            crate::metrics::init_zero_series,
+        )
+        .await
+        {
             tracing::error!(error = %e, "metrics server failed");
         }
     });

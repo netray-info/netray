@@ -101,6 +101,10 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 tokio-rustls = "0.26"
 
 [[test]]
+name = "metrics_recorder"
+required-features = ["prometheus"]
+
+[[test]]
 name = "fetch"
 required-features = ["fetch"]
 
