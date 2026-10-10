@@ -638,9 +638,9 @@ Three fields. No ruleset selection, no weight overrides, no threshold tuning —
 Environment variable override follows the existing convention:
 
 ```
-TLSIGHT_QUALITY__ENABLED=true
-TLSIGHT_QUALITY__HTTP_CHECK_TIMEOUT_SECS=5
-TLSIGHT_QUALITY__SKIP_HTTP_CHECKS=false
+NETRAY_TLS_QUALITY__ENABLED=true
+NETRAY_TLS_QUALITY__HTTP_CHECK_TIMEOUT_SECS=5
+NETRAY_TLS_QUALITY__SKIP_HTTP_CHECKS=false
 ```
 
 Hard caps:

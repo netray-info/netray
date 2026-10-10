@@ -76,6 +76,7 @@ xxhash-rust = { version = "0.8", features = ["xxh3"] }
 netray-http = { path = "../http", features = ["testing"] }
 netray-email = { path = "../email", features = ["testing"] }
 netray-ip = { path = "../ip", features = ["testing"] }
+netray-tls = { path = "../tls", features = ["testing"] }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 serde_json = { workspace = true }

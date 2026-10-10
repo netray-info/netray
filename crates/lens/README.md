@@ -240,7 +240,7 @@ Each backend returns a set of named checks. Every check has a status: `pass`, `w
 
 | Section | Weight | Notes |
 |---|---|---|
-| TLS   | 35% | Certificate validity and transport security are foundational |
+| TLS   | 35% | Certificate validity and transport security are foundational (runs in-process as the `netray-tls` module, configured in `[modules.tls]`) |
 | DNS   | 20% | DNS infrastructure health (DNSSEC, CAA, NS delegation) |
 | HTTP  | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (runs in-process as the `netray-http` module, enabled by `[backends.http]`) |
 | Email | 15% | Email authentication (SPF, DKIM, DMARC) and receiving infrastructure (runs in-process as the `netray-email` module, enabled by `[backends.email]`) |
@@ -310,7 +310,7 @@ These conditions force an **F** regardless of the numeric score:
 | Event | When emitted | Key fields |
 |---|---|---|
 | `dns` | After DNS backend | `status`, `headline`, `checks`, `detail_url` |
-| `tls` | After TLS backend | `status`, `headline`, `checks`, `detail_url` |
+| `tls` | After TLS module | `status`, `headline`, `checks`, `detail_url` |
 | `http` | After HTTP backend (optional) | `status`, `headline`, `checks`, `detail_url` |
 | `email` | After email backend (optional) | `status`, `grade`, `buckets`, `headline`, `detail_url` |
 | `ip` | After IP backend | `status`, `headline`, `checks`, `addresses`, `detail_url` |
@@ -416,9 +416,13 @@ metrics_bind = "127.0.0.1:9090"
 
 [backends]
 dns_url = "https://dns.netray.info"
-tls_url = "https://tls.netray.info"
 ip_url  = "https://ip.netray.info"
 # backend_timeout_secs = 20
+
+# The TLS section runs in-process; `[backends.tls] url` is refused.
+# [backends.tls]
+# timeout_ms = 15000
+# [modules.tls]                      # optional, see crates/tls
 
 [cache]
 enabled = true

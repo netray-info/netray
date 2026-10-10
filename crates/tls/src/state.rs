@@ -77,6 +77,24 @@ impl AppState {
             config: Arc::new(ArcSwap::from_pointee(config.clone())),
         }
     }
+
+    /// Initializes the DNS resolver, used for A/AAAA resolution and for CAA/DANE lookups; a
+    /// failure leaves it unset and hostname inspection failing.
+    pub async fn init_dns_resolver(&mut self, config: &Config) {
+        match DnsResolver::new(config.dns.timeout_secs).await {
+            Ok(resolver) => {
+                self.dns_resolver = Some(Arc::new(resolver));
+                tracing::info!(
+                    check_caa = config.validation.check_caa,
+                    check_dane = config.validation.check_dane,
+                    "DNS resolver initialized"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to initialize DNS resolver; hostname inspection will fail");
+            }
+        }
+    }
 }
 
 /// Load all `*.pem` and `*.crt` files from a directory into the root store.

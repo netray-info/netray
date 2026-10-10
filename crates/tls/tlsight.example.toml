@@ -57,7 +57,7 @@ check_ct = false
 
 [telemetry]
 # Log output format: "text" (default, human-readable) or "json" (structured, for log aggregators).
-# Override via TLSIGHT_TELEMETRY__LOG_FORMAT=json
+# Override via NETRAY_TLS_TELEMETRY__LOG_FORMAT=json
 # log_format = "text"
 
 # Set enabled = true and configure otlp_endpoint to export traces via OTLP.

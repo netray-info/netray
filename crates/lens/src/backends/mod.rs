@@ -1,6 +1,5 @@
 pub mod dns;
 pub mod sse;
-pub mod tls;
 
 use std::collections::HashMap;
 use std::net::IpAddr;

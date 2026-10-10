@@ -7,6 +7,7 @@ description = "Web-based TLS certificate inspection and diagnostics service"
 
 [dependencies]
 netray-model = { workspace = true }
+netray-engine = { workspace = true }
 # TLS
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 rustls-pki-types = "1"
@@ -72,8 +73,16 @@ percent-encoding = { workspace = true }
 # HTTP client (readiness probe to enrichment service)
 reqwest = { workspace = true, features = ["json", "rustls", "webpki-roots"] }
 
+[features]
+testing = []
+
+[[test]]
+name = "module"
+path = "tests/module.rs"
+required-features = ["testing"]
 
 [dev-dependencies]
+toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 rcgen = "0.14"

@@ -13,6 +13,7 @@ use utoipa::ToSchema;
 
 use utoipa::OpenApi;
 
+use crate::config::Config;
 use crate::error::{AppError, ErrorResponse};
 use crate::input::{self, Target};
 use crate::security::rate_limit::select_representative_ips;
@@ -26,25 +27,41 @@ use netray_common::enrichment::{CloudInfo, IpInfo};
 // Response types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct InspectResponse {
     pub request_id: String,
     pub hostname: String,
-    pub input_mode: &'static str,
+    #[serde(deserialize_with = "deserialize_input_mode")]
+    #[schema(value_type = String)]
+    pub input_mode: InputMode,
     pub summary: validate::Summary,
     pub ports: Vec<PortResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dns: Option<DnsContext>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<crate::quality::QualityResult>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skipped_ips: Vec<String>,
     pub duration_ms: u64,
 }
 
-#[derive(Debug, Serialize, ToSchema)]
+/// `"hostname"` or `"ip"`. An alias, so serde does not borrow the field from its input.
+pub type InputMode = &'static str;
+
+fn deserialize_input_mode<'de, D: serde::Deserializer<'de>>(d: D) -> Result<InputMode, D::Error> {
+    match String::deserialize(d)?.as_str() {
+        "hostname" => Ok("hostname"),
+        "ip" => Ok("ip"),
+        other => Err(serde::de::Error::unknown_variant(
+            other,
+            &["hostname", "ip"],
+        )),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PortResult {
     pub port: u16,
     pub ips: Vec<tls::IpInspectionResult>,
@@ -60,37 +77,37 @@ pub struct PortResult {
     pub error: Option<tls::InspectionError>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct DnsContext {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub caa: Option<CaaInfo>,
     pub resolved_ips: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CaaInfo {
     pub records: Vec<String>,
     pub issuer_allowed: Option<bool>,
     pub issuewild_present: bool,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TlsaInfo {
     pub records: Vec<String>,
     pub dnssec_signed: bool,
     pub dane_valid: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ConsistencyResult {
     pub certificates_match: bool,
     pub tls_versions_match: bool,
     pub cipher_suites_match: bool,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mismatches: Vec<ConsistencyMismatch>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ConsistencyMismatch {
     pub field: String,
     /// Per-IP values, keyed by IP address string.
@@ -450,11 +467,6 @@ async fn do_inspect(
         Target::Hostname(h) => h.clone(),
         Target::Ip(ip) => ip.to_string(),
     };
-    let input_mode = match &parsed.target {
-        Target::Hostname(_) => "hostname",
-        Target::Ip(_) => "ip",
-    };
-
     let mut warnings = Vec::new();
     let mut skipped_ips = Vec::new();
 
@@ -465,43 +477,20 @@ async fn do_inspect(
         "inspect start"
     );
 
-    // Resolve IPs via mhost (same resolver used for CAA/TLSA — unified DNS path).
-    // Resolved IPs are re-checked against target_policy below (DNS rebinding protection).
-    let ips = match &parsed.target {
-        Target::Hostname(h) => {
-            let resolver = state.dns_resolver.as_ref().ok_or_else(|| {
-                AppError::DnsResolutionFailed("DNS resolver not available".to_string())
-            })?;
-            resolve_hostname(h, resolver).await?
-        }
-        Target::Ip(ip) => vec![*ip],
-    };
-
-    // Filter blocked IPs
-    let allow_blocked = config.limits.allow_blocked_targets;
-    let allowed_ips: Vec<IpAddr> = ips
-        .into_iter()
-        .filter(
-            |ip| match target_policy::check_allowed_with_policy(ip, allow_blocked) {
-                Ok(()) => true,
-                Err(reason) => {
-                    warnings.push(format!("{ip}: blocked ({reason})"));
-                    false
-                }
-            },
-        )
-        .collect();
-
-    if allowed_ips.is_empty() {
+    let ips = resolve_target(&state, &parsed.target).await?;
+    let allowed_ips = filter_allowed(
+        ips,
+        config.limits.allow_blocked_targets,
+        &hostname_str,
+        &mut warnings,
+    )
+    .inspect_err(|_| {
         tracing::warn!(
             client_ip = %client_ip,
             target = %hostname_str,
             "blocked target: all resolved IPs in blocked ranges"
         );
-        return Err(AppError::BlockedTarget(format!(
-            "all resolved IPs for {hostname_str} are in blocked ranges"
-        )));
-    }
+    })?;
 
     // Cap-and-warn: compute cost and reduce IPs if over budget
     let full_cost = parsed.ports.len() as u32 * allowed_ips.len() as u32;
@@ -514,8 +503,8 @@ async fn do_inspect(
     } else {
         // Try with reduced IPs
         let budget = state.rate_limiter.remaining_budget(client_ip);
-        let ip_budget = (budget / parsed.ports.len() as u32).max(1) as usize;
-        let (selected, skipped) = select_representative_ips(&allowed_ips, ip_budget);
+        let (selected, skipped) =
+            cap_to_budget(&allowed_ips, parsed.ports.len(), budget, &mut warnings);
 
         if selected.is_empty() {
             // Even 1 IP doesn't fit — hard reject
@@ -545,16 +534,147 @@ async fn do_inspect(
             return Err(e);
         }
 
-        if !skipped.is_empty() {
-            warnings.push(format!(
-                "rate limit: inspecting {} of {} IPs to stay within budget",
-                selected.len(),
-                selected.len() + skipped.len()
-            ));
-            skipped_ips = skipped.iter().map(|ip| ip.to_string()).collect();
-        }
-
+        skipped_ips = skipped;
         selected
+    };
+
+    let resp = inspect(
+        &state,
+        &config,
+        InspectRequest {
+            parsed,
+            ips: inspected_ips,
+            warnings,
+            skipped_ips,
+            request_id,
+            start: request_start,
+        },
+    )
+    .await?;
+
+    // Extract soonest-expiring leaf cert for response headers
+    let cert_expiry_info: Option<(String, i64)> = resp
+        .ports
+        .iter()
+        .flat_map(|pr| pr.ips.iter())
+        .filter(|r| r.error.is_none())
+        .filter_map(|r| r.chain.as_ref())
+        .flat_map(|chain| chain.iter())
+        .filter(|c| c.position == "leaf" || c.position == "leaf_self_signed")
+        .min_by_key(|c| c.days_remaining)
+        .map(|c| (c.not_after.clone(), c.days_remaining));
+
+    let mut response = Json(resp).into_response();
+
+    if let Some((expiry, days)) = cert_expiry_info {
+        if let Ok(v) = HeaderValue::from_str(&expiry) {
+            response.headers_mut().insert("x-cert-expiry", v);
+        }
+        if let Ok(v) = HeaderValue::from_str(&days.to_string()) {
+            response.headers_mut().insert("x-cert-days-remaining", v);
+        }
+    }
+
+    Ok(response)
+}
+
+/// The parsed input, the addresses to inspect (after the target policy and any rate-limit
+/// cap) and the warnings so far: what an inspection starts from.
+pub struct InspectRequest {
+    pub parsed: input::ParsedInput,
+    pub ips: Vec<IpAddr>,
+    pub warnings: Vec<String>,
+    pub skipped_ips: Vec<String>,
+    pub request_id: String,
+    pub start: Instant,
+}
+
+/// Resolves the target to its addresses; an IP target is its own address.
+pub async fn resolve_target(state: &AppState, target: &Target) -> Result<Vec<IpAddr>, AppError> {
+    // Resolve IPs via mhost (same resolver used for CAA/TLSA — unified DNS path).
+    // Resolved IPs are re-checked against target_policy (DNS rebinding protection).
+    match target {
+        Target::Hostname(h) => {
+            let resolver = state.dns_resolver.as_ref().ok_or_else(|| {
+                AppError::DnsResolutionFailed("DNS resolver not available".to_string())
+            })?;
+            resolve_hostname(h, resolver).await
+        }
+        Target::Ip(ip) => Ok(vec![*ip]),
+    }
+}
+
+/// Drops the addresses the target policy blocks, with a warning each; none left is
+/// `BlockedTarget`.
+pub fn filter_allowed(
+    ips: Vec<IpAddr>,
+    allow_blocked: bool,
+    hostname: &str,
+    warnings: &mut Vec<String>,
+) -> Result<Vec<IpAddr>, AppError> {
+    let allowed_ips: Vec<IpAddr> = ips
+        .into_iter()
+        .filter(
+            |ip| match target_policy::check_allowed_with_policy(ip, allow_blocked) {
+                Ok(()) => true,
+                Err(reason) => {
+                    warnings.push(format!("{ip}: blocked ({reason})"));
+                    false
+                }
+            },
+        )
+        .collect();
+
+    if allowed_ips.is_empty() {
+        return Err(AppError::BlockedTarget(format!(
+            "all resolved IPs for {hostname} are in blocked ranges"
+        )));
+    }
+    Ok(allowed_ips)
+}
+
+/// The addresses `budget` handshakes over `ports` ports cover (at least one): all of them if
+/// they fit, else representative ones with the cap-and-warn warning, and the skipped ones.
+pub fn cap_to_budget(
+    ips: &[IpAddr],
+    ports: usize,
+    budget: u32,
+    warnings: &mut Vec<String>,
+) -> (Vec<IpAddr>, Vec<String>) {
+    let ip_budget = (budget / ports as u32).max(1) as usize;
+    let (selected, skipped) = select_representative_ips(ips, ip_budget);
+    if !skipped.is_empty() {
+        warnings.push(format!(
+            "rate limit: inspecting {} of {} IPs to stay within budget",
+            selected.len(),
+            selected.len() + skipped.len()
+        ));
+    }
+    (selected, skipped.iter().map(|ip| ip.to_string()).collect())
+}
+
+/// The inspection of `req.ips`: enrichment, CAA/TLSA/ECH, per-port handshakes, consistency,
+/// validation, quality and the assembled response.
+pub async fn inspect(
+    state: &AppState,
+    config: &Config,
+    req: InspectRequest,
+) -> Result<InspectResponse, AppError> {
+    let InspectRequest {
+        parsed,
+        ips: inspected_ips,
+        mut warnings,
+        skipped_ips,
+        request_id,
+        start: request_start,
+    } = req;
+    let hostname_str = match &parsed.target {
+        Target::Hostname(h) => h.clone(),
+        Target::Ip(ip) => ip.to_string(),
+    };
+    let input_mode = match &parsed.target {
+        Target::Hostname(_) => "hostname",
+        Target::Ip(_) => "ip",
     };
 
     // IP input warning
@@ -911,18 +1031,7 @@ async fn do_inspect(
         "inspect complete"
     );
 
-    // Extract soonest-expiring leaf cert for response headers
-    let cert_expiry_info: Option<(String, i64)> = port_results
-        .iter()
-        .flat_map(|pr| pr.ips.iter())
-        .filter(|r| r.error.is_none())
-        .filter_map(|r| r.chain.as_ref())
-        .flat_map(|chain| chain.iter())
-        .filter(|c| c.position == "leaf" || c.position == "leaf_self_signed")
-        .min_by_key(|c| c.days_remaining)
-        .map(|c| (c.not_after.clone(), c.days_remaining));
-
-    let mut response = Json(InspectResponse {
+    Ok(InspectResponse {
         request_id,
         hostname: hostname_str,
         input_mode,
@@ -934,18 +1043,6 @@ async fn do_inspect(
         skipped_ips,
         duration_ms,
     })
-    .into_response();
-
-    if let Some((expiry, days)) = cert_expiry_info {
-        if let Ok(v) = HeaderValue::from_str(&expiry) {
-            response.headers_mut().insert("x-cert-expiry", v);
-        }
-        if let Ok(v) = HeaderValue::from_str(&days.to_string()) {
-            response.headers_mut().insert("x-cert-days-remaining", v);
-        }
-    }
-
-    Ok(response)
 }
 
 /// Map well-known STARTTLS ports to a protocol name.

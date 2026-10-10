@@ -5,7 +5,7 @@ use netray_common::fetch::{
 use netray_common::target_policy::is_allowed_target;
 use reqwest::header::{CONTENT_TYPE, HeaderValue};
 use reqwest::{Method, StatusCode};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use spki::AlgorithmIdentifierOwned;
 use std::net::IpAddr;
@@ -18,7 +18,7 @@ use x509_ocsp::{CertId, OcspRequest, Request, TbsRequest};
 use chrono::Utc;
 
 /// Result of a live OCSP revocation check via the AIA OCSP responder URL.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OcspRevocationResult {
     /// "good", "revoked", or "unknown"
     pub status: String,
@@ -193,7 +193,7 @@ fn parse_live_ocsp_response(
     }
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OcspInfo {
     pub stapled: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

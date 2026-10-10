@@ -77,3 +77,22 @@ G1: C1, C2, C4, C6, C7, C8 (netray-ip) · G2: C3, C5, C9 (lens and the binary, S
 - `crates/lens/src/modules.rs`: `Facts.a`/`aaaa` from `BackendContext.resolved_ips`; IP presentation → `BackendExtra::Ip`, `detail_url` as before.
 - `crates/lens/src/config.rs` refuses `backends.ip.url`; `state.rs` IP section from the registry; delete `backends/ip.rs` and its uses; lens dev/example configs; dev-dep `netray-ip` with `testing`.
 - `crates/netray`: `lens_registry` builds `IpModule` from `[modules.ip]`, keeps an `Arc` and reloads it on SIGHUP.
+
+## Phase 4 — TLS module
+
+## Groups
+
+G1: C1, C2, C4, C5, C6 (netray-tls) · G2: C3, C7 (lens and the binary). Orchestrator-written, the Phase 1 shape.
+
+## Plan
+
+### G1 — netray-tls
+- `crates/tls/src/config.rs`: refuse `TLSIGHT_`, load `NETRAY_TLS_`; `ModuleConfig` (limits subset incl. per-target, dns, validation, quality, backends.ip).
+- `crates/tls/src/routes.rs`: extract the inspection core of `do_inspect` into a pub async fn returning `InspectResponse`; the route keeps the per-client cap-and-warn and its headers/response.
+- `InspectResponse` and its parts derive `Deserialize` (`&'static str` fields become `String`/`Cow`).
+- `crates/tls/src/module.rs`: `translate` ported verbatim from `crates/lens/src/backends/tls.rs` (`NOT_TESTED_FROM_HERE` → `NotTested`); `TlsModule` (`async new`, `parse_input`, per-target limit before the target policy, handshake semaphore, core, translate).
+- `crates/tls/src/testing.rs`, exports, `run()` reads `NETRAY_TLS_CONFIG`; Cargo: feature `testing`, `[[test]] module`.
+
+### G2 — lens and the binary
+- `crates/lens/src/modules.rs`: TLS presentation → `BackendExtra::Tls`, `detail_url` as before; `config.rs` refuses `backends.tls.url`; `state.rs` TLS from the registry; delete `backends/tls.rs`; lens dev/example configs; dev-dep `netray-tls` with `testing`; justfile tls row crate dir.
+- `crates/netray`: `lens_registry` builds `TlsModule` from `[modules.tls]`.

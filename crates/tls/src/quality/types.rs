@@ -1,9 +1,9 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::validate::CheckStatus;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Category {
     Certificate,
@@ -11,7 +11,7 @@ pub enum Category {
     Configuration,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HealthCheck {
     pub id: String,
     pub category: Category,
@@ -20,7 +20,7 @@ pub struct HealthCheck {
     pub detail: String,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QualityResult {
     pub verdict: CheckStatus,
     pub checks: Vec<HealthCheck>,
@@ -30,13 +30,13 @@ pub struct QualityResult {
     pub https_redirect: Option<RedirectInfo>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PortQualityResult {
     pub verdict: CheckStatus,
     pub checks: Vec<HealthCheck>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct HstsInfo {
     pub present: bool,
     pub max_age: u64,
@@ -44,7 +44,7 @@ pub struct HstsInfo {
     pub preload: bool,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RedirectInfo {
     pub status: CheckStatus,
     #[serde(skip_serializing_if = "Option::is_none")]

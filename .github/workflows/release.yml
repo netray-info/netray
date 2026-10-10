@@ -73,7 +73,7 @@ jobs:
           rows=(
             "lens|lens.example.toml|LENS_SERVER__|-e LENS_SNAPSHOTS__DB_PATH=/tmp/snapshots.db"
             "dns|prism.example.toml|PRISM_SERVER__|"
-            "tls|tlsight.example.toml|TLSIGHT_SERVER__|-e TLSIGHT_VALIDATION__CUSTOM_CA_DIR=/tmp/custom_cas -v $cas:/tmp/custom_cas:ro"
+            "tls|tlsight.example.toml|NETRAY_TLS_SERVER__|-e NETRAY_TLS_VALIDATION__CUSTOM_CA_DIR=/tmp/custom_cas -v $cas:/tmp/custom_cas:ro"
             "http|spectra.example.toml|NETRAY_HTTP_SERVER__|"
             "email|beacon.toml|NETRAY_EMAIL_SERVER__|"
             "ip|ifconfig.example.toml|NETRAY_IP_SERVER__|"

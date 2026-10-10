@@ -471,6 +471,11 @@ impl Config {
                 "invalid configuration: backends.ip.url is no longer read; the IP section runs in-process, configure it in [modules.ip]".to_string(),
             ));
         }
+        if b.tls.url.is_some() {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.tls.url is no longer read; the TLS section runs in-process, configure it in [modules.tls]".to_string(),
+            ));
+        }
         let wave1_ms = b
             .dns
             .timeout_ms
@@ -512,10 +517,7 @@ mod tests {
                     ..Default::default()
                 },
                 dns_servers: Vec::new(),
-                tls: crate::config::BackendConfig {
-                    url: Some("http://localhost:8081".to_string()),
-                    ..Default::default()
-                },
+                tls: crate::config::BackendConfig::default(),
                 ip: crate::config::BackendConfig::default(),
                 http: None,
                 email: None,
@@ -684,6 +686,12 @@ mod tests {
     fn backends_ip_url_is_rejected() {
         let err = load_toml("[backends.ip]\nurl = \"http://ip.example.com\"\n").unwrap_err();
         assert!(err.to_string().contains("backends.ip.url"), "got: {err}");
+    }
+
+    #[test]
+    fn backends_tls_url_is_rejected() {
+        let err = load_toml("[backends.tls]\nurl = \"http://tls.example.com\"\n").unwrap_err();
+        assert!(err.to_string().contains("backends.tls.url"), "got: {err}");
     }
 
     #[test]

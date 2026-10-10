@@ -12,9 +12,22 @@ metrics_bind = "127.0.0.1:9095"
 url = "https://dns.netray.info"
 timeout_ms = 15000
 
+# The TLS section runs in-process (module `netray-tls`); `url` is refused.
 [backends.tls]
-url = "https://tls.netray.info"
 timeout_ms = 15000
+
+# [modules.tls]                      # optional; sections `limits`, `dns`, `validation`, `quality` and `backends`, see crates/tls
+#
+# [modules.tls.limits]
+# per_target_per_minute = 60
+# per_target_burst = 20
+# check_budget = 10                 # handshakes one check may spend; more addresses are sampled down
+#
+# [modules.tls.validation]
+# check_ct = true
+#
+# [modules.tls.backends.ip]
+# url = "https://ip.netray.info"     # enrichment for the inspected addresses
 
 # The IP section runs in-process (module `netray-ip`); `url` is refused.
 [backends.ip]

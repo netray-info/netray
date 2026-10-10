@@ -187,10 +187,36 @@ RED (3f339d2): the new and rewired tests failed against the missing module API; 
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R12: crates/tls is netray-tls, NETRAY_TLS_ / NETRAY_TLS_CONFIG, TLSIGHT_ refused naming the new prefix | open | tests/repo/test_env_prefixes.sh |
-| C2 | R13: core extracted and shared; tlsight's route responses unchanged; ModuleConfig; Module (tls.<v1>) with input parsing, per-target limit and handshake semaphore; translate moved; golden_module | open | crates/tls/tests/module.rs, crates/tls/tests/*.rs |
-| C3 | R14: lens takes TLS from the registry; backends/tls.rs and [backends.tls] url gone; goldens unchanged | open | crates/lens/tests/*.rs |
-| C4 | tlsight-inspect/not-tested/unreachable translated equal the TLS section of their full-output goldens | open | crates/tls/tests/module.rs |
-| C5 | TLSIGHT_CONFIG set → netray tls refused naming NETRAY_TLS_CONFIG | open | tests/repo/test_env_prefixes.sh |
-| C6 | a third run for one host over a per-target burst of 2 → Incomplete naming the limit; an invalid domain → Incomplete with tlsight's text | open | crates/tls/tests/module_limits.rs |
-| C7 | full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+| C1 | R12: crates/tls is netray-tls, NETRAY_TLS_ / NETRAY_TLS_CONFIG, TLSIGHT_ refused naming the new prefix | green | tests/repo/test_env_prefixes.sh |
+| C2 | R13: core extracted and shared; tlsight's route responses unchanged; ModuleConfig; Module (tls.<v1>) with input parsing, per-target limit and handshake semaphore; translate moved; golden_module | green | crates/tls/tests/module.rs, crates/tls/tests/*.rs |
+| C3 | R14: lens takes TLS from the registry; backends/tls.rs and [backends.tls] url gone; goldens unchanged | green | crates/lens/tests/*.rs |
+| C4 | tlsight-inspect/not-tested/unreachable translated equal the TLS section of their full-output goldens | green | crates/tls/tests/module.rs |
+| C5 | TLSIGHT_CONFIG set → netray tls refused naming NETRAY_TLS_CONFIG | green | tests/repo/test_env_prefixes.sh |
+| C6 | a third run for one host over a per-target burst of 2 → Incomplete naming the limit; an invalid domain → Incomplete with tlsight's text | green | crates/tls/tests/module_limits.rs |
+| C7 | full-output and lens_golden unchanged | green | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+
+RED (a5c39db): the new and rewired tests failed against the missing module API; the tls row of `test_env_prefixes.sh` on the `TLSIGHT_` loader.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| rename | 1 (general-purpose, mechanical) | sonnet | 92123 | 454 |
+| G1 netray-tls (core extracted from `do_inspect`) | 2 | opus (chosen up front: the extraction had to keep the route byte-identical) | 150645 | 496 |
+| G2 lens + binary | 3 | sonnet | 92163 | 415 |
+| reader repairs | 3 | opus | 54834 | 423 |
+
+### Reader
+
+| class | at | finding | outcome |
+|---|---|---|---|
+| BLOCKER | crates/tls/src/module.rs:89 | the module charged ports × every resolved address against per_target before the target policy and never reduced, so a host with more addresses than the burst (20) was refused on every run; 0.23.1 capped a visitor at 10 (tlsight's per_ip_burst with cap-and-warn) | repaired: policy first, then the route's reduction to `limits.check_budget` (default 10) with the same warning, shared as `routes::cap_to_budget`; the limiter is charged the reduced cost (one unit when everything is blocked); in-src unit tests |
+| AMENDMENT | crates/netray/src/main.rs:151 | a missing `[modules.tls]` ran on tlsight's defaults silently (`check_ct = false`, production has it on) | repaired: startup warning "modules.tls is not configured: TLS runs on tlsight's defaults (certificate transparency off)" |
+| NIT | crates/tls/src/routes.rs:50 | `/api-docs/openapi.json` showed `input_mode` as a `str` schema reference | repaired: `#[schema(value_type = String)]`; the document equals HEAD's (dumped and diffed) |
+| NIT | crates/tls/src/module.rs:118 | an empty request id reaches enrichment; ifconfig mints its own | accepted: log correlation only; `RunContext` carries no request id in 1a |
+| DEFERRED | crates/tls/src/module.rs:59 | the per-target limiter and the handshake semaphore exist once per process: lens and `netray tls` each have their own until the cutover (S1, P13) | for the SDD |
+| DEFERRED | crates/tls/src/module.rs:90 | a visitor's handshake budget now comes from lens's check limit (10/min, burst 3) × `check_budget` | for the SDD (S18 admission) |
+
+### Behavioural verification
+
+`just adlc-verify` green; `tests/fixtures/contracts/` unchanged; tlsight's `/api/inspect` body, `x-cert-*` headers and `/api-docs/openapi.json` unchanged (reader and coder compared them against HEAD).

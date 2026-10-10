@@ -74,11 +74,13 @@ tlsight/
     ccadb_caa_identifiers.csv     # gitignored; fetched from CCADB AllCAAIdentifiersReportCSVV2
   src/
     main.rs                       # entry point, axum server, graceful shutdown
-    config.rs                     # netray_common::config::load: TOML + env vars (TLSIGHT_ prefix), unknown keys rejected
+    config.rs                     # netray_common::config::load: TOML + env vars (NETRAY_TLS_ prefix; TLSIGHT_ refused), unknown keys rejected
     error.rs                      # thiserror AppError enum -> HTTP status + error codes
     input.rs                      # hostname[:port,...] input parsing and validation
     state.rs                      # AppState (config, rate limiter, dns resolver, trust store)
-    routes.rs                     # axum router, endpoint handlers
+    routes.rs                     # axum router, endpoint handlers; the inspection core (`resolve_target`, `filter_allowed`, `inspect`) shared with the module
+    module.rs                     # TlsModule (engine module, ModuleConfig from [modules.tls]) and translate (InspectResponse -> tls.<id> checks)
+    testing.rs                    # feature `testing`: golden_module(contract_json)
     scalar_docs.html              # Scalar API docs UI template
     enrichment.rs                 # IP enrichment client (geo, ASN, rDNS via ip_api_url)
     tls/
@@ -156,7 +158,7 @@ tlsight/
 - **Per-request concurrency**: `JoinSet` + `Arc<Semaphore>` bounds concurrent handshakes per request (`max_concurrent_handshakes`). Ports run concurrently, not sequentially.
 - **Cap-and-warn rate limiting**: When multi-IP fan-out exceeds rate budget, reduce inspected IPs (prefer one v4 + one v6) instead of rejecting. Response includes `warnings` and `skipped_ips`.
 - **Trust store**: `RootCertStore` built at startup from `webpki-roots` (Mozilla bundle) + all `*.pem` and `*.crt` files from `custom_ca_dir` (if configured). Supports private CAs without rebuilds.
-- **Config precedence**: CLI arg / `TLSIGHT_CONFIG` env var > TOML file > built-in defaults. Env vars override TOML (`TLSIGHT_` prefix, `__` section separator). Hardcoded caps (§8.1) are upper bounds that config cannot exceed. Every config struct is `deny_unknown_fields`; `netray tls --check-config <path>` validates a file, including that `custom_ca_dir` exists, and exits 0 (`config ok: <path>`) or 1 with the error.
+- **Config precedence**: CLI arg / `NETRAY_TLS_CONFIG` env var > TOML file > built-in defaults. Env vars override TOML (`NETRAY_TLS_` prefix, `__` section separator; a `TLSIGHT_` variable, `TLSIGHT_CONFIG` included, fails the load naming the new prefix). Hardcoded caps (§8.1) are upper bounds that config cannot exceed. Every config struct is `deny_unknown_fields`; `netray tls --check-config <path>` validates a file, including that `custom_ca_dir` exists, and exits 0 (`config ok: <path>`) or 1 with the error.
 - **Error responses**: Structured JSON via `AppError` enum: `{ "error": { "code": "...", "message": "..." } }`.
 - **Request IDs**: UUID v7 in `X-Request-Id` header on every response.
 - **Static file serving**: `rust-embed` in release, filesystem reads in debug. Vite-hashed assets get `immutable` cache headers; `index.html` gets `no-cache`.
@@ -195,7 +197,7 @@ Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rule
 
 Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
-Default filter: `info,netray_tls=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `TLSIGHT_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "tlsight"`.
+Default filter: `info,netray_tls=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `NETRAY_TLS_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "tlsight"`.
 
 ## CI/CD
 

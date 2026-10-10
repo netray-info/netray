@@ -7,14 +7,14 @@ pub mod verifier;
 use std::net::IpAddr;
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 pub use chain::CertInfo;
 pub use params::TlsParams;
 
 /// Per-IP error detail embedded in inspection results.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InspectionError {
     /// Machine-readable error code (e.g. `HANDSHAKE_FAILED`).
     pub code: String,
@@ -23,7 +23,7 @@ pub struct InspectionError {
 }
 
 /// Result of inspecting a single IP on a single port.
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct IpInspectionResult {
     pub ip: String,
     pub ip_version: String,

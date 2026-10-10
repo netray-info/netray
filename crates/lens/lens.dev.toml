@@ -10,8 +10,22 @@ url = "https://dns.netray.info"
 timeout_ms = 15000
 
 [backends.tls]
-url = "https://tls.netray.info"
 timeout_ms = 15000
+
+# The TLS section runs in-process (module `netray-tls`); `url` is refused. Check values as in
+# crates/tls/tlsight.dev.toml; `custom_ca_dir` is left out because it must exist at startup.
+[modules.tls.limits]
+per_target_per_minute = 600
+per_target_burst = 100
+
+[modules.tls.validation]
+check_ct = true
+
+[modules.tls.quality]
+enabled = true
+
+[modules.tls.backends.ip]
+url = "https://ip.netray.info"
 
 [backends.ip]
 timeout_ms = 2000

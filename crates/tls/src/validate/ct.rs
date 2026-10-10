@@ -5,19 +5,19 @@
 
 use std::fmt::Write;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use x509_parser::prelude::*;
 
 use super::CheckStatus;
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CtInfo {
     pub sct_count: usize,
     pub scts: Vec<SctEntry>,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SctEntry {
     pub version: u8,
     pub log_id: String,

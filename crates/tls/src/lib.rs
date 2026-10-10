@@ -5,13 +5,19 @@ pub mod config;
 pub mod dns;
 pub mod error;
 pub mod input;
+pub mod module;
 pub mod quality;
 pub mod reload;
 pub mod routes;
 pub mod security;
 pub mod state;
+#[cfg(feature = "testing")]
+pub mod testing;
 pub mod tls;
 pub mod validate;
+
+pub use config::ModuleConfig;
+pub use module::{TlsModule, translate};
 
 pub use netray_common::middleware::RequestId;
 
@@ -31,7 +37,7 @@ pub async fn run(config_arg: Option<String>) {
         .expect("failed to install rustls crypto provider");
 
     // 1. Load configuration (before tracing, since telemetry config controls subscriber setup).
-    let config_path = config_arg.or_else(|| std::env::var("TLSIGHT_CONFIG").ok());
+    let config_path = config_arg.or_else(|| std::env::var("NETRAY_TLS_CONFIG").ok());
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
@@ -64,19 +70,7 @@ pub async fn run(config_arg: Option<String>) {
 
     // The DNS resolver is used for A/AAAA resolution (replacing tokio's system resolver)
     // and for CAA/DANE lookups when those checks are enabled. Always initialize it.
-    match dns::DnsResolver::new(config.dns.timeout_secs).await {
-        Ok(resolver) => {
-            state.dns_resolver = Some(std::sync::Arc::new(resolver));
-            tracing::info!(
-                check_caa = config.validation.check_caa,
-                check_dane = config.validation.check_dane,
-                "DNS resolver initialized"
-            );
-        }
-        Err(e) => {
-            tracing::warn!(error = %e, "failed to initialize DNS resolver; hostname inspection will fail");
-        }
-    }
+    state.init_dns_resolver(&config).await;
 
     if state.enrichment_client.is_some() {
         tracing::info!("IP enrichment enabled");

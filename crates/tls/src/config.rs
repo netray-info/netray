@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::net::SocketAddr;
 
 use serde::Deserialize;
@@ -33,6 +34,94 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     #[serde(default)]
     pub backends: BackendsConfig,
+}
+
+/// The check sections the TLS module reads from a `[modules.tls]` table; tlsight's key names
+/// and defaults.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleConfig {
+    #[serde(default)]
+    pub limits: ModuleLimits,
+    #[serde(default = "default_dns")]
+    pub dns: DnsConfig,
+    #[serde(default = "default_validation")]
+    pub validation: ValidationConfig,
+    #[serde(default = "default_quality")]
+    pub quality: QualityConfig,
+    #[serde(default)]
+    pub backends: BackendsConfig,
+}
+
+/// The subset of `[limits]` that applies to the module: no per-client limit and no
+/// `allow_blocked_targets`.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleLimits {
+    #[serde(default = "default_handshake_timeout_secs")]
+    pub handshake_timeout_secs: u64,
+    #[serde(default = "default_request_timeout_secs")]
+    pub request_timeout_secs: u64,
+    #[serde(default = "default_max_ports")]
+    pub max_ports: usize,
+    #[serde(default = "default_max_concurrent_handshakes")]
+    pub max_concurrent_handshakes: usize,
+    #[serde(default = "default_max_ips_per_hostname")]
+    pub max_ips_per_hostname: usize,
+    #[serde(default = "default_per_target_per_minute")]
+    pub per_target_per_minute: u32,
+    #[serde(default = "default_per_target_burst")]
+    pub per_target_burst: u32,
+    /// Handshakes one lens check may spend; 0.23.x got this from tlsight's `per_ip_burst`.
+    #[serde(default = "default_per_ip_burst")]
+    pub check_budget: u32,
+}
+
+impl Default for ModuleLimits {
+    fn default() -> Self {
+        Self {
+            handshake_timeout_secs: default_handshake_timeout_secs(),
+            request_timeout_secs: default_request_timeout_secs(),
+            max_ports: default_max_ports(),
+            max_concurrent_handshakes: default_max_concurrent_handshakes(),
+            max_ips_per_hostname: default_max_ips_per_hostname(),
+            per_target_per_minute: default_per_target_per_minute(),
+            per_target_burst: default_per_target_burst(),
+            check_budget: default_per_ip_burst(),
+        }
+    }
+}
+
+impl ModuleConfig {
+    /// The service `Config` these sections stand for, validated and clamped as at startup.
+    pub fn into_config(self) -> Result<Config, ConfigError> {
+        let l = self.limits;
+        reject_zero("check_budget", l.check_budget)?;
+        let mut cfg = Config {
+            site_name: default_site_name(),
+            server: default_server(),
+            limits: LimitsConfig {
+                per_target_per_minute: l.per_target_per_minute,
+                per_target_burst: l.per_target_burst,
+                max_concurrent_handshakes: l.max_concurrent_handshakes,
+                handshake_timeout_secs: l.handshake_timeout_secs,
+                request_timeout_secs: l.request_timeout_secs,
+                max_ports: l.max_ports,
+                max_ips_per_hostname: l.max_ips_per_hostname,
+                allow_blocked_targets: false,
+                ..default_limits()
+            },
+            dns: self.dns,
+            validation: self.validation,
+            ecosystem: EcosystemConfig::default(),
+            quality: self.quality,
+            telemetry: TelemetryConfig::default(),
+            backends: self.backends,
+        };
+        cfg.validate()?;
+        cfg.check_startup()?;
+        Ok(cfg)
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -260,10 +349,21 @@ fn default_true() -> bool {
 impl Config {
     /// Load configuration from an optional TOML file path and environment variables.
     ///
-    /// Precedence (highest first): env vars (TLSIGHT_ prefix) > TOML file > built-in defaults.
+    /// Precedence (highest first): env vars (NETRAY_TLS_ prefix) > TOML file > built-in defaults.
+    /// A `TLSIGHT_` variable is refused.
     pub fn load(config_path: Option<&str>) -> Result<Self, ConfigError> {
-        // e.g. TLSIGHT_LIMITS__PER_IP_PER_MINUTE=60 maps to limits.per_ip_per_minute.
-        let mut cfg: Config = netray_common::config::load(config_path, "TLSIGHT_")?;
+        Self::load_with_env(config_path, std::env::vars_os())
+    }
+
+    fn load_with_env(
+        config_path: Option<&str>,
+        env: impl IntoIterator<Item = (OsString, OsString)>,
+    ) -> Result<Self, ConfigError> {
+        let env: Vec<(OsString, OsString)> = env.into_iter().collect();
+        netray_common::config::refuse_legacy_prefix("TLSIGHT_", "NETRAY_TLS_", &env)?;
+        // e.g. NETRAY_TLS_LIMITS__PER_IP_PER_MINUTE=60 maps to limits.per_ip_per_minute.
+        let mut cfg: Config =
+            netray_common::config::load_with_env(config_path, "NETRAY_TLS_", env)?;
         cfg.validate()?;
 
         Ok(cfg)

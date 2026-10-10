@@ -1,12 +1,12 @@
 use rustls::pki_types::CertificateDer;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use utoipa::ToSchema;
 use x509_parser::prelude::*;
 
 /// Parsed certificate info.
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CertInfo {
     pub position: String,
     pub subject: String,

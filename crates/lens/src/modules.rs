@@ -47,6 +47,13 @@ struct IpPresentation {
     addresses: Vec<IpInfo>,
 }
 
+/// The V1 headline the TLS module carries in `presentation`.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct TlsPresentation {
+    headline: String,
+}
+
 fn section_name(protocol: Protocol) -> &'static str {
     match protocol {
         Protocol::Dns => "dns",
@@ -151,6 +158,18 @@ impl Backend for ModuleSection {
                                 addresses: p.addresses,
                                 raw_headline: p.headline,
                                 detail_url: self.public_url.clone(),
+                            }
+                        }
+                        Protocol::Tls => {
+                            let p: TlsPresentation =
+                                serde_json::from_value(presentation).unwrap_or_default();
+                            BackendExtra::Tls {
+                                raw_headline: p.headline,
+                                detail_url: format!(
+                                    "{}/?h={}",
+                                    self.public_url.trim_end_matches('/'),
+                                    percent_encode(&domain),
+                                ),
                             }
                         }
                         _ => {

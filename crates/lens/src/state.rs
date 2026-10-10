@@ -15,7 +15,6 @@ use netray_model::Protocol;
 
 use crate::backends::Backend;
 use crate::backends::dns::DnsBackend;
-use crate::backends::tls::TlsBackend;
 use crate::cache::CachedResult;
 use crate::check::CheckOutput;
 use crate::config::Config;
@@ -69,7 +68,7 @@ impl AppState {
 
     /// Build `AppState` from a validated `Config`; the HTTP and email sections run the
     /// registry's modules when `[backends.http]` and `[backends.email]` are configured, the IP
-    /// section when the registry has an IP module.
+    /// and TLS sections when the registry has those modules.
     pub fn with_registry(
         config: Config,
         registry: Registry,
@@ -103,21 +102,21 @@ impl AppState {
 
         let eco = &config.ecosystem;
 
-        let mut backends: Vec<Box<dyn Backend + Send + Sync>> = vec![
-            Box::new(DnsBackend {
-                dns_url: config.backends.dns.url.clone().unwrap_or_default(),
-                public_url: eco.dns_base_url.clone().unwrap_or_default(),
-                timeout: Duration::from_millis(config.backends.dns.timeout_ms),
-                client: http_client.clone(),
-                dns_servers: config.backends.dns_servers.clone(),
-            }),
-            Box::new(TlsBackend {
-                tls_url: config.backends.tls.url.clone().unwrap_or_default(),
-                public_url: eco.tls_base_url.clone().unwrap_or_default(),
+        let mut backends: Vec<Box<dyn Backend + Send + Sync>> = vec![Box::new(DnsBackend {
+            dns_url: config.backends.dns.url.clone().unwrap_or_default(),
+            public_url: eco.dns_base_url.clone().unwrap_or_default(),
+            timeout: Duration::from_millis(config.backends.dns.timeout_ms),
+            client: http_client.clone(),
+            dns_servers: config.backends.dns_servers.clone(),
+        })];
+        if registry.module(Protocol::Tls).is_some() {
+            backends.push(Box::new(ModuleSection {
+                registry: registry.clone(),
+                protocol: Protocol::Tls,
                 timeout: Duration::from_millis(config.backends.tls.timeout_ms),
-                client: http_client.clone(),
-            }),
-        ];
+                public_url: eco.tls_base_url.clone().unwrap_or_default(),
+            }));
+        }
         if let Some(ref http_cfg) = config.backends.http
             && registry.module(Protocol::Http).is_some()
         {
@@ -206,10 +205,7 @@ mod tests {
                     ..Default::default()
                 },
                 dns_servers: Vec::new(),
-                tls: crate::config::BackendConfig {
-                    url: Some("http://localhost:8081".to_string()),
-                    ..Default::default()
-                },
+                tls: crate::config::BackendConfig::default(),
                 ip: crate::config::BackendConfig::default(),
                 http: None,
                 email: None,
@@ -272,9 +268,19 @@ mod tests {
     }
 
     #[test]
-    fn backends_registered_correctly() {
+    fn only_dns_registered_without_modules() {
         let config = test_config();
         let state = AppState::new(config).unwrap();
+        assert_eq!(state.backends.len(), 1);
+        assert_eq!(state.backends[0].section(), "dns");
+    }
+
+    #[test]
+    fn tls_section_registered_when_module_present() {
+        let registry = Registry::new().with(netray_tls::testing::golden_module(include_str!(
+            "../../../tests/fixtures/contracts/tlsight-inspect.json"
+        )));
+        let state = AppState::with_registry(test_config(), registry).unwrap();
         assert_eq!(state.backends.len(), 2);
         assert_eq!(state.backends[0].section(), "dns");
         assert_eq!(state.backends[1].section(), "tls");
@@ -286,8 +292,8 @@ mod tests {
             "../../../tests/fixtures/contracts/ifconfig-json.json"
         )));
         let state = AppState::with_registry(test_config(), registry).unwrap();
-        assert_eq!(state.backends.len(), 3);
-        assert_eq!(state.backends[2].section(), "ip");
+        assert_eq!(state.backends.len(), 2);
+        assert_eq!(state.backends[1].section(), "ip");
     }
 
     #[test]
@@ -298,9 +304,8 @@ mod tests {
             "../../../tests/fixtures/contracts/spectra-inspect.json"
         )));
         let state = AppState::with_registry(config, registry).unwrap();
-        assert_eq!(state.backends.len(), 3);
+        assert_eq!(state.backends.len(), 2);
         assert_eq!(state.backends[0].section(), "dns");
-        assert_eq!(state.backends[1].section(), "tls");
-        assert_eq!(state.backends[2].section(), "http");
+        assert_eq!(state.backends[1].section(), "http");
     }
 }

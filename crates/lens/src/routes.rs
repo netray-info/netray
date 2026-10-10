@@ -738,16 +738,10 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut down: Vec<String> = Vec::new();
 
     // Build list of required backends to probe (3 s timeout each).
-    let probes: Vec<(String, String)> = vec![
-        (
-            "dns".to_string(),
-            config.backends.dns.url.clone().unwrap_or_default(),
-        ),
-        (
-            "tls".to_string(),
-            config.backends.tls.url.clone().unwrap_or_default(),
-        ),
-    ];
+    let probes: Vec<(String, String)> = vec![(
+        "dns".to_string(),
+        config.backends.dns.url.clone().unwrap_or_default(),
+    )];
 
     let futures: Vec<_> = probes
         .into_iter()
@@ -2783,7 +2777,7 @@ pub mod tests {
         let seen: Seen = Arc::new(Mutex::new(Vec::new()));
         let seen_ref = seen.clone();
 
-        // One mock serves both backends; prism (POST /api/check) answers with an A record.
+        // The mock serves prism, the one HTTP backend left; prism (POST /api/check) answers with an A record.
         let mock = Router::new().fallback(move |req: Request<Body>| {
             let seen_ref = seen_ref.clone();
             async move {
@@ -2816,7 +2810,6 @@ pub mod tests {
         config.server.trusted_proxies = vec!["172.31.0.0/24".to_string()];
         config.cache.enabled = false;
         config.backends.dns.url = Some(base.clone());
-        config.backends.tls.url = Some(base.clone());
         let state = AppState::new(config).unwrap();
         let app = Router::new()
             .route("/api/check/{domain}", get(check_get_handler))
@@ -2829,7 +2822,7 @@ pub mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
 
         let seen = seen.lock().unwrap();
-        for (prefix, label) in [("/api/check", "prism"), ("/api/inspect?h=", "tlsight")] {
+        for (prefix, label) in [("/api/check", "prism")] {
             let (uri, headers) = seen
                 .iter()
                 .find(|(uri, _)| uri.starts_with(prefix))

@@ -4,10 +4,10 @@ pub mod chain_trust;
 pub mod ct;
 pub mod dane;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckStatus {
     Pass,
@@ -28,13 +28,13 @@ impl From<CheckStatus> for netray_model::Status {
     }
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Summary {
     pub verdict: CheckStatus,
     pub checks: SummaryChecks,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SummaryChecks {
     pub chain_trusted: CheckStatus,
     pub not_expired: CheckStatus,
@@ -46,7 +46,7 @@ pub struct SummaryChecks {
     pub consistency: CheckStatus,
 }
 
-#[derive(Debug, Clone, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ValidationResult {
     pub chain_trusted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

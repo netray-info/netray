@@ -251,7 +251,7 @@ handshake_timeout_secs = 5
 request_timeout_secs = 15
 ```
 
-Override any value with `TLSIGHT_` env vars (`__` for nested sections): `TLSIGHT_SERVER__BIND=0.0.0.0:8081`.
+Override any value with `NETRAY_TLS_` env vars (`__` for nested sections): `NETRAY_TLS_SERVER__BIND=0.0.0.0:8081`. The config file path comes from `NETRAY_TLS_CONFIG`. A `TLSIGHT_` variable is refused at startup.
 
 **Custom CA support** — drop `.pem` or `.crt` files into `custom_ca_dir` to trust private CAs without a rebuild. Useful for internal PKI (Step-CA, Vault PKI, etc.).
 
