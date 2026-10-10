@@ -28,6 +28,7 @@ fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
+            resolve_timeout_ms: 2000,
             dns: lens::config::BackendConfig {
                 timeout_ms: 1000,
                 ..Default::default()

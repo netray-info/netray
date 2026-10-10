@@ -60,6 +60,7 @@ fn state(s: Setup) -> AppState {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
+            resolve_timeout_ms: 2000,
             // The DNS section runs in-process; only its deadline comes from the config.
             dns: BackendConfig {
                 timeout_ms: t[0],

@@ -30,6 +30,7 @@ fn base_config() -> Config {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
+            resolve_timeout_ms: 2000,
             dns: lens::config::BackendConfig {
                 timeout_ms: 100,
                 ..Default::default()

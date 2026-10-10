@@ -30,6 +30,7 @@ fn live_state() -> AppState {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
+            resolve_timeout_ms: 2000,
             dns: lens::config::BackendConfig {
                 timeout_ms: 20000,
                 ..Default::default()

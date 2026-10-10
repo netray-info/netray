@@ -28,6 +28,7 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
             trusted_proxies: Vec::new(),
         },
         backends: BackendsConfig {
+            resolve_timeout_ms: 2000,
             dns: lens::config::BackendConfig {
                 timeout_ms: 100,
                 ..Default::default()

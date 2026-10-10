@@ -153,8 +153,12 @@ fn outcome(events: &[(SectionEvent, Instant)], protocol: Protocol) -> &SectionOu
 #[tokio::test]
 async fn c4_one_resolve_stage_and_every_module_sees_the_same_facts() {
     let (provider, calls) = StubProvider::ok();
-    let mods =
-        [Protocol::Http, Protocol::Tls, Protocol::Ip].map(|p| StubModule::new(p, Duration::ZERO));
+    let mods = [Protocol::Http, Protocol::Tls, Protocol::Ip].map(|p| {
+        // Modules that read Facts declare it; they wait for the resolve stage.
+        let mut m = StubModule::new(p, Duration::ZERO);
+        m.needs_addresses = true;
+        m
+    });
     let seen: Vec<_> = mods.iter().map(|m| m.seen.clone()).collect();
     let mut registry = Registry::new().with_facts(Box::new(provider));
     for m in mods {
