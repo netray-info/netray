@@ -1,6 +1,6 @@
 # Spec: lens admission metrics
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-10
 
 ## Goal
