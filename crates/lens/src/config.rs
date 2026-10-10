@@ -527,6 +527,12 @@ impl Config {
                 b.resolve_timeout_ms, b.ip.timeout_ms
             )));
         }
+        if b.resolve_timeout_ms >= b.tls.timeout_ms {
+            return Err(ConfigError::Message(format!(
+                "invalid configuration: backends.resolve_timeout_ms {} must stay below [backends.tls] timeout_ms {}: the TLS section waits for the resolve inside its own window, both counted from the start of a check",
+                b.resolve_timeout_ms, b.tls.timeout_ms
+            )));
+        }
 
         Ok(())
     }
@@ -831,6 +837,25 @@ mod tests {
         if let Err(e) = load_toml(&backend_timeouts_toml(15000, 2000)) {
             panic!("15000/2000 must load: {e}");
         }
+    }
+
+    #[test]
+    fn resolve_timeout_must_stay_below_the_tls_timeout() {
+        let toml = "[backends]\nresolve_timeout_ms = 1500\n\
+                    [backends.tls]\ntimeout_ms = 1500\n\
+                    [backends.ip]\ntimeout_ms = 2000\n";
+        let msg = load_toml(toml).unwrap_err().to_string();
+        assert!(
+            msg.contains("resolve_timeout_ms") && msg.contains("[backends.tls] timeout_ms"),
+            "error must name resolve_timeout_ms and the TLS timeout, got: {msg}"
+        );
+        assert!(
+            load_toml(&toml.replace(
+                "timeout_ms = 1500\n[backends.ip]",
+                "timeout_ms = 1501\n[backends.ip]"
+            ))
+            .is_ok()
+        );
     }
 
     #[test]

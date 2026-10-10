@@ -9,7 +9,6 @@ use mhost::RecordType;
 use mhost::lints::CheckResult as LintResult;
 use mhost::resolver::{Lookups, MultiQuery};
 use mhost::resources::{RData, Record};
-use netray_common::enrichment::EnrichmentClient;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{
     BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, ResolveError, RunContext,
@@ -44,7 +43,6 @@ static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
         "ns_lame",
         "ns_delegation",
         "ttl",
-        "infrastructure",
     ]
     .into_iter()
     .map(|name| CheckId::parse(&format!("dns.{name}")).expect("static check id"))
@@ -73,7 +71,6 @@ pub struct DnsModule {
     servers: Vec<String>,
     circuit_breakers: Arc<CircuitBreakerRegistry>,
     query_semaphore: Arc<Semaphore>,
-    ip_enrichment: Option<Arc<EnrichmentClient>>,
     per_target: KeyedLimiter<String>,
 }
 
@@ -92,7 +89,6 @@ impl DnsModule {
         Ok(Self {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
             query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
-            ip_enrichment: crate::ip_enrichment(&config.backends),
             per_target,
             servers,
             config,
@@ -137,7 +133,7 @@ impl DnsModule {
             breaker_keys,
             circuit_breakers: self.circuit_breakers.clone(),
             query_semaphore: self.query_semaphore.clone(),
-            ip_enrichment: self.ip_enrichment.clone(),
+            ip_enrichment: None,
         };
         let (tx, mut rx) = mpsc::channel::<CheckEvent>(32);
         let collect = async move {
@@ -377,6 +373,7 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
             if check.name == "dnskey_algorithm" || check.name == "dnssec_rollover" {
                 check.verdict = Verdict::Skip;
                 check.messages.clear();
+                check.messages.push("DNSSEC not deployed".to_string());
             }
         }
     }
@@ -399,6 +396,16 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
             findings: check.messages,
             evidence: vec![],
         });
+    }
+    for id in dns_checks() {
+        if !results.iter().any(|r| r.id == *id) {
+            results.push(CheckResult {
+                id: id.clone(),
+                status: Status::NotApplicable,
+                findings: vec!["not reported".to_string()],
+                evidence: vec![],
+            });
+        }
     }
 
     let resolved_ips: Vec<String> = resolved_ips.iter().map(ToString::to_string).collect();
@@ -440,9 +447,18 @@ fn collect_ips_from_batch(
 /// A lint event as a single check carrying the worst verdict.
 ///
 /// Email-security categories (spf, dmarc, mta_sts, tlsrpt, bimi, mx) belong to the email
-/// module; DNS lint events for those categories are ignored here.
+/// module, and `infrastructure` is not a catalogue check; DNS lint events for those categories
+/// are ignored here.
 fn parse_lint_event(lint: &LintEvent) -> Option<LintCheck> {
-    const EMAIL_CATEGORIES: &[&str] = &["spf", "dmarc", "mta_sts", "tlsrpt", "bimi", "mx"];
+    const EMAIL_CATEGORIES: &[&str] = &[
+        "spf",
+        "dmarc",
+        "mta_sts",
+        "tlsrpt",
+        "bimi",
+        "mx",
+        "infrastructure",
+    ];
     if EMAIL_CATEGORIES.contains(&lint.category) {
         return None;
     }

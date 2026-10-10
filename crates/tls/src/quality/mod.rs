@@ -46,6 +46,41 @@ pub fn assess_port(
     };
 
     let mut all_checks = vec![checks::check_tls_reachable(ips)];
+    let mut address_checks = assess_address(ip_result, port, is_hostname, hostname, ct_enabled);
+    let ech = address_checks.pop();
+    all_checks.extend(address_checks);
+
+    let has_ocsp_url = ip_result
+        .chain
+        .as_ref()
+        .and_then(|c| c.first())
+        .is_some_and(|leaf| leaf.ocsp_url.is_some());
+    all_checks.push(checks::check_ocsp_stapled(ocsp_stapled, has_ocsp_url));
+
+    // Configuration checks
+    all_checks.push(checks::check_caa_compliant(caa_status));
+    all_checks.push(checks::check_dane_valid(dane_status));
+    all_checks.push(checks::check_consistency(consistency));
+    all_checks.push(checks::check_alpn_consistency(ips));
+    all_checks.extend(ech);
+
+    let verdict = types::compute_verdict(&all_checks);
+    PortQualityResult {
+        verdict,
+        checks: all_checks,
+    }
+}
+
+/// The checks one address's handshake answers: certificate, protocol, CT and ECH, in
+/// `assess_port`'s order with `ech_advertised` last.
+pub fn assess_address(
+    ip_result: &IpInspectionResult,
+    port: u16,
+    is_hostname: bool,
+    hostname: &str,
+    ct_enabled: bool,
+) -> Vec<HealthCheck> {
+    let mut all_checks = Vec::new();
     let mut chain_complete = false;
 
     // Certificate checks
@@ -76,30 +111,11 @@ pub fn assess_port(
 
     let sct_count = ip_result.ct.as_ref().map(|ct| ct.sct_count);
     all_checks.push(checks::check_ct_logged(ct_enabled, sct_count));
-    let has_ocsp_url = ip_result
-        .chain
-        .as_ref()
-        .and_then(|c| c.first())
-        .is_some_and(|leaf| leaf.ocsp_url.is_some());
-    all_checks.push(checks::check_ocsp_stapled(ocsp_stapled, has_ocsp_url));
 
-    // Configuration checks
-    all_checks.push(checks::check_caa_compliant(caa_status));
-    all_checks.push(checks::check_dane_valid(dane_status));
-    all_checks.push(checks::check_consistency(consistency));
-    all_checks.push(checks::check_alpn_consistency(ips));
-
-    // ECH check: read from the first successful IP's tls params
-    let ech_advertised = first_ok
-        .and_then(|r| r.tls.as_ref())
-        .and_then(|t| t.ech_advertised);
+    let ech_advertised = ip_result.tls.as_ref().and_then(|t| t.ech_advertised);
     all_checks.push(checks::check_ech_advertised(ech_advertised, port));
 
-    let verdict = types::compute_verdict(&all_checks);
-    PortQualityResult {
-        verdict,
-        checks: all_checks,
-    }
+    all_checks
 }
 
 /// Assess hostname-scoped quality (HSTS + HTTPS redirect).

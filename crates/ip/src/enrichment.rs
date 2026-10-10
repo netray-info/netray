@@ -94,6 +94,16 @@ impl EnrichmentContext {
     /// Load all backends from the paths specified in `config`.
     /// DNS resolver is built from system config (async).
     pub async fn load(config: &Config) -> Result<Self, LoadError> {
+        Self::load_with(config, true).await
+    }
+
+    /// Like [`load`](Self::load), for the engine module: no User-Agent parser, and no log line
+    /// about it, since the module never sees a User-Agent header.
+    pub async fn load_for_module(config: &Config) -> Result<Self, LoadError> {
+        Self::load_with(config, false).await
+    }
+
+    async fn load_with(config: &Config, with_user_agent: bool) -> Result<Self, LoadError> {
         let geoip_city_db = if let Some(path) = config.geoip_city_db.as_deref() {
             match GeoIpCityDb::new(path).await {
                 Some(db) => {
@@ -130,7 +140,9 @@ impl EnrichmentContext {
             None
         };
 
-        let user_agent_parser = if let Some(path) = config.user_agent_regexes.as_deref() {
+        let user_agent_parser = if !with_user_agent {
+            None
+        } else if let Some(path) = config.user_agent_regexes.as_deref() {
             match UserAgentParser::from_yaml(path).await {
                 Ok(parser) => {
                     info!("Loaded User-Agent regexes from {}", path);

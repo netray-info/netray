@@ -14,6 +14,7 @@ use utoipa::ToSchema;
 use utoipa::OpenApi;
 
 use crate::config::Config;
+use crate::dns::CaaLookup;
 use crate::error::{AppError, ErrorResponse};
 use crate::input::{self, Target};
 use crate::security::rate_limit::select_representative_ips;
@@ -548,6 +549,8 @@ async fn do_inspect(
             skipped_ips,
             request_id,
             start: request_start,
+            caa: None,
+            ech: None,
         },
     )
     .await?;
@@ -579,7 +582,8 @@ async fn do_inspect(
 }
 
 /// The parsed input, the addresses to inspect (after the target policy and any rate-limit
-/// cap) and the warnings so far: what an inspection starts from.
+/// cap) and the warnings so far: what an inspection starts from. `caa` and `ech`, when set,
+/// replace the inspection's own CAA and HTTPS-record lookups.
 pub struct InspectRequest {
     pub parsed: input::ParsedInput,
     pub ips: Vec<IpAddr>,
@@ -587,6 +591,8 @@ pub struct InspectRequest {
     pub skipped_ips: Vec<String>,
     pub request_id: String,
     pub start: Instant,
+    pub caa: Option<CaaLookup>,
+    pub ech: Option<bool>,
 }
 
 /// Resolves the target to its addresses; an IP target is its own address.
@@ -667,6 +673,8 @@ pub async fn inspect(
         skipped_ips,
         request_id,
         start: request_start,
+        caa: known_caa,
+        ech: known_ech,
     } = req;
     let hostname_str = match &parsed.target {
         Target::Hostname(h) => h.clone(),
@@ -716,10 +724,10 @@ pub async fn inspect(
 
         Some(tokio::task::spawn_blocking(move || {
             rt.block_on(async move {
-                let caa = if check_caa {
-                    Some(resolver.lookup_caa(&hostname).await)
-                } else {
-                    None
+                let caa = match (check_caa, known_caa) {
+                    (false, _) => None,
+                    (true, Some(caa)) => Some(caa),
+                    (true, None) => Some(resolver.lookup_caa(&hostname).await),
                 };
 
                 let mut tlsa = HashMap::new();
@@ -729,7 +737,10 @@ pub async fn inspect(
                     }
                 }
 
-                let ech = resolver.lookup_ech_advertised(&hostname).await;
+                let ech = match known_ech {
+                    Some(ech) => ech,
+                    None => resolver.lookup_ech_advertised(&hostname).await,
+                };
 
                 (caa, tlsa, ech)
             })

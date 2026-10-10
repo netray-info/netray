@@ -9,7 +9,7 @@ pub mod metrics;
 pub mod modules;
 pub mod og;
 pub mod routes;
-pub mod scoring;
+pub mod score;
 pub mod security;
 pub mod snapshot;
 pub mod spa;

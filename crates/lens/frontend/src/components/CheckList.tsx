@@ -34,9 +34,13 @@ function scoreClass(v: Verdict): string {
 function scoreNumerator(v: Verdict, weight: number): number {
   switch (v) {
     case 'pass':  return weight;
-    case 'warn':  return Math.floor(weight / 2);
+    case 'warn':  return weight / 2;
     default:      return 0;
   }
+}
+
+function formatPoints(n: number): string {
+  return String(Math.round(n * 10) / 10);
 }
 
 interface Props {
@@ -96,7 +100,7 @@ export default function CheckList(props: Props) {
             </div>
             <Show when={check.weight !== undefined && check.verdict !== 'skip'}>
               <span class={scoreClass(check.verdict)}>
-                {scoreNumerator(check.verdict, check.weight!)}/{check.weight}
+                {formatPoints(scoreNumerator(check.verdict, check.weight!))}/{formatPoints(check.weight!)}
               </span>
             </Show>
           </li>

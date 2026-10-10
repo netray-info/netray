@@ -7,7 +7,7 @@ use netray_model::Protocol;
 use tokio::sync::mpsc;
 
 use crate::modules::{Backend, BackendResult};
-use crate::scoring::engine::{OverallScore, SectionInput, SectionStatus, compute_score};
+use crate::score::OverallScore;
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -128,49 +128,20 @@ pub async fn run_check_with_deadline(
             .or_insert(Err(SectionError::Timeout));
     }
 
-    // Build scoring inputs.
-    let mut inputs: HashMap<String, SectionInput> = HashMap::new();
-    for (name, result) in &sections {
-        inputs.insert(name.clone(), section_input_from_result(result));
-    }
-
     // Warn about profile sections with no registered backend.
-    for name in state.scoring_profile.sections.keys() {
+    for protocol in state.scoring_profile.sections.keys() {
+        let name = protocol.as_str();
         if !sections.contains_key(name) {
             tracing::warn!(section = %name, "profile section has no registered backend — skipped");
         }
     }
 
-    let score = compute_score(&state.scoring_profile, &inputs);
+    let score = crate::score::score(&state.scoring_profile, &sections);
 
     CheckOutput {
         domain,
         sections,
         score,
         duration_ms: start.elapsed().as_millis() as u64,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// Build a SectionInput for the scoring engine from a backend result.
-fn section_input_from_result(result: &Result<BackendResult, SectionError>) -> SectionInput {
-    match result {
-        Ok(r) => SectionInput {
-            checks: r.checks.clone(),
-            status: SectionStatus::Scored,
-        },
-        Err(SectionError::NotApplicable { reason }) => SectionInput {
-            checks: vec![],
-            status: SectionStatus::NotApplicable {
-                reason: reason.clone(),
-            },
-        },
-        Err(_) => SectionInput {
-            checks: vec![],
-            status: SectionStatus::Errored,
-        },
     }
 }

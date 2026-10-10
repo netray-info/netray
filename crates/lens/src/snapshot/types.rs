@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use super::store::MAX_FINDINGS_PER_SECTION;
 use crate::check::SectionError;
 use crate::modules::{BackendExtra, BackendResult};
-use crate::scoring::engine::{CheckVerdict, OverallScore};
-use crate::scoring::profile::ScoringProfile;
+use crate::score::{CheckVerdict, OverallScore, section_weights};
+use netray_engine::profile::Profile;
 
 /// One section's data passed to `Snapshot::from_check_output`.
 pub struct SectionResult {
@@ -44,7 +44,7 @@ impl Snapshot {
         score: &OverallScore,
         sections: &[SectionResult],
         lens_version: &str,
-        profile: &ScoringProfile,
+        profile: &Profile,
     ) -> Self {
         let snap_sections = sections
             .iter()
@@ -61,7 +61,7 @@ impl Snapshot {
                             check_name: "backend".to_string(),
                             verdict: "fail".to_string(),
                             message: "Section check failed — no details available".to_string(),
-                            earned: 0,
+                            earned: 0.0,
                             possible: 0,
                             fix_hint: None,
                             fix_owner: None,
@@ -73,19 +73,16 @@ impl Snapshot {
                         Ok(r) => r.checks.as_slice(),
                         Err(_) => &[],
                     };
-                    let section_weights = profile.sections.get(&sr.name).map(|s| &s.checks);
+                    let weights = section_weights(profile, &sr.name);
                     let findings: Vec<SnapshotFinding> = checks
                         .iter()
                         .map(|c| {
-                            let weight = section_weights
-                                .and_then(|w| w.get(&c.name))
-                                .copied()
-                                .unwrap_or(0);
+                            let weight = weights.get(&c.name).copied().unwrap_or(0);
                             let (earned, possible) = match c.verdict {
-                                CheckVerdict::Pass => (weight, weight),
-                                CheckVerdict::Warn => (weight / 2, weight),
-                                CheckVerdict::Fail | CheckVerdict::NotFound => (0, weight),
-                                CheckVerdict::Skip => (0, 0),
+                                CheckVerdict::Pass => (weight as f64, weight),
+                                CheckVerdict::Warn => (weight as f64 / 2.0, weight),
+                                CheckVerdict::Fail | CheckVerdict::NotFound => (0.0, weight),
+                                CheckVerdict::Skip => (0.0, 0),
                             };
                             SnapshotFinding {
                                 check_name: c.name.clone(),
@@ -187,7 +184,7 @@ pub struct SnapshotFinding {
     pub verdict: String,
     pub message: String,
     #[serde(default)]
-    pub earned: u32,
+    pub earned: f64,
     #[serde(default)]
     pub possible: u32,
     pub fix_hint: Option<String>,

@@ -35,7 +35,7 @@ pub struct IpModule {
 impl IpModule {
     pub async fn new(module: ModuleConfig) -> Result<Self, LoadError> {
         let config = Config::from_module(module);
-        let ctx = EnrichmentContext::load(&config).await?;
+        let ctx = EnrichmentContext::load_for_module(&config).await?;
         Ok(Self {
             config: Arc::new(config),
             enrichment: Arc::new(ArcSwap::from_pointee(ctx)),
@@ -45,7 +45,15 @@ impl IpModule {
 
     /// Loads the data again; a failed load keeps the previous data.
     pub async fn reload(&self) {
-        crate::reload_enrichment(&self.enrichment, &self.config, "reload").await;
+        match EnrichmentContext::load_for_module(&self.config).await {
+            Ok(ctx) => {
+                self.enrichment.store(Arc::new(ctx));
+                tracing::info!("Enrichment data reloaded successfully");
+            }
+            Err(e) => {
+                tracing::warn!("Failed to reload enrichment data: {}; keeping previous context", e);
+            }
+        }
     }
 
     async fn lookup(&self, ip: IpAddr) -> Result<Ifconfig, String> {

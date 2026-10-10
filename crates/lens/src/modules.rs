@@ -1,7 +1,6 @@
 //! The engine's protocol modules as lens sections: a `ModuleSection` runs the registry's module
 //! in-process and maps its `SectionOutcome` onto lens's backend result.
 
-use std::collections::HashMap;
 use std::net::IpAddr;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -13,7 +12,7 @@ use serde::Deserialize;
 use tokio::sync::mpsc;
 
 use crate::check::{HARD_DEADLINE, SectionError};
-use crate::scoring::engine::{CheckResult, CheckVerdict};
+use crate::score::{CheckResult, CheckVerdict};
 
 /// Section-specific extra data produced by each backend.
 #[derive(Clone, Debug)]
@@ -46,8 +45,6 @@ pub enum BackendExtra {
         raw_headline: String,
         detail_url: String,
         grade: Option<String>,
-        /// Bucket name → reason for buckets that are not-applicable (e.g. no MX records).
-        bucket_na: HashMap<String, String>,
     },
 }
 
@@ -93,7 +90,7 @@ pub(crate) fn percent_encode(s: &str) -> String {
 }
 
 pub trait Backend: Send + Sync {
-    /// Must match the key in `ScoringProfile.sections`.
+    /// The protocol name of the profile section this backend scores.
     fn section(&self) -> &'static str;
 
     /// Run the section on its own: one engine run with this section only.
@@ -125,7 +122,6 @@ struct HttpPresentation {
 struct EmailPresentation {
     headline: String,
     grade: Option<String>,
-    bucket_na: HashMap<String, String>,
 }
 
 /// The V1 headline and addresses the IP module carries in `presentation`.
@@ -220,7 +216,6 @@ impl ModuleSection {
                             raw_headline: p.headline,
                             detail_url: format!("{base}/?domain={}", percent_encode(domain)),
                             grade: p.grade,
-                            bucket_na: p.bucket_na,
                         }
                     }
                     Protocol::Ip => {

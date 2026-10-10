@@ -8,7 +8,7 @@ use moka::ops::compute::{CompResult, Op};
 
 use crate::check::SectionError;
 use crate::modules::BackendResult;
-use crate::scoring::engine::OverallScore;
+use crate::score::OverallScore;
 
 /// Cached check result stored in the moka cache.
 pub struct CachedResult {

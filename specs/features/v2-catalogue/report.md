@@ -101,13 +101,65 @@ skipped: library-only phase; lens still scores through its own module until phas
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R3(a) DNS: `prism.sse` → exactly the 10 `dns.*` IDs, unreported ones `not_applicable` "not reported", no `dns.infrastructure` | open | crates/dns/tests/module_v3.rs |
-| C2 | R3(a) IP: loading the module logs no "user_agent_regexes" line; it emits only `ip.reputation` | open | crates/ip/tests/module_v3.rs |
-| C3 | R3(b) HTTP: `spectra-inspect.json` → 12 `http.*` IDs; reported ones carry spectra's status, others "not reported"; `redirect_limit_reached` → finding on `http.https_redirect`, no `redirect_limit` check | open | crates/http/tests/module_v3.rs |
-| C4 | R3(c) Email: 10 IDs; routing of `dane_without_tls_rpt`/`mta_sts_without_tls_rpt` → tls_rpt, `dane_without_dnssec` → dane; null/no MX → 7 MX-dependent N/A, spf+dmarc measured; dkim info → N/A with its message | open | crates/email/tests/module_v3.rs |
-| C5 | R3(d) TLS: 21 IDs every run; worst-of over handshake addresses naming the failing address; reachable rule; all-fail → 20 N/A "no TLS handshake"; aia N/A on complete chain; consistency/alpn N/A with one address | open | crates/tls/tests/module_v3.rs |
-| C6 | R3(d) engine: a `wants_facts` module sees the resolved Facts; on resolve error it runs with empty Facts | open | crates/engine/tests/wants_facts.rs |
-| C7 | R3(e) every module's golden: IDs within its protocol, none twice, none missing, no ID from two modules | open | crates/lens/tests/catalogue_emitters.rs |
-| C8 | R3(f) lens renders v3 names with catalogue texts and scores via the engine; a 0.24.0 snapshot with `email_authentication` renders its V1 label and guide link; integer `earned` still reads | open | crates/lens/tests/v3_render.rs |
-| C9 | R3(f) checkMeta guard fails on a differing name or title | open | tests/repo/test_checkmeta_catalogue.sh |
-| C10 | R3(f) regenerated goldens; the report explains each grade change | open | (report) |
+| C1 | R3(a) DNS: `prism.sse` → exactly the 10 `dns.*` IDs, unreported ones `not_applicable` "not reported", no `dns.infrastructure` | green | crates/dns/tests/module_v3.rs |
+| C2 | R3(a) IP: loading the module logs no "user_agent_regexes" line; it emits only `ip.reputation` | green | crates/ip/tests/module_v3.rs |
+| C3 | R3(b) HTTP: `spectra-inspect.json` → 12 `http.*` IDs; reported ones carry spectra's status, others "not reported"; `redirect_limit_reached` → finding on `http.https_redirect`, no `redirect_limit` check | green | crates/http/tests/module_v3.rs |
+| C4 | R3(c) Email: 10 IDs; routing of `dane_without_tls_rpt`/`mta_sts_without_tls_rpt` → tls_rpt, `dane_without_dnssec` → dane; null/no MX → 7 MX-dependent N/A, spf+dmarc measured; dkim info → N/A with its message | green | crates/email/tests/module_v3.rs |
+| C5 | R3(d) TLS: 21 IDs every run; worst-of over handshake addresses naming the failing address; reachable rule; all-fail → 20 N/A "no TLS handshake"; aia N/A on complete chain; consistency/alpn N/A with one address | green | crates/tls/tests/module_v3.rs |
+| C6 | R3(d) engine: a `wants_facts` module sees the resolved Facts; on resolve error it runs with empty Facts | green | crates/engine/tests/wants_facts.rs |
+| C7 | R3(e) every module's golden: IDs within its protocol, none twice, none missing, no ID from two modules | green | crates/lens/tests/catalogue_emitters.rs |
+| C8 | R3(f) lens renders v3 names with catalogue texts and scores via the engine; a 0.24.0 snapshot with `email_authentication` renders its V1 label and guide link; integer `earned` still reads | green | crates/lens/tests/v3_render.rs |
+| C9 | R3(f) checkMeta guard fails on a differing name or title | green | tests/repo/test_checkmeta_catalogue.sh |
+| C10 | R3(f) regenerated goldens; the report explains each grade change | green | (report, below) |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 DNS, IP | 1 | sonnet | 46514 | 151 |
+| G2 HTTP | 1 | sonnet | 36313 | 62 |
+| G3 Email | 1 | opus | 53835 | 167 |
+| G4 engine wants_facts, TLS | 1 | opus | 85442 | 249 |
+| G5 checkMeta | 1 | sonnet | 38572 | 58 |
+| G6 lens on engine scoring, goldens | 2 | opus | 233332 | 1058 |
+| reader fixes | — | opus | 115545 | 852 |
+
+### Grade changes of the regenerated goldens (C10)
+
+Section grades dns/tls/http/email/ip.
+
+| golden | V1 → v3 | sections V1 → v3 | why |
+|---|---|---|---|
+| healthy | C 73.1 → B 87.5 | C/B/B/F/A+ → C/A+/A/C/A+ | TLS: checks are computed per address; the tlsight golden's hand-written port quality said `expiry_window` warn for a 60-day certificate, tlsight's own rule (30 days) passes it; `ocsp_stapled` from tlsight's rule is warn (the golden's summary said fail). HTTP: `security_headers` (5, warn) is now `csp` (1, warn), the other headers are "not reported". Email: split weights (dkim fail 3, dmarc warn 4, mta_sts warn 2) and the exact half-warn, 12/18. DNS: unreported checks N/A "not reported", grade unchanged |
+| null-mx | B 82.8 → A 92.5 | C/B/B/A+/A+ → C/A+/A/A+/A+ | TLS, HTTP as above; email A+: MX-dependent N/A by design, dkim info → N/A |
+| no-mx | C 67.8 → B 77.5 | C/B/B/F/A+ → C/A+/A/F/A+ | TLS, HTTP as above; email F (spf and dmarc fail) |
+| mx-cname | B 77.8 → B 88.5 | C/B/B/C/A+ → C/A+/A/C/A+ | TLS, HTTP as above; email C (mx fail 2, dnsbl fail 2) |
+| http-only | F 44.4 → F 53.1 | C/F/B/F/A+ → C/F/A/C/A+ | still a `tls_reachable` hard fail; the other 20 TLS checks N/A "no TLS handshake" |
+| no-address-records | incomplete 29.3 → 46.4 | email F → C | email as in healthy; still incomplete |
+| no-weighted-tls | incomplete 68.3 → 81.7 | C/–/B/F/A+ → C/–/A/C/A+ | HTTP, email as in healthy; TLS nothing possible, still incomplete |
+| full-beacon-sending-no-dkim | B 79.1 → A 91.2 | C/B/B/B/A+ → C/A+/A/A/A+ | email: `reject_no_dkim` is a dkim warn (3) instead of an auth-bucket warn (10) |
+| full-beacon-partial, full-beacon-timeout | incomplete 79.8 → 91.2 | tls B → A+, http B → A | email errored or timed out; still incomplete |
+
+The hygiene skip fix shows in HTTP: `hygiene` (skip) is gone, its three checks are measured or "not reported". The TLS shift of the goldens is mostly a fixture artefact (hand-written port quality inconsistent with tlsight's rules); the real shift is measured against the V1 baseline before the release (R4).
+
+### Reader
+
+COUNTS blockers=1 amendments=0 deferred=3 nits=3; all fixed in this phase except where noted.
+
+- BLOCKER (fixed): the live check list showed a warn as `floor(weight/2)` while the score gives exactly half (`crates/lens/frontend/src/components/CheckList.tsx`); now `weight / 2`, "2.5/5", with a vitest.
+- DEFERRED (fixed): `[scoring] profile_path` loaded a profile with non-catalogue IDs and graded everything incomplete; now refused at startup naming the ID.
+- DEFERRED (fixed): TLS waits for the resolve; config validation now also requires `resolve_timeout_ms < [backends.tls] timeout_ms`.
+- DEFERRED (fixed): V1 cases lost with `crates/lens/src/scoring/` (several hard fails, every threshold row, lens `grade_for`) — `crates/engine/tests/score_v1_cases.rs`, `crates/lens/tests/grade_for.rs`.
+- NIT (fixed): email findings carried beacon `info` notes of routed sub-checks; only warn/fail (and `sends_no_mail`) now.
+- NIT (fixed): V1 bucket names in user-facing copy (`App.tsx`, `site/guide/lens.html`, `site/api/lens.html`).
+- NIT (fixed): the DNS module ran prism's IP enrichment for the dropped `infrastructure` check; it no longer does, and the startup warning is gone.
+
+### Deferred
+
+- `[modules.dns.backends.ip]` is still accepted and now ignored (the production config sets it, `crates/lens/tests/fixtures/lens.production.toml:72`); refusing it is a config change for argus, left for a later feature.
+- The TLS section budget (`[backends.tls] timeout_ms` 15000 vs `handshake_timeout_secs` 5 + HSTS checks + the resolve wait of ≤ 1.5 s) does not strictly cover the worst case; it did not before either.
+- Five check code defects for `v2-check-fixes` (phase 1 reader).
+
+### Behavioural verification
+
+`cargo test -p lens --test v3_render --test catalogue_emitters` green: a run over every module golden emits exactly the 54 IDs once each, lens's grade equals `netray_engine::score(Profiles::current(), …)` with a weight-5 warn earning 2.5, a 0.24.0 snapshot with `email_authentication` and integer `earned` renders "Authentication" and `/guide/email-auth`.

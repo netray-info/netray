@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::LazyLock;
@@ -10,9 +11,11 @@ use netray_model::{CheckId, CheckResult, Protocol, Status};
 use serde_json::json;
 
 use crate::config::{ConfigError, ModuleConfig};
+use crate::dns::CaaLookup;
+use crate::dns::https_record::ech_in_presentation;
 use crate::error::AppError;
 use crate::input::{self, Target};
-use crate::quality::HealthCheck;
+use crate::quality::{self, HealthCheck, checks};
 use crate::routes::{self, InspectRequest, InspectResponse, PortResult};
 use crate::state::AppState;
 use crate::tls::IpInspectionResult;
@@ -83,7 +86,7 @@ impl TlsModule {
         })
     }
 
-    async fn measure(&self, ctx: &RunContext) -> Result<InspectResponse, AppError> {
+    async fn measure(&self, ctx: &RunContext, facts: &Facts) -> Result<InspectResponse, AppError> {
         let start = Instant::now();
         let config = self.state.config.load();
         let parsed = input::parse_input(ctx.domain.as_str(), config.limits.max_ports)?;
@@ -129,6 +132,8 @@ impl TlsModule {
                 skipped_ips,
                 request_id: String::new(),
                 start,
+                caa: (!facts.caa.is_empty()).then(|| CaaLookup::from_presentation(&facts.caa)),
+                ech: (!facts.https.is_empty()).then(|| ech_in_presentation(&facts.https)),
             },
         )
         .await
@@ -173,9 +178,13 @@ impl Module for TlsModule {
         &[]
     }
 
-    fn run<'a>(&'a self, ctx: &'a RunContext, _facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
+    fn wants_facts(&self) -> bool {
+        true
+    }
+
+    fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
         Box::pin(async move {
-            match self.measure(ctx).await {
+            match self.measure(ctx, facts).await {
                 Ok(resp) => translate(&resp),
                 Err(e) => SectionOutcome::Incomplete {
                     reason: e.to_string(),
@@ -185,39 +194,144 @@ impl Module for TlsModule {
     }
 }
 
-/// Maps the first port's quality checks onto `tls.<id>` checks and the V1 headline.
+/// Maps port 443 (else the first port) onto all 21 `tls.<id>` checks and the V1 headline. Each
+/// per-address check is measured on every address that completed a handshake and reports the
+/// worst of them; CAA, DANE and OCSP come once from the summary.
 pub fn translate(resp: &InspectResponse) -> SectionOutcome {
-    let mut checks: Vec<CheckResult> = Vec::new();
+    let port = resp
+        .ports
+        .iter()
+        .find(|p| p.port == 443)
+        .or_else(|| resp.ports.first());
+    let ips = port.map_or(&[][..], |p| p.ips.as_slice());
+    let handshakes: Vec<&IpInspectionResult> = ips.iter().filter(|r| r.error.is_none()).collect();
 
-    // Collect per-port quality checks (cert, protocol, config) from the first port.
-    // These are in ports[0].quality.checks (PortQualityResult).
-    if let Some(port) = resp.ports.first()
-        && let Some(port_quality) = port.quality.as_ref()
-    {
-        for hc in &port_quality.checks {
-            let id = match CheckId::parse(&format!("tls.{}", hc.id)) {
-                Ok(id) => id,
-                Err(e) => {
-                    return SectionOutcome::Incomplete {
-                        reason: e.to_string(),
-                    };
-                }
-            };
-            checks.push(CheckResult {
-                id,
-                status: check_status(hc, &port.ips),
-                findings: tls_check_messages(hc.status, &hc.detail),
-                evidence: vec![],
-            });
+    let mut by_id: HashMap<String, CheckResult> = HashMap::new();
+    let reachable = checks::check_tls_reachable(ips);
+    let reachable_status = check_status(&reachable, ips);
+    by_id.insert(
+        reachable.id.clone(),
+        result(&reachable.id, reachable_status, findings(&reachable)),
+    );
+
+    if let (Some(port), false) = (port, handshakes.is_empty()) {
+        let is_hostname = resp.input_mode == "hostname";
+        let ct_enabled = resp.summary.checks.ct_logged != CheckStatus::Skip;
+        let per_address: Vec<(&str, Vec<HealthCheck>)> = handshakes
+            .iter()
+            .map(|r| {
+                let mut checks =
+                    quality::assess_address(r, port.port, is_hostname, &resp.hostname, ct_enabled);
+                not_applicable_when_chain_complete(&mut checks);
+                (r.ip.as_str(), checks)
+            })
+            .collect();
+        for id in tls_checks() {
+            let name = id.to_string();
+            let name = name.trim_start_matches("tls.");
+            let hcs: Vec<(&str, &HealthCheck)> = per_address
+                .iter()
+                .filter_map(|(ip, checks)| {
+                    checks.iter().find(|hc| hc.id == name).map(|hc| (*ip, hc))
+                })
+                .collect();
+            if let Some(r) = worst_of(name, &hcs) {
+                by_id.insert(name.to_string(), r);
+            }
+        }
+
+        let summary = &resp.summary.checks;
+        let ocsp = summary.ocsp_stapled;
+        for hc in [
+            checks::check_ocsp_stapled(ocsp == CheckStatus::Pass, ocsp != CheckStatus::Skip),
+            checks::check_caa_compliant(summary.caa_compliant),
+            checks::check_dane_valid(summary.dane_valid),
+            checks::check_consistency(port.consistency.as_ref()),
+            checks::check_alpn_consistency(ips),
+        ] {
+            by_id.insert(
+                hc.id.clone(),
+                result(&hc.id, hc.status.into(), findings(&hc)),
+            );
         }
     }
 
-    let headline = build_headline(&resp.ports);
+    let fallback = if handshakes.is_empty() {
+        "no TLS handshake"
+    } else {
+        "not reported"
+    };
+    let checks = tls_checks()
+        .iter()
+        .map(|id| {
+            let name = id.to_string();
+            let name = name.trim_start_matches("tls.");
+            by_id
+                .remove(name)
+                .unwrap_or_else(|| result(name, Status::NotApplicable, vec![fallback.to_string()]))
+        })
+        .collect();
 
     SectionOutcome::Measured {
         checks,
-        presentation: json!({ "headline": headline }),
+        presentation: json!({ "headline": build_headline(&resp.ports) }),
     }
+}
+
+fn result(name: &str, status: Status, findings: Vec<String>) -> CheckResult {
+    CheckResult {
+        id: CheckId::parse(&format!("tls.{name}")).expect("static check id"),
+        status,
+        findings,
+        evidence: vec![],
+    }
+}
+
+/// The detail of a verdict that is not a pass.
+fn findings(hc: &HealthCheck) -> Vec<String> {
+    match hc.status {
+        CheckStatus::Pass => vec![],
+        _ => vec![hc.detail.clone()],
+    }
+}
+
+/// An AIA pass because the chain is complete says nothing about AIA: not applicable.
+fn not_applicable_when_chain_complete(checks: &mut [HealthCheck]) {
+    let complete = checks
+        .iter()
+        .any(|hc| hc.id == "chain_complete" && hc.status != CheckStatus::Fail);
+    if let Some(aia) = checks
+        .iter_mut()
+        .find(|hc| hc.id == "aia_reachability" && hc.status == CheckStatus::Pass)
+        && complete
+    {
+        aia.status = CheckStatus::Skip;
+    }
+}
+
+/// The worst verdict over the addresses (Fail > Warn > Pass > Skip); a Warn or Fail names each
+/// address at that verdict, all-Skip is not applicable with the detail.
+fn worst_of(name: &str, hcs: &[(&str, &HealthCheck)]) -> Option<CheckResult> {
+    let rank = |s: CheckStatus| match s {
+        CheckStatus::Skip => 0,
+        CheckStatus::Pass => 1,
+        CheckStatus::Warn => 2,
+        CheckStatus::Fail => 3,
+    };
+    let worst = hcs
+        .iter()
+        .map(|(_, hc)| hc.status)
+        .max_by_key(|s| rank(*s))?;
+    let findings = match worst {
+        CheckStatus::Pass => vec![],
+        CheckStatus::Skip => vec![hcs[0].1.detail.clone()],
+        _ => hcs
+            .iter()
+            .filter(|(_, hc)| hc.status == worst)
+            .map(|(ip, hc)| format!("{ip}: {}", hc.detail))
+            .collect(),
+    };
+    Some(result(name, worst.into(), findings))
 }
 
 /// tlsight's status; a `tls_reachable` skip because this host cannot reach the target is
@@ -233,14 +347,6 @@ fn check_status(hc: &HealthCheck, ips: &[IpInspectionResult]) -> Status {
         }
     }
     hc.status.into()
-}
-
-/// Return diagnostic messages for a TLS check — only for non-passing verdicts.
-fn tls_check_messages(status: CheckStatus, detail: &str) -> Vec<String> {
-    match status {
-        CheckStatus::Pass | CheckStatus::Skip => vec![],
-        _ => vec![detail.to_string()],
-    }
 }
 
 /// Build a human-readable headline from the first port's first IP result.
