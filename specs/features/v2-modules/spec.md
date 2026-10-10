@@ -1,6 +1,6 @@
 # Spec: v2 modules
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-10
 
 ## Goal
