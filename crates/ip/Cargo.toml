@@ -58,10 +58,16 @@ hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 insta = { version = "1", features = ["json", "yaml", "toml"] }
 pretty_assertions = "1.4.0"
 tower = { workspace = true, features = ["util"] }
+tracing-subscriber = "0.3"
 
 [[test]]
 name = "module"
 path = "tests/module.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "module_v3"
+path = "tests/module_v3.rs"
 required-features = ["testing"]
 
 # Explicit test binary so admin tests always run in their own process.
