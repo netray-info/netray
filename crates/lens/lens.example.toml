@@ -20,9 +20,6 @@ timeout_ms = 15000
 # [modules.dns.limits]                # a check charges 25 per target: 19 for the DNS check, 6 for the resolve stage's facts
 # per_target_per_minute = 160
 # per_target_burst = 53
-#
-# [modules.dns.backends.ip]
-# url = "https://ip.netray.info"     # enrichment for the resolved addresses
 
 # The TLS section runs in-process (module `netray-tls`); `url` is refused.
 [backends.tls]
@@ -97,7 +94,7 @@ global_per_minute = 100
 global_burst = 20
 
 [scoring]
-# profile_path = "profiles/default.toml"   # override built-in default profile
+# profile_path = "my-profile.toml"   # override the built-in profile v3 (crates/engine/profiles/v3.toml)
 
 [site]
 # Apex landing-page branding. Every field is optional; missing values fall

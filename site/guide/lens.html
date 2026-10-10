@@ -165,75 +165,100 @@
     </ul>
 
     <p>
-      Lens reflects this split in four scored buckets within the Email section:
+      Lens reflects this split in the ten scored checks of the Email section:
     </p>
 
     <table>
       <thead>
-        <tr><th>Bucket</th><th>Checks</th><th>Applies to</th><th>Weight</th></tr>
+        <tr><th>Check</th><th>Applies to</th><th>Weight</th></tr>
       </thead>
       <tbody>
         <tr>
-          <td><strong>Authentication</strong></td>
-          <td>SPF, DKIM, DMARC</td>
+          <td><strong>SPF</strong></td>
           <td>All domains</td>
-          <td>10</td>
+          <td>3</td>
         </tr>
         <tr>
-          <td><strong>Infrastructure</strong></td>
-          <td>MX, FCrDNS, DNSBL</td>
-          <td>Domains with MX records</td>
-          <td>5</td>
+          <td><strong>DKIM</strong></td>
+          <td>All domains</td>
+          <td>3</td>
         </tr>
         <tr>
-          <td><strong>Transport</strong></td>
-          <td>MTA-STS, TLS-RPT, DANE</td>
-          <td>Domains with MX records</td>
-          <td>5</td>
+          <td><strong>DMARC</strong></td>
+          <td>All domains</td>
+          <td>4</td>
         </tr>
         <tr>
-          <td><strong>Brand Policy</strong></td>
-          <td>BIMI, DMARC enforcement</td>
+          <td><strong>MX</strong></td>
           <td>Domains with MX records</td>
           <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>MTA-STS</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>TLS-RPT</strong></td>
+          <td>Domains with MX records</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td><strong>BIMI</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>DANE</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>DNSBL</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>FCrDNS</strong></td>
+          <td>Domains with MX records</td>
+          <td>1</td>
         </tr>
       </tbody>
     </table>
 
     <p>
-      When lens detects no MX records, the three receiving buckets are marked
+      When lens detects no MX records, the seven MX-dependent checks are marked
       <strong>not applicable</strong> and use a <code>skip</code> verdict.
       Skip verdicts are excluded from both earned and possible totals, so a
       parked domain is not penalised for missing receiving infrastructure.
-      Only the Authentication bucket (weight 10) is scored.
+      Only SPF, DKIM and DMARC (weight 10) are scored.
     </p>
 
     <h2>Worked example: mail domain vs. parked domain</h2>
 
     <h3>Mail domain (MX records present)</h3>
     <p>
-      <code>example.com</code> runs email. All four buckets are scored.
-      SPF, DKIM, and DMARC pass; MTA-STS is missing (warn); everything else passes.
+      <code>example.com</code> runs email. All ten checks are scored.
+      SPF, DKIM, and DMARC pass; MTA-STS is in testing mode (warn); everything else passes.
     </p>
     <ul>
-      <li>Authentication: 10/10 (SPF, DKIM, DMARC all pass)</li>
-      <li>Infrastructure: 5/5 (MX, FCrDNS, DNSBL all pass)</li>
-      <li>Transport: 2.5/5 (MTA-STS warns, others pass)</li>
-      <li>Brand Policy: 2/2</li>
-      <li>Email section: 19.5/22 = 88.6% &rarr; grade B</li>
+      <li>SPF, DKIM, DMARC: 10/10</li>
+      <li>MX, DNSBL, FCrDNS: 5/5</li>
+      <li>MTA-STS: 1/2 (a warn earns half the weight)</li>
+      <li>TLS-RPT, DANE, BIMI: 5/5</li>
+      <li>Email section: 21/22 = 95.5% &rarr; grade A</li>
     </ul>
 
     <h3>Parked domain (no MX records)</h3>
     <p>
       <code>parked.example.com</code> is used only for web. No MX records exist.
-      Infrastructure, Transport, and Brand Policy are skipped automatically.
+      The seven MX-dependent checks are skipped automatically.
     </p>
     <ul>
-      <li>Authentication: 10/10 (SPF and DMARC both pass — mandatory even for parked domains)</li>
-      <li>Infrastructure: skipped (no MX)</li>
-      <li>Transport: skipped (no MX)</li>
-      <li>Brand Policy: skipped (no MX)</li>
-      <li>Email section: 10/10 = 100% &rarr; grade A+</li>
+      <li>SPF: 3/3, DMARC: 4/4 (mandatory even for parked domains)</li>
+      <li>DKIM: skipped (no DKIM keys published)</li>
+      <li>MX, MTA-STS, TLS-RPT, BIMI, DANE, DNSBL, FCrDNS: skipped (no MX)</li>
+      <li>Email section: 7/7 = 100% &rarr; grade A+</li>
     </ul>
     <p>
       A parked domain with correct SPF and DMARC records scores A+ on the email
@@ -253,7 +278,7 @@ https://lens.netray.info/?d=example.com&dkim_selectors=google,selector1
 
 # Via curl
 curl -s 'https://lens.netray.info/api/check/example.com?stream=false&dkim_selectors=default,s1' \
-  | jq '.email.checks[] | select(.name == "email_authentication")'</code></pre>
+  | jq '.email.checks[] | select(.name == "dkim")'</code></pre>
 
     <p>Selector validation rules:</p>
     <ul>

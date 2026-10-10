@@ -189,24 +189,36 @@ data: {
   "headline": "Auth: OK  Infra: OK  Transport: OK  Brand: OK",
   "grade": "A",
   "checks": [
-    {"name": "email_authentication", "verdict": "pass", "weight": 10},
-    {"name": "email_infrastructure",  "verdict": "pass", "weight": 5},
-    {"name": "email_transport",       "verdict": "pass", "weight": 5},
-    {"name": "email_brand_policy",    "verdict": "pass", "weight": 2}
+    {"name": "mx",      "verdict": "pass", "weight": 2},
+    {"name": "spf",     "verdict": "pass", "weight": 3},
+    {"name": "dkim",    "verdict": "pass", "weight": 3},
+    {"name": "dmarc",   "verdict": "pass", "weight": 4},
+    {"name": "mta_sts", "verdict": "pass", "weight": 2},
+    {"name": "tls_rpt", "verdict": "pass", "weight": 1},
+    {"name": "bimi",    "verdict": "pass", "weight": 2},
+    {"name": "dane",    "verdict": "pass", "weight": 2},
+    {"name": "dnsbl",   "verdict": "pass", "weight": 2},
+    {"name": "fcrdns",  "verdict": "pass", "weight": 1}
   ],
   "detail_url": "https://email.netray.info/?domain=example.com"
 }
 
-# For a parked domain (no MX records), infrastructure/transport/brand are skipped:
+# For a parked domain (no MX records), the seven MX-dependent checks are skipped:
 data: {
   "status": "pass",
   "headline": "Auth: OK  Infra: N/A  Transport: N/A  Brand: N/A",
   "grade": "B",
   "checks": [
-    {"name": "email_authentication", "verdict": "pass",  "weight": 10},
-    {"name": "email_infrastructure",  "verdict": "skip",  "weight": 5,  "messages": ["No MX records — email receiving not configured"]},
-    {"name": "email_transport",       "verdict": "skip",  "weight": 5,  "messages": ["No MX records — email receiving not configured"]},
-    {"name": "email_brand_policy",    "verdict": "skip",  "weight": 2,  "messages": ["No MX records — email receiving not configured"]}
+    {"name": "mx",      "verdict": "skip", "weight": 2, "messages": ["no MX"]},
+    {"name": "spf",     "verdict": "pass", "weight": 3},
+    {"name": "dkim",    "verdict": "pass", "weight": 3},
+    {"name": "dmarc",   "verdict": "pass", "weight": 4},
+    {"name": "mta_sts", "verdict": "skip", "weight": 2, "messages": ["no MX"]},
+    {"name": "tls_rpt", "verdict": "skip", "weight": 1, "messages": ["no MX"]},
+    {"name": "bimi",    "verdict": "skip", "weight": 2, "messages": ["no MX"]},
+    {"name": "dane",    "verdict": "skip", "weight": 2, "messages": ["no MX"]},
+    {"name": "dnsbl",   "verdict": "skip", "weight": 2, "messages": ["no MX"]},
+    {"name": "fcrdns",  "verdict": "skip", "weight": 1, "messages": ["no MX"]}
   ],
   "detail_url": "https://email.netray.info/?domain=parked.example.com"
 }</code></pre>
