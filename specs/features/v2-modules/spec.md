@@ -38,7 +38,7 @@ The five check services become V2 modules and lens runs them in-process through 
 7. **Email module.** `netray-email` has a `ModuleConfig` and implements `Module` (`email.<v1 name>`), running `run_all_checks` in-process with the request's DKIM selectors and translating with the function moved from `backends/email.rs`; `golden_module` behind `testing`; its inspection semaphore stays.
 8. **Email section through the engine.** As 5 for email: `backends/email.rs` and `[backends.email] url` gone; full-output goldens unchanged, the three beacon-only ones included.
 9. **IP rename.** `crates/ifconfig-rs` → `crates/ip` (`netray-ip`), its `data/` directory moves along; `NETRAY_IP_`, `NETRAY_IP_CONFIG`, an `IFCONFIG_`-prefixed variable refuses startup; the data image, the release's no-data check, paths, checks, docs follow.
-10. **IP module.** `netray-ip` has a `ModuleConfig` with the data paths and loads them as ifconfig-rs does (GeoIP city, ASN and user-agent regexes refuse startup when they fail to load, the others warn); `netray lens --check-config` loads them too and has a `startup_rejects` row. `Module` (`ip.<v1 name>`) samples four IPv4 and four IPv6 public addresses from `Facts`, sorted, and translates with the function moved from `backends/ip.rs`; `golden_module` behind `testing`.
+10. **IP module.** `netray-ip` has a `ModuleConfig` with the data paths and loads them as ifconfig-rs does (GeoIP city, ASN and user-agent regexes refuse startup when they fail to load, the others warn); `netray lens --check-config` loads them too and has a `startup_rejects` row. lens reloads the IP data on SIGHUP as ifconfig-rs does. `Module` (`ip.<v1 name>`) samples four IPv4 and four IPv6 public addresses from `Facts`, sorted, and translates with the function moved from `backends/ip.rs`; `golden_module` behind `testing`.
 11. **IP section through the engine.** As 5 for IP; until the DNS module exists, lens fills `Facts.a`/`aaaa` from the DNS backend's resolved addresses.
 12. **TLS rename.** `crates/tlsight` → `crates/tls` (`netray-tls`), `NETRAY_TLS_`, `NETRAY_TLS_CONFIG`, a `TLSIGHT_`-prefixed variable refuses startup; paths, checks, docs follow.
 13. **TLS module.** The inspection core is extracted from `do_inspect` into a pub function that both the HTTP route and the module call; tlsight's route responses stay as they are. `ModuleConfig`, `Module` (`tls.<v1 name>`), the handshake semaphore stays, the translation moves from `backends/tls.rs`; `golden_module` behind `testing`.
@@ -96,6 +96,7 @@ The five check services become V2 modules and lens runs them in-process through 
 - GIVEN `ifconfig-json.json` WHEN translated THEN equal to the IP section of its full-output golden; GIVEN nine public and two private addresses in `Facts` THEN four IPv4 and four IPv6 public ones are sampled, sorted.
 - GIVEN `[modules.ip] geoip_city_db` missing WHEN `netray lens --check-config` and WHEN lens starts THEN both refuse; GIVEN `feodo_botnet_ips` missing THEN both start with a warning.
 - GIVEN `IFCONFIG_CONFIG` set WHEN `netray ip` starts THEN refused naming `NETRAY_IP_CONFIG`.
+- GIVEN a data file replaced and SIGHUP sent to lens WHEN the next IP section runs THEN it uses the new data.
 - GIVEN the release image WHEN checked THEN it carries no data file.
 - GIVEN lens WHEN the full-output and `lens_golden` tests run THEN unchanged.
 
@@ -154,6 +155,7 @@ The five check services become V2 modules and lens runs them in-process through 
 - `RunContext` carries domain and options, a `Registry` in the engine, `lens::run_with` from the binary (operator, 2026-10-10).
 - The IP module reads `Facts` from Phase 3; lens fills them from the DNS backend until Phase 5 (operator, 2026-10-10).
 - Order HTTP, email, IP, TLS, DNS (operator, 2026-10-10).
+- lens's container limit rises to 768m for the in-process IP data (heap-loaded as in ifconfig-rs, no mmap), and lens reloads that data on SIGHUP; both argus-side in the version-gated change (operator, 2026-10-10, after argus-oci's feasibility check).
 - Check IDs `<p>.<v1 name>` in 1a; the catalogue renames them in 1b (operator, 2026-10-10).
 
 ## Open decisions
