@@ -363,7 +363,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "beacon"
-version = "0.23.0"
+version = "0.23.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -2039,7 +2039,7 @@ dependencies = [
 
 [[package]]
 name = "ifconfig-rs"
-version = "0.23.0"
+version = "0.23.1"
 dependencies = [
  "arc-swap",
  "axum",
@@ -2389,7 +2389,7 @@ dependencies = [
 
 [[package]]
 name = "lens"
-version = "0.23.0"
+version = "0.23.1"
 dependencies = [
  "axum",
  "axum-extra",
@@ -2811,7 +2811,7 @@ checksum = "27b02d87554356db9e9a873add8782d4ea6e3e58ea071a9adb9a2e8ddb884a8b"
 
 [[package]]
 name = "netray"
-version = "0.23.0"
+version = "0.23.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -2830,7 +2830,7 @@ dependencies = [
 
 [[package]]
 name = "netray-common"
-version = "0.23.0"
+version = "0.23.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -3419,7 +3419,7 @@ dependencies = [
 
 [[package]]
 name = "prism"
-version = "0.23.0"
+version = "0.23.1"
 dependencies = [
  "arc-swap",
  "axum",
@@ -4477,7 +4477,7 @@ dependencies = [
 
 [[package]]
 name = "spectra"
-version = "0.23.0"
+version = "0.23.1"
 dependencies = [
  "axum",
  "chrono",
@@ -5028,7 +5028,7 @@ dependencies = [
 
 [[package]]
 name = "tlsight"
-version = "0.23.0"
+version = "0.23.1"
 dependencies = [
  "arc-swap",
  "axum",

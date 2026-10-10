@@ -57,6 +57,8 @@ pub struct AppState {
     pub badge_check_fn: Option<BadgeCheckFn>,
     /// Snapshot storage. `None` when snapshots are disabled.
     pub snapshot_store: Option<Arc<crate::snapshot::SnapshotStore>>,
+    /// Fresh runs per client for the current hour; flushed hourly into a histogram.
+    pub client_runs: Arc<crate::metrics::ClientRunCounter>,
 }
 
 impl AppState {
@@ -154,6 +156,7 @@ impl AppState {
             font_db,
             badge_check_fn: None,
             snapshot_store: None,
+            client_runs: Arc::new(crate::metrics::ClientRunCounter::new()),
         })
     }
 }
