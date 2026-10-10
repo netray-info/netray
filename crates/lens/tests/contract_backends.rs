@@ -13,7 +13,7 @@ use std::time::Duration;
 mod common;
 
 use common::{dns_golden_raw, run_dns, run_tls, tls_golden};
-use lens::backends::BackendExtra;
+use lens::modules::BackendExtra;
 use lens::scoring::engine::CheckVerdict;
 use netray_engine::SectionOutcome;
 use netray_http::inspect::assembler::InspectResponse;

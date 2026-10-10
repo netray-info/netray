@@ -20,7 +20,9 @@ use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
-use common::{dns_golden, email_golden, http_module, ip_golden, registry_with, tls_module};
+use common::{
+    dns_golden, email_golden, facts_golden, http_module, ip_golden, registry_with, tls_module,
+};
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -249,6 +251,7 @@ async fn run_fixture(name: &str) -> String {
         config,
         registry_with(
             dns_golden(f.dns),
+            facts_golden(f.dns),
             http_module(f.http),
             email_golden(f.email),
             ip_golden(f.ip),

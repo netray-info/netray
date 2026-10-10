@@ -17,8 +17,8 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use common::{
-    dns_golden_raw, dns_with_body, email_golden, email_incomplete, http_module, ip_golden,
-    registry_with, tls_module,
+    dns_golden_raw, dns_with_body, email_golden, email_incomplete, facts_golden_raw,
+    facts_with_body, http_module, ip_golden, registry_with, tls_module,
 };
 use lens::config::Config;
 use lens::routes::{api_router, badge_router, og_router};
@@ -92,8 +92,13 @@ async fn harness(b: Backends) -> Harness {
         Answer::Golden(file) => dns_golden_raw(file),
         Answer::Body(body) => dns_with_body(body),
     };
+    let facts = match &b.dns {
+        Answer::Golden(file) => facts_golden_raw(file),
+        Answer::Body(body) => facts_with_body(body),
+    };
     let registry = registry_with(
         dns,
+        facts,
         http_module(b.http),
         email,
         ip_golden("ifconfig-json.json"),

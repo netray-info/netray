@@ -5,6 +5,8 @@
 //! `[backends.email] url` and no other section's module in the registry, so the section cannot
 //! have come from a request.
 
+mod common;
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -68,7 +70,9 @@ fn app() -> (Router, Arc<Mutex<Vec<Option<Vec<String>>>>>) {
     config.snapshots.enabled = false;
 
     let seen = Arc::new(Mutex::new(Vec::new()));
-    let registry = Registry::new().with(Box::new(RecordingEmail { seen: seen.clone() }));
+    let registry = Registry::new()
+        .with(Box::new(RecordingEmail { seen: seen.clone() }))
+        .with_facts(Box::new(common::StubFacts(Facts::default())));
     let state = AppState::with_registry(config, registry).unwrap();
     let (routes, _) = api_router().split_for_parts();
     let app = Router::new()

@@ -15,7 +15,7 @@ use std::net::IpAddr;
 use std::time::Duration;
 
 use common::{ip_golden, run_ip};
-use lens::backends::BackendExtra;
+use lens::modules::BackendExtra;
 
 struct Case {
     name: &'static str,

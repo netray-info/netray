@@ -10,7 +10,8 @@ use std::time::{Duration, Instant};
 mod common;
 
 use common::{
-    dns_golden_raw, email_golden, http_module, ip_golden, registry_with, slow, tls_golden,
+    dns_golden_raw, email_golden, facts_golden_raw, http_module, ip_golden, registry_with, slow,
+    tls_golden,
 };
 use lens::check::{CheckInput, CheckOutput, SectionError, run_check_with_deadline};
 use lens::config::{
@@ -113,6 +114,7 @@ fn state(s: Setup) -> AppState {
     };
     let registry = registry_with(
         module(s.dns, "prism.sse", dns_golden_raw),
+        facts_golden_raw("prism.sse"),
         http_module(Some("spectra-inspect.json")),
         module(s.email, "beacon.sse", email_golden),
         ip_golden("ifconfig-json.json"),
@@ -139,7 +141,7 @@ async fn run(state: &AppState, deadline: Duration, guard: Duration) -> (CheckOut
     (out, start.elapsed())
 }
 
-fn is_timeout(r: &Result<lens::backends::BackendResult, SectionError>) -> bool {
+fn is_timeout(r: &Result<lens::modules::BackendResult, SectionError>) -> bool {
     matches!(r, Err(SectionError::Timeout))
 }
 

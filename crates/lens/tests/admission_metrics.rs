@@ -19,7 +19,8 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use common::{
-    dns_golden_raw, email_golden, gated, http_module, ip_golden, registry_with, tls_golden,
+    dns_golden_raw, email_golden, facts_golden_raw, gated, http_module, ip_golden, registry_with,
+    tls_golden,
 };
 use lens::config::Config;
 use lens::routes::api_router;
@@ -48,6 +49,7 @@ fn app(per_ip: u32, dns_gate: Option<(Arc<Notify>, Arc<Notify>)>) -> Router {
     };
     let registry = registry_with(
         dns,
+        facts_golden_raw("prism.sse"),
         http_module(Some("spectra-inspect.json")),
         email_golden("beacon.sse"),
         ip_golden("ifconfig-json.json"),

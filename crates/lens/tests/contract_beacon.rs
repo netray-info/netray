@@ -9,9 +9,9 @@ use std::time::Duration;
 mod common;
 
 use common::golden;
-use lens::backends::{Backend, BackendContext, BackendExtra, BackendResult};
 use lens::check::SectionError;
 use lens::modules::ModuleSection;
+use lens::modules::{Backend, BackendContext, BackendExtra, BackendResult};
 use lens::scoring::engine::CheckVerdict;
 use netray_engine::{Module, Registry};
 use netray_model::Protocol;
@@ -21,13 +21,16 @@ const TIMEOUT: Duration = Duration::from_secs(5);
 /// Run lens's email section over an email module.
 async fn run_raw(module: Box<dyn Module>) -> Result<BackendResult, SectionError> {
     let section = ModuleSection {
-        registry: Arc::new(Registry::new().with(module)),
+        registry: Arc::new(
+            Registry::new()
+                .with(module)
+                .with_facts(common::facts_with_ips(&[])),
+        ),
         protocol: Protocol::Email,
         timeout: TIMEOUT,
         public_url: String::new(),
     };
     let ctx = BackendContext {
-        resolved_ips: vec![],
         dkim_selectors: None,
         forward_headers: reqwest::header::HeaderMap::new(),
     };

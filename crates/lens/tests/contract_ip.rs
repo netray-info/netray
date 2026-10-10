@@ -8,7 +8,7 @@ mod common;
 use std::time::Duration;
 
 use common::{golden, ip_golden, run_ip};
-use lens::backends::BackendExtra;
+use lens::modules::BackendExtra;
 
 #[tokio::test]
 async fn ip_module_reads_real_ifconfig_json_body() {

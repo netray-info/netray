@@ -4,8 +4,9 @@
 //! the HTTP module is `netray_http::testing::golden_module` on a spectra contract golden, the
 //! email module `netray_email::testing::golden_module` on a beacon `.sse` golden, the IP module
 //! `netray_ip::testing::golden_module` on the ifconfig contract golden; for a scenario where a
-//! section fails, a module answering `SectionOutcome::Incomplete`. The IP module takes its
-//! addresses from the DNS module's presentation (`resolved_ips`) through `Facts`.
+//! section fails, a module answering `SectionOutcome::Incomplete`. Every registry also carries
+//! the resolve stage: `netray_dns::testing::golden_facts` on the same prism golden as the DNS
+//! module, so the IP module samples its addresses from `Facts`, not from the DNS section.
 
 // Every test crate compiles this file whole but uses only some helpers.
 #![allow(dead_code)]
@@ -14,10 +15,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use lens::backends::{Backend, BackendContext, BackendResult};
 use lens::check::SectionError;
-use lens::modules::ModuleSection;
-use netray_engine::{BoxFuture, EvidencePath, Facts, Module, Registry, RunContext, SectionOutcome};
+use lens::modules::{Backend, BackendContext, BackendResult, ModuleSection};
+use netray_engine::{
+    BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, Registry, ResolveError,
+    RunContext, SectionOutcome,
+};
 use netray_model::{CheckId, Protocol};
 use tokio::sync::Notify;
 
@@ -152,6 +155,60 @@ pub fn dns_with_body(contract_sse: &str) -> Box<dyn Module> {
     netray_dns::testing::golden_module(contract_sse)
 }
 
+/// The resolve stage for the prism golden `file` as it is (`dns_golden_raw`).
+pub fn facts_golden_raw(file: &str) -> Box<dyn FactsProvider> {
+    netray_dns::testing::golden_facts(&golden(file))
+}
+
+/// The resolve stage for the prism golden `file` with the same public stand-in `dns_golden`
+/// serves, so the IP section samples the addresses it sampled before.
+pub fn facts_golden(file: &str) -> Box<dyn FactsProvider> {
+    facts_with_body(&golden(file).replace(DNS_DOCUMENTATION_A, DNS_PUBLIC_A))
+}
+
+/// The resolve stage for `contract_sse` (a prism check stream).
+pub fn facts_with_body(contract_sse: &str) -> Box<dyn FactsProvider> {
+    netray_dns::testing::golden_facts(contract_sse)
+}
+
+/// A resolve stage that answers exactly `facts`.
+pub struct StubFacts(pub Facts);
+
+impl FactsProvider for StubFacts {
+    fn resolve<'a>(
+        &'a self,
+        _ctx: &'a RunContext,
+        _domain: &'a Domain,
+    ) -> BoxFuture<'a, Result<Facts, ResolveError>> {
+        Box::pin(async move { Ok(self.0.clone()) })
+    }
+}
+
+/// A resolve stage that fails.
+pub struct FailingFacts;
+
+impl FactsProvider for FailingFacts {
+    fn resolve<'a>(
+        &'a self,
+        _ctx: &'a RunContext,
+        _domain: &'a Domain,
+    ) -> BoxFuture<'a, Result<Facts, ResolveError>> {
+        Box::pin(async { Err(ResolveError("resolver unreachable".to_string())) })
+    }
+}
+
+/// A resolve stage answering exactly the A and AAAA addresses in `ips`.
+pub fn facts_with_ips(ips: &[&str]) -> Box<dyn FactsProvider> {
+    let mut facts = Facts::default();
+    for ip in ips {
+        match ip.parse::<std::net::IpAddr>().unwrap() {
+            std::net::IpAddr::V4(a) => facts.a.push(a),
+            std::net::IpAddr::V6(a) => facts.aaaa.push(a),
+        }
+    }
+    Box::new(StubFacts(facts))
+}
+
 /// A DNS module whose run is incomplete: what lens saw as "prism answered HTTP 500".
 pub fn dns_incomplete() -> Box<dyn Module> {
     Box::new(Incomplete(Protocol::Dns))
@@ -211,7 +268,7 @@ pub fn ip_incomplete() -> Box<dyn Module> {
 }
 
 /// Run the IP section of lens over `module` for a domain whose DNS section resolved `ips`: the
-/// addresses reach the module as `Facts` through the adapter. `Err` is what lens turns into an
+/// addresses reach the module as `Facts` from the registry's resolve stage. `Err` is what lens turns into an
 /// Errored section.
 pub async fn run_ip(
     module: Box<dyn Module>,
@@ -219,13 +276,12 @@ pub async fn run_ip(
     ips: &[&str],
 ) -> Result<BackendResult, SectionError> {
     let section = ModuleSection {
-        registry: Arc::new(Registry::new().with(module)),
+        registry: Arc::new(Registry::new().with(module).with_facts(facts_with_ips(ips))),
         protocol: Protocol::Ip,
         timeout,
         public_url: String::new(),
     };
     let ctx = BackendContext {
-        resolved_ips: ips.iter().map(|s| s.parse().unwrap()).collect(),
         dkim_selectors: None,
         forward_headers: Default::default(),
     };
@@ -239,13 +295,12 @@ pub async fn run_dns(
     timeout: Duration,
 ) -> Result<BackendResult, SectionError> {
     let section = ModuleSection {
-        registry: Arc::new(Registry::new().with(module)),
+        registry: Arc::new(Registry::new().with(module).with_facts(facts_with_ips(&[]))),
         protocol: Protocol::Dns,
         timeout,
         public_url: String::new(),
     };
     let ctx = BackendContext {
-        resolved_ips: vec![],
         dkim_selectors: None,
         forward_headers: Default::default(),
     };
@@ -259,22 +314,22 @@ pub async fn run_tls(
     timeout: Duration,
 ) -> Result<BackendResult, SectionError> {
     let section = ModuleSection {
-        registry: Arc::new(Registry::new().with(module)),
+        registry: Arc::new(Registry::new().with(module).with_facts(facts_with_ips(&[]))),
         protocol: Protocol::Tls,
         timeout,
         public_url: String::new(),
     };
     let ctx = BackendContext {
-        resolved_ips: vec![],
         dkim_selectors: None,
         forward_headers: Default::default(),
     };
     section.run("example.com", &ctx).await
 }
 
-/// A registry with the given DNS, HTTP, email, IP and TLS modules.
+/// A registry with the given DNS, HTTP, email, IP and TLS modules and the resolve stage.
 pub fn registry_with(
     dns: Box<dyn Module>,
+    facts: Box<dyn FactsProvider>,
     http: Box<dyn Module>,
     email: Box<dyn Module>,
     ip: Box<dyn Module>,
@@ -286,6 +341,7 @@ pub fn registry_with(
         .with(email)
         .with(ip)
         .with(tls)
+        .with_facts(facts)
 }
 
 /// A registry whose DNS module runs the prism golden `prism.sse`, whose HTTP module runs the
@@ -296,6 +352,7 @@ pub fn registry_with(
 pub fn registry(http: Option<&str>, email: &str) -> Registry {
     registry_with(
         dns_golden("prism.sse"),
+        facts_golden("prism.sse"),
         http_module(http),
         email_golden(email),
         ip_golden("ifconfig-json.json"),

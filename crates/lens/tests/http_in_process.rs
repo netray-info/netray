@@ -3,6 +3,8 @@
 //! checks are the module's; there is no `http_url` to call and no other section's module in the
 //! registry, so the section cannot have come from a request.
 
+mod common;
+
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Duration;
 
@@ -59,9 +61,11 @@ async fn lens_runs_the_registry_http_module_in_process() {
     config.snapshots.enabled = false;
 
     let ran_for = Arc::new(Mutex::new(Vec::new()));
-    let registry = Registry::new().with(Box::new(RecordingHttp {
-        ran_for: ran_for.clone(),
-    }));
+    let registry = Registry::new()
+        .with(Box::new(RecordingHttp {
+            ran_for: ran_for.clone(),
+        }))
+        .with_facts(Box::new(common::StubFacts(Facts::default())));
     let state = AppState::with_registry(config, registry).unwrap();
 
     let input = CheckInput {

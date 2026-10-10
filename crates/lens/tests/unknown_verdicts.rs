@@ -12,8 +12,8 @@ use std::time::Duration;
 
 mod common;
 
-use lens::backends::{Backend, BackendContext};
 use lens::modules::ModuleSection;
+use lens::modules::{Backend, BackendContext};
 use lens::scoring::engine::CheckVerdict;
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
 use netray_email::quality::SseEvent;
@@ -73,13 +73,16 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
         "email" => {
             let module = netray_email::testing::golden_module(&body);
             let section = ModuleSection {
-                registry: Arc::new(Registry::new().with(module)),
+                registry: Arc::new(
+                    Registry::new()
+                        .with(module)
+                        .with_facts(common::facts_with_ips(&[])),
+                ),
                 protocol: Protocol::Email,
                 timeout: TIMEOUT,
                 public_url: String::new(),
             };
             let ctx = BackendContext {
-                resolved_ips: vec![],
                 dkim_selectors: None,
                 forward_headers: fwd,
             };
@@ -91,14 +94,17 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
         }
         "ip" => {
             let section = ModuleSection {
-                registry: Arc::new(Registry::new().with(netray_ip::testing::golden_module(&body))),
+                registry: Arc::new(
+                    Registry::new()
+                        .with(netray_ip::testing::golden_module(&body))
+                        .with_facts(common::facts_with_ips(&["1.1.1.1"])),
+                ),
                 protocol: Protocol::Ip,
                 timeout: TIMEOUT,
                 public_url: String::new(),
             };
             // A public address: the module's own target policy refuses documentation ranges.
             let ctx = BackendContext {
-                resolved_ips: vec!["1.1.1.1".parse().unwrap()],
                 dkim_selectors: None,
                 forward_headers: fwd,
             };
