@@ -1,7 +1,7 @@
 //! Incomplete results (spec grade-integrity, Phase 2, requirements 3 and 4).
 //!
 //! Real stub servers serve the committed backend goldens (or a failure, or a rewritten
-//! variant of a golden; the HTTP and email sections come from golden modules of the engine
+//! variant of a golden; the HTTP, email and IP sections come from golden modules of the engine
 //! registry, or from ones that are incomplete); lens runs with `tests/fixtures/lens.production.toml` (URLs pointed
 //! at the stubs), the cache enabled and a temp-file snapshot store. The routers are driven
 //! in-process. A result with an Errored section is `incomplete`: never cached, never
@@ -17,7 +17,7 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
-use common::{email_golden, email_incomplete, http_module, registry_with};
+use common::{email_golden, email_incomplete, http_module, ip_golden, registry_with};
 use lens::config::Config;
 use lens::routes::{api_router, badge_router, og_router};
 use lens::snapshot::SnapshotStore;
@@ -117,15 +117,6 @@ async fn harness(b: Backends) -> Harness {
     let mut config = Config::load(path.to_str()).expect("production config loads");
     config.backends.dns.url = Some(stub("/api/check", true, "text/event-stream", b.dns).await);
     config.backends.tls.url = Some(stub("/api/inspect", false, "application/json", b.tls).await);
-    config.backends.ip.url = Some(
-        stub(
-            "/json",
-            false,
-            "application/json",
-            Answer::Golden("ifconfig-json.json"),
-        )
-        .await,
-    );
     assert!(config.cache.enabled, "production config enables the cache");
     config.snapshots.enabled = true;
 
@@ -138,7 +129,7 @@ async fn harness(b: Backends) -> Harness {
         Some(file) => email_golden(file),
         None => email_incomplete(),
     };
-    let registry = registry_with(http_module(b.http), email);
+    let registry = registry_with(http_module(b.http), email, ip_golden("ifconfig-json.json"));
     let mut state = AppState::with_registry(config, registry).unwrap();
     state.snapshot_store = Some(std::sync::Arc::new(store));
     assert!(state.badge_check_fn.is_none(), "use the real check");

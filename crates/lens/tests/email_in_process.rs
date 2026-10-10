@@ -68,7 +68,6 @@ fn app() -> (Router, Arc<Mutex<Vec<Option<Vec<String>>>>>) {
     let closed = || Some("http://127.0.0.1:1".to_string());
     config.backends.dns.url = closed();
     config.backends.tls.url = closed();
-    config.backends.ip.url = closed();
     config.cache.enabled = false;
     config.snapshots.enabled = false;
 

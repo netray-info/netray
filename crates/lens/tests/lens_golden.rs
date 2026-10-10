@@ -1,10 +1,11 @@
 //! Golden test: the verdict lens computes from the committed backend goldens.
 //!
-//! Local stub servers serve the DNS, TLS and IP goldens from `tests/fixtures/contracts/`
-//! at the paths and methods lens calls; the HTTP and email sections come from `netray_http`'s and
-//! `netray_email`'s `golden_module` through the engine registry (`AppState::with_registry`).
+//! Local stub servers serve the DNS and TLS goldens from `tests/fixtures/contracts/`
+//! at the paths and methods lens calls; the HTTP, email and IP sections come from `netray_http`'s,
+//! `netray_email`'s and `netray_ip`'s `golden_module` through the engine registry
+//! (`AppState::with_registry`); the IP module samples the DNS section's addresses.
 //! lens runs with the backend and scoring settings of
-//! `tests/fixtures/lens.production.toml` (backend URLs pointed at the stubs, no HTTP or email backend), and
+//! `tests/fixtures/lens.production.toml` (backend URLs pointed at the stubs, no HTTP, email or IP backend URL), and
 //! `POST /api/check` is driven through its router in-process. A projection of the SSE
 //! events (grades, statuses, check verdicts; no prose, durations or ids) is compared with
 //! `tests/fixtures/contracts/lens-<fixture>.json`. `UPDATE_GOLDEN=1` rewrites those files.
@@ -20,7 +21,7 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
-use common::registry;
+use common::{email_golden, http_module, ip_golden, registry_with};
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -181,7 +182,6 @@ async fn production_config(f: &Fixture) -> Config {
         Some(file) => stub("/api/inspect", false, "application/json", file).await,
         None => failing_stub("/api/inspect", false).await,
     });
-    config.backends.ip.url = Some(stub("/json", false, "application/json", f.ip).await);
 
     config.snapshots.enabled = false;
     // Every run computes the verdict afresh instead of answering from the cache.
@@ -314,7 +314,11 @@ fn project(events: &[(String, Value)]) -> Projection {
 async fn run_fixture(name: &str) -> String {
     let config = production_config(fixture(name)).await;
     let f = fixture(name);
-    let state = AppState::with_registry(config, registry(f.http, f.email)).unwrap();
+    let state = AppState::with_registry(
+        config,
+        registry_with(http_module(f.http), email_golden(f.email), ip_golden(f.ip)),
+    )
+    .unwrap();
     let (routes, _) = api_router().split_for_parts();
     let app = Router::new()
         .merge(routes.with_state(state))

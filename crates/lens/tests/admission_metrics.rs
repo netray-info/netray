@@ -98,16 +98,6 @@ async fn app(per_ip: u32, dns_gate: Option<(Arc<Notify>, Arc<Notify>)>) -> Route
         )
         .await,
     );
-    config.backends.ip.url = Some(
-        stub(
-            "/json",
-            false,
-            "application/json",
-            "ifconfig-json.json",
-            None,
-        )
-        .await,
-    );
     assert!(config.cache.enabled, "production config enables the cache");
     config.rate_limit.per_ip_per_minute = per_ip;
     config.rate_limit.per_ip_burst = per_ip;

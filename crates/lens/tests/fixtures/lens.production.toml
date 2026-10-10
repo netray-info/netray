@@ -19,7 +19,6 @@ url = "http://tlsight:8081"
 timeout_ms = 15000
 
 [backends.ip]
-url = "http://ifconfig-rs:8000"
 timeout_ms = 2000
 
 [backends.http]
@@ -82,3 +81,20 @@ max_user_selectors = 5
 [modules.email.backends]
 ip_url = "http://ifconfig-rs:8000"
 timeout_ms = 500
+
+# The IP section runs in-process; the data paths are those of the production ifconfig.toml
+# (crates/ip/tests/fixtures/ifconfig.production.toml) under the image's data mount.
+[modules.ip]
+geoip_city_db = "/netray/data/GeoLite2-City.mmdb"
+geoip_asn_db = "/netray/data/GeoLite2-ASN.mmdb"
+user_agent_regexes = "/netray/data/regexes.yaml"
+tor_exit_nodes = "/netray/data/tor_exit_nodes.txt"
+cloud_provider_ranges = "/netray/data/cloud_provider_ranges.jsonl"
+feodo_botnet_ips = "/netray/data/feodo_botnet_ips.txt"
+vpn_ranges = "/netray/data/vpn_ranges.txt"
+datacenter_ranges = "/netray/data/datacenter_ranges.txt"
+bot_ranges = "/netray/data/bot_ranges.jsonl"
+spamhaus_drop = "/netray/data/spamhaus_drop.txt"
+cins_army_ips = "/netray/data/cins_army_ips.txt"
+asn_patterns = "/netray/data/asn_patterns.toml"
+asn_info = "/netray/data/as_metadata.jsonl"

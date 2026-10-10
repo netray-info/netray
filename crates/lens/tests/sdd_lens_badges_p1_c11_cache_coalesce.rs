@@ -47,7 +47,6 @@ fn make_state_with_cache(ttl_seconds: u64) -> AppState {
                 ..Default::default()
             },
             ip: lens::config::BackendConfig {
-                url: Some("http://127.0.0.1:19997".to_string()),
                 timeout_ms: 100,
                 ..Default::default()
             },

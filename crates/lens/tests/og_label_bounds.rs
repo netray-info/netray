@@ -38,8 +38,8 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
                 timeout_ms: 100,
             },
             ip: lens::config::BackendConfig {
-                url: Some("http://127.0.0.1:19997".to_string()),
                 timeout_ms: 100,
+                ..Default::default()
             },
             http: None,
             email: None,

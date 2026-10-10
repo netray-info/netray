@@ -42,7 +42,6 @@ fn base_config() -> Config {
                 ..Default::default()
             },
             ip: lens::config::BackendConfig {
-                url: Some("http://127.0.0.1:19997".to_string()),
                 timeout_ms: 100,
                 ..Default::default()
             },

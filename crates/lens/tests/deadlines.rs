@@ -17,7 +17,7 @@ use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::http::{StatusCode, header};
 use axum::routing::{get, post};
-use common::{email_golden, http_module, registry_with, slow};
+use common::{email_golden, http_module, ip_golden, registry_with, slow};
 use futures::StreamExt;
 use lens::check::{CheckInput, CheckOutput, SectionError, run_check_with_deadline};
 use lens::config::{
@@ -165,16 +165,11 @@ async fn state(s: Setup) -> AppState {
                 stub("/api/inspect", false, "application/json", s.tls).await,
                 t[1],
             ),
-            ip: backend(
-                stub(
-                    "/json",
-                    false,
-                    "application/json",
-                    Behaviour::Golden("ifconfig-json.json"),
-                )
-                .await,
-                t[4],
-            ),
+            // The IP section runs in-process; only its deadline comes from the config.
+            ip: BackendConfig {
+                timeout_ms: t[4],
+                ..Default::default()
+            },
             // The HTTP section runs in-process; only its deadline comes from the config.
             http: Some(BackendConfig {
                 timeout_ms: t[2],
@@ -212,7 +207,11 @@ async fn state(s: Setup) -> AppState {
         // In-process there is no first chunk: a stalled stream is a module that never finishes.
         Behaviour::Stall(f) => slow(email_golden(f), None),
     };
-    let registry = registry_with(http_module(Some("spectra-inspect.json")), email);
+    let registry = registry_with(
+        http_module(Some("spectra-inspect.json")),
+        email,
+        ip_golden("ifconfig-json.json"),
+    );
     AppState::with_registry(config, registry).expect("state builds")
 }
 

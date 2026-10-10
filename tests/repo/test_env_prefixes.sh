@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Phase 1, requirement 3 (env prefix): each service reads NETRAY_<SVC>_ variables only.
 # The legacy prefix and legacy *_CONFIG variable fail fast and name the new prefix.
-# C6: no file of the old crates/spectra directory stays tracked.
+# C6: no file of the old crates/spectra, beacon or ifconfig-rs directory stays tracked.
 set -u
 source "$(dirname "$0")/lib/netray.sh"
 cd "$REPO_ROOT" || exit 1
@@ -12,10 +12,11 @@ NETRAY=$(netray_bin) || exit 1
 TMP=$(mktemp -d)
 trap '_netray_cleanup; rm -rf "$TMP"' EXIT
 
-# sub | dev config | new prefix | legacy prefix | legacy config var
+# sub | dev config | new prefix | legacy prefix | legacy config var | second bind key
 rows=(
-  "http|crates/http/spectra.dev.toml|NETRAY_HTTP_|SPECTRA__|SPECTRA_CONFIG"
-  "email|crates/email/beacon.dev.toml|NETRAY_EMAIL_|BEACON__|BEACON_CONFIG"
+  "http|crates/http/spectra.dev.toml|NETRAY_HTTP_|SPECTRA__|SPECTRA_CONFIG|METRICS_BIND"
+  "email|crates/email/beacon.dev.toml|NETRAY_EMAIL_|BEACON__|BEACON_CONFIG|METRICS_BIND"
+  "ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_|IFCONFIG_|IFCONFIG_CONFIG|ADMIN_BIND"
 )
 
 # run_expect_reject <log> <expected text> <env assignment> <netray args...>
@@ -39,12 +40,12 @@ run_expect_reject() {
 }
 
 for row in "${rows[@]}"; do
-    IFS='|' read -r sub cfg new old oldcfg <<<"$row"
+    IFS='|' read -r sub cfg new old oldcfg bind2 <<<"$row"
     p=$(free_port); m=$(free_port); q=$(free_port)
 
     # (a) new prefix is read
     start_bg "$TMP/$sub-new.log" \
-        env "${new}SERVER__BIND=127.0.0.1:$p" "${new}SERVER__METRICS_BIND=127.0.0.1:$m" "$NETRAY" "$sub"
+        env "${new}SERVER__BIND=127.0.0.1:$p" "${new}SERVER__${bind2}=127.0.0.1:$m" "$NETRAY" "$sub"
     wait_http "http://127.0.0.1:$p/health" 30 \
         || fail "netray $sub ignores ${new}SERVER__BIND (no /health on $p)"
 
@@ -71,6 +72,10 @@ if git ls-files | grep -q '^crates/spectra/'; then
 fi
 if git ls-files | grep -q '^crates/beacon/'; then
     fail "files under crates/beacon/ are still tracked"
+fi
+
+if git ls-files | grep -q '^crates/ifconfig-rs/'; then
+    fail "files under crates/ifconfig-rs/ are still tracked"
 fi
 
 echo "PASS"

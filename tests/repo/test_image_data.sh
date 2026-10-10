@@ -21,7 +21,7 @@ last_workdir=$(grep -E '^WORKDIR[[:space:]]' Dockerfile | tail -n1 | sed -E 's/^
 # Requirement 2: release.yml reads no data and proves the absence before pushing.
 rel=.github/workflows/release.yml
 grep -q 'ifconfig-rs-data' "$rel" && fail "release.yml references ifconfig-rs-data"
-grep -q 'IFCONFIG_GEOIP_' "$rel" && fail "release.yml sets GeoIP paths for the smoke test"
+grep -qE '(IFCONFIG|NETRAY_IP)_GEOIP_' "$rel" && fail "release.yml sets GeoIP paths for the smoke test"
 check_line=$(grep -nE 'mmdb' "$rel" | head -n1 | cut -d: -f1)
 data_line=$(grep -nE '/netray/data' "$rel" | head -n1 | cut -d: -f1)
 push_line=$(grep -nE 'docker push' "$rel" | head -n1 | cut -d: -f1)

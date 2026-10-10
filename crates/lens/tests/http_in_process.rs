@@ -59,7 +59,6 @@ async fn lens_runs_the_registry_http_module_in_process() {
     let closed = || Some("http://127.0.0.1:1".to_string());
     config.backends.dns.url = closed();
     config.backends.tls.url = closed();
-    config.backends.ip.url = closed();
     config.cache.enabled = false;
     config.snapshots.enabled = false;
 

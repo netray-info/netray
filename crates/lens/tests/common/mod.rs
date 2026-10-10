@@ -1,14 +1,20 @@
-//! Shared by the lens tests that run the HTTP and email sections through the engine registry:
+//! Shared by the lens tests that run the HTTP, email and IP sections through the engine registry:
 //! the HTTP module is `netray_http::testing::golden_module` on a spectra contract golden, the
-//! email module `netray_email::testing::golden_module` on a beacon `.sse` golden; for a scenario
-//! where a section fails, a module answering `SectionOutcome::Incomplete`.
+//! email module `netray_email::testing::golden_module` on a beacon `.sse` golden, the IP module
+//! `netray_ip::testing::golden_module` on the ifconfig contract golden; for a scenario where a
+//! section fails, a module answering `SectionOutcome::Incomplete`. The IP module takes its
+//! addresses from the DNS backend's section through `Facts`.
 
 // Every test crate compiles this file whole but uses only some helpers.
 #![allow(dead_code)]
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
+use lens::backends::{Backend, BackendContext, BackendResult};
+use lens::check::SectionError;
+use lens::modules::ModuleSection;
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, Registry, RunContext, SectionOutcome};
 use netray_model::{CheckId, Protocol};
 
@@ -98,14 +104,60 @@ pub fn http_module(file: Option<&str>) -> Box<dyn Module> {
     }
 }
 
-/// A registry with the given HTTP and email modules.
-pub fn registry_with(http: Box<dyn Module>, email: Box<dyn Module>) -> Registry {
-    Registry::new().with(http).with(email)
+/// An IP module that answers the ifconfig contract golden `file` (an `ifconfig-json*.json`) for
+/// every sampled address.
+pub fn ip_golden(file: &str) -> Box<dyn Module> {
+    netray_ip::testing::golden_module(&golden(file))
+}
+
+/// An IP module that answers `contract_json` (an ifconfig body) for every sampled address.
+pub fn ip_with_body(contract_json: &str) -> Box<dyn Module> {
+    netray_ip::testing::golden_module(contract_json)
+}
+
+/// An IP module whose run is incomplete: what lens saw as a failed or timed-out enrichment call.
+pub fn ip_incomplete() -> Box<dyn Module> {
+    Box::new(Incomplete(Protocol::Ip))
+}
+
+/// Run the IP section of lens over `module` for a domain whose DNS section resolved `ips`: the
+/// addresses reach the module as `Facts` through the adapter. `Err` is what lens turns into an
+/// Errored section.
+pub async fn run_ip(
+    module: Box<dyn Module>,
+    timeout: Duration,
+    ips: &[&str],
+) -> Result<BackendResult, SectionError> {
+    let section = ModuleSection {
+        registry: Arc::new(Registry::new().with(module)),
+        protocol: Protocol::Ip,
+        timeout,
+        public_url: String::new(),
+    };
+    let ctx = BackendContext {
+        resolved_ips: ips.iter().map(|s| s.parse().unwrap()).collect(),
+        dkim_selectors: None,
+        forward_headers: Default::default(),
+    };
+    section.run("example.com", &ctx).await
+}
+
+/// A registry with the given HTTP, email and IP modules.
+pub fn registry_with(
+    http: Box<dyn Module>,
+    email: Box<dyn Module>,
+    ip: Box<dyn Module>,
+) -> Registry {
+    Registry::new().with(http).with(email).with(ip)
 }
 
 /// A registry whose HTTP module runs the spectra golden `http` and whose email module runs the
-/// beacon golden `email` (both from `tests/fixtures/contracts/`); `None` for `http` makes the
-/// HTTP section incomplete.
+/// beacon golden `email` and whose IP module answers the ifconfig golden (all from
+/// `tests/fixtures/contracts/`); `None` for `http` makes the HTTP section incomplete.
 pub fn registry(http: Option<&str>, email: &str) -> Registry {
-    registry_with(http_module(http), email_golden(email))
+    registry_with(
+        http_module(http),
+        email_golden(email),
+        ip_golden("ifconfig-json.json"),
+    )
 }

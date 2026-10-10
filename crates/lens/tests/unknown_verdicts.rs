@@ -3,7 +3,7 @@
 // (specs/features/grade-integrity/spec.md, Phase 1, requirement 2: C2, C7, C8, C9.)
 //
 // Each row serves a committed golden from `tests/fixtures/contracts/`, with at most one
-// verdict renamed, on a local stub and calls the section's public backend function. The
+// verdict renamed, on a local stub (or a golden module) and runs the section. The
 // counter is read from a per-test local recorder, so tests do not interfere.
 
 use std::net::SocketAddr;
@@ -17,7 +17,6 @@ use axum::Router;
 use axum::http::header;
 use axum::routing::{get, post};
 use lens::backends::dns::check_dns;
-use lens::backends::ip::check_ip;
 use lens::backends::tls::check_tls;
 use lens::backends::{Backend, BackendContext};
 use lens::modules::ModuleSection;
@@ -31,13 +30,6 @@ use netray_model::{Protocol, Status};
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 const COUNTER: &str = "lens_unknown_verdict_total";
-
-fn public_or_documentation(ip: std::net::IpAddr) -> bool {
-    match netray_common::target_policy::refusal_reason(ip) {
-        None => true,
-        Some(r) => r.starts_with("documentation"),
-    }
-}
 
 fn golden(name: &str) -> String {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -130,9 +122,20 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
                 .map_err(|e| format!("{e:?}"))
         }
         "ip" => {
-            let url = stub("/json", false, "application/json", body).await;
-            let ip: std::net::IpAddr = "203.0.113.42".parse().unwrap();
-            check_ip(&client, &url, &[ip], TIMEOUT, &fwd, public_or_documentation)
+            let section = ModuleSection {
+                registry: Arc::new(Registry::new().with(netray_ip::testing::golden_module(&body))),
+                protocol: Protocol::Ip,
+                timeout: TIMEOUT,
+                public_url: String::new(),
+            };
+            // A public address: the module's own target policy refuses documentation ranges.
+            let ctx = BackendContext {
+                resolved_ips: vec!["1.1.1.1".parse().unwrap()],
+                dkim_selectors: None,
+                forward_headers: fwd,
+            };
+            section
+                .run("example.com", &ctx)
                 .await
                 .map(|r| pairs(&r.checks))
                 .map_err(|e| format!("{e:?}"))

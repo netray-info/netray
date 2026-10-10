@@ -26,6 +26,17 @@ run_check() {
     out=$(cat "$log")
 }
 
+# The lens production fixture names the production data under /netray/data, which a checkout
+# does not have, and `[modules.ip]` refuses a missing city or ASN database. Checks that need a
+# lens config that loads anywhere run on this copy, without the data paths.
+lens_fixture="$REPO_ROOT/crates/lens/tests/fixtures/lens.production.toml"
+lens_nodata="$tmp/lens.production.nodata.toml"
+perl -ne 'if (/^\[/) { $skip = /^\[modules\.ip\]\s*$/ } print unless $skip' "$lens_fixture" >"$lens_nodata"
+grep -q '^\[modules\.ip\]' "$lens_nodata" && fail "lens: [modules.ip] was not stripped from the data-free copy"
+grep -q '^\[modules\.ip\]' "$lens_fixture" || fail "lens: production fixture has no [modules.ip]"
+grep -q '^geoip_city_db = "/netray/data/' "$lens_fixture" || fail "lens: [modules.ip] does not carry the production data paths"
+sed -n '/^\[backends\.ip\]/,/^\[/p' "$lens_fixture" | grep -q '^url' && fail "lens: [backends.ip] still carries url"
+
 # sub:fixture:bad-value sed expression ("" = validate() has no rejecting rule to exercise)
 table=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
@@ -41,11 +52,13 @@ for row in "${table[@]}"; do
     fixture="$REPO_ROOT/$fixture"
     [ -f "$fixture" ] || { fail "$sub: fixture missing: $fixture"; continue; }
 
-    run_check "$sub" "$fixture"
+    ok_fixture="$fixture"
+    [ "$sub" = lens ] && ok_fixture="$lens_nodata"
+    run_check "$sub" "$ok_fixture"
     [ "$rc" -eq 0 ] || fail "$sub: valid fixture exited $rc, expected 0 ($out)"
-    grep -qF "config ok: $fixture" <<<"$out" || fail "$sub: stdout lacks 'config ok: $fixture' ($out)"
+    grep -qF "config ok: $ok_fixture" <<<"$out" || fail "$sub: stdout lacks 'config ok: $ok_fixture' ($out)"
 
-    { echo 'bogus_key = 1'; cat "$fixture"; } >"$tmp/$sub.unknown.toml"
+    { echo 'bogus_key = 1'; cat "$ok_fixture"; } >"$tmp/$sub.unknown.toml"
     run_check "$sub" "$tmp/$sub.unknown.toml"
     [ "$rc" -eq 1 ] || fail "$sub: unknown key exited $rc, expected 1"
 
@@ -53,7 +66,7 @@ for row in "${table[@]}"; do
     [ "$rc" -eq 1 ] || fail "$sub: missing file exited $rc, expected 1"
 
     if [ -n "$badsed" ]; then
-        sed "$badsed" "$fixture" >"$tmp/$sub.invalid.toml"
+        sed "$badsed" "$ok_fixture" >"$tmp/$sub.invalid.toml"
         run_check "$sub" "$tmp/$sub.invalid.toml"
         [ "$rc" -eq 1 ] || fail "$sub: validate()-rejected value exited $rc, expected 1"
     fi
@@ -116,7 +129,6 @@ done
 
 # C7: backend timeouts that exceed the deadline budget (dns/tls/http/email 20000, ip 2000,
 # forced regardless of the fixture) must fail the check and name the budget.
-lens_fixture="$REPO_ROOT/crates/lens/tests/fixtures/lens.production.toml"
 perl -pe '
     $s = $1 if /^\[backends\.(\w+)\]/;
     $s = "" if /^\[(?!backends\.)/;
@@ -133,18 +145,21 @@ else
 fi
 
 # C8: the shipped lens configs stay loadable.
-for f in crates/lens/tests/fixtures/lens.production.toml crates/lens/lens.dev.toml crates/lens/lens.example.toml; do
-    run_check lens "$REPO_ROOT/$f"
+# The production fixture is checked without its data paths (`lens_nodata`).
+for f in "$lens_nodata" "$REPO_ROOT/crates/lens/lens.dev.toml" "$REPO_ROOT/crates/lens/lens.example.toml"; do
+    run_check lens "$f"
     [ "$rc" -eq 0 ] || fail "lens: $f exited $rc, expected 0 ($out)"
 done
 
-# V2 Phases 1 and 2: the HTTP and email sections are modules. A leftover `[backends.<x>] url`
+# V2 Phases 1 to 3: the HTTP, email and IP sections are modules. A leftover `[backends.<x>] url`
 # and an unknown `[modules.<x>]` key both fail the check and the output names the offending key.
 module_rejects=(
     "backends.http url:url:s|^\\[backends\\.http\\]\$|[backends.http]\\nurl = 'http://spectra:8082'|"
     "modules.http bogus:bogus:s|^\\[ecosystem\\]\$|[modules.http]\\nbogus = 1\\n\\n[ecosystem]|"
     "backends.email url:url:s|^\\[backends\\.email\\]\$|[backends.email]\\nurl = 'http://beacon:8084'|"
     "modules.email bogus:bogus:s|^\\[ecosystem\\]\$|[modules.email]\\nbogus = 1\\n\\n[ecosystem]|"
+    "backends.ip url:url:s|^\\[backends\\.ip\\]\$|[backends.ip]\\nurl = 'http://ifconfig-rs:8000'|"
+    "modules.ip bogus:bogus:s|^\\[modules\\.ip\\]\$|[modules.ip]\\nbogus = 1|"
 )
 n=0
 for row in "${module_rejects[@]}"; do
@@ -158,6 +173,26 @@ for row in "${module_rejects[@]}"; do
     run_check lens "$tmp/lens.module$n.toml"
     [ "$rc" -eq 1 ] || fail "lens: $label exited $rc, expected 1 ($out)"
     grep -qF "$key" <<<"$out" || fail "lens: $label error does not name '$key' ($out)"
+done
+
+# V2 Phase 3, C5: `[modules.ip]` loads its data at `--check-config`. A missing city database
+# refuses, a missing reputation list only warns. Both run on the data-free copy with a
+# `[modules.ip]` that names only the file under test, so the verdict is the module's alone.
+ip_data_rows=(
+    "geoip_city_db:/nonexistent.mmdb:1"
+    "feodo_botnet_ips:/nonexistent.txt:0"
+)
+for row in "${ip_data_rows[@]}"; do
+    IFS=: read -r key path want <<<"$row"
+    # The file name must not carry the key: the output names the file.
+    ipdata="$tmp/lens.ipdata.exit$want.toml"
+    { cat "$lens_nodata"; printf '\n[modules.ip]\n%s = "%s"\n' "$key" "$path"; } >"$ipdata"
+    run_check lens "$ipdata"
+    [ "$rc" -eq "$want" ] || fail "lens: [modules.ip] $key = $path exited $rc, expected $want ($out)"
+    if [ "$want" -eq 1 ]; then
+        grep -qF "$key" <<<"$out" || grep -qF "$path" <<<"$out" \
+            || fail "lens: [modules.ip] $key error names neither the key nor the path ($out)"
+    fi
 done
 
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
