@@ -557,4 +557,34 @@ mod tests {
         );
         assert_eq!(facts.ns, vec!["ns1.example.com.".to_string()]);
     }
+
+    #[test]
+    fn facts_keep_records_for_an_unqualified_query_name_and_cname_targets() {
+        // A live query name comes from lens without the trailing dot; wire records are fully
+        // qualified. The MX answer follows a CNAME to another name.
+        let unqualified = |query_type: &str, records: serde_json::Value| {
+            let mut l = lookup(query_type, records);
+            l["query"]["name"] = json!("shop.example.com");
+            l
+        };
+        let lookups: Lookups = serde_json::from_value(json!({"lookups": [
+            unqualified("MX", json!([
+                {"data": {"CNAME": "shop.example.net."}, "name": "shop.example.com.", "ttl": 300, "type": "CNAME"},
+                {"data": {"MX": {"preference": 10, "exchange": "mx.example.net."}}, "name": "shop.example.net.", "ttl": 300, "type": "MX"}
+            ])),
+            unqualified("NS", json!([
+                {"data": {"NS": "ns1.example.com."}, "name": "shop.example.com.", "ttl": 300, "type": "NS"}
+            ])),
+        ]}))
+        .expect("lookups decode");
+
+        let facts = facts_from_lookups(&lookups);
+        assert_eq!(
+            facts.mx.len(),
+            1,
+            "the MX behind the CNAME is kept: {:?}",
+            facts.mx
+        );
+        assert_eq!(facts.ns, vec!["ns1.example.com.".to_string()]);
+    }
 }
