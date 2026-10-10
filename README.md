@@ -6,7 +6,7 @@ netray.info is a suite of network inspectors, live at [netray.info](https://netr
 
 | Path | What |
 |---|---|
-| `crates/` | the six services (`lens`, `mhost-prism`, `tlsight`, `http`, `email`, `ifconfig-rs`), each a library with its SolidJS frontend; `common` (shared Rust); `netray` (the binary) |
+| `crates/` | the six services (`lens`, `mhost-prism`, `tlsight`, `http`, `email`, `ip`), each a library with its SolidJS frontend; `common` (shared Rust); `netray` (the binary) |
 | `packages/common-frontend` | shared SolidJS package, an npm workspace member |
 | `site/` | the static site, served by `netray site` |
 | `tests/acceptance` | Playwright acceptance suite against a deployed environment |
@@ -25,7 +25,7 @@ just release X.Y.Z       # set the workspace version, changelog section, commit,
 
 `just --list` shows the rest (`ifconfig-data`, `test-ifconfig-data`, `tlsight-data`, `e2e`, …).
 
-The image contains no data files. In production the ifconfig-rs config points its GeoIP and list paths at `data/…`, and the deployment fills `/netray/data` with `crates/ifconfig-rs/data/fetch.sh` (MaxMind licence required) plus the repository's `asn_patterns.toml`, and mounts it read-only; the bundled `ifconfig.example.toml` leaves those paths unset.
+The image contains no data files. In production the ifconfig-rs config points its GeoIP and list paths at `data/…`, and the deployment fills `/netray/data` with `crates/ip/data/fetch.sh` (MaxMind licence required) plus the repository's `asn_patterns.toml`, and mounts it read-only; the bundled `ifconfig.example.toml` leaves those paths unset.
 
 ## Releases
 

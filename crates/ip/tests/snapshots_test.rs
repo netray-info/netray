@@ -9,8 +9,8 @@
 // Accept them with: cargo insta review
 //   or: INSTA_UPDATE=always cargo test --test snapshots_test
 
-use ifconfig_rs::backend::{CloudInfo, Ifconfig, Ip, Location, Network, NetworkBot, Tcp, VpnInfo};
-use ifconfig_rs::format::OutputFormat;
+use netray_ip::backend::{CloudInfo, Ifconfig, Ip, Location, Network, NetworkBot, Tcp, VpnInfo};
+use netray_ip::format::OutputFormat;
 
 fn make_test_ifconfig() -> Ifconfig {
     Ifconfig {

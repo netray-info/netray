@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-use ifconfig_rs::Config;
+use netray_ip::Config;
 
 struct TestResponse {
     status: StatusCode,
@@ -21,7 +21,7 @@ fn rate_limit_config() -> Config {
 }
 
 async fn spawn_server(config: &Config) -> (SocketAddr, tokio::sync::oneshot::Sender<()>) {
-    let app = ifconfig_rs::build_app(config).await.app;
+    let app = netray_ip::build_app(config).await.app;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();

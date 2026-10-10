@@ -229,10 +229,7 @@ pub async fn build_app(config: &Config) -> AppBundle {
 pub async fn run(config_path: Option<String>, print_config: bool, check: bool) {
     let config = Config::load(config_path.as_deref()).expect("Failed to load config");
 
-    netray_common::telemetry::init_subscriber(
-        &config.telemetry,
-        "info,ifconfig_rs=debug,hyper=warn,h2=warn,mhost=warn",
-    );
+    netray_common::telemetry::init_subscriber(&config.telemetry, "info,netray_ip=debug,hyper=warn,h2=warn,mhost=warn");
 
     if print_config {
         println!(

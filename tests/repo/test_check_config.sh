@@ -33,7 +33,7 @@ table=(
     "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
     "http:crates/http/tests/fixtures/spectra.production.toml:"
     "email:crates/email/tests/fixtures/beacon.production.toml:"
-    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
+    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
 )
 
 for row in "${table[@]}"; do
@@ -67,11 +67,11 @@ startup_rejects=(
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"0/min\"|"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"ten\"|"
     "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[validation\\]\$|[validation]\\ncustom_ca_dir = \"/nonexistent-ca-dir\"|"
-    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s|^bind = .*|bind = \"nope\"|"
-    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s|^admin_bind = .*|admin_bind = \"nope\"|"
-    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s/^per_target_per_minute = .*/per_target_per_minute = 0/"
-    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s/^per_target_burst = .*/per_target_burst = 0/"
-    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s/^max_size = .*/max_size = 0/"
+    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^bind = .*|bind = \"nope\"|"
+    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^admin_bind = .*|admin_bind = \"nope\"|"
+    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^per_target_per_minute = .*/per_target_per_minute = 0/"
+    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^per_target_burst = .*/per_target_burst = 0/"
+    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^max_size = .*/max_size = 0/"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^bind = .*|bind = \"nope\"|"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^metrics_bind = .*|metrics_bind = \"nope\"|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[badges]\\nttl_seconds = 0\\n\\n[site]|"
@@ -99,7 +99,7 @@ telemetry_rejects=(
     "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "http:crates/http/tests/fixtures/spectra.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\n$bad_otlp|"
-    "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+    "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
 )
 for row in "${telemetry_rejects[@]}"; do
     IFS=: read -r sub fixture expr <<<"$row"

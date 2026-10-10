@@ -262,7 +262,7 @@ From the repository root (see the root `README.md`):
 
 ```sh
 just build                                       # frontends + release binary `netray`
-netray ip crates/ifconfig-rs/ifconfig.dev.toml   # run with the dev config (port 8080)
+netray ip crates/ip/ifconfig.dev.toml   # run with the dev config (port 8080)
 just ifconfig-data                               # fetch the runtime data (see data/README.md)
 just test-ifconfig-data                          # unit + integration tests (needs the data)
 just adlc-verify                                 # the fast, offline gate run before a push

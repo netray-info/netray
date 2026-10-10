@@ -12,7 +12,7 @@ use http_body_util::BodyExt;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-use ifconfig_rs::Config;
+use netray_ip::Config;
 
 fn test_config() -> Config {
     Config::load(Some("ifconfig.dev.toml")).expect("test config")
@@ -40,7 +40,7 @@ async fn admin_port_metrics_and_bearer_auth() {
     config.server.admin_bind = Some("127.0.0.1:0".to_string());
     config.server.admin_token = Some("test-admin-secret".to_string());
 
-    let bundle = ifconfig_rs::build_app(&config).await;
+    let bundle = netray_ip::build_app(&config).await;
 
     let admin_app = match bundle.admin_app {
         Some(app) => app,

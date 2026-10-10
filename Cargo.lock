@@ -2001,49 +2001,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ifconfig-rs"
-version = "0.23.1"
-dependencies = [
- "arc-swap",
- "axum",
- "axum-extra",
- "config",
- "criterion",
- "governor",
- "http-body-util",
- "httpdate",
- "hyper-util",
- "insta",
- "ip_network",
- "ip_network_table",
- "lru",
- "maxminddb",
- "metrics",
- "metrics-exporter-prometheus",
- "metrics-process",
- "mhost",
- "mime_guess",
- "moka",
- "netray-common",
- "notify",
- "pretty_assertions",
- "regex",
- "rust-embed",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "subtle",
- "thiserror 2.0.21",
- "tokio",
- "toml",
- "tower",
- "tower-http",
- "tracing",
- "uaparser",
- "utoipa",
-]
-
-[[package]]
 name = "image"
 version = "0.25.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2781,13 +2738,13 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
- "ifconfig-rs",
  "lens",
  "mime_guess",
  "netray-common",
  "netray-email",
  "netray-engine",
  "netray-http",
+ "netray-ip",
  "percent-encoding",
  "prism",
  "tlsight",
@@ -2910,6 +2867,49 @@ dependencies = [
  "tower-http",
  "tracing",
  "url",
+ "utoipa",
+]
+
+[[package]]
+name = "netray-ip"
+version = "0.23.1"
+dependencies = [
+ "arc-swap",
+ "axum",
+ "axum-extra",
+ "config",
+ "criterion",
+ "governor",
+ "http-body-util",
+ "httpdate",
+ "hyper-util",
+ "insta",
+ "ip_network",
+ "ip_network_table",
+ "lru",
+ "maxminddb",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "metrics-process",
+ "mhost",
+ "mime_guess",
+ "moka",
+ "netray-common",
+ "notify",
+ "pretty_assertions",
+ "regex",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "subtle",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "tower",
+ "tower-http",
+ "tracing",
+ "uaparser",
  "utoipa",
 ]
 

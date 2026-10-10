@@ -1,5 +1,5 @@
 // Contract: lens must understand the real ifconfig-rs `/json?ip=` body.
-// The golden is written by `cargo test -p ifconfig-rs --lib contract_golden`
+// The golden is written by `cargo test -p netray-ip --lib contract_golden`
 // (UPDATE_GOLDEN=1 regenerates it).
 
 use lens::backends::ip::check_ip;

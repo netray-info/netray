@@ -4,7 +4,7 @@ use http_body_util::BodyExt;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-use ifconfig_rs::Config;
+use netray_ip::Config;
 
 fn test_config() -> Config {
     Config::load(Some("ifconfig.dev.toml")).expect("test config")
@@ -12,7 +12,7 @@ fn test_config() -> Config {
 
 async fn send_request(req: Request<Body>) -> (StatusCode, String) {
     let config = test_config();
-    let app = ifconfig_rs::build_app(&config).await.app;
+    let app = netray_ip::build_app(&config).await.app;
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

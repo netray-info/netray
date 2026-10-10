@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use ifconfig_rs::backend::cloud_provider::CloudProviderDb;
+use netray_ip::backend::cloud_provider::CloudProviderDb;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static COUNTER: AtomicU32 = AtomicU32::new(0);

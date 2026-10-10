@@ -69,7 +69,7 @@ impl Config {
         "localhost".to_string()
     }
     fn default_project_name() -> String {
-        env!("CARGO_PKG_NAME").to_string()
+        "ifconfig-rs".to_string()
     }
     fn default_project_version() -> String {
         env!("CARGO_PKG_VERSION").to_string()

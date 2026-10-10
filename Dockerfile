@@ -10,7 +10,7 @@ WORKDIR /build
 # `.dockerignore` prunes target/, node_modules/, frontend/dist/ and .git/.
 COPY . .
 COPY --from=frontend /build/crates/email/frontend/dist crates/email/frontend/dist/
-COPY --from=frontend /build/crates/ifconfig-rs/frontend/dist crates/ifconfig-rs/frontend/dist/
+COPY --from=frontend /build/crates/ip/frontend/dist crates/ip/frontend/dist/
 COPY --from=frontend /build/crates/lens/frontend/dist crates/lens/frontend/dist/
 COPY --from=frontend /build/crates/mhost-prism/frontend/dist crates/mhost-prism/frontend/dist/
 COPY --from=frontend /build/crates/http/frontend/dist crates/http/frontend/dist/
@@ -25,7 +25,7 @@ RUN apk add --no-cache ca-certificates wget \
  && addgroup -S netray && adduser -S netray -G netray
 WORKDIR /netray
 COPY --from=builder /out/ /usr/local/bin/
-COPY crates/email/beacon.toml crates/ifconfig-rs/ifconfig.example.toml crates/lens/lens.example.toml \
+COPY crates/email/beacon.toml crates/ip/ifconfig.example.toml crates/lens/lens.example.toml \
      crates/mhost-prism/prism.example.toml crates/http/spectra.example.toml \
      crates/tlsight/tlsight.example.toml ./
 COPY site ./site

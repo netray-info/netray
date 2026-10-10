@@ -12,7 +12,7 @@ base_url = "ip.netray.info"
 # site_name = "ip.netray.info"
 
 # Project name returned by the /meta endpoint.
-# Default: "ifconfig-rs" (from Cargo.toml)
+# Default: "ifconfig-rs"
 # project_name = "ifconfig-rs"
 
 # Project version returned by the /meta endpoint.

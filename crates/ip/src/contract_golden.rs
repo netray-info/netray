@@ -78,11 +78,11 @@ mod tests {
             return;
         }
         let want = std::fs::read_to_string(GOLDEN).unwrap_or_else(|_| {
-            panic!("golden {GOLDEN} missing; run UPDATE_GOLDEN=1 cargo test -p ifconfig-rs --lib contract_golden")
+            panic!("golden {GOLDEN} missing; run UPDATE_GOLDEN=1 cargo test -p netray-ip --lib contract_golden")
         });
         assert_eq!(
             body, want,
-            "/json?ip= shape changed; if intended, run UPDATE_GOLDEN=1 cargo test -p ifconfig-rs --lib contract_golden"
+            "/json?ip= shape changed; if intended, run UPDATE_GOLDEN=1 cargo test -p netray-ip --lib contract_golden"
         );
     }
 }

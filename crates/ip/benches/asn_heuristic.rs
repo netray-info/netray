@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use ifconfig_rs::backend::asn_heuristic::{AsnPatterns, classify_asn};
+use netray_ip::backend::asn_heuristic::{AsnPatterns, classify_asn};
 
 fn bench_classify_asn(c: &mut Criterion) {
     let patterns = AsnPatterns::builtin();

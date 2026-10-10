@@ -41,7 +41,7 @@ A free MaxMind account is required.
 3. Copy the example config and fill in your credentials:
 
    ```sh
-   cp crates/ifconfig-rs/data/geoipupdate.conf.example crates/ifconfig-rs/data/.geoip.conf
+   cp crates/ip/data/geoipupdate.conf.example crates/ip/data/.geoip.conf
    ```
 
    Edit `.geoip.conf` — set `AccountID` and `LicenseKey`. The `DatabaseDirectory`
@@ -56,7 +56,7 @@ MaxMind releases updated databases on the first and third Tuesday of each month.
 
 ## Other Data Sources
 
-All remaining files are fetched from public URLs by `just ifconfig-data` — no account required. A file that already exists is not fetched again; `crates/ifconfig-rs/data/fetch.sh clean` removes them.
+All remaining files are fetched from public URLs by `just ifconfig-data` — no account required. A file that already exists is not fetched again; `crates/ip/data/fetch.sh clean` removes them.
 
 | File | Source |
 |---|---|

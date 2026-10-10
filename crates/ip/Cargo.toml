@@ -1,5 +1,5 @@
 [package]
-name = "ifconfig-rs"
+name = "netray-ip"
 version.workspace = true
 authors = ["Lukas Pustina <lukas@pustina.net>"]
 

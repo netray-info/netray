@@ -10,7 +10,7 @@ netray-common = { workspace = true, features = ["server"] }
 netray-engine = { workspace = true }
 
 netray-email = { path = "../email" }
-ifconfig-rs = { path = "../ifconfig-rs" }
+netray-ip = { path = "../ip" }
 lens = { path = "../lens" }
 prism = { path = "../mhost-prism" }
 netray-http = { path = "../http" }

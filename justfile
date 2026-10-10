@@ -47,26 +47,26 @@ clippy:
 
 # ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`), so only its unit tests run offline.
 test-rust-offline:
-    cargo test --workspace --exclude ifconfig-rs
-    cargo test -p ifconfig-rs --lib
+    cargo test --workspace --exclude netray-ip
+    cargo test -p netray-ip --lib
 
 # The full Rust suite. Most ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`,
 # MaxMind licence); without it they are skipped with a notice and run in CI with the data image.
 test-rust:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -f crates/ifconfig-rs/data/GeoLite2-City.mmdb ]; then
+    if [ -f crates/ip/data/GeoLite2-City.mmdb ]; then
         cargo test --workspace
     else
         echo "notice: no GeoIP data; ifconfig-rs integration tests skipped (just ifconfig-data, then just test-ifconfig-data)" >&2
-        cargo test --workspace --exclude ifconfig-rs
-        cargo test -p ifconfig-rs --lib
+        cargo test --workspace --exclude netray-ip
+        cargo test -p netray-ip --lib
     fi
 
 # ifconfig-rs including the tests that need GeoIP data.
 test-ifconfig-data:
-    @[ -f crates/ifconfig-rs/data/GeoLite2-City.mmdb ] || { echo "crates/ifconfig-rs/data/GeoLite2-City.mmdb is missing; run 'just ifconfig-data'" >&2; exit 1; }
-    cargo test -p ifconfig-rs -- --include-ignored
+    @[ -f crates/ip/data/GeoLite2-City.mmdb ] || { echo "crates/ip/data/GeoLite2-City.mmdb is missing; run 'just ifconfig-data'" >&2; exit 1; }
+    cargo test -p netray-ip -- --include-ignored
 
 test-frontend:
     npm test --workspaces --if-present
@@ -130,7 +130,7 @@ acceptance-local *args:
       "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
       "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND|"
       "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND|"
-      "ip|ifconfig-rs|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND|"
+      "ip|ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND|"
     )
     for row in "${rows[@]}"; do
         IFS='|' read -r sub dir cfg bind_var metrics_var extra <<<"$row"
@@ -195,11 +195,11 @@ adlc-setup:
 
 # Fetch the ifconfig-rs runtime data (GeoIP needs geoipupdate and data/.geoip.conf).
 ifconfig-data:
-    crates/ifconfig-rs/data/fetch.sh
+    crates/ip/data/fetch.sh
 
 # Build the ifconfig-rs-data image (multi-arch); push="true" pushes it instead of loading it.
 ifconfig-data-image push="false": ifconfig-data
-    cd crates/ifconfig-rs/data && docker buildx build --platform linux/amd64,linux/arm64 \
+    cd crates/ip/data && docker buildx build --platform linux/amd64,linux/arm64 \
         --tag ghcr.io/netray-info/ifconfig-rs-data:latest \
         {{ if push == "true" { "--push" } else { "--load" } }} \
         .
@@ -210,6 +210,6 @@ tlsight-data:
     cd crates/tlsight/data && curl -fsSL https://ccadb.my.salesforce-sites.com/ccadb/AllCAAIdentifiersReportCSVV2 -o ccadb_caa_identifiers.csv
     cd crates/tlsight/data && python3 process.py
 
-# Per-crate Playwright e2e suite (ifconfig-rs or tlsight) against a running service (BASE_URL). Network and browser.
+# Per-crate Playwright e2e suite (ip or tlsight) against a running service (BASE_URL). Network and browser.
 e2e crate:
     cd crates/{{crate}}/tests/e2e && npm install && npx playwright install && npx playwright test --reporter=list

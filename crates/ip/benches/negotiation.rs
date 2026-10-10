@@ -2,7 +2,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
 use axum::http::{HeaderMap, HeaderValue};
-use ifconfig_rs::negotiate::negotiate;
+use netray_ip::negotiate::negotiate;
 
 fn headers_with(pairs: &[(&str, &str)]) -> HeaderMap {
     let mut map = HeaderMap::new();

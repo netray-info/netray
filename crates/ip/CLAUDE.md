@@ -15,12 +15,12 @@ The verbs live in the root `justfile` (see the root `README.md`); run them from 
 just adlc-setup            # once: npm workspaces + frontend builds; required before any cargo build
 just adlc-verify           # the gate, offline; runs only this crate's library tests
 just build                 # frontends + release binary `netray`
-cargo test -p ifconfig-rs --lib   # library tests only (fast, no network, no GeoIP database)
+cargo test -p netray-ip --lib   # library tests only (fast, no network, no GeoIP database)
 just ifconfig-data         # fetch the runtime data into data/ (GeoIP needs data/.geoip.conf)
 just test-ifconfig-data    # library + integration tests (needs data/GeoLite2-City.mmdb)
-just e2e ifconfig-rs       # Playwright E2E tests against BASE_URL
-cargo bench -p ifconfig-rs # Criterion benchmarks
-netray ip crates/ifconfig-rs/ifconfig.dev.toml   # local dev server on :8080
+just e2e ip       # Playwright E2E tests against BASE_URL
+cargo bench -p netray-ip # Criterion benchmarks
+netray ip crates/ip/ifconfig.dev.toml   # local dev server on :8080
 ```
 
 The Rust build embeds `frontend/dist` via RustEmbed and does not compile without
@@ -181,7 +181,7 @@ Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rule
 
 Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
-Default filter: `info,ifconfig_rs=debug,hyper=warn,h2=warn,mhost=warn`. Telemetry config via `[telemetry]` section or `IFCONFIG_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "ifconfig"`.
+Default filter: `info,netray_ip=debug,hyper=warn,h2=warn,mhost=warn`. Telemetry config via `[telemetry]` section or `IFCONFIG_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "ifconfig"`.
 
 ## CI/CD
 
@@ -205,4 +205,4 @@ Workflows: `ci.yml` (PR gate: fmt, clippy, test, frontend, deny, integration-tes
 - Application-level Prometheus metrics: `http_requests_total{method,status}`, `http_request_duration_seconds{method}`, `enrichment_sources_loaded{source}`, `geoip_database_age_seconds`. `metrics` macros are no-op when no recorder is installed (safe in tests).
 - Frontend assets are embedded at compile time via `rust-embed` — `cargo build` requires `frontend/dist/` to exist.
 - All error responses are structured JSON via `error_response()` returning `ErrorResponse { error, status }`. The `ErrorResponse` struct derives `utoipa::ToSchema` and is referenced in OpenAPI error response annotations.
-- Criterion benchmarks in `benches/` cover negotiation, ASN classification, serialization (all 4 formats), and cloud CIDR lookup. Run with `cargo bench -p ifconfig-rs`.
+- Criterion benchmarks in `benches/` cover negotiation, ASN classification, serialization (all 4 formats), and cloud CIDR lookup. Run with `cargo bench -p netray-ip`.

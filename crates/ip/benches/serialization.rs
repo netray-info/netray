@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use ifconfig_rs::format::OutputFormat;
+use netray_ip::format::OutputFormat;
 use serde_json::json;
 
 fn representative_ifconfig() -> serde_json::Value {

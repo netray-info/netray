@@ -4,7 +4,7 @@ use http_body_util::BodyExt;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-use ifconfig_rs::Config;
+use netray_ip::Config;
 
 fn test_config() -> Config {
     Config::load(Some("ifconfig.dev.toml")).expect("test config")
@@ -12,7 +12,7 @@ fn test_config() -> Config {
 
 async fn send_request(req: Request<Body>, _remote: SocketAddr) -> (StatusCode, axum::http::HeaderMap, String) {
     let config = test_config();
-    let app = ifconfig_rs::build_app(&config).await.app;
+    let app = netray_ip::build_app(&config).await.app;
 
     // Bind a real listener so ConnectInfo works
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1415,7 +1415,7 @@ async fn ipv6_with_ipv4_ip_param_returns_404() {
 
 async fn send_request_v6(path: &str, req_headers: &[(&str, &str)]) -> (StatusCode, axum::http::HeaderMap, String) {
     let config = test_config();
-    let app = ifconfig_rs::build_app(&config).await.app;
+    let app = netray_ip::build_app(&config).await.app;
 
     let listener = TcpListener::bind("[::1]:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -1478,7 +1478,7 @@ async fn ipv6_client_ipv4_endpoint_returns_404() {
 #[tokio::test]
 async fn cors_preflight_returns_correct_headers() {
     let config = test_config();
-    let app = ifconfig_rs::build_app(&config).await.app;
+    let app = netray_ip::build_app(&config).await.app;
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -1549,7 +1549,7 @@ async fn ip_param_dns_true_returns_valid_response() {
 async fn filtered_headers_excluded_from_response() {
     let mut config = test_config();
     config.filtered_headers = vec!["(?i)^x-test-secret$".to_string()];
-    let app = ifconfig_rs::build_app(&config).await.app;
+    let app = netray_ip::build_app(&config).await.app;
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

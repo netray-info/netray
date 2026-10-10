@@ -158,7 +158,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Ip {
             check_config: Some(path),
             ..
-        } => check_config(&path, ifconfig_rs::config::Config::load),
+        } => check_config(&path, netray_ip::config::Config::load),
         Command::Lens { config, .. } => {
             let path = config.or_else(|| std::env::var("LENS_CONFIG").ok());
             let cfg = lens::config::Config::load(path.as_deref())
@@ -175,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
             check,
             print_config,
             ..
-        } => ifconfig_rs::run(config, print_config, check).await,
+        } => netray_ip::run(config, print_config, check).await,
         Command::Site { bind, root } => site::run(bind, root).await?,
     }
     Ok(())
