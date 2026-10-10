@@ -17,8 +17,11 @@ const THRESHOLDS: &str = r#"
 "F" = 0
 "#;
 
-/// A profile from `(protocol, section weight, hard_fail names, [(check name, weight)])`.
-fn profile(sections: &[(&str, u32, &[&str], &[(&str, u32)])]) -> Profile {
+/// `(protocol, section weight, hard_fail names, [(check name, weight)])`.
+type SectionSpec<'a> = (&'a str, u32, &'a [&'a str], &'a [(&'a str, u32)]);
+
+/// A profile from its section specs.
+fn profile(sections: &[SectionSpec]) -> Profile {
     let mut toml = String::from("[meta]\nname = \"test\"\nversion = 3\n");
     for (proto, weight, hard_fail, checks) in sections {
         let hf: Vec<String> = hard_fail.iter().map(|n| format!("\"{n}\"")).collect();
