@@ -30,19 +30,25 @@ Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows suite patterns.
 
 ## Config
 
-TOML file + env overrides with `BEACON__` prefix (`__` for nesting, e.g.
-`BEACON__SERVER__BIND`). The file is argv[1], else `$BEACON_CONFIG`, else
+TOML file + env overrides with `NETRAY_EMAIL_` prefix (`__` for nesting, e.g.
+`NETRAY_EMAIL_SERVER__BIND`). The file is argv[1], else `$NETRAY_EMAIL_CONFIG`, else
 `beacon.toml` in the working directory; the `starting beacon` log line names
 the path and source. A deployment that passes no argument lets
-`BEACON_CONFIG` win over `beacon.toml` in the working directory.
+`NETRAY_EMAIL_CONFIG` win over `beacon.toml` in the working directory.
 
 Every config struct is `#[serde(deny_unknown_fields)]`: an unknown key in the
-file or a `BEACON__*` env var fails startup instead of silently disabling a
+file or a `NETRAY_EMAIL_*` env var fails startup instead of silently disabling a
 feature; `[ecosystem]` uses netray-common's `EcosystemConfig`, strict as well.
 `tests/fixtures/beacon.production.toml` pins the shape the argus-oci template
 must render. `netray email --check-config <path>` validates a file, including
 the values startup rejects (unparsable or zero `per_ip`), and exits 0
 (`config ok: <path>`) or 1 with the error.
+
+The retired `BEACON__*` / `BEACON_CONFIG` variables are refused at load, naming
+`NETRAY_EMAIL_`. `ModuleConfig` (`[modules.email]` in lens's config: `dns`, `dnsbl`,
+`http`, `dkim`, `backends`, `inspections.max_concurrent`) feeds `EmailModule`, which
+runs `run_all_checks` in-process; `module::translate` maps the events onto the four
+`email.<bucket>` checks and the V1 headline.
 
 ## Development
 

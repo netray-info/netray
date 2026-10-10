@@ -9,7 +9,7 @@
 //!
 //! The crate is split into self-contained modules: [`checks`] implements the
 //! per-category probes and the three-phase orchestration; [`config`] loads
-//! TOML plus `BEACON_*` environment overrides; [`dns`] wraps `mhost` into a
+//! TOML plus `NETRAY_EMAIL_*` environment overrides; [`dns`] wraps `mhost` into a
 //! shared round-robin resolver; [`quality`] defines the `Verdict` / `Grade`
 //! /`CheckResult` model and grade computation; [`input`] validates domains
 //! and DKIM selectors; [`routes`] wires the Axum handlers and the utoipa
@@ -23,11 +23,16 @@ pub mod config;
 pub mod dns;
 pub mod error;
 pub mod input;
+pub mod module;
 pub mod quality;
 pub mod routes;
 pub mod security;
 pub mod state;
+#[cfg(feature = "testing")]
+pub mod testing;
 
+pub use config::ModuleConfig;
+pub use module::{EmailModule, translate};
 pub use netray_common::middleware::RequestId;
 
 use std::net::SocketAddr;
@@ -48,9 +53,13 @@ struct Assets;
 pub async fn run(config_arg: Option<String>) -> anyhow::Result<()> {
     // Load config
     let (config_path, config_source) =
-        config::resolve_path(config_arg, std::env::var("BEACON_CONFIG").ok());
+        config::resolve_path(config_arg, std::env::var("NETRAY_EMAIL_CONFIG").ok());
 
-    let config = config::Config::load(Some(&config_path)).expect("failed to load config");
+    // A missing default file is not an error: the built-in defaults and the environment apply.
+    let file = (config_source != config::ConfigSource::Default
+        || std::path::Path::new(&config_path).exists())
+    .then_some(config_path.as_str());
+    let config = config::Config::load(file).expect("failed to load config");
 
     // Init telemetry
     let telemetry_config = netray_common::telemetry::TelemetryConfig::from(&config.telemetry);

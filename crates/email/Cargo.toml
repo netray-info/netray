@@ -7,6 +7,7 @@ description = "Email security inspector for netray.info — DNS-only mail postur
 
 [dependencies]
 netray-model = { workspace = true }
+netray-engine = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json", "macros"] }
 tower = { workspace = true, features = ["limit"] }
@@ -62,7 +63,16 @@ percent-encoding = { workspace = true }
 # URL parsing (BIMI logo scheme validation)
 url = { workspace = true }
 
+[features]
+testing = []
+
+[[test]]
+name = "module"
+path = "tests/module.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
+toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 serde_json = { workspace = true }

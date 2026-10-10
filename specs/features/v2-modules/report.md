@@ -89,10 +89,35 @@ SPECTRA__SERVER__BIND is set: these variables are now NETRAY_HTTP_* (config file
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R6: crates/email is netray-email, NETRAY_EMAIL_ / NETRAY_EMAIL_CONFIG, BEACON_ refused naming the new prefix; paths, checks, docs follow | open | tests/repo/test_env_prefixes.sh |
-| C2 | R7: ModuleConfig, Module (email.<v1>) running run_all_checks in-process with the request's selectors, translate moved from lens, golden_module, inspection semaphore kept | open | crates/email/tests/module.rs |
-| C3 | R8: lens takes email from the registry; backends/email.rs and [backends.email] url gone; full-output goldens unchanged incl. the three beacon-only | open | crates/lens/tests/*.rs |
-| C4 | BEACON__SERVER__BIND or BEACON_CONFIG set → netray email refused naming NETRAY_EMAIL_ | open | tests/repo/test_env_prefixes.sh |
-| C5 | each beacon-*.sse translated equals the email section of its full-output golden (Null MX, no MX, timeout, partial, cross-validation) | open | crates/email/tests/module.rs |
-| C6 | DKIM selectors on a lens request reach the email module | open | crates/lens/tests/email_in_process.rs |
-| C7 | full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+| C1 | R6: crates/email is netray-email, NETRAY_EMAIL_ / NETRAY_EMAIL_CONFIG, BEACON_ refused naming the new prefix; paths, checks, docs follow | green | tests/repo/test_env_prefixes.sh |
+| C2 | R7: ModuleConfig, Module (email.<v1>) running run_all_checks in-process with the request's selectors, translate moved from lens, golden_module, inspection semaphore kept | green | crates/email/tests/module.rs |
+| C3 | R8: lens takes email from the registry; backends/email.rs and [backends.email] url gone; full-output goldens unchanged incl. the three beacon-only | green | crates/lens/tests/*.rs |
+| C4 | BEACON__SERVER__BIND or BEACON_CONFIG set → netray email refused naming NETRAY_EMAIL_ | green | tests/repo/test_env_prefixes.sh |
+| C5 | each beacon-*.sse translated equals the email section of its full-output golden (Null MX, no MX, timeout, partial, cross-validation) | green | crates/email/tests/module.rs |
+| C6 | DKIM selectors on a lens request reach the email module | green | crates/lens/tests/email_in_process.rs |
+| C7 | full-output and lens_golden unchanged | green | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+
+RED (ea02272): the new and rewired tests failed against the missing module API; `test_env_prefixes.sh` failed on the `BEACON__` loader.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| rename | 1 (general-purpose, mechanical) | sonnet | 67056 | 321 |
+| G1 engine `TimedOut` + netray-email | 3 (needed one lens match arm; a lost space in a test row, fixed by the orchestrator) | sonnet | 114911 | 327 |
+| G2 lens + binary | 2 (one test read a non-existent `sections` key; fixed by the orchestrator) | sonnet | 99582 | 272 |
+| reader repairs | 1 | sonnet | 41478 | 45 |
+
+### Reader
+
+| class | at | finding | outcome |
+|---|---|---|---|
+| BLOCKER | crates/email/src/module.rs:125 | the module passed lens's up to 10 DKIM selectors without beacon's `max_user_selectors` cap (route-only): a key at the 6th selector was never queried (release) or the check panicked (debug) | repaired: the module validates selectors as the route does (shared `input::validate_selectors`), refusal → `Incomplete` with beacon's text; `module_input.rs` |
+| AMENDMENT | crates/email/src/module.rs:124 | `parse_domain` was route-only: `localhost`, `foo_bar.example.com` were inspected and scored | repaired in phase: the module parses the domain first |
+| NIT | crates/email/src/module.rs:87 | `inspections.max_concurrent` 0 made every run "busy"; above `MAX_PERMITS` panicked | repaired: refused at parse time |
+| NIT | crates/email/src/lib.rs:74 | a missing default `beacon.toml` now runs on built-in defaults (the image ships one) | accepted: matches `netray http`; `test_env_prefixes.sh` needs it |
+| DEFERRED | — | `lens_unknown_verdict_total{section="email"}` cannot increment in-process (typed events) | by design, as for HTTP |
+
+### Behavioural verification
+
+`just adlc-verify` green; `tests/fixtures/contracts/` unchanged; `test_env_prefixes.sh` refuses `BEACON__SERVER__BIND` and `BEACON_CONFIG` naming `NETRAY_EMAIL_`; `email_in_process.rs` sees the request's DKIM selectors in the module.

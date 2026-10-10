@@ -40,3 +40,22 @@ G1: C1 (engine half), C5 · G2: C2, C3, C6, C7, C8 · G3: C1 (lens half), C4, C9
 - `crates/lens/src/state.rs`: `with_registry`; HTTP section when `[backends.http]` and the module exist; `new` = empty registry.
 - `crates/lens/src/backends/http.rs` deleted; `lib.rs` `run_with`; `routes.rs` `/ready` without the http probe; lens example/dev configs.
 - `crates/netray`: `lens_registry(&Config)` (unknown module tables refused; `[modules.http]` → `ModuleConfig`, errors prefixed `modules.http:`), `run_with`, `--check-config` builds it.
+
+## Phase 2 — Email module
+
+## Groups
+
+G1: C1, C2, C4, C5 (engine `TimedOut` + netray-email) · G2: C3, C6, C7 (lens and the binary). Orchestrator-written, the Phase 1 shape.
+
+## Plan
+
+### G1 — netray-email
+- `crates/engine/src/lib.rs`: `SectionOutcome::TimedOut`.
+- `crates/email/src/config.rs`: refuse `BEACON_`, load `NETRAY_EMAIL_`; `ConfigSource::Env` prints `NETRAY_EMAIL_CONFIG`; `ModuleConfig { dns, dnsbl, http, dkim, backends, inspections }`.
+- `crates/email/src/module.rs`: `translate(&[SseEvent])` ported verbatim from `crates/lens/src/backends/email.rs` (buckets, cross-validation routing, Null MX, skipped summary → `TimedOut`, structural errors → `Incomplete`) with lens's unit tests and the bucket-vocabulary test; `EmailModule` (`async new`, resolvers as `AppState::new`, inspection semaphore; `run` drives `run_all_checks` into a channel with the request's selectors, collects the events, translates).
+- `crates/email/src/testing.rs`, `lib.rs` exports, `run()` reads `NETRAY_EMAIL_CONFIG`; Cargo: `netray-engine`, feature `testing`, `[[test]] module`.
+
+### G2 — lens and the binary
+- `crates/lens/src/modules.rs`: the adapter takes any protocol; email presentation → `BackendExtra::Email`; `TimedOut` → `SectionError::Timeout`, with the WARN log.
+- `crates/lens/src/config.rs` refuses `backends.email.url`; `state.rs` email section from the registry; delete `backends/email.rs` and its uses; lens dev/example configs; dev-dep `netray-email` with `testing`.
+- `crates/netray`: `lens_registry` builds `EmailModule` (async) from `[modules.email]`.

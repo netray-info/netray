@@ -51,7 +51,7 @@ max_user_selectors = 5
 # Log output format.
 #   "text" -- human-readable, colour-coded (default; best for terminals)
 #   "json" -- structured JSON lines (best for log aggregators: Loki, Dozzle, etc.)
-# Also configurable via: BEACON__TELEMETRY__LOG_FORMAT=json
+# Also configurable via: NETRAY_EMAIL_TELEMETRY__LOG_FORMAT=json
 #log_format = "text"
 
 # OTLP HTTP endpoint to export spans to. Setting it enables OpenTelemetry

@@ -15,7 +15,6 @@ use netray_model::Protocol;
 
 use crate::backends::Backend;
 use crate::backends::dns::DnsBackend;
-use crate::backends::email::EmailBackend;
 use crate::backends::ip::IpBackend;
 use crate::backends::tls::TlsBackend;
 use crate::cache::CachedResult;
@@ -69,8 +68,8 @@ impl AppState {
         Self::with_registry(config, Registry::new())
     }
 
-    /// Build `AppState` from a validated `Config`; the HTTP section runs the registry's HTTP
-    /// module when `[backends.http]` is configured.
+    /// Build `AppState` from a validated `Config`; the HTTP and email sections run the
+    /// registry's modules when `[backends.http]` and `[backends.email]` are configured.
     pub fn with_registry(
         config: Config,
         registry: Registry,
@@ -130,13 +129,13 @@ impl AppState {
             }));
         }
         if let Some(ref email_cfg) = config.backends.email
-            && let Some(ref url) = email_cfg.url
+            && registry.module(Protocol::Email).is_some()
         {
-            backends.push(Box::new(EmailBackend {
-                email_url: url.clone(),
-                public_url: eco.email_base_url.clone().unwrap_or_else(|| url.clone()),
+            backends.push(Box::new(ModuleSection {
+                registry: registry.clone(),
+                protocol: Protocol::Email,
                 timeout: Duration::from_millis(email_cfg.timeout_ms),
-                client: http_client.clone(),
+                public_url: eco.email_base_url.clone().unwrap_or_default(),
             }));
         }
         backends.push(Box::new(IpBackend {

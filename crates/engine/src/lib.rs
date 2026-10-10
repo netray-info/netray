@@ -72,6 +72,8 @@ pub enum SectionOutcome {
     Incomplete {
         reason: String,
     },
+    /// The module's own deadline fired.
+    TimedOut,
 }
 
 /// Facts could not be resolved.

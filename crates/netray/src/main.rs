@@ -93,9 +93,14 @@ fn check_config<T, E: std::fmt::Display>(
 }
 
 /// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
-/// does not know is refused, and an absent `[modules.http]` builds the module on its defaults.
-fn lens_registry(cfg: &lens::config::Config) -> Result<Registry, String> {
-    if let Some(name) = cfg.modules.keys().find(|k| k.as_str() != "http") {
+/// does not know is refused, and an absent `[modules.http]` or `[modules.email]` builds the module
+/// on its defaults.
+async fn lens_registry(cfg: &lens::config::Config) -> Result<Registry, String> {
+    if let Some(name) = cfg
+        .modules
+        .keys()
+        .find(|k| !matches!(k.as_str(), "http" | "email"))
+    {
         return Err(format!("modules.{name}: unknown module"));
     }
     let table = cfg.modules.get("http").cloned().unwrap_or_default();
@@ -108,7 +113,14 @@ fn lens_registry(cfg: &lens::config::Config) -> Result<Registry, String> {
     }
     let module =
         netray_http::HttpModule::new(module_config).map_err(|e| format!("modules.http: {e}"))?;
-    Ok(Registry::new().with(Box::new(module)))
+    let table = cfg.modules.get("email").cloned().unwrap_or_default();
+    let email_config: netray_email::ModuleConfig = table
+        .try_into()
+        .map_err(|e| format!("modules.email: {e}"))?;
+    let email = netray_email::EmailModule::new(email_config)
+        .await
+        .map_err(|e| format!("modules.email: {e}"))?;
+    Ok(Registry::new().with(Box::new(module)).with(Box::new(email)))
 }
 
 #[tokio::main]
@@ -117,10 +129,13 @@ async fn main() -> anyhow::Result<()> {
         Command::Lens {
             check_config: Some(path),
             ..
-        } => check_config(&path, |p| {
-            let cfg = lens::config::Config::load(p).map_err(|e| e.to_string())?;
-            lens_registry(&cfg)
-        }),
+        } => {
+            let loaded = match lens::config::Config::load(Some(&path)) {
+                Ok(cfg) => lens_registry(&cfg).await.map(drop),
+                Err(e) => Err(e.to_string()),
+            };
+            check_config(&path, |_| loaded)
+        }
         Command::Dns {
             check_config: Some(path),
             ..
@@ -148,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
             let path = config.or_else(|| std::env::var("LENS_CONFIG").ok());
             let cfg = lens::config::Config::load(path.as_deref())
                 .map_err(|e| anyhow::anyhow!("failed to load configuration: {e}"))?;
-            let registry = lens_registry(&cfg).map_err(|e| anyhow::anyhow!(e))?;
+            let registry = lens_registry(&cfg).await.map_err(|e| anyhow::anyhow!(e))?;
             lens::run_with(path, registry).await
         }
         Command::Dns { config, .. } => prism::run(config).await,

@@ -29,10 +29,15 @@ timeout_ms = 2000
 # [modules.http.enrichment]
 # ip_url = "https://ip.netray.info"  # needed for server org and network type; without it both stay empty
 
+# The email section runs in-process (module `netray-email`); `url` is refused.
 # [backends.email]
-# url = "http://beacon:8085"         # optional; omit to disable email section
-# timeout_ms = 15000
-# Public URL for detail_url links is sourced from [ecosystem] email_base_url, not this url.
+# timeout_ms = 15000                 # optional; omit the table to disable the email section
+#
+# [modules.email]                    # optional; sections `dns`, `dnsbl`, `http`, `dkim`, `backends` and `inspections`, see crates/email
+#
+# [modules.email.backends]
+# ip_url = "https://ip.netray.info"  # enrichment for the email checks
+# Public URL for detail_url links is sourced from [ecosystem] email_base_url.
 
 [ecosystem]
 ip_base_url    = "https://ip.netray.info"

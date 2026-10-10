@@ -1,6 +1,7 @@
 //! The engine's protocol modules as lens sections: a `ModuleSection` runs the registry's module
 //! in-process and maps its `SectionOutcome` onto lens's backend result.
 
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -26,6 +27,25 @@ struct HttpPresentation {
     server_network_type: Option<String>,
 }
 
+/// The V1 headline and extras the email module carries in `presentation`.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct EmailPresentation {
+    headline: String,
+    grade: Option<String>,
+    bucket_na: HashMap<String, String>,
+}
+
+fn section_name(protocol: Protocol) -> &'static str {
+    match protocol {
+        Protocol::Dns => "dns",
+        Protocol::Tls => "tls",
+        Protocol::Http => "http",
+        Protocol::Email => "email",
+        Protocol::Ip => "ip",
+    }
+}
+
 pub struct ModuleSection {
     pub registry: Arc<Registry>,
     pub protocol: Protocol,
@@ -44,7 +64,7 @@ fn verdict(status: Status) -> CheckVerdict {
 
 impl Backend for ModuleSection {
     fn section(&self) -> &'static str {
-        "http"
+        section_name(self.protocol)
     }
 
     fn run(
@@ -55,6 +75,7 @@ impl Backend for ModuleSection {
     {
         let domain = domain.to_string();
         let dkim_selectors = context.dkim_selectors.clone();
+        let section = self.section();
         Box::pin(async move {
             let module = self.registry.module(self.protocol).ok_or_else(|| {
                 SectionError::BackendError(format!("no {:?} module registered", self.protocol))
@@ -67,7 +88,7 @@ impl Backend for ModuleSection {
             let outcome = tokio::time::timeout(self.timeout, module.run(&ctx, &Facts::default()))
                 .await
                 .map_err(|_| {
-                    tracing::warn!(service = "http", url = %domain, error = "timeout", "backend call failed");
+                    tracing::warn!(service = section, url = %domain, error = "timeout", "backend call failed");
                     SectionError::Timeout
                 })?;
             match outcome {
@@ -83,29 +104,50 @@ impl Backend for ModuleSection {
                             messages: c.findings,
                         })
                         .collect();
-                    let p: HttpPresentation =
-                        serde_json::from_value(presentation).unwrap_or_default();
-                    Ok(BackendResult {
-                        checks,
-                        extra: BackendExtra::Http {
-                            raw_headline: p.headline,
-                            detail_url: format!(
-                                "{}/?url=https%3A%2F%2F{}",
-                                self.public_url.trim_end_matches('/'),
-                                percent_encode(&domain),
-                            ),
-                            status_code: p.status_code,
-                            http_version: p.http_version,
-                            response_duration_ms: p.response_duration_ms,
-                            server_ip: p.server_ip,
-                            server_org: p.server_org,
-                            server_network_type: p.server_network_type,
-                        },
-                    })
+                    let extra = match self.protocol {
+                        Protocol::Email => {
+                            let p: EmailPresentation =
+                                serde_json::from_value(presentation).unwrap_or_default();
+                            let base = if self.public_url.is_empty() {
+                                "https://email.netray.info"
+                            } else {
+                                self.public_url.trim_end_matches('/')
+                            };
+                            BackendExtra::Email {
+                                raw_headline: p.headline,
+                                detail_url: format!("{base}/?domain={}", percent_encode(&domain)),
+                                grade: p.grade,
+                                bucket_na: p.bucket_na,
+                            }
+                        }
+                        _ => {
+                            let p: HttpPresentation =
+                                serde_json::from_value(presentation).unwrap_or_default();
+                            BackendExtra::Http {
+                                raw_headline: p.headline,
+                                detail_url: format!(
+                                    "{}/?url=https%3A%2F%2F{}",
+                                    self.public_url.trim_end_matches('/'),
+                                    percent_encode(&domain),
+                                ),
+                                status_code: p.status_code,
+                                http_version: p.http_version,
+                                response_duration_ms: p.response_duration_ms,
+                                server_ip: p.server_ip,
+                                server_org: p.server_org,
+                                server_network_type: p.server_network_type,
+                            }
+                        }
+                    };
+                    Ok(BackendResult { checks, extra })
                 }
                 SectionOutcome::Incomplete { reason } => {
-                    tracing::warn!(service = "http", url = %domain, error = %reason, "backend call failed");
+                    tracing::warn!(service = section, url = %domain, error = %reason, "backend call failed");
                     Err(SectionError::BackendError(reason))
+                }
+                SectionOutcome::TimedOut => {
+                    tracing::warn!(service = section, url = %domain, error = "timeout", "backend call failed");
+                    Err(SectionError::Timeout)
                 }
                 SectionOutcome::NotApplicable { reason } => {
                     Err(SectionError::NotApplicable { reason })

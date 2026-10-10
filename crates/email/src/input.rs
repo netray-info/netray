@@ -1,5 +1,16 @@
 use crate::error::MailError;
 
+/// Validate the DKIM selectors of a request: at most `max`, each a valid selector.
+pub(crate) fn validate_selectors(selectors: &[String], max: usize) -> Result<(), MailError> {
+    if selectors.len() > max {
+        return Err(MailError::TooManySelectors { max });
+    }
+    for s in selectors {
+        validate_dkim_selector(s)?;
+    }
+    Ok(())
+}
+
 /// Validate a DKIM selector: ASCII alphanumeric + hyphen only, 1-63 chars, no dots.
 pub fn validate_dkim_selector(s: &str) -> Result<(), MailError> {
     if s.is_empty() {

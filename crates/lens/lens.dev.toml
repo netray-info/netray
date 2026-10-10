@@ -24,8 +24,30 @@ timeout_ms = 15000
 ip_url = "https://ip.netray.info"
 
 [backends.email]
-url = "https://email.netray.info"
 timeout_ms = 15000
+
+[modules.email.dns]
+resolvers = ["1.1.1.1", "1.0.0.1", "8.8.8.8", "8.8.4.4"]
+timeout_ms = 5000
+
+[modules.email.dnsbl]
+zones = [
+  "zen.spamhaus.org",
+  "b.barracudacentral.org",
+  "bl.spamcop.net",
+  "dbl.spamhaus.org",
+]
+timeout_ms = 2000
+resolvers = ["system"]
+
+[modules.email.http]
+timeout_ms = 10000
+
+[modules.email.dkim]
+max_user_selectors = 5
+
+[modules.email.backends]
+ip_url = "https://ip.netray.info"
 
 [ecosystem]
 ip_base_url    = "https://ip.netray.info"

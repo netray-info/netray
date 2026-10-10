@@ -30,14 +30,14 @@ Beacon loads configuration from a TOML file and allows every value to be overrid
 
 ### Environment variables
 
-Environment variables use the `BEACON__` prefix (two underscores) and `__` (double underscore) to traverse nested sections:
+Environment variables use the `NETRAY_EMAIL_` prefix and `__` (double underscore) to traverse nested sections; the config file path is `NETRAY_EMAIL_CONFIG`. The retired `BEACON__*` and `BEACON_CONFIG` variables fail startup, naming the new prefix:
 
 ```sh
-# [backends.ip] url = "..."
-BEACON__BACKENDS__IP__URL=http://ip.netray.info
+# [backends] ip_url = "..."
+NETRAY_EMAIL_BACKENDS__IP_URL=http://ip.netray.info
 
-# [telemetry] level = "..."
-BEACON__TELEMETRY__LEVEL=info
+# [telemetry] log_format = "..."
+NETRAY_EMAIL_TELEMETRY__LOG_FORMAT=json
 ```
 
 ## API

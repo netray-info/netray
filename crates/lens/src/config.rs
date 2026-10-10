@@ -461,17 +461,17 @@ impl Config {
                 "invalid configuration: backends.http.url is no longer read; the HTTP section runs in-process, configure it in [modules.http]".to_string(),
             ));
         }
-        let configured = |c: &Option<BackendConfig>| {
-            c.as_ref()
-                .filter(|c| c.url.is_some())
-                .map_or(0, |c| c.timeout_ms)
-        };
+        if b.email.as_ref().is_some_and(|e| e.url.is_some()) {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.email.url is no longer read; the email section runs in-process, configure it in [modules.email]".to_string(),
+            ));
+        }
         let wave1_ms = b
             .dns
             .timeout_ms
             .max(b.tls.timeout_ms)
             .max(b.http.as_ref().map_or(0, |h| h.timeout_ms))
-            .max(configured(&b.email));
+            .max(b.email.as_ref().map_or(0, |e| e.timeout_ms));
         let budget_ms = wave1_ms.saturating_add(b.ip.timeout_ms);
         let deadline_ms = crate::check::HARD_DEADLINE.as_millis() as u64;
         if budget_ms >= deadline_ms {
@@ -731,7 +731,7 @@ mod tests {
             "[backends.dns]\ntimeout_ms = {slow_ms}\n\
              [backends.tls]\ntimeout_ms = {slow_ms}\n\
              [backends.http]\ntimeout_ms = {slow_ms}\n\
-             [backends.email]\nurl = \"http://beacon:8084\"\ntimeout_ms = {slow_ms}\n\
+             [backends.email]\ntimeout_ms = {slow_ms}\n\
              [backends.ip]\ntimeout_ms = {ip_ms}\n"
         )
     }
@@ -778,8 +778,8 @@ mod tests {
         assert_eq!(cfg.server.trusted_proxies.len(), 2);
         assert_eq!(cfg.backends.ip.timeout_ms, 2000);
         assert_eq!(
-            cfg.backends.email.as_ref().and_then(|e| e.url.as_deref()),
-            Some("http://beacon:8084")
+            cfg.backends.email.as_ref().map(|e| e.timeout_ms),
+            Some(15000)
         );
     }
 

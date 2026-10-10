@@ -25,6 +25,57 @@ pub struct Config {
     pub backends: BackendsConfig,
 }
 
+/// The sections the email module reads from a `[modules.email]` table.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleConfig {
+    #[serde(default = "default_dns")]
+    pub dns: DnsConfig,
+    #[serde(default = "default_dnsbl")]
+    pub dnsbl: DnsblConfig,
+    #[serde(default = "default_http")]
+    pub http: HttpConfig,
+    #[serde(default = "default_dkim")]
+    pub dkim: DkimConfig,
+    #[serde(default)]
+    pub backends: BackendsConfig,
+    #[serde(default)]
+    pub inspections: InspectionsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InspectionsConfig {
+    #[serde(
+        default = "default_max_concurrent",
+        deserialize_with = "deserialize_max_concurrent"
+    )]
+    pub max_concurrent: usize,
+}
+
+/// Refuses 0 (no inspection could ever run) and values tokio's semaphore cannot hold.
+fn deserialize_max_concurrent<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = usize::deserialize(deserializer)?;
+    if value == 0 || value > tokio::sync::Semaphore::MAX_PERMITS {
+        return Err(serde::de::Error::custom(format!(
+            "max_concurrent must be between 1 and {}",
+            tokio::sync::Semaphore::MAX_PERMITS
+        )));
+    }
+    Ok(value)
+}
+
+impl Default for InspectionsConfig {
+    fn default() -> Self {
+        Self {
+            max_concurrent: default_max_concurrent(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ServerConfig {
@@ -111,7 +162,7 @@ fn default_backends_timeout_ms() -> u64 {
     5000
 }
 
-/// Config file loaded when neither argv nor `BEACON_CONFIG` names one;
+/// Config file loaded when neither argv nor `NETRAY_EMAIL_CONFIG` names one;
 /// relative to the working directory (the container's `WORKDIR`).
 pub const DEFAULT_CONFIG_PATH: &str = "beacon.toml";
 
@@ -127,13 +178,13 @@ impl ConfigSource {
     pub fn as_str(self) -> &'static str {
         match self {
             ConfigSource::Argv => "argv",
-            ConfigSource::Env => "BEACON_CONFIG",
+            ConfigSource::Env => "NETRAY_EMAIL_CONFIG",
             ConfigSource::Default => "default",
         }
     }
 }
 
-/// Picks the config file path: first CLI argument, then `BEACON_CONFIG`,
+/// Picks the config file path: first CLI argument, then `NETRAY_EMAIL_CONFIG`,
 /// then [`DEFAULT_CONFIG_PATH`].
 pub fn resolve_path(arg: Option<String>, env: Option<String>) -> (String, ConfigSource) {
     match (arg, env) {
@@ -144,25 +195,45 @@ pub fn resolve_path(arg: Option<String>, env: Option<String>) -> (String, Config
 }
 
 impl Config {
+    /// The inspection config of a `[modules.email]` table; the service sections keep their
+    /// defaults, only `server.max_concurrent_inspections` follows `inspections.max_concurrent`.
+    pub fn from_module(module: ModuleConfig) -> Self {
+        Self {
+            server: ServerConfig {
+                max_concurrent_inspections: module.inspections.max_concurrent,
+                ..default_server()
+            },
+            dns: module.dns,
+            dnsbl: module.dnsbl,
+            http: module.http,
+            rate_limit: default_rate_limit(),
+            dkim: module.dkim,
+            telemetry: TelemetryConfig::default(),
+            ecosystem: EcosystemConfig::default(),
+            backends: module.backends,
+        }
+    }
+
     pub fn load(path: Option<&str>) -> Result<Self, config::ConfigError> {
         Self::load_with_env(path, None)
     }
 
     /// `env` replaces the process environment as the override source when set
-    /// (tests); `None` reads the process environment.
+    /// (tests); `None` reads the process environment. A variable of the retired
+    /// `BEACON_` prefix fails the load.
     fn load_with_env(
         path: Option<&str>,
         env: Option<config::Map<String, String>>,
     ) -> Result<Self, config::ConfigError> {
-        let cfg: Self = match env {
-            None => netray_common::config::load(path, "BEACON__")?,
-            Some(map) => netray_common::config::load_with_env(
-                path,
-                "BEACON__",
-                map.into_iter()
-                    .map(|(k, v)| (OsString::from(k), OsString::from(v))),
-            )?,
+        let env: Vec<(OsString, OsString)> = match env {
+            None => std::env::vars_os().collect(),
+            Some(map) => map
+                .into_iter()
+                .map(|(k, v)| (OsString::from(k), OsString::from(v)))
+                .collect(),
         };
+        netray_common::config::refuse_legacy_prefix("BEACON_", "NETRAY_EMAIL_", &env)?;
+        let cfg: Self = netray_common::config::load_with_env(path, "NETRAY_EMAIL_", env)?;
         cfg.validate()?;
         Ok(cfg)
     }
@@ -447,21 +518,21 @@ mod tests {
     fn env_overrides_still_apply() {
         let env = config::Map::from([
             (
-                "BEACON__SERVER__BIND".to_string(),
+                "NETRAY_EMAIL_SERVER__BIND".to_string(),
                 "0.0.0.0:8084".to_string(),
             ),
             (
-                "BEACON__BACKENDS__IP_URL".to_string(),
+                "NETRAY_EMAIL_BACKENDS__IP_URL".to_string(),
                 "http://ip.example.com".to_string(),
             ),
             (
-                "BEACON__DKIM__MAX_USER_SELECTORS".to_string(),
+                "NETRAY_EMAIL_DKIM__MAX_USER_SELECTORS".to_string(),
                 "7".to_string(),
             ),
-            // Single underscore: not under the `BEACON__` prefix, so it must
-            // not reach the strict deserializer as a `config` key.
+            // Not an override: it names the file, so it must not reach the strict
+            // deserializer as a `config` key.
             (
-                "BEACON_CONFIG".to_string(),
+                "NETRAY_EMAIL_CONFIG".to_string(),
                 "/etc/beacon/beacon.toml".to_string(),
             ),
         ]);
@@ -474,7 +545,7 @@ mod tests {
 
     #[test]
     fn unknown_env_override_is_rejected() {
-        let env = config::Map::from([("BEACON__SERVER__BINDD".to_string(), "x".to_string())]);
+        let env = config::Map::from([("NETRAY_EMAIL_SERVER__BINDD".to_string(), "x".to_string())]);
         assert_unknown_field(
             Config::load_with_env(Some(&repo_file("beacon.toml")), Some(env)),
             "bindd",

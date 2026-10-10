@@ -7,27 +7,7 @@ use serde_json::Value;
 /// Reading stops when an event matching `terminal_event` is dispatched. Returns Err
 /// when the stream ends without it, on a chunk read error, when a complete line is
 /// not valid UTF-8, or when an event's data is not JSON.
-pub async fn collect(resp: reqwest::Response, terminal_event: &str) -> Result<Vec<Value>, String> {
-    drain(resp, terminal_event, false).await
-}
-
-/// Like [`collect`], for streams that send `data:` lines only.
-///
-/// The event type is the `type` field of the JSON payload (an `event:` line, if
-/// present, is ignored). Reading stops at the first event whose type equals
-/// `terminal_type`; a stream that ends without it is an error.
-pub async fn collect_until_type(
-    resp: reqwest::Response,
-    terminal_type: &str,
-) -> Result<Vec<Value>, String> {
-    drain(resp, terminal_type, true).await
-}
-
-async fn drain(
-    resp: reqwest::Response,
-    terminal: &str,
-    type_from_data: bool,
-) -> Result<Vec<Value>, String> {
+pub async fn collect(resp: reqwest::Response, terminal: &str) -> Result<Vec<Value>, String> {
     let mut stream = resp.bytes_stream();
     let mut buf: Vec<u8> = Vec::new();
     let mut events: Vec<Value> = Vec::new();
@@ -53,13 +33,6 @@ async fn drain(
                         if !cur_data.is_empty() {
                             let data = serde_json::from_str::<Value>(&cur_data)
                                 .map_err(|e| format!("invalid JSON in SSE event: {e}"))?;
-                            if type_from_data {
-                                cur_type = data
-                                    .get("type")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or_default()
-                                    .to_string();
-                            }
                             let is_terminal = cur_type == terminal;
                             events.push(serde_json::json!({
                                 "type": cur_type,
@@ -98,8 +71,6 @@ mod tests {
     #[tokio::test]
     async fn c3_stream_without_terminal_event_is_an_error() {
         let r = collect(resp("event: batch\ndata: {\"a\":1}\n\n"), "done").await;
-        assert!(r.is_err(), "truncated stream must be Err, got {r:?}");
-        let r = collect_until_type(resp("data: {\"type\":\"batch\"}\n\n"), "done").await;
         assert!(r.is_err(), "truncated stream must be Err, got {r:?}");
     }
 

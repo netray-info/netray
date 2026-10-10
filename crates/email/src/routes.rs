@@ -153,15 +153,7 @@ async fn validate_and_rate_limit(
     headers: &axum::http::HeaderMap,
     peer: SocketAddr,
 ) -> Result<std::net::IpAddr, MailError> {
-    if selectors.len() > state.config.dkim.max_user_selectors {
-        return Err(MailError::TooManySelectors {
-            max: state.config.dkim.max_user_selectors,
-        });
-    }
-
-    for s in selectors {
-        crate::input::validate_dkim_selector(s)?;
-    }
+    crate::input::validate_selectors(selectors, state.config.dkim.max_user_selectors)?;
 
     let client_ip = state.ip_extractor.extract(headers, peer);
     if let Err(e) = state.rate_limiter.check(client_ip) {

@@ -243,7 +243,7 @@ Each backend returns a set of named checks. Every check has a status: `pass`, `w
 | TLS   | 35% | Certificate validity and transport security are foundational |
 | DNS   | 20% | DNS infrastructure health (DNSSEC, CAA, NS delegation) |
 | HTTP  | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (runs in-process as the `netray-http` module, enabled by `[backends.http]`) |
-| Email | 15% | Email authentication (SPF, DKIM, DMARC) and receiving infrastructure (requires beacon backend) |
+| Email | 15% | Email authentication (SPF, DKIM, DMARC) and receiving infrastructure (runs in-process as the `netray-email` module, enabled by `[backends.email]`) |
 | IP    | 10% | Reputation informs risk but is beyond the domain owner's direct control |
 
 The HTTP and Email sections are optional. When not configured, the scoring engine rebalances proportionally across active sections (weights are relative, not fixed-sum).
