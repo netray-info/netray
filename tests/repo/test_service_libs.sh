@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.." || exit 1
 fails=()
 fail() { fails+=("$1"); }
 
-for s in ip mhost-prism tlsight http email lens; do
+for s in ip mhost-prism tls http email lens; do
     m="crates/$s/Cargo.toml"
     if [ ! -f "$m" ]; then
         fail "$m is missing"

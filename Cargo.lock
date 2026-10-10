@@ -2747,9 +2747,9 @@ dependencies = [
  "netray-http",
  "netray-ip",
  "netray-model",
+ "netray-tls",
  "percent-encoding",
  "prism",
- "tlsight",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2925,6 +2925,48 @@ version = "0.23.1"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "netray-tls"
+version = "0.23.1"
+dependencies = [
+ "arc-swap",
+ "axum",
+ "chrono",
+ "config",
+ "der",
+ "governor",
+ "http-body-util",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "mhost",
+ "mime_guess",
+ "netray-common",
+ "netray-model",
+ "percent-encoding",
+ "rcgen",
+ "reqwest",
+ "rust-embed",
+ "rustls",
+ "rustls-pki-types",
+ "serde",
+ "serde_json",
+ "sha1 0.11.0",
+ "sha2 0.11.0",
+ "spki",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tokio-rustls",
+ "tower",
+ "tower-http",
+ "tracing",
+ "utoipa",
+ "webpki-roots",
+ "x509-cert",
+ "x509-ocsp",
+ "x509-parser 0.18.1",
 ]
 
 [[package]]
@@ -5039,48 +5081,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "tlsight"
-version = "0.23.1"
-dependencies = [
- "arc-swap",
- "axum",
- "chrono",
- "config",
- "der",
- "governor",
- "http-body-util",
- "metrics",
- "metrics-exporter-prometheus",
- "mhost",
- "mime_guess",
- "netray-common",
- "netray-model",
- "percent-encoding",
- "rcgen",
- "reqwest",
- "rust-embed",
- "rustls",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "sha1 0.11.0",
- "sha2 0.11.0",
- "spki",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "tokio-rustls",
- "tower",
- "tower-http",
- "tracing",
- "utoipa",
- "webpki-roots",
- "x509-cert",
- "x509-ocsp",
- "x509-parser 0.18.1",
 ]
 
 [[package]]

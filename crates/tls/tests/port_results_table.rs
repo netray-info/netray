@@ -14,12 +14,12 @@
 use std::net::{IpAddr, Ipv4Addr, TcpListener};
 use std::time::Duration;
 
-use tlsight::quality::assess_port;
-use tlsight::tls::chain::CertInfo;
-use tlsight::tls::ocsp::OcspInfo;
-use tlsight::tls::params::TlsParams;
-use tlsight::tls::{InspectionError, IpInspectionResult, inspect_ip};
-use tlsight::validate::{CheckStatus, ValidationResult};
+use netray_tls::quality::assess_port;
+use netray_tls::tls::chain::CertInfo;
+use netray_tls::tls::ocsp::OcspInfo;
+use netray_tls::tls::params::TlsParams;
+use netray_tls::tls::{InspectionError, IpInspectionResult, inspect_ip};
+use netray_tls::validate::{CheckStatus, ValidationResult};
 
 const HOSTNAME: &str = "example.com";
 

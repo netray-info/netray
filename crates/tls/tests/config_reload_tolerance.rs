@@ -2,7 +2,7 @@
 //! not make that fail: the existence check belongs to startup and to `--check-config`,
 //! so a running server keeps its previous trust store instead of rejecting the reload.
 
-use tlsight::config::Config;
+use netray_tls::config::Config;
 
 #[test]
 fn load_tolerates_missing_custom_ca_dir() {

@@ -12,9 +12,9 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use tlsight::config::Config;
-use tlsight::routes::{api_router, health_router};
-use tlsight::state::AppState;
+use netray_tls::config::Config;
+use netray_tls::routes::{api_router, health_router};
+use netray_tls::state::AppState;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -175,7 +175,7 @@ async fn empty_hostname_returns_400() {
 async fn rate_limit_returns_429() {
     ensure_crypto_provider();
 
-    use tlsight::config::{
+    use netray_tls::config::{
         DnsConfig, EcosystemConfig, LimitsConfig, QualityConfig, ServerConfig, TelemetryConfig,
         ValidationConfig,
     };
@@ -219,7 +219,7 @@ async fn rate_limit_returns_429() {
             skip_http_checks: true,
         },
         telemetry: TelemetryConfig::default(),
-        backends: tlsight::config::BackendsConfig::default(),
+        backends: netray_tls::config::BackendsConfig::default(),
     };
 
     // Use Arc<ArcSwap<Config>> as AppState::new expects it stored via ArcSwap.

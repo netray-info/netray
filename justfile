@@ -204,12 +204,12 @@ ifconfig-data-image push="false": ifconfig-data
         {{ if push == "true" { "--push" } else { "--load" } }} \
         .
 
-# Refresh crates/tlsight/data/caa_domains.tsv (committed) from SSLMate and CCADB.
+# Refresh crates/tls/data/caa_domains.tsv (committed) from SSLMate and CCADB.
 tlsight-data:
-    cd crates/tlsight/data && curl -fsSL https://web.api.sslmate.com/caahelper/issuers -o sslmate_issuers.json
-    cd crates/tlsight/data && curl -fsSL https://ccadb.my.salesforce-sites.com/ccadb/AllCAAIdentifiersReportCSVV2 -o ccadb_caa_identifiers.csv
-    cd crates/tlsight/data && python3 process.py
+    cd crates/tls/data && curl -fsSL https://web.api.sslmate.com/caahelper/issuers -o sslmate_issuers.json
+    cd crates/tls/data && curl -fsSL https://ccadb.my.salesforce-sites.com/ccadb/AllCAAIdentifiersReportCSVV2 -o ccadb_caa_identifiers.csv
+    cd crates/tls/data && python3 process.py
 
-# Per-crate Playwright e2e suite (ip or tlsight) against a running service (BASE_URL). Network and browser.
+# Per-crate Playwright e2e suite (ip or tls) against a running service (BASE_URL). Network and browser.
 e2e crate:
     cd crates/{{crate}}/tests/e2e && npm install && npx playwright install && npx playwright test --reporter=list

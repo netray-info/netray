@@ -506,7 +506,7 @@ fn require_tlsight_golden(name: &str) {
     let path = contracts_dir().join(file);
     assert!(
         path.exists(),
-        "tlsight golden {} is missing; write it with `UPDATE_GOLDEN=1 cargo test -p tlsight --test contract_golden`",
+        "tlsight golden {} is missing; write it with `UPDATE_GOLDEN=1 cargo test -p netray-tls --test contract_golden`",
         path.display()
     );
 }

@@ -261,8 +261,8 @@ From the repository root (see the root `README.md`):
 
 ```sh
 just build                                   # frontends + release binary `netray`
-netray tls crates/tlsight/tlsight.dev.toml   # run with the dev config
-cargo test -p tlsight                        # this crate's tests
+netray tls crates/tls/tlsight.dev.toml   # run with the dev config
+cargo test -p netray-tls                        # this crate's tests
 just check                                   # the gate plus the full Rust suite
 just adlc-verify                             # the fast, offline gate run before a push
 just tlsight-data                            # refresh CAA issuer lookup table (data/caa_domains.tsv)

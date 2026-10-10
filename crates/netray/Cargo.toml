@@ -15,7 +15,7 @@ netray-ip = { path = "../ip" }
 lens = { path = "../lens" }
 prism = { path = "../mhost-prism" }
 netray-http = { path = "../http" }
-tlsight = { path = "../tlsight" }
+netray-tls = { path = "../tls" }
 
 axum = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs", "signal"] }

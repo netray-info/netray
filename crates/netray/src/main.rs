@@ -206,7 +206,7 @@ async fn main() -> anyhow::Result<()> {
             check_config: Some(path),
             ..
         } => check_config(&path, |p| {
-            let cfg = tlsight::config::Config::load(p)?;
+            let cfg = netray_tls::config::Config::load(p)?;
             cfg.check_startup()
         }),
         Command::Http {
@@ -233,7 +233,7 @@ async fn main() -> anyhow::Result<()> {
             lens::run_with(path, registry).await
         }
         Command::Dns { config, .. } => prism::run(config).await,
-        Command::Tls { config, .. } => tlsight::run(config).await,
+        Command::Tls { config, .. } => netray_tls::run(config).await,
         Command::Http { config, .. } => netray_http::run(config).await,
         Command::Email { config, .. } => netray_email::run(config).await?,
         Command::Ip {

@@ -14,7 +14,7 @@ COPY --from=frontend /build/crates/ip/frontend/dist crates/ip/frontend/dist/
 COPY --from=frontend /build/crates/lens/frontend/dist crates/lens/frontend/dist/
 COPY --from=frontend /build/crates/mhost-prism/frontend/dist crates/mhost-prism/frontend/dist/
 COPY --from=frontend /build/crates/http/frontend/dist crates/http/frontend/dist/
-COPY --from=frontend /build/crates/tlsight/frontend/dist crates/tlsight/frontend/dist/
+COPY --from=frontend /build/crates/tls/frontend/dist crates/tls/frontend/dist/
 RUN cargo build --release -p netray \
  && mkdir /out \
  && cp "$(find /build/target -xdev -type f -path '*/release/*' -name netray | head -n1)" /out/
@@ -27,7 +27,7 @@ WORKDIR /netray
 COPY --from=builder /out/ /usr/local/bin/
 COPY crates/email/beacon.toml crates/ip/ifconfig.example.toml crates/lens/lens.example.toml \
      crates/mhost-prism/prism.example.toml crates/http/spectra.example.toml \
-     crates/tlsight/tlsight.example.toml ./
+     crates/tls/tlsight.example.toml ./
 COPY site ./site
 RUN chown -R netray:netray /netray
 USER netray

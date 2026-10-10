@@ -36,13 +36,13 @@ just adlc-verify                      # fmt-check + clippy + tests + site checks
 just build
 
 # This crate only
-cargo test -p tlsight                 # Rust tests
+cargo test -p netray-tls                 # Rust tests
 npm test -w tlsight-frontend          # frontend tests (vitest)
 just e2e tlsight                      # Playwright E2E tests against BASE_URL
 
 # Development (two terminals)
 npm run dev -w tlsight-frontend                  # Vite dev server :5174
-netray tls crates/tlsight/tlsight.dev.toml       # the service
+netray tls crates/tls/tlsight.dev.toml       # the service
 
 # CA/CAA data (refreshes data/caa_domains.tsv — commit the result)
 just tlsight-data                     # fetch SSLMate + CCADB sources and regenerate TSV
@@ -195,7 +195,7 @@ Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rule
 
 Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
-Default filter: `info,tlsight=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `TLSIGHT_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "tlsight"`.
+Default filter: `info,netray_tls=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `TLSIGHT_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "tlsight"`.
 
 ## CI/CD
 

@@ -4,22 +4,22 @@
 // real `InspectResponse` (and the types it nests), serialized by axum's `Json` exactly as the
 // route does. lens's `tests/contract_backends.rs` reads the same file.
 //
-// UPDATE_GOLDEN=1 cargo test -p tlsight --test contract_golden   writes the golden.
+// UPDATE_GOLDEN=1 cargo test -p netray-tls --test contract_golden   writes the golden.
 
 use std::path::PathBuf;
 
 use axum::Json;
 use axum::response::IntoResponse;
 use http_body_util::BodyExt;
-use tlsight::quality::assess_port;
-use tlsight::quality::types::Category;
-use tlsight::quality::{HealthCheck, PortQualityResult, QualityResult};
-use tlsight::routes::{CaaInfo, DnsContext, InspectResponse, PortResult};
-use tlsight::tls::chain::CertInfo;
-use tlsight::tls::ocsp::OcspInfo;
-use tlsight::tls::params::TlsParams;
-use tlsight::tls::{InspectionError, IpInspectionResult};
-use tlsight::validate::{CheckStatus, Summary, SummaryChecks, ValidationResult};
+use netray_tls::quality::assess_port;
+use netray_tls::quality::types::Category;
+use netray_tls::quality::{HealthCheck, PortQualityResult, QualityResult};
+use netray_tls::routes::{CaaInfo, DnsContext, InspectResponse, PortResult};
+use netray_tls::tls::chain::CertInfo;
+use netray_tls::tls::ocsp::OcspInfo;
+use netray_tls::tls::params::TlsParams;
+use netray_tls::tls::{InspectionError, IpInspectionResult};
+use netray_tls::validate::{CheckStatus, Summary, SummaryChecks, ValidationResult};
 
 fn golden_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -6,7 +6,7 @@ netray.info is a suite of network inspectors, live at [netray.info](https://netr
 
 | Path | What |
 |---|---|
-| `crates/` | the six services (`lens`, `mhost-prism`, `tlsight`, `http`, `email`, `ip`), each a library with its SolidJS frontend; `common` (shared Rust); `netray` (the binary) |
+| `crates/` | the six services (`lens`, `mhost-prism`, `tls`, `http`, `email`, `ip`), each a library with its SolidJS frontend; `common` (shared Rust); `netray` (the binary) |
 | `packages/common-frontend` | shared SolidJS package, an npm workspace member |
 | `site/` | the static site, served by `netray site` |
 | `tests/acceptance` | Playwright acceptance suite against a deployed environment |

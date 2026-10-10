@@ -4,8 +4,8 @@
 // Run with: cargo test --test model_status
 
 use netray_model::Status;
-use tlsight::tls::status_of_error_code;
-use tlsight::validate::CheckStatus;
+use netray_tls::tls::status_of_error_code;
+use netray_tls::validate::CheckStatus;
 
 /// Expected mapping for every `CheckStatus` variant. The `match` is exhaustive
 /// without a wildcard: adding a variant fails to compile until it is mapped here.

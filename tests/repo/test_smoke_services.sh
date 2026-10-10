@@ -28,7 +28,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 rows=(
   "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db"
   "dns|mhost-prism|prism.dev.toml|PRISM_SERVER__BIND|PRISM_SERVER__METRICS_BIND|"
-  "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
+  "tls|tls|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
   "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND|"
   "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND|"
   "ip|ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_SERVER__BIND|NETRAY_IP_SERVER__ADMIN_BIND|"

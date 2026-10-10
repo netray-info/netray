@@ -31,7 +31,7 @@ function expand(pattern) {
   return bases.map(p => path.normalize(p));
 }
 const resolved = new Set(ws.flatMap(expand));
-const want = ["ip","mhost-prism","tlsight","http","email","lens"].map(c => `crates/${c}/frontend`)
+const want = ["ip","mhost-prism","tls","http","email","lens"].map(c => `crates/${c}/frontend`)
   .concat(["packages/common-frontend"]);
 const missing = want.filter(w => !resolved.has(w));
 if (missing.length) { console.log("workspaces miss: " + missing.join(", ")); process.exit(1); }

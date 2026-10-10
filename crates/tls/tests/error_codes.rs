@@ -1,5 +1,5 @@
 // C2, C8: a connect error that says "this host cannot reach the target" is not a verdict on
-// the target. Contract for the coder: in `tlsight::tls`,
+// the target. Contract for the coder: in `netray_tls::tls`,
 //
 //     pub fn error_code(err: &(dyn std::error::Error + Send + Sync + 'static)) -> &'static str
 //
@@ -9,7 +9,7 @@
 
 use std::io;
 
-use tlsight::tls::error_code;
+use netray_tls::tls::error_code;
 
 type BoxErr = Box<dyn std::error::Error + Send + Sync>;
 
@@ -67,7 +67,7 @@ async fn pin_tls_handshake_keeps_io_error_boxed_for_refused_connection() {
         let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         l.local_addr().unwrap().port()
     };
-    let err = match tlsight::tls::connect::tls_handshake(
+    let err = match netray_tls::tls::connect::tls_handshake(
         "127.0.0.1".parse().unwrap(),
         port,
         None,

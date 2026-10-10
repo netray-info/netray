@@ -41,7 +41,7 @@ sed -n '/^\[backends\.ip\]/,/^\[/p' "$lens_fixture" | grep -q '^url' && fail "le
 table=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
     "dns:crates/mhost-prism/tests/fixtures/prism.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-    "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
+    "tls:crates/tls/tests/fixtures/tlsight.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
     "http:crates/http/tests/fixtures/spectra.production.toml:"
     "email:crates/email/tests/fixtures/beacon.production.toml:"
     "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
@@ -79,7 +79,7 @@ startup_rejects=(
     "http:crates/http/tests/fixtures/spectra.production.toml:s/^per_ip_burst = .*/per_ip_burst = 0/"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"0/min\"|"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"ten\"|"
-    "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[validation\\]\$|[validation]\\ncustom_ca_dir = \"/nonexistent-ca-dir\"|"
+    "tls:crates/tls/tests/fixtures/tlsight.production.toml:s|^\\[validation\\]\$|[validation]\\ncustom_ca_dir = \"/nonexistent-ca-dir\"|"
     "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^bind = .*|bind = \"nope\"|"
     "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^admin_bind = .*|admin_bind = \"nope\"|"
     "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s/^per_target_per_minute = .*/per_target_per_minute = 0/"
@@ -109,7 +109,7 @@ bad_otlp='otlp_endpoint = \"http://bad host:4318\"'
 telemetry_rejects=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "dns:crates/mhost-prism/tests/fixtures/prism.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
-    "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+    "tls:crates/tls/tests/fixtures/tlsight.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "http:crates/http/tests/fixtures/spectra.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\n$bad_otlp|"
     "ip:crates/ip/tests/fixtures/ifconfig.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
