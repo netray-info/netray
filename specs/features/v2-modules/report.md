@@ -220,3 +220,29 @@ RED (a5c39db): the new and rewired tests failed against the missing module API; 
 ### Behavioural verification
 
 `just adlc-verify` green; `tests/fixtures/contracts/` unchanged; tlsight's `/api/inspect` body, `x-cert-*` headers and `/api-docs/openapi.json` unchanged (reader and coder compared them against HEAD).
+
+## Phase 5 — DNS module
+
+### API contract (fixed before the test writers)
+
+- `netray_dns`: the check pipeline leaves `api/check.rs` `post_handler` as a pub async function that emits prism's check events (`batch`, `lint`, `done`) on a channel; the SSE route forwards them unchanged.
+- What the route applies to lens's calls stays in the module, except the per-client limit: domain validation, `parse_server_spec` + `QueryPolicy::validate_for_check` (so `@system` stays refused when `allow_system_resolvers = false`, SC17), the per-target part of `check_query_cost` (keyed by the effective servers), circuit breakers and the query semaphore. A refusal → `Incomplete` with prism's error text.
+- `ModuleConfig` (`deny_unknown_fields`): prism's check sections with its key names — `dns` (`default_servers`, `allow_system_resolvers`, `allow_arbitrary_servers`), `limits` (the timeout, `max_servers`, per-target keys), `circuit_breaker`, `backends` (ip enrichment) — plus `servers` (the list lens sent as `[backends] dns_servers`).
+- `DnsModule::new(ModuleConfig) -> Result<DnsModule, _>` (`async` if needed); `impl Module` with ids `dns.<v1 name>`; `run()` runs the pipeline with `servers`, collects the events, translates.
+- `translate(&[CheckEvent]) -> SectionOutcome` (pure, moved from `crates/lens/src/backends/dns.rs`: lint categories → checks, the email categories dropped, DNSSEC absent → skip, headline; presentation carries `resolved_ips` from the `batch` A/AAAA records for the IP section).
+- `DnsModule` implements `FactsProvider`: A, AAAA, MX, CAA, NS and the HTTPS RR through the module's resolver group; `facts_from_lookups(&Lookups) -> Facts` is pure and tested on a golden.
+- Feature `testing`: `testing::golden_module(contract_sse: &str)`.
+- lens: DNS presentation → `BackendExtra::Dns` (incl. `resolved_ips`, which the IP section still reads in this phase); `[backends.dns] url` and `[backends] dns_servers` refused (→ `[modules.dns] servers`).
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R15: crates/dns is netray-dns, NETRAY_DNS_ / NETRAY_DNS_CONFIG, PRISM_ refused naming the new prefix | open | tests/repo/test_env_prefixes.sh |
+| C2 | R16: pipeline extracted and shared; prism's event stream unchanged; ModuleConfig; Module (dns.<v1>) with domain/server validation, @system policy, per-target cost, circuit breakers, semaphore; translate moved; FactsProvider; golden_module | open | crates/dns/tests/module.rs, crates/dns/tests/*.rs |
+| C3 | R17: lens takes DNS from the registry; backends/dns.rs, [backends.dns] url and [backends] dns_servers gone; goldens unchanged | open | crates/lens/tests/*.rs |
+| C4 | prism.sse, prism-no-address.sse translated equal the DNS section of their full-output goldens | open | crates/dns/tests/module.rs |
+| C5 | facts_from_lookups on the golden's lookups holds its A, AAAA, MX, CAA, NS (and HTTPS when present) | open | crates/dns/tests/module.rs |
+| C6 | PRISM_CONFIG set → netray dns refused naming NETRAY_DNS_CONFIG | open | tests/repo/test_env_prefixes.sh |
+| C7 | `@system` in `servers` with `allow_system_resolvers = false` → Incomplete with prism's refusal; an invalid domain → Incomplete | open | crates/dns/tests/module_input.rs |
+| C8 | full-output and lens_golden unchanged; `crates/lens/src/backends/` holds no section file | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
