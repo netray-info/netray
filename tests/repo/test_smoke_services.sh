@@ -20,7 +20,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 # | env var holding the metrics bind | extra env (space separated KEY=VALUE)
 #
 # Env syntax differs per service: LENS_/PRISM_/TLSIGHT_/IFCONFIG_ use a single
-# underscore after the prefix, BEACON__ and NETRAY_HTTP_ a double one.
+# underscore after the prefix, NETRAY_EMAIL_ and NETRAY_HTTP_ a double one.
 # Offline start-up needs two overrides and one fixture:
 #   lens     snapshot DB path (dev config's data/ directory does not exist)
 #   tls      custom_ca_dir    (dev config's custom_cas/ directory does not exist)
@@ -30,7 +30,7 @@ rows=(
   "dns|mhost-prism|prism.dev.toml|PRISM_SERVER__BIND|PRISM_SERVER__METRICS_BIND|"
   "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
   "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND|"
-  "email|email|beacon.dev.toml|BEACON__SERVER__BIND|BEACON__SERVER__METRICS_BIND|"
+  "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND|"
   "ip|ifconfig-rs|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND|"
 )
 

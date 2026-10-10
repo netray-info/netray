@@ -20,7 +20,7 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
-use common::http_registry;
+use common::registry;
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -176,12 +176,6 @@ async fn production_config(f: &Fixture) -> Config {
         None => failing_stub("/api/inspect", false).await,
     });
     config.backends.ip.url = Some(stub("/json", false, "application/json", f.ip).await);
-    config
-        .backends
-        .email
-        .as_mut()
-        .expect("email backend configured")
-        .url = Some(stub("/inspect", true, "text/event-stream", f.email).await);
 
     config.snapshots.enabled = false;
     // Every run computes the verdict afresh instead of answering from the cache.
@@ -228,7 +222,7 @@ fn sorted(v: Value) -> Value {
 /// Run one fixture through the sync `POST /api/check`; return the stripped, key-sorted output.
 async fn run_full(f: &Fixture) -> Value {
     let config = production_config(f).await;
-    let state = AppState::with_registry(config, http_registry(f.http)).unwrap();
+    let state = AppState::with_registry(config, registry(f.http, f.email)).unwrap();
     let (routes, _) = api_router().split_for_parts();
     let app = Router::new()
         .merge(routes.with_state(state))

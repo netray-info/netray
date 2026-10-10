@@ -1,8 +1,8 @@
 //! Incomplete results (spec grade-integrity, Phase 2, requirements 3 and 4).
 //!
 //! Real stub servers serve the committed backend goldens (or a failure, or a rewritten
-//! variant of a golden; the HTTP section comes from a golden module of the engine registry, or
-//! from one that is incomplete); lens runs with `tests/fixtures/lens.production.toml` (URLs pointed
+//! variant of a golden; the HTTP and email sections come from golden modules of the engine
+//! registry, or from ones that are incomplete); lens runs with `tests/fixtures/lens.production.toml` (URLs pointed
 //! at the stubs), the cache enabled and a temp-file snapshot store. The routers are driven
 //! in-process. A result with an Errored section is `incomplete`: never cached, never
 //! snapshotted, never badged or rendered as a letter.
@@ -17,7 +17,7 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
-use common::http_registry;
+use common::{email_golden, email_incomplete, http_module, registry_with};
 use lens::config::Config;
 use lens::routes::{api_router, badge_router, og_router};
 use lens::snapshot::SnapshotStore;
@@ -90,7 +90,8 @@ struct Backends {
     tls: Answer,
     /// The spectra golden the HTTP module runs; `None` makes the HTTP section incomplete.
     http: Option<&'static str>,
-    email: Answer,
+    /// The beacon golden the email module runs; `None` makes the email section incomplete.
+    email: Option<&'static str>,
 }
 
 impl Backends {
@@ -99,7 +100,7 @@ impl Backends {
             dns: Answer::Golden("prism.sse"),
             tls: Answer::Golden("tlsight-inspect.json"),
             http: Some("spectra-inspect.json"),
-            email: Answer::Golden("beacon.sse"),
+            email: Some("beacon.sse"),
         }
     }
 }
@@ -125,8 +126,6 @@ async fn harness(b: Backends) -> Harness {
         )
         .await,
     );
-    config.backends.email.as_mut().unwrap().url =
-        Some(stub("/inspect", true, "text/event-stream", b.email).await);
     assert!(config.cache.enabled, "production config enables the cache");
     config.snapshots.enabled = true;
 
@@ -135,7 +134,12 @@ async fn harness(b: Backends) -> Harness {
     let store = SnapshotStore::new(db.path()).await.unwrap();
     store.migrate().await.unwrap();
 
-    let mut state = AppState::with_registry(config, http_registry(b.http)).unwrap();
+    let email = match b.email {
+        Some(file) => email_golden(file),
+        None => email_incomplete(),
+    };
+    let registry = registry_with(http_module(b.http), email);
+    let mut state = AppState::with_registry(config, registry).unwrap();
     state.snapshot_store = Some(std::sync::Arc::new(store));
     assert!(state.badge_check_fn.is_none(), "use the real check");
 
@@ -227,7 +231,7 @@ fn assert_incomplete(c: &Checked) {
 #[tokio::test]
 async fn incomplete_c4_email_http500_is_incomplete_unsnapshotted_and_uncached() {
     let h = harness(Backends {
-        email: Answer::Http500,
+        email: None,
         ..Backends::healthy()
     })
     .await;
@@ -343,7 +347,7 @@ async fn incomplete_c6_no_address_records_and_failed_tls_http_is_incomplete() {
 #[tokio::test]
 async fn incomplete_email_all_skipped_summary_is_incomplete() {
     let h = harness(Backends {
-        email: Answer::Golden("beacon-timeout.sse"),
+        email: Some("beacon-timeout.sse"),
         ..Backends::healthy()
     })
     .await;
@@ -354,7 +358,7 @@ async fn incomplete_email_all_skipped_summary_is_incomplete() {
 #[tokio::test]
 async fn incomplete_c7_badge_first_shows_question_mark_and_leaves_check_uncached() {
     let h = harness(Backends {
-        email: Answer::Http500,
+        email: None,
         ..Backends::healthy()
     })
     .await;
@@ -374,7 +378,7 @@ async fn incomplete_c7_badge_first_shows_question_mark_and_leaves_check_uncached
 #[tokio::test]
 async fn incomplete_c8_og_first_shows_unknown_card_and_leaves_check_uncached() {
     let h = harness(Backends {
-        email: Answer::Http500,
+        email: None,
         ..Backends::healthy()
     })
     .await;

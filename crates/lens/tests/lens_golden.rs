@@ -1,9 +1,10 @@
 //! Golden test: the verdict lens computes from the committed backend goldens.
 //!
-//! Local stub servers serve the DNS, TLS, email and IP goldens from `tests/fixtures/contracts/`
-//! at the paths and methods lens calls; the HTTP section comes from `netray_http`'s
-//! `golden_module` through the engine registry (`AppState::with_registry`). lens runs with the backend and scoring settings of
-//! `tests/fixtures/lens.production.toml` (backend URLs pointed at the stubs, no HTTP backend), and
+//! Local stub servers serve the DNS, TLS and IP goldens from `tests/fixtures/contracts/`
+//! at the paths and methods lens calls; the HTTP and email sections come from `netray_http`'s and
+//! `netray_email`'s `golden_module` through the engine registry (`AppState::with_registry`).
+//! lens runs with the backend and scoring settings of
+//! `tests/fixtures/lens.production.toml` (backend URLs pointed at the stubs, no HTTP or email backend), and
 //! `POST /api/check` is driven through its router in-process. A projection of the SSE
 //! events (grades, statuses, check verdicts; no prose, durations or ids) is compared with
 //! `tests/fixtures/contracts/lens-<fixture>.json`. `UPDATE_GOLDEN=1` rewrites those files.
@@ -19,7 +20,7 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
-use common::http_registry;
+use common::registry;
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -27,8 +28,8 @@ use serde::Serialize;
 use serde_json::Value;
 use tower::ServiceExt;
 
-/// One fixture: a name and the golden file each backend serves. `None` for tls means that
-/// backend answers HTTP 500; `None` for http means the HTTP module is incomplete.
+/// One fixture: a name and the golden file each backend or module serves. `None` for tls means
+/// that backend answers HTTP 500; `None` for http means the HTTP module is incomplete.
 struct Fixture {
     name: &'static str,
     dns: &'static str,
@@ -181,12 +182,6 @@ async fn production_config(f: &Fixture) -> Config {
         None => failing_stub("/api/inspect", false).await,
     });
     config.backends.ip.url = Some(stub("/json", false, "application/json", f.ip).await);
-    config
-        .backends
-        .email
-        .as_mut()
-        .expect("email backend configured")
-        .url = Some(stub("/inspect", true, "text/event-stream", f.email).await);
 
     config.snapshots.enabled = false;
     // Every run computes the verdict afresh instead of answering from the cache.
@@ -318,7 +313,8 @@ fn project(events: &[(String, Value)]) -> Projection {
 /// Run one fixture through `POST /api/check` and return the serialised projection.
 async fn run_fixture(name: &str) -> String {
     let config = production_config(fixture(name)).await;
-    let state = AppState::with_registry(config, http_registry(fixture(name).http)).unwrap();
+    let f = fixture(name);
+    let state = AppState::with_registry(config, registry(f.http, f.email)).unwrap();
     let (routes, _) = api_router().split_for_parts();
     let app = Router::new()
         .merge(routes.with_state(state))

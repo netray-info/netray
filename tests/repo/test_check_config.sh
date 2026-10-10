@@ -138,11 +138,13 @@ for f in crates/lens/tests/fixtures/lens.production.toml crates/lens/lens.dev.to
     [ "$rc" -eq 0 ] || fail "lens: $f exited $rc, expected 0 ($out)"
 done
 
-# V2 Phase 1 (C9): the HTTP section is a module. A leftover `[backends.http] url` and an unknown
-# `[modules.http]` key both fail the check and the output names the offending key.
+# V2 Phases 1 and 2: the HTTP and email sections are modules. A leftover `[backends.<x>] url`
+# and an unknown `[modules.<x>]` key both fail the check and the output names the offending key.
 module_rejects=(
     "backends.http url:url:s|^\\[backends\\.http\\]\$|[backends.http]\\nurl = 'http://spectra:8082'|"
     "modules.http bogus:bogus:s|^\\[ecosystem\\]\$|[modules.http]\\nbogus = 1\\n\\n[ecosystem]|"
+    "backends.email url:url:s|^\\[backends\\.email\\]\$|[backends.email]\\nurl = 'http://beacon:8084'|"
+    "modules.email bogus:bogus:s|^\\[ecosystem\\]\$|[modules.email]\\nbogus = 1\\n\\n[ecosystem]|"
 )
 n=0
 for row in "${module_rejects[@]}"; do

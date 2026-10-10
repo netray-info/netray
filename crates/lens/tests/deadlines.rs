@@ -1,6 +1,7 @@
 //! Deadlines (spec grade-integrity, Phase 3, requirement 5; criteria C1, C3-C6).
 //!
-//! Real axum stubs serve the committed backend goldens, or stall on purpose. `AppState` is
+//! Real axum stubs serve the committed backend goldens, or stall on purpose; the email module
+//! answers its golden at once, after a delay, or never. `AppState` is
 //! built from a `Config` constructed here (not `Config::load`), the check is driven through
 //! `run_check_with_deadline`. A timed-out section is `Err(SectionError::Timeout)` and makes
 //! the score incomplete.
@@ -16,7 +17,7 @@ use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::http::{StatusCode, header};
 use axum::routing::{get, post};
-use common::http_registry;
+use common::{email_golden, http_module, registry_with, slow};
 use futures::StreamExt;
 use lens::check::{CheckInput, CheckOutput, SectionError, run_check_with_deadline};
 use lens::config::{
@@ -179,10 +180,11 @@ async fn state(s: Setup) -> AppState {
                 timeout_ms: t[2],
                 ..Default::default()
             }),
-            email: Some(backend(
-                stub("/inspect", true, "text/event-stream", s.email).await,
-                t[3],
-            )),
+            // The email section runs in-process; only its deadline comes from the config.
+            email: Some(BackendConfig {
+                timeout_ms: t[3],
+                ..Default::default()
+            }),
         },
         ecosystem: EcosystemConfig::default(),
         telemetry: Default::default(),
@@ -203,8 +205,15 @@ async fn state(s: Setup) -> AppState {
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),
     };
-    AppState::with_registry(config, http_registry(Some("spectra-inspect.json")))
-        .expect("state builds")
+    let email = match s.email {
+        Behaviour::Golden(f) => email_golden(f),
+        Behaviour::GoldenAfter(f, d) => slow(email_golden(f), Some(d)),
+        Behaviour::Never => slow(email_golden("beacon.sse"), None),
+        // In-process there is no first chunk: a stalled stream is a module that never finishes.
+        Behaviour::Stall(f) => slow(email_golden(f), None),
+    };
+    let registry = registry_with(http_module(Some("spectra-inspect.json")), email);
+    AppState::with_registry(config, registry).expect("state builds")
 }
 
 fn input() -> CheckInput {
@@ -258,7 +267,7 @@ async fn hard_deadline_keeps_finished_sections_and_times_out_the_stuck_one() {
     );
 }
 
-/// C4: a send that succeeds and a stream that stalls share one email budget (timeout_ms).
+/// C4: an email module that never finishes is bounded by one email budget (timeout_ms).
 #[tokio::test]
 async fn email_send_and_stream_share_one_timeout_budget() {
     let mut s = Setup::fast();

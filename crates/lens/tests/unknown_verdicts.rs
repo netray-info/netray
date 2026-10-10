@@ -8,22 +8,26 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
+
+mod common;
 
 use axum::Router;
 use axum::http::header;
 use axum::routing::{get, post};
 use lens::backends::dns::check_dns;
-use lens::backends::email::EmailBackend;
 use lens::backends::ip::check_ip;
 use lens::backends::tls::check_tls;
 use lens::backends::{Backend, BackendContext};
+use lens::modules::ModuleSection;
 use lens::scoring::engine::CheckVerdict;
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
-use netray_engine::SectionOutcome;
+use netray_email::quality::SseEvent;
+use netray_engine::{Registry, SectionOutcome};
 use netray_http::inspect::assembler::InspectResponse;
 use netray_http::translate;
-use netray_model::Status;
+use netray_model::{Protocol, Status};
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 const COUNTER: &str = "lens_unknown_verdict_total";
@@ -107,19 +111,19 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
                 .map_err(|e| format!("{e:?}"))
         }
         "email" => {
-            let url = stub("/inspect", true, "text/event-stream", body).await;
-            let backend = EmailBackend {
-                email_url: url,
-                public_url: String::new(),
+            let module = netray_email::testing::golden_module(&body);
+            let section = ModuleSection {
+                registry: Arc::new(Registry::new().with(module)),
+                protocol: Protocol::Email,
                 timeout: TIMEOUT,
-                client: client.clone(),
+                public_url: String::new(),
             };
             let ctx = BackendContext {
                 resolved_ips: vec![],
                 dkim_selectors: None,
                 forward_headers: fwd,
             };
-            backend
+            section
                 .run("example.com", &ctx)
                 .await
                 .map(|r| pairs(&r.checks))
@@ -170,6 +174,41 @@ fn unknown_total(snapshotter: &Snapshotter) -> u64 {
         .sum()
 }
 
+/// The `data:` lines of a beacon golden decoded as the typed events `netray_email` translates.
+fn email_events(body: &str) -> Result<Vec<SseEvent>, String> {
+    body.lines()
+        .filter_map(|l| l.strip_prefix("data:"))
+        .map(|d| serde_json::from_str(d.trim()).map_err(|e| e.to_string()))
+        .collect()
+}
+
+// C7 for email: in-process the verdicts are typed. A beacon verdict value lens does not know
+// (category `pass` -> `passed`, summary `spf: pass` -> `passed`) is refused when `netray_email`
+// decodes the stream, not translated into a verdict. The `lens_unknown_verdict_total{section}`
+// counter is not asserted for email: the decode lives outside lens's metrics, as for HTTP.
+#[test]
+fn email_unknown_verdict_is_refused_at_decode() {
+    let rows = [
+        renamed(
+            "beacon.sse",
+            r#""title":"SPF","type":"category","verdict":"pass""#,
+            r#""title":"SPF","type":"category","verdict":"passed""#,
+        ),
+        renamed("beacon.sse", r#""spf":"pass""#, r#""spf":"passed""#),
+    ];
+    for body in rows {
+        let outcome = email_events(&body);
+        assert!(
+            outcome.is_err(),
+            "an unknown beacon verdict must be refused, got {outcome:?}"
+        );
+    }
+    assert!(
+        email_events(&golden("beacon.sse")).is_ok(),
+        "the unchanged golden decodes"
+    );
+}
+
 // Local recorders are thread-local: a current-thread runtime keeps lens on this thread.
 #[tokio::test(flavor = "current_thread")]
 async fn unknown_verdict_errors_section_and_counts() {
@@ -192,20 +231,6 @@ async fn unknown_verdict_errors_section_and_counts() {
                 "/ports/0/quality/checks/0/status",
                 "passed",
             ),
-        ),
-        // C7: beacon category verdict `pass` -> `passed`
-        (
-            "email",
-            renamed(
-                "beacon.sse",
-                r#""title":"SPF","type":"category","verdict":"pass""#,
-                r#""title":"SPF","type":"category","verdict":"passed""#,
-            ),
-        ),
-        // C7: beacon summary verdict (the scored map) `spf: pass` -> `passed`
-        (
-            "email",
-            renamed("beacon.sse", r#""spf":"pass""#, r#""spf":"passed""#),
         ),
     ];
 

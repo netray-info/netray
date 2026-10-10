@@ -15,6 +15,7 @@ trap '_netray_cleanup; rm -rf "$TMP"' EXIT
 # sub | dev config | new prefix | legacy prefix | legacy config var
 rows=(
   "http|crates/http/spectra.dev.toml|NETRAY_HTTP_|SPECTRA__|SPECTRA_CONFIG"
+  "email|crates/email/beacon.dev.toml|NETRAY_EMAIL_|BEACON__|BEACON_CONFIG"
 )
 
 # run_expect_reject <log> <expected text> <env assignment> <netray args...>
@@ -67,6 +68,9 @@ done
 # --- C6: the old crate directory is gone from the index ---------------------
 if git ls-files | grep -q '^crates/spectra/'; then
     fail "files under crates/spectra/ are still tracked"
+fi
+if git ls-files | grep -q '^crates/beacon/'; then
+    fail "files under crates/beacon/ are still tracked"
 fi
 
 echo "PASS"

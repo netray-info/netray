@@ -26,7 +26,6 @@ timeout_ms = 2000
 timeout_ms = 15000
 
 [backends.email]
-url = "http://beacon:8084"
 timeout_ms = 15000
 
 [ecosystem]
@@ -59,3 +58,27 @@ og_image = "https://example.com/og/landing.png"
 
 [modules.http.enrichment]
 ip_url = "http://ifconfig-rs:8000"
+
+[modules.email.dns]
+resolvers = ["cloudflare"]
+timeout_ms = 5000
+
+[modules.email.dnsbl]
+zones = [
+  "zen.spamhaus.org",
+  "b.barracudacentral.org",
+  "bl.spamcop.net",
+  "dbl.spamhaus.org",
+]
+resolvers = ["system"]
+timeout_ms = 2000
+
+[modules.email.http]
+timeout_ms = 10000
+
+[modules.email.dkim]
+max_user_selectors = 5
+
+[modules.email.backends]
+ip_url = "http://ifconfig-rs:8000"
+timeout_ms = 500

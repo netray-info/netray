@@ -1,77 +1,51 @@
-//! Contract: lens's email backend must parse the SSE stream beacon actually sends
-//! (golden: `tests/fixtures/contracts/beacon.sse`, produced by
-//! `crates/email/tests/contract_golden.rs`).
+//! Contract: lens's email section must reflect the SSE stream beacon actually sends (golden:
+//! `tests/fixtures/contracts/beacon.sse`, produced by `crates/email/tests/contract_golden.rs`).
+//! The email section is a module of the engine registry: `netray_email::testing::golden_module`
+//! answers with the translation of the golden, and lens runs it through its `ModuleSection`.
 
+use std::sync::Arc;
 use std::time::Duration;
 
-use axum::Router;
-use axum::response::IntoResponse;
-use axum::routing::post;
-use lens::backends::email::EmailBackend;
+mod common;
+
+use common::golden;
 use lens::backends::{Backend, BackendContext, BackendExtra, BackendResult};
 use lens::check::SectionError;
+use lens::modules::ModuleSection;
 use lens::scoring::engine::CheckVerdict;
+use netray_engine::{Module, Registry};
+use netray_model::Protocol;
 
-fn golden(name: &str) -> Vec<u8> {
-    let path = format!(
-        "{}/../../tests/fixtures/contracts/{name}",
-        env!("CARGO_MANIFEST_DIR")
-    );
-    std::fs::read(&path).unwrap_or_else(|e| panic!("golden {path} unreadable: {e}"))
-}
+const TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Serve the golden at POST /inspect; with `hold_open` the body never ends.
-async fn serve(name: &str, hold_open: bool) -> String {
-    serve_bytes(golden(name), hold_open).await
-}
-
-async fn serve_bytes(bytes: Vec<u8>, hold_open: bool) -> String {
-    let app = Router::new().route(
-        "/inspect",
-        post(move || {
-            let bytes = bytes.clone();
-            async move {
-                let head = futures::stream::once(async move {
-                    Ok::<_, std::convert::Infallible>(axum::body::Bytes::from(bytes))
-                });
-                let body = if hold_open {
-                    let tail = futures::stream::once(async {
-                        tokio::time::sleep(Duration::from_secs(30)).await;
-                        Ok::<_, std::convert::Infallible>(axum::body::Bytes::new())
-                    });
-                    axum::body::Body::from_stream(futures::StreamExt::chain(head, tail))
-                } else {
-                    axum::body::Body::from_stream(head)
-                };
-                ([("content-type", "text/event-stream")], body).into_response()
-            }
-        }),
-    );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let base = format!("http://{}", listener.local_addr().unwrap());
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-    base
-}
-
-async fn run_backend(base: String, timeout: Duration) -> Result<BackendResult, String> {
-    run_raw(base, timeout).await.map_err(|e| format!("{e:?}"))
-}
-
-async fn run_raw(base: String, timeout: Duration) -> Result<BackendResult, SectionError> {
-    let backend = EmailBackend {
-        email_url: base,
+/// Run lens's email section over an email module.
+async fn run_raw(module: Box<dyn Module>) -> Result<BackendResult, SectionError> {
+    let section = ModuleSection {
+        registry: Arc::new(Registry::new().with(module)),
+        protocol: Protocol::Email,
+        timeout: TIMEOUT,
         public_url: String::new(),
-        timeout,
-        client: reqwest::Client::new(),
     };
     let ctx = BackendContext {
         resolved_ips: vec![],
         dkim_selectors: None,
         forward_headers: reqwest::header::HeaderMap::new(),
     };
-    backend.run("example.com", &ctx).await
+    section.run("example.com", &ctx).await
+}
+
+async fn run_backend(module: Box<dyn Module>) -> Result<BackendResult, String> {
+    run_raw(module).await.map_err(|e| format!("{e:?}"))
+}
+
+/// The email module answering the golden `name` as it is.
+async fn run_golden(name: &str) -> Result<BackendResult, String> {
+    run_backend(netray_email::testing::golden_module(&golden(name))).await
+}
+
+/// The email module answering a rewritten golden stream.
+async fn run_sse(sse: &str) -> Result<BackendResult, SectionError> {
+    run_raw(netray_email::testing::golden_module(sse)).await
 }
 
 fn assert_reflects_golden(res: &BackendResult) {
@@ -135,31 +109,13 @@ fn bucket_na(res: &BackendResult) -> &std::collections::HashMap<String, String> 
 
 #[tokio::test]
 async fn lens_parses_beacon_golden_verdicts() {
-    let base = serve("beacon.sse", false).await;
-    let res = run_backend(base, Duration::from_secs(5))
-        .await
-        .expect("backend result");
-    assert_reflects_golden(&res);
-}
-
-#[tokio::test]
-async fn lens_returns_at_summary_without_waiting_for_stream_end() {
-    let base = serve("beacon.sse", true).await;
-    let outcome = tokio::time::timeout(
-        Duration::from_secs(5),
-        run_backend(base, Duration::from_secs(20)),
-    )
-    .await;
-    let res = outcome
-        .expect("lens must return at the summary event, not wait for the stream to close")
-        .expect("backend result");
+    let res = run_golden("beacon.sse").await.expect("backend result");
     assert_reflects_golden(&res);
 }
 
 #[tokio::test]
 async fn lens_marks_buckets_na_only_for_beacon_no_mx() {
-    let base = serve("beacon-no-mx.sse", false).await;
-    let res = run_backend(base, Duration::from_secs(5))
+    let res = run_golden("beacon-no-mx.sse")
         .await
         .expect("backend result");
     for name in [
@@ -187,8 +143,7 @@ async fn lens_marks_buckets_na_only_for_beacon_no_mx() {
 
 #[tokio::test]
 async fn lens_does_not_treat_mx_cname_failure_as_no_mx() {
-    let base = serve("beacon-mx-cname.sse", false).await;
-    let res = run_backend(base, Duration::from_secs(5))
+    let res = run_golden("beacon-mx-cname.sse")
         .await
         .expect("backend result");
     // An mx_cname failure is not "no MX": no bucket is N/A for that reason. Buckets whose
@@ -223,51 +178,11 @@ async fn lens_does_not_treat_mx_cname_failure_as_no_mx() {
     );
 }
 
+// The section sign of the mx_cname detail survives the module intact (the chunk-split half of
+// this test has no in-process counterpart: there is no stream to split).
 #[tokio::test]
-async fn lens_keeps_utf8_char_split_across_chunks() {
-    let bytes = golden("beacon-mx-cname.sse");
-    let at = bytes
-        .windows(2)
-        .position(|w| w == [0xC2, 0xA7])
-        .expect("golden contains the section sign")
-        + 1;
-    let (first, second) = (bytes[..at].to_vec(), bytes[at..].to_vec());
-    let app = Router::new().route(
-        "/inspect",
-        post(move || {
-            let (first, second) = (first.clone(), second.clone());
-            async move {
-                let stream = futures::stream::unfold(0u8, move |state| {
-                    let (first, second) = (first.clone(), second.clone());
-                    async move {
-                        match state {
-                            0 => Some((
-                                Ok::<_, std::convert::Infallible>(axum::body::Bytes::from(first)),
-                                1,
-                            )),
-                            1 => {
-                                tokio::time::sleep(Duration::from_millis(200)).await;
-                                Some((Ok(axum::body::Bytes::from(second)), 2))
-                            }
-                            _ => None,
-                        }
-                    }
-                });
-                (
-                    [("content-type", "text/event-stream")],
-                    axum::body::Body::from_stream(stream),
-                )
-                    .into_response()
-            }
-        }),
-    );
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let base = format!("http://{}", listener.local_addr().unwrap());
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.ok();
-    });
-
-    let res = run_backend(base, Duration::from_secs(5))
+async fn lens_keeps_non_ascii_detail_intact() {
+    let res = run_golden("beacon-mx-cname.sse")
         .await
         .expect("backend result");
     let infra = bucket(&res, "email_infrastructure");
@@ -293,8 +208,8 @@ async fn lens_keeps_utf8_char_split_across_chunks() {
 /// Rewrite the golden's `data:` events and re-emit the stream with its framing untouched:
 /// the stream is split on the blank-line separators, only the JSON of each block changes,
 /// and the final blank line stays. `f` may edit or remove events.
-fn variant(name: &str, f: impl FnOnce(&mut Vec<serde_json::Value>)) -> Vec<u8> {
-    let text = String::from_utf8(golden(name)).unwrap();
+fn variant(name: &str, f: impl FnOnce(&mut Vec<serde_json::Value>)) -> String {
+    let text = golden(name);
     assert!(
         text.ends_with("\n\n"),
         "{name}: golden must end with a blank line"
@@ -317,7 +232,7 @@ fn variant(name: &str, f: impl FnOnce(&mut Vec<serde_json::Value>)) -> Vec<u8> {
         out.push_str(&serde_json::to_string(e).unwrap());
         out.push_str("\n\n");
     }
-    out.into_bytes()
+    out
 }
 
 fn category_mut<'a>(events: &'a mut [serde_json::Value], name: &str) -> &'a mut serde_json::Value {
@@ -350,8 +265,7 @@ fn assert_na(res: &BackendResult, name: &str) {
 // C2 / C6 parser part: beacon's own timeout summary is a Timeout, not N/A.
 #[tokio::test]
 async fn beacon_timeout_golden_is_section_timeout() {
-    let base = serve("beacon-timeout.sse", false).await;
-    let err = run_raw(base, Duration::from_secs(5))
+    let err = run_sse(&golden("beacon-timeout.sse"))
         .await
         .expect_err("a skipped beacon run has no result");
     assert!(matches!(err, SectionError::Timeout), "got {err:?}");
@@ -360,10 +274,7 @@ async fn beacon_timeout_golden_is_section_timeout() {
 // C7: a Null MX domain does not accept mail; authentication still scores and passes.
 #[tokio::test]
 async fn beacon_null_mx_golden_marks_three_buckets_na_and_auth_passes() {
-    let base = serve("beacon-null-mx.sse", false).await;
-    let res = run_backend(base, Duration::from_secs(5))
-        .await
-        .expect("result");
+    let res = run_golden("beacon-null-mx.sse").await.expect("result");
     for name in [
         "email_infrastructure",
         "email_transport",
@@ -399,9 +310,9 @@ async fn null_mx_keeps_transport_na_when_a_receiving_check_fails() {
         sts["verdict"] = "fail".into();
         summary_mut(ev)["verdicts"]["mta_sts"] = "fail".into();
     });
-    let base = serve_bytes(bytes, false).await;
-    let res = run_backend(base, Duration::from_secs(5))
+    let res = run_sse(&bytes)
         .await
+        .map_err(|e| format!("{e:?}"))
         .expect("result");
     assert_na(&res, "email_transport");
     assert_ne!(
@@ -421,9 +332,9 @@ async fn sends_no_mail_excludes_spf_mx_coverage() {
             {"detail": "MX host IPs are not covered by SPF (only relevant if these MX hosts also send outbound mail)", "name": "spf_mx_coverage", "verdict": "warn"}
         ));
     });
-    let base = serve_bytes(bytes, false).await;
-    let res = run_backend(base, Duration::from_secs(5))
+    let res = run_sse(&bytes)
         .await
+        .map_err(|e| format!("{e:?}"))
         .expect("result");
     let auth = bucket(&res, "email_authentication");
     assert!(
@@ -437,10 +348,7 @@ async fn sends_no_mail_excludes_spf_mx_coverage() {
 // C8: no MX records.
 #[tokio::test]
 async fn beacon_no_mx_golden_marks_three_buckets_na() {
-    let base = serve("beacon-no-mx.sse", false).await;
-    let res = run_backend(base, Duration::from_secs(5))
-        .await
-        .expect("result");
+    let res = run_golden("beacon-no-mx.sse").await.expect("result");
     for name in [
         "email_infrastructure",
         "email_transport",
@@ -453,10 +361,7 @@ async fn beacon_no_mx_golden_marks_three_buckets_na() {
 // C9 parser part: a BIMI-less domain has nothing to score for brand policy.
 #[tokio::test]
 async fn beacon_golden_brand_policy_is_not_applicable() {
-    let base = serve("beacon.sse", false).await;
-    let res = run_backend(base, Duration::from_secs(5))
-        .await
-        .expect("result");
+    let res = run_golden("beacon.sse").await.expect("result");
     let brand = bucket(&res, "email_brand_policy");
     assert!(
         matches!(brand.verdict, CheckVerdict::Skip),
@@ -473,8 +378,7 @@ async fn beacon_golden_brand_policy_is_not_applicable() {
 // C11: a category that did not complete makes the section Errored.
 #[tokio::test]
 async fn beacon_partial_golden_errors_the_section() {
-    let base = serve("beacon-partial.sse", false).await;
-    let out = run_raw(base, Duration::from_secs(5)).await;
+    let out = run_sse(&golden("beacon-partial.sse")).await;
     assert!(out.is_err(), "a skipped category must Error the section");
     assert!(
         !matches!(
@@ -488,8 +392,7 @@ async fn beacon_partial_golden_errors_the_section() {
 // C13: a sender without DKIM but with p=reject gets the cross-validation warning in auth.
 #[tokio::test]
 async fn beacon_sending_no_dkim_golden_warns_authentication() {
-    let base = serve("beacon-sending-no-dkim.sse", false).await;
-    let res = run_backend(base, Duration::from_secs(5))
+    let res = run_golden("beacon-sending-no-dkim.sse")
         .await
         .expect("result");
     let auth = bucket(&res, "email_authentication");
@@ -518,9 +421,9 @@ async fn bimi_dmarc_policy_cross_check_warns_brand_bucket() {
         cv["verdict"] = "warn".into();
         summary_mut(ev)["verdicts"]["cross_validation"] = "warn".into();
     });
-    let base = serve_bytes(bytes, false).await;
-    let res = run_backend(base, Duration::from_secs(5))
+    let res = run_sse(&bytes)
         .await
+        .map_err(|e| format!("{e:?}"))
         .expect("result");
     let brand = bucket(&res, "email_brand_policy");
     assert!(
@@ -537,22 +440,18 @@ async fn missing_category_event_errors_the_section() {
     let bytes = variant("beacon.sse", |ev| {
         ev.retain(|e| e["category"] != "dnsbl");
     });
-    let base = serve_bytes(bytes, false).await;
-    let out = run_raw(base, Duration::from_secs(5)).await;
+    let out = run_sse(&bytes).await;
     assert!(
         out.is_err(),
         "a missing category event must Error, got {out:?}"
     );
 }
 
-// C15: an unknown cross-validation sub-check is a contract break: Errored and counted.
-#[tokio::test(flavor = "current_thread")]
-async fn unknown_cross_validation_sub_check_errors_and_counts() {
-    use metrics_util::debugging::{DebugValue, DebuggingRecorder};
-    let recorder = DebuggingRecorder::new();
-    let snapshotter = recorder.snapshotter();
-    let _guard = metrics::set_default_local_recorder(&recorder);
-
+// C15: an unknown cross-validation sub-check is a contract break: the section errors. (The
+// `lens_unknown_verdict_total{section="email"}` count is not asserted: the translation now lives
+// in `netray_email`, outside lens's metrics, as for HTTP.)
+#[tokio::test]
+async fn unknown_cross_validation_sub_check_errors_the_section() {
     let bytes = variant("beacon.sse", |ev| {
         let cv = category_mut(ev, "cross_validation");
         cv["sub_checks"] =
@@ -560,64 +459,9 @@ async fn unknown_cross_validation_sub_check_errors_and_counts() {
         cv["verdict"] = "warn".into();
         summary_mut(ev)["verdicts"]["cross_validation"] = "warn".into();
     });
-    let base = serve_bytes(bytes, false).await;
-    let out = run_raw(base, Duration::from_secs(5)).await;
+    let out = run_sse(&bytes).await;
     assert!(
         out.is_err(),
         "an unrouted sub-check must Error, got {out:?}"
-    );
-
-    let counted: u64 = snapshotter
-        .snapshot()
-        .into_vec()
-        .into_iter()
-        .filter(|(key, ..)| {
-            key.key().name() == "lens_unknown_verdict_total"
-                && key
-                    .key()
-                    .labels()
-                    .any(|l| l.key() == "section" && l.value() == "email")
-        })
-        .map(|(_, _, _, v)| match v {
-            DebugValue::Counter(n) => n,
-            _ => 0,
-        })
-        .sum();
-    assert_eq!(
-        counted, 1,
-        "lens_unknown_verdict_total{{section=\"email\"}}"
-    );
-}
-
-// C14: lens's routing tables cover everything beacon can emit, and its sentinels are beacon's.
-#[test]
-fn lens_routing_covers_beacon_vocabulary() {
-    use lens::backends::email as e;
-    let mut problems = Vec::new();
-    for c in netray_email::quality::types::Category::ALL {
-        let name = serde_json::to_value(&c)
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .to_string();
-        let known = e::BUCKETED.iter().any(|(cat, _)| *cat == name)
-            || e::EXCLUDED.iter().any(|(cat, _)| *cat == name);
-        if !known {
-            problems.push(format!(
-                "category `{name}` is neither BUCKETED nor EXCLUDED"
-            ));
-        }
-    }
-    for name in netray_email::checks::cross_validation::CROSS_VALIDATION_CHECKS {
-        if e::route_cross_validation(name).is_none() {
-            problems.push(format!("cross-validation check `{name}` has no bucket"));
-        }
-    }
-    assert!(problems.is_empty(), "{}", problems.join("\n"));
-    assert_eq!(e::BEACON_SKIPPED, netray_email::checks::SKIPPED);
-    assert_eq!(e::BEACON_NULL_MX, netray_email::checks::mx::NULL_MX);
-    assert_eq!(
-        e::BEACON_SENDS_NO_MAIL,
-        netray_email::checks::cross_validation::SENDS_NO_MAIL
     );
 }

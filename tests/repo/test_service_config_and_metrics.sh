@@ -37,12 +37,12 @@ check_precedence() {
         sed $'s/\x1b\\[[0-9;]*m//g' "$TMP/$sub-prec.log" > "$TMP/$sub-prec.plain"
         grep -Eq 'config_source[^A-Za-z]{1,12}argv' "$TMP/$sub-prec.plain" \
             || fail "netray $sub startup log lacks config_source=argv"
-        grep -Eq 'config_source[^A-Za-z]{1,12}BEACON_CONFIG' "$TMP/$sub-prec.plain" \
-            && fail "netray $sub startup log reports config_source=BEACON_CONFIG"
+        grep -Eq 'config_source[^A-Za-z]{1,12}NETRAY_EMAIL_CONFIG' "$TMP/$sub-prec.plain" \
+            && fail "netray $sub startup log reports config_source=NETRAY_EMAIL_CONFIG"
     fi
 }
 
-check_precedence email BEACON_CONFIG crates/email/beacon.dev.toml yes
+check_precedence email NETRAY_EMAIL_CONFIGcrates/email/beacon.dev.toml yes
 # http: argument, then NETRAY_HTTP_CONFIG (no config_source log field)
 check_precedence http NETRAY_HTTP_CONFIG crates/http/spectra.dev.toml no
 

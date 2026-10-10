@@ -60,7 +60,6 @@ async fn lens_runs_the_registry_http_module_in_process() {
     config.backends.dns.url = closed();
     config.backends.tls.url = closed();
     config.backends.ip.url = closed();
-    config.backends.email.as_mut().unwrap().url = closed();
     config.cache.enabled = false;
     config.snapshots.enabled = false;
 
