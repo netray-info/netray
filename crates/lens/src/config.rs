@@ -117,7 +117,7 @@ impl Default for BackendsConfig {
 }
 
 fn default_resolve_timeout_ms() -> u64 {
-    2000
+    1500
 }
 
 /// One backend service. lens calls backends with its own reqwest client, so
@@ -521,10 +521,9 @@ impl Config {
                 b.ip.timeout_ms
             )));
         }
-        let resolve_ms = b.resolve_timeout_ms.saturating_add(b.ip.timeout_ms);
-        if resolve_ms >= deadline_ms {
+        if b.resolve_timeout_ms >= b.ip.timeout_ms {
             return Err(ConfigError::Message(format!(
-                "invalid configuration: backends.resolve_timeout_ms {} + ip timeout_ms {} = {resolve_ms} ms must stay below the {deadline_ms} ms hard deadline",
+                "invalid configuration: backends.resolve_timeout_ms {} must stay below [backends.ip] timeout_ms {}: the IP section waits for the resolve inside its own window, both counted from the start of a check",
                 b.resolve_timeout_ms, b.ip.timeout_ms
             )));
         }

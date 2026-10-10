@@ -214,6 +214,16 @@ async fn lens_registry(
                 .into(),
         );
     }
+    for (key, path) in [
+        ("geoip_city_db", &ip_config.geoip_city_db),
+        ("geoip_asn_db", &ip_config.geoip_asn_db),
+    ] {
+        if let Some(path) = path
+            && !std::path::Path::new(path).is_file()
+        {
+            return Err(format!("modules.ip: {key}: no file at {path}"));
+        }
+    }
     let ip = Arc::new(
         netray_ip::IpModule::new(ip_config)
             .await

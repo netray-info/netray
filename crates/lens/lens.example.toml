@@ -4,7 +4,7 @@ metrics_bind = "127.0.0.1:9095"
 # trusted_proxies = ["10.0.0.0/8"]
 
 # [backends]
-# resolve_timeout_ms = 2000          # budget of the resolve stage from the start of a check; plus [backends.ip] timeout_ms it must stay below the 20 s hard deadline
+# resolve_timeout_ms = 1500          # budget of the resolve stage from the start of a check; must stay below [backends.ip] timeout_ms, whose window also counts from the start and holds the resolve
 
 # The DNS section runs in-process (module `netray-dns`); `url` and `[backends] dns_servers` are refused.
 [backends.dns]

@@ -8,6 +8,7 @@ use governor::{Quota, RateLimiter};
 use mhost::RecordType;
 use mhost::lints::CheckResult as LintResult;
 use mhost::resolver::{Lookups, MultiQuery};
+use mhost::resources::{RData, Record};
 use netray_common::enrichment::EnrichmentClient;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{
@@ -240,29 +241,73 @@ impl FactsProvider for DnsModule {
 }
 
 /// The A, AAAA, MX (exchange), CAA (presentation form), NS and HTTPS (presentation form)
-/// records of `lookups`, each once, in lookup order.
+/// records of `lookups`, each once, in lookup order. A field reads only the lookups of its own
+/// record type, as the A and AAAA batches of `translate` do: an A or AAAA lookup keeps every
+/// address it answers (the CNAME chain target included), the others keep the records owned by
+/// the queried name, so the glue of an NS answer is not an address of the domain.
 pub fn facts_from_lookups(lookups: &Lookups) -> Facts {
     Facts {
-        a: first_seen(lookups.a().into_iter().copied()),
-        aaaa: first_seen(lookups.aaaa().into_iter().copied()),
-        mx: first_seen(lookups.mx().into_iter().map(|mx| mx.exchange().to_string())),
-        caa: first_seen(lookups.caa().into_iter().map(|caa| {
-            let flags = if caa.issuer_critical() { 128 } else { 0 };
-            format!("{flags} {} \"{}\"", caa.tag(), caa.value())
-        })),
-        ns: first_seen(lookups.ns().into_iter().map(ToString::to_string)),
-        https: first_seen(lookups.https().into_iter().map(|svcb| {
-            let mut rr = format!("{} {}", svcb.svc_priority(), svcb.target_name());
-            for param in svcb.svc_params() {
-                rr.push_str(&format!(
-                    " {}={}",
-                    param.key(),
-                    param.value().trim_end_matches(',')
-                ));
-            }
-            rr
-        })),
+        a: first_seen(
+            rdata_of(lookups, RecordType::A)
+                .filter_map(RData::a)
+                .copied(),
+        ),
+        aaaa: first_seen(
+            rdata_of(lookups, RecordType::AAAA)
+                .filter_map(RData::aaaa)
+                .copied(),
+        ),
+        mx: first_seen(
+            rdata_of(lookups, RecordType::MX)
+                .filter_map(RData::mx)
+                .map(|mx| mx.exchange().to_string()),
+        ),
+        caa: first_seen(
+            rdata_of(lookups, RecordType::CAA)
+                .filter_map(RData::caa)
+                .map(|caa| {
+                    let flags = if caa.issuer_critical() { 128 } else { 0 };
+                    format!("{flags} {} \"{}\"", caa.tag(), caa.value())
+                }),
+        ),
+        ns: first_seen(
+            rdata_of(lookups, RecordType::NS)
+                .filter_map(RData::ns)
+                .map(ToString::to_string),
+        ),
+        https: first_seen(
+            rdata_of(lookups, RecordType::HTTPS)
+                .filter_map(RData::https)
+                .map(|svcb| {
+                    let mut rr = format!("{} {}", svcb.svc_priority(), svcb.target_name());
+                    for param in svcb.svc_params() {
+                        rr.push_str(&format!(
+                            " {}={}",
+                            param.key(),
+                            param.value().trim_end_matches(',')
+                        ));
+                    }
+                    rr
+                }),
+        ),
     }
+}
+
+/// The record data of the lookups that queried `record_type`; besides A and AAAA only the
+/// records owned by the queried name.
+fn rdata_of(lookups: &Lookups, record_type: RecordType) -> impl Iterator<Item = &RData> {
+    let any_owner = matches!(record_type, RecordType::A | RecordType::AAAA);
+    lookups
+        .iter()
+        .filter(move |lookup| lookup.query().record_type() == record_type)
+        .flat_map(move |lookup| {
+            let name = lookup.query().name();
+            lookup
+                .records()
+                .into_iter()
+                .filter(move |record| any_owner || record.name() == name)
+                .map(Record::data)
+        })
 }
 
 fn first_seen<T: PartialEq>(items: impl Iterator<Item = T>) -> Vec<T> {
@@ -479,4 +524,42 @@ fn build_headline(checks: &[LintCheck]) -> String {
         .collect();
 
     parts.join("  ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn lookup(query_type: &str, records: serde_json::Value) -> serde_json::Value {
+        json!({
+            "name_server": "udp:192.0.2.53:53",
+            "query": {"name": "example.com.", "record_type": query_type},
+            "result": {"Response": {
+                "records": records,
+                "response_time": {"nanos": 0, "secs": 0},
+                "valid_until": "2030-01-01T00:00:00Z"
+            }}
+        })
+    }
+
+    #[test]
+    fn facts_skip_the_glue_of_an_ns_answer() {
+        let lookups: Lookups = serde_json::from_value(json!({"lookups": [
+            lookup("NS", json!([
+                {"data": {"NS": "ns1.example.com."}, "name": "example.com.", "ttl": 300, "type": "NS"},
+                {"data": {"A": "192.0.2.53"}, "name": "ns1.example.com.", "ttl": 300, "type": "A"}
+            ])),
+            lookup("A", json!([
+                {"data": {"A": "192.0.2.10"}, "name": "example.com.", "ttl": 300, "type": "A"}
+            ])),
+        ]}))
+        .expect("lookups decode");
+
+        let facts = facts_from_lookups(&lookups);
+        assert_eq!(
+            facts.a,
+            vec!["192.0.2.10".parse::<std::net::Ipv4Addr>().unwrap()]
+        );
+        assert_eq!(facts.ns, vec!["ns1.example.com.".to_string()]);
+    }
 }
