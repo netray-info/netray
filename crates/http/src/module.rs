@@ -175,7 +175,7 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
                         vec![
                             c.message
                                 .clone()
-                                .unwrap_or_else(|| NOT_REPORTED.to_string()),
+                                .unwrap_or_else(|| NOT_APPLICABLE.to_string()),
                         ],
                     ),
                     _ => (c.status.clone(), c.message.clone().into_iter().collect()),
@@ -218,6 +218,8 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
 }
 
 const NOT_REPORTED: &str = "not reported";
+/// Finding of a check spectra measured as not applicable without giving a reason.
+const NOT_APPLICABLE: &str = "not applicable";
 
 fn find_check<'a>(checks: &'a [QualityCheck], name: &str) -> Option<&'a QualityCheck> {
     checks.iter().find(|c| c.name == name)
@@ -328,6 +330,18 @@ mod tests {
                 "http.caching",
             ]
         );
+    }
+
+    #[test]
+    fn skip_without_message_is_not_applicable_not_unreported() {
+        let resp = response(Some(true), &[("cookie_secure", CheckStatus::Skip)]);
+        let (checks, _) = translated(&resp);
+        let c = checks
+            .iter()
+            .find(|c| c.id.to_string() == "http.cookie_secure")
+            .expect("cookie_secure");
+        assert_eq!(c.status, Status::NotApplicable);
+        assert_eq!(c.findings, vec!["not applicable".to_string()]);
     }
 
     #[test]
