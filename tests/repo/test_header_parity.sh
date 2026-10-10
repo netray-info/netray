@@ -52,7 +52,7 @@ rows=(
   "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db|max-age=31536000; includeSubDomains; preload"
   "dns|mhost-prism|prism.dev.toml|PRISM_SERVER__BIND|PRISM_SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
   "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas|max-age=31536000; includeSubDomains; preload"
-  "http|spectra|spectra.dev.toml|SPECTRA__SERVER__BIND|SPECTRA__SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
+  "http|http|spectra.dev.toml|SPECTRA__SERVER__BIND|SPECTRA__SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
   "email|beacon|beacon.dev.toml|BEACON__SERVER__BIND|BEACON__SERVER__METRICS_BIND||max-age=31536000; includeSubDomains; preload"
   "ip|ifconfig-rs|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND||max-age=63072000; includeSubDomains; preload"
 )

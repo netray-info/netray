@@ -18,10 +18,10 @@ use axum::Router;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use netray_common::fetch::Resolve;
-use spectra::inspect::assembler::RedirectHop;
-use spectra::inspect::request::{Outbound, execute_request};
-use spectra::inspect::{EnrichmentData, InspectResult, TaskResult, assemble_response};
-use spectra::quality::types::CheckStatus;
+use netray_http::inspect::assembler::RedirectHop;
+use netray_http::inspect::request::{Outbound, execute_request};
+use netray_http::inspect::{EnrichmentData, InspectResult, TaskResult, assemble_response};
+use netray_http::quality::types::CheckStatus;
 use tokio::net::TcpListener;
 use url::Url;
 

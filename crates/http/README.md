@@ -116,10 +116,10 @@ just build
 
 # Development (two terminals)
 npm run dev -w spectra-frontend                   # Vite dev server on :5175
-netray http crates/spectra/spectra.dev.toml       # the service
+netray http crates/http/spectra.dev.toml       # the service
 
 # Tests
-cargo test -p spectra                             # this crate's Rust tests
+cargo test -p netray-http                             # this crate's Rust tests
 just check                                        # the gate plus the full Rust suite
 ```
 

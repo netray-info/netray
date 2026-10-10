@@ -13,7 +13,7 @@ COPY --from=frontend /build/crates/beacon/frontend/dist crates/beacon/frontend/d
 COPY --from=frontend /build/crates/ifconfig-rs/frontend/dist crates/ifconfig-rs/frontend/dist/
 COPY --from=frontend /build/crates/lens/frontend/dist crates/lens/frontend/dist/
 COPY --from=frontend /build/crates/mhost-prism/frontend/dist crates/mhost-prism/frontend/dist/
-COPY --from=frontend /build/crates/spectra/frontend/dist crates/spectra/frontend/dist/
+COPY --from=frontend /build/crates/http/frontend/dist crates/http/frontend/dist/
 COPY --from=frontend /build/crates/tlsight/frontend/dist crates/tlsight/frontend/dist/
 RUN cargo build --release -p netray \
  && mkdir /out \
@@ -26,7 +26,7 @@ RUN apk add --no-cache ca-certificates wget \
 WORKDIR /netray
 COPY --from=builder /out/ /usr/local/bin/
 COPY crates/beacon/beacon.toml crates/ifconfig-rs/ifconfig.example.toml crates/lens/lens.example.toml \
-     crates/mhost-prism/prism.example.toml crates/spectra/spectra.example.toml \
+     crates/mhost-prism/prism.example.toml crates/http/spectra.example.toml \
      crates/tlsight/tlsight.example.toml ./
 COPY site ./site
 RUN chown -R netray:netray /netray

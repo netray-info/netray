@@ -29,7 +29,7 @@ rows=(
   "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db"
   "dns|mhost-prism|prism.dev.toml|PRISM_SERVER__BIND|PRISM_SERVER__METRICS_BIND|"
   "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
-  "http|spectra|spectra.dev.toml|SPECTRA__SERVER__BIND|SPECTRA__SERVER__METRICS_BIND|"
+  "http|http|spectra.dev.toml|SPECTRA__SERVER__BIND|SPECTRA__SERVER__METRICS_BIND|"
   "email|beacon|beacon.dev.toml|BEACON__SERVER__BIND|BEACON__SERVER__METRICS_BIND|"
   "ip|ifconfig-rs|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND|"
 )

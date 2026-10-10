@@ -39,7 +39,7 @@ TOML file (default: `spectra.dev.toml` for local dev) + env overrides as `SPECTR
 ### Running locally
 
 ```sh
-netray http crates/spectra/spectra.dev.toml  # starts the service (after `just build`)
+netray http crates/http/spectra.dev.toml  # starts the service (after `just build`)
 SPECTRA_CONFIG=my.toml netray http           # use a custom config file path
 ```
 
@@ -50,7 +50,7 @@ The verbs live in the root `justfile` (see the root `README.md`); run them from 
 ```sh
 just adlc-setup                      # once: npm workspaces + frontend builds
 just adlc-verify                     # the gate: fmt-check, clippy, tests, offline
-cargo test -p spectra                # this crate's tests
+cargo test -p netray-http                # this crate's tests
 npm run dev -w spectra-frontend      # Vite dev server on :5175
 ```
 

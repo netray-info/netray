@@ -1,5 +1,5 @@
 [package]
-name = "spectra"
+name = "netray-http"
 version.workspace = true
 edition.workspace = true
 license = "MIT"

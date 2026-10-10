@@ -32,7 +32,7 @@ pub async fn run(config_arg: Option<String>) {
     let telemetry_config: netray_common::telemetry::TelemetryConfig = (&config.telemetry).into();
     netray_common::telemetry::init_subscriber(
         &telemetry_config,
-        "info,spectra=debug,hyper=warn,h2=warn",
+        "info,netray_http=debug,hyper=warn,h2=warn",
     );
 
     metrics::register_metrics();

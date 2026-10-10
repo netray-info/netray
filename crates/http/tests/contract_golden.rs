@@ -5,14 +5,14 @@
 // requires is present), serialized by axum's `Json` exactly as the route does.
 // lens's `tests/contract_backends.rs` reads the same file.
 //
-// UPDATE_GOLDEN=1 cargo test -p spectra --test contract_golden   writes the golden.
+// UPDATE_GOLDEN=1 cargo test -p netray-http --test contract_golden   writes the golden.
 
 use std::path::PathBuf;
 
 use axum::Json;
 use axum::response::IntoResponse;
 use http_body_util::BodyExt;
-use spectra::inspect::assembler::InspectResponse;
+use netray_http::inspect::assembler::InspectResponse;
 
 fn golden_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

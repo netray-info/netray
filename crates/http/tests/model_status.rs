@@ -3,8 +3,8 @@
 // `expected` matches every `CheckStatus` variant without a wildcard, so adding a variant
 // breaks this file's compilation until its mapping is decided here.
 
+use netray_http::quality::types::CheckStatus;
 use netray_model::Status;
-use spectra::quality::types::CheckStatus;
 
 fn expected(status: &CheckStatus) -> Status {
     match status {

@@ -44,7 +44,7 @@ check_precedence() {
 
 check_precedence email BEACON_CONFIG crates/beacon/beacon.dev.toml yes
 # spectra: argument, then SPECTRA_CONFIG (no config_source log field)
-check_precedence http SPECTRA_CONFIG crates/spectra/spectra.dev.toml no
+check_precedence http SPECTRA_CONFIG crates/http/spectra.dev.toml no
 
 # --- C9: metric names keep the service prefix ------------------------------
 # check_metrics <subcommand> <ENV_PREFIX> <metric prefix>

@@ -31,7 +31,7 @@ table=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
     "dns:crates/mhost-prism/tests/fixtures/prism.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
     "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-    "http:crates/spectra/tests/fixtures/spectra.production.toml:"
+    "http:crates/http/tests/fixtures/spectra.production.toml:"
     "email:crates/beacon/tests/fixtures/beacon.production.toml:"
     "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
 )
@@ -62,8 +62,8 @@ done
 # Values the service refuses at startup must fail the check too, or the operator check
 # passes a config that crash-loops (sub:fixture:perl substitution).
 startup_rejects=(
-    "http:crates/spectra/tests/fixtures/spectra.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-    "http:crates/spectra/tests/fixtures/spectra.production.toml:s/^per_ip_burst = .*/per_ip_burst = 0/"
+    "http:crates/http/tests/fixtures/spectra.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
+    "http:crates/http/tests/fixtures/spectra.production.toml:s/^per_ip_burst = .*/per_ip_burst = 0/"
     "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"0/min\"|"
     "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^per_ip = .*|per_ip = \"ten\"|"
     "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[validation\\]\$|[validation]\\ncustom_ca_dir = \"/nonexistent-ca-dir\"|"
@@ -97,7 +97,7 @@ telemetry_rejects=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "dns:crates/mhost-prism/tests/fixtures/prism.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "tls:crates/tlsight/tests/fixtures/tlsight.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
-    "http:crates/spectra/tests/fixtures/spectra.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+    "http:crates/http/tests/fixtures/spectra.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "email:crates/beacon/tests/fixtures/beacon.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\n$bad_otlp|"
     "ip:crates/ifconfig-rs/tests/fixtures/ifconfig.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
 )

@@ -2821,9 +2821,9 @@ dependencies = [
  "lens",
  "mime_guess",
  "netray-common",
+ "netray-http",
  "percent-encoding",
  "prism",
- "spectra",
  "tlsight",
  "tokio",
 ]
@@ -2873,6 +2873,35 @@ version = "0.23.1"
 dependencies = [
  "netray-model",
  "tokio",
+]
+
+[[package]]
+name = "netray-http"
+version = "0.23.1"
+dependencies = [
+ "axum",
+ "chrono",
+ "config",
+ "governor",
+ "http-body-util",
+ "indexmap",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "mime_guess",
+ "netray-common",
+ "netray-model",
+ "percent-encoding",
+ "reqwest",
+ "rust-embed",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "url",
+ "utoipa",
 ]
 
 [[package]]
@@ -4473,35 +4502,6 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "spectra"
-version = "0.23.1"
-dependencies = [
- "axum",
- "chrono",
- "config",
- "governor",
- "http-body-util",
- "indexmap",
- "metrics",
- "metrics-exporter-prometheus",
- "mime_guess",
- "netray-common",
- "netray-model",
- "percent-encoding",
- "reqwest",
- "rust-embed",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "url",
- "utoipa",
 ]
 
 [[package]]

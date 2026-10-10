@@ -12,7 +12,7 @@ beacon = { path = "../beacon" }
 ifconfig-rs = { path = "../ifconfig-rs" }
 lens = { path = "../lens" }
 prism = { path = "../mhost-prism" }
-spectra = { path = "../spectra" }
+netray-http = { path = "../http" }
 tlsight = { path = "../tlsight" }
 
 axum = { workspace = true }

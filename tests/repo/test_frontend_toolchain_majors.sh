@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.." || exit 1
 
 node -e '
 const fs = require("fs");
-const dirs = ["ifconfig-rs","mhost-prism","tlsight","spectra","beacon","lens"].map(c => `crates/${c}/frontend`)
+const dirs = ["ifconfig-rs","mhost-prism","tlsight","http","beacon","lens"].map(c => `crates/${c}/frontend`)
   .concat(["packages/common-frontend"]);
 let bad = false;
 for (const tool of ["vite", "typescript"]) {

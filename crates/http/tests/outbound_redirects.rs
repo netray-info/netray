@@ -16,8 +16,8 @@ use axum::Router;
 use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use netray_common::fetch::Resolve;
-use spectra::inspect::TaskResult;
-use spectra::inspect::request::{Outbound, execute_request};
+use netray_http::inspect::TaskResult;
+use netray_http::inspect::request::{Outbound, execute_request};
 use tokio::net::TcpListener;
 use url::Url;
 
@@ -193,15 +193,15 @@ async fn port80_redirect_to_refused_https_target_is_not_recorded() {
         redirect_limit_reached: false,
         error: None,
     };
-    let resp = spectra::inspect::assemble_response(
+    let resp = netray_http::inspect::assemble_response(
         &Url::parse("https://a.test/").unwrap(),
         SocketAddr::new(LO4, 443),
-        spectra::inspect::InspectResult {
+        netray_http::inspect::InspectResult {
             https: empty(),
             http_upgrade: Some(probe),
             cors: empty(),
         },
-        spectra::inspect::EnrichmentData::default(),
+        netray_http::inspect::EnrichmentData::default(),
         None,
         1,
     );

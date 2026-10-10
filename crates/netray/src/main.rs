@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Http {
             check_config: Some(path),
             ..
-        } => check_config(&path, spectra::config::Config::load),
+        } => check_config(&path, netray_http::config::Config::load),
         Command::Email {
             check_config: Some(path),
             ..
@@ -124,7 +124,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Lens { config, .. } => lens::run(config).await,
         Command::Dns { config, .. } => prism::run(config).await,
         Command::Tls { config, .. } => tlsight::run(config).await,
-        Command::Http { config, .. } => spectra::run(config).await,
+        Command::Http { config, .. } => netray_http::run(config).await,
         Command::Email { config, .. } => beacon::run(config).await?,
         Command::Ip {
             config,
