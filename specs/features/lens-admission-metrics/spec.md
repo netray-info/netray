@@ -56,7 +56,7 @@ lens exports what V2's admission numbers need (V2 SDD S18, §4.4), from startup 
 - GIVEN client A with three fresh runs and client B with one in the current hour WHEN the hour is flushed THEN `lens_client_hourly_runs` has count 2 and sum 4, rendered with the buckets of R3.
 - GIVEN a flush WHEN the next hour has no fresh run THEN the following flush observes nothing (the map was cleared).
 - GIVEN cache hits and rate-limited requests from a client WHEN flushed THEN they are not counted.
-- GIVEN the rendered `/metrics` and lens's log output WHEN a client made fresh runs THEN neither contains the client's address.
+- GIVEN a client made fresh runs WHEN `/metrics` is rendered after a flush THEN it does not contain the client's address, and the per-client counter writes no log line naming it (lens's request span already records `client_ip`, `routes.rs:1088`; that is unchanged).
 - GIVEN the help text of `lens_client_hourly_runs` WHEN rendered THEN it says a restart loses the partial hour.
 
 ## Decision log
@@ -67,6 +67,8 @@ lens exports what V2's admission numbers need (V2 SDD S18, §4.4), from startup 
 - An invalid domain is not counted, over a fourth `invalid` result: the agreed metric has three results, and invalid input is no admission load.
 - Buckets as proposed by the planning session (R3) and fresh-run buckets up to the 20 s hard deadline plus 30 (R2).
 - The hour boundary is process-local, over persisting the map: no client key leaves memory (S27).
+
+- The address check covers this feature's metric and counter, over all of lens's log output: the request span has logged `client_ip` since before this feature (`routes.rs:1088`), which this slice does not change (phase 2 amendment, 2026-10-10).
 
 ## Open decisions
 
