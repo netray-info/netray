@@ -82,6 +82,7 @@ impl Module for StubModule {
 struct StubProvider {
     result: Result<Facts, ResolveError>,
     calls: Arc<AtomicUsize>,
+    delay: Duration,
 }
 
 impl StubProvider {
@@ -91,6 +92,7 @@ impl StubProvider {
             StubProvider {
                 result: Ok(facts()),
                 calls: calls.clone(),
+                delay: Duration::ZERO,
             },
             calls,
         )
@@ -105,7 +107,11 @@ impl FactsProvider for StubProvider {
     ) -> BoxFuture<'a, Result<Facts, ResolveError>> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let result = self.result.clone();
-        Box::pin(async move { result })
+        let delay = self.delay;
+        Box::pin(async move {
+            tokio::time::sleep(delay).await;
+            result
+        })
     }
 }
 
@@ -122,6 +128,7 @@ async fn drive(
     registry: &Registry,
     base: RunContext,
     sections: &[(Protocol, Duration)],
+    resolve_budget: Duration,
 ) -> (netray_engine::RunReport, Vec<(SectionEvent, Instant)>) {
     let (tx, mut rx) = mpsc::channel(8);
     let collect = async {
@@ -131,7 +138,7 @@ async fn drive(
         }
         events
     };
-    tokio::join!(run(registry, base, sections, tx), collect)
+    tokio::join!(run(registry, base, sections, resolve_budget, tx), collect)
 }
 
 fn outcome(events: &[(SectionEvent, Instant)], protocol: Protocol) -> &SectionOutcome {
@@ -159,7 +166,7 @@ async fn c4_one_resolve_stage_and_every_module_sees_the_same_facts() {
         (Protocol::Ip, MS(500)),
     ];
 
-    let (report, events) = drive(&registry, base(MS(2000)), &sections).await;
+    let (report, events) = drive(&registry, base(MS(2000)), &sections, MS(500)).await;
 
     assert_eq!(
         calls.load(Ordering::SeqCst),
@@ -196,7 +203,7 @@ async fn c5_sections_arrive_in_finish_order_each_before_the_slower_finish() {
         (Protocol::Ip, MS(1000)),
     ];
 
-    let (_, events) = drive(&registry, base(MS(2000)), &sections).await;
+    let (_, events) = drive(&registry, base(MS(2000)), &sections, MS(500)).await;
 
     let order: Vec<Protocol> = events.iter().map(|(e, _)| e.protocol).collect();
     assert_eq!(order, vec![Protocol::Tls, Protocol::Ip, Protocol::Http]);
@@ -226,7 +233,7 @@ async fn c6_overrun_of_section_deadline_is_timed_out_others_keep_results() {
         (Protocol::Ip, MS(500)),
     ];
 
-    let (_, events) = drive(&registry, base(MS(2000)), &sections).await;
+    let (_, events) = drive(&registry, base(MS(2000)), &sections, MS(500)).await;
 
     assert_eq!(events.len(), 3);
     assert_eq!(outcome(&events, Protocol::Http), &SectionOutcome::TimedOut);
@@ -239,6 +246,7 @@ async fn failed_resolve_makes_address_sections_incomplete_and_others_still_run()
     let provider = StubProvider {
         result: Err(ResolveError("nameserver unreachable".into())),
         calls: Arc::default(),
+        delay: Duration::ZERO,
     };
     let mut http = StubModule::new(Protocol::Http, Duration::ZERO);
     http.needs_addresses = true;
@@ -257,7 +265,7 @@ async fn failed_resolve_makes_address_sections_incomplete_and_others_still_run()
         (Protocol::Email, MS(500)),
     ];
 
-    let (report, events) = drive(&registry, base(MS(2000)), &sections).await;
+    let (report, events) = drive(&registry, base(MS(2000)), &sections, MS(500)).await;
 
     assert_eq!(events.len(), 3);
     for p in [Protocol::Http, Protocol::Tls] {
@@ -293,7 +301,7 @@ async fn hard_deadline_caps_a_longer_section_deadline() {
     let sections = [(Protocol::Http, Duration::from_secs(30))];
 
     let start = Instant::now();
-    let (_, events) = drive(&registry, base(MS(60)), &sections).await;
+    let (_, events) = drive(&registry, base(MS(60)), &sections, MS(500)).await;
 
     assert_eq!(outcome(&events, Protocol::Http), &SectionOutcome::TimedOut);
     assert!(
@@ -301,4 +309,47 @@ async fn hard_deadline_caps_a_longer_section_deadline() {
         "the hard deadline, not the 30 s section deadline, ended the run: {:?}",
         start.elapsed()
     );
+}
+
+#[tokio::test]
+async fn section_window_counts_from_the_run_start_not_from_the_end_of_the_resolve() {
+    let mut provider = StubProvider::ok().0;
+    provider.delay = MS(50);
+    let registry = Registry::new()
+        .with_facts(Box::new(provider))
+        .with(Box::new(StubModule::new(Protocol::Http, MS(30))));
+    let sections = [(Protocol::Http, MS(40))];
+
+    let (_, events) = drive(&registry, base(MS(2000)), &sections, MS(1000)).await;
+
+    assert_eq!(
+        outcome(&events, Protocol::Http),
+        &measured(),
+        "the non-address module started at run start: 30 ms fits its 40 ms window"
+    );
+}
+
+#[tokio::test]
+async fn resolve_budget_overrun_is_a_resolve_error_address_incomplete_others_measured() {
+    let mut provider = StubProvider::ok().0;
+    provider.delay = MS(500);
+    let mut ip = StubModule::new(Protocol::Ip, Duration::ZERO);
+    ip.needs_addresses = true;
+    let registry = Registry::new()
+        .with_facts(Box::new(provider))
+        .with(Box::new(ip))
+        .with(Box::new(StubModule::new(Protocol::Http, Duration::ZERO)));
+    let sections = [(Protocol::Ip, MS(1000)), (Protocol::Http, MS(1000))];
+
+    let (report, events) = drive(&registry, base(MS(2000)), &sections, MS(20)).await;
+
+    assert!(
+        report.resolve_error.is_some(),
+        "the 20 ms resolve budget elapsed: {report:?}"
+    );
+    assert!(matches!(
+        outcome(&events, Protocol::Ip),
+        SectionOutcome::Incomplete { .. }
+    ));
+    assert_eq!(outcome(&events, Protocol::Http), &measured());
 }

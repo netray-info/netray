@@ -1,6 +1,6 @@
 //! V2 Phase 6, requirements 18 and 20: lens's check path runs through `netray_engine::run` with
 //! one resolve stage. A request calls the registry's `FactsProvider` once; a failed resolve
-//! leaves the sections that need addresses (HTTP, TLS, IP) errored and the result `incomplete`
+//! leaves the section that needs addresses (IP only; HTTP and TLS do their own lookups) errored and the result `incomplete`
 //! while DNS and email keep their results; the IP section samples the provider's A/AAAA, not
 //! the DNS section's presentation.
 
@@ -99,7 +99,7 @@ async fn one_check_request_calls_the_facts_provider_once() {
 }
 
 #[tokio::test]
-async fn a_failed_resolve_errors_the_address_sections_and_keeps_dns_and_email() {
+async fn a_failed_resolve_errors_only_the_ip_section_and_keeps_the_others() {
     let state = state_with(Box::new(FailingFacts));
 
     let body = sync_check(state).await;
@@ -107,13 +107,11 @@ async fn a_failed_resolve_errors_the_address_sections_and_keeps_dns_and_email() 
     let summary = &body["summary"];
     assert_eq!(summary["grade"], "incomplete", "summary: {summary}");
     assert_eq!(summary["complete"], false, "summary: {summary}");
-    for section in ["http", "tls", "ip"] {
-        assert_eq!(
-            summary["sections"][section], "error",
-            "{section} needs addresses and the resolve failed: {summary}"
-        );
-    }
-    for section in ["dns", "email"] {
+    assert_eq!(
+        summary["sections"]["ip"], "error",
+        "ip needs addresses and the resolve failed: {summary}"
+    );
+    for section in ["http", "tls", "dns", "email"] {
         assert_ne!(
             summary["sections"][section], "error",
             "{section} needs no addresses: {summary}"

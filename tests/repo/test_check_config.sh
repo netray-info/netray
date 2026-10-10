@@ -150,6 +150,15 @@ else
         || fail "lens: over-budget error does not mention timeout and deadline ($out)"
 fi
 
+# V2 Phase 6: the resolve stage has its own budget; resolve_timeout_ms plus the IP backend's
+# timeout must stay under the 20000 ms hard deadline, and the error names resolve_timeout_ms.
+perl -pe 's/^resolve_timeout_ms = .*/resolve_timeout_ms = 18500/' "$lens_nodata" >"$tmp/lens.resolve.toml"
+grep -qx 'resolve_timeout_ms = 18500' "$tmp/lens.resolve.toml" \
+    || fail "lens: resolve_timeout_ms substitution did not change the data-free copy"
+run_check lens "$tmp/lens.resolve.toml"
+[ "$rc" -eq 1 ] || fail "lens: resolve_timeout_ms 18500 + ip 2000 exited $rc, expected 1 ($out)"
+grep -qF 'resolve_timeout_ms' <<<"$out" || fail "lens: over-budget resolve error does not name resolve_timeout_ms ($out)"
+
 # C8: the shipped lens configs stay loadable.
 # The production fixture is checked without its data paths (`lens_nodata`).
 for f in "$lens_nodata" "$REPO_ROOT/crates/lens/lens.dev.toml" "$REPO_ROOT/crates/lens/lens.example.toml"; do

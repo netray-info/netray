@@ -7,6 +7,9 @@ bind = "0.0.0.0:8082"
 metrics_bind = "0.0.0.0:9090"
 trusted_proxies = ["172.31.0.0/24", "172.30.0.0/24"]
 
+[backends]
+resolve_timeout_ms = 2000
+
 [backends.dns]
 timeout_ms = 15000
 
@@ -61,8 +64,8 @@ default_servers = ["google"]
 allow_system_resolvers = false
 
 [modules.dns.limits]
-per_target_per_minute = 120
-per_target_burst = 40
+per_target_per_minute = 160
+per_target_burst = 53
 max_timeout_secs = 10
 max_servers = 4
 
