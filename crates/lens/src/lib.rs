@@ -105,6 +105,8 @@ pub async fn run(config_arg: Option<String>) {
     let snapshot_routes = routes::snapshot_router();
     let openapi = api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
 
+    let client_runs = std::sync::Arc::clone(&state.client_runs);
+
     // 5. Build the main app with all middleware.
     let app = Router::new()
         .merge(health_router.with_state(state.clone()))
@@ -182,6 +184,9 @@ pub async fn run(config_arg: Option<String>) {
         let _ = shutdown_tx.send(true);
     });
 
+    let flush_shutdown = shutdown_rx.clone();
+    tokio::spawn(run_client_runs_flush(client_runs, flush_shutdown));
+
     // 7. Metrics server.
     let metrics_addr = config.server.metrics_bind;
     let metrics_shutdown = shutdown_rx.clone();
@@ -228,6 +233,20 @@ async fn robots_txt() -> impl axum::response::IntoResponse {
         )],
         "User-agent: *\nAllow: /\n",
     )
+}
+
+async fn run_client_runs_flush(
+    counter: std::sync::Arc<metrics::ClientRunCounter>,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
+) {
+    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(3600));
+    ticker.tick().await;
+    loop {
+        tokio::select! {
+            _ = ticker.tick() => counter.flush(),
+            _ = shutdown.wait_for(|v| *v) => break,
+        }
+    }
 }
 
 async fn wait_for_shutdown(mut rx: tokio::sync::watch::Receiver<bool>) {

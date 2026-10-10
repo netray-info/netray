@@ -1116,6 +1116,7 @@ async fn run_check_handler(
 
     // 4. Run check.
     crate::metrics::count_request("fresh");
+    state.client_runs.record(client_ip);
     let run_guard = crate::metrics::RunGuard::new();
     let run_started = std::time::Instant::now();
     let output = run_check_with_input(

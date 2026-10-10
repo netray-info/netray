@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::Mutex;
 use std::time::Duration;
 
 pub const HISTOGRAM_BUCKETS: &[(&str, &[f64])] = &[
@@ -23,6 +26,36 @@ pub fn init_zero_series() {
         metrics::counter!("lens_rate_limit_hits_total", "scope" => scope).increment(0);
     }
     metrics::gauge!("lens_runs_in_flight").set(0.0);
+    metrics::describe_histogram!(
+        "lens_client_hourly_runs",
+        "Fresh check runs per client in one flushed hour, one observation per active client; a restart loses the partial hour"
+    );
+    let _ = metrics::histogram!("lens_client_hourly_runs");
+}
+
+/// Counts fresh runs per client address for the current hour. The addresses
+/// stay in memory only: `flush` records one count per client and drops the keys.
+#[derive(Default)]
+pub struct ClientRunCounter {
+    runs: Mutex<HashMap<IpAddr, u32>>,
+}
+
+impl ClientRunCounter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn record(&self, ip: IpAddr) {
+        let mut runs = self.runs.lock().unwrap_or_else(|e| e.into_inner());
+        *runs.entry(ip).or_insert(0) += 1;
+    }
+
+    pub fn flush(&self) {
+        let runs = std::mem::take(&mut *self.runs.lock().unwrap_or_else(|e| e.into_inner()));
+        for count in runs.into_values() {
+            metrics::histogram!("lens_client_hourly_runs").record(f64::from(count));
+        }
+    }
 }
 
 pub fn count_request(result: &'static str) {

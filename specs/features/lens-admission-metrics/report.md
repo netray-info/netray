@@ -58,3 +58,30 @@ $ curl -s -o /dev/null -w '%{http_code}' localhost:8085/api/check/not_a_domain  
 200
 lens_check_requests_total{result="fresh"} 1
 ```
+
+## Phase 2 — Hourly runs per client
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R3: in-memory fresh-run count per client, flushed hourly into `lens_client_hourly_runs` (buckets 1 2 3 5 10 20 50 100), map cleared; client key never exported, logged or persisted; help text names the restart caveat | green | crates/lens/tests/client_hourly_runs.rs |
+| C2 | A three runs, B one → flush: count 2, sum 4, R3's buckets | green | crates/lens/tests/client_hourly_runs.rs |
+| C3 | a flush with no runs since the last observes nothing | green | crates/lens/tests/client_hourly_runs.rs |
+| C4 | cache hits and rate-limited requests are not counted | green | crates/lens/tests/client_hourly_runs.rs |
+| C5 | rendered `/metrics` after a flush contains no client address | green | crates/lens/tests/client_hourly_runs.rs |
+| C6 | the help text says a restart loses the partial hour | green | crates/lens/tests/client_hourly_runs.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 3 | sonnet (`describe_histogram!` alone renders no HELP line; the histogram is registered at startup too) | 38689 | 47 |
+
+### Reader
+
+Folded into the branch review that follows this phase (one phase of four files, the review reads the whole range).
+
+### Behavioural verification
+
+skipped: the hourly flush has no entry point short of an hour's wait; `client_runs_c4_only_the_fresh_run_counts` drives it through the router and `flush()`, and `tests/repo/test_lens_admission_metrics.sh` starts `netray lens` with the new state.
