@@ -178,7 +178,7 @@ module_rejects=(
     "backends.tls url:url:s|^\\[backends\\.tls\\]\$|[backends.tls]\\nurl = 'http://tlsight:8081'|"
     "modules.tls bogus:bogus:s|^\\[modules\\.tls\\.limits\\]\$|[modules.tls]\\nbogus = 1\\n\\n[modules.tls.limits]|"
     "backends.dns url:url:s|^\\[backends\\.dns\\]\$|[backends.dns]\\nurl = 'http://prism:8080'|"
-    "backends dns_servers:dns_servers:s|^\\[backends\\.dns\\]\$|[backends]\\ndns_servers = ['google']\\n\\n[backends.dns]|"
+    "backends dns_servers:dns_servers:s|^resolve_timeout_ms = .*\$|resolve_timeout_ms = 2000\\ndns_servers = ['google']|"
     "modules.dns bogus:bogus:s|^servers = .*\$|servers = ['google']\\nbogus = 1|"
 )
 n=0
