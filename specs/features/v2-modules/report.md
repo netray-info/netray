@@ -171,3 +171,26 @@ RED (3f339d2): the new and rewired tests failed against the missing module API; 
 ### Behavioural verification
 
 `just adlc-verify` green; `tests/fixtures/contracts/` unchanged; reader ran `netray lens` and `kill -HUP` on it ("reload triggered", "Enrichment data reloaded successfully").
+
+## Phase 4 — TLS module
+
+### API contract (fixed before the test writers)
+
+- `netray_tls`: the inspection core leaves `routes::do_inspect` as a pub async function (resolve, target policy, enrichment, CAA/TLSA/ECH, per-port inspection, validation, quality) that returns `InspectResponse`; the route keeps its per-client cap-and-warn and builds its HTTP response from it unchanged.
+- `ModuleConfig` (`deny_unknown_fields`) with tlsight's check sections and key names: `limits` (handshake/request timeouts, `max_ports`, `max_concurrent_handshakes`, `max_ips_per_hostname`, `per_target_per_minute`, `per_target_burst`), `dns`, `validation`, `quality`, `backends` (the enrichment `ip`); no `allow_blocked_targets`.
+- `TlsModule::new(ModuleConfig) -> Result<TlsModule, _>` is `async` (tlsight's resolver); `impl Module` with ids `tls.<v1 name>`; `run()` parses the domain with `input::parse_input` as the route does (a refusal → `Incomplete` with tlsight's text), checks the per-target limit with cost ports × addresses (keyed by host, scope `per_target`; over → `Incomplete` with the limiter's text; no per-client limit), keeps the handshake semaphore, then the core and `translate`.
+- `translate(&InspectResponse) -> SectionOutcome` (pure, moved from `crates/lens/src/backends/tls.rs`: first port's checks, `tls_reachable`, `NOT_TESTED_FROM_HERE`, headline).
+- Feature `testing`: `testing::golden_module(contract_json: &str) -> Box<dyn Module>`.
+- lens: TLS presentation → `BackendExtra::Tls`; `[backends.tls] url` refused; `[modules.tls]` in the production fixture with tlsight.production.toml's check values.
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R12: crates/tls is netray-tls, NETRAY_TLS_ / NETRAY_TLS_CONFIG, TLSIGHT_ refused naming the new prefix | open | tests/repo/test_env_prefixes.sh |
+| C2 | R13: core extracted and shared; tlsight's route responses unchanged; ModuleConfig; Module (tls.<v1>) with input parsing, per-target limit and handshake semaphore; translate moved; golden_module | open | crates/tls/tests/module.rs, crates/tls/tests/*.rs |
+| C3 | R14: lens takes TLS from the registry; backends/tls.rs and [backends.tls] url gone; goldens unchanged | open | crates/lens/tests/*.rs |
+| C4 | tlsight-inspect/not-tested/unreachable translated equal the TLS section of their full-output goldens | open | crates/tls/tests/module.rs |
+| C5 | TLSIGHT_CONFIG set → netray tls refused naming NETRAY_TLS_CONFIG | open | tests/repo/test_env_prefixes.sh |
+| C6 | a third run for one host over a per-target burst of 2 → Incomplete naming the limit; an invalid domain → Incomplete with tlsight's text | open | crates/tls/tests/module_limits.rs |
+| C7 | full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
