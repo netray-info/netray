@@ -26,6 +26,20 @@ pub enum Verdict {
     Fail,
 }
 
+/// Maps onto the shared model vocabulary; `Skip` is `NotApplicable`, `Info` is `Pass`.
+/// The caller keeps `Info`'s message as a finding.
+impl From<Verdict> for netray_model::Status {
+    fn from(verdict: Verdict) -> Self {
+        match verdict {
+            Verdict::Skip => netray_model::Status::NotApplicable,
+            Verdict::Info => netray_model::Status::Pass,
+            Verdict::Pass => netray_model::Status::Pass,
+            Verdict::Warn => netray_model::Status::Warn,
+            Verdict::Fail => netray_model::Status::Fail,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, ToSchema)]
 pub enum Grade {
     F,

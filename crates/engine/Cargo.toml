@@ -1,0 +1,12 @@
+[package]
+name = "netray-engine"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+description = "V2 engine seams for the netray.info suite: the Module trait and FactsProvider"
+
+[dependencies]
+netray-model = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

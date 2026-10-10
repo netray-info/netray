@@ -6,6 +6,7 @@ license = "MIT"
 description = "Email security inspector for netray.info — DNS-only mail posture analysis"
 
 [dependencies]
+netray-model = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json", "macros"] }
 tower = { workspace = true, features = ["limit"] }

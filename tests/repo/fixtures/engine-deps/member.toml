@@ -1,0 +1,8 @@
+[package]
+name = "netray-engine"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+netray-model = { path = "../model" }
+netray-common = { path = "../common" }

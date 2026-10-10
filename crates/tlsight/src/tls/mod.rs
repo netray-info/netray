@@ -64,6 +64,14 @@ pub fn error_code(err: &(dyn std::error::Error + Send + Sync + 'static)) -> &'st
     "HANDSHAKE_FAILED"
 }
 
+/// Maps an `error_code` value onto the shared model status; unknown codes are `Unmeasured`.
+pub fn status_of_error_code(code: &str) -> netray_model::Status {
+    match code {
+        "NOT_TESTED_FROM_HERE" => netray_model::Status::NotTested,
+        _ => netray_model::Status::Unmeasured,
+    }
+}
+
 /// Perform TLS inspection on a single IP and port.
 pub async fn inspect_ip(
     ip: IpAddr,

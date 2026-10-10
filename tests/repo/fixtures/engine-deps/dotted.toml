@@ -1,0 +1,8 @@
+dependencies.beacon = { path = "../beacon" }
+
+[package]
+name = "netray-engine"
+version = "0.0.0"
+edition = "2021"
+description = "uses beacon, tlsight and lens"
+

@@ -14,6 +14,7 @@ carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
 |---|---|
 | `crates/{lens,mhost-prism,tlsight,spectra,beacon,ifconfig-rs}` | the services; each a library with its frontend in `frontend/` |
 | `crates/common` | `netray-common`, shared Rust (workspace member, not published) |
+| `crates/{model,engine}` | V2 core (planning SDD `v2.md` §3): `netray-model` the check vocabulary, no workspace dependency; `netray-engine` the `Module`/`FactsProvider` traits, depends on `netray-model` only (`tests/repo/test_engine_names_no_module.sh`). Each V1 crate maps its status word onto `netray_model::Status` once |
 | `crates/netray` | the binary: subcommands `lens dns tls http email ip site`; all but `site` take `--check-config <path>` (exit 0 `config ok: <path>`, exit 1 with the error) |
 | `packages/common-frontend` | `@netray-info/common-frontend` (workspace member, not published) |
 | `site/` | static site, served by `netray site` |
@@ -36,6 +37,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Data: `just ifconfig-data` / `just test-ifconfig-data` (GeoIP), `just tlsight-data` (CAA table, committed).
 - Run tests that depend on feature unification with `--workspace`; `cargo test -p <crate>` resolves features for that crate alone and passes where the binary is wrong.
 - `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
+- A repo check over Cargo dependencies reads `cargo metadata`, never the TOML text: renames, dotted keys and inline tables escape a text scan.
+- The gate's clippy runs without `--all-targets`; a narrower command with `--all-targets` hits old test-code lints the gate never sees.
 - `metrics_util` 0.20's `Snapshotter::snapshot()` swaps every value to 0 on read: read once, accumulate across reads, or render a `PrometheusRecorder`.
 - A `describe_*!` alone renders no HELP line: also register the metric at startup.
 - `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.

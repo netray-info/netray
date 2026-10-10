@@ -10,6 +10,18 @@ pub enum CheckStatus {
     Fail,
 }
 
+/// Maps onto the shared model vocabulary; `Skip` is `NotApplicable`.
+impl From<CheckStatus> for netray_model::Status {
+    fn from(status: CheckStatus) -> Self {
+        match status {
+            CheckStatus::Pass => netray_model::Status::Pass,
+            CheckStatus::Skip => netray_model::Status::NotApplicable,
+            CheckStatus::Warn => netray_model::Status::Warn,
+            CheckStatus::Fail => netray_model::Status::Fail,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QualityCheck {
     pub name: String,
