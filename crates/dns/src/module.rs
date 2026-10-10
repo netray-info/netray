@@ -293,21 +293,16 @@ pub fn facts_from_lookups(lookups: &Lookups) -> Facts {
     }
 }
 
-/// The record data of the lookups that queried `record_type`; besides A and AAAA only the
-/// records owned by the queried name.
+/// The record data of the lookups that queried `record_type`, CNAME chain targets included.
+/// Only the query type selects: an NS answer's glue sits in the NS lookup and never reaches
+/// `a`/`aaaa`, and mhost already keeps authority/additional records only when they are owned
+/// by the queried name. No owner comparison here: a live query name is not fully qualified
+/// while wire record names are, and hickory's `Name` equality tells the two apart.
 fn rdata_of(lookups: &Lookups, record_type: RecordType) -> impl Iterator<Item = &RData> {
-    let any_owner = matches!(record_type, RecordType::A | RecordType::AAAA);
     lookups
         .iter()
         .filter(move |lookup| lookup.query().record_type() == record_type)
-        .flat_map(move |lookup| {
-            let name = lookup.query().name();
-            lookup
-                .records()
-                .into_iter()
-                .filter(move |record| any_owner || record.name() == name)
-                .map(Record::data)
-        })
+        .flat_map(|lookup| lookup.records().into_iter().map(Record::data))
 }
 
 fn first_seen<T: PartialEq>(items: impl Iterator<Item = T>) -> Vec<T> {
