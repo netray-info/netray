@@ -62,7 +62,7 @@ fn emit_file_age(path: &str, source_label: &'static str) {
 }
 
 #[derive(Debug, thiserror::Error)]
-#[error("Failed to create DNS resolver: {0}")]
+#[error("{0}")]
 pub struct LoadError(String);
 
 /// Groups all reloadable backend resources. Stored behind `ArcSwap` in `AppState`
@@ -102,7 +102,9 @@ impl EnrichmentContext {
                 }
                 None => {
                     error!("Failed to load GeoIP City database from {}", path);
-                    return Err(LoadError(format!("Failed to load GeoIP City database from {path}")));
+                    return Err(LoadError(format!(
+                        "geoip_city_db: failed to load GeoIP City database from {path}"
+                    )));
                 }
             }
         } else {
@@ -118,7 +120,9 @@ impl EnrichmentContext {
                 }
                 None => {
                     error!("Failed to load GeoIP ASN database from {}", path);
-                    return Err(LoadError(format!("Failed to load GeoIP ASN database from {path}")));
+                    return Err(LoadError(format!(
+                        "geoip_asn_db: failed to load GeoIP ASN database from {path}"
+                    )));
                 }
             }
         } else {
@@ -134,7 +138,9 @@ impl EnrichmentContext {
                 }
                 Err(e) => {
                     error!("Failed to load User-Agent regexes from {}: {}", path, e);
-                    return Err(LoadError(format!("Failed to load User-Agent regexes from {path}: {e}")));
+                    return Err(LoadError(format!(
+                        "user_agent_regexes: failed to load User-Agent regexes from {path}: {e}"
+                    )));
                 }
             }
         } else {
@@ -302,7 +308,7 @@ impl EnrichmentContext {
             .system()
             .build()
             .await
-            .map_err(|e| LoadError(e.to_string()))?;
+            .map_err(|e| LoadError(format!("failed to create DNS resolver: {e}")))?;
         info!("DNS resolver initialized from system config");
 
         let geoip_city_build_epoch = geoip_city_db.as_ref().map(|db| db.build_epoch());
