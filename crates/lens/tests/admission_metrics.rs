@@ -5,6 +5,8 @@
 //! on them, the cache enabled, driven in-process. The metrics are read from a per-test local
 //! recorder; a current-thread runtime keeps the handler on the recording thread.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -140,57 +142,95 @@ async fn post_check(app: &Router, domain: &str) -> StatusCode {
 }
 
 /// Value of `lens_check_requests_total{result}`; absent series count 0.
-fn requests(s: &Snapshotter, result: &str) -> u64 {
-    s.snapshot()
-        .into_vec()
+fn requests(s: &Acc, result: &str) -> u64 {
+    s.series()
         .into_iter()
-        .filter(|(k, ..)| {
-            k.key().name() == REQUESTS
-                && k.key()
-                    .labels()
-                    .any(|l| l.key() == "result" && l.value() == result)
+        .filter(|t| {
+            t.name == REQUESTS && t.labels.iter().any(|(k, v)| k == "result" && v == result)
         })
-        .map(|(_, _, _, v)| match v {
-            DebugValue::Counter(n) => n,
-            _ => 0,
-        })
+        .map(|t| t.counter)
         .sum()
 }
 
-fn requests_total(s: &Snapshotter) -> u64 {
-    s.snapshot()
-        .into_vec()
+fn requests_total(s: &Acc) -> u64 {
+    s.series()
         .into_iter()
-        .filter(|(k, ..)| k.key().name() == REQUESTS)
-        .map(|(_, _, _, v)| match v {
-            DebugValue::Counter(n) => n,
-            _ => 0,
-        })
+        .filter(|t| t.name == REQUESTS)
+        .map(|t| t.counter)
         .sum()
 }
 
 /// The gauge's value; `None` when the series was never touched.
-fn in_flight(s: &Snapshotter) -> Option<f64> {
-    s.snapshot()
-        .into_vec()
+fn in_flight(s: &Acc) -> Option<f64> {
+    s.series()
         .into_iter()
-        .find(|(k, ..)| k.key().name() == IN_FLIGHT)
-        .and_then(|(_, _, _, v)| match v {
-            DebugValue::Gauge(g) => Some(g.into_inner()),
-            _ => None,
-        })
+        .find(|t| t.name == IN_FLIGHT && t.is_gauge)
+        .map(|t| t.gauge)
 }
 
-fn duration_observations(s: &Snapshotter) -> usize {
-    s.snapshot()
-        .into_vec()
+fn duration_observations(s: &Acc) -> usize {
+    s.series()
         .into_iter()
-        .filter(|(k, ..)| k.key().name() == DURATION)
-        .map(|(_, _, _, v)| match v {
-            DebugValue::Histogram(h) => h.len(),
-            _ => 0,
-        })
+        .filter(|t| t.name == DURATION)
+        .map(|t| t.observations)
         .sum()
+}
+
+/// Accumulates snapshots: `Snapshotter::snapshot()` resets counters and gauges to 0 and
+/// drains histograms, so every read adds its delta to a running total (for a gauge, the
+/// running sum of increments and decrements is its value).
+struct Acc {
+    snap: Snapshotter,
+    total: RefCell<HashMap<String, Total>>,
+}
+
+#[derive(Clone)]
+struct Total {
+    name: String,
+    labels: Vec<(String, String)>,
+    counter: u64,
+    gauge: f64,
+    observations: usize,
+    is_gauge: bool,
+}
+
+impl Acc {
+    fn new(snap: Snapshotter) -> Self {
+        Self {
+            snap,
+            total: RefCell::new(HashMap::new()),
+        }
+    }
+
+    /// Drain the recorder into the running totals and return all series.
+    fn series(&self) -> Vec<Total> {
+        let mut total = self.total.borrow_mut();
+        for (k, _, _, v) in self.snap.snapshot().into_vec() {
+            let labels: Vec<(String, String)> = k
+                .key()
+                .labels()
+                .map(|l| (l.key().to_string(), l.value().to_string()))
+                .collect();
+            let id = format!("{}{:?}", k.key().name(), labels);
+            let t = total.entry(id).or_insert_with(|| Total {
+                name: k.key().name().to_string(),
+                labels,
+                counter: 0,
+                gauge: 0.0,
+                observations: 0,
+                is_gauge: false,
+            });
+            match v {
+                DebugValue::Counter(n) => t.counter += n,
+                DebugValue::Gauge(g) => {
+                    t.gauge += g.into_inner();
+                    t.is_gauge = true;
+                }
+                DebugValue::Histogram(h) => t.observations += h.len(),
+            }
+        }
+        total.values().cloned().collect()
+    }
 }
 
 // Local recorders are thread-local: a current-thread runtime keeps lens on this thread.
@@ -198,7 +238,7 @@ fn duration_observations(s: &Snapshotter) -> usize {
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c6_fresh_run_counts_fresh_only() {
     let recorder = DebuggingRecorder::new();
-    let snap = recorder.snapshotter();
+    let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let app = app(10, None).await;
 
@@ -212,7 +252,7 @@ async fn admission_c6_fresh_run_counts_fresh_only() {
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c7_repeat_within_ttl_counts_cache_hit() {
     let recorder = DebuggingRecorder::new();
-    let snap = recorder.snapshotter();
+    let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let app = app(10, None).await;
 
@@ -226,7 +266,7 @@ async fn admission_c7_repeat_within_ttl_counts_cache_hit() {
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c8_second_request_over_per_ip_limit_counts_rate_limited() {
     let recorder = DebuggingRecorder::new();
-    let snap = recorder.snapshotter();
+    let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let app = app(1, None).await;
 
@@ -243,7 +283,7 @@ async fn admission_c8_second_request_over_per_ip_limit_counts_rate_limited() {
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c9_invalid_domain_increments_no_request_series() {
     let recorder = DebuggingRecorder::new();
-    let snap = recorder.snapshotter();
+    let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let app = app(10, None).await;
 
@@ -262,7 +302,7 @@ async fn admission_c9_invalid_domain_increments_no_request_series() {
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c10_in_flight_gauge_is_1_during_run_and_0_after_return() {
     let recorder = DebuggingRecorder::new();
-    let snap = recorder.snapshotter();
+    let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let entered = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
@@ -285,7 +325,7 @@ async fn admission_c10_in_flight_gauge_is_1_during_run_and_0_after_return() {
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c10_in_flight_gauge_is_0_after_handler_future_is_dropped() {
     let recorder = DebuggingRecorder::new();
-    let snap = recorder.snapshotter();
+    let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let entered = Arc::new(Notify::new());
     // Never released: the stub does not answer before the timeout fires.
@@ -310,7 +350,7 @@ async fn admission_c10_in_flight_gauge_is_0_after_handler_future_is_dropped() {
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c11_one_fresh_run_observes_one_duration() {
     let recorder = DebuggingRecorder::new();
-    let snap = recorder.snapshotter();
+    let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let app = app(10, None).await;
 
