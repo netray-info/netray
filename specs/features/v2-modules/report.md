@@ -273,3 +273,28 @@ RED (195c89d): the new and rewired tests failed against the missing module API; 
 ### Behavioural verification
 
 `just adlc-verify` green; `tests/fixtures/contracts/` unchanged; prism's `/api/check` stream unchanged (reader traced frames, order, error frames, cache key); `crates/lens/src/backends/` holds only `mod.rs`.
+
+## Phase 6 — Engine run
+
+### API contract (fixed before the test writers)
+
+- `netray_engine::Facts` gains `https: Vec<String>` (the HTTPS RR as presented by mhost).
+- `netray_engine::run(registry: &Registry, base: RunContext, sections: &[(Protocol, Duration)], tx: mpsc::Sender<SectionEvent>) -> RunReport`: resolve stage first through `registry.facts()` (once); then every module named in `sections` concurrently, each under `min(section deadline, base.deadline)`; each result is sent as `SectionEvent { protocol, outcome }` the moment it finishes (bounded channel); a module that overruns yields `SectionOutcome::TimedOut` and the others keep their results; a failed resolve makes the sections that need addresses (`Module::needs_addresses()` — new trait method, default `false`; HTTP, TLS, IP true) `Incomplete { reason: "address resolution failed" }`, never N/A. `RunReport` carries the `Facts` and the resolve error if any.
+- `netray_dns`: the `FactsProvider` resolves A, AAAA, MX, CAA, NS and HTTPS, under the same per-target charge, breakers and semaphore as `run`; `testing::golden_facts(contract_sse: &str) -> Box<dyn FactsProvider>` answers `facts_from_lookups` of the golden.
+- lens's check path calls `netray_engine::run` with the registry (`with_facts` set by the binary from the DNS module) and maps each `SectionEvent` to its V1 section as the adapter does today; the IP section reads `Facts`, not the DNS section's `resolved_ips`. `crates/lens/src/backends/` is deleted; the adapter types it held move to `crates/lens/src/modules.rs`.
+- `tests/repo/test_module_no_own_http_client.sh`: fails when a module crate's sources (`crates/{dns,tls,http,email,ip}/src`) construct a reqwest client (`reqwest::Client::new`, `Client::builder`, `ClientBuilder::new`, also through a `use … as` alias); self-test on a fixture.
+- `tests/repo/test_lens_names_no_module.sh` (or an extension of the engine check): `crates/lens/Cargo.toml` `[dependencies]` names no module crate (`cargo metadata`, kind normal).
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R18: engine run — one resolve stage, concurrent modules under section/hard deadlines, sections sent as they finish, overrun → TimedOut, failed resolve → address sections Incomplete; lens's check path calls it | open | crates/engine/tests/run.rs |
+| C2 | R19: no module crate builds its own reqwest client outside netray_common | open | tests/repo/test_module_no_own_http_client.sh |
+| C3 | R20: crates/lens/src/backends/ gone; lens [dependencies] names no module crate; goldens unchanged | open | tests/repo/test_lens_names_no_module.sh, crates/lens/tests/*.rs |
+| C4 | counting stub FactsProvider + modules reading Facts → each of A, AAAA, MX, CAA, NS, HTTPS resolved once per name | open | crates/engine/tests/run.rs |
+| C5 | stub modules finishing after 10, 50, 100 ms → sections arrive in that order, each before the slower finish | open | crates/engine/tests/run.rs |
+| C6 | a stub module overrunning its section deadline → TimedOut, the others keep their results | open | crates/engine/tests/run.rs |
+| C7 | fixture `use reqwest::Client as C; C::new()` → the repo check fails; module crates pass | open | tests/repo/test_module_no_own_http_client.sh |
+| C8 | lens built: backends/ absent, [dependencies] without module crates | open | tests/repo/test_lens_names_no_module.sh |
+| C9 | full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
