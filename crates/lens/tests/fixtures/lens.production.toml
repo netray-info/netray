@@ -56,3 +56,6 @@ service_name = "lens"
 
 [site]
 og_image = "https://example.com/og/landing.png"
+
+[modules.http.enrichment]
+ip_url = "http://ifconfig-rs:8000"
