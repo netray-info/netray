@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Grades and results are unchanged; this release changes how lens runs and how every service is configured.
+
+### Changed
+
+- **lens runs the five checks in-process.** The DNS, TLS, HTTP, email and IP sections no longer call the services over HTTP; lens runs the check modules itself through the new engine (`netray-engine`), which resolves A, AAAA, MX, CAA, NS and HTTPS once per run and streams each section as it finishes. The services keep running as `netray dns|tls|http|email|ip` for their own pages and APIs.
+- **lens configuration.** `[backends.<section>]` keeps only `timeout_ms`; a `url` is refused. Each section's check settings move to `[modules.dns|tls|http|email|ip]` with the services' own key names (see `crates/lens/lens.example.toml`). `[backends] dns_servers` moves to `[modules.dns] servers`. New `[backends] resolve_timeout_ms` (default 2000) bounds the shared lookup stage.
+- **lens needs the IP data.** With `[modules.ip]`, lens loads the GeoIP and reputation data itself (both GeoIP databases are required; the lists warn when missing) and reloads it on SIGHUP. Without `[modules.ip]`, lens has no IP section and says so at startup.
+- **Environment variables.** Every check service reads `NETRAY_<SERVICE>_` (nesting `__`) and `NETRAY_<SERVICE>_CONFIG`: `NETRAY_DNS_`, `NETRAY_TLS_`, `NETRAY_HTTP_`, `NETRAY_EMAIL_`, `NETRAY_IP_`. The old prefixes (`PRISM_`, `TLSIGHT_`, `SPECTRA__`, `BEACON__`, `IFCONFIG_`) refuse startup with a message naming the new one. lens keeps `LENS_`.
+- **Crates renamed to their protocols:** `crates/dns`, `tls`, `http`, `email`, `ip` (packages `netray-dns` …). Metric names, config files and subcommands are unchanged.
+- lens's `/ready` no longer probes backend services (there are none) and answers 200.
+
+### Added
+
+- `netray-model` (the V2 check vocabulary) and `netray-engine` (the `Module` and `FactsProvider` traits, the registry and the run).
+
 ## [0.23.1] - 2026-10-10
 
 ### Added
