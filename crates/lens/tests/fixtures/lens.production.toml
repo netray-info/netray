@@ -87,7 +87,6 @@ timeout_ms = 500
 [modules.ip]
 geoip_city_db = "/netray/data/GeoLite2-City.mmdb"
 geoip_asn_db = "/netray/data/GeoLite2-ASN.mmdb"
-user_agent_regexes = "/netray/data/regexes.yaml"
 tor_exit_nodes = "/netray/data/tor_exit_nodes.txt"
 cloud_provider_ranges = "/netray/data/cloud_provider_ranges.jsonl"
 feodo_botnet_ips = "/netray/data/feodo_botnet_ips.txt"
