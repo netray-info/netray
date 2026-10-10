@@ -14,7 +14,7 @@ mod common;
 
 use common::{dns_golden_raw, run_dns, run_tls, tls_golden};
 use lens::modules::BackendExtra;
-use lens::scoring::engine::CheckVerdict;
+use lens::score::CheckVerdict;
 use netray_engine::SectionOutcome;
 use netray_http::inspect::assembler::InspectResponse;
 use netray_http::translate;
@@ -75,8 +75,9 @@ async fn lens_parses_tlsight_golden() {
         .checks
         .iter()
         .find(|c| c.name == "ocsp_stapled")
-        .expect("port quality check `ocsp_stapled` missing");
-    assert_eq!(ocsp.verdict, CheckVerdict::Fail);
+        .expect("check `ocsp_stapled` missing");
+    // v3 reads ocsp_stapled once from the summary: an unstapled response with an OCSP URL warns.
+    assert_eq!(ocsp.verdict, CheckVerdict::Warn);
     // HTTP owns hsts and https_redirect; the TLS section no longer copies tlsight's
     // hostname checks (grade-integrity requirement 9).
     for owned_by_http in ["hsts", "https_redirect"] {
@@ -118,7 +119,7 @@ fn netray_http_translates_spectra_golden() {
             .unwrap_or_else(|| panic!("check {id} missing"))
     };
     assert_eq!(check("http.https_redirect").status, Status::Pass);
-    let headers = check("http.security_headers");
+    let headers = check("http.csp");
     assert_eq!(headers.status, Status::Warn);
     assert!(
         headers

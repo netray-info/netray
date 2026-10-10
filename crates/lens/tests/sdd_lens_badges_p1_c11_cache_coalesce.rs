@@ -16,7 +16,7 @@ use lens::cache::{CachedResult, cache_key};
 use lens::check::CheckOutput;
 use lens::config::{BadgesConfig, CacheConfig};
 use lens::routes::badge_router;
-use lens::scoring::engine::OverallScore;
+use lens::score::OverallScore;
 use lens::state::{AppState, BadgeCheckFn};
 
 // ---------------------------------------------------------------------------

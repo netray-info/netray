@@ -1,59 +1,62 @@
-use lens::scoring::engine::{
-    CheckResult, CheckVerdict, SectionInput, SectionStatus, compute_score,
-};
-use lens::scoring::profile::ScoringProfile;
-/// Pure unit regression tests for the scoring engine.
+use lens::check::SectionError;
+use lens::modules::{BackendExtra, BackendResult};
+use lens::score::{CheckResult, CheckVerdict, grade_label, score, section_weights};
+use netray_engine::profile::{Profile, Profiles};
+/// Pure unit regression tests for lens's scoring through the engine.
 ///
-/// No network access. Tests use the embedded default profile.
+/// No network access. Tests use the engine's current profile (v3).
 use std::collections::HashMap;
+
+type Section = Result<BackendResult, SectionError>;
+type Sections = HashMap<String, Section>;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn default_profile() -> ScoringProfile {
-    ScoringProfile::embedded_default()
+fn default_profile() -> &'static Profile {
+    Profiles::current()
+}
+
+fn check(name: &str, verdict: CheckVerdict) -> CheckResult {
+    CheckResult {
+        name: name.to_string(),
+        verdict,
+        messages: vec![],
+    }
 }
 
 fn pass(name: &str) -> CheckResult {
-    CheckResult {
-        name: name.to_string(),
-        verdict: CheckVerdict::Pass,
-        messages: vec![],
-    }
+    check(name, CheckVerdict::Pass)
 }
 
 fn warn(name: &str) -> CheckResult {
-    CheckResult {
-        name: name.to_string(),
-        verdict: CheckVerdict::Warn,
-        messages: vec![],
-    }
+    check(name, CheckVerdict::Warn)
 }
 
 fn fail(name: &str) -> CheckResult {
-    CheckResult {
-        name: name.to_string(),
-        verdict: CheckVerdict::Fail,
-        messages: vec![],
-    }
+    check(name, CheckVerdict::Fail)
 }
 
-fn no_error(checks: Vec<CheckResult>) -> SectionInput {
-    SectionInput {
+fn skip(name: &str) -> CheckResult {
+    check(name, CheckVerdict::Skip)
+}
+
+fn no_error(checks: Vec<CheckResult>) -> Section {
+    Ok(BackendResult {
         checks,
-        status: SectionStatus::Scored,
-    }
+        extra: BackendExtra::Tls {
+            raw_headline: String::new(),
+            detail_url: String::new(),
+        },
+    })
 }
 
-fn errored() -> SectionInput {
-    SectionInput {
-        checks: vec![],
-        status: SectionStatus::Errored,
-    }
+fn errored() -> Section {
+    Err(SectionError::BackendError("down".to_string()))
 }
 
-fn inputs(dns: SectionInput, tls: SectionInput, ip: SectionInput) -> HashMap<String, SectionInput> {
+fn inputs(dns: Section, tls: Section, ip: Section) -> Sections {
     HashMap::from([
         ("dns".to_string(), dns),
         ("tls".to_string(), tls),
@@ -61,34 +64,34 @@ fn inputs(dns: SectionInput, tls: SectionInput, ip: SectionInput) -> HashMap<Str
     ])
 }
 
+/// Every weighted check of `section`, built by `f`.
+fn all_of(profile: &Profile, section: &str, f: fn(&str) -> CheckResult) -> Vec<CheckResult> {
+    section_weights(profile, section)
+        .keys()
+        .map(|k| f(k))
+        .collect()
+}
+
 /// Build all-pass inputs from the profile's own check keys.
-fn all_pass(profile: &ScoringProfile) -> (SectionInput, SectionInput, SectionInput) {
-    let dns = no_error(
-        profile.sections["dns"]
-            .checks
-            .keys()
-            .map(|k| pass(k))
-            .collect(),
-    );
-    let tls = no_error(
-        profile.sections["tls"]
-            .checks
-            .keys()
-            .map(|k| pass(k))
-            .collect(),
-    );
-    let ip = no_error(
-        profile.sections["ip"]
-            .checks
-            .keys()
-            .map(|k| pass(k))
-            .collect(),
-    );
-    (dns, tls, ip)
+fn all_pass(profile: &Profile) -> (Section, Section, Section) {
+    (
+        no_error(all_of(profile, "dns", pass)),
+        no_error(all_of(profile, "tls", pass)),
+        no_error(all_of(profile, "ip", pass)),
+    )
+}
+
+fn section_weight(profile: &Profile, name: &str) -> u32 {
+    profile
+        .sections
+        .iter()
+        .find(|(p, _)| p.as_str() == name)
+        .map(|(_, s)| s.weight)
+        .unwrap_or_else(|| panic!("section {name}"))
 }
 
 // ---------------------------------------------------------------------------
-// 1. Default profile parses correctly
+// 1. Current profile parses correctly
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -96,53 +99,45 @@ fn default_profile_parses_correctly() {
     let profile = default_profile();
 
     // Basic structural checks
-    assert_eq!(profile.meta.name, "default");
-    assert_eq!(profile.meta.version, 2);
+    assert_eq!(profile.name, "v3");
+    assert_eq!(profile.version, 3);
 
     // Section weights are non-zero
-    assert!(profile.sections["dns"].weight > 0);
-    assert!(profile.sections["tls"].weight > 0);
-    assert!(profile.sections["ip"].weight > 0);
+    for section in ["dns", "tls", "ip"] {
+        assert!(section_weight(profile, section) > 0);
+    }
 
     // Grade thresholds include the expected grades
-    let grades: Vec<&String> = profile.thresholds.keys().collect();
-    assert!(
-        grades.iter().any(|g| g.as_str() == "A+"),
-        "profile must define A+ threshold"
-    );
-    assert!(
-        grades.iter().any(|g| g.as_str() == "A"),
-        "profile must define A threshold"
-    );
-    assert!(
-        grades.iter().any(|g| g.as_str() == "F"),
-        "profile must define F threshold"
-    );
+    let grades: Vec<&str> = profile
+        .thresholds
+        .iter()
+        .map(|(g, _)| grade_label(*g))
+        .collect();
+    for g in ["A+", "A", "F"] {
+        assert!(grades.contains(&g), "profile must define {g} threshold");
+    }
 
-    // Hard fail lists: tls still has hard fails; dns hard_fail cleared in this version
+    // Hard fail lists: tls has hard fails
     assert!(
-        !profile.sections["tls"].hard_fail.is_empty(),
+        profile
+            .sections
+            .iter()
+            .any(|(p, s)| p.as_str() == "tls" && !s.hard_fail.is_empty()),
         "tls hard_fail must not be empty"
     );
 
     // Each section has at least one weighted check
-    assert!(
-        !profile.sections["dns"].checks.is_empty(),
-        "dns section must have weighted checks"
-    );
-    assert!(
-        !profile.sections["tls"].checks.is_empty(),
-        "tls section must have weighted checks"
-    );
-    assert!(
-        !profile.sections["ip"].checks.is_empty(),
-        "ip section must have weighted checks"
-    );
+    for section in ["dns", "tls", "ip"] {
+        assert!(
+            !section_weights(profile, section).is_empty(),
+            "{section} section must have weighted checks"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
-// 2. Profile structure: four sections, weights sum to 100, hsts/https_redirect
-//    moved out of TLS and into HTTP (AC-6, AC-7)
+// 2. Profile structure: five sections, weights sum to 100, hsts/https_redirect
+//    in HTTP, not TLS (AC-6, AC-7)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -150,23 +145,25 @@ fn profile_section_weights_sum_to_100() {
     let profile = default_profile();
     let sum: u32 = profile.sections.values().map(|s| s.weight).sum();
     assert_eq!(sum, 100, "section weights must sum to 100, got {}", sum);
-    assert_eq!(profile.sections["dns"].weight, 20, "dns weight must be 20");
-    assert_eq!(profile.sections["tls"].weight, 35, "tls weight must be 35");
+    assert_eq!(section_weight(profile, "dns"), 20, "dns weight must be 20");
+    assert_eq!(section_weight(profile, "tls"), 35, "tls weight must be 35");
     assert_eq!(
-        profile.sections["http"].weight, 20,
+        section_weight(profile, "http"),
+        20,
         "http weight must be 20"
     );
     assert_eq!(
-        profile.sections["email"].weight, 15,
+        section_weight(profile, "email"),
+        15,
         "email weight must be 15"
     );
-    assert_eq!(profile.sections["ip"].weight, 10, "ip weight must be 10");
+    assert_eq!(section_weight(profile, "ip"), 10, "ip weight must be 10");
 }
 
 #[test]
 fn tls_section_does_not_contain_hsts_or_https_redirect() {
     let profile = default_profile();
-    let tls_checks = &profile.sections["tls"].checks;
+    let tls_checks = section_weights(profile, "tls");
     assert!(
         !tls_checks.contains_key("hsts"),
         "tls section must not contain hsts (moved to http)"
@@ -175,8 +172,8 @@ fn tls_section_does_not_contain_hsts_or_https_redirect() {
         !tls_checks.contains_key("https_redirect"),
         "tls section must not contain https_redirect (moved to http)"
     );
-    // Both checks are now owned by the http section.
-    let http_checks = &profile.sections["http"].checks;
+    // Both checks are owned by the http section.
+    let http_checks = section_weights(profile, "http");
     assert!(
         http_checks.contains_key("hsts"),
         "http section must contain hsts"
@@ -194,8 +191,8 @@ fn tls_section_does_not_contain_hsts_or_https_redirect() {
 #[test]
 fn perfect_domain_all_pass_scores_a_plus() {
     let profile = default_profile();
-    let (dns, tls, ip) = all_pass(&profile);
-    let result = compute_score(&profile, &inputs(dns, tls, ip));
+    let (dns, tls, ip) = all_pass(profile);
+    let result = score(profile, &inputs(dns, tls, ip));
 
     assert!(!result.hard_fail_triggered);
     assert_eq!(result.grade, "A+", "all-pass should produce A+");
@@ -211,23 +208,24 @@ fn perfect_domain_all_pass_scores_a_plus() {
 // 5. Expired cert (not_expired=fail) → F (hard fail)
 // ---------------------------------------------------------------------------
 
-#[test]
-fn expired_cert_triggers_hard_fail_f() {
-    let profile = default_profile();
-    let (dns, _, ip) = all_pass(&profile);
-
-    // not_expired fails — simulates an expired certificate
-    let mut tls_checks: Vec<CheckResult> = profile.sections["tls"]
-        .checks
-        .keys()
-        .map(|k| pass(k))
-        .collect();
+/// All TLS checks pass but `failing`.
+fn tls_all_pass_but(failing: &str) -> Section {
+    let mut tls_checks = all_of(default_profile(), "tls", pass);
     for c in &mut tls_checks {
-        if c.name == "not_expired" {
+        if c.name == failing {
             c.verdict = CheckVerdict::Fail;
         }
     }
-    let result = compute_score(&profile, &inputs(dns, no_error(tls_checks), ip));
+    no_error(tls_checks)
+}
+
+#[test]
+fn expired_cert_triggers_hard_fail_f() {
+    let profile = default_profile();
+    let (dns, _, ip) = all_pass(profile);
+
+    // not_expired fails — simulates an expired certificate
+    let result = score(profile, &inputs(dns, tls_all_pass_but("not_expired"), ip));
 
     assert!(
         result.hard_fail_triggered,
@@ -248,20 +246,10 @@ fn expired_cert_triggers_hard_fail_f() {
 #[test]
 fn untrusted_chain_triggers_hard_fail_f() {
     let profile = default_profile();
-    let (dns, _, ip) = all_pass(&profile);
+    let (dns, _, ip) = all_pass(profile);
 
     // chain_trusted fails — simulates a self-signed or otherwise untrusted cert
-    let mut tls_checks: Vec<CheckResult> = profile.sections["tls"]
-        .checks
-        .keys()
-        .map(|k| pass(k))
-        .collect();
-    for c in &mut tls_checks {
-        if c.name == "chain_trusted" {
-            c.verdict = CheckVerdict::Fail;
-        }
-    }
-    let result = compute_score(&profile, &inputs(dns, no_error(tls_checks), ip));
+    let result = score(profile, &inputs(dns, tls_all_pass_but("chain_trusted"), ip));
 
     assert!(
         result.hard_fail_triggered,
@@ -285,40 +273,27 @@ fn untrusted_chain_triggers_hard_fail_f() {
 fn all_dns_warn_with_all_tls_pass_grades_below_a() {
     let profile = default_profile();
 
-    // All DNS checks at Warn (half credit each)
-    let dns_checks: Vec<CheckResult> = profile.sections["dns"]
-        .checks
-        .keys()
-        .map(|k| warn(k))
-        .collect();
-    // All TLS checks pass
-    let tls_checks: Vec<CheckResult> = profile.sections["tls"]
-        .checks
-        .keys()
-        .map(|k| pass(k))
-        .collect();
-    // All IP checks pass
-    let ip_checks: Vec<CheckResult> = profile.sections["ip"]
-        .checks
-        .keys()
-        .map(|k| pass(k))
-        .collect();
-
-    let result = compute_score(
-        &profile,
+    let result = score(
+        profile,
         &inputs(
-            no_error(dns_checks),
-            no_error(tls_checks),
-            no_error(ip_checks),
+            // All DNS checks at Warn (half credit each)
+            no_error(all_of(profile, "dns", warn)),
+            no_error(all_of(profile, "tls", pass)),
+            no_error(all_of(profile, "ip", pass)),
         ),
     );
 
-    // DNS section should be 50% (all warn = half credit).
-    // TLS and IP sections should be 100%.
+    // DNS section is 50% (all warn = exactly half credit).
+    // TLS and IP sections are 100%.
     // HTTP and email absent from inputs → excluded from weighted average.
     // Active weights: dns=20, tls=35, ip=10, total=65.
     //   overall = (50*20 + 100*35 + 100*10) / 65 = (1000 + 3500 + 1000) / 65 ≈ 84.6
     // → grade B (75..89.9)
+    assert!(
+        (result.sections["dns"].percentage - 50.0).abs() < 0.001,
+        "all-warn dns must be exactly 50%, got {:.2}",
+        result.sections["dns"].percentage
+    );
     assert!(
         !matches!(result.grade.as_str(), "A" | "A+"),
         "all-DNS-warn should not produce A or A+, got {} (score={:.1})",
@@ -344,27 +319,23 @@ fn all_dns_warn_with_all_tls_pass_grades_below_a() {
 #[test]
 fn grade_boundary_97_is_a_plus() {
     let profile = default_profile();
-    let grade = lookup_grade_via_profile(&profile, 97.0);
+    let grade = lookup_grade_via_profile(profile, 97.0);
     assert_eq!(grade, "A+", "score 97.0 must yield A+");
 }
 
 #[test]
 fn grade_boundary_96_9_is_a() {
     let profile = default_profile();
-    let grade = lookup_grade_via_profile(&profile, 96.9);
+    let grade = lookup_grade_via_profile(profile, 96.9);
     assert_eq!(grade, "A", "score 96.9 must yield A");
 }
 
-/// Drive grade lookup through the public compute_score API by crafting a single-section
-/// scenario where overall_percentage equals the target.
+/// Drive grade lookup through the public `score` API by crafting a single-section scenario
+/// where overall_percentage equals the target.
 ///
-/// Uses dns-only (tls + ip errored). A single fake check named "synthetic" with weight 1000
-/// gives us precise fractional control: pass 970/1000 = 97.0%, etc.
-fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) -> String {
-    use lens::scoring::profile::{ProfileMeta, ScoringProfile, SectionProfile};
-    use std::collections::{BTreeMap, HashMap};
-
-    // Build a minimal profile with a single dns check weighted 1000.
+/// Uses dns-only (tls + ip errored, absent from the synthetic profile). Two synthetic checks
+/// weighted 1000 in total give precise fractional control: pass 970/1000 = 97.0%, etc.
+fn lookup_grade_via_profile(profile: &Profile, target_percentage: f64) -> String {
     // earned = round(target * 10) out of 1000 → precise to 0.1%.
     let earned: u32 = (target_percentage * 10.0).round() as u32;
     let possible: u32 = 1000;
@@ -372,43 +343,26 @@ fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) ->
     // Two checks: one pass (earned weight), one fail (remainder).
     let fail_weight = possible - earned;
 
-    let mut dns_checks = HashMap::new();
-    dns_checks.insert("synthetic_pass".to_string(), earned);
-    if fail_weight > 0 {
-        dns_checks.insert("synthetic_fail".to_string(), fail_weight);
-    }
-
-    let mut thresholds = BTreeMap::new();
-    // Copy thresholds from the real profile.
-    for (grade, val) in &profile.thresholds {
-        thresholds.insert(grade.clone(), *val);
-    }
-
-    let mut sections = HashMap::new();
-    sections.insert(
-        "dns".to_string(),
-        SectionProfile {
-            weight: 1,
-            hard_fail: vec![],
-            checks: dns_checks,
-        },
+    let mut toml = format!(
+        "[meta]\nname = \"synthetic\"\nversion = 3\n\n[sections.dns]\nweight = 1\n\n\
+         [sections.dns.checks]\nsynthetic_pass = {earned}\n"
     );
-
-    let synthetic_profile = ScoringProfile {
-        meta: ProfileMeta {
-            name: "synthetic".to_string(),
-            version: 2,
-        },
-        sections,
-        thresholds,
-    };
+    if fail_weight > 0 {
+        toml.push_str(&format!("synthetic_fail = {fail_weight}\n"));
+    }
+    // Copy thresholds from the real profile.
+    toml.push_str("\n[thresholds]\n");
+    for (grade, val) in &profile.thresholds {
+        toml.push_str(&format!("\"{}\" = {val}\n", grade_label(*grade)));
+    }
+    let synthetic_profile = Profile::from_toml(&toml).expect("synthetic profile parses");
 
     let mut dns_input_checks = vec![pass("synthetic_pass")];
     if fail_weight > 0 {
         dns_input_checks.push(fail("synthetic_fail"));
     }
 
-    let result = compute_score(
+    let result = score(
         &synthetic_profile,
         &inputs(no_error(dns_input_checks), errored(), errored()),
     );
@@ -420,59 +374,42 @@ fn lookup_grade_via_profile(profile: &ScoringProfile, target_percentage: f64) ->
 // Email section scoring regression (SR1–SR3, O1–O2)
 // ---------------------------------------------------------------------------
 
-fn email_all_pass() -> SectionInput {
-    no_error(vec![
-        pass("email_authentication"),
-        pass("email_infrastructure"),
-        pass("email_transport"),
-        pass("email_brand_policy"),
-    ])
+/// The email checks of V1's authentication bucket.
+const AUTH: [&str; 3] = ["spf", "dkim", "dmarc"];
+/// The email checks that need a receiving mail server.
+const MX_DEPENDENT: [&str; 7] = [
+    "mx", "mta_sts", "tls_rpt", "bimi", "dane", "dnsbl", "fcrdns",
+];
+
+fn email_all_pass() -> Section {
+    no_error(all_of(default_profile(), "email", pass))
 }
 
-fn email_no_mx() -> SectionInput {
-    // Authentication passes; infra/transport/brand are Skip (no MX records).
-    no_error(vec![
-        pass("email_authentication"),
-        CheckResult {
-            name: "email_infrastructure".to_string(),
-            verdict: CheckVerdict::Skip,
-            messages: vec![],
-        },
-        CheckResult {
-            name: "email_transport".to_string(),
-            verdict: CheckVerdict::Skip,
-            messages: vec![],
-        },
-        CheckResult {
-            name: "email_brand_policy".to_string(),
-            verdict: CheckVerdict::Skip,
-            messages: vec![],
-        },
-    ])
+fn email_no_mx() -> Section {
+    // Authentication passes; the MX-dependent checks are Skip (no MX records).
+    let mut checks: Vec<CheckResult> = AUTH.iter().map(|n| pass(n)).collect();
+    checks.extend(MX_DEPENDENT.iter().map(|n| skip(n)));
+    no_error(checks)
 }
 
-fn email_auth_fail() -> SectionInput {
-    no_error(vec![
-        fail("email_authentication"),
-        pass("email_infrastructure"),
-        pass("email_transport"),
-        pass("email_brand_policy"),
-    ])
+fn email_auth_fail() -> Section {
+    let mut checks: Vec<CheckResult> = AUTH.iter().map(|n| fail(n)).collect();
+    checks.extend(MX_DEPENDENT.iter().map(|n| pass(n)));
+    no_error(checks)
 }
 
-fn all_inputs_with_email(email: SectionInput) -> HashMap<String, SectionInput> {
-    let profile = default_profile();
-    let (dns, tls, ip) = all_pass(&profile);
+fn all_inputs_with_email(email: Section) -> Sections {
+    let (dns, tls, ip) = all_pass(default_profile());
     let mut map = inputs(dns, tls, ip);
     map.insert("email".to_string(), email);
     map
 }
 
-// SR1: Full-pass email section → A+, not_applicable empty, possible=22 (all four buckets)
+// SR1: Full-pass email section → A+, not_applicable empty, possible=22 (all ten checks)
 #[test]
 fn email_full_pass_scores_a_plus() {
     let profile = default_profile();
-    let result = compute_score(&profile, &all_inputs_with_email(email_all_pass()));
+    let result = score(profile, &all_inputs_with_email(email_all_pass()));
     assert_eq!(
         result.grade, "A+",
         "all-pass including email should produce A+"
@@ -482,9 +419,9 @@ fn email_full_pass_scores_a_plus() {
         "not_applicable must be empty for all-Scored email section"
     );
     let email_score = &result.sections["email"];
-    // email_authentication=10, infra=5, transport=5, brand=2 → possible=22
+    // spf+dkim+dmarc=10, the seven MX-dependent checks=12 → possible=22
     assert_eq!(email_score.possible, 22);
-    assert_eq!(email_score.earned, 22);
+    assert_eq!(email_score.earned, 22.0);
     assert!((email_score.percentage - 100.0).abs() < 0.001);
 }
 
@@ -492,18 +429,18 @@ fn email_full_pass_scores_a_plus() {
 #[test]
 fn email_no_mx_scored_on_auth_only() {
     let profile = default_profile();
-    let result = compute_score(&profile, &all_inputs_with_email(email_no_mx()));
+    let result = score(profile, &all_inputs_with_email(email_no_mx()));
     assert!(
         result.not_applicable.is_empty(),
         "section is Scored (not NotApplicable) — not_applicable must be empty"
     );
     let email_score = &result.sections["email"];
-    // Only email_authentication weight=10 is non-Skip; infra/transport/brand are Skip → excluded
+    // Only spf+dkim+dmarc (3+3+4) are non-Skip; the MX-dependent checks are excluded
     assert_eq!(
         email_score.possible, 10,
-        "possible=10: authentication weight only"
+        "possible=10: authentication weights only"
     );
-    assert_eq!(email_score.earned, 10);
+    assert_eq!(email_score.earned, 10.0);
     assert!((email_score.percentage - 100.0).abs() < 0.001);
     // Auth passes → no penalty → A+
     assert_eq!(
@@ -512,16 +449,16 @@ fn email_no_mx_scored_on_auth_only() {
     );
 }
 
-// SR3: Auth fail → grade drops via email section; dns section unaffected (auth is no longer in DNS)
+// SR3: Auth fail → grade drops via email section; dns section unaffected (auth is not in DNS)
 #[test]
 fn email_auth_fail_lowers_grade_not_via_dns() {
     let profile = default_profile();
-    let result = compute_score(&profile, &all_inputs_with_email(email_auth_fail()));
+    let result = score(profile, &all_inputs_with_email(email_auth_fail()));
     let email_score = &result.sections["email"];
-    // auth fails (weight 10); infra(5)+transport(5)+brand(2)=12 earned out of 22
+    // spf, dkim, dmarc fail (10); the MX-dependent checks earn 12 of 22
     assert_eq!(email_score.possible, 22);
-    assert_eq!(email_score.earned, 12);
-    // Grade must drop below A+ (54.5% for email section → overall ≈ 91.5%, grade A not A+)
+    assert_eq!(email_score.earned, 12.0);
+    // Grade must drop below A+ (54.5% for email section → overall ≈ 93.2%, grade A not A+)
     assert_ne!(
         result.grade, "A+",
         "auth fail must drop below A+, got {} (overall={:.1})",
@@ -533,16 +470,16 @@ fn email_auth_fail_lowers_grade_not_via_dns() {
         "overall must be below 99% when email auth fails, got {:.1}",
         result.overall_percentage,
     );
-    // No hard-fail triggered (email hard_fail = [] in v1)
+    // No hard-fail triggered (email hard_fail = [])
     assert!(
         !result.hard_fail_triggered,
-        "email auth fail must not trigger hard_fail in v1"
+        "email auth fail must not trigger hard_fail"
     );
-    // DNS section still 100% — auth is now in email backend
+    // DNS section still 100% — auth lives in the email section
     let dns_score = &result.sections["dns"];
     assert!(
         (dns_score.percentage - 100.0).abs() < 0.001,
-        "dns section must be 100% — auth moved to email section"
+        "dns section must be 100% — auth lives in the email section"
     );
 }
 
@@ -550,16 +487,7 @@ fn email_auth_fail_lowers_grade_not_via_dns() {
 #[test]
 fn email_backend_errored_makes_grade_incomplete() {
     let profile = default_profile();
-    let mut map = all_inputs_with_email(SectionInput {
-        checks: vec![],
-        status: SectionStatus::Errored,
-    });
-    let (dns, tls, ip) = all_pass(&profile);
-    map.insert("dns".to_string(), dns);
-    map.insert("tls".to_string(), tls);
-    map.insert("ip".to_string(), ip);
-
-    let result = compute_score(&profile, &map);
+    let result = score(profile, &all_inputs_with_email(errored()));
     assert!(
         !result.sections.contains_key("email"),
         "errored email must be absent from sections"
@@ -581,29 +509,19 @@ fn email_backend_errored_makes_grade_incomplete() {
 // C4 (engine): a Scored section whose checks are all Skip (possible == 0) is incomplete
 #[test]
 fn scored_section_with_all_skip_checks_is_incomplete() {
-    let skip = |n: &str| CheckResult {
-        name: n.to_string(),
-        verdict: CheckVerdict::Skip,
-        messages: vec![],
-    };
-    let email = no_error(vec![
-        skip("email_authentication"),
-        skip("email_infrastructure"),
-        skip("email_transport"),
-        skip("email_brand_policy"),
-    ]);
+    let email = no_error(all_of(default_profile(), "email", skip));
     let profile = default_profile();
-    let result = compute_score(&profile, &all_inputs_with_email(email));
+    let result = score(profile, &all_inputs_with_email(email));
     assert_eq!(result.grade, "incomplete");
     assert!(!result.complete);
 }
 
-// C1 (engine): a timeout reaches the engine as Errored (no Timeout status exists); dns Errored → incomplete
+// C1 (engine): a timed-out section reaches the engine as incomplete; dns timed out → incomplete
 #[test]
 fn errored_dns_section_makes_grade_incomplete() {
     let profile = default_profile();
-    let (_, tls, ip) = all_pass(&profile);
-    let result = compute_score(&profile, &inputs(errored(), tls, ip));
+    let (_, tls, ip) = all_pass(profile);
+    let result = score(profile, &inputs(Err(SectionError::Timeout), tls, ip));
     assert_eq!(result.grade, "incomplete");
     assert!(!result.complete);
 }
@@ -612,18 +530,12 @@ fn errored_dns_section_makes_grade_incomplete() {
 #[test]
 fn email_not_applicable_recorded_and_excluded() {
     let profile = default_profile();
-    let mut map = all_inputs_with_email(SectionInput {
-        checks: vec![],
-        status: SectionStatus::NotApplicable {
+    let result = score(
+        profile,
+        &all_inputs_with_email(Err(SectionError::NotApplicable {
             reason: "beacon timeout".to_string(),
-        },
-    });
-    let (dns, tls, ip) = all_pass(&profile);
-    map.insert("dns".to_string(), dns);
-    map.insert("tls".to_string(), tls);
-    map.insert("ip".to_string(), ip);
-
-    let result = compute_score(&profile, &map);
+        })),
+    );
     assert!(
         !result.sections.contains_key("email"),
         "N/A email must be absent from sections"

@@ -12,7 +12,7 @@ use common::golden;
 use lens::check::SectionError;
 use lens::modules::ModuleSection;
 use lens::modules::{Backend, BackendContext, BackendExtra, BackendResult};
-use lens::scoring::engine::CheckVerdict;
+use lens::score::CheckVerdict;
 use netray_engine::{Module, Registry};
 use netray_model::Protocol;
 
@@ -51,28 +51,24 @@ async fn run_sse(sse: &str) -> Result<BackendResult, SectionError> {
     run_raw(netray_email::testing::golden_module(sse)).await
 }
 
+/// The email IDs that need a receiving mail server: not applicable without MX or with Null MX.
+const MX_DEPENDENT: [&str; 7] = [
+    "mx", "mta_sts", "tls_rpt", "bimi", "dane", "dnsbl", "fcrdns",
+];
+
 fn assert_reflects_golden(res: &BackendResult) {
-    let auth = res
-        .checks
-        .iter()
-        .find(|c| c.name == "email_authentication")
-        .expect("email_authentication bucket");
     // golden: dkim=fail, dmarc=warn, spf=pass
+    let dkim = check(res, "dkim");
     assert!(
-        matches!(auth.verdict, CheckVerdict::Fail),
-        "auth bucket must be Fail (golden dkim=fail), got {:?}",
-        auth.verdict
+        matches!(dkim.verdict, CheckVerdict::Fail),
+        "dkim must be Fail (golden dkim=fail), got {:?}",
+        dkim.verdict
     );
-    // golden: mta_sts=warn, tls_rpt=warn, dane=pass
-    let transport = res
-        .checks
-        .iter()
-        .find(|c| c.name == "email_transport")
-        .expect("email_transport bucket");
+    let mta_sts = check(res, "mta_sts");
     assert!(
-        matches!(transport.verdict, CheckVerdict::Warn),
-        "transport bucket must be Warn (golden mta_sts/tls_rpt=warn), got {:?}",
-        transport.verdict
+        matches!(mta_sts.verdict, CheckVerdict::Warn),
+        "mta_sts must be Warn (golden mta_sts=warn), got {:?}",
+        mta_sts.verdict
     );
     match &res.extra {
         BackendExtra::Email { grade, .. } => assert_eq!(grade.as_deref(), Some("D")),
@@ -80,34 +76,24 @@ fn assert_reflects_golden(res: &BackendResult) {
     }
     // The reason lives in beacon's sub_checks[].detail, not in the category status line.
     assert!(
-        auth.messages
+        dkim.messages
             .iter()
             .any(|m| m.contains("RSA 512 bits < 1024")),
-        "auth messages must carry the DKIM sub-check detail, got {:?}",
-        auth.messages
+        "dkim messages must carry the DKIM sub-check detail, got {:?}",
+        dkim.messages
     );
     assert!(
-        transport
-            .messages
-            .iter()
-            .any(|m| m.contains("mode: testing")),
-        "transport messages must carry the MTA-STS sub-check detail, got {:?}",
-        transport.messages
+        mta_sts.messages.iter().any(|m| m.contains("mode: testing")),
+        "mta_sts messages must carry the MTA-STS sub-check detail, got {:?}",
+        mta_sts.messages
     );
 }
 
-fn bucket<'a>(res: &'a BackendResult, name: &str) -> &'a lens::scoring::engine::CheckResult {
+fn check<'a>(res: &'a BackendResult, name: &str) -> &'a lens::score::CheckResult {
     res.checks
         .iter()
         .find(|c| c.name == name)
-        .unwrap_or_else(|| panic!("{name} bucket"))
-}
-
-fn bucket_na(res: &BackendResult) -> &std::collections::HashMap<String, String> {
-    match &res.extra {
-        BackendExtra::Email { bucket_na, .. } => bucket_na,
-        _ => panic!("expected BackendExtra::Email"),
-    }
+        .unwrap_or_else(|| panic!("{name} check"))
 }
 
 #[tokio::test]
@@ -117,30 +103,18 @@ async fn lens_parses_beacon_golden_verdicts() {
 }
 
 #[tokio::test]
-async fn lens_marks_buckets_na_only_for_beacon_no_mx() {
+async fn lens_marks_mx_dependent_checks_na_for_beacon_no_mx() {
     let res = run_golden("beacon-no-mx.sse")
         .await
         .expect("backend result");
-    for name in [
-        "email_infrastructure",
-        "email_transport",
-        "email_brand_policy",
-    ] {
-        let b = bucket(&res, name);
+    for name in MX_DEPENDENT {
+        let c = check(&res, name);
         assert!(
-            matches!(b.verdict, CheckVerdict::Skip),
+            matches!(c.verdict, CheckVerdict::Skip),
             "{name} must be N/A (Skip) for no_mx, got {:?}",
-            b.verdict
+            c.verdict
         );
-        assert!(
-            b.messages.iter().any(|m| m.contains("No MX records")),
-            "{name} messages: {:?}",
-            b.messages
-        );
-        assert!(
-            bucket_na(&res).contains_key(name),
-            "{name} missing from bucket_na"
-        );
+        assert_eq!(c.messages, ["no MX"], "{name} messages");
     }
 }
 
@@ -149,35 +123,39 @@ async fn lens_does_not_treat_mx_cname_failure_as_no_mx() {
     let res = run_golden("beacon-mx-cname.sse")
         .await
         .expect("backend result");
-    // An mx_cname failure is not "no MX": no bucket is N/A for that reason. Buckets whose
-    // categories are all Info (here transport and brand) are "not applicable" on their own
-    // (requirement 9), like brand on beacon.sse.
+    // An mx_cname failure is not "no MX": no check is N/A for that reason. Checks whose
+    // categories are Info (here mta_sts, tls_rpt, bimi, dane) are not applicable on their own.
     assert!(
-        bucket_na(&res).values().all(|r| r != "no MX records"),
-        "mx_cname is not 'no MX records'; got bucket_na {:?}",
-        bucket_na(&res)
-    );
-    let infra = bucket(&res, "email_infrastructure");
-    assert!(
-        matches!(infra.verdict, CheckVerdict::Fail),
-        "infra must reflect the mx_cname failure, got {:?}",
-        infra.verdict
-    );
-    assert!(
-        infra
-            .messages
+        res.checks
             .iter()
-            .any(|m| m.contains("points to a CNAME")),
-        "infra messages must carry the mx_cname detail, got {:?}",
-        infra.messages
+            .all(|c| !c.messages.iter().any(|m| m == "no MX" || m == "Null MX")),
+        "mx_cname is not 'no MX'; got {:?}",
+        res.checks
+    );
+    let mx = check(&res, "mx");
+    assert!(
+        matches!(mx.verdict, CheckVerdict::Fail),
+        "mx must reflect the mx_cname failure, got {:?}",
+        mx.verdict
     );
     assert!(
-        infra
+        mx.messages.iter().any(|m| m.contains("points to a CNAME")),
+        "mx messages must carry the mx_cname detail, got {:?}",
+        mx.messages
+    );
+    let dnsbl = check(&res, "dnsbl");
+    assert!(
+        matches!(dnsbl.verdict, CheckVerdict::Fail),
+        "dnsbl must reflect the listing, got {:?}",
+        dnsbl.verdict
+    );
+    assert!(
+        dnsbl
             .messages
             .iter()
             .any(|m| m.contains("listed in zen.spamhaus.org")),
-        "infra messages must carry the DNSBL listing, got {:?}",
-        infra.messages
+        "dnsbl messages must carry the DNSBL listing, got {:?}",
+        dnsbl.messages
     );
 }
 
@@ -188,19 +166,18 @@ async fn lens_keeps_non_ascii_detail_intact() {
     let res = run_golden("beacon-mx-cname.sse")
         .await
         .expect("backend result");
-    let infra = bucket(&res, "email_infrastructure");
+    let mx = check(&res, "mx");
     assert!(
-        infra
-            .messages
+        mx.messages
             .iter()
             .any(|m| m.contains("points to a CNAME (RFC 5321 \u{a7}5.1)")),
-        "infra messages must carry the exact mx_cname detail, got {:?}",
-        infra.messages
+        "mx messages must carry the exact mx_cname detail, got {:?}",
+        mx.messages
     );
     assert!(
-        !infra.messages.iter().any(|m| m.contains('\u{FFFD}')),
+        !mx.messages.iter().any(|m| m.contains('\u{FFFD}')),
         "no U+FFFD allowed in messages, got {:?}",
-        infra.messages
+        mx.messages
     );
 }
 
@@ -253,15 +230,15 @@ fn summary_mut(events: &mut [serde_json::Value]) -> &mut serde_json::Value {
 }
 
 fn assert_na(res: &BackendResult, name: &str) {
-    let b = bucket(res, name);
+    let c = check(res, name);
     assert!(
-        matches!(b.verdict, CheckVerdict::Skip),
+        matches!(c.verdict, CheckVerdict::Skip),
         "{name} must be N/A (Skip), got {:?}",
-        b.verdict
+        c.verdict
     );
     assert!(
-        bucket_na(res).contains_key(name),
-        "{name} missing from bucket_na"
+        !c.messages.is_empty(),
+        "{name} must carry its N/A reason as message"
     );
 }
 
@@ -274,34 +251,31 @@ async fn beacon_timeout_golden_is_section_timeout() {
     assert!(matches!(err, SectionError::Timeout), "got {err:?}");
 }
 
-// C7: a Null MX domain does not accept mail; authentication still scores and passes.
+// C7: a Null MX domain does not accept mail; spf and dmarc still score and pass.
 #[tokio::test]
-async fn beacon_null_mx_golden_marks_three_buckets_na_and_auth_passes() {
+async fn beacon_null_mx_golden_marks_mx_dependent_checks_na_and_auth_passes() {
     let res = run_golden("beacon-null-mx.sse").await.expect("result");
-    for name in [
-        "email_infrastructure",
-        "email_transport",
-        "email_brand_policy",
-    ] {
+    for name in MX_DEPENDENT {
         assert_na(&res, name);
-        // The domain publishes `MX 0 .`: the message must say Null MX, not "No MX records".
-        let msgs = &bucket(&res, name).messages;
+        // The domain publishes `MX 0 .`: the message must say Null MX, not "no MX".
+        let msgs = &check(&res, name).messages;
         assert!(
-            msgs.iter().any(|m| m.contains("Null MX"))
-                && msgs.iter().all(|m| !m.contains("No MX records")),
+            msgs.iter().any(|m| m.contains("Null MX")) && msgs.iter().all(|m| m != "no MX"),
             "{name}: Null MX message expected, got {msgs:?}"
         );
     }
-    let auth = bucket(&res, "email_authentication");
-    assert!(
-        matches!(auth.verdict, CheckVerdict::Pass),
-        "auth must Pass for a Null MX domain, got {:?} {:?}",
-        auth.verdict,
-        auth.messages
-    );
+    for name in ["spf", "dmarc"] {
+        let c = check(&res, name);
+        assert!(
+            matches!(c.verdict, CheckVerdict::Pass),
+            "{name} must Pass for a Null MX domain, got {:?} {:?}",
+            c.verdict,
+            c.messages
+        );
+    }
 }
 
-// Requirement 9: Null MX makes the three buckets N/A for that reason, even when a
+// Requirement 9: Null MX makes the MX-dependent checks N/A for that reason, even when a
 // receiving-side check fails (a stale MTA-STS record whose policy fetch fails).
 #[tokio::test]
 async fn null_mx_keeps_transport_na_when_a_receiving_check_fails() {
@@ -317,15 +291,15 @@ async fn null_mx_keeps_transport_na_when_a_receiving_check_fails() {
         .await
         .map_err(|e| format!("{e:?}"))
         .expect("result");
-    assert_na(&res, "email_transport");
-    assert_ne!(
-        bucket_na(&res).get("email_transport").map(String::as_str),
-        Some("not applicable"),
-        "transport is N/A because of Null MX, not because its categories are Info"
+    assert_na(&res, "mta_sts");
+    assert_eq!(
+        check(&res, "mta_sts").messages,
+        ["Null MX"],
+        "mta_sts is N/A because of Null MX, not because of its failing policy fetch"
     );
 }
 
-// Requirement 10: with sends_no_mail, spf_mx_coverage does not reach authentication.
+// Requirement 10: with sends_no_mail, spf_mx_coverage does not reach spf.
 #[tokio::test]
 async fn sends_no_mail_excludes_spf_mx_coverage() {
     let bytes = variant("beacon-null-mx.sse", |ev| {
@@ -339,43 +313,39 @@ async fn sends_no_mail_excludes_spf_mx_coverage() {
         .await
         .map_err(|e| format!("{e:?}"))
         .expect("result");
-    let auth = bucket(&res, "email_authentication");
+    let spf = check(&res, "spf");
     assert!(
-        matches!(auth.verdict, CheckVerdict::Pass),
+        matches!(spf.verdict, CheckVerdict::Pass),
         "spf_mx_coverage must not count for a domain that sends no mail, got {:?} {:?}",
-        auth.verdict,
-        auth.messages
+        spf.verdict,
+        spf.messages
     );
 }
 
 // C8: no MX records.
 #[tokio::test]
-async fn beacon_no_mx_golden_marks_three_buckets_na() {
+async fn beacon_no_mx_golden_marks_mx_dependent_checks_na() {
     let res = run_golden("beacon-no-mx.sse").await.expect("result");
-    for name in [
-        "email_infrastructure",
-        "email_transport",
-        "email_brand_policy",
-    ] {
+    for name in MX_DEPENDENT {
         assert_na(&res, name);
     }
 }
 
-// C9 parser part: a BIMI-less domain has nothing to score for brand policy.
+// C9 parser part: a BIMI-less domain has nothing to score for BIMI.
 #[tokio::test]
-async fn beacon_golden_brand_policy_is_not_applicable() {
+async fn beacon_golden_bimi_is_not_applicable() {
     let res = run_golden("beacon.sse").await.expect("result");
-    let brand = bucket(&res, "email_brand_policy");
+    let bimi = check(&res, "bimi");
     assert!(
-        matches!(brand.verdict, CheckVerdict::Skip),
-        "brand must be Skip without BIMI, got {:?}",
-        brand.verdict
+        matches!(bimi.verdict, CheckVerdict::Skip),
+        "bimi must be Skip without BIMI, got {:?}",
+        bimi.verdict
     );
-    let reason = bucket_na(&res)
-        .get("email_brand_policy")
-        .expect("brand missing from bucket_na")
-        .to_lowercase();
-    assert!(reason.contains("not applicable"), "reason: {reason}");
+    assert_eq!(
+        bimi.messages,
+        ["No BIMI record"],
+        "beacon's info message is the reason"
+    );
 }
 
 // C11: a category that did not complete makes the section Errored.
@@ -392,30 +362,30 @@ async fn beacon_partial_golden_errors_the_section() {
     );
 }
 
-// C13: a sender without DKIM but with p=reject gets the cross-validation warning in auth.
+// C13: a sender without DKIM but with p=reject gets the cross-validation warning on dkim.
 #[tokio::test]
 async fn beacon_sending_no_dkim_golden_warns_authentication() {
     let res = run_golden("beacon-sending-no-dkim.sse")
         .await
         .expect("result");
-    let auth = bucket(&res, "email_authentication");
+    let dkim = check(&res, "dkim");
     assert!(
-        matches!(auth.verdict, CheckVerdict::Warn),
-        "auth must Warn, got {:?}",
-        auth.verdict
+        matches!(dkim.verdict, CheckVerdict::Warn),
+        "dkim must Warn, got {:?}",
+        dkim.verdict
     );
     assert!(
-        auth.messages
+        dkim.messages
             .iter()
             .any(|m| m.contains("DMARC p=reject and SPF -all but no DKIM keys found")),
-        "auth messages must carry the reject_no_dkim detail, got {:?}",
-        auth.messages
+        "dkim messages must carry the reject_no_dkim detail, got {:?}",
+        dkim.messages
     );
 }
 
-// C10: a BIMI/DMARC cross-validation warning is routed to the brand bucket.
+// C10: a BIMI/DMARC cross-validation warning is routed to bimi.
 #[tokio::test]
-async fn bimi_dmarc_policy_cross_check_warns_brand_bucket() {
+async fn bimi_dmarc_policy_cross_check_warns_bimi() {
     let bytes = variant("beacon.sse", |ev| {
         let cv = category_mut(ev, "cross_validation");
         cv["sub_checks"] = serde_json::json!([
@@ -428,12 +398,12 @@ async fn bimi_dmarc_policy_cross_check_warns_brand_bucket() {
         .await
         .map_err(|e| format!("{e:?}"))
         .expect("result");
-    let brand = bucket(&res, "email_brand_policy");
+    let bimi = check(&res, "bimi");
     assert!(
-        matches!(brand.verdict, CheckVerdict::Warn),
-        "brand must Warn, got {:?} {:?}",
-        brand.verdict,
-        brand.messages
+        matches!(bimi.verdict, CheckVerdict::Warn),
+        "bimi must Warn, got {:?} {:?}",
+        bimi.verdict,
+        bimi.messages
     );
 }
 

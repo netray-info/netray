@@ -24,7 +24,7 @@ fn make_snapshot() -> Snapshot {
                         check_name: "dnssec".to_string(),
                         verdict: "pass".to_string(),
                         message: "DNSSEC is enabled".to_string(),
-                        earned: 5,
+                        earned: 5.0,
                         possible: 5,
                         fix_hint: None,
                         fix_owner: None,
@@ -34,7 +34,7 @@ fn make_snapshot() -> Snapshot {
                         check_name: "caa".to_string(),
                         verdict: "warn".to_string(),
                         message: "CAA record missing".to_string(),
-                        earned: 2,
+                        earned: 2.0,
                         possible: 5,
                         fix_hint: None,
                         fix_owner: None,
@@ -53,7 +53,7 @@ fn make_snapshot() -> Snapshot {
                     check_name: "ech_advertised".to_string(),
                     verdict: "fail".to_string(),
                     message: "ECH not advertised".to_string(),
-                    earned: 0,
+                    earned: 0.0,
                     possible: 3,
                     fix_hint: None,
                     fix_owner: None,
@@ -115,8 +115,8 @@ fn contains_check_names() {
         "human-readable label DNSSEC must appear"
     );
     assert!(
-        html.contains("CAA Records"),
-        "human-readable label CAA Records must appear"
+        html.contains("CAA records"),
+        "the catalogue title CAA records must appear"
     );
 }
 
@@ -243,7 +243,7 @@ fn error_section_gets_synthetic_finding() {
             check_name: "backend".to_string(),
             verdict: "fail".to_string(),
             message: "Section check failed — no details available".to_string(),
-            earned: 0,
+            earned: 0.0,
             possible: 0,
             fix_hint: None,
             fix_owner: None,

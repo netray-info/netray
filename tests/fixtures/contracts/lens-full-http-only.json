@@ -2,7 +2,7 @@
   "dns": {
     "checks": [
       {
-        "fix_hint": "Add CAA records to specify which certificate authorities are allowed to issue certificates for your domain, reducing mis-issuance risk.",
+        "fix_hint": "Publish issue and issuewild CAA records naming the allowed certificate authorities, using only known tags.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/caa-records",
         "messages": [
@@ -13,12 +13,100 @@
         "weight": 5
       },
       {
-        "fix_hint": "Ensure your domain has at least two authoritative nameservers in separate networks for redundancy.",
-        "fix_owner": "your DNS provider or registrar",
+        "fix_hint": "Delegate the zone to at least two authoritative nameservers.",
+        "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
         "name": "ns",
         "verdict": "pass",
         "weight": 3
+      },
+      {
+        "fix_hint": "Replace the apex CNAME with A/AAAA records, or an ALIAS/ANAME record where the provider supports it.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/record-types",
+        "messages": [
+          "not reported"
+        ],
+        "name": "cname_apex",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Enable DNSSEC signing at the DNS provider, have its DS record published at the registrar and keep the signatures current.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dnssec",
+        "messages": [
+          "not reported"
+        ],
+        "name": "dnssec",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Re-sign the zone with ECDSA P-256 (algorithm 13) or Ed25519 (algorithm 15).",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dnssec",
+        "messages": [
+          "not reported"
+        ],
+        "name": "dnskey_algorithm",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Retire superseded KSKs from the zone so that one remains, and as part of it remove the DS records of retired keys at the registrar.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dnssec",
+        "messages": [
+          "not reported"
+        ],
+        "name": "dnssec_rollover",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Publish either one alias-mode or only service-mode HTTPS records that advertise the supported ALPN protocols.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/record-types",
+        "messages": [
+          "not reported"
+        ],
+        "name": "https_svcb",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Remove the lame nameserver from the zone's NS records and from the delegation at the registrar.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/lame-delegation",
+        "messages": [
+          "not reported"
+        ],
+        "name": "ns_lame",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Make every authoritative nameserver serve the same NS set, matching the delegation at the registrar.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/lame-delegation",
+        "messages": [
+          "not reported"
+        ],
+        "name": "ns_delegation",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Keep TTLs at 60 seconds or more, NS and MX TTLs at one week or less, and the SOA minimum at one day or less.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/record-types",
+        "messages": [
+          "not reported"
+        ],
+        "name": "ttl",
+        "verdict": "skip",
+        "weight": 2
       }
     ],
     "detail_url": "https://dns.example.com/?q=example.com+%2Bcheck",
@@ -32,47 +120,100 @@
   "email": {
     "checks": [
       {
-        "fix_hint": "Publish an SPF record that covers your mail servers, configure DKIM signing with your email provider, and publish a DMARC policy at `p=quarantine` or `p=reject`.",
-        "fix_owner": "your DNS provider and email provider",
+        "fix_hint": "Point MX records at hostnames with their own A or AAAA records, spread over at least two servers in separate networks.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/email-deliverability",
+        "name": "mx",
+        "verdict": "pass",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Publish one SPF record that lists every server sending mail for the domain, including its own MX hosts that also send, and ends in -all, or ~all where the domain does not publish a Null MX.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "name": "spf",
+        "verdict": "pass",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Rotate to a 2048-bit RSA or an Ed25519 DKIM key at the mail provider, publish it at the selector and sign all outgoing mail with it.",
+        "fix_owner": "your mail provider",
+        "guide_url": "https://netray.info/guide/dkim",
+        "messages": [
+          "selector 'default': RSA 512 bits < 1024"
+        ],
+        "name": "dkim",
+        "verdict": "fail",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Publish one DMARC record with p=reject, without sp=none or pct=0, and with an rua address authorised to receive reports.",
+        "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/email-auth",
         "messages": [
-          "selector 'default': RSA 512 bits < 1024",
           "no enforcement"
         ],
-        "name": "email_authentication",
-        "verdict": "fail",
-        "weight": 10
+        "name": "dmarc",
+        "verdict": "warn",
+        "weight": 4
       },
       {
-        "fix_hint": "Ensure your domain has valid MX records pointing to functioning mail servers, and that each pointed hostname resolves to an A or AAAA record.",
-        "fix_owner": "your DNS provider and email provider",
-        "guide_url": "https://netray.info/guide/email-auth",
-        "name": "email_infrastructure",
-        "verdict": "pass",
-        "weight": 5
-      },
-      {
-        "fix_hint": "Publish an MTA-STS policy to enforce encrypted email transport and prevent SMTP downgrade attacks on mail delivered to your domain.",
-        "fix_owner": "your email provider and DNS provider",
-        "guide_url": "https://netray.info/guide/email-auth",
+        "fix_hint": "Serve a valid MTA-STS policy from the mta-sts web host in mode enforce, listing every MX host with a max_age of at least one day, and update the id in the _mta-sts TXT record on every change.",
+        "fix_owner": "your hosting provider",
+        "guide_url": "https://netray.info/guide/mta-sts",
         "messages": [
           "mode: testing",
           "max_age 3600 < 86400; suggest >= 604800"
         ],
-        "name": "email_transport",
+        "name": "mta_sts",
         "verdict": "warn",
-        "weight": 5
+        "weight": 2
       },
       {
-        "fix_hint": "Publish a BIMI record with a valid SVG Tiny PS logo once your DMARC policy is at `p=quarantine` or `p=reject`, to show your brand logo in supporting email clients.",
+        "fix_hint": "Publish a _smtp._tls TXT record with v=TLSRPTv1 and a mailto: or https: rua address.",
         "fix_owner": "your DNS provider",
-        "guide_url": "https://netray.info/guide/email-auth",
+        "guide_url": "https://netray.info/guide/tls-rpt",
+        "name": "tls_rpt",
+        "verdict": "pass",
+        "weight": 1
+      },
+      {
+        "fix_hint": "Serve the BIMI logo over HTTPS at a reachable URL and set DMARC to p=quarantine or p=reject.",
+        "fix_owner": "your hosting provider",
+        "guide_url": "https://netray.info/guide/bimi",
         "messages": [
-          "not applicable"
+          "No BIMI record"
         ],
-        "name": "email_brand_policy",
+        "name": "bimi",
         "verdict": "skip",
         "weight": 2
+      },
+      {
+        "fix_hint": "Sign the domain's zone with DNSSEC and keep the TLSA records at _25._tcp of every MX host within the valid usage, selector and matching-type values.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dane-tlsa",
+        "messages": [
+          "No DANE TLSA records"
+        ],
+        "name": "dane",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Stop the activity that caused the listing, then request delisting from each blocklist.",
+        "fix_owner": "your mail provider",
+        "guide_url": "https://netray.info/guide/dnsbl",
+        "name": "dnsbl",
+        "verdict": "pass",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Set a PTR record for each mail server address that resolves back to the same address.",
+        "fix_owner": "your hosting provider",
+        "guide_url": "https://netray.info/guide/dnsbl",
+        "name": "fcrdns",
+        "verdict": "pass",
+        "weight": 1
       }
     ],
     "detail_url": "https://email.example.com/?domain=example.com",
@@ -83,55 +224,121 @@
   "http": {
     "checks": [
       {
-        "fix_hint": "Configure your web server to redirect all HTTP requests to HTTPS with a 301 permanent redirect before serving any content.",
-        "fix_owner": "your web server config",
+        "fix_hint": "Serve HTTP on port 80 and redirect every request to HTTPS with a 301 before serving content.",
+        "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/hsts",
         "name": "https_redirect",
         "verdict": "pass",
         "weight": 5
       },
       {
-        "fix_hint": "Add a `Strict-Transport-Security` header with `max-age=31536000` to all HTTPS responses so browsers always use HTTPS for your domain.",
-        "fix_owner": "your web server config",
+        "fix_hint": "Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses.",
+        "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/hsts",
         "name": "hsts",
         "verdict": "pass",
         "weight": 5
       },
       {
-        "fix_hint": "Add the missing security headers — at minimum `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a `Content-Security-Policy` — to reduce common browser-based attack surface.",
-        "fix_owner": "your web server config",
-        "guide_url": "https://netray.info/guide/security-headers",
-        "messages": [
-          "Content-Security-Policy: No Content-Security-Policy header"
-        ],
-        "name": "security_headers",
-        "verdict": "warn",
-        "weight": 5
-      },
-      {
-        "fix_hint": "Avoid using `Access-Control-Allow-Origin: *` on endpoints that use cookies or authentication — enumerate allowed origins explicitly instead.",
-        "fix_owner": "your web server or application config",
+        "fix_hint": "Allow only an explicit list of trusted origins and send Access-Control-Allow-Credentials only for those.",
+        "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/cors",
         "name": "cors",
         "verdict": "pass",
         "weight": 3
       },
       {
-        "fix_hint": "Set the `Secure` and `HttpOnly` flags on all cookies so they are never sent over plain HTTP and are not accessible to JavaScript.",
-        "fix_owner": "your web server or application config",
+        "fix_hint": "Set the Secure flag on every cookie.",
+        "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/cookie-security",
+        "messages": [
+          "not reported"
+        ],
         "name": "cookie_secure",
         "verdict": "skip",
         "weight": 2
       },
       {
-        "fix_hint": "Remove or anonymise the `Server` and `X-Powered-By` response headers to avoid leaking software names and versions to potential attackers.",
-        "fix_owner": "your web server config",
-        "guide_url": "https://netray.info/guide/http-redirects",
-        "name": "hygiene",
+        "fix_hint": "Send an enforced Content-Security-Policy with default-src, object-src 'none' and base-uri that restricts scripts to trusted origins.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/csp",
+        "messages": [
+          "No Content-Security-Policy header"
+        ],
+        "name": "csp",
+        "verdict": "warn",
+        "weight": 1
+      },
+      {
+        "fix_hint": "Send X-Frame-Options: DENY, or SAMEORIGIN where the site frames its own pages.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/security-headers",
+        "name": "x_frame_options",
+        "verdict": "pass",
+        "weight": 1
+      },
+      {
+        "fix_hint": "Send X-Content-Type-Options: nosniff on all responses.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/security-headers",
+        "messages": [
+          "not reported"
+        ],
+        "name": "x_content_type_options",
         "verdict": "skip",
-        "weight": 2
+        "weight": 1
+      },
+      {
+        "fix_hint": "Send Referrer-Policy: strict-origin-when-cross-origin or stricter.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/security-headers",
+        "messages": [
+          "not reported"
+        ],
+        "name": "referrer_policy",
+        "verdict": "skip",
+        "weight": 1
+      },
+      {
+        "fix_hint": "Send a Permissions-Policy that disables the browser features the site does not use.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/security-headers",
+        "messages": [
+          "not reported"
+        ],
+        "name": "permissions_policy",
+        "verdict": "skip",
+        "weight": 1
+      },
+      {
+        "fix_hint": "Remove deprecated security headers from the server's responses.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/http-redirects",
+        "messages": [
+          "not reported"
+        ],
+        "name": "deprecated_headers",
+        "verdict": "skip",
+        "weight": 1
+      },
+      {
+        "fix_hint": "Remove the Server, X-Powered-By and similar technology headers from the server's responses.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/http-redirects",
+        "name": "info_leakage",
+        "verdict": "pass",
+        "weight": 1
+      },
+      {
+        "fix_hint": "Send an explicit Cache-Control header on each response and pair max-age=0 with no-cache or must-revalidate.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/http-redirects",
+        "messages": [
+          "not reported"
+        ],
+        "name": "caching",
+        "verdict": "skip",
+        "weight": 1
       }
     ],
     "detail_url": "https://http.example.com/?url=https%3A%2F%2Fexample.com",
@@ -154,8 +361,8 @@
     ],
     "checks": [
       {
-        "fix_hint": "Your IP address appears on one or more DNS blocklists — check your mail server for spam activity, then request delisting from each blocklist individually.",
-        "fix_owner": "your hosting provider or mail administrator",
+        "fix_hint": "Investigate the flagged address, request delisting where the source offers it, or stop using the address for the service.",
+        "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/ip-enrichment",
         "name": "reputation",
         "verdict": "pass",
@@ -176,11 +383,11 @@
     "hard_fail_reason": "tls_reachable",
     "not_applicable": {},
     "overall": "fail",
-    "score": 44.4,
+    "score": 53.1,
     "section_grades": {
       "dns": "C",
-      "email": "F",
-      "http": "B",
+      "email": "C",
+      "http": "A",
       "ip": "A+",
       "tls": "F"
     },
@@ -195,8 +402,8 @@
   "tls": {
     "checks": [
       {
-        "fix_hint": "Serve HTTPS on port 443 with a valid certificate, and make sure the firewall allows inbound connections to port 443.",
-        "fix_owner": "the site's web server or hosting provider",
+        "fix_hint": "Serve HTTPS on port 443 and allow inbound connections to it through the firewall.",
+        "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/tls-protocol",
         "messages": [
           "TLS handshake failed on every address: connection refused"
@@ -204,6 +411,226 @@
         "name": "tls_reachable",
         "verdict": "fail",
         "weight": 10
+      },
+      {
+        "fix_hint": "Install a certificate from a public CA together with its full intermediate chain.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "chain_trusted",
+        "verdict": "skip",
+        "weight": 10
+      },
+      {
+        "fix_hint": "Renew the leaf certificate and remove expired intermediates and cross-signs from the chain the server sends.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "not_expired",
+        "verdict": "skip",
+        "weight": 10
+      },
+      {
+        "fix_hint": "Reissue the certificate with every hostname served on this server in its SAN list.",
+        "fix_owner": "your certificate provider",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "hostname_match",
+        "verdict": "skip",
+        "weight": 10
+      },
+      {
+        "fix_hint": "Configure the server to send the leaf followed by every intermediate in issuing order.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "chain_complete",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Replace the affected certificates with ones signed using SHA-256 or stronger.",
+        "fix_owner": "your certificate provider",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "strong_signature",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Reissue the certificate with at least a 2048-bit RSA or a 256-bit ECDSA key from a CA whose intermediates meet the same minimum.",
+        "fix_owner": "your certificate provider",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "key_strength",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Renew the certificate now and automate future renewals.",
+        "fix_owner": "your certificate provider",
+        "guide_url": "https://netray.info/guide/certificate-management",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "expiry_window",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Reissue the certificate with a lifetime of 398 days or less.",
+        "fix_owner": "your certificate provider",
+        "guide_url": "https://netray.info/guide/certificate-management",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "cert_lifetime",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Reissue the certificate with public hostnames only and split very large SAN lists across several certificates.",
+        "fix_owner": "your certificate provider",
+        "guide_url": "https://netray.info/guide/certificate-management",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "san_quality",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Configure the server to send the full chain, leaf plus all intermediates.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/certificate-management",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "aia_reachability",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Enable TLS 1.3 in the server's TLS configuration.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/tls-protocol",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "tls_version",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Prefer ECDHE cipher suites in the server's TLS configuration.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/tls-protocol",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "forward_secrecy",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Allow only AEAD ciphers such as AES-GCM and ChaCha20-Poly1305.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/tls-protocol",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "aead_cipher",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Obtain a certificate from a CA that embeds SCTs from at least two Certificate Transparency logs.",
+        "fix_owner": "your certificate provider",
+        "guide_url": "https://netray.info/guide/certificate-transparency",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "ct_logged",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Enable OCSP stapling in the server's TLS configuration.",
+        "fix_owner": "your web server configuration",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "ocsp_stapled",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Authorise the issuing CA in the CAA records or reissue from a CA they already allow, and drop the critical flag from records with unknown tags.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/caa-records",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "caa_compliant",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Update the TLSA record to match the current certificate or key on every rotation.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dane-tlsa",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "dane_valid",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Serve the same certificate and TLS configuration on every address of the domain.",
+        "fix_owner": "your hosting provider",
+        "guide_url": "https://netray.info/guide/multi-ip-tls",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "consistency",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Align the ALPN configuration across all servers behind the domain.",
+        "fix_owner": "your hosting provider",
+        "guide_url": "https://netray.info/guide/multi-ip-tls",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "alpn_consistency",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Publish the server's ECH configuration in the ech= parameter of the HTTPS record, once Encrypted Client Hello is enabled on the server.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/encrypted-client-hello",
+        "messages": [
+          "no TLS handshake"
+        ],
+        "name": "ech_advertised",
+        "verdict": "skip",
+        "weight": 2
       }
     ],
     "detail_url": "https://tls.example.com/?h=example.com",

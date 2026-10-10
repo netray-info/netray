@@ -22,7 +22,7 @@ fn make_snapshot(domain: &str) -> Snapshot {
                 check_name: "dnssec".to_string(),
                 verdict: "pass".to_string(),
                 message: String::new(),
-                earned: 5,
+                earned: 5.0,
                 possible: 5,
                 fix_hint: None,
                 fix_owner: None,

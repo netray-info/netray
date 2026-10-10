@@ -323,7 +323,7 @@ async fn known_grade_badge_has_correct_cache_headers() {
     // Backends are unreachable in tests, so we pre-populate the cache with a
     // known grade to exercise the success code path.
     use lens::cache::{CachedResult, cache_key};
-    use lens::scoring::engine::OverallScore;
+    use lens::score::OverallScore;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::SystemTime;

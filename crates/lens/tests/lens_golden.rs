@@ -371,8 +371,8 @@ async fn lens_golden_no_mx() {
     assert!(skipped > 0, "no-mx must skip the mail buckets");
 }
 
-/// A null MX domain sends no mail: infrastructure, transport and brand are skipped, the
-/// authentication bucket is still scored, and the verdict is complete.
+/// A null MX domain sends no mail: the seven MX-dependent checks are skipped, spf and dmarc
+/// are still scored, and the verdict is complete.
 #[tokio::test]
 async fn lens_golden_null_mx() {
     let projection: Value = serde_json::from_str(&run_fixture("null-mx").await).unwrap();
@@ -392,18 +392,14 @@ async fn lens_golden_null_mx() {
             .unwrap_or_else(|| panic!("null-mx: no email check {name}; checks: {checks:?}"))["verdict"]
             .clone()
     };
-    for bucket in [
-        "email_infrastructure",
-        "email_transport",
-        "email_brand_policy",
+    for name in [
+        "mx", "mta_sts", "tls_rpt", "bimi", "dane", "dnsbl", "fcrdns",
     ] {
-        assert_eq!(verdict(bucket), "skip", "null-mx: {bucket} is skipped");
+        assert_eq!(verdict(name), "skip", "null-mx: {name} is skipped");
     }
-    assert_eq!(
-        verdict("email_authentication"),
-        "pass",
-        "null-mx: authentication is scored"
-    );
+    for name in ["spf", "dmarc"] {
+        assert_eq!(verdict(name), "pass", "null-mx: {name} is scored");
+    }
     assert_lens_golden_exists("null-mx");
     check_golden("null-mx").await;
 }

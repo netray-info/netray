@@ -12,7 +12,7 @@ use tower::ServiceExt;
 use lens::check::CheckOutput;
 use lens::config::{BadgesConfig, CacheConfig, OgCardsConfig};
 use lens::routes::og_router;
-use lens::scoring::engine::OverallScore;
+use lens::score::OverallScore;
 use lens::state::{AppState, BadgeCheckFn};
 
 fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
