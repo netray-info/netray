@@ -29,13 +29,48 @@ RED: `lens_full_output_matches_goldens` failed on the ten missing goldens; the c
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R2: RunContext domain/options, Measured{checks,presentation}, Registry, run_with, with_registry | open | crates/engine/tests/traits.rs, crates/engine/tests/registry.rs |
-| C2 | R3: crates/http is netray-http, NETRAY_HTTP_ / NETRAY_HTTP_CONFIG, SPECTRA_ refused naming the new prefix; paths, checks, release smoke, docs follow | open | crates/http/tests/env_prefix.rs, tests/repo/test_env_prefixes.sh |
-| C3 | R4: ModuleConfig, Module with http.<v1> IDs, in-process run on Facts, pure translate moved from lens, golden_module behind testing | open | crates/http/tests/module.rs |
-| C4 | R5: lens takes HTTP from the registry; backends/http.rs and [backends.http] url gone (url refused), timeout_ms the deadline; lens tests on golden_module; goldens unchanged | open | crates/lens/tests/*.rs |
-| C5 | stub Module reads domain and DKIM selectors from RunContext; Measured{checks,presentation} reaches lens | open | crates/engine/tests/registry.rs |
-| C6 | no tracked path names crates/spectra | open | tests/repo/test_env_prefixes.sh |
-| C7 | NETRAY_HTTP_SERVER__BIND binds; SPECTRA__SERVER__BIND refused naming NETRAY_HTTP_ | open | tests/repo/test_env_prefixes.sh |
-| C8 | spectra-inspect.json translated equals the HTTP section of lens-full-healthy.json | open | crates/http/tests/module.rs |
-| C9 | [modules.http] unknown key, or [backends.http] url, makes `netray lens --check-config` exit 1 naming it | open | tests/repo/test_check_config.sh |
-| C10 | lens with golden modules: full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+| C1 | R2: RunContext domain/options, Measured{checks,presentation}, Registry, run_with, with_registry | green | crates/engine/tests/traits.rs, crates/engine/tests/registry.rs |
+| C2 | R3: crates/http is netray-http, NETRAY_HTTP_ / NETRAY_HTTP_CONFIG, SPECTRA_ refused naming the new prefix; paths, checks, release smoke, docs follow | green | tests/repo/test_env_prefixes.sh, crates/http/src/config.rs (unit) |
+| C3 | R4: ModuleConfig, Module with http.<v1> IDs, in-process run on Facts, pure translate moved from lens, golden_module behind testing | green | crates/http/tests/module.rs |
+| C4 | R5: lens takes HTTP from the registry; backends/http.rs and [backends.http] url gone (url refused), timeout_ms the deadline; lens tests on golden_module; goldens unchanged | green | crates/lens/tests/*.rs |
+| C5 | stub Module reads domain and DKIM selectors from RunContext; Measured{checks,presentation} reaches lens | green | crates/engine/tests/registry.rs |
+| C6 | no tracked path names crates/spectra | green | tests/repo/test_env_prefixes.sh |
+| C7 | NETRAY_HTTP_SERVER__BIND binds; SPECTRA__SERVER__BIND refused naming NETRAY_HTTP_ | green | tests/repo/test_env_prefixes.sh |
+| C8 | spectra-inspect.json translated equals the HTTP section of lens-full-healthy.json | green | crates/http/tests/module.rs |
+| C9 | [modules.http] unknown key, or [backends.http] url, makes `netray lens --check-config` exit 1 naming it | green | tests/repo/test_check_config.sh |
+| C10 | lens with golden modules: full-output and lens_golden unchanged | green | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+
+RED (08dc0c4): every new and rewired test failed to compile against the missing API; `test_env_prefixes.sh` failed on the `SPECTRA__` loader.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| rename | 1 (general-purpose, mechanical) | sonnet | 73128 | 263 |
+| G1 engine | 1 | sonnet | 25626 | 27 |
+| G2 netray-http | 1 | sonnet | 99250 | 196 |
+| G3 lens + binary | 1 (+ orchestrator: `modules` in seven test Config literals) | sonnet | 100459 | 215 |
+| reader amendments | 1 | sonnet | 44685 | 129 |
+
+### Reader
+
+| class | at | finding | outcome |
+|---|---|---|---|
+| AMENDMENT | crates/netray/src/main.rs:101 | without `[modules.http.enrichment] ip_url` the HTTP section loses server org and network type, silently | repaired: lens dev, example and production fixture carry `ip_url`; startup warns when it is missing; argus renders it (K item) |
+| AMENDMENT | crates/http/src/module.rs:69 | in-process the HTTP section skipped spectra's per-target limit (30/min, burst 10); lens's cache bypass with `dkim_selectors` made one target reachable at lens's per-IP rate per client | repaired: the module keeps the per-target limiter (`[modules.http.limits]`), checked before target validation; `module_target_limit.rs` |
+| AMENDMENT | crates/lens/src/modules.rs:103 | an HTTP failure or timeout left no log line | repaired: WARN "backend call failed" with `service = "http"` and the reason |
+| AMENDMENT | spec R4 | with `Facts` empty until the engine run, the module resolves as spectra does (`validate_target`); with `Facts` it picks from them | in this phase; Phase 6 supplies `Facts` |
+| NIT | crates/lens/src/state.rs:123 | `[backends.http]` without `url` now enables the section | documented in lens.example.toml and README; argus renders the table |
+| DEFERRED | crates/lens/tests/unknown_verdicts.rs | `lens_unknown_verdict_total{section="http"}` can no longer increment: in-process the status is typed | by design |
+
+### Behavioural verification
+
+```
+$ netray lens --check-config crates/lens/lens.dev.toml
+config ok: crates/lens/lens.dev.toml
+$ netray lens --check-config <dev + [modules.http] bogus = 1>
+config error: …: modules.http: unknown field `bogus`, expected one of `inspect`, `enrichment`, `limits`   (exit 1)
+$ SPECTRA__SERVER__BIND=127.0.0.1:1 netray http crates/http/spectra.dev.toml
+SPECTRA__SERVER__BIND is set: these variables are now NETRAY_HTTP_* (config file: NETRAY_HTTP_CONFIG)
+```
+`just adlc-verify` green; `tests/fixtures/contracts/` unchanged.

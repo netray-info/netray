@@ -2408,6 +2408,8 @@ dependencies = [
  "moka",
  "nanoid",
  "netray-common",
+ "netray-engine",
+ "netray-http",
  "netray-model",
  "regex",
  "reqwest",
@@ -2821,11 +2823,13 @@ dependencies = [
  "lens",
  "mime_guess",
  "netray-common",
+ "netray-engine",
  "netray-http",
  "percent-encoding",
  "prism",
  "tlsight",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2872,6 +2876,7 @@ name = "netray-engine"
 version = "0.23.1"
 dependencies = [
  "netray-model",
+ "serde_json",
  "tokio",
 ]
 
@@ -2889,6 +2894,7 @@ dependencies = [
  "metrics-exporter-prometheus",
  "mime_guess",
  "netray-common",
+ "netray-engine",
  "netray-model",
  "percent-encoding",
  "reqwest",
@@ -2897,6 +2903,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+ "toml",
  "tower",
  "tower-http",
  "tracing",

@@ -7,6 +7,7 @@ description = "Unified domain health check — netray.info"
 
 [dependencies]
 netray-model = { workspace = true }
+netray-engine = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
@@ -72,6 +73,7 @@ fontdb = "0.24"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [dev-dependencies]
+netray-http = { path = "../http", features = ["testing"] }
 beacon = { path = "../beacon" }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }

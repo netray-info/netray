@@ -162,7 +162,7 @@ service_name = "spectra"
 sample_rate  = 1.0
 ```
 
-Configuration is loaded from `spectra.toml` by default. Override the path with `SPECTRA_CONFIG`. Environment variables take precedence over the file, using the `SPECTRA__` prefix (two underscores) with `__` as the section separator — e.g. `SPECTRA__SERVER__BIND=0.0.0.0:3000`. An unknown key, in the file or the environment, fails the load.
+Configuration is loaded from `spectra.toml` by default. Override the path with `NETRAY_HTTP_CONFIG`. Environment variables take precedence over the file, using the `NETRAY_HTTP_` prefix with `__` as the section separator — e.g. `NETRAY_HTTP_SERVER__BIND=0.0.0.0:3000`. An unknown key, in the file or the environment, fails the load, and so does any variable of the old `SPECTRA_` prefix (the error names `NETRAY_HTTP_`).
 
 ---
 

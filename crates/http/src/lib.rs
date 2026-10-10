@@ -5,10 +5,16 @@ pub mod error;
 pub mod input;
 pub mod inspect;
 pub mod metrics;
+pub mod module;
 pub mod quality;
 pub mod routes;
 pub mod security;
 pub mod state;
+#[cfg(feature = "testing")]
+pub mod testing;
+
+pub use config::ModuleConfig;
+pub use module::{HttpModule, translate};
 
 pub use netray_common::middleware::RequestId;
 
@@ -24,7 +30,7 @@ struct Assets;
 
 pub async fn run(config_arg: Option<String>) {
     // 1. Load configuration.
-    let config_path = config_arg.or_else(|| std::env::var("SPECTRA_CONFIG").ok());
+    let config_path = config_arg.or_else(|| std::env::var("NETRAY_HTTP_CONFIG").ok());
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 

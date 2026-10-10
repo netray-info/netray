@@ -7,6 +7,7 @@ description = "HTTP header inspection and security audit service for netray.info
 
 [dependencies]
 netray-model = { workspace = true }
+netray-engine = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json"] }
 tower = { workspace = true, features = ["limit"] }
@@ -56,7 +57,16 @@ url = { workspace = true }
 # Percent-decoding for query params
 percent-encoding = { workspace = true }
 
+[features]
+testing = []
+
+[[test]]
+name = "module"
+path = "tests/module.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
+toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 serde_json = { workspace = true }

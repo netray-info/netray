@@ -7,6 +7,7 @@ description = "V2 engine seams for the netray.info suite: the Module trait and F
 
 [dependencies]
 netray-model = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

@@ -10,16 +10,18 @@ use governor::{Quota, RateLimiter};
 use moka::future::Cache;
 use netray_common::ip_extract::IpExtractor;
 use netray_common::rate_limit::KeyedLimiter;
+use netray_engine::Registry;
+use netray_model::Protocol;
 
 use crate::backends::Backend;
 use crate::backends::dns::DnsBackend;
 use crate::backends::email::EmailBackend;
-use crate::backends::http::HttpBackend;
 use crate::backends::ip::IpBackend;
 use crate::backends::tls::TlsBackend;
 use crate::cache::CachedResult;
 use crate::check::CheckOutput;
 use crate::config::Config;
+use crate::modules::ModuleSection;
 use crate::scoring::ScoringProfile;
 use crate::security::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
 use crate::spa::{Assets, render_apex_html};
@@ -62,8 +64,18 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Build `AppState` from a validated `Config`.
+    /// Build `AppState` from a validated `Config` and no protocol modules.
     pub fn new(config: Config) -> Result<Self, Box<dyn std::error::Error>> {
+        Self::with_registry(config, Registry::new())
+    }
+
+    /// Build `AppState` from a validated `Config`; the HTTP section runs the registry's HTTP
+    /// module when `[backends.http]` is configured.
+    pub fn with_registry(
+        config: Config,
+        registry: Registry,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let registry = Arc::new(registry);
         let http_client = reqwest::Client::builder()
             .tls_backend_rustls()
             .user_agent(concat!("lens/", env!("CARGO_PKG_VERSION")))
@@ -108,13 +120,13 @@ impl AppState {
             }),
         ];
         if let Some(ref http_cfg) = config.backends.http
-            && let Some(ref url) = http_cfg.url
+            && registry.module(Protocol::Http).is_some()
         {
-            backends.push(Box::new(HttpBackend {
-                http_url: url.clone(),
-                public_url: eco.http_base_url.clone().unwrap_or_default(),
+            backends.push(Box::new(ModuleSection {
+                registry: registry.clone(),
+                protocol: Protocol::Http,
                 timeout: Duration::from_millis(http_cfg.timeout_ms),
-                client: http_client.clone(),
+                public_url: eco.http_base_url.clone().unwrap_or_default(),
             }));
         }
         if let Some(ref email_cfg) = config.backends.email
@@ -222,6 +234,7 @@ mod tests {
             badges: BadgesConfig::default(),
             og_cards: crate::config::OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
+            modules: Default::default(),
         }
     }
 
@@ -272,13 +285,13 @@ mod tests {
     }
 
     #[test]
-    fn http_backend_registered_when_url_set() {
+    fn http_section_registered_when_configured_and_module_present() {
         let mut config = test_config();
-        config.backends.http = Some(crate::config::BackendConfig {
-            url: Some("http://localhost:8083".to_string()),
-            ..Default::default()
-        });
-        let state = AppState::new(config).unwrap();
+        config.backends.http = Some(crate::config::BackendConfig::default());
+        let registry = Registry::new().with(netray_http::testing::golden_module(include_str!(
+            "../../../tests/fixtures/contracts/spectra-inspect.json"
+        )));
+        let state = AppState::with_registry(config, registry).unwrap();
         assert_eq!(state.backends.len(), 4);
         assert_eq!(state.backends[0].section(), "dns");
         assert_eq!(state.backends[1].section(), "tls");

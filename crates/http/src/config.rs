@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::net::SocketAddr;
+use std::num::NonZeroU32;
 
 use serde::Deserialize;
 
@@ -20,6 +21,45 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     #[serde(default)]
     pub meta: MetaConfig,
+}
+
+/// The sections the HTTP module reads from a `[modules.http]` table.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleConfig {
+    #[serde(default = "default_inspect")]
+    pub inspect: InspectConfig,
+    #[serde(default)]
+    pub enrichment: EnrichmentConfig,
+    #[serde(default)]
+    pub limits: ModuleLimits,
+}
+
+/// The per-target subset of `[limits]` that applies to the module; same keys and defaults as
+/// `LimitsConfig`. A zero value is refused at deserialisation.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleLimits {
+    #[serde(default = "default_module_per_target_per_minute")]
+    pub per_target_per_minute: NonZeroU32,
+    #[serde(default = "default_module_per_target_burst")]
+    pub per_target_burst: NonZeroU32,
+}
+
+impl Default for ModuleLimits {
+    fn default() -> Self {
+        Self {
+            per_target_per_minute: default_module_per_target_per_minute(),
+            per_target_burst: default_module_per_target_burst(),
+        }
+    }
+}
+
+fn default_module_per_target_per_minute() -> NonZeroU32 {
+    NonZeroU32::new(default_per_target_per_minute()).expect("non-zero default")
+}
+fn default_module_per_target_burst() -> NonZeroU32 {
+    NonZeroU32::new(default_per_target_burst()).expect("non-zero default")
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -103,7 +143,7 @@ pub struct TelemetryConfig {
 }
 
 impl Config {
-    /// Loads the TOML file at `path` (if any), then `SPECTRA__<SECTION>__<KEY>`
+    /// Loads the TOML file at `path` (if any), then `NETRAY_HTTP_<SECTION>__<KEY>`
     /// env overrides. Unknown keys in either source are a load error.
     pub fn load(path: Option<&str>) -> Result<Self, ConfigError> {
         Self::load_with_env(path, std::env::vars_os())
@@ -132,7 +172,9 @@ impl Config {
         path: Option<&str>,
         env: impl IntoIterator<Item = (OsString, OsString)>,
     ) -> Result<Self, ConfigError> {
-        let cfg: Self = netray_common::config::load_with_env(path, "SPECTRA__", env)?;
+        let env: Vec<(OsString, OsString)> = env.into_iter().collect();
+        netray_common::config::refuse_legacy_prefix("SPECTRA_", "NETRAY_HTTP_", &env)?;
+        let cfg: Self = netray_common::config::load_with_env(path, "NETRAY_HTTP_", env)?;
         cfg.validate()?;
         Ok(cfg)
     }
@@ -310,9 +352,12 @@ mod tests {
     #[test]
     fn env_overrides_apply() {
         let env = [
-            ("SPECTRA__ENRICHMENT__IP_URL", "http://ip.example.com"),
-            ("SPECTRA__LIMITS__PER_IP_BURST", "7"),
-            ("SPECTRA__META__LENS_BASE_URL", "https://lens.example.com"),
+            ("NETRAY_HTTP_ENRICHMENT__IP_URL", "http://ip.example.com"),
+            ("NETRAY_HTTP_LIMITS__PER_IP_BURST", "7"),
+            (
+                "NETRAY_HTTP_META__LENS_BASE_URL",
+                "https://lens.example.com",
+            ),
         ]
         .map(|(k, v)| (OsString::from(k), OsString::from(v)));
         let cfg = Config::load_with_env(None, env).unwrap();
@@ -330,7 +375,7 @@ mod tests {
     #[test]
     fn unknown_env_key_is_rejected() {
         let env = [(
-            OsString::from("SPECTRA__BACKENDS__IP__URL"),
+            OsString::from("NETRAY_HTTP_BACKENDS__IP__URL"),
             OsString::from("http://ip.example.com"),
         )];
         let err = Config::load_with_env(None, env).unwrap_err().to_string();

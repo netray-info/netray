@@ -7,6 +7,7 @@ pub mod config;
 pub mod error;
 pub mod input;
 pub mod metrics;
+pub mod modules;
 pub mod og;
 pub mod routes;
 pub mod scoring;
@@ -30,7 +31,7 @@ use utoipa_scalar::{Scalar, Servable};
 use netray_common::cors::cors_layer;
 use netray_common::security_headers::{SecurityHeadersConfig, security_headers_layer};
 
-pub async fn run(config_arg: Option<String>) {
+pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Registry) {
     // 1. Load config (first arg or LENS_CONFIG env var).
     let config_path = config_arg.or_else(|| std::env::var("LENS_CONFIG").ok());
 
@@ -48,7 +49,7 @@ pub async fn run(config_arg: Option<String>) {
         dns_url = config.backends.dns.url.as_deref().unwrap_or("disabled"),
         tls_url = config.backends.tls.url.as_deref().unwrap_or("disabled"),
         ip_url  = config.backends.ip.url.as_deref().unwrap_or("disabled"),
-        http_url = config.backends.http.as_ref().and_then(|h| h.url.as_deref()).unwrap_or("disabled"),
+        http_module = config.backends.http.is_some(),
         per_ip_rate = config.rate_limit.per_ip_per_minute,
         per_ip_burst = config.rate_limit.per_ip_burst,
         global_rate = config.rate_limit.global_per_minute,
@@ -60,7 +61,8 @@ pub async fn run(config_arg: Option<String>) {
     );
 
     // 3. Build app state.
-    let mut state = state::AppState::new(config.clone()).expect("failed to build app state");
+    let mut state = state::AppState::with_registry(config.clone(), registry)
+        .expect("failed to build app state");
 
     // 3a. Init snapshot store if enabled.
     if config.snapshots.enabled {

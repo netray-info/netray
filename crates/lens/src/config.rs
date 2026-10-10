@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::net::SocketAddr;
 
@@ -28,6 +29,9 @@ pub struct Config {
     pub og_cards: OgCardsConfig,
     #[serde(default)]
     pub snapshots: SnapshotsConfig,
+    /// Per-module tables (`[modules.http]`), read by the binary that builds the modules.
+    #[serde(default)]
+    pub modules: BTreeMap<String, toml::Table>,
     #[serde(default)]
     pub telemetry: netray_common::telemetry::TelemetryConfig,
 }
@@ -452,6 +456,11 @@ impl Config {
         netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
 
         let b = &self.backends;
+        if b.http.as_ref().is_some_and(|h| h.url.is_some()) {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.http.url is no longer read; the HTTP section runs in-process, configure it in [modules.http]".to_string(),
+            ));
+        }
         let configured = |c: &Option<BackendConfig>| {
             c.as_ref()
                 .filter(|c| c.url.is_some())
@@ -461,7 +470,7 @@ impl Config {
             .dns
             .timeout_ms
             .max(b.tls.timeout_ms)
-            .max(configured(&b.http))
+            .max(b.http.as_ref().map_or(0, |h| h.timeout_ms))
             .max(configured(&b.email));
         let budget_ms = wave1_ms.saturating_add(b.ip.timeout_ms);
         let deadline_ms = crate::check::HARD_DEADLINE.as_millis() as u64;
@@ -517,6 +526,7 @@ mod tests {
             badges: BadgesConfig::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: SnapshotsConfig::default(),
+            modules: Default::default(),
             telemetry: Default::default(),
         }
     }

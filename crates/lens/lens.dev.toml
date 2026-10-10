@@ -18,8 +18,10 @@ url = "https://ip.netray.info"
 timeout_ms = 2000
 
 [backends.http]
-url = "https://http.netray.info"
 timeout_ms = 15000
+
+[modules.http.enrichment]
+ip_url = "https://ip.netray.info"
 
 [backends.email]
 url = "https://email.netray.info"

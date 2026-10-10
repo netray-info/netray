@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use netray_engine::Registry;
 
 mod site;
 
@@ -91,13 +92,35 @@ fn check_config<T, E: std::fmt::Display>(
     }
 }
 
+/// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
+/// does not know is refused, and an absent `[modules.http]` builds the module on its defaults.
+fn lens_registry(cfg: &lens::config::Config) -> Result<Registry, String> {
+    if let Some(name) = cfg.modules.keys().find(|k| k.as_str() != "http") {
+        return Err(format!("modules.{name}: unknown module"));
+    }
+    let table = cfg.modules.get("http").cloned().unwrap_or_default();
+    let module_config: netray_http::ModuleConfig =
+        table.try_into().map_err(|e| format!("modules.http: {e}"))?;
+    if cfg.backends.http.is_some() && module_config.enrichment.ip_url.is_none() {
+        tracing::warn!(
+            "modules.http.enrichment.ip_url is not set: server org and network type stay empty"
+        );
+    }
+    let module =
+        netray_http::HttpModule::new(module_config).map_err(|e| format!("modules.http: {e}"))?;
+    Ok(Registry::new().with(Box::new(module)))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Lens {
             check_config: Some(path),
             ..
-        } => check_config(&path, lens::config::Config::load),
+        } => check_config(&path, |p| {
+            let cfg = lens::config::Config::load(p).map_err(|e| e.to_string())?;
+            lens_registry(&cfg)
+        }),
         Command::Dns {
             check_config: Some(path),
             ..
@@ -121,7 +144,13 @@ async fn main() -> anyhow::Result<()> {
             check_config: Some(path),
             ..
         } => check_config(&path, ifconfig_rs::config::Config::load),
-        Command::Lens { config, .. } => lens::run(config).await,
+        Command::Lens { config, .. } => {
+            let path = config.or_else(|| std::env::var("LENS_CONFIG").ok());
+            let cfg = lens::config::Config::load(path.as_deref())
+                .map_err(|e| anyhow::anyhow!("failed to load configuration: {e}"))?;
+            let registry = lens_registry(&cfg).map_err(|e| anyhow::anyhow!(e))?;
+            lens::run_with(path, registry).await
+        }
         Command::Dns { config, .. } => prism::run(config).await,
         Command::Tls { config, .. } => tlsight::run(config).await,
         Command::Http { config, .. } => netray_http::run(config).await,

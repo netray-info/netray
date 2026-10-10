@@ -345,47 +345,17 @@ async fn do_inspect_inner(
         .unwrap_or("")
         .to_string();
     tracing::Span::current().record("request_id", request_id.as_str());
-    let result =
-        inspect::inspect(&url, resolved_addr, &state.config.inspect, &state.outbound).await?;
-
-    // 5. IP enrichment (non-blocking, failure is OK)
-    let enrichment = if let Some(ref client) = state.enrichment_client {
-        match client.lookup(resolved_addr.ip(), None).await {
-            Some(info) => {
-                let threat = if info.is_c2 {
-                    Some("C2".to_string())
-                } else if info.is_spamhaus {
-                    Some("DROP".to_string())
-                } else if info.is_tor {
-                    Some("TOR".to_string())
-                } else {
-                    None
-                };
-                inspect::EnrichmentData {
-                    org: info.org,
-                    ip_type: info.ip_type,
-                    threat,
-                    role: info.network_role,
-                }
-            }
-            None => inspect::EnrichmentData::default(),
-        }
-    } else {
-        inspect::EnrichmentData::default()
-    };
-
-    let duration_ms = start.elapsed().as_millis() as u64;
-    metrics::histogram!("spectra_inspect_duration_ms").record(duration_ms as f64);
-
-    // 6. Assemble response
-    let response = inspect::assemble_response(
+    let response = inspect::inspect_and_assemble(
         &url,
         resolved_addr,
-        result,
-        enrichment,
+        &state.config.inspect,
+        &state.outbound,
+        state.enrichment_client.as_deref(),
         ip_detail_base(&state.config),
-        duration_ms,
-    );
+        start,
+    )
+    .await?;
+    metrics::histogram!("spectra_inspect_duration_ms").record(response.duration_ms as f64);
 
     Ok(Json(response))
 }

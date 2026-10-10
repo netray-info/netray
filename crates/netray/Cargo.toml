@@ -7,6 +7,7 @@ description = "The netray.info suite as one binary: six services and the static 
 
 [dependencies]
 netray-common = { workspace = true, features = ["server"] }
+netray-engine = { workspace = true }
 
 beacon = { path = "../beacon" }
 ifconfig-rs = { path = "../ifconfig-rs" }
@@ -20,4 +21,5 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs"
 mime_guess = { workspace = true }
 percent-encoding = { workspace = true }
 anyhow = { workspace = true }
+tracing = { workspace = true }
 clap = { version = "4", features = ["derive"] }

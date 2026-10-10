@@ -9,9 +9,10 @@ pub mod request;
 pub mod security;
 
 use std::net::SocketAddr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::Utc;
+use netray_common::enrichment::EnrichmentClient;
 use url::Url;
 
 use crate::config::InspectConfig;
@@ -135,6 +136,56 @@ pub struct EnrichmentData {
     pub ip_type: Option<String>,
     pub threat: Option<String>,
     pub role: Option<String>,
+}
+
+/// Inspect `url` at `resolved_addr`, look the address up when an enrichment client is given, and
+/// assemble the response. `start` is when the caller began the request; `duration_ms` counts
+/// from it.
+pub async fn inspect_and_assemble(
+    url: &Url,
+    resolved_addr: SocketAddr,
+    config: &InspectConfig,
+    outbound: &request::Outbound,
+    enrichment_client: Option<&EnrichmentClient>,
+    ip_base_url: Option<&str>,
+    start: Instant,
+) -> Result<InspectResponse, crate::error::AppError> {
+    let result = inspect(url, resolved_addr, config, outbound).await?;
+
+    let enrichment = if let Some(client) = enrichment_client {
+        match client.lookup(resolved_addr.ip(), None).await {
+            Some(info) => {
+                let threat = if info.is_c2 {
+                    Some("C2".to_string())
+                } else if info.is_spamhaus {
+                    Some("DROP".to_string())
+                } else if info.is_tor {
+                    Some("TOR".to_string())
+                } else {
+                    None
+                };
+                EnrichmentData {
+                    org: info.org,
+                    ip_type: info.ip_type,
+                    threat,
+                    role: info.network_role,
+                }
+            }
+            None => EnrichmentData::default(),
+        }
+    } else {
+        EnrichmentData::default()
+    };
+
+    let duration_ms = start.elapsed().as_millis() as u64;
+    Ok(assemble_response(
+        url,
+        resolved_addr,
+        result,
+        enrichment,
+        ip_base_url,
+        duration_ms,
+    ))
 }
 
 /// Assemble the full InspectResponse from the raw task results.

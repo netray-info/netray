@@ -1,6 +1,5 @@
 pub mod dns;
 pub mod email;
-pub mod http;
 pub mod ip;
 pub mod sse;
 pub mod tls;

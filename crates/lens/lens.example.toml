@@ -20,9 +20,14 @@ timeout_ms = 15000
 url = "https://ip.netray.info"
 timeout_ms = 2000
 
+# The HTTP section runs in-process (module `netray-http`); `url` is refused.
 # [backends.http]
-# url = "https://http.netray.info"   # optional; omit to disable HTTP section
-# timeout_ms = 15000
+# timeout_ms = 15000                 # optional; omit the table to disable the HTTP section
+#
+# [modules.http]                     # optional; sections `inspect`, `enrichment` and `limits`, see crates/http
+#
+# [modules.http.enrichment]
+# ip_url = "https://ip.netray.info"  # needed for server org and network type; without it both stay empty
 
 # [backends.email]
 # url = "http://beacon:8085"         # optional; omit to disable email section

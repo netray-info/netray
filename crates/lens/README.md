@@ -162,7 +162,7 @@ curl -s -X POST -H 'Content-Type: application/json' \
 |---|---|
 | `dns` | DNS findings, resolved IPs, per-check results |
 | `tls` | Certificate chain, quality checks, grade |
-| `http` | HTTP security headers, HTTPS redirect, CORS, cookie posture (omitted when `http_url` not configured) |
+| `http` | HTTP security headers, HTTPS redirect, CORS, cookie posture (omitted when `[backends.http]` is not configured) |
 | `ip` | Per-IP classification: network type, ASN, geo |
 | `summary` | Overall grade, score, section grades, `hard_fail`, `hard_fail_reason` |
 | `done` | Domain, duration_ms, cached flag |
@@ -242,7 +242,7 @@ Each backend returns a set of named checks. Every check has a status: `pass`, `w
 |---|---|---|
 | TLS   | 35% | Certificate validity and transport security are foundational |
 | DNS   | 20% | DNS infrastructure health (DNSSEC, CAA, NS delegation) |
-| HTTP  | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (requires spectra backend) |
+| HTTP  | 20% | HTTP security headers, HTTPS redirect, CORS, and cookie posture (runs in-process as the `netray-http` module, enabled by `[backends.http]`) |
 | Email | 15% | Email authentication (SPF, DKIM, DMARC) and receiving infrastructure (requires beacon backend) |
 | IP    | 10% | Reputation informs risk but is beyond the domain owner's direct control |
 

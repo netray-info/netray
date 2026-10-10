@@ -1,5 +1,6 @@
 //! The V2 engine: the `Module` trait and `FactsProvider`, the two seams between the engine and
-//! the protocol modules. The engine never names a module crate (P40).
+//! the protocol modules, and the `Registry` that hands them out by protocol. The engine never
+//! names a module crate (P40).
 
 use std::error::Error;
 use std::fmt;
@@ -31,10 +32,19 @@ impl Domain {
     }
 }
 
+/// Per-run options a caller may set.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct RunOptions {
+    /// DKIM selectors to probe; `None` leaves the choice to the module.
+    pub dkim_selectors: Option<Vec<String>>,
+}
+
 /// Per-run context handed to modules and the facts provider.
 #[derive(Debug, Clone)]
 pub struct RunContext {
     pub deadline: Instant,
+    pub domain: Domain,
+    pub options: RunOptions,
 }
 
 /// DNS facts resolved once per run and shared by all modules.
@@ -50,9 +60,18 @@ pub struct Facts {
 /// What a module returns for its section.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SectionOutcome {
-    Measured(Vec<CheckResult>),
-    NotApplicable { reason: String },
-    Incomplete { reason: String },
+    Measured {
+        checks: Vec<CheckResult>,
+        /// Transitional: the V1 headline and extras, carried as JSON until the evidence shapes
+        /// of phase 1b replace it.
+        presentation: serde_json::Value,
+    },
+    NotApplicable {
+        reason: String,
+    },
+    Incomplete {
+        reason: String,
+    },
 }
 
 /// Facts could not be resolved.
@@ -84,4 +103,40 @@ pub trait FactsProvider: Send + Sync {
         ctx: &'a RunContext,
         domain: &'a Domain,
     ) -> BoxFuture<'a, Result<Facts, ResolveError>>;
+}
+
+/// The modules and the facts provider of one engine, looked up by protocol.
+#[derive(Default)]
+pub struct Registry {
+    modules: Vec<Box<dyn Module>>,
+    facts: Option<Box<dyn FactsProvider>>,
+}
+
+impl Registry {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Registers a module; a second module for the same protocol replaces the first.
+    pub fn with(mut self, module: Box<dyn Module>) -> Self {
+        self.modules.retain(|m| m.protocol() != module.protocol());
+        self.modules.push(module);
+        self
+    }
+
+    pub fn with_facts(mut self, facts: Box<dyn FactsProvider>) -> Self {
+        self.facts = Some(facts);
+        self
+    }
+
+    pub fn module(&self, protocol: Protocol) -> Option<&dyn Module> {
+        self.modules
+            .iter()
+            .find(|m| m.protocol() == protocol)
+            .map(|m| m.as_ref())
+    }
+
+    pub fn facts(&self) -> Option<&dyn FactsProvider> {
+        self.facts.as_deref()
+    }
 }

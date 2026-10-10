@@ -738,7 +738,6 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut down: Vec<String> = Vec::new();
 
     // Build list of required backends to probe (3 s timeout each).
-    // Optional http backend is only probed when its url is configured.
     let mut probes: Vec<(String, String)> = vec![
         (
             "dns".to_string(),
@@ -753,11 +752,6 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
             config.backends.ip.url.clone().unwrap_or_default(),
         ),
     ];
-    if let Some(ref http_cfg) = config.backends.http
-        && let Some(ref url) = http_cfg.url
-    {
-        probes.push(("http".to_string(), url.clone()));
-    }
     if let Some(ref email_cfg) = config.backends.email
         && let Some(ref url) = email_cfg.url
     {
@@ -2012,6 +2006,7 @@ pub mod tests {
             badges: BadgesConfig::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
+            modules: Default::default(),
         }
     }
 
@@ -2797,7 +2792,7 @@ pub mod tests {
         let seen: Seen = Arc::new(Mutex::new(Vec::new()));
         let seen_ref = seen.clone();
 
-        // One mock serves all five backends; prism (POST /api/check) answers
+        // One mock serves all four backends; prism (POST /api/check) answers
         // with an A record so the IP backend runs in wave 2.
         let mock = Router::new().fallback(move |req: Request<Body>| {
             let seen_ref = seen_ref.clone();
@@ -2833,11 +2828,6 @@ pub mod tests {
         config.backends.dns.url = Some(base.clone());
         config.backends.tls.url = Some(base.clone());
         config.backends.ip.url = Some(base.clone());
-        config.backends.http = Some(crate::config::BackendConfig {
-            url: Some(base.clone()),
-            timeout_ms: 1000,
-            ..Default::default()
-        });
         config.backends.email = Some(crate::config::BackendConfig {
             url: Some(base.clone()),
             timeout_ms: 1000,
@@ -2858,7 +2848,6 @@ pub mod tests {
         for (prefix, label) in [
             ("/api/check", "prism"),
             ("/api/inspect?h=", "tlsight"),
-            ("/api/inspect?url=", "spectra"),
             ("/inspect", "beacon"),
             ("/json?ip=", "ifconfig-rs"),
         ] {

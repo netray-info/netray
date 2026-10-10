@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use url::Url;
 
@@ -43,26 +43,31 @@ pub async fn validate_target(url: &Url) -> Result<SocketAddr, AppError> {
     let port = url.port_or_known_default().unwrap_or(443);
     let addr_str = format!("{host}:{port}");
 
-    let addrs: Vec<SocketAddr> = tokio::net::lookup_host(&addr_str)
+    let addrs: Vec<IpAddr> = tokio::net::lookup_host(&addr_str)
         .await
         .map_err(|e| AppError::InvalidTarget(format!("Could not resolve hostname: {e}")))?
+        .map(|addr| addr.ip())
         .collect();
 
-    if addrs.is_empty() {
-        return Err(AppError::InvalidTarget(
-            "Could not resolve hostname".to_string(),
-        ));
-    }
+    pick_target(&addrs, port)
+}
 
-    for addr in &addrs {
-        if !netray_common::target_policy::is_allowed_target(addr.ip()) {
+/// Apply the target policy to already resolved addresses: any refused address refuses the
+/// target, otherwise the first address is returned with `port`.
+pub fn pick_target(addrs: &[IpAddr], port: u16) -> Result<SocketAddr, AppError> {
+    let first = addrs
+        .first()
+        .ok_or_else(|| AppError::InvalidTarget("Could not resolve hostname".to_string()))?;
+
+    for ip in addrs {
+        if !netray_common::target_policy::is_allowed_target(*ip) {
             return Err(AppError::BlockedTarget(
                 "Target resolves to a reserved address".to_string(),
             ));
         }
     }
 
-    Ok(addrs[0])
+    Ok(SocketAddr::new(*first, port))
 }
 
 #[cfg(test)]
