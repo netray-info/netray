@@ -277,8 +277,8 @@ From the repository root (see the root `README.md`):
 
 ```sh
 just build                                     # frontends + release binary `netray`
-netray dns crates/mhost-prism/prism.dev.toml   # run prism with the dev config
-cargo test -p prism                            # this crate's tests
+netray dns crates/dns/prism.dev.toml   # run prism with the dev config
+cargo test -p netray-dns                            # this crate's tests
 just check                                     # the gate plus the full Rust suite
 just adlc-verify                               # the fast, offline gate run before a push
 ```

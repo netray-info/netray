@@ -17,12 +17,12 @@ use tower::ServiceExt;
 // Bring internal modules into scope (integration tests link against the crate).
 // ---------------------------------------------------------------------------
 
-use prism::api::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
-use prism::circuit_breaker::CircuitBreakerRegistry;
-use prism::config::Config;
-use prism::reload::HotState;
-use prism::result_cache::ResultCache;
-use prism::security::IpExtractor;
+use netray_dns::api::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
+use netray_dns::circuit_breaker::CircuitBreakerRegistry;
+use netray_dns::config::Config;
+use netray_dns::reload::HotState;
+use netray_dns::result_cache::ResultCache;
+use netray_dns::security::IpExtractor;
 use tokio::sync::Semaphore;
 
 // ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ fn default_state() -> AppState {
 fn test_router(state: AppState) -> axum::Router {
     health_router(state.clone())
         .merge(api_router(state))
-        .layer(axum::middleware::from_fn(prism::request_id_middleware))
+        .layer(axum::middleware::from_fn(netray_dns::request_id_middleware))
 }
 
 fn test_peer() -> SocketAddr {
@@ -171,7 +171,7 @@ async fn blocked_target_ip_as_server_returns_422() {
 
 #[tokio::test]
 async fn rate_limit_returns_429() {
-    use prism::config::{
+    use netray_dns::config::{
         CircuitBreakerConfig, DnsConfig, EcosystemConfig, LimitsConfig, ServerConfig,
         TelemetryConfig, TraceConfig,
     };
@@ -213,7 +213,7 @@ async fn rate_limit_returns_429() {
         },
         telemetry: TelemetryConfig::default(),
         ecosystem: EcosystemConfig::default(),
-        backends: prism::config::BackendsConfig::default(),
+        backends: netray_dns::config::BackendsConfig::default(),
     };
 
     let hot_state = HotState::new(&config);

@@ -42,7 +42,7 @@ grep -q '^\[modules\.tls\.limits\]' "$lens_fixture" || fail "lens: production fi
 # sub:fixture:bad-value sed expression ("" = validate() has no rejecting rule to exercise)
 table=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
-    "dns:crates/mhost-prism/tests/fixtures/prism.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
+    "dns:crates/dns/tests/fixtures/prism.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
     "tls:crates/tls/tests/fixtures/tlsight.production.toml:s/^per_ip_per_minute = .*/per_ip_per_minute = 0/"
     "http:crates/http/tests/fixtures/spectra.production.toml:"
     "email:crates/email/tests/fixtures/beacon.production.toml:"
@@ -110,7 +110,7 @@ done
 bad_otlp='otlp_endpoint = \"http://bad host:4318\"'
 telemetry_rejects=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
-    "dns:crates/mhost-prism/tests/fixtures/prism.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
+    "dns:crates/dns/tests/fixtures/prism.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "tls:crates/tls/tests/fixtures/tlsight.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "http:crates/http/tests/fixtures/spectra.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\nenabled = true\\n$bad_otlp|"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^\\[telemetry\\]\$|[telemetry]\\n$bad_otlp|"

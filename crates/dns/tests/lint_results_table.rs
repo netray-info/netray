@@ -15,7 +15,7 @@
 
 use mhost::lints::CheckResult;
 use mhost::resolver::Lookups;
-use prism::api::check::{lint_lookups, unique_lines};
+use netray_dns::api::check::{lint_lookups, unique_lines};
 use serde_json::{Value, json};
 
 const DOMAIN: &str = "example.com.";

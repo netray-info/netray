@@ -1,6 +1,6 @@
 //! The production config fixture must switch system resolvers off (C7).
 
-use prism::config::Config;
+use netray_dns::config::Config;
 
 fn fixture_path() -> String {
     format!(

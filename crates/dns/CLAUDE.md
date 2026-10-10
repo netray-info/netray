@@ -30,12 +30,12 @@ just adlc-verify                      # fmt-check + clippy + tests + site checks
 just build
 
 # This crate only
-cargo test -p prism                   # Rust tests
+cargo test -p netray-dns                   # Rust tests
 npm test -w prism-frontend            # frontend tests (vitest)
 
 # Development (two terminals)
 npm run dev -w prism-frontend                      # Vite dev server :5173
-netray dns crates/mhost-prism/prism.dev.toml       # the service
+netray dns crates/dns/prism.dev.toml       # the service
 ```
 
 ### Test Guidelines
@@ -160,7 +160,7 @@ Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rule
 
 Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
-Default filter: `info,prism=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `PRISM_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "prism"`.
+Default filter: `info,netray_dns=debug,hyper=warn,h2=warn`. Telemetry config via `[telemetry]` section or `PRISM_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "prism"`.
 
 ## CI/CD
 

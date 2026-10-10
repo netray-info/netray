@@ -1,4 +1,4 @@
-//! `allow_system_resolvers` gates the `@system` completion of `POST /api/parse`.
+//! `allow_system_resolvers`: reported by `/api/config`, enforced on `@system` queries.
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -9,12 +9,12 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
 
-use prism::api::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
-use prism::circuit_breaker::CircuitBreakerRegistry;
-use prism::config::Config;
-use prism::reload::HotState;
-use prism::result_cache::ResultCache;
-use prism::security::IpExtractor;
+use netray_dns::api::{AppState, QUERY_SEMAPHORE_PERMITS, api_router, health_router};
+use netray_dns::circuit_breaker::CircuitBreakerRegistry;
+use netray_dns::config::Config;
+use netray_dns::reload::HotState;
+use netray_dns::result_cache::ResultCache;
+use netray_dns::security::IpExtractor;
 
 fn state_with(allow_system_resolvers: bool) -> AppState {
     let mut config = Config::load(None).expect("default config must be valid");
@@ -34,11 +34,19 @@ fn state_with(allow_system_resolvers: bool) -> AppState {
 fn test_router(state: AppState) -> axum::Router {
     health_router(state.clone())
         .merge(api_router(state))
-        .layer(axum::middleware::from_fn(prism::request_id_middleware))
+        .layer(axum::middleware::from_fn(netray_dns::request_id_middleware))
 }
 
 fn peer() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345)
+}
+
+fn get(uri: &str) -> Request<Body> {
+    Request::builder()
+        .uri(uri)
+        .extension(ConnectInfo::<SocketAddr>(peer()))
+        .body(Body::empty())
+        .unwrap()
 }
 
 fn post_json(uri: &str, body: &str) -> Request<Body> {
@@ -59,42 +67,45 @@ async fn json_of(resp: axum::response::Response) -> (StatusCode, serde_json::Val
     (status, json)
 }
 
-/// (input, allow_system_resolvers, `@system` offered, a non-system server that must still be offered)
-const ROWS: &[(&str, bool, bool, &str)] = &[
-    ("example.com @sy", false, false, ""),
-    ("example.com @sy", true, true, ""),
-    ("example.com @c", false, false, "@cloudflare"),
-    ("example.com ", false, false, "@cloudflare"),
-    ("example.com ", true, true, "@cloudflare"),
-];
+#[tokio::test]
+async fn config_reports_allow_system_resolvers() {
+    for allow in [false, true] {
+        let router = test_router(state_with(allow));
+        let resp = router.oneshot(get("/api/config")).await.unwrap();
+        let (status, json) = json_of(resp).await;
+        assert_eq!(status, StatusCode::OK, "body: {json}");
+        assert_eq!(
+            json["allow_system_resolvers"],
+            serde_json::Value::Bool(allow),
+            "body: {json}"
+        );
+    }
+}
 
 #[tokio::test]
-async fn parse_offers_system_completion_only_when_allowed() {
-    for &(input, allow, expect_system, other) in ROWS {
-        let router = test_router(state_with(allow));
-        let body = serde_json::json!({ "input": input }).to_string();
-        let resp = router
-            .oneshot(post_json("/api/parse", &body))
-            .await
-            .unwrap();
+async fn system_server_is_refused_when_system_resolvers_disabled() {
+    // (label, request) pairs; the policy refuses before any resolver is built.
+    let requests = [
+        ("GET", get("/api/query?q=example.com%20A%20@system")),
+        (
+            "POST",
+            post_json(
+                "/api/query",
+                r#"{"domain":"example.com","record_types":["A"],"servers":["system"]}"#,
+            ),
+        ),
+    ];
+    for (label, req) in requests {
+        let router = test_router(state_with(false));
+        let resp = router.oneshot(req).await.unwrap();
         let (status, json) = json_of(resp).await;
-        assert_eq!(status, StatusCode::OK, "{input:?} allow={allow}: {json}");
-        let labels: Vec<&str> = json["completions"]
-            .as_array()
-            .unwrap_or_else(|| panic!("no completions array: {json}"))
-            .iter()
-            .filter_map(|c| c["label"].as_str())
-            .collect();
-        assert_eq!(
-            labels.contains(&"@system"),
-            expect_system,
-            "{input:?} allow={allow}: labels {labels:?}"
+        assert!(
+            status.is_client_error(),
+            "{label}: status {status}, body: {json}"
         );
-        if !other.is_empty() {
-            assert!(
-                labels.contains(&other),
-                "{input:?} allow={allow}: {other} missing from {labels:?}"
-            );
-        }
+        assert_eq!(
+            json["error"]["code"], "SYSTEM_RESOLVERS_DISABLED",
+            "{label}: body: {json}"
+        );
     }
 }

@@ -13,7 +13,7 @@ netray-model = { workspace = true }
 netray-email = { path = "../email" }
 netray-ip = { path = "../ip" }
 lens = { path = "../lens" }
-prism = { path = "../mhost-prism" }
+netray-dns = { path = "../dns" }
 netray-http = { path = "../http" }
 netray-tls = { path = "../tls" }
 

@@ -47,7 +47,7 @@ pub async fn run(config_arg: Option<String>) {
     // 2. Initialize tracing (with optional OpenTelemetry layer).
     netray_common::telemetry::init_subscriber(
         &config.telemetry,
-        "info,prism=debug,hyper=warn,h2=warn",
+        "info,netray_dns=debug,hyper=warn,h2=warn",
     );
 
     tracing::info!(bind = %config.server.bind, "starting prism");

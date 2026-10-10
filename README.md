@@ -6,7 +6,7 @@ netray.info is a suite of network inspectors, live at [netray.info](https://netr
 
 | Path | What |
 |---|---|
-| `crates/` | the six services (`lens`, `mhost-prism`, `tls`, `http`, `email`, `ip`), each a library with its SolidJS frontend; `common` (shared Rust); `netray` (the binary) |
+| `crates/` | the six services (`lens`, `dns`, `tls`, `http`, `email`, `ip`), each a library with its SolidJS frontend; `common` (shared Rust); `netray` (the binary) |
 | `packages/common-frontend` | shared SolidJS package, an npm workspace member |
 | `site/` | the static site, served by `netray site` |
 | `tests/acceptance` | Playwright acceptance suite against a deployed environment |
@@ -36,7 +36,7 @@ The image contains no data files. In production the ifconfig-rs config points it
 `netray <service> <config>` starts one service (`just build` leaves the binary at `target/release/netray`); the subcommands are `lens`, `dns`, `tls`, `http`, `email` and `ip`. Each crate ships a dev config named `<name>.dev.toml`:
 
 ```sh
-netray dns crates/mhost-prism/prism.dev.toml
+netray dns crates/dns/prism.dev.toml
 netray site --root site          # the static site on 127.0.0.1:8080
 ```
 

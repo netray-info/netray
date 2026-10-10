@@ -218,7 +218,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Dns {
             check_config: Some(path),
             ..
-        } => check_config(&path, prism::config::Config::load),
+        } => check_config(&path, netray_dns::config::Config::load),
         Command::Tls {
             check_config: Some(path),
             ..
@@ -249,7 +249,7 @@ async fn main() -> anyhow::Result<()> {
             }
             lens::run_with(path, registry).await
         }
-        Command::Dns { config, .. } => prism::run(config).await,
+        Command::Dns { config, .. } => netray_dns::run(config).await,
         Command::Tls { config, .. } => netray_tls::run(config).await,
         Command::Http { config, .. } => netray_http::run(config).await,
         Command::Email { config, .. } => netray_email::run(config).await?,

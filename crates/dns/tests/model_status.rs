@@ -1,14 +1,14 @@
 // Mapping tests: mhost lint results map onto the shared netray-model status vocabulary.
 //
 // The orphan rule forbids `From<CheckResult> for Status`, so prism exposes
-// `prism::lint_status`. The exhaustive match below (no wildcard) makes a new
+// `netray_dns::lint_status`. The exhaustive match below (no wildcard) makes a new
 // `CheckResult` variant a compile error here until its mapping is decided.
 //
 // Run with: cargo test --test model_status
 
 use mhost::lints::CheckResult;
+use netray_dns::lint_status;
 use netray_model::Status;
-use prism::lint_status;
 
 /// Expected status per variant. No wildcard arm: a new variant must fail to compile.
 fn expected(r: &CheckResult) -> Status {

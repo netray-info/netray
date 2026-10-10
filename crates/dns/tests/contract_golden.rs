@@ -7,7 +7,7 @@
 // The `/api/check` handler needs live DNS, so the stream is assembled here from prism's real
 // `LintEvent` and `CheckDoneEvent`; the lint results inside are mhost's `CheckResult` values.
 //
-// UPDATE_GOLDEN=1 cargo test -p prism --test contract_golden   writes the golden.
+// UPDATE_GOLDEN=1 cargo test -p netray-dns --test contract_golden   writes the golden.
 
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -17,8 +17,8 @@ use axum::response::sse::{Event, Sse};
 use http_body_util::BodyExt;
 use mhost::lints::{CheckResult, check_caa, check_ns_count, check_spf};
 use mhost::resolver::Lookups;
-use prism::api::{BatchEvent, CheckDoneEvent, LintEvent};
-use prism::record_format;
+use netray_dns::api::{BatchEvent, CheckDoneEvent, LintEvent};
+use netray_dns::record_format;
 
 fn golden_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

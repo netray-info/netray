@@ -2743,6 +2743,7 @@ dependencies = [
  "lens",
  "mime_guess",
  "netray-common",
+ "netray-dns",
  "netray-email",
  "netray-engine",
  "netray-http",
@@ -2750,7 +2751,6 @@ dependencies = [
  "netray-model",
  "netray-tls",
  "percent-encoding",
- "prism",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -2791,6 +2791,42 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "netray-dns"
+version = "0.23.1"
+dependencies = [
+ "arc-swap",
+ "axum",
+ "config",
+ "futures",
+ "governor",
+ "hickory-proto",
+ "http-body-util",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "mhost",
+ "mime_guess",
+ "moka",
+ "netray-common",
+ "netray-model",
+ "rand 0.10.3",
+ "rcgen",
+ "reqwest",
+ "rust-embed",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tower",
+ "tower-http",
+ "tracing",
  "utoipa",
  "uuid",
 ]
@@ -3504,42 +3540,6 @@ checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
 dependencies = [
  "diff",
  "yansi",
-]
-
-[[package]]
-name = "prism"
-version = "0.23.1"
-dependencies = [
- "arc-swap",
- "axum",
- "config",
- "futures",
- "governor",
- "hickory-proto",
- "http-body-util",
- "metrics",
- "metrics-exporter-prometheus",
- "mhost",
- "mime_guess",
- "moka",
- "netray-common",
- "netray-model",
- "rand 0.10.3",
- "rcgen",
- "reqwest",
- "rust-embed",
- "rustls",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "tokio-rustls",
- "tokio-stream",
- "tower",
- "tower-http",
- "tracing",
- "utoipa",
- "uuid",
 ]
 
 [[package]]
