@@ -8,6 +8,7 @@ description = "The netray.info suite as one binary: six services and the static 
 [dependencies]
 netray-common = { workspace = true, features = ["server"] }
 netray-engine = { workspace = true }
+netray-model = { workspace = true }
 
 netray-email = { path = "../email" }
 netray-ip = { path = "../ip" }
@@ -17,9 +18,10 @@ netray-http = { path = "../http" }
 tlsight = { path = "../tlsight" }
 
 axum = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs", "signal"] }
 mime_guess = { workspace = true }
 percent-encoding = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = "0.3"
 clap = { version = "4", features = ["derive"] }

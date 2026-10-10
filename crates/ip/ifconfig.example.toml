@@ -1,7 +1,7 @@
 # ifconfig-rs configuration
 #
 # All values can be overridden via environment variables with the prefix
-# IFCONFIG_ and separator __ (e.g. IFCONFIG_BASE_URL, IFCONFIG_SERVER__BIND).
+# NETRAY_IP_ and separator __ (e.g. NETRAY_IP_BASE_URL, NETRAY_IP_SERVER__BIND).
 
 # Base URL / public domain name, used in curl examples.
 # Default: "localhost"
@@ -81,7 +81,7 @@ base_url = "ip.netray.info"
 # a pattern is excluded from /headers responses. Useful for hiding infrastructure
 # headers injected by hosting providers.
 # Default: [] (no headers filtered)
-# Env: IFCONFIG_FILTERED_HEADERS='["^x-koyeb-", "^cf-"]'
+# Env: NETRAY_IP_FILTERED_HEADERS='["^x-koyeb-", "^cf-"]'
 # filtered_headers = ["^x-koyeb-", "^cf-"]
 
 # Allow ?ip= queries for private and reserved IP ranges (RFC 1918, loopback,
@@ -89,7 +89,7 @@ base_url = "ip.netray.info"
 # the service is not reachable from the public internet.
 # GeoIP returns no data for these IPs; classification type will be "internal".
 # Default: false (private IPs are rejected with 400)
-# Env: IFCONFIG_INTERNAL_MODE=true
+# Env: NETRAY_IP_INTERNAL_MODE=true
 # internal_mode = true
 
 # Watch data file directories for changes and auto-reload enrichment data.
@@ -98,7 +98,7 @@ base_url = "ip.netray.info"
 # enrichment data is reloaded — equivalent to sending SIGHUP.
 # Useful for Kubernetes/Docker deployments where geoipupdate writes new files.
 # Default: false (disabled)
-# Env: IFCONFIG_WATCH_DATA_FILES=true
+# Env: NETRAY_IP_WATCH_DATA_FILES=true
 # watch_data_files = true
 
 [server]
@@ -177,7 +177,7 @@ per_ip_burst = 10
 # Log output format.
 #   "text" -- human-readable, colour-coded (default; best for terminals)
 #   "json" -- structured JSON lines (best for log aggregators: Loki, Dozzle, etc.)
-# Also configurable via: IFCONFIG_TELEMETRY__LOG_FORMAT=json
+# Also configurable via: NETRAY_IP_TELEMETRY__LOG_FORMAT=json
 #log_format = "text"
 
 # Enable OpenTelemetry distributed tracing (OTLP/HTTP export).

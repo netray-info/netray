@@ -466,6 +466,11 @@ impl Config {
                 "invalid configuration: backends.email.url is no longer read; the email section runs in-process, configure it in [modules.email]".to_string(),
             ));
         }
+        if b.ip.url.is_some() {
+            return Err(ConfigError::Message(
+                "invalid configuration: backends.ip.url is no longer read; the IP section runs in-process, configure it in [modules.ip]".to_string(),
+            ));
+        }
         let wave1_ms = b
             .dns
             .timeout_ms
@@ -511,10 +516,7 @@ mod tests {
                     url: Some("http://localhost:8081".to_string()),
                     ..Default::default()
                 },
-                ip: crate::config::BackendConfig {
-                    url: Some("http://localhost:8082".to_string()),
-                    ..Default::default()
-                },
+                ip: crate::config::BackendConfig::default(),
                 http: None,
                 email: None,
             },
@@ -679,13 +681,19 @@ mod tests {
     }
 
     #[test]
+    fn backends_ip_url_is_rejected() {
+        let err = load_toml("[backends.ip]\nurl = \"http://ip.example.com\"\n").unwrap_err();
+        assert!(err.to_string().contains("backends.ip.url"), "got: {err}");
+    }
+
+    #[test]
     fn unread_backend_keys_are_rejected() {
         for key in [
             "max_concurrent = 10",
             "cache_ttl_secs = 300",
             "cache_capacity = 1024",
         ] {
-            let toml = format!("[backends.ip]\nurl = \"http://ip.example.com\"\n{key}\n");
+            let toml = format!("[backends.dns]\nurl = \"http://dns.example.com\"\n{key}\n");
             assert!(load_toml(&toml).is_err(), "{key} must be rejected");
         }
     }

@@ -137,12 +137,37 @@ RED (ea02272): the new and rewired tests failed against the missing module API; 
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R9: crates/ip is netray-ip (data/ moved), NETRAY_IP_ / NETRAY_IP_CONFIG, IFCONFIG_ refused; data image, no-data check, paths, docs follow | open | tests/repo/test_env_prefixes.sh, test_image_data.sh |
-| C2 | R10: ModuleConfig with the data paths, same load semantics, --check-config loads them with a startup_rejects row; Module samples 4+4 sorted public addresses from Facts; translate moved; golden_module; SIGHUP reload | open | crates/ip/tests/module.rs, tests/repo/test_check_config.sh |
-| C3 | R11: lens takes IP from the registry with Facts from the DNS backend; backends/ip.rs and [backends.ip] url gone; goldens unchanged | open | crates/lens/tests/*.rs |
-| C4 | ifconfig-json.json translated equals the IP section of its full-output golden; 9 public + 2 private → 4 IPv4 + 4 IPv6 public sorted | open | crates/ip/tests/module.rs |
-| C5 | [modules.ip] geoip_city_db missing → --check-config and startup refuse; feodo_botnet_ips missing → both start with a warning | open | tests/repo/test_check_config.sh |
-| C6 | IFCONFIG_CONFIG set → netray ip refused naming NETRAY_IP_CONFIG | open | tests/repo/test_env_prefixes.sh |
-| C7 | the release image carries no data file | open | tests/repo/test_image_data.sh |
-| C8 | data file replaced + reload → the next lookup uses the new data | open | crates/ip/tests/module.rs |
-| C9 | full-output and lens_golden unchanged | open | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+| C1 | R9: crates/ip is netray-ip (data/ moved), NETRAY_IP_ / NETRAY_IP_CONFIG, IFCONFIG_ refused; data image, no-data check, paths, docs follow | green | tests/repo/test_env_prefixes.sh, test_image_data.sh |
+| C2 | R10: ModuleConfig with the data paths, same load semantics, --check-config loads them with a startup_rejects row; Module samples 4+4 sorted public addresses from Facts; translate moved; golden_module; SIGHUP reload | green | crates/ip/tests/module.rs, tests/repo/test_check_config.sh |
+| C3 | R11: lens takes IP from the registry with Facts from the DNS backend; backends/ip.rs and [backends.ip] url gone; goldens unchanged | green | crates/lens/tests/*.rs |
+| C4 | ifconfig-json.json translated equals the IP section of its full-output golden; 9 public + 2 private → 4 IPv4 + 4 IPv6 public sorted | green | crates/ip/tests/module.rs |
+| C5 | [modules.ip] geoip_city_db missing → --check-config and startup refuse; feodo_botnet_ips missing → both start with a warning | green | tests/repo/test_check_config.sh |
+| C6 | IFCONFIG_CONFIG set → netray ip refused naming NETRAY_IP_CONFIG | green | tests/repo/test_env_prefixes.sh |
+| C7 | the release image carries no data file | green | tests/repo/test_image_data.sh |
+| C8 | data file replaced + reload → the next lookup uses the new data | green | crates/ip/tests/module.rs |
+| C9 | full-output and lens_golden unchanged | green | crates/lens/tests/lens_full_output.rs, lens_golden.rs |
+
+RED (3f339d2): the new and rewired tests failed against the missing module API; the ip row of `test_env_prefixes.sh` on the `IFCONFIG_` loader.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| rename | 1 (general-purpose, mechanical; `/meta` project name pinned to `ifconfig-rs`) | sonnet | 83409 | 358 |
+| G1 netray-ip | 3 (ifconfig-rs's integration tests need GeoIP data a checkout lacks; not in the gate, which runs `--lib`) | sonnet | 109045 | 242 |
+| G2 lens + binary + SIGHUP | 1 (+ sampling total counts all addresses, as 0.23.1) | sonnet | 107035 | 293 |
+| reader repairs | 4 | sonnet | 59651 | 261 |
+
+### Reader
+
+| class | at | finding | outcome |
+|---|---|---|---|
+| BLOCKER | crates/netray/src/main.rs:215 | the registry (and every data-load warning) was built before lens installed its tracing subscriber; `--check-config` had none | repaired: the binary installs the subscriber first (`lens::init_telemetry`), `--check-config` a stderr one; `test_check_config.sh` greps the warnings |
+| BLOCKER | crates/netray/src/main.rs:149 | an absent or data-less `[modules.ip]` built an IP module with no data: reputation passed for Tor exits and DROP-listed addresses | repaired: no `[modules.ip]` → no IP section and a startup warning; a `[modules.ip]` without both GeoIP databases refuses; `test_check_config.sh` |
+| AMENDMENT | crates/netray/src/main.rs:137 | Phase 1's missing-enrichment warning was lost the same way | repaired with the first blocker |
+| NIT | crates/ip/src/module.rs:56 | lens loaded the user-agent regexes it never reads; a missing file refused startup | repaired: `user_agent_regexes` leaves `ModuleConfig` and the fixture |
+| NIT | crates/netray/src/main.rs:216 | no test covers lens's SIGHUP wiring | accepted: verified by `kill -HUP` ("Enrichment data reloaded successfully"); `module.rs` covers `reload()` |
+
+### Behavioural verification
+
+`just adlc-verify` green; `tests/fixtures/contracts/` unchanged; reader ran `netray lens` and `kill -HUP` on it ("reload triggered", "Enrichment data reloaded successfully").

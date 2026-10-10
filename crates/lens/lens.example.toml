@@ -16,9 +16,23 @@ timeout_ms = 15000
 url = "https://tls.netray.info"
 timeout_ms = 15000
 
+# The IP section runs in-process (module `netray-ip`); `url` is refused.
 [backends.ip]
-url = "https://ip.netray.info"
 timeout_ms = 2000
+
+# [modules.ip]                       # without the table the IP section is off; the data paths of crates/ip, here under the image's data mount
+# geoip_city_db = "/netray/data/GeoLite2-City.mmdb"           # both GeoIP databases are required once the table is set
+# geoip_asn_db = "/netray/data/GeoLite2-ASN.mmdb"
+# tor_exit_nodes = "/netray/data/tor_exit_nodes.txt"
+# cloud_provider_ranges = "/netray/data/cloud_provider_ranges.jsonl"
+# feodo_botnet_ips = "/netray/data/feodo_botnet_ips.txt"       # a missing reputation list only warns
+# vpn_ranges = "/netray/data/vpn_ranges.txt"
+# datacenter_ranges = "/netray/data/datacenter_ranges.txt"
+# bot_ranges = "/netray/data/bot_ranges.jsonl"
+# spamhaus_drop = "/netray/data/spamhaus_drop.txt"
+# cins_army_ips = "/netray/data/cins_army_ips.txt"
+# asn_patterns = "/netray/data/asn_patterns.toml"
+# asn_info = "/netray/data/as_metadata.jsonl"
 
 # The HTTP section runs in-process (module `netray-http`); `url` is refused.
 # [backends.http]

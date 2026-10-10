@@ -15,7 +15,6 @@ use netray_model::Protocol;
 
 use crate::backends::Backend;
 use crate::backends::dns::DnsBackend;
-use crate::backends::ip::IpBackend;
 use crate::backends::tls::TlsBackend;
 use crate::cache::CachedResult;
 use crate::check::CheckOutput;
@@ -69,7 +68,8 @@ impl AppState {
     }
 
     /// Build `AppState` from a validated `Config`; the HTTP and email sections run the
-    /// registry's modules when `[backends.http]` and `[backends.email]` are configured.
+    /// registry's modules when `[backends.http]` and `[backends.email]` are configured, the IP
+    /// section when the registry has an IP module.
     pub fn with_registry(
         config: Config,
         registry: Registry,
@@ -138,13 +138,14 @@ impl AppState {
                 public_url: eco.email_base_url.clone().unwrap_or_default(),
             }));
         }
-        backends.push(Box::new(IpBackend {
-            ip_url: config.backends.ip.url.clone().unwrap_or_default(),
-            public_url: eco.ip_base_url.clone().unwrap_or_default(),
-            timeout: Duration::from_millis(config.backends.ip.timeout_ms),
-            client: http_client.clone(),
-            allow: netray_common::target_policy::is_allowed_target,
-        }));
+        if registry.module(Protocol::Ip).is_some() {
+            backends.push(Box::new(ModuleSection {
+                registry: registry.clone(),
+                protocol: Protocol::Ip,
+                timeout: Duration::from_millis(config.backends.ip.timeout_ms),
+                public_url: eco.ip_base_url.clone().unwrap_or_default(),
+            }));
+        }
 
         let rendered_html = Assets::get("index.html").map(|f| {
             let template = std::str::from_utf8(&f.data).unwrap_or("").to_string();
@@ -209,10 +210,7 @@ mod tests {
                     url: Some("http://localhost:8081".to_string()),
                     ..Default::default()
                 },
-                ip: crate::config::BackendConfig {
-                    url: Some("http://localhost:8082".to_string()),
-                    ..Default::default()
-                },
+                ip: crate::config::BackendConfig::default(),
                 http: None,
                 email: None,
             },
@@ -277,9 +275,18 @@ mod tests {
     fn backends_registered_correctly() {
         let config = test_config();
         let state = AppState::new(config).unwrap();
-        assert_eq!(state.backends.len(), 3);
+        assert_eq!(state.backends.len(), 2);
         assert_eq!(state.backends[0].section(), "dns");
         assert_eq!(state.backends[1].section(), "tls");
+    }
+
+    #[test]
+    fn ip_section_registered_when_module_present() {
+        let registry = Registry::new().with(netray_ip::testing::golden_module(include_str!(
+            "../../../tests/fixtures/contracts/ifconfig-json.json"
+        )));
+        let state = AppState::with_registry(test_config(), registry).unwrap();
+        assert_eq!(state.backends.len(), 3);
         assert_eq!(state.backends[2].section(), "ip");
     }
 
@@ -291,10 +298,9 @@ mod tests {
             "../../../tests/fixtures/contracts/spectra-inspect.json"
         )));
         let state = AppState::with_registry(config, registry).unwrap();
-        assert_eq!(state.backends.len(), 4);
+        assert_eq!(state.backends.len(), 3);
         assert_eq!(state.backends[0].section(), "dns");
         assert_eq!(state.backends[1].section(), "tls");
         assert_eq!(state.backends[2].section(), "http");
-        assert_eq!(state.backends[3].section(), "ip");
     }
 }

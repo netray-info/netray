@@ -2,6 +2,7 @@
 //! in-process and maps its `SectionOutcome` onto lens's backend result.
 
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -10,7 +11,9 @@ use netray_engine::{Domain, Facts, Registry, RunContext, RunOptions, SectionOutc
 use netray_model::{Protocol, Status};
 use serde::Deserialize;
 
-use crate::backends::{Backend, BackendContext, BackendExtra, BackendResult, percent_encode};
+use crate::backends::{
+    Backend, BackendContext, BackendExtra, BackendResult, IpInfo, percent_encode,
+};
 use crate::check::SectionError;
 use crate::scoring::engine::{CheckResult, CheckVerdict};
 
@@ -34,6 +37,14 @@ struct EmailPresentation {
     headline: String,
     grade: Option<String>,
     bucket_na: HashMap<String, String>,
+}
+
+/// The V1 headline and addresses the IP module carries in `presentation`.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct IpPresentation {
+    headline: String,
+    addresses: Vec<IpInfo>,
 }
 
 fn section_name(protocol: Protocol) -> &'static str {
@@ -75,8 +86,21 @@ impl Backend for ModuleSection {
     {
         let domain = domain.to_string();
         let dkim_selectors = context.dkim_selectors.clone();
+        let resolved_ips = context.resolved_ips.clone();
         let section = self.section();
         Box::pin(async move {
+            let mut facts = Facts::default();
+            if self.protocol == Protocol::Ip {
+                if resolved_ips.is_empty() {
+                    return Err(SectionError::NoDnsResults);
+                }
+                for ip in resolved_ips {
+                    match ip {
+                        IpAddr::V4(a) => facts.a.push(a),
+                        IpAddr::V6(aaaa) => facts.aaaa.push(aaaa),
+                    }
+                }
+            }
             let module = self.registry.module(self.protocol).ok_or_else(|| {
                 SectionError::BackendError(format!("no {:?} module registered", self.protocol))
             })?;
@@ -85,7 +109,7 @@ impl Backend for ModuleSection {
                 domain: Domain::new(domain.as_str()),
                 options: RunOptions { dkim_selectors },
             };
-            let outcome = tokio::time::timeout(self.timeout, module.run(&ctx, &Facts::default()))
+            let outcome = tokio::time::timeout(self.timeout, module.run(&ctx, &facts))
                 .await
                 .map_err(|_| {
                     tracing::warn!(service = section, url = %domain, error = "timeout", "backend call failed");
@@ -118,6 +142,15 @@ impl Backend for ModuleSection {
                                 detail_url: format!("{base}/?domain={}", percent_encode(&domain)),
                                 grade: p.grade,
                                 bucket_na: p.bucket_na,
+                            }
+                        }
+                        Protocol::Ip => {
+                            let p: IpPresentation =
+                                serde_json::from_value(presentation).unwrap_or_default();
+                            BackendExtra::Ip {
+                                addresses: p.addresses,
+                                raw_headline: p.headline,
+                                detail_url: self.public_url.clone(),
                             }
                         }
                         _ => {
@@ -154,5 +187,30 @@ impl Backend for ModuleSection {
                 }
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn ip_section_returns_no_dns_results_when_empty() {
+        let section = ModuleSection {
+            registry: Arc::new(Registry::new()),
+            protocol: Protocol::Ip,
+            timeout: Duration::from_secs(5),
+            public_url: "https://ip.example.com".to_string(),
+        };
+        let context = BackendContext {
+            resolved_ips: vec![],
+            dkim_selectors: None,
+            forward_headers: Default::default(),
+        };
+        let result = section.run("example.com", &context).await;
+        assert!(
+            matches!(result, Err(SectionError::NoDnsResults)),
+            "expected NoDnsResults, got: {result:?}"
+        );
     }
 }

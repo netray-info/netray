@@ -130,7 +130,7 @@ acceptance-local *args:
       "tls|tlsight|tlsight.dev.toml|TLSIGHT_SERVER__BIND|TLSIGHT_SERVER__METRICS_BIND|TLSIGHT_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
       "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND|"
       "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND|"
-      "ip|ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|IFCONFIG_SERVER__BIND|IFCONFIG_SERVER__ADMIN_BIND|"
+      "ip|ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_SERVER__BIND|NETRAY_IP_SERVER__ADMIN_BIND|"
     )
     for row in "${rows[@]}"; do
         IFS='|' read -r sub dir cfg bind_var metrics_var extra <<<"$row"

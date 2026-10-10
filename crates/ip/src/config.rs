@@ -1,5 +1,6 @@
 use netray_common::telemetry::TelemetryConfig;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsString;
 
 pub const HARD_CAP_RATE_LIMIT_PER_MINUTE: u32 = 600;
 pub const HARD_CAP_RATE_LIMIT_BURST: u32 = 100;
@@ -228,9 +229,57 @@ impl CacheConfig {
     }
 }
 
+/// The data sources the IP module reads from a `[modules.ip]` table: the data path keys of
+/// [`Config`], same names and same load semantics.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModuleConfig {
+    pub geoip_city_db: Option<String>,
+    pub geoip_asn_db: Option<String>,
+    pub tor_exit_nodes: Option<String>,
+    pub feodo_botnet_ips: Option<String>,
+    pub cins_army_ips: Option<String>,
+    pub cloud_provider_ranges: Option<String>,
+    pub vpn_ranges: Option<String>,
+    pub datacenter_ranges: Option<String>,
+    pub bot_ranges: Option<String>,
+    pub spamhaus_drop: Option<String>,
+    pub asn_patterns: Option<String>,
+    pub asn_info: Option<String>,
+}
+
 impl Config {
+    /// The service config with the module's data paths and every other key at its default.
+    pub fn from_module(module: ModuleConfig) -> Self {
+        let mut cfg: Self = toml::from_str("").expect("an empty config is the defaults");
+        cfg.geoip_city_db = module.geoip_city_db;
+        cfg.geoip_asn_db = module.geoip_asn_db;
+        cfg.tor_exit_nodes = module.tor_exit_nodes;
+        cfg.feodo_botnet_ips = module.feodo_botnet_ips;
+        cfg.cins_army_ips = module.cins_army_ips;
+        cfg.cloud_provider_ranges = module.cloud_provider_ranges;
+        cfg.vpn_ranges = module.vpn_ranges;
+        cfg.datacenter_ranges = module.datacenter_ranges;
+        cfg.bot_ranges = module.bot_ranges;
+        cfg.spamhaus_drop = module.spamhaus_drop;
+        cfg.asn_patterns = module.asn_patterns;
+        cfg.asn_info = module.asn_info;
+        cfg
+    }
+
+    /// Loads the TOML file at `path` (if any), then `NETRAY_IP_<KEY>` env overrides. An
+    /// `IFCONFIG_` variable is refused.
     pub fn load(path: Option<&str>) -> Result<Self, config::ConfigError> {
-        let cfg: Self = netray_common::config::load(path, "IFCONFIG_")?;
+        Self::load_with_env(path, std::env::vars_os())
+    }
+
+    fn load_with_env(
+        path: Option<&str>,
+        env: impl IntoIterator<Item = (OsString, OsString)>,
+    ) -> Result<Self, config::ConfigError> {
+        let env: Vec<(OsString, OsString)> = env.into_iter().collect();
+        netray_common::config::refuse_legacy_prefix("IFCONFIG_", "NETRAY_IP_", &env)?;
+        let cfg: Self = netray_common::config::load_with_env(path, "NETRAY_IP_", env)?;
         cfg.validate()?;
         Ok(cfg)
     }
@@ -369,17 +418,17 @@ mod tests {
     }
 
     // Env-var tests share a mutex to prevent concurrent tests from clobbering
-    // each other's IFCONFIG_* env vars (set_var is process-global).
+    // each other's NETRAY_IP_* env vars (set_var is process-global).
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[test]
     fn env_var_overrides_top_level_field() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: single-threaded test context, guarded by ENV_LOCK mutex
-        unsafe { std::env::set_var("IFCONFIG_BASE_URL", "env-test.example.com") };
+        unsafe { std::env::set_var("NETRAY_IP_BASE_URL", "env-test.example.com") };
         let result = Config::load(None);
         // SAFETY: single-threaded test context, guarded by ENV_LOCK mutex
-        unsafe { std::env::remove_var("IFCONFIG_BASE_URL") };
+        unsafe { std::env::remove_var("NETRAY_IP_BASE_URL") };
         let config = result.unwrap();
         assert_eq!(config.base_url, "env-test.example.com");
     }
@@ -388,10 +437,10 @@ mod tests {
     fn env_var_overrides_nested_field_with_double_underscore() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: single-threaded test context, guarded by ENV_LOCK mutex
-        unsafe { std::env::set_var("IFCONFIG_SERVER__BIND", "0.0.0.0:9191") };
+        unsafe { std::env::set_var("NETRAY_IP_SERVER__BIND", "0.0.0.0:9191") };
         let result = Config::load(None);
         // SAFETY: single-threaded test context, guarded by ENV_LOCK mutex
-        unsafe { std::env::remove_var("IFCONFIG_SERVER__BIND") };
+        unsafe { std::env::remove_var("NETRAY_IP_SERVER__BIND") };
         let config = result.unwrap();
         assert_eq!(config.server.bind, "0.0.0.0:9191");
     }

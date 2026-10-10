@@ -1,8 +1,10 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
-use netray_engine::Registry;
+use netray_engine::{BoxFuture, EvidencePath, Facts, Module, Registry, RunContext, SectionOutcome};
+use netray_model::{CheckId, Protocol};
 
 mod site;
 
@@ -92,14 +94,40 @@ fn check_config<T, E: std::fmt::Display>(
     }
 }
 
+/// The IP module behind a shared handle: the registry owns one reference, the SIGHUP task the
+/// other.
+struct SharedIp(Arc<netray_ip::IpModule>);
+
+impl Module for SharedIp {
+    fn protocol(&self) -> Protocol {
+        self.0.protocol()
+    }
+
+    fn checks(&self) -> &'static [CheckId] {
+        self.0.checks()
+    }
+
+    fn volatile(&self) -> &'static [EvidencePath] {
+        self.0.volatile()
+    }
+
+    fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
+        self.0.run(ctx, facts)
+    }
+}
+
 /// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
 /// does not know is refused, and an absent `[modules.http]` or `[modules.email]` builds the module
-/// on its defaults.
-async fn lens_registry(cfg: &lens::config::Config) -> Result<Registry, String> {
+/// on its defaults. The IP module needs data: an absent `[modules.ip]` leaves the IP section off
+/// (with a warning), a present one must name `geoip_city_db` and `geoip_asn_db`. The IP module is
+/// returned as well, for its data reload.
+async fn lens_registry(
+    cfg: &lens::config::Config,
+) -> Result<(Registry, Option<Arc<netray_ip::IpModule>>), String> {
     if let Some(name) = cfg
         .modules
         .keys()
-        .find(|k| !matches!(k.as_str(), "http" | "email"))
+        .find(|k| !matches!(k.as_str(), "http" | "email" | "ip"))
     {
         return Err(format!("modules.{name}: unknown module"));
     }
@@ -120,7 +148,37 @@ async fn lens_registry(cfg: &lens::config::Config) -> Result<Registry, String> {
     let email = netray_email::EmailModule::new(email_config)
         .await
         .map_err(|e| format!("modules.email: {e}"))?;
-    Ok(Registry::new().with(Box::new(module)).with(Box::new(email)))
+    let mut registry = Registry::new().with(Box::new(module)).with(Box::new(email));
+    let Some(table) = cfg.modules.get("ip").cloned() else {
+        tracing::warn!("modules.ip is not configured: the IP section is off");
+        return Ok((registry, None));
+    };
+    let ip_config: netray_ip::ModuleConfig =
+        table.try_into().map_err(|e| format!("modules.ip: {e}"))?;
+    if ip_config.geoip_city_db.is_none() || ip_config.geoip_asn_db.is_none() {
+        return Err(
+            "modules.ip: geoip_city_db and geoip_asn_db are required when [modules.ip] is set"
+                .into(),
+        );
+    }
+    let ip = Arc::new(
+        netray_ip::IpModule::new(ip_config)
+            .await
+            .map_err(|e| format!("modules.ip: {e}"))?,
+    );
+    registry = registry.with(Box::new(SharedIp(ip.clone())));
+    Ok((registry, Some(ip)))
+}
+
+/// Reloads the IP module's data on every SIGHUP.
+fn reload_ip_on_sighup(ip: Arc<netray_ip::IpModule>) {
+    tokio::spawn(async move {
+        let mut sig = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())
+            .expect("failed to register the SIGHUP handler");
+        while sig.recv().await.is_some() {
+            ip.reload().await;
+        }
+    });
 }
 
 #[tokio::main]
@@ -130,6 +188,10 @@ async fn main() -> anyhow::Result<()> {
             check_config: Some(path),
             ..
         } => {
+            tracing_subscriber::fmt()
+                .with_max_level(tracing::Level::WARN)
+                .with_writer(std::io::stderr)
+                .init();
             let loaded = match lens::config::Config::load(Some(&path)) {
                 Ok(cfg) => lens_registry(&cfg).await.map(drop),
                 Err(e) => Err(e.to_string()),
@@ -163,7 +225,11 @@ async fn main() -> anyhow::Result<()> {
             let path = config.or_else(|| std::env::var("LENS_CONFIG").ok());
             let cfg = lens::config::Config::load(path.as_deref())
                 .map_err(|e| anyhow::anyhow!("failed to load configuration: {e}"))?;
-            let registry = lens_registry(&cfg).await.map_err(|e| anyhow::anyhow!(e))?;
+            lens::init_telemetry(&cfg);
+            let (registry, ip) = lens_registry(&cfg).await.map_err(|e| anyhow::anyhow!(e))?;
+            if let Some(ip) = ip {
+                reload_ip_on_sighup(ip);
+            }
             lens::run_with(path, registry).await
         }
         Command::Dns { config, .. } => prism::run(config).await,

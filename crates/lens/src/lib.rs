@@ -31,6 +31,16 @@ use utoipa_scalar::{Scalar, Servable};
 use netray_common::cors::cors_layer;
 use netray_common::security_headers::{SecurityHeadersConfig, security_headers_layer};
 
+/// Installs the tracing subscriber (with the optional OpenTelemetry layer). The caller installs
+/// it before building the registry, so the module load warnings are logged, and before
+/// [`run_with`], which does not install one.
+pub fn init_telemetry(config: &config::Config) {
+    netray_common::telemetry::init_subscriber(
+        &config.telemetry,
+        "info,lens=debug,hyper=warn,h2=warn",
+    );
+}
+
 pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Registry) {
     // 1. Load config (first arg or LENS_CONFIG env var).
     let config_path = config_arg.or_else(|| std::env::var("LENS_CONFIG").ok());
@@ -38,17 +48,10 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
-    // 2. Init tracing (with optional OpenTelemetry layer).
-    netray_common::telemetry::init_subscriber(
-        &config.telemetry,
-        "info,lens=debug,hyper=warn,h2=warn",
-    );
-
     tracing::info!(
         bind = %config.server.bind,
         dns_url = config.backends.dns.url.as_deref().unwrap_or("disabled"),
         tls_url = config.backends.tls.url.as_deref().unwrap_or("disabled"),
-        ip_url  = config.backends.ip.url.as_deref().unwrap_or("disabled"),
         http_module = config.backends.http.is_some(),
         per_ip_rate = config.rate_limit.per_ip_per_minute,
         per_ip_burst = config.rate_limit.per_ip_burst,

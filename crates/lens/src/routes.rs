@@ -747,10 +747,6 @@ pub async fn ready_handler(State(state): State<AppState>) -> impl IntoResponse {
             "tls".to_string(),
             config.backends.tls.url.clone().unwrap_or_default(),
         ),
-        (
-            "ip".to_string(),
-            config.backends.ip.url.clone().unwrap_or_default(),
-        ),
     ];
 
     let futures: Vec<_> = probes
@@ -2787,8 +2783,7 @@ pub mod tests {
         let seen: Seen = Arc::new(Mutex::new(Vec::new()));
         let seen_ref = seen.clone();
 
-        // One mock serves all three backends; prism (POST /api/check) answers
-        // with an A record so the IP backend runs in wave 2.
+        // One mock serves both backends; prism (POST /api/check) answers with an A record.
         let mock = Router::new().fallback(move |req: Request<Body>| {
             let seen_ref = seen_ref.clone();
             async move {
@@ -2822,7 +2817,6 @@ pub mod tests {
         config.cache.enabled = false;
         config.backends.dns.url = Some(base.clone());
         config.backends.tls.url = Some(base.clone());
-        config.backends.ip.url = Some(base.clone());
         let state = AppState::new(config).unwrap();
         let app = Router::new()
             .route("/api/check/{domain}", get(check_get_handler))
@@ -2835,11 +2829,7 @@ pub mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
 
         let seen = seen.lock().unwrap();
-        for (prefix, label) in [
-            ("/api/check", "prism"),
-            ("/api/inspect?h=", "tlsight"),
-            ("/json?ip=", "ifconfig-rs"),
-        ] {
+        for (prefix, label) in [("/api/check", "prism"), ("/api/inspect?h=", "tlsight")] {
             let (uri, headers) = seen
                 .iter()
                 .find(|(uri, _)| uri.starts_with(prefix))
@@ -3077,11 +3067,11 @@ pub mod tests {
         let mut config = test_config_with_rate_limit(60, 10);
         // Set ecosystem to public URLs
         config.ecosystem = EcosystemConfig {
-            ip_base_url: Some("https://ip.example.com".to_string()),
+            dns_base_url: Some("https://dns.example.com".to_string()),
             ..Default::default()
         };
         // Set backend to internal URL
-        config.backends.ip = crate::config::BackendConfig {
+        config.backends.dns = crate::config::BackendConfig {
             url: Some("http://127.0.0.1:19997".to_string()),
             timeout_ms: 1000,
             ..Default::default()
@@ -3100,67 +3090,16 @@ pub mod tests {
         let bytes = to_bytes(resp.into_body(), 8192).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(
-            json["ecosystem"]["ip_base_url"], "https://ip.example.com",
+            json["ecosystem"]["dns_base_url"], "https://dns.example.com",
             "ecosystem should use public URL"
         );
 
         // The backend config should use the internal URL
         assert_eq!(
-            state.config.backends.ip.url.as_deref(),
+            state.config.backends.dns.url.as_deref(),
             Some("http://127.0.0.1:19997"),
             "backend should use internal URL"
         );
-    }
-
-    // T10: Lens IP backend uses /json path
-    #[tokio::test]
-    async fn ip_backend_uses_json_path() {
-        use crate::backends::ip::check_ip;
-        use std::sync::Arc;
-
-        let received_path = Arc::new(tokio::sync::Mutex::new(String::new()));
-        let path_ref = received_path.clone();
-
-        let app = axum::Router::new().route(
-            "/json",
-            axum::routing::get(
-                move |axum::extract::Query(params): axum::extract::Query<
-                    std::collections::HashMap<String, String>,
-                >| {
-                    let path_ref = path_ref.clone();
-                    async move {
-                        let ip = params.get("ip").cloned().unwrap_or_default();
-                        *path_ref.lock().await = format!("/json?ip={ip}");
-                        axum::Json(serde_json::json!({
-                            "network": { "type": "cloud", "org": "Example Corp", "is_spamhaus": false, "is_c2": false, "is_tor": false, "is_vpn": false },
-                            "location": { "city": "Berlin", "country": "Germany" }
-                        }))
-                    }
-                },
-            ),
-        );
-
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            axum::serve(listener, app).await.ok();
-        });
-
-        let client = reqwest::Client::new();
-        let ip: std::net::IpAddr = "1.2.3.4".parse().unwrap();
-        let result = check_ip(
-            &client,
-            &format!("http://{addr}"),
-            &[ip],
-            std::time::Duration::from_secs(5),
-            &Default::default(),
-            netray_common::target_policy::is_allowed_target,
-        )
-        .await;
-
-        assert!(result.is_ok(), "check_ip should succeed");
-        let path = received_path.lock().await;
-        assert_eq!(*path, "/json?ip=1.2.3.4", "should call /json?ip=<addr>");
     }
 
     // --- dkim_selectors validation ---

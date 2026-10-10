@@ -12,11 +12,14 @@ pub mod handlers;
 #[cfg(test)]
 mod ip_cache_tests;
 pub mod middleware;
+pub mod module;
 pub mod negotiate;
 #[cfg(test)]
 mod rate_limit_exempt_tests;
 pub mod routes;
 pub mod state;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 use arc_swap::ArcSwap;
 use axum::Router;
@@ -37,7 +40,8 @@ use tower_http::cors::AllowOrigin;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
-pub use config::Config;
+pub use config::{Config, ModuleConfig};
+pub use module::{IpModule, translate};
 pub use state::ProjectInfo;
 
 /// Middleware that requires a valid `Authorization: Bearer <token>` header.
@@ -226,7 +230,8 @@ pub async fn build_app(config: &Config) -> AppBundle {
     }
 }
 
-pub async fn run(config_path: Option<String>, print_config: bool, check: bool) {
+pub async fn run(config_arg: Option<String>, print_config: bool, check: bool) {
+    let config_path = config_arg.or_else(|| std::env::var("NETRAY_IP_CONFIG").ok());
     let config = Config::load(config_path.as_deref()).expect("Failed to load config");
 
     netray_common::telemetry::init_subscriber(&config.telemetry, "info,netray_ip=debug,hyper=warn,h2=warn,mhost=warn");

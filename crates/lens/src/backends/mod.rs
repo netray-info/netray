@@ -1,5 +1,4 @@
 pub mod dns;
-pub mod ip;
 pub mod sse;
 pub mod tls;
 
@@ -32,7 +31,7 @@ pub enum BackendExtra {
         server_network_type: Option<String>,
     },
     Ip {
-        addresses: Vec<ip::IpInfo>,
+        addresses: Vec<IpInfo>,
         raw_headline: String,
         detail_url: String,
     },
@@ -43,6 +42,15 @@ pub enum BackendExtra {
         /// Bucket name → reason for buckets that are not-applicable (e.g. no MX records).
         bucket_na: HashMap<String, String>,
     },
+}
+
+/// One enriched public address of the IP section.
+#[derive(Clone, Debug, serde::Deserialize)]
+pub struct IpInfo {
+    pub ip: IpAddr,
+    pub org: Option<String>,
+    pub geo: Option<String>,
+    pub network_type: String,
 }
 
 #[derive(Clone, Debug)]

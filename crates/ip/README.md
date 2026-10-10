@@ -248,7 +248,7 @@ enabled = true
 ttl_secs = 300
 ```
 
-Override any value with `IFCONFIG_` env vars (`__` for nested sections): `IFCONFIG_SERVER__BIND=0.0.0.0:8080`.
+Override any value with `NETRAY_IP_` env vars (`__` for nested sections): `NETRAY_IP_SERVER__BIND=0.0.0.0:8080`.
 
 Data files live in `data/`. Acquire them with `just ifconfig-data` (requires a free MaxMind license for GeoLite2).
 

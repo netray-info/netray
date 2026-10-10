@@ -2330,6 +2330,7 @@ dependencies = [
  "netray-email",
  "netray-engine",
  "netray-http",
+ "netray-ip",
  "netray-model",
  "regex",
  "reqwest",
@@ -2745,11 +2746,13 @@ dependencies = [
  "netray-engine",
  "netray-http",
  "netray-ip",
+ "netray-model",
  "percent-encoding",
  "prism",
  "tlsight",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2879,6 +2882,7 @@ dependencies = [
  "axum-extra",
  "config",
  "criterion",
+ "futures",
  "governor",
  "http-body-util",
  "httpdate",
@@ -2895,6 +2899,8 @@ dependencies = [
  "mime_guess",
  "moka",
  "netray-common",
+ "netray-engine",
+ "netray-model",
  "notify",
  "pretty_assertions",
  "regex",

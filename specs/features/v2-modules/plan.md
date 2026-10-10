@@ -59,3 +59,21 @@ G1: C1, C2, C4, C5 (engine `TimedOut` + netray-email) · G2: C3, C6, C7 (lens an
 - `crates/lens/src/modules.rs`: the adapter takes any protocol; email presentation → `BackendExtra::Email`; `TimedOut` → `SectionError::Timeout`, with the WARN log.
 - `crates/lens/src/config.rs` refuses `backends.email.url`; `state.rs` email section from the registry; delete `backends/email.rs` and its uses; lens dev/example configs; dev-dep `netray-email` with `testing`.
 - `crates/netray`: `lens_registry` builds `EmailModule` (async) from `[modules.email]`.
+
+## Phase 3 — IP module
+
+## Groups
+
+G1: C1, C2, C4, C6, C7, C8 (netray-ip) · G2: C3, C5, C9 (lens and the binary, SIGHUP). Orchestrator-written, the Phase 1 shape.
+
+## Plan
+
+### G1 — netray-ip
+- `crates/ip/src/config.rs`: refuse `IFCONFIG_`, load `NETRAY_IP_`; `ModuleConfig` with the data path keys.
+- `crates/ip/src/module.rs`: `translate` ported verbatim from `crates/lens/src/backends/ip.rs`; `IpModule` (`async new` loading `EnrichmentContext` with the same refuse/warn semantics, `ArcSwap` + `reload()`, `DnsCache`, sampling 4+4 sorted public addresses from `Facts` via `is_allowed_target`, `get_ifconfig` with no reverse DNS).
+- `crates/ip/src/testing.rs`, `lib.rs` exports and `run()` reading `NETRAY_IP_CONFIG`; Cargo: `netray-engine`, feature `testing`, `[[test]] module`.
+
+### G2 — lens and the binary
+- `crates/lens/src/modules.rs`: `Facts.a`/`aaaa` from `BackendContext.resolved_ips`; IP presentation → `BackendExtra::Ip`, `detail_url` as before.
+- `crates/lens/src/config.rs` refuses `backends.ip.url`; `state.rs` IP section from the registry; delete `backends/ip.rs` and its uses; lens dev/example configs; dev-dep `netray-ip` with `testing`.
+- `crates/netray`: `lens_registry` builds `IpModule` from `[modules.ip]`, keeps an `Arc` and reloads it on SIGHUP.

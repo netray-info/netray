@@ -48,8 +48,8 @@ Request → CompressionLayer → request_id → record_metrics → TraceLayer (r
 
 Key modules:
 - `src/lib.rs` — Module hub, `build_app()` returns `AppBundle` (main app + optional admin app), installs Prometheus metrics recorder, configures middleware stack (compression, request ID, metrics, tracing, CORS)
-- `src/main.rs` — tokio entry point, config loading, `--print-config` flag, `IFCONFIG_LOG_FORMAT=json` support, optional admin port, SIGHUP reload, optional filesystem watcher (`watch_data_files`), graceful shutdown
-- `src/config.rs` — `Config` struct (derives `Serialize` + `Deserialize`) loaded from config file + `IFCONFIG_` env vars via `netray_common::config::load`; every config struct is `deny_unknown_fields`
+- `src/main.rs` — tokio entry point, config loading, `--print-config` flag, `NETRAY_IP_LOG_FORMAT=json` support, optional admin port, SIGHUP reload, optional filesystem watcher (`watch_data_files`), graceful shutdown
+- `src/config.rs` — `Config` struct (derives `Serialize` + `Deserialize`) loaded from config file + `NETRAY_IP_` env vars via `netray_common::config::load`; every config struct is `deny_unknown_fields`
 - `src/state.rs` — `AppState` wrapping Arc'd backends (GeoIP, UA parser, Tor nodes); `KeyedRateLimiter` uses `StateInformationMiddleware` for burst-capacity tracking; `trusted_proxies: Arc<Vec<IpNetwork>>` for CIDR-aware XFF parsing
 - `src/backend/mod.rs` — Core logic: `get_ifconfig()` orchestrates GeoIP, reverse DNS, UA parsing, network classification
 - `src/backend/user_agent.rs` — UA parsing wrapper around `uaparser`
@@ -122,7 +122,7 @@ Build: `cd frontend && npm run build` (outputs to `frontend/dist/`).
 ## Configuration
 
 Config files: `ifconfig.dev.toml` (local dev), `ifconfig.example.toml` (all options documented).
-Runtime config via a TOML file with `IFCONFIG_` env var overrides (`_` separates prefix from key, `__` separates nested sections):
+Runtime config via a TOML file with `NETRAY_IP_` env var overrides (`_` separates prefix from key, `__` separates nested sections):
 
 ```toml
 base_url = "localhost"
@@ -164,7 +164,7 @@ max_entries = 1024
 
 `watch_data_files = true` enables filesystem watcher for auto-reload of data files (alternative to SIGHUP).
 
-Env var examples: `IFCONFIG_SERVER__BIND=0.0.0.0:8080`, `IFCONFIG_BASE_URL=ip.netray.info`, `IFCONFIG_SERVER__ADMIN_TOKEN=secret`.
+Env var examples: `NETRAY_IP_SERVER__BIND=0.0.0.0:8080`, `NETRAY_IP_BASE_URL=ip.netray.info`, `NETRAY_IP_SERVER__ADMIN_TOKEN=secret`.
 Print effective config and exit: `--print-config` flag.
 Validate all configured data files and exit: `--check` flag (exit 0 = all files ok, exit 1 = one or more failed). Useful in deploy scripts and container startup checks.
 Validate a config file without starting: `netray ip --check-config <path>` (exit 0 and `config ok: <path>`; exit 1 with the error for an unknown key, a missing file or a value startup rejects). It does not touch the data files; `--check` covers those.
@@ -181,7 +181,7 @@ Rules: [`specs/rules/architecture-rules.md`](../../specs/rules/architecture-rule
 
 Rules: [`specs/rules/logging-rules.md`](../../specs/rules/logging-rules.md). Follow those rules when modifying tracing init, log filters, or `[telemetry]` config.
 
-Default filter: `info,netray_ip=debug,hyper=warn,h2=warn,mhost=warn`. Telemetry config via `[telemetry]` section or `IFCONFIG_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "ifconfig"`.
+Default filter: `info,netray_ip=debug,hyper=warn,h2=warn,mhost=warn`. Telemetry config via `[telemetry]` section or `NETRAY_IP_TELEMETRY__*` env vars. Production uses `log_format = "json"` and `service_name = "ifconfig"`.
 
 ## CI/CD
 

@@ -18,8 +18,11 @@ axum-extra = { workspace = true, features = ["typed-header"] }
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
 config = { workspace = true }
+futures = { workspace = true }
 mhost = { workspace = true }
 governor = { workspace = true }
+netray-engine = { workspace = true }
+netray-model = { workspace = true }
 netray-common = { workspace = true, features = ["schema", "middleware", "server", "spa", "otel", "cors"] }
 httpdate = "1"
 ip_network = { workspace = true }
@@ -45,6 +48,9 @@ tracing = { workspace = true }
 uaparser = "0.6"
 utoipa = { workspace = true, features = ["axum_extras"] }
 
+[features]
+testing = []
+
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
 http-body-util = { workspace = true }
@@ -52,6 +58,11 @@ hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
 insta = { version = "1", features = ["json", "yaml", "toml"] }
 pretty_assertions = "1.4.0"
 tower = { workspace = true, features = ["util"] }
+
+[[test]]
+name = "module"
+path = "tests/module.rs"
+required-features = ["testing"]
 
 # Explicit test binary so admin tests always run in their own process.
 # The Prometheus metrics recorder is a global singleton; declaring admin as a
