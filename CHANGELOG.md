@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- lens metrics for admission planning: `lens_check_requests_total{result}` (`fresh`, `cache_hit`, `rate_limited`), `lens_runs_in_flight`, `lens_run_duration_seconds` and `lens_client_hourly_runs` (fresh runs per client per hour, as a distribution; no client address is exported).
+- lens's badge and rate-limit counters (`lens_badge_requests_total`, `lens_rate_limit_hits_total`) exist at zero from startup.
+
 ## [0.23.0] - 2026-10-09
 
 Grades change in this release. Old snapshots keep the grade they were stored with.

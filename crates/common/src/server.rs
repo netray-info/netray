@@ -32,12 +32,31 @@ pub async fn shutdown_signal() {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "prometheus")]
-pub use prometheus_server::serve_metrics;
+pub use prometheus_server::{metrics_recorder, serve_metrics, serve_metrics_with};
 
 #[cfg(feature = "prometheus")]
 mod prometheus_server {
     use axum::Router;
+    use metrics_exporter_prometheus::Matcher;
     use std::net::SocketAddr;
+
+    /// Build, without installing, a Prometheus recorder. Each `(name, buckets)` entry
+    /// makes the histogram `name` render with those buckets; an entry with an empty
+    /// bucket slice is skipped (the exporter rejects it), so that histogram stays a summary.
+    pub fn metrics_recorder(
+        buckets: &[(&str, &[f64])],
+    ) -> metrics_exporter_prometheus::PrometheusRecorder {
+        let mut builder = metrics_exporter_prometheus::PrometheusBuilder::new();
+        for (name, bounds) in buckets {
+            if bounds.is_empty() {
+                continue;
+            }
+            builder = builder
+                .set_buckets_for_metric(Matcher::Full((*name).to_string()), bounds)
+                .expect("bucket slice is non-empty");
+        }
+        builder.build_recorder()
+    }
 
     /// Bind a metrics-only HTTP server on the given address.
     /// Exposes a single `/metrics` route.
@@ -46,8 +65,22 @@ mod prometheus_server {
         addr: SocketAddr,
         shutdown: tokio::sync::watch::Receiver<bool>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let builder = metrics_exporter_prometheus::PrometheusBuilder::new();
-        let handle = builder.install_recorder()?;
+        serve_metrics_with(addr, shutdown, &[], || {}).await
+    }
+
+    /// Like [`serve_metrics`], with per-histogram `buckets` (see [`metrics_recorder`]).
+    /// `after_install` runs once the recorder is the global recorder, before the
+    /// server binds, so callers can register metric descriptions and zero-initialise series.
+    pub async fn serve_metrics_with(
+        addr: SocketAddr,
+        shutdown: tokio::sync::watch::Receiver<bool>,
+        buckets: &[(&str, &[f64])],
+        after_install: impl FnOnce() + Send,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let recorder = metrics_recorder(buckets);
+        let handle = recorder.handle();
+        metrics::set_global_recorder(recorder)?;
+        after_install();
 
         let app = Router::new().route(
             "/metrics",

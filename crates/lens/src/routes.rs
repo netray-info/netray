@@ -1095,6 +1095,7 @@ async fn run_check_handler(
 
     // 2. Rate limit.
     if let Err(e) = check_rate_limit(&state.per_ip_limiter, &state.global_limiter, client_ip) {
+        crate::metrics::count_request("rate_limited");
         return e.into_response();
     }
 
@@ -1105,6 +1106,7 @@ async fn run_check_handler(
         && let Some(cached) = cache.get(&key).await
         && is_fresh(&cached, state.config.cache.ttl_seconds)
     {
+        crate::metrics::count_request("cache_hit");
         return if sync {
             sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
         } else {
@@ -1113,6 +1115,10 @@ async fn run_check_handler(
     }
 
     // 4. Run check.
+    crate::metrics::count_request("fresh");
+    state.client_runs.record(client_ip);
+    let run_guard = crate::metrics::RunGuard::new();
+    let run_started = std::time::Instant::now();
     let output = run_check_with_input(
         &state,
         CheckInput {
@@ -1123,6 +1129,8 @@ async fn run_check_handler(
         },
     )
     .await;
+    crate::metrics::observe_run(run_started.elapsed());
+    drop(run_guard);
     let duration_ms = output.duration_ms;
     let domain_out = output.domain.clone();
 
