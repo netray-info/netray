@@ -1,6 +1,6 @@
 # Spec: v2 catalogue
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-10
 
 ## Goal
