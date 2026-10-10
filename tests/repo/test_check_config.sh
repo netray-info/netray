@@ -196,13 +196,12 @@ for row in "${module_rejects[@]}"; do
     grep -qF "$key" <<<"$out" || fail "lens: $label error does not name '$key' ($out)"
 done
 
-# V2 Phase 3, C5: `[modules.ip]` loads its data at `--check-config`. A configured IP section
-# must name `geoip_city_db` or `geoip_asn_db`: a missing database file, a list-only section and
-# an empty table all refuse and the output names `geoip_city_db`. All rows run on the data-free
-# copy with a `[modules.ip]` appended. ("A missing optional list only warns" is the unit test
-# crates/ip/tests/module_data.rs: a config naming both GeoIP databases cannot load offline.)
+# V2 Phase 3, C5: a configured IP section must name both `geoip_city_db` and `geoip_asn_db`:
+# a list-only section and an empty table refuse at `--check-config` and the output names
+# `geoip_city_db`. All rows run on the data-free copy with a `[modules.ip]` appended.
+# (specs/features/lens-check-config-data: `--check-config` checks config only, as `netray ip`
+# does; data files are checked at startup, below.)
 ip_data_rows=(
-    "missing city db|geoip_city_db = \"/nonexistent.mmdb\"\ngeoip_asn_db = \"/nonexistent-asn.mmdb\""
     "list only|feodo_botnet_ips = \"/nonexistent.txt\""
     "empty table|"
 )
@@ -216,6 +215,26 @@ for row in "${ip_data_rows[@]}"; do
     [ "$rc" -eq 1 ] || fail "lens: [modules.ip] $label exited $rc, expected 1 ($out)"
     grep -qF 'geoip_city_db' <<<"$out" || fail "lens: [modules.ip] $label error does not name geoip_city_db ($out)"
 done
+
+# specs/features/lens-check-config-data: both GeoIP keys at missing paths pass the config
+# check (no data is read), and lens's startup refuses them, naming the key.
+ipfiles="$tmp/lens.ipfiles.toml"
+{ cat "$lens_nodata"; printf '\n[modules.ip]\ngeoip_city_db = "/nonexistent.mmdb"\ngeoip_asn_db = "/nonexistent-asn.mmdb"\n'; } >"$ipfiles"
+run_check lens "$ipfiles"
+[ "$rc" -eq 0 ] || fail "lens: --check-config with missing GeoIP files exited $rc, expected 0 ($out)"
+startup_out=$(perl -e 'alarm 20; exec @ARGV' "$bin" lens "$ipfiles" 2>&1 </dev/null)
+startup_rc=$?
+[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with missing GeoIP files did not refuse (rc $startup_rc)"
+grep -qF 'geoip_city_db' <<<"$startup_out" || fail "lens: startup refusal does not name geoip_city_db ($startup_out)"
+
+# A GeoIP file that exists but does not parse: startup refuses and names the key too.
+: >"$tmp/empty-city.mmdb"; : >"$tmp/empty-asn.mmdb"
+ipbad="$tmp/lens.ipbad.toml"
+{ cat "$lens_nodata"; printf '\n[modules.ip]\ngeoip_city_db = "%s"\ngeoip_asn_db = "%s"\n' "$tmp/empty-city.mmdb" "$tmp/empty-asn.mmdb"; } >"$ipbad"
+startup_out=$(perl -e 'alarm 20; exec @ARGV' "$bin" lens "$ipbad" 2>&1 </dev/null)
+startup_rc=$?
+[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with an unparsable GeoIP file did not refuse (rc $startup_rc)"
+grep -qF 'geoip_city_db' <<<"$startup_out" || fail "lens: unparsable GeoIP refusal does not name geoip_city_db ($startup_out)"
 
 # V2 Phase 3: an unconfigured section is off, and --check-config says so (exit stays 0).
 run_check lens "$lens_nodata"

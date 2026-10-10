@@ -63,6 +63,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **A new check id needs its texts in lens**: `fix_for` and `guide_url_for` (`routes.rs`), the snapshot labels (`snapshot/render.rs`) and `CHECK_LABELS`/`CHECK_DESCRIPTIONS` (frontend `checkMeta.ts`); the `fix_for` test lists names by hand.
 - **report.md criteria statuses** are `green`, `already_implemented` or `test-unwritable`; any other keeps `adlc next` on implement. Drop a criterion whose scenario left the spec.
 - **Startup rejects are checked.** A new startup `.expect`/`panic!` on a config value needs a `validate()` rule and a `startup_rejects` row in `tests/repo/test_check_config.sh`.
+- **Data files are checked at startup, not by `--check-config`.** Data files named in config (lens's `[modules.ip]` GeoIP databases, as `netray ip`) are read at startup; the config check parses the table and its keys only.
 - **Layer order**, outermost first: concurrency limit, `request_id`, security headers, CORS, body limit, trace, compression — so preflights and 413s carry the request id and headers.
 - **`start_bg` never in a subshell**: the EXIT trap of `tests/repo/lib/netray.sh` kills only PIDs recorded in the parent shell.
 - **`just acceptance-local`** starts the stack on free ports (`LOCAL_<NAME>_URL`); never assume 8000 or 8080 are free.

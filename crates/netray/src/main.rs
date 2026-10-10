@@ -137,9 +137,12 @@ impl<T: FactsProvider> FactsProvider for Shared<T> {
 /// does not know is refused, and an absent `[modules.http]`, `[modules.email]`, `[modules.tls]` or
 /// `[modules.dns]` builds the module on its defaults. The IP module needs data: an absent `[modules.ip]` leaves the IP section off
 /// (with a warning), a present one must name `geoip_city_db` and `geoip_asn_db`. The IP module is
-/// returned as well, for its data reload.
+/// returned as well, for its data reload. With `startup` false (`--check-config`) the IP table is
+/// parsed and its keys checked, but the data files are neither checked nor read and no IP module
+/// is built.
 async fn lens_registry(
     cfg: &lens::config::Config,
+    startup: bool,
 ) -> Result<(Registry, Option<Arc<netray_ip::IpModule>>), String> {
     if let Some(name) = cfg
         .modules
@@ -214,6 +217,9 @@ async fn lens_registry(
                 .into(),
         );
     }
+    if !startup {
+        return Ok((registry, None));
+    }
     for (key, path) in [
         ("geoip_city_db", &ip_config.geoip_city_db),
         ("geoip_asn_db", &ip_config.geoip_asn_db),
@@ -256,7 +262,7 @@ async fn main() -> anyhow::Result<()> {
                 .with_writer(std::io::stderr)
                 .init();
             let loaded = match lens::config::Config::load(Some(&path)) {
-                Ok(cfg) => lens_registry(&cfg).await.map(drop),
+                Ok(cfg) => lens_registry(&cfg, false).await.map(drop),
                 Err(e) => Err(e.to_string()),
             };
             check_config(&path, |_| loaded)
@@ -289,7 +295,9 @@ async fn main() -> anyhow::Result<()> {
             let cfg = lens::config::Config::load(path.as_deref())
                 .map_err(|e| anyhow::anyhow!("failed to load configuration: {e}"))?;
             lens::init_telemetry(&cfg);
-            let (registry, ip) = lens_registry(&cfg).await.map_err(|e| anyhow::anyhow!(e))?;
+            let (registry, ip) = lens_registry(&cfg, true)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
             if let Some(ip) = ip {
                 reload_ip_on_sighup(ip);
             }
