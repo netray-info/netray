@@ -10,10 +10,13 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+mod common;
+
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::http::{StatusCode, header};
 use axum::routing::{get, post};
+use common::http_registry;
 use futures::StreamExt;
 use lens::check::{CheckInput, CheckOutput, SectionError, run_check_with_deadline};
 use lens::config::{
@@ -120,7 +123,6 @@ impl<T: axum::response::IntoResponse> IntoResponse_ for T {
 struct Setup {
     dns: Behaviour,
     tls: Behaviour,
-    http: Behaviour,
     email: Behaviour,
     timeouts_ms: [u64; 5], // dns, tls, http, email, ip
 }
@@ -130,7 +132,6 @@ impl Setup {
         Self {
             dns: Behaviour::Golden("prism.sse"),
             tls: Behaviour::Golden("tlsight-inspect.json"),
-            http: Behaviour::Golden("spectra-inspect.json"),
             email: Behaviour::Golden("beacon.sse"),
             timeouts_ms: [5000, 5000, 5000, 5000, 2000],
         }
@@ -173,10 +174,11 @@ async fn state(s: Setup) -> AppState {
                 .await,
                 t[4],
             ),
-            http: Some(backend(
-                stub("/api/inspect", false, "application/json", s.http).await,
-                t[2],
-            )),
+            // The HTTP section runs in-process; only its deadline comes from the config.
+            http: Some(BackendConfig {
+                timeout_ms: t[2],
+                ..Default::default()
+            }),
             email: Some(backend(
                 stub("/inspect", true, "text/event-stream", s.email).await,
                 t[3],
@@ -197,10 +199,12 @@ async fn state(s: Setup) -> AppState {
         scoring: ScoringConfig::default(),
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
+        modules: Default::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),
     };
-    AppState::new(config).expect("state builds")
+    AppState::with_registry(config, http_registry(Some("spectra-inspect.json")))
+        .expect("state builds")
 }
 
 fn input() -> CheckInput {

@@ -1,9 +1,10 @@
-// Contract test: lens parses the goldens its DNS, TLS and HTTP backends write.
+// Contract test: lens parses the goldens its DNS and TLS backends write; `netray_http`
+// translates the HTTP golden (the HTTP section runs in-process).
 //
 // Each backend's own `tests/contract_golden.rs` writes its golden under
 // `tests/fixtures/contracts/` from its real response types. Here a local HTTP server
 // serves the committed golden at the path and method lens calls, and lens's public
-// `check_dns` / `check_tls` / `check_http` must produce checks and no error, with values
+// `check_dns` / `check_tls` must produce checks and no error, with values
 // that come from the golden rather than defaults.
 
 use std::net::SocketAddr;
@@ -13,11 +14,13 @@ use std::time::Duration;
 use axum::Router;
 use axum::http::header;
 use axum::routing::{get, post};
-use lens::backends::BackendExtra;
 use lens::backends::dns::check_dns;
-use lens::backends::http::check_http;
 use lens::backends::tls::check_tls;
 use lens::scoring::engine::CheckVerdict;
+use netray_engine::SectionOutcome;
+use netray_http::inspect::assembler::InspectResponse;
+use netray_http::translate;
+use netray_model::Status;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -134,61 +137,40 @@ async fn lens_parses_tlsight_golden() {
     );
 }
 
-#[tokio::test]
-async fn lens_parses_spectra_golden() {
-    let body = golden("spectra-inspect.json");
-    let app = Router::new().route(
-        "/api/inspect",
-        get(move || {
-            let body = body.clone();
-            async move { ([(header::CONTENT_TYPE, "application/json")], body) }
-        }),
-    );
-    let url = serve(app).await;
+#[test]
+fn netray_http_translates_spectra_golden() {
+    let resp: InspectResponse = serde_json::from_str(&golden("spectra-inspect.json"))
+        .expect("netray-http must decode spectra's golden");
 
-    let result = check_http(
-        &reqwest::Client::new(),
-        &url,
-        "example.com",
-        TIMEOUT,
-        &reqwest::header::HeaderMap::new(),
-    )
-    .await
-    .expect("lens must parse spectra's golden without a section error");
+    let (checks, presentation) = match translate(&resp) {
+        SectionOutcome::Measured {
+            checks,
+            presentation,
+        } => (checks, presentation),
+        other => panic!("expected Measured, got {other:?}"),
+    };
 
     assert!(
-        !result.checks.is_empty(),
-        "no checks parsed from spectra's golden"
+        !checks.is_empty(),
+        "no checks translated from spectra's golden"
     );
-    let redirect = result
-        .checks
-        .iter()
-        .find(|c| c.name == "https_redirect")
-        .unwrap();
-    assert_eq!(redirect.verdict, CheckVerdict::Pass);
-    let headers = result
-        .checks
-        .iter()
-        .find(|c| c.name == "security_headers")
-        .unwrap();
-    assert_eq!(headers.verdict, CheckVerdict::Warn);
+    let check = |id: &str| {
+        checks
+            .iter()
+            .find(|c| c.id.to_string() == id)
+            .unwrap_or_else(|| panic!("check {id} missing"))
+    };
+    assert_eq!(check("http.https_redirect").status, Status::Pass);
+    let headers = check("http.security_headers");
+    assert_eq!(headers.status, Status::Warn);
     assert!(
         headers
-            .messages
+            .findings
             .iter()
             .any(|m| m.contains("Content-Security-Policy")),
-        "messages {:?} do not come from the golden's csp check",
-        headers.messages
+        "findings {:?} do not come from the golden's csp check",
+        headers.findings
     );
-    match result.extra {
-        BackendExtra::Http {
-            status_code,
-            server_org,
-            ..
-        } => {
-            assert_eq!(status_code, Some(200));
-            assert_eq!(server_org.as_deref(), Some("Example Hosting"));
-        }
-        _ => panic!("expected BackendExtra::Http"),
-    }
+    assert_eq!(presentation["status_code"], 200);
+    assert_eq!(presentation["server_org"], "Example Hosting");
 }

@@ -15,12 +15,15 @@ use axum::http::header;
 use axum::routing::{get, post};
 use lens::backends::dns::check_dns;
 use lens::backends::email::EmailBackend;
-use lens::backends::http::check_http;
 use lens::backends::ip::check_ip;
 use lens::backends::tls::check_tls;
 use lens::backends::{Backend, BackendContext};
 use lens::scoring::engine::CheckVerdict;
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
+use netray_engine::SectionOutcome;
+use netray_http::inspect::assembler::InspectResponse;
+use netray_http::translate;
+use netray_model::Status;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 const COUNTER: &str = "lens_unknown_verdict_total";
@@ -99,13 +102,6 @@ async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>,
         "tls" => {
             let url = stub("/api/inspect", false, "application/json", body).await;
             check_tls(&client, &url, "example.com", TIMEOUT, &fwd)
-                .await
-                .map(|r| pairs(&r.checks))
-                .map_err(|e| format!("{e:?}"))
-        }
-        "http" => {
-            let url = stub("/api/inspect", false, "application/json", body).await;
-            check_http(&client, &url, "example.com", TIMEOUT, &fwd)
                 .await
                 .map(|r| pairs(&r.checks))
                 .map_err(|e| format!("{e:?}"))
@@ -211,11 +207,6 @@ async fn unknown_verdict_errors_section_and_counts() {
             "email",
             renamed("beacon.sse", r#""spf":"pass""#, r#""spf":"passed""#),
         ),
-        // C8: spectra check status `pass` -> `passed` (decode failure today)
-        (
-            "http",
-            json_with("spectra-inspect.json", "/quality/checks/0/status", "passed"),
-        ),
     ];
 
     let mut failures: Vec<String> = Vec::new();
@@ -265,11 +256,9 @@ async fn known_verdicts_stay_ok_and_count_nothing() {
         .expect("tls Ok");
     assert_eq!(verdict_of(&tls, "ocsp_stapled"), CheckVerdict::Fail);
 
-    let http = run("http", golden("spectra-inspect.json"))
-        .await
-        .expect("http Ok");
-    assert_eq!(verdict_of(&http, "https_redirect"), CheckVerdict::Pass);
-    assert_eq!(verdict_of(&http, "security_headers"), CheckVerdict::Warn);
+    let http = http_statuses(&golden("spectra-inspect.json")).expect("http Ok");
+    assert_eq!(status_of(&http, "http.https_redirect"), Status::Pass);
+    assert_eq!(status_of(&http, "http.security_headers"), Status::Warn);
 
     // golden: dkim=fail, mta_sts=warn; brand (bimi `absent`, info only) is Skip
     let email = run("email", golden("beacon.sse")).await.expect("email Ok");
@@ -289,5 +278,39 @@ async fn known_verdicts_stay_ok_and_count_nothing() {
         unknown_total(&snapshotter),
         0,
         "known verdicts must not increment {COUNTER}"
+    );
+}
+
+/// The HTTP section's checks as (id, status), decoded and translated by `netray_http`.
+fn http_statuses(body: &str) -> Result<Vec<(String, Status)>, String> {
+    let resp: InspectResponse = serde_json::from_str(body).map_err(|e| e.to_string())?;
+    match translate(&resp) {
+        SectionOutcome::Measured { checks, .. } => Ok(checks
+            .iter()
+            .map(|c| (c.id.to_string(), c.status))
+            .collect()),
+        other => Err(format!("{other:?}")),
+    }
+}
+
+fn status_of(checks: &[(String, Status)], id: &str) -> Status {
+    checks
+        .iter()
+        .find(|(n, _)| n == id)
+        .unwrap_or_else(|| panic!("check `{id}` missing in {checks:?}"))
+        .1
+}
+
+// C8: a spectra check status lens does not know (`pass` -> `passed`) is refused when
+// `netray_http` decodes the response, not translated into a verdict. The section-level
+// `lens_unknown_verdict_total` counter is not asserted for HTTP: the decode now lives in
+// `netray_http`, outside lens's metrics.
+#[test]
+fn http_unknown_status_is_refused_at_decode() {
+    let body = json_with("spectra-inspect.json", "/quality/checks/0/status", "passed");
+    let outcome = http_statuses(&body);
+    assert!(
+        outcome.is_err(),
+        "an unknown spectra status must be refused, got {outcome:?}"
     );
 }

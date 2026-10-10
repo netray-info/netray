@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use netray_engine::{
     BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, ResolveError, RunContext,
-    SectionOutcome,
+    RunOptions, SectionOutcome,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 
@@ -41,7 +41,12 @@ impl Module for StubModule {
         &VOLATILE
     }
     fn run<'a>(&'a self, _ctx: &'a RunContext, _facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
-        Box::pin(async { SectionOutcome::Measured(vec![result()]) })
+        Box::pin(async {
+            SectionOutcome::Measured {
+                checks: vec![result()],
+                presentation: serde_json::Value::Null,
+            }
+        })
     }
 }
 
@@ -69,6 +74,8 @@ impl FactsProvider for StubProvider {
 fn ctx() -> RunContext {
     RunContext {
         deadline: Instant::now() + Duration::from_secs(5),
+        domain: Domain::new("example.com"),
+        options: RunOptions::default(),
     }
 }
 
@@ -80,7 +87,13 @@ async fn boxed_module_declares_and_returns_its_outcome() {
     assert_eq!(module.volatile(), &[EvidencePath("tls.handshake_ms")]);
 
     let outcome = module.run(&ctx(), &Facts::default()).await;
-    assert_eq!(outcome, SectionOutcome::Measured(vec![result()]));
+    assert_eq!(
+        outcome,
+        SectionOutcome::Measured {
+            checks: vec![result()],
+            presentation: serde_json::Value::Null,
+        }
+    );
 }
 
 #[tokio::test]

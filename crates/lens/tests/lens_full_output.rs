@@ -13,19 +13,22 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+mod common;
+
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
+use common::http_registry;
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
 use serde_json::Value;
 use tower::ServiceExt;
 
-/// One fixture: a name and the golden file each backend serves. `None` for tls or http means
-/// that backend answers HTTP 500.
+/// One fixture: a name and the golden file each backend serves. `None` for tls means that
+/// backend answers HTTP 500; `None` for http means the HTTP module is incomplete.
 #[derive(Clone)]
 struct Fixture {
     name: &'static str,
@@ -175,15 +178,6 @@ async fn production_config(f: &Fixture) -> Config {
     config.backends.ip.url = Some(stub("/json", false, "application/json", f.ip).await);
     config
         .backends
-        .http
-        .as_mut()
-        .expect("http backend configured")
-        .url = Some(match f.http {
-        Some(file) => stub("/api/inspect", false, "application/json", file).await,
-        None => failing_stub("/api/inspect", false).await,
-    });
-    config
-        .backends
         .email
         .as_mut()
         .expect("email backend configured")
@@ -234,7 +228,7 @@ fn sorted(v: Value) -> Value {
 /// Run one fixture through the sync `POST /api/check`; return the stripped, key-sorted output.
 async fn run_full(f: &Fixture) -> Value {
     let config = production_config(f).await;
-    let state = AppState::new(config).unwrap();
+    let state = AppState::with_registry(config, http_registry(f.http)).unwrap();
     let (routes, _) = api_router().split_for_parts();
     let app = Router::new()
         .merge(routes.with_state(state))

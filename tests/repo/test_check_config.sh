@@ -138,5 +138,25 @@ for f in crates/lens/tests/fixtures/lens.production.toml crates/lens/lens.dev.to
     [ "$rc" -eq 0 ] || fail "lens: $f exited $rc, expected 0 ($out)"
 done
 
+# V2 Phase 1 (C9): the HTTP section is a module. A leftover `[backends.http] url` and an unknown
+# `[modules.http]` key both fail the check and the output names the offending key.
+module_rejects=(
+    "backends.http url:url:s|^\\[backends\\.http\\]\$|[backends.http]\\nurl = 'http://spectra:8082'|"
+    "modules.http bogus:bogus:s|^\\[ecosystem\\]\$|[modules.http]\\nbogus = 1\\n\\n[ecosystem]|"
+)
+n=0
+for row in "${module_rejects[@]}"; do
+    IFS=: read -r label key expr <<<"$row"
+    n=$((n + 1))
+    perl -pe "$expr" "$lens_fixture" >"$tmp/lens.module$n.toml"
+    if cmp -s "$lens_fixture" "$tmp/lens.module$n.toml"; then
+        fail "lens: substitution for '$label' did not change the fixture"
+        continue
+    fi
+    run_check lens "$tmp/lens.module$n.toml"
+    [ "$rc" -eq 1 ] || fail "lens: $label exited $rc, expected 1 ($out)"
+    grep -qF "$key" <<<"$out" || fail "lens: $label error does not name '$key' ($out)"
+done
+
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
 echo "PASS: test_check_config"

@@ -1,8 +1,9 @@
 //! Golden test: the verdict lens computes from the committed backend goldens.
 //!
-//! Local stub servers serve the backend goldens from `tests/fixtures/contracts/` at the
-//! paths and methods lens calls. lens runs with the backend and scoring settings of
-//! `tests/fixtures/lens.production.toml` (backend URLs pointed at the stubs), and
+//! Local stub servers serve the DNS, TLS, email and IP goldens from `tests/fixtures/contracts/`
+//! at the paths and methods lens calls; the HTTP section comes from `netray_http`'s
+//! `golden_module` through the engine registry (`AppState::with_registry`). lens runs with the backend and scoring settings of
+//! `tests/fixtures/lens.production.toml` (backend URLs pointed at the stubs, no HTTP backend), and
 //! `POST /api/check` is driven through its router in-process. A projection of the SSE
 //! events (grades, statuses, check verdicts; no prose, durations or ids) is compared with
 //! `tests/fixtures/contracts/lens-<fixture>.json`. `UPDATE_GOLDEN=1` rewrites those files.
@@ -11,11 +12,14 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+mod common;
+
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
+use common::http_registry;
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -23,8 +27,8 @@ use serde::Serialize;
 use serde_json::Value;
 use tower::ServiceExt;
 
-/// One fixture: a name and the golden file each backend serves. `None` for tls or http means
-/// that backend answers HTTP 500.
+/// One fixture: a name and the golden file each backend serves. `None` for tls means that
+/// backend answers HTTP 500; `None` for http means the HTTP module is incomplete.
 struct Fixture {
     name: &'static str,
     dns: &'static str,
@@ -179,15 +183,6 @@ async fn production_config(f: &Fixture) -> Config {
     config.backends.ip.url = Some(stub("/json", false, "application/json", f.ip).await);
     config
         .backends
-        .http
-        .as_mut()
-        .expect("http backend configured")
-        .url = Some(match f.http {
-        Some(file) => stub("/api/inspect", false, "application/json", file).await,
-        None => failing_stub("/api/inspect", false).await,
-    });
-    config
-        .backends
         .email
         .as_mut()
         .expect("email backend configured")
@@ -323,7 +318,7 @@ fn project(events: &[(String, Value)]) -> Projection {
 /// Run one fixture through `POST /api/check` and return the serialised projection.
 async fn run_fixture(name: &str) -> String {
     let config = production_config(fixture(name)).await;
-    let state = AppState::new(config).unwrap();
+    let state = AppState::with_registry(config, http_registry(fixture(name).http)).unwrap();
     let (routes, _) = api_router().split_for_parts();
     let app = Router::new()
         .merge(routes.with_state(state))

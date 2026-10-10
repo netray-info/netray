@@ -12,11 +12,14 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+mod common;
+
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use axum::routing::{get, post};
+use common::http_registry;
 use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
@@ -105,23 +108,14 @@ async fn app(per_ip: u32, dns_gate: Option<(Arc<Notify>, Arc<Notify>)>) -> Route
         )
         .await,
     );
-    config.backends.http.as_mut().unwrap().url = Some(
-        stub(
-            "/api/inspect",
-            false,
-            "application/json",
-            "spectra-inspect.json",
-            None,
-        )
-        .await,
-    );
     config.backends.email.as_mut().unwrap().url =
         Some(stub("/inspect", true, "text/event-stream", "beacon.sse", None).await);
     assert!(config.cache.enabled, "production config enables the cache");
     config.rate_limit.per_ip_per_minute = per_ip;
     config.rate_limit.per_ip_burst = per_ip;
 
-    let state = AppState::new(config).unwrap();
+    let state =
+        AppState::with_registry(config, http_registry(Some("spectra-inspect.json"))).unwrap();
     let (api, _) = api_router().split_for_parts();
     Router::new()
         .merge(api.with_state(state))

@@ -23,7 +23,6 @@ url = "http://ifconfig-rs:8000"
 timeout_ms = 2000
 
 [backends.http]
-url = "http://spectra:8082"
 timeout_ms = 15000
 
 [backends.email]
