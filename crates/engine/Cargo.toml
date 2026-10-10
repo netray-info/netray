@@ -10,6 +10,7 @@ netray-model = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
+sha2 = { workspace = true }
 futures = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time"] }
 

@@ -63,7 +63,27 @@ skipped: phase 1 adds a library loader and data with no callable entry point; le
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R2: v3.toml weights exactly the catalogue's IDs (each ≥ 1), sections 20/35/20/15/10, §3.9 split weights, unchanged V1 weights, hard fail tls.{chain_trusted,not_expired,tls_reachable}, thresholds A+ 97 … F 0; `Profiles::current()` is v3 | open | crates/engine/tests/profile.rs |
-| C2 | the lock: embedded v3.toml matches; a changed byte fails `check_lock` | open | crates/engine/tests/profile.rs |
-| C3 | a section of one weight-1 check that warns scores 0.5 of 1 | open | crates/engine/tests/score.rs |
-| C4 | V1's scoring cases hold in the engine (N/A excluded, possible 0 → incomplete, Incomplete/TimedOut → incomplete, hard fail → F, thresholds) | open | crates/engine/tests/score.rs |
+| C1 | R2: v3.toml weights exactly the catalogue's IDs (each ≥ 1), sections 20/35/20/15/10, §3.9 split weights, unchanged V1 weights, hard fail tls.{chain_trusted,not_expired,tls_reachable}, thresholds A+ 97 … F 0; `Profiles::current()` is v3 | green | crates/engine/tests/profile.rs |
+| C2 | the lock: embedded v3.toml matches; a changed byte fails `check_lock` | green | crates/engine/tests/profile.rs |
+| C3 | a section of one weight-1 check that warns scores 0.5 of 1 | green | crates/engine/tests/score.rs |
+| C4 | V1's scoring cases hold in the engine (N/A excluded, possible 0 → incomplete, Incomplete/TimedOut → incomplete, hard fail → F, thresholds) | green | crates/engine/tests/score.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 profile v3, lock, engine scoring | 2 | opus | 56361 | 162 |
+
+### Reader
+
+COUNTS blockers=0 amendments=0 deferred=1 nits=4. v3.toml weights exactly the 54 IDs (V1 weights unchanged, §3.9 split), lock hash matches, rules equal V1 except the exact half-warn.
+
+- DEFERRED: a weighted `unmeasured` check is excluded and the section stays complete (V1 Skip); SDD §3.5 makes it incomplete. Belongs to `v2-unmeasured`, whose change of `crates/engine/tests/score.rs:112` needs an `ADLC-Test-Change`.
+- NIT: hard fail matches any duplicate of a check ID (V1: the first); duplicates are refused from phase 3 on (R3(e)).
+- NIT: thresholds are not checked for grade order, an empty table parses (as V1).
+- NIT: no `deny_unknown_fields` on the profile structs; a misspelt `hard_fails` drops every hard fail (as V1; v3's test pins its hard fails).
+- NIT: workspace `sha2` is 0.10 while `crates/tls` pins 0.11 directly.
+
+### Behavioural verification
+
+skipped: library-only phase; lens still scores through its own module until phase 3.

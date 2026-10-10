@@ -3,8 +3,11 @@
 //! drives one check through them. The engine never names a module crate (P40).
 
 pub mod catalogue;
+pub mod profile;
+pub mod scoring;
 
 pub use catalogue::catalogue;
+pub use scoring::score;
 
 use std::error::Error;
 use std::fmt;

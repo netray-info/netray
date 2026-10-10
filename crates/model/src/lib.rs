@@ -7,7 +7,7 @@ use std::fmt;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// The protocol a check belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     Dns,
@@ -18,7 +18,7 @@ pub enum Protocol {
 }
 
 impl Protocol {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Protocol::Dns => "dns",
             Protocol::Tls => "tls",
@@ -41,7 +41,7 @@ impl Protocol {
 }
 
 /// A check identifier of the form `<protocol>.<name>`, e.g. `tls.chain_trusted`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CheckId {
     protocol: Protocol,
     name: String,

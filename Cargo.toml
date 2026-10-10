@@ -57,3 +57,4 @@ chrono = { version = "0.4", default-features = false }
 percent-encoding = "2"
 url = "2"
 ip_network = "0.4"
+sha2 = "0.10"
