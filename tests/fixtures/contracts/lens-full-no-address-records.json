@@ -1,0 +1,126 @@
+{
+  "dns": {
+    "checks": [
+      {
+        "fix_hint": "Add CAA records to specify which certificate authorities are allowed to issue certificates for your domain, reducing mis-issuance risk.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/caa-records",
+        "messages": [
+          "No CAA records found: any Certificate Authority can issue certificates for this domain; cf. RFC 8659"
+        ],
+        "name": "caa",
+        "verdict": "warn",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Ensure your domain has at least two authoritative nameservers in separate networks for redundancy.",
+        "fix_owner": "your DNS provider or registrar",
+        "guide_url": "https://netray.info/guide/record-types",
+        "messages": [
+          "Not found"
+        ],
+        "name": "ns",
+        "verdict": "fail",
+        "weight": 3
+      }
+    ],
+    "detail_url": "https://dns.example.com/?q=example.com+%2Bcheck",
+    "headline": "DNSSEC –  CAA ~  NS –  CNAME-apex –",
+    "status": "fail"
+  },
+  "done": {
+    "cached": false,
+    "domain": "example.com"
+  },
+  "email": {
+    "checks": [
+      {
+        "fix_hint": "Publish an SPF record that covers your mail servers, configure DKIM signing with your email provider, and publish a DMARC policy at `p=quarantine` or `p=reject`.",
+        "fix_owner": "your DNS provider and email provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "messages": [
+          "selector 'default': RSA 512 bits < 1024",
+          "no enforcement"
+        ],
+        "name": "email_authentication",
+        "verdict": "fail",
+        "weight": 10
+      },
+      {
+        "fix_hint": "Ensure your domain has valid MX records pointing to functioning mail servers, and that each pointed hostname resolves to an A or AAAA record.",
+        "fix_owner": "your DNS provider and email provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "name": "email_infrastructure",
+        "verdict": "pass",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Publish an MTA-STS policy to enforce encrypted email transport and prevent SMTP downgrade attacks on mail delivered to your domain.",
+        "fix_owner": "your email provider and DNS provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "messages": [
+          "mode: testing",
+          "max_age 3600 < 86400; suggest >= 604800"
+        ],
+        "name": "email_transport",
+        "verdict": "warn",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Publish a BIMI record with a valid SVG Tiny PS logo once your DMARC policy is at `p=quarantine` or `p=reject`, to show your brand logo in supporting email clients.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "messages": [
+          "not applicable"
+        ],
+        "name": "email_brand_policy",
+        "verdict": "skip",
+        "weight": 2
+      }
+    ],
+    "detail_url": "https://email.example.com/?domain=example.com",
+    "grade": "D",
+    "headline": "Auth: Fail  Infra: OK  Transport: Warn  Brand: N/A",
+    "status": "fail"
+  },
+  "http": {
+    "checks": [],
+    "detail_url": "",
+    "headline": "backend error",
+    "status": "error"
+  },
+  "ip": {
+    "addresses": [],
+    "checks": [],
+    "detail_url": "",
+    "headline": "no DNS results",
+    "status": "error"
+  },
+  "summary": {
+    "complete": false,
+    "grade": "incomplete",
+    "hard_fail": false,
+    "hard_fail_checks": [],
+    "hard_fail_reason": null,
+    "not_applicable": {},
+    "overall": "error",
+    "score": 29.3,
+    "section_grades": {
+      "dns": "F",
+      "email": "F"
+    },
+    "sections": {
+      "dns": "fail",
+      "email": "fail",
+      "http": "error",
+      "ip": "error",
+      "tls": "error"
+    }
+  },
+  "tls": {
+    "checks": [],
+    "detail_url": "",
+    "headline": "backend error",
+    "status": "error"
+  }
+}

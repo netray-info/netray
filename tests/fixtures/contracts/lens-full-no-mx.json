@@ -1,0 +1,248 @@
+{
+  "dns": {
+    "checks": [
+      {
+        "fix_hint": "Add CAA records to specify which certificate authorities are allowed to issue certificates for your domain, reducing mis-issuance risk.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/caa-records",
+        "messages": [
+          "No CAA records found: any Certificate Authority can issue certificates for this domain; cf. RFC 8659"
+        ],
+        "name": "caa",
+        "verdict": "warn",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Ensure your domain has at least two authoritative nameservers in separate networks for redundancy.",
+        "fix_owner": "your DNS provider or registrar",
+        "guide_url": "https://netray.info/guide/record-types",
+        "name": "ns",
+        "verdict": "pass",
+        "weight": 3
+      }
+    ],
+    "detail_url": "https://dns.example.com/?q=example.com+%2Bcheck",
+    "headline": "DNSSEC –  CAA ~  NS ✓  CNAME-apex –",
+    "status": "warn"
+  },
+  "done": {
+    "cached": false,
+    "domain": "example.com"
+  },
+  "email": {
+    "checks": [
+      {
+        "fix_hint": "Publish an SPF record that covers your mail servers, configure DKIM signing with your email provider, and publish a DMARC policy at `p=quarantine` or `p=reject`.",
+        "fix_owner": "your DNS provider and email provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "messages": [
+          "no SPF record found",
+          "no DMARC record found"
+        ],
+        "name": "email_authentication",
+        "verdict": "fail",
+        "weight": 10
+      },
+      {
+        "fix_hint": "Ensure your domain has valid MX records pointing to functioning mail servers, and that each pointed hostname resolves to an A or AAAA record.",
+        "fix_owner": "your DNS provider and email provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "messages": [
+          "No MX records — email receiving not configured"
+        ],
+        "name": "email_infrastructure",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Publish an MTA-STS policy to enforce encrypted email transport and prevent SMTP downgrade attacks on mail delivered to your domain.",
+        "fix_owner": "your email provider and DNS provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "messages": [
+          "No MX records — email receiving not configured"
+        ],
+        "name": "email_transport",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Publish a BIMI record with a valid SVG Tiny PS logo once your DMARC policy is at `p=quarantine` or `p=reject`, to show your brand logo in supporting email clients.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "messages": [
+          "No MX records — email receiving not configured"
+        ],
+        "name": "email_brand_policy",
+        "verdict": "skip",
+        "weight": 2
+      }
+    ],
+    "detail_url": "https://email.example.com/?domain=example.com",
+    "grade": "F",
+    "headline": "Auth: Fail  Infra: N/A  Transport: N/A  Brand: N/A",
+    "status": "fail"
+  },
+  "http": {
+    "checks": [
+      {
+        "fix_hint": "Configure your web server to redirect all HTTP requests to HTTPS with a 301 permanent redirect before serving any content.",
+        "fix_owner": "your web server config",
+        "guide_url": "https://netray.info/guide/hsts",
+        "name": "https_redirect",
+        "verdict": "pass",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Add a `Strict-Transport-Security` header with `max-age=31536000` to all HTTPS responses so browsers always use HTTPS for your domain.",
+        "fix_owner": "your web server config",
+        "guide_url": "https://netray.info/guide/hsts",
+        "name": "hsts",
+        "verdict": "pass",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Add the missing security headers — at minimum `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a `Content-Security-Policy` — to reduce common browser-based attack surface.",
+        "fix_owner": "your web server config",
+        "guide_url": "https://netray.info/guide/security-headers",
+        "messages": [
+          "Content-Security-Policy: No Content-Security-Policy header"
+        ],
+        "name": "security_headers",
+        "verdict": "warn",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Avoid using `Access-Control-Allow-Origin: *` on endpoints that use cookies or authentication — enumerate allowed origins explicitly instead.",
+        "fix_owner": "your web server or application config",
+        "guide_url": "https://netray.info/guide/cors",
+        "name": "cors",
+        "verdict": "pass",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Set the `Secure` and `HttpOnly` flags on all cookies so they are never sent over plain HTTP and are not accessible to JavaScript.",
+        "fix_owner": "your web server or application config",
+        "guide_url": "https://netray.info/guide/cookie-security",
+        "name": "cookie_secure",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Remove or anonymise the `Server` and `X-Powered-By` response headers to avoid leaking software names and versions to potential attackers.",
+        "fix_owner": "your web server config",
+        "guide_url": "https://netray.info/guide/http-redirects",
+        "name": "hygiene",
+        "verdict": "skip",
+        "weight": 2
+      }
+    ],
+    "detail_url": "https://http.example.com/?url=https%3A%2F%2Fexample.com",
+    "headline": "HTTPS ✓  HSTS ✓  CSP ~  CORS ✓",
+    "http_version": "HTTP/2",
+    "server_ip": "192.0.2.10",
+    "server_network_type": "datacenter",
+    "server_org": "Example Hosting",
+    "status": "warn",
+    "status_code": 200
+  },
+  "ip": {
+    "addresses": [
+      {
+        "geo": "Berlin, Germany",
+        "ip": "1.1.1.1",
+        "network_type": "cloud",
+        "org": "Example Cloud GmbH"
+      }
+    ],
+    "checks": [
+      {
+        "fix_hint": "Your IP address appears on one or more DNS blocklists — check your mail server for spam activity, then request delisting from each blocklist individually.",
+        "fix_owner": "your hosting provider or mail administrator",
+        "guide_url": "https://netray.info/guide/ip-enrichment",
+        "name": "reputation",
+        "verdict": "pass",
+        "weight": 5
+      }
+    ],
+    "detail_url": "https://ip.example.com",
+    "headline": "Example Cloud GmbH + Berlin, Germany",
+    "status": "pass"
+  },
+  "summary": {
+    "complete": true,
+    "grade": "C",
+    "hard_fail": false,
+    "hard_fail_checks": [],
+    "hard_fail_reason": null,
+    "not_applicable": {},
+    "overall": "fail",
+    "score": 67.8,
+    "section_grades": {
+      "dns": "C",
+      "email": "F",
+      "http": "B",
+      "ip": "A+",
+      "tls": "B"
+    },
+    "sections": {
+      "dns": "warn",
+      "email": "fail",
+      "http": "warn",
+      "ip": "pass",
+      "tls": "fail"
+    }
+  },
+  "tls": {
+    "checks": [
+      {
+        "fix_hint": "Serve HTTPS on port 443 with a valid certificate, and make sure the firewall allows inbound connections to port 443.",
+        "fix_owner": "the site's web server or hosting provider",
+        "guide_url": "https://netray.info/guide/tls-protocol",
+        "name": "tls_reachable",
+        "verdict": "pass",
+        "weight": 10
+      },
+      {
+        "fix_hint": "Your certificate is not trusted by major browsers — ensure you're using a certificate from a public CA and that the full chain including intermediates is configured.",
+        "fix_owner": "your web server config",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "name": "chain_trusted",
+        "verdict": "pass",
+        "weight": 10
+      },
+      {
+        "fix_hint": "Your certificate is expiring soon — renew it now to avoid browsers showing a warning or blocking your site.",
+        "fix_owner": "your CA or certificate provider",
+        "guide_url": "https://netray.info/guide/certificate-management",
+        "messages": [
+          "Certificate expires in 60 days"
+        ],
+        "name": "expiry_window",
+        "verdict": "warn",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Disable TLS 1.0 and TLS 1.1 in your web server — only TLS 1.2 and TLS 1.3 should be enabled.",
+        "fix_owner": "your web server config",
+        "guide_url": "https://netray.info/guide/tls-protocol",
+        "name": "tls_version",
+        "verdict": "pass",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Enable OCSP stapling in your web server so browsers don't need to make a live round-trip to your CA on every TLS handshake.",
+        "fix_owner": "your web server config",
+        "guide_url": "https://netray.info/guide/certificate-chain",
+        "messages": [
+          "No OCSP response stapled"
+        ],
+        "name": "ocsp_stapled",
+        "verdict": "fail",
+        "weight": 3
+      }
+    ],
+    "detail_url": "https://tls.example.com/?h=example.com",
+    "headline": "TLSv1.3, expires in 60d",
+    "status": "fail"
+  }
+}
