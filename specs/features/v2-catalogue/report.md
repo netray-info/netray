@@ -44,3 +44,26 @@
 ### Behavioural verification
 
 skipped: phase 1 adds a library loader and data with no callable entry point; lens is unchanged until phase 3.
+
+## Phase 2 — Profile v3 and scoring
+
+### API contract
+
+- `crates/engine/profiles/v3.toml` (embedded): V1 shape — `[meta] name = "v3"`, `version = 3`; `[sections.<protocol>] weight`, `hard_fail = ["chain_trusted", …]` (section-local names); `[sections.<protocol>.checks] <name> = <weight>`; `[thresholds] "A+" = 97 …`. The check ID is `<protocol>.<name>`.
+- `crates/engine/profiles/lock.toml`: `v3 = "<sha256 hex of v3.toml>"`.
+- `netray_engine::profile::{Profile, SectionWeights, Profiles, ProfileError}`:
+  - `Profile::from_toml(&str) -> Result<Profile, ProfileError>`; fields `name: String`, `version: u32`, `sections: BTreeMap<Protocol, SectionWeights>`, `thresholds: Vec<(Grade, u32)>` (descending). `SectionWeights { weight: u32, checks: BTreeMap<CheckId, u32>, hard_fail: Vec<CheckId> }`. Refuses a weight 0, a check name that is no valid ID, a hard-fail name not among the section's checks.
+  - `Profiles::get(version: u32) -> Option<&'static Profile>`, `Profiles::current() -> &'static Profile` (v3).
+  - `netray_engine::profile::check_lock(version: u32, toml: &str) -> Result<(), ProfileError>`: Err when the SHA-256 of `toml` differs from the lock entry or the version has none.
+- `netray_engine::score(profile: &Profile, sections: &[SectionEvent]) -> Score`; `netray_engine::scoring::{Score, SectionScore}`:
+  - `Score { sections: BTreeMap<Protocol, SectionScore>, overall_percentage: f64, grade: Grade, complete: bool, hard_fail_checks: Vec<CheckId>, not_applicable: BTreeMap<Protocol, String> }`; `SectionScore { earned: f64, possible: u32, percentage: f64 }`.
+  - V1 rules: Pass earns the weight, Warn exactly half (f64), Fail 0; NotApplicable, NotTested and Unmeasured are excluded from earned and possible (V1 Skip; the Unmeasured split is `v2-unmeasured`). Checks without a profile weight are ignored. `Measured` with possible 0, `Incomplete` and `TimedOut` make the score incomplete (grade `Incomplete`); `NotApplicable` sections are excluded and listed; a profile section absent from `sections` is ignored. No finished section → `Incomplete`. A hard-fail check with status Fail forces `F` on a complete score. Overall = Σ percentage·weight / Σ weight over finished sections; grade by thresholds.
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R2: v3.toml weights exactly the catalogue's IDs (each ≥ 1), sections 20/35/20/15/10, §3.9 split weights, unchanged V1 weights, hard fail tls.{chain_trusted,not_expired,tls_reachable}, thresholds A+ 97 … F 0; `Profiles::current()` is v3 | open | crates/engine/tests/profile.rs |
+| C2 | the lock: embedded v3.toml matches; a changed byte fails `check_lock` | open | crates/engine/tests/profile.rs |
+| C3 | a section of one weight-1 check that warns scores 0.5 of 1 | open | crates/engine/tests/score.rs |
+| C4 | V1's scoring cases hold in the engine (N/A excluded, possible 0 → incomplete, Incomplete/TimedOut → incomplete, hard fail → F, thresholds) | open | crates/engine/tests/score.rs |
