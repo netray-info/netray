@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-10-10
+
 ### Added
 
 - lens metrics for admission planning: `lens_check_requests_total{result}` (`fresh`, `cache_hit`, `rate_limited`), `lens_runs_in_flight`, `lens_run_duration_seconds` and `lens_client_hourly_runs` (fresh runs per client per hour, as a distribution; no client address is exported).
