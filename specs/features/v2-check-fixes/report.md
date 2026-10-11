@@ -89,6 +89,8 @@ skipped: the phase changes pure check functions with no entry point of its own; 
 | C35 | R6: the stored fixtures' asserted statuses hold (`module_v3`, `port_results_table`, `contract_golden`) | green | existing tests |
 | C36 | R6 (amended): cross-certificates served past the anchor do not fail completeness | green | crates/tls/tests/chain_completeness.rs |
 | C37 | R6 (amended): a chain ending self-signed outside the store passes with "chain ends at a self-signed certificate" | green | crates/tls/tests/chain_completeness.rs |
+| C38 | R8: v3 hard fails are chain_trusted, hostname_match, not_expired, tls_reachable | green | crates/engine/tests/profile.rs |
+| C39 | R8: every hard-fail check is `critical` in the catalogue | already_implemented | crates/engine/tests/profile.rs |
 
 C36 and C37 come from the phase-2 reading and were written with their fix, not committed red first.
 
@@ -114,7 +116,5 @@ The coder's edit of the struct literals and the golden was blocked by the sandbo
 ### Behavioural verification
 
 skipped: no live target in the offline gate; `validate_chain` is driven end to end on real rcgen chains by `trust_anchor.rs` and `chain_completeness.rs`, the same call `routes.rs` makes.
-| C38 | R8: v3 hard fails are chain_trusted, hostname_match, not_expired, tls_reachable | green | crates/engine/tests/profile.rs |
-| C39 | R8: every hard-fail check is `critical` in the catalogue | already_implemented (guard; held for the three before R8) | crates/engine/tests/profile.rs |
 
-C38 and C39 come from the branch reading (MAJOR: a name mismatch no longer reached a hard fail once R5 took the name out of `chain_trusted`). Profile v3 is unreleased; its lock hash moves with the one-line change. Lens goldens are unchanged: every one passes `hostname_match`.
+C39 is a guard that already held for the three hard fails before R8. C38 and C39 come from the branch reading (MAJOR: a name mismatch no longer reached a hard fail once R5 took the name out of `chain_trusted`). Profile v3 is unreleased; its lock hash moves with the one-line change. Lens goldens are unchanged: every one passes `hostname_match`.
