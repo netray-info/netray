@@ -1,7 +1,8 @@
 # Spec: changelog 0.25.0
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-11
+Finished: 2026-10-11
 
 ## Goal
 
