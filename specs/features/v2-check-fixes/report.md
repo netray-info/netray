@@ -24,9 +24,18 @@
 | C16 | R4: leaf `Unknown(1.2.840.113549.1.1.10)` → Warn `unrecognised signature algorithm 1.2.840.113549.1.1.10` | green | crates/tls/tests/signature_verdict.rs |
 | C17 | R4: leaf `Unknown(...)` + intermediate SHA-1 → Fail | green | crates/tls/tests/signature_verdict.rs |
 | C18 | R4: signature algorithm "" → Warn `unreadable certificate signature` | green | crates/tls/tests/signature_verdict.rs |
-| C19 | R4: catalogue `tls.strong_signature` finding names unrecognised algorithms | green | crates/engine/tests/strong_signature_finding.rs |
+| C19 | R4: catalogue `tls.strong_signature` finding names MD2 and unrecognised algorithms | green | crates/engine/tests/strong_signature_finding.rs |
+| C20 | R4: intermediate md2WithRSAEncryption → Fail | already_implemented | crates/tls/tests/signature_verdict.rs |
+| C21 | R1: catalogue `http.cors` finding names `null` | green | crates/engine/tests/strong_signature_finding.rs |
+| C22 | R7: wildcard leaf, `issuewild ";"` → Fail | green | crates/tls/tests/caa_wildcard.rs |
+| C23 | R7: issuewild names the CA, issue another → Pass; plus apex SAN → Fail | green | crates/tls/tests/caa_wildcard.rs |
+| C24 | R7: wildcard leaf, no issuewild → issue decides, Pass | green | crates/tls/tests/caa_wildcard.rs |
+| C25 | R7: non-wildcard leaf ignores `issuewild ";"` → Pass | green | crates/tls/tests/caa_wildcard.rs |
 
 C7 and C9 pass today (Fail is already the outcome); their rows stay as protection.
+
+C20 passed on arrival: the G3 code already ranked MD2 weak; the row closes the reader's NIT.
+C20–C25 come from the phase-1 amendments (spec d2b3a5b); the orchestrator wrote their tests and code directly, the change being one function and four text lines.
 
 ### Runs
 
@@ -53,3 +62,11 @@ The plan was written by the orchestrator, not a planner agent: three groups over
 | DEFERRED | cors.rs:21 | ACAC compared case-insensitively; Fetch requires exact `true` | listed (unchanged behaviour) |
 | NIT | cors_probe.rs | C6 checks only the constant's value | listed |
 | NIT | checks.rs:117 | no end-to-end MD2 row | covered by the R4 amendment's tests |
+
+### Behavioural verification
+
+skipped: the phase changes pure check functions with no entry point of its own; the end-to-end paths (`/api/inspect`, lens SSE) need live targets, and the unit and integration tests above drive the same functions the routes call (`routes.rs:820`, :868; `inspect/mod.rs:205`).
+
+### Verify
+
+`adlc verify`: contract passed, 101 tests collected (tree d05eb99).
