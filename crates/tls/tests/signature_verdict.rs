@@ -94,6 +94,15 @@ fn signature_verdict_end_to_end() {
             None,
         ),
         (
+            "C20 intermediate md2WithRSAEncryption",
+            vec![
+                cert("leaf", false, "sha256WithRSAEncryption"),
+                cert("intermediate", false, "md2WithRSAEncryption"),
+            ],
+            CheckStatus::Fail,
+            None,
+        ),
+        (
             "C15 single self-signed leaf sha1",
             vec![cert("leaf_self_signed", true, "sha1WithRSAEncryption")],
             CheckStatus::Fail,

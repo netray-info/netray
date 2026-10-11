@@ -54,7 +54,11 @@ fn caa_critical_flag_handling() {
         ),
     ];
     for (name, records, want) in cases {
-        let got = check_caa_compliance(&CaaLookup { records }, LE_ISSUER);
+        let got = check_caa_compliance(
+            &CaaLookup { records },
+            LE_ISSUER,
+            &["www.example.com".to_string()],
+        );
         assert_eq!(got, want, "{name}");
     }
 }
