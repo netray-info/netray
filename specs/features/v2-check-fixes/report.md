@@ -114,3 +114,7 @@ The coder's edit of the struct literals and the golden was blocked by the sandbo
 ### Behavioural verification
 
 skipped: no live target in the offline gate; `validate_chain` is driven end to end on real rcgen chains by `trust_anchor.rs` and `chain_completeness.rs`, the same call `routes.rs` makes.
+| C38 | R8: v3 hard fails are chain_trusted, hostname_match, not_expired, tls_reachable | green | crates/engine/tests/profile.rs |
+| C39 | R8: every hard-fail check is `critical` in the catalogue | already_implemented (guard; held for the three before R8) | crates/engine/tests/profile.rs |
+
+C38 and C39 come from the branch reading (MAJOR: a name mismatch no longer reached a hard fail once R5 took the name out of `chain_trusted`). Profile v3 is unreleased; its lock hash moves with the one-line change. Lens goldens are unchanged: every one passes `hostname_match`.
