@@ -6,19 +6,41 @@
 use crate::dns::CaaLookup;
 use crate::validate::CheckStatus;
 
+/// CAA property tags this checker understands (RFC 8659 and registered extensions).
+const KNOWN_CAA_TAGS: &[&str] = &[
+    "issue",
+    "issuewild",
+    "iodef",
+    "contactemail",
+    "contactphone",
+    "issuemail",
+    "issuevmc",
+];
+
+fn is_known_tag(tag: &str) -> bool {
+    KNOWN_CAA_TAGS.iter().any(|k| k.eq_ignore_ascii_case(tag))
+}
+
 /// Check if the certificate issuer is authorized by CAA records.
 ///
 /// - No CAA records → Pass (RFC 8659: absence is permissive)
+/// - A critical record with an unknown tag → Fail (RFC 8659 §4.1)
 /// - Records exist but no `issue` tags → Pass (no issuance constraint)
 /// - Records with `issue` tags, issuer matches → Pass
 /// - Records with `issue` tags, no match → Fail
+///
+/// A critical record with a known tag is evaluated like a non-critical one.
 pub fn check_caa_compliance(caa: &CaaLookup, leaf_issuer: &str) -> CheckStatus {
     if caa.is_empty() {
         return CheckStatus::Pass;
     }
 
-    // RFC 8659 §4: an unknown critical tag means no CA is authorized
-    if caa.records.iter().any(|r| r.issuer_critical) {
+    // RFC 8659 §4.1: a critical record whose tag is not understood blocks issuance
+    if caa
+        .records
+        .iter()
+        .any(|r| r.issuer_critical && !is_known_tag(&r.tag))
+    {
         return CheckStatus::Fail;
     }
 
@@ -232,7 +254,7 @@ mod tests {
     fn issuer_critical_blocks_all_issuance() {
         let caa = CaaLookup {
             records: vec![CaaRecord {
-                tag: "issue".into(),
+                tag: "foo".into(),
                 value: "letsencrypt.org".into(),
                 issuer_critical: true,
             }],

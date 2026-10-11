@@ -270,8 +270,14 @@ fn extract_key_info(cert: &X509Certificate) -> (String, u32) {
     }
 }
 
-fn format_sig_algo(oid: &str) -> String {
+pub fn format_sig_algo(oid: &str) -> String {
     match oid {
+        "1.2.840.113549.1.1.4" => "md5WithRSAEncryption".to_string(),
+        "1.2.840.113549.1.1.2" => "md2WithRSAEncryption".to_string(),
+        "1.2.840.10045.4.1" => "ecdsa-with-SHA1".to_string(),
+        "1.2.840.10040.4.3" => "dsa-with-SHA1".to_string(),
+        "1.3.14.3.2.29" => "sha1WithRSASignature".to_string(),
+        "1.3.101.113" => "Ed448".to_string(),
         "1.2.840.113549.1.1.5" => "sha1WithRSAEncryption".to_string(),
         "1.2.840.113549.1.1.11" => "sha256WithRSAEncryption".to_string(),
         "1.2.840.113549.1.1.12" => "sha384WithRSAEncryption".to_string(),

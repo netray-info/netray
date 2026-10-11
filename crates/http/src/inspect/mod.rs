@@ -94,7 +94,7 @@ pub async fn inspect(
         max_redirects,
         request_timeout,
         &user_agent,
-        Some("https://evil.example.com"),
+        Some(cors::PROBE_ORIGIN),
     );
 
     let result = tokio::time::timeout(total_timeout, async {

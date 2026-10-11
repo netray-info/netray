@@ -23,12 +23,7 @@ pub fn validate_chain(
 
     let (chain_trusted, chain_trust_reason) = verify_chain_trust(verifier, hostname, raw_certs);
 
-    let weakest_signature = chain
-        .iter()
-        .map(|c| c.signature_algorithm.as_str())
-        .min_by_key(|algo| sig_strength(algo))
-        .unwrap_or("unknown")
-        .to_string();
+    let weakest_signature = weakest_signature(chain);
 
     let (earliest_expiry, earliest_expiry_days) = chain
         .iter()
@@ -132,11 +127,26 @@ fn check_hostname_match(chain: &[CertInfo], hostname: &str) -> bool {
     })
 }
 
+/// Weakest signature algorithm in the chain, ignoring a root's self-signature (index > 0).
+pub fn weakest_signature(chain: &[CertInfo]) -> String {
+    chain
+        .iter()
+        .enumerate()
+        .filter(|(i, c)| *i == 0 || !c.is_self_signed)
+        .map(|(_, c)| c.signature_algorithm.as_str())
+        .min_by_key(|algo| sig_strength(algo))
+        .unwrap_or("unknown")
+        .to_string()
+}
+
 /// Return a numeric strength ordering for signature algorithms.
-/// Lower = weaker.
+/// Lower = weaker: weak (SHA-1/MD5/MD2) < unreadable or unrecognised < known strong.
 fn sig_strength(algo: &str) -> u32 {
+    let lower = algo.to_lowercase();
+    if ["sha1", "md5", "md2"].iter().any(|w| lower.contains(w)) {
+        return 0;
+    }
     match algo {
-        "sha1WithRSAEncryption" => 1,
         "sha256WithRSAEncryption" => 2,
         "ecdsa-with-SHA256" => 3,
         "sha384WithRSAEncryption" => 4,
@@ -144,7 +154,8 @@ fn sig_strength(algo: &str) -> u32 {
         "sha512WithRSAEncryption" => 6,
         "ecdsa-with-SHA512" => 7,
         "Ed25519" => 8,
-        _ => 0,
+        "Ed448" => 9,
+        _ => 1,
     }
 }
 
@@ -347,8 +358,10 @@ mod tests {
     }
 
     #[test]
-    fn unknown_algo_is_weakest() {
-        assert_eq!(sig_strength("some-unknown-algo"), 0);
+    fn unknown_algo_ranks_between_weak_and_strong() {
+        assert!(sig_strength("sha1WithRSAEncryption") < sig_strength("some-unknown-algo"));
+        assert!(sig_strength("some-unknown-algo") < sig_strength("sha256WithRSAEncryption"));
+        assert_eq!(sig_strength(""), sig_strength("Unknown(1.2.3)"));
     }
 
     // --- check_any_not_yet_valid tests ---

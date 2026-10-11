@@ -114,10 +114,26 @@ pub fn check_chain_complete(validation: &ValidationResult) -> HealthCheck {
 pub fn check_strong_signature(validation: &ValidationResult) -> HealthCheck {
     let algo = &validation.weakest_signature;
     let algo_lower = algo.to_lowercase();
-    let (status, detail) = if algo_lower.contains("sha1") || algo_lower.contains("md5") {
+    let (status, detail) = if ["sha1", "md5", "md2"]
+        .iter()
+        .any(|w| algo_lower.contains(w))
+    {
         (
             CheckStatus::Fail,
             format!("weak signature algorithm: {algo}"),
+        )
+    } else if algo.is_empty() {
+        (
+            CheckStatus::Warn,
+            "unreadable certificate signature".to_string(),
+        )
+    } else if let Some(oid) = algo
+        .strip_prefix("Unknown(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        (
+            CheckStatus::Warn,
+            format!("unrecognised signature algorithm {oid}"),
         )
     } else {
         (CheckStatus::Pass, format!("signature algorithm: {algo}"))
