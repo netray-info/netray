@@ -19,7 +19,7 @@ Each fix is proven by a unit test on the scenario the defect names.
 
 - Fetching intermediates over AIA. `tls.aia_reachability` keeps judging from the served chain.
 - Parsing RSASSA-PSS parameters.
-- Changing weights or profile v3 (`crates/engine/profiles/v3.toml` stays byte-identical). In `checks.toml` only the `finding` of `tls.strong_signature` changes (R4).
+- Changing weights or profile v3 (`crates/engine/profiles/v3.toml` stays byte-identical). In `checks.toml` only the `finding` texts of `tls.strong_signature` (R4) and `http.cors` (R1) change.
 - Regenerating the stored lens goldens (`tests/fixtures/contracts/lens-*.json`). They are recorded outputs, and none of the scenarios below occurs in them.
 
 ## Context and constraints
@@ -57,7 +57,7 @@ Each fix is proven by a unit test on the scenario the defect names.
 
 ## Requirements
 
-1. **CORS echo.** The probe Origin is one constant in `crates/http` used both by the request and by `analyze_cors`. `reflects_origin` is true only when ACAO equals that constant byte for byte (as the Fetch Standard's CORS check compares) or is `null` (a sandboxed or opaque origin any page can obtain). With credentials it fails as today. An ACAO naming any other specific origin, with or without credentials, passes with "CORS configured". The `*` cases are unchanged.
+1. **CORS echo.** The probe Origin is one constant in `crates/http` used both by the request and by `analyze_cors`. `reflects_origin` is true only when ACAO equals that constant byte for byte (as the Fetch Standard's CORS check compares) or is `null` (a sandboxed or opaque origin any page can obtain). With credentials it fails as today. The catalogue `finding` of `http.cors` reads: "The site echoes an untrusted request Origin in Access-Control-Allow-Origin, or answers with Access-Control-Allow-Origin: null, together with Access-Control-Allow-Credentials: true, or allows any origin with Access-Control-Allow-Origin: *." An ACAO naming any other specific origin, with or without credentials, passes with "CORS configured". The `*` cases are unchanged.
 2. **CAA critical flag.** The known CAA tags are `issue`, `issuewild`, `iodef`, `contactemail`, `contactphone`, `issuemail` and `issuevmc`, compared ASCII case-insensitively. Only a critical record whose tag is not known fails `tls.caa_compliant`. A critical record with a known tag is evaluated like a non-critical one.
 3. **Signature algorithms.** `format_sig_algo` maps 1.2.840.113549.1.1.4 to `md5WithRSAEncryption`, 1.2.840.113549.1.1.2 to `md2WithRSAEncryption`, 1.2.840.10045.4.1 to `ecdsa-with-SHA1`, 1.2.840.10040.4.3 to `dsa-with-SHA1`, 1.3.14.3.2.29 to `sha1WithRSASignature` and 1.3.101.113 to `Ed448`.
 4. **Signature verdict.**
@@ -66,7 +66,9 @@ Each fix is proven by a unit test on the scenario the defect names.
    - Otherwise any `Unknown(<oid>)` algorithm gives Warn with the message `unrecognised signature algorithm <oid>`, and a certificate whose algorithm could not be read (empty string) gives Warn with `unreadable certificate signature`.
    - Otherwise the check passes.
    - A Fail outranks a Warn regardless of where the certificates sit in the chain.
-   - The catalogue `finding` of `tls.strong_signature` reads: "The leaf or an intermediate certificate is signed with SHA-1 or MD5, or with an algorithm netray does not recognise; root self-signatures are ignored." `impact`, `fix_hint` and the other fields stay.
+   - The catalogue `finding` of `tls.strong_signature` reads: "The leaf or an intermediate certificate is signed with SHA-1, MD5 or MD2, or with an algorithm netray does not recognise; root self-signatures are ignored." `impact`, `fix_hint` and the other fields stay.
+   - The API field `validation.weakest_signature` excludes root self-signatures too: it is the value the check reads.
+   - The check's explanations name the same scope: tlsight's `ValidationSummary.tsx`, `crates/tls/docs/quality.md` and lens's `checkMeta.ts` description.
 5. **Trust without the name.** `chain_trusted` reports whether the served chain builds to a trust anchor in the store at the current time, using `verify_server_cert_signed_by_trust_anchor` with no server name. A hostname mismatch no longer makes it false (`tls.hostname_match` keeps reporting the mismatch). A target without a hostname, such as an IP address, gets a real trust verdict.
 6. **Chain completeness.** Completeness is decided from the served certificates and the trust store's anchors, not from the trust verdict or its error.
    - A chain in correct order passes `tls.chain_complete` when its last certificate is self-signed, or when its last certificate or that certificate's issuer is a trust anchor in the store (compared by subject name).
@@ -74,12 +76,14 @@ Each fix is proven by a unit test on the scenario the defect names.
    - Wrong order: trusted gives Warn and untrusted gives Fail, as today.
    - `tls.aia_reachability` follows from this without changes to its own rules.
 
+7. **CAA for wildcard certificates.** When the leaf carries a wildcard SAN and the CAA set holds `issuewild` records, those records decide whether the issuing CA is authorised for it, ignoring `issue` (RFC 8659 §4.3); without `issuewild` records `issue` decides as today. An empty `issuewild` value (`;`) authorises no CA. The leaf's non-wildcard SANs stay judged by `issue`; the check passes only when every applicable set authorises the CA.
+
 ## Phases
 
 ## Phase 1 — Independent check fixes
 
 **Depends on:** none
-**Requirements:** 1, 2, 3, 4
+**Requirements:** 1, 2, 3, 4, 7
 
 `crates/http/src/inspect/{mod.rs, cors.rs}`; `crates/tls/src/validate/caa_compliance.rs` (known-tag set); `crates/tls/src/tls/chain.rs` (`format_sig_algo`); `crates/engine/catalogue/checks.toml` (the one `finding`); `crates/tls/src/validate/chain_trust.rs` and `crates/tls/src/quality/checks.rs` (signature verdict over non-root certificates). `issuer_critical_blocks_all_issuance` changes to an unknown critical tag (ADLC-Test-Change).
 
@@ -98,7 +102,13 @@ GIVEN a critical `IODEF` or `contactemail` record next to an `issue` record auth
 GIVEN OIDs 1.2.840.113549.1.1.4, 1.2.840.113549.1.1.2, 1.2.840.10045.4.1, 1.2.840.10040.4.3, 1.3.14.3.2.29, 1.3.101.113 WHEN format_sig_algo runs THEN `md5WithRSAEncryption`, `md2WithRSAEncryption`, `ecdsa-with-SHA1`, `dsa-with-SHA1`, `sha1WithRSASignature`, `Ed448`.
 GIVEN an intermediate signed with `dsa-with-SHA1` WHEN strong_signature is assessed THEN Fail.
 GIVEN a certificate with signature algorithm "" WHEN strong_signature is assessed THEN Warn with `unreadable certificate signature`.
-GIVEN the catalogue WHEN `tls.strong_signature` is loaded THEN its `finding` names unrecognised algorithms.
+GIVEN the catalogue WHEN `tls.strong_signature` is loaded THEN its `finding` names MD2 and unrecognised algorithms.
+GIVEN the catalogue WHEN `http.cors` is loaded THEN its `finding` names `null`.
+GIVEN an intermediate signed with `md2WithRSAEncryption` WHEN strong_signature is assessed THEN Fail.
+GIVEN a wildcard leaf from the CA in `issue`, with `issuewild ";"` WHEN check_caa_compliance runs THEN Fail.
+GIVEN a wildcard leaf, `issue` naming another CA and `issuewild` naming the leaf's CA WHEN check_caa_compliance runs THEN Pass.
+GIVEN a wildcard leaf from the CA in `issue` and no `issuewild` WHEN check_caa_compliance runs THEN Pass (unchanged).
+GIVEN a non-wildcard leaf from the CA in `issue`, with `issuewild ";"` WHEN check_caa_compliance runs THEN Pass.
 GIVEN a leaf and intermediate signed with SHA-256 and a root self-signed with SHA-1 WHEN strong_signature is assessed THEN Pass.
 GIVEN an intermediate signed with ecdsa-with-SHA1 WHEN strong_signature is assessed THEN Fail.
 GIVEN a self-signed leaf (`leaf_self_signed`) signed with SHA-1 WHEN strong_signature is assessed THEN Fail.
@@ -135,6 +145,8 @@ GIVEN the fixtures of `crates/tls/tests/{module_v3, port_results_table, contract
 - Trust-anchor API over matching the name error: IP targets get a real trust verdict (operator, 2026-10-11).
 - A chain is complete when it ends at an anchor or self-signed, over failing every lone leaf: a leaf issued directly by a root is not punished (operator, 2026-10-11).
 - Completeness from the anchors' subjects over the trust verdict or webpki's error kind: webpki reports expiry before an unknown issuer, so an expired lone leaf would pass. Consequence: a private-CA chain without its root also fails completeness, besides the hard-fail `chain_trusted` (operator, 2026-10-11).
+- Phase 1 reader amendments repaired in phase over noting them for later: the `http.cors` finding names `null`, R4's finding names MD2, `weakest_signature` excludes roots in the API too, the explanation texts follow (operator, 2026-10-11).
+- `issuewild` evaluated in this feature (R7) over a later one: the blanket critical Fail used to hide a critical `issuewild ";"`, so R2 alone would regress it (operator, 2026-10-11).
 - A separate feature before 0.25.0 over folding into v2-catalogue (operator, 2026-10-11).
 
 ## Open decisions
