@@ -755,7 +755,7 @@ pub async fn inspect(
         for &port in &parsed.ports {
             let ips = inspected_ips.clone();
             let hostname = parsed.target.hostname().map(|h| h.to_string());
-            let verifier = state.cert_verifier.clone();
+            let trust_store = state.trust_store.load_full();
             let check_ct = config.validation.check_ct;
             let semaphore = Arc::clone(&state.handshake_semaphore);
             join_set.spawn(async move {
@@ -764,7 +764,7 @@ pub async fn inspect(
                     port,
                     hostname.as_deref(),
                     handshake_timeout,
-                    verifier,
+                    trust_store,
                     check_ct,
                     semaphore,
                 )
@@ -808,16 +808,19 @@ pub async fn inspect(
     };
 
     // Extract leaf issuer for CAA checking
-    let leaf_issuer: Option<String> = port_results
+    let leaf = port_results
         .iter()
         .flat_map(|pr| pr.ips.iter())
         .find(|r| r.chain.is_some())
-        .and_then(|r| r.chain.as_ref()?.first())
-        .map(|leaf| leaf.issuer.clone());
+        .and_then(|r| r.chain.as_ref()?.first());
+    let leaf_issuer: Option<String> = leaf.map(|leaf| leaf.issuer.clone());
+    let leaf_sans: Vec<String> = leaf.map(|leaf| leaf.sans.clone()).unwrap_or_default();
 
     // Compute CAA check status
     let caa_status = match (&caa_lookup, &leaf_issuer) {
-        (Some(caa), Some(issuer)) => validate::caa_compliance::check_caa_compliance(caa, issuer),
+        (Some(caa), Some(issuer)) => {
+            validate::caa_compliance::check_caa_compliance(caa, issuer, &leaf_sans)
+        }
         (Some(caa), None) if caa.is_empty() => validate::CheckStatus::Pass,
         (Some(_), None) => validate::CheckStatus::Skip, // Have records but no cert to check against
         (None, _) => validate::CheckStatus::Skip,
@@ -865,7 +868,7 @@ pub async fn inspect(
     let dns_context = if do_dns {
         let caa_info = caa_lookup.as_ref().map(|caa| {
             let issuer_allowed = leaf_issuer.as_ref().map(|issuer| {
-                validate::caa_compliance::check_caa_compliance(caa, issuer)
+                validate::caa_compliance::check_caa_compliance(caa, issuer, &leaf_sans)
                     == validate::CheckStatus::Pass
             });
             CaaInfo {
@@ -1072,7 +1075,7 @@ async fn inspect_port(
     port: u16,
     hostname: Option<&str>,
     timeout: Duration,
-    cert_verifier: Arc<dyn rustls::client::danger::ServerCertVerifier>,
+    trust_store: Arc<rustls::RootCertStore>,
     check_ct: bool,
     semaphore: Arc<tokio::sync::Semaphore>,
 ) -> PortResult {
@@ -1080,7 +1083,7 @@ async fn inspect_port(
 
     for (idx, &ip) in ips.iter().enumerate() {
         let semaphore = Arc::clone(&semaphore);
-        let cert_verifier = Arc::clone(&cert_verifier);
+        let trust_store = Arc::clone(&trust_store);
         let hostname = hostname.map(|h| h.to_string());
         join_set.spawn(async move {
             let _permit = semaphore.acquire().await.ok();
@@ -1095,7 +1098,7 @@ async fn inspect_port(
                 let validation = validate::chain_trust::validate_chain(
                     chain,
                     hostname.as_deref(),
-                    cert_verifier.as_ref(),
+                    trust_store.as_ref(),
                     raw_certs,
                 );
                 result.validation = Some(validation);

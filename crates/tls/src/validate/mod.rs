@@ -52,6 +52,7 @@ pub struct ValidationResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chain_trust_reason: Option<String>,
     pub terminates_at_self_signed: bool,
+    pub ends_at_anchor: bool,
     pub chain_order_correct: bool,
     pub leaf_covers_hostname: bool,
     pub any_expired: bool,
@@ -156,6 +157,7 @@ mod tests {
             chain_trusted: true,
             chain_trust_reason: None,
             terminates_at_self_signed: false,
+            ends_at_anchor: true,
             chain_order_correct: true,
             leaf_covers_hostname: true,
             any_expired: false,

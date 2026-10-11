@@ -8,7 +8,6 @@ use crate::config::Config;
 use crate::dns::DnsResolver;
 use crate::security::{IpExtractor, RateLimitState};
 use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
-use rustls::client::danger::ServerCertVerifier;
 use rustls_pki_types::CertificateDer;
 use rustls_pki_types::pem::PemObject;
 use tokio::sync::Semaphore;
@@ -20,7 +19,6 @@ pub struct AppState {
     pub rate_limiter: Arc<RateLimitState>,
     /// Trust store wrapped in ArcSwap so it can be hot-reloaded on SIGHUP.
     pub trust_store: Arc<ArcSwap<rustls::RootCertStore>>,
-    pub cert_verifier: Arc<dyn ServerCertVerifier>,
     pub handshake_semaphore: Arc<Semaphore>,
     pub hsts_tls_connector: Arc<tokio_rustls::TlsConnector>,
     pub dns_resolver: Option<Arc<DnsResolver>>,
@@ -40,10 +38,6 @@ impl AppState {
 
         let custom_ca_count = root_store.len().saturating_sub(mozilla_count);
         let trust_store_inner = Arc::new(root_store);
-        let cert_verifier =
-            rustls::client::WebPkiServerVerifier::builder(Arc::clone(&trust_store_inner))
-                .build()
-                .expect("failed to build WebPki verifier");
         let trust_store = Arc::new(ArcSwap::from(trust_store_inner));
 
         let hsts_config = rustls::ClientConfig::builder()
@@ -68,7 +62,6 @@ impl AppState {
             ip_extractor: Arc::new(IpExtractor::new(&config.server.trusted_proxies)),
             rate_limiter: Arc::new(RateLimitState::new(&config.limits)),
             trust_store,
-            cert_verifier,
             handshake_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
             hsts_tls_connector,
             dns_resolver: None, // Initialized async in main

@@ -126,7 +126,7 @@
     <h2>Hard failures</h2>
 
     <p>
-      Two TLS conditions force the grade to <strong>F</strong> regardless of the
+      Four TLS conditions force the grade to <strong>F</strong> regardless of the
       numeric score:
     </p>
     <ul>
@@ -134,6 +134,10 @@
           trusted CA. Browsers will show a security warning.</li>
       <li><strong>Expired certificate</strong> — any certificate in the chain
           is past its validity period.</li>
+      <li><strong>Hostname mismatch</strong> — the certificate does not cover
+          the checked hostname. Browsers will show a security warning.</li>
+      <li><strong>TLS unreachable</strong> — no address completed a TLS
+          handshake.</li>
     </ul>
 
     <p>

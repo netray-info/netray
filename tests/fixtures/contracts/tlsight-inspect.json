@@ -61,6 +61,7 @@
             "chain_trusted": true,
             "earliest_expiry": "2030-04-01T00:00:00Z",
             "earliest_expiry_days": 60,
+            "ends_at_anchor": true,
             "leaf_covers_hostname": true,
             "terminates_at_self_signed": false,
             "weakest_signature": "ecdsa-with-SHA256"

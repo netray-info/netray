@@ -96,11 +96,11 @@ Every check must be **actionable** — a warn or fail status should correspond t
 
 | ID | Label | Pass | Warn | Fail | Skip | Source |
 |----|-------|------|------|------|------|--------|
-| `chain_trusted` | Chain trusted | webpki verification passes | — | Verification fails (self-signed, unknown CA) | No chain available | `ValidationResult.chain_trusted` |
+| `chain_trusted` | Chain trusted | The served chain builds to a trust anchor (webpki, no hostname involved) | — | Verification fails (self-signed, unknown CA, expired) | No chain available | `ValidationResult.chain_trusted` |
 | `not_expired` | Certificate valid | All certs in validity period | — | Any cert expired or not yet valid | No chain available | `ValidationResult.any_expired`, `any_not_yet_valid` |
 | `hostname_match` | Hostname match | Leaf SAN covers requested hostname | — | No matching SAN | IP-mode input (no hostname to match) | `ValidationResult.leaf_covers_hostname` |
-| `chain_complete` | Chain complete | Chain order correct, intermediates present | `chain_order_correct` is false but `chain_trusted` is pass (webpki was lenient despite misordering) | — | No chain available | `ValidationResult.chain_order_correct`, `chain_trusted` |
-| `strong_signature` | Signature algorithm | SHA-256 or stronger across entire chain | — | SHA-1 or MD5 in any chain certificate | No chain available | `ValidationResult.weakest_signature` |
+| `chain_complete` | Chain complete | Chain order correct and the last served certificate is self-signed, an anchor, or issued by an anchor | `chain_order_correct` is false but `chain_trusted` is pass (webpki was lenient despite misordering) | Order correct but the last certificate's issuer is no anchor (an intermediate is missing, also for a leaf sent alone); or order wrong and untrusted | No chain available | `ValidationResult.chain_order_correct`, `ends_at_anchor`, `chain_trusted` |
+| `strong_signature` | Signature algorithm | SHA-256 or stronger on the leaf and every intermediate (root self-signatures are ignored) | Unrecognised or unreadable signature algorithm | SHA-1, MD5 or MD2 on the leaf or an intermediate | No chain available | `ValidationResult.weakest_signature` |
 | `key_strength` | Key strength | RSA >= 2048 bits, or ECDSA P-256+ / Ed25519+ | — | RSA < 2048 bits | No chain available | `CertInfo.key_type`, `key_size` |
 | `expiry_window` | Expiry window | > 30 days remaining | 8–30 days remaining | <= 7 days remaining | No chain available | `CertInfo.days_remaining` (see note) |
 
@@ -140,7 +140,7 @@ These checks are per-port because they depend on port-specific data:
 
 | ID | Label | Pass | Warn | Fail | Skip | Source |
 |----|-------|------|------|------|------|--------|
-| `caa_compliant` | CAA compliance | Issuer matches CAA `issue` record, or no CAA records | — | CAA records exist and issuer doesn't match | CAA checking disabled or no cert to check against | Existing `caa_compliance` |
+| `caa_compliant` | CAA compliance | Issuer matches the `issue` records (for a wildcard SAN the `issuewild` records when present), or no constraining records | — | A constraining set does not name the issuer, or a critical record has an unknown tag | CAA checking disabled or no cert to check against | Existing `caa_compliance` |
 | `dane_valid` | DANE valid | TLSA records match presented certificate | — | TLSA records do not match | DANE check skipped (requires DNSSEC) | Existing `dane_status` from validation |
 | `consistency` | Multi-IP consistency | All IPs return same leaf cert fingerprint, same TLS version, and same cipher suite | — | Any of the three fields differs across IPs | Single IP or fewer than 2 successful handshakes | Existing `ConsistencyResult` |
 

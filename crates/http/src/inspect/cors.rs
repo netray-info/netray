@@ -4,6 +4,9 @@ use crate::quality::types::CheckStatus;
 
 use super::assembler::CorsReport;
 
+/// The `Origin` the CORS probe sends; a response reflects it only by echoing it byte for byte.
+pub const PROBE_ORIGIN: &str = "https://evil.example.com";
+
 /// Analyze the CORS probe response headers.
 pub fn analyze_cors(headers: &HeaderMap) -> CorsReport {
     let acao = headers
@@ -14,7 +17,7 @@ pub fn analyze_cors(headers: &HeaderMap) -> CorsReport {
         .and_then(|v| v.to_str().ok());
 
     let allows_any_origin = acao == Some("*");
-    let reflects_origin = acao.is_some_and(|v| v != "*" && !v.is_empty());
+    let reflects_origin = acao.is_some_and(|v| v == PROBE_ORIGIN || v == "null");
     let allows_credentials = acac.is_some_and(|v| v.eq_ignore_ascii_case("true"));
 
     // Reflected origin + credentials is the dangerous combination

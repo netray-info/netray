@@ -110,13 +110,18 @@ fn profile_v3_is_current_and_weights_exactly_the_catalogue() {
         .values()
         .flat_map(|s| s.hard_fail.iter().map(|id| id.to_string()))
         .collect();
-    let want_hard: BTreeSet<String> = ["tls.chain_trusted", "tls.not_expired", "tls.tls_reachable"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let want_hard: BTreeSet<String> = [
+        "tls.chain_trusted",
+        "tls.hostname_match",
+        "tls.not_expired",
+        "tls.tls_reachable",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect();
     assert_eq!(hard, want_hard);
     let tls_hard = p.sections[&Protocol::Tls].hard_fail.len();
-    assert_eq!(tls_hard, 3, "hard fail lives in the tls section");
+    assert_eq!(tls_hard, 4, "hard fail lives in the tls section");
 
     assert_eq!(
         p.thresholds,
@@ -164,4 +169,22 @@ fn lock_accepts_the_embedded_v3_and_refuses_a_changed_byte_or_unknown_version() 
     check_lock(3, V3).expect("embedded v3.toml matches the lock");
     assert!(check_lock(3, &format!("{V3} ")).is_err(), "appended byte");
     assert!(check_lock(99, V3).is_err(), "version without a lock entry");
+}
+
+#[test]
+fn every_hard_fail_check_is_critical_in_the_catalogue() {
+    let p = Profiles::current();
+    let cat = catalogue();
+    for section in p.sections.values() {
+        for id in &section.hard_fail {
+            let spec = cat
+                .get(id)
+                .unwrap_or_else(|| panic!("{id} in the catalogue"));
+            assert_eq!(
+                spec.severity,
+                netray_model::Severity::Critical,
+                "{id}: a hard fail is critical"
+            );
+        }
+    }
 }

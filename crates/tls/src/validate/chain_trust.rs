@@ -1,5 +1,6 @@
-use rustls::client::danger::ServerCertVerifier;
-use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::RootCertStore;
+use rustls::pki_types::{CertificateDer, UnixTime};
+use rustls::server::ParsedCertificate;
 
 use crate::tls::chain::CertInfo;
 use crate::validate::ValidationResult;
@@ -8,7 +9,7 @@ use crate::validate::ValidationResult;
 pub fn validate_chain(
     chain: &[CertInfo],
     hostname: Option<&str>,
-    verifier: &dyn ServerCertVerifier,
+    roots: &RootCertStore,
     raw_certs: &[CertificateDer<'_>],
 ) -> ValidationResult {
     let any_expired = chain.iter().any(|c| c.is_expired);
@@ -21,14 +22,10 @@ pub fn validate_chain(
         .map(|h| check_hostname_match(chain, h))
         .unwrap_or(false);
 
-    let (chain_trusted, chain_trust_reason) = verify_chain_trust(verifier, hostname, raw_certs);
+    let (chain_trusted, chain_trust_reason) = verify_chain_trust(roots, raw_certs);
+    let ends_at_anchor = chain_ends_at_anchor(chain, roots, raw_certs);
 
-    let weakest_signature = chain
-        .iter()
-        .map(|c| c.signature_algorithm.as_str())
-        .min_by_key(|algo| sig_strength(algo))
-        .unwrap_or("unknown")
-        .to_string();
+    let weakest_signature = weakest_signature(chain);
 
     let (earliest_expiry, earliest_expiry_days) = chain
         .iter()
@@ -40,6 +37,7 @@ pub fn validate_chain(
         chain_trusted,
         chain_trust_reason,
         terminates_at_self_signed,
+        ends_at_anchor,
         chain_order_correct,
         leaf_covers_hostname,
         any_expired,
@@ -50,43 +48,72 @@ pub fn validate_chain(
     }
 }
 
-/// Verify chain trust using rustls WebPkiServerVerifier.
+/// Verify chain trust against the root store. The hostname plays no part in it.
 /// Returns `(trusted, reason)` where reason captures the error message on failure.
 fn verify_chain_trust(
-    verifier: &dyn ServerCertVerifier,
-    hostname: Option<&str>,
+    roots: &RootCertStore,
     raw_certs: &[CertificateDer<'_>],
 ) -> (bool, Option<String>) {
     let Some(end_entity) = raw_certs.first() else {
         return (false, Some("empty certificate chain".to_string()));
     };
-    let intermediates = if raw_certs.len() > 1 {
-        &raw_certs[1..]
-    } else {
-        &[]
-    };
+    let intermediates = &raw_certs[1..];
 
-    // We need a ServerName to verify. For IP input (no hostname), we can't do
-    // standard hostname verification — return false gracefully since the summary
-    // will mark hostname_match as Skip anyway.
-    let server_name = match hostname {
-        Some(h) => match ServerName::try_from(h.to_owned()) {
-            Ok(sn) => sn,
-            Err(_) => return (false, Some(format!("invalid server name: {h}"))),
-        },
-        None => {
-            return (
-                false,
-                Some("no hostname for trust verification".to_string()),
-            );
-        }
+    let parsed = match ParsedCertificate::try_from(end_entity) {
+        Ok(p) => p,
+        Err(e) => return (false, Some(e.to_string())),
     };
-
-    let now = UnixTime::now();
-    match verifier.verify_server_cert(end_entity, intermediates, &server_name, &[], now) {
-        Ok(_) => (true, None),
+    let algs = rustls::crypto::ring::default_provider()
+        .signature_verification_algorithms
+        .all;
+    match rustls::client::verify_server_cert_signed_by_trust_anchor(
+        &parsed,
+        roots,
+        intermediates,
+        UnixTime::now(),
+        algs,
+    ) {
+        Ok(()) => (true, None),
         Err(e) => (false, Some(e.to_string())),
     }
+}
+
+/// True when a served certificate is self-signed, or its subject or issuer is the subject
+/// of a trust anchor in the store: the served chain reaches the end of a path, so no
+/// intermediate is missing. Extra certificates served past that point do not count.
+fn chain_ends_at_anchor(
+    chain: &[CertInfo],
+    roots: &RootCertStore,
+    raw_certs: &[CertificateDer<'_>],
+) -> bool {
+    use x509_parser::prelude::*;
+    if chain.iter().any(|c| c.is_self_signed) {
+        return true;
+    }
+    raw_certs.iter().any(|der| {
+        let Ok((_, cert)) = X509Certificate::from_der(der.as_ref()) else {
+            return false;
+        };
+        let subject = der_contents(cert.subject().as_raw());
+        let issuer = der_contents(cert.issuer().as_raw());
+        roots.roots.iter().any(|anchor| {
+            let name = anchor.subject.as_ref();
+            name == subject || name == issuer
+        })
+    })
+}
+
+/// Strip the outer tag and length of a DER element; webpki stores a Name without them.
+fn der_contents(der: &[u8]) -> &[u8] {
+    let Some(&len_byte) = der.get(1) else {
+        return der;
+    };
+    let header = if len_byte & 0x80 == 0 {
+        2
+    } else {
+        2 + usize::from(len_byte & 0x7f)
+    };
+    der.get(header..).unwrap_or(der)
 }
 
 /// Check if any certificate in the chain has a not_before date in the future.
@@ -132,11 +159,26 @@ fn check_hostname_match(chain: &[CertInfo], hostname: &str) -> bool {
     })
 }
 
+/// Weakest signature algorithm in the chain, ignoring a root's self-signature (index > 0).
+pub fn weakest_signature(chain: &[CertInfo]) -> String {
+    chain
+        .iter()
+        .enumerate()
+        .filter(|(i, c)| *i == 0 || !c.is_self_signed)
+        .map(|(_, c)| c.signature_algorithm.as_str())
+        .min_by_key(|algo| sig_strength(algo))
+        .unwrap_or("unknown")
+        .to_string()
+}
+
 /// Return a numeric strength ordering for signature algorithms.
-/// Lower = weaker.
+/// Lower = weaker: weak (SHA-1/MD5/MD2) < unreadable or unrecognised < known strong.
 fn sig_strength(algo: &str) -> u32 {
+    let lower = algo.to_lowercase();
+    if ["sha1", "md5", "md2"].iter().any(|w| lower.contains(w)) {
+        return 0;
+    }
     match algo {
-        "sha1WithRSAEncryption" => 1,
         "sha256WithRSAEncryption" => 2,
         "ecdsa-with-SHA256" => 3,
         "sha384WithRSAEncryption" => 4,
@@ -144,7 +186,8 @@ fn sig_strength(algo: &str) -> u32 {
         "sha512WithRSAEncryption" => 6,
         "ecdsa-with-SHA512" => 7,
         "Ed25519" => 8,
-        _ => 0,
+        "Ed448" => 9,
+        _ => 1,
     }
 }
 
@@ -288,50 +331,45 @@ mod tests {
 
     // --- verify_chain_trust tests ---
 
-    fn test_verifier() -> std::sync::Arc<dyn ServerCertVerifier> {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-        let mut root_store = rustls::RootCertStore::empty();
-        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        rustls::client::WebPkiServerVerifier::builder(std::sync::Arc::new(root_store))
-            .build()
-            .unwrap()
-    }
-
-    #[test]
-    fn self_signed_cert_not_trusted() {
-        let verifier = test_verifier();
+    fn self_signed_der() -> CertificateDer<'static> {
         let params = rcgen::CertificateParams::new(vec!["example.com".to_string()]).unwrap();
         let cert = params
             .self_signed(&rcgen::KeyPair::generate().unwrap())
             .unwrap();
-        let der = CertificateDer::from(cert.der().to_vec());
-        let (trusted, reason) = verify_chain_trust(verifier.as_ref(), Some("example.com"), &[der]);
+        CertificateDer::from(cert.der().to_vec())
+    }
+
+    fn webpki_roots_store() -> RootCertStore {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let mut root_store = RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        root_store
+    }
+
+    #[test]
+    fn self_signed_cert_not_trusted() {
+        let roots = webpki_roots_store();
+        let (trusted, reason) = verify_chain_trust(&roots, &[self_signed_der()]);
         assert!(!trusted);
         assert!(reason.is_some());
     }
 
     #[test]
     fn empty_chain_not_trusted() {
-        let verifier = test_verifier();
-        let (trusted, reason) = verify_chain_trust(verifier.as_ref(), Some("example.com"), &[]);
+        let roots = webpki_roots_store();
+        let (trusted, reason) = verify_chain_trust(&roots, &[]);
         assert!(!trusted);
         assert_eq!(reason.as_deref(), Some("empty certificate chain"));
     }
 
     #[test]
-    fn no_hostname_not_trusted() {
-        let verifier = test_verifier();
-        let params = rcgen::CertificateParams::new(vec!["example.com".to_string()]).unwrap();
-        let cert = params
-            .self_signed(&rcgen::KeyPair::generate().unwrap())
-            .unwrap();
-        let der = CertificateDer::from(cert.der().to_vec());
-        let (trusted, reason) = verify_chain_trust(verifier.as_ref(), None, &[der]);
-        assert!(!trusted);
-        assert_eq!(
-            reason.as_deref(),
-            Some("no hostname for trust verification")
-        );
+    fn cert_in_store_is_trusted_without_hostname() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let der = self_signed_der();
+        let mut roots = RootCertStore::empty();
+        roots.add(der.clone()).unwrap();
+        let (trusted, reason) = verify_chain_trust(&roots, &[der]);
+        assert!(trusted, "{reason:?}");
     }
 
     // --- sig_strength tests ---
@@ -347,8 +385,10 @@ mod tests {
     }
 
     #[test]
-    fn unknown_algo_is_weakest() {
-        assert_eq!(sig_strength("some-unknown-algo"), 0);
+    fn unknown_algo_ranks_between_weak_and_strong() {
+        assert!(sig_strength("sha1WithRSAEncryption") < sig_strength("some-unknown-algo"));
+        assert!(sig_strength("some-unknown-algo") < sig_strength("sha256WithRSAEncryption"));
+        assert_eq!(sig_strength(""), sig_strength("Unknown(1.2.3)"));
     }
 
     // --- check_any_not_yet_valid tests ---
@@ -366,5 +406,16 @@ mod tests {
     #[test]
     fn empty_certs_not_future() {
         assert!(!check_any_not_yet_valid(&[]));
+    }
+
+    #[test]
+    fn der_contents_strips_short_and_long_form_headers() {
+        assert_eq!(der_contents(&[0x30, 0x02, 0xAA, 0xBB]), &[0xAA, 0xBB]);
+        let mut long = vec![0x30, 0x81, 0x80];
+        long.extend(std::iter::repeat_n(0xCC, 0x80));
+        assert_eq!(der_contents(&long).len(), 0x80);
+        let mut longer = vec![0x30, 0x82, 0x01, 0x00];
+        longer.extend(std::iter::repeat_n(0xDD, 0x100));
+        assert_eq!(der_contents(&longer).len(), 0x100);
     }
 }
