@@ -2,6 +2,13 @@
 //! the protocol modules, the `Registry` that hands them out by protocol, and [`run`], which
 //! drives one check through them. The engine never names a module crate (P40).
 
+pub mod catalogue;
+pub mod profile;
+pub mod scoring;
+
+pub use catalogue::catalogue;
+pub use scoring::score;
+
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
@@ -106,6 +113,12 @@ pub trait Module: Send + Sync {
     fn needs_addresses(&self) -> bool {
         false
     }
+    /// Whether the module reads the resolved `Facts` without needing addresses; such a module
+    /// waits for the resolve inside its own window and, after a failed resolve, runs with empty
+    /// `Facts`.
+    fn wants_facts(&self) -> bool {
+        false
+    }
     fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome>;
 }
 
@@ -174,8 +187,9 @@ pub struct RunReport {
 /// `base.deadline`; an overrun is a `ResolveError`. Every module named in `sections` runs
 /// concurrently with the resolve, each under the earlier of its section duration from the run
 /// start and `base.deadline`. Modules that need addresses wait for the resolve inside their own
-/// window and, after a failed resolve, are not run and yield `Incomplete`; all others start at
-/// the run start with empty `Facts`. Each section is sent on `tx` the moment it finishes; a
+/// window and, after a failed resolve, are not run and yield `Incomplete`; modules that want
+/// facts also wait inside their own window and, after a failed resolve, run with empty `Facts`;
+/// all others start at the run start with empty `Facts`. Each section is sent on `tx` the moment it finishes; a
 /// module that overruns its deadline yields `TimedOut`. Protocols without a registered module
 /// are skipped, and a closed receiver only drops the events.
 pub async fn run(
@@ -215,6 +229,10 @@ pub async fn run(
             Some(async move {
                 let work = async {
                     if !module.needs_addresses() {
+                        if module.wants_facts() {
+                            let facts = resolve.await.unwrap_or_default();
+                            return module.run(&ctx, &facts).await;
+                        }
                         return module.run(&ctx, no_facts).await;
                     }
                     match resolve.await {

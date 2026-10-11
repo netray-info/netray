@@ -12,7 +12,7 @@ mod common;
 use std::time::Duration;
 
 use common::{ip_with_body, run_ip};
-use lens::scoring::engine::CheckVerdict;
+use lens::score::CheckVerdict;
 
 const GOLDEN: &str = include_str!("../../../tests/fixtures/contracts/ifconfig-json.json");
 

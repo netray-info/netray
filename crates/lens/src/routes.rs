@@ -15,13 +15,18 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
+use netray_engine::profile::Profile;
+
 use crate::badge::render::svg_for_grade;
 use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
 use crate::cache::{CachedResult, cache_key, is_fresh};
 use crate::check::{CheckInput, CheckOutput, SectionError, run_check, run_check_with_input};
 use crate::input::validate_domain;
 use crate::modules::{BackendExtra, BackendResult};
-use crate::scoring::engine::{CheckResult, CheckVerdict, OverallScore};
+use crate::score::{
+    CheckResult, CheckVerdict, OverallScore, fix_owner_label, grade_for, grade_label, guide_url,
+    section_weights, spec_by_name,
+};
 use crate::security::check_rate_limit;
 use crate::state::AppState;
 
@@ -44,8 +49,7 @@ pub struct CheckItem {
     #[schema(value_type = String)]
     pub verdict: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[schema(value_type = Option<String>)]
-    pub guide_url: Option<&'static str>,
+    pub guide_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub fix_hint: Option<&'static str>,
@@ -56,318 +60,6 @@ pub struct CheckItem {
     pub weight: Option<u32>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
-}
-
-fn guide_url_for(name: &str) -> Option<&'static str> {
-    match name {
-        // DNS — DNSSEC
-        "dnssec" | "dnskey_algorithm" | "dnssec_rollover" => {
-            Some("https://netray.info/guide/dnssec")
-        }
-        // DNS — record types & infrastructure
-        "cname_apex" | "https_svcb" | "ns" | "ttl" => {
-            Some("https://netray.info/guide/record-types")
-        }
-        "caa" => Some("https://netray.info/guide/caa-records"),
-        "ns_lame" | "ns_delegation" => Some("https://netray.info/guide/lame-delegation"),
-        "infrastructure" => Some("https://netray.info/guide/ip-enrichment"),
-        // TLS — certificate chain
-        "chain_trusted" | "chain_complete" | "strong_signature" | "key_strength"
-        | "not_expired" | "hostname_match" => Some("https://netray.info/guide/certificate-chain"),
-        // TLS — certificate management (expiry, lifetime, SAN, AIA)
-        "expiry_window" | "cert_lifetime" | "san_quality" | "aia_reachability" => {
-            Some("https://netray.info/guide/certificate-management")
-        }
-        // TLS — protocol & cipher suites
-        "tls_version" | "forward_secrecy" | "aead_cipher" | "tls_reachable" => {
-            Some("https://netray.info/guide/tls-protocol")
-        }
-        // TLS — multi-IP consistency
-        "consistency" | "alpn_consistency" => Some("https://netray.info/guide/multi-ip-tls"),
-        // TLS — Encrypted Client Hello
-        "ech_advertised" => Some("https://netray.info/guide/encrypted-client-hello"),
-        "ct_logged" => Some("https://netray.info/guide/certificate-transparency"),
-        "ocsp_stapled" => Some("https://netray.info/guide/certificate-chain"),
-        "hsts" | "https_redirect" => Some("https://netray.info/guide/hsts"),
-        "security_headers" => Some("https://netray.info/guide/security-headers"),
-        "cors" => Some("https://netray.info/guide/cors"),
-        "cookie_secure" => Some("https://netray.info/guide/cookie-security"),
-        "hygiene" => Some("https://netray.info/guide/http-redirects"),
-        "dane_valid" | "caa_compliant" => Some("https://netray.info/guide/dane-tlsa"),
-        // Email buckets
-        "email_authentication"
-        | "email_infrastructure"
-        | "email_transport"
-        | "email_brand_policy" => Some("https://netray.info/guide/email-auth"),
-        // IP
-        "reputation" => Some("https://netray.info/guide/ip-enrichment"),
-        _ => None,
-    }
-}
-
-/// Return the `(fix_hint, fix_owner)` pair for a check name.
-fn fix_for(name: &str) -> (Option<&'static str>, Option<&'static str>) {
-    match name {
-        // DNS
-        "dnssec" => (
-            Some("Enable DNSSEC signing for your domain at your registrar or DNS provider."),
-            Some("your DNS provider or registrar"),
-        ),
-        "dnskey_algorithm" => (
-            Some(
-                "Upgrade your DNSSEC signing algorithm to ECDSA P-256 (Algorithm 13) or Ed25519 (Algorithm 15) — older algorithms are no longer considered safe.",
-            ),
-            Some("your DNS provider"),
-        ),
-        "dnssec_rollover" => (
-            Some(
-                "Complete the DNSSEC key rollover: remove the old DNSKEY and ensure only the new key's DS record is published at your registrar.",
-            ),
-            Some("your DNS provider or registrar"),
-        ),
-        "cname_apex" => (
-            Some(
-                "Remove the CNAME at your apex domain and replace it with A/AAAA records, or use ALIAS/ANAME records if your DNS provider supports them.",
-            ),
-            Some("your DNS provider"),
-        ),
-        "https_svcb" => (
-            Some(
-                "Add an HTTPS (type 65) record to enable service discovery that speeds up HTTPS connections and advertises HTTP/2, HTTP/3, and ECH support.",
-            ),
-            Some("your DNS provider"),
-        ),
-        "ns" => (
-            Some(
-                "Ensure your domain has at least two authoritative nameservers in separate networks for redundancy.",
-            ),
-            Some("your DNS provider or registrar"),
-        ),
-        "ttl" => (
-            Some(
-                "Set your DNS TTL to between 300 and 86400 seconds — very low TTLs overload resolvers and very high TTLs slow down propagation of changes.",
-            ),
-            Some("your DNS provider"),
-        ),
-        "caa" => (
-            Some(
-                "Add CAA records to specify which certificate authorities are allowed to issue certificates for your domain, reducing mis-issuance risk.",
-            ),
-            Some("your DNS provider"),
-        ),
-        "ns_lame" => (
-            Some(
-                "Your nameserver is not authoritative for your zone — update your registrar's nameserver list to match the NS records in your zone, or update your zone's NS records to match your registrar.",
-            ),
-            Some("your DNS provider or registrar"),
-        ),
-        "ns_delegation" => (
-            Some(
-                "The nameservers at your registrar don't match the NS records in your zone — synchronise them to prevent resolution failures.",
-            ),
-            Some("your registrar"),
-        ),
-        // TLS — certificate chain
-        "chain_trusted" => (
-            Some(
-                "Your certificate is not trusted by major browsers — ensure you're using a certificate from a public CA and that the full chain including intermediates is configured.",
-            ),
-            Some("your web server config"),
-        ),
-        "chain_complete" => (
-            Some(
-                "Configure your web server to serve the full certificate chain including all intermediate certificates, not just the leaf certificate.",
-            ),
-            Some("your web server config"),
-        ),
-        "strong_signature" => (
-            Some(
-                "Replace your certificate — SHA-1 signatures are no longer trusted by browsers and must be upgraded to SHA-256 or stronger.",
-            ),
-            Some("your CA or certificate provider"),
-        ),
-        "key_strength" => (
-            Some(
-                "Reissue your certificate with at least a 2048-bit RSA key or a 256-bit ECDSA key — shorter keys are no longer accepted by modern clients.",
-            ),
-            Some("your CA or certificate provider"),
-        ),
-        "not_expired" => (
-            Some(
-                "Your certificate has expired — renew it immediately, as browsers will block all access to your site until it is replaced.",
-            ),
-            Some("your CA or certificate provider"),
-        ),
-        "hostname_match" => (
-            Some(
-                "Your certificate's Subject Alternative Names don't cover this hostname — reissue a certificate that includes all domains you serve on this server.",
-            ),
-            Some("your CA or certificate provider"),
-        ),
-        "expiry_window" => (
-            Some(
-                "Your certificate is expiring soon — renew it now to avoid browsers showing a warning or blocking your site.",
-            ),
-            Some("your CA or certificate provider"),
-        ),
-        "cert_lifetime" => (
-            Some(
-                "Reissue your certificate with a lifetime of 397 days or less — longer lifetimes are no longer accepted by major browsers.",
-            ),
-            Some("your CA or certificate provider"),
-        ),
-        "san_quality" => (
-            Some(
-                "Review your certificate's Subject Alternative Names: replace wildcards with specific names where possible and split certificates that cover unrelated domains.",
-            ),
-            Some("your CA or certificate provider"),
-        ),
-        "aia_reachability" => (
-            Some(
-                "The OCSP or issuer URL in your certificate is unreachable — contact your CA, as this may break certificate revocation checking for your visitors.",
-            ),
-            Some("your CA"),
-        ),
-        // TLS — protocol & ciphers
-        "tls_version" => (
-            Some(
-                "Disable TLS 1.0 and TLS 1.1 in your web server — only TLS 1.2 and TLS 1.3 should be enabled.",
-            ),
-            Some("your web server config"),
-        ),
-        "forward_secrecy" => (
-            Some(
-                "Configure your web server to prefer ECDHE or DHE cipher suites, which provide forward secrecy and protect past sessions if your private key is later compromised.",
-            ),
-            Some("your web server config"),
-        ),
-        "aead_cipher" => (
-            Some(
-                "Remove CBC and RC4 cipher suites from your TLS configuration and use only AEAD ciphers such as AES-GCM and ChaCha20-Poly1305.",
-            ),
-            Some("your web server config"),
-        ),
-        // TLS — multi-IP consistency
-        "consistency" => (
-            Some(
-                "Your TLS configuration varies across your server IPs — ensure all servers behind your domain serve identical certificates and cipher suites.",
-            ),
-            Some("your infrastructure team"),
-        ),
-        "alpn_consistency" => (
-            Some(
-                "Your servers advertise different protocols (HTTP/1.1, HTTP/2) on different IPs — align your web server configuration across all instances.",
-            ),
-            Some("your infrastructure team"),
-        ),
-        "tls_reachable" => (
-            Some(
-                "Serve HTTPS on port 443 with a valid certificate, and make sure the firewall allows inbound connections to port 443.",
-            ),
-            Some("the site's web server or hosting provider"),
-        ),
-        // TLS — advanced
-        "ech_advertised" => (
-            Some(
-                "Consider enabling Encrypted Client Hello to hide the SNI from network observers — requires an HTTPS DNS record with ECH keys and web server support (nginx 1.27+ or nginx-quic).",
-            ),
-            Some("your web server config and DNS provider"),
-        ),
-        "ct_logged" => (
-            Some(
-                "Obtain a new certificate from a CA that submits to Certificate Transparency logs — all publicly-trusted CAs are required to do so.",
-            ),
-            Some("your CA or certificate provider"),
-        ),
-        "ocsp_stapled" => (
-            Some(
-                "Enable OCSP stapling in your web server so browsers don't need to make a live round-trip to your CA on every TLS handshake.",
-            ),
-            Some("your web server config"),
-        ),
-        "dane_valid" => (
-            Some(
-                "Update your DANE TLSA record to match your current certificate or key — TLSA records must be updated every time a certificate rotates.",
-            ),
-            Some("your DNS provider"),
-        ),
-        "caa_compliant" => (
-            Some(
-                "Either add the issuing CA to your CAA records, or reissue your certificate from a CA already listed in your CAA records.",
-            ),
-            Some("your DNS provider or CA"),
-        ),
-        // HTTP
-        "hsts" => (
-            Some(
-                "Add a `Strict-Transport-Security` header with `max-age=31536000` to all HTTPS responses so browsers always use HTTPS for your domain.",
-            ),
-            Some("your web server config"),
-        ),
-        "https_redirect" => (
-            Some(
-                "Configure your web server to redirect all HTTP requests to HTTPS with a 301 permanent redirect before serving any content.",
-            ),
-            Some("your web server config"),
-        ),
-        "security_headers" => (
-            Some(
-                "Add the missing security headers — at minimum `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and a `Content-Security-Policy` — to reduce common browser-based attack surface.",
-            ),
-            Some("your web server config"),
-        ),
-        "cors" => (
-            Some(
-                "Avoid using `Access-Control-Allow-Origin: *` on endpoints that use cookies or authentication — enumerate allowed origins explicitly instead.",
-            ),
-            Some("your web server or application config"),
-        ),
-        "cookie_secure" => (
-            Some(
-                "Set the `Secure` and `HttpOnly` flags on all cookies so they are never sent over plain HTTP and are not accessible to JavaScript.",
-            ),
-            Some("your web server or application config"),
-        ),
-        "hygiene" => (
-            Some(
-                "Remove or anonymise the `Server` and `X-Powered-By` response headers to avoid leaking software names and versions to potential attackers.",
-            ),
-            Some("your web server config"),
-        ),
-        // Email
-        "email_authentication" => (
-            Some(
-                "Publish an SPF record that covers your mail servers, configure DKIM signing with your email provider, and publish a DMARC policy at `p=quarantine` or `p=reject`.",
-            ),
-            Some("your DNS provider and email provider"),
-        ),
-        "email_infrastructure" => (
-            Some(
-                "Ensure your domain has valid MX records pointing to functioning mail servers, and that each pointed hostname resolves to an A or AAAA record.",
-            ),
-            Some("your DNS provider and email provider"),
-        ),
-        "email_transport" => (
-            Some(
-                "Publish an MTA-STS policy to enforce encrypted email transport and prevent SMTP downgrade attacks on mail delivered to your domain.",
-            ),
-            Some("your email provider and DNS provider"),
-        ),
-        "email_brand_policy" => (
-            Some(
-                "Publish a BIMI record with a valid SVG Tiny PS logo once your DMARC policy is at `p=quarantine` or `p=reject`, to show your brand logo in supporting email clients.",
-            ),
-            Some("your DNS provider"),
-        ),
-        // IP
-        "reputation" => (
-            Some(
-                "Your IP address appears on one or more DNS blocklists — check your mail server for spam activity, then request delisting from each blocklist individually.",
-            ),
-            Some("your hosting provider or mail administrator"),
-        ),
-        _ => (None, None),
-    }
 }
 
 /// Validate and split a comma-separated `dkim_selectors` string.
@@ -677,17 +369,35 @@ pub async fn meta_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut all_checks = HashMap::new();
     let mut section_weights = HashMap::new();
     let mut hard_fail = HashMap::new();
-    for (name, section) in &profile.sections {
-        all_checks.extend(section.checks.iter().map(|(k, v)| (k.clone(), *v)));
+    for (protocol, section) in &profile.sections {
+        let name = protocol.as_str().to_string();
+        all_checks.extend(
+            section
+                .checks
+                .iter()
+                .map(|(id, w)| (id.name().to_string(), *w)),
+        );
         section_weights.insert(name.clone(), section.weight);
-        hard_fail.insert(name.clone(), section.hard_fail.clone());
+        hard_fail.insert(
+            name,
+            section
+                .hard_fail
+                .iter()
+                .map(|id| id.name().to_string())
+                .collect(),
+        );
     }
+    let thresholds = profile
+        .thresholds
+        .iter()
+        .map(|(g, t)| (grade_label(*g).to_string(), *t))
+        .collect();
     let profile_data = ProfileData {
-        name: profile.meta.name.clone(),
-        version: profile.meta.version,
+        name: profile.name.clone(),
+        version: profile.version,
         checks: all_checks,
         section_weights,
-        thresholds: profile.thresholds.clone(),
+        thresholds,
         hard_fail,
     };
 
@@ -1158,11 +868,11 @@ fn build_check_items(checks: &[CheckResult], weights: &HashMap<String, u32>) -> 
         .iter()
         .map(|c| {
             let verdict = verdict_str(&c.verdict);
-            let (fix_hint, fix_owner) = fix_for(&c.name);
+            let spec = spec_by_name(&c.name);
             CheckItem {
-                guide_url: guide_url_for(&c.name),
-                fix_hint,
-                fix_owner,
+                guide_url: spec.map(guide_url),
+                fix_hint: spec.map(|s| s.fix_hint.as_str()),
+                fix_owner: spec.map(|s| fix_owner_label(s.fix_owner)),
                 name: c.name.clone(),
                 verdict,
                 weight: weights.get(&c.name).copied(),
@@ -1404,10 +1114,8 @@ fn email_payload_from(
 fn summary_payload_from(
     sections: &HashMap<String, Result<BackendResult, SectionError>>,
     score: &OverallScore,
-    thresholds: &std::collections::BTreeMap<String, u32>,
+    profile: &Profile,
 ) -> SummaryEvent {
-    use crate::scoring::engine::lookup_grade;
-
     let mut section_statuses: HashMap<String, String> = HashMap::new();
     let mut section_grades: HashMap<String, String> = HashMap::new();
 
@@ -1424,7 +1132,7 @@ fn summary_payload_from(
         };
         section_statuses.insert(name.clone(), status.to_string());
         if let Some(s) = score.sections.get(name) {
-            section_grades.insert(name.clone(), lookup_grade(thresholds, s.percentage));
+            section_grades.insert(name.clone(), grade_for(profile, s.percentage));
         }
     }
 
@@ -1529,9 +1237,9 @@ fn email_event_from(
 fn summary_event_from(
     sections: &HashMap<String, Result<BackendResult, SectionError>>,
     score: &OverallScore,
-    thresholds: &std::collections::BTreeMap<String, u32>,
+    profile: &Profile,
 ) -> Event {
-    let payload = summary_payload_from(sections, score, thresholds);
+    let payload = summary_payload_from(sections, score, profile);
     Event::default()
         .event("summary")
         .data(serde_json::to_string(&payload).unwrap_or_default())
@@ -1548,38 +1256,17 @@ fn build_sse_events(
     domain: String,
     output: CheckOutput,
     cached: bool,
-    profile: &crate::scoring::profile::ScoringProfile,
+    profile: &Profile,
     snapshot_id: Option<String>,
 ) -> Vec<Event> {
     let duration_ms = output.duration_ms;
-    let empty_checks = HashMap::new();
     let empty_err: Result<BackendResult, SectionError> =
         Err(SectionError::BackendError("absent".to_string()));
-    let dns_checks = profile
-        .sections
-        .get("dns")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
-    let tls_checks = profile
-        .sections
-        .get("tls")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
-    let http_checks = profile
-        .sections
-        .get("http")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
-    let ip_checks = profile
-        .sections
-        .get("ip")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
-    let email_checks = profile
-        .sections
-        .get("email")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
+    let dns_checks = &section_weights(profile, "dns");
+    let tls_checks = &section_weights(profile, "tls");
+    let http_checks = &section_weights(profile, "http");
+    let ip_checks = &section_weights(profile, "ip");
+    let email_checks = &section_weights(profile, "email");
     let mut events = vec![
         dns_event_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
         tls_event_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
@@ -1594,11 +1281,7 @@ fn build_sse_events(
         output.sections.get("ip").unwrap_or(&empty_err),
         ip_checks,
     ));
-    events.push(summary_event_from(
-        &output.sections,
-        &output.score,
-        &profile.thresholds,
-    ));
+    events.push(summary_event_from(&output.sections, &output.score, profile));
     events.push(done_event(&domain, duration_ms, cached, snapshot_id));
     events
 }
@@ -1606,7 +1289,7 @@ fn build_sse_events(
 fn build_sse_events_from_cached(
     domain: &str,
     cached: &CachedResult,
-    profile: &crate::scoring::profile::ScoringProfile,
+    profile: &Profile,
 ) -> Vec<Event> {
     let dummy_output = CheckOutput {
         domain: domain.to_string(),
@@ -1640,7 +1323,7 @@ fn sse_response_from_cached(
     domain: String,
     cached: &CachedResult,
     is_cached: bool,
-    profile: &crate::scoring::profile::ScoringProfile,
+    profile: &Profile,
 ) -> Response {
     let events = build_sse_events_from_cached(&domain, cached, profile);
     make_sse_stream(events, if is_cached { "HIT" } else { "MISS" })
@@ -1654,37 +1337,16 @@ fn build_sync_response(
     domain: String,
     output: CheckOutput,
     cached: bool,
-    profile: &crate::scoring::profile::ScoringProfile,
+    profile: &Profile,
     snapshot_id: Option<String>,
 ) -> Response {
-    let empty_checks = HashMap::new();
     let empty_err: Result<BackendResult, SectionError> =
         Err(SectionError::BackendError("absent".to_string()));
-    let dns_checks = profile
-        .sections
-        .get("dns")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
-    let tls_checks = profile
-        .sections
-        .get("tls")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
-    let http_checks = profile
-        .sections
-        .get("http")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
-    let ip_checks = profile
-        .sections
-        .get("ip")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
-    let email_checks = profile
-        .sections
-        .get("email")
-        .map(|s| &s.checks)
-        .unwrap_or(&empty_checks);
+    let dns_checks = &section_weights(profile, "dns");
+    let tls_checks = &section_weights(profile, "tls");
+    let http_checks = &section_weights(profile, "http");
+    let ip_checks = &section_weights(profile, "ip");
+    let email_checks = &section_weights(profile, "email");
     let duration_ms = output.duration_ms;
     let response = SyncCheckResponse {
         dns: dns_payload_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
@@ -1698,7 +1360,7 @@ fn build_sync_response(
             .get("email")
             .map(|r| email_payload_from(r, email_checks)),
         ip: ip_payload_from(output.sections.get("ip").unwrap_or(&empty_err), ip_checks),
-        summary: summary_payload_from(&output.sections, &output.score, &profile.thresholds),
+        summary: summary_payload_from(&output.sections, &output.score, profile),
         done: done_payload(&domain, duration_ms, cached, snapshot_id),
     };
     let cache_header = if cached { "HIT" } else { "MISS" };
@@ -1716,7 +1378,7 @@ fn sync_response_from_cached(
     domain: String,
     cached: &CachedResult,
     is_cached: bool,
-    profile: &crate::scoring::profile::ScoringProfile,
+    profile: &Profile,
 ) -> Response {
     let dummy_output = CheckOutput {
         domain: domain.clone(),
@@ -1740,7 +1402,7 @@ fn sync_response_from_cached(
 /// Build section results for snapshot creation from a CheckOutput.
 fn snapshot_section_results(
     output: &CheckOutput,
-    profile: &crate::scoring::profile::ScoringProfile,
+    profile: &Profile,
 ) -> Vec<crate::snapshot::SectionResult> {
     // Section order and display names
     let known_sections: &[(&str, &str)] = &[
@@ -1765,7 +1427,7 @@ fn snapshot_section_results(
             let grade = if output.score.not_applicable.contains_key(*key) {
                 "N/A".to_string()
             } else if let Some(section_score) = output.score.sections.get(*key) {
-                crate::scoring::engine::lookup_grade(&profile.thresholds, section_score.percentage)
+                grade_for(profile, section_score.percentage)
             } else {
                 "error".to_string()
             };
@@ -2211,7 +1873,7 @@ pub mod tests {
         let item = CheckItem {
             name: "hsts".to_string(),
             verdict: "warn",
-            guide_url: Some("https://netray.info/guide/hsts"),
+            guide_url: Some("https://netray.info/guide/hsts".to_string()),
             fix_hint: None,
             fix_owner: None,
             weight: Some(10),
@@ -2233,7 +1895,7 @@ pub mod tests {
         let item = CheckItem {
             name: "hsts".to_string(),
             verdict: "warn",
-            guide_url: Some("https://netray.info/guide/hsts"),
+            guide_url: Some("https://netray.info/guide/hsts".to_string()),
             fix_hint: Some("HSTS max-age should be at least 1 year."),
             fix_owner: Some("Your web server config"),
             weight: Some(10),
@@ -2245,86 +1907,54 @@ pub mod tests {
     }
 
     #[test]
-    fn fix_for_returns_populated_hints_for_all_known_checks() {
-        for name in [
-            "dnssec",
-            "dnskey_algorithm",
-            "dnssec_rollover",
-            "cname_apex",
-            "https_svcb",
-            "ns",
-            "ttl",
-            "caa",
-            "ns_lame",
-            "ns_delegation",
-            "chain_trusted",
-            "chain_complete",
-            "strong_signature",
-            "key_strength",
-            "not_expired",
-            "hostname_match",
-            "expiry_window",
-            "cert_lifetime",
-            "san_quality",
-            "aia_reachability",
-            "tls_version",
-            "forward_secrecy",
-            "aead_cipher",
-            "consistency",
-            "alpn_consistency",
-            "ech_advertised",
-            "ct_logged",
-            "ocsp_stapled",
-            "dane_valid",
-            "caa_compliant",
-            "tls_reachable",
-            "hsts",
-            "https_redirect",
-            "security_headers",
-            "cors",
-            "cookie_secure",
-            "hygiene",
-            "email_authentication",
-            "email_infrastructure",
-            "email_transport",
-            "email_brand_policy",
-            "reputation",
-        ] {
-            assert_ne!(
-                fix_for(name),
-                (None, None),
-                "fix_for({name}) must return a non-None pair"
-            );
+    fn check_items_carry_catalogue_texts_for_every_check() {
+        let checks: Vec<CheckResult> = netray_engine::catalogue()
+            .entries()
+            .iter()
+            .map(|spec| CheckResult {
+                name: spec.id.name().to_string(),
+                verdict: CheckVerdict::Warn,
+                messages: vec![],
+            })
+            .collect();
+        for item in build_check_items(&checks, &HashMap::new()) {
+            assert!(item.fix_hint.is_some(), "{} lacks a fix hint", item.name);
+            assert!(item.fix_owner.is_some(), "{} lacks a fix owner", item.name);
+            assert!(item.guide_url.is_some(), "{} lacks a guide URL", item.name);
         }
-        let (_, owner) = fix_for("reputation");
-        assert_eq!(
-            owner.unwrap(),
-            "your hosting provider or mail administrator"
-        );
+        let reputation = build_check_items(&checks[checks.len() - 1..], &HashMap::new());
+        assert_eq!(reputation[0].name, "reputation");
+        assert_eq!(reputation[0].fix_owner, Some("your hosting provider"));
+    }
+
+    #[test]
+    fn check_item_without_catalogue_entry_has_no_texts() {
+        let checks = vec![CheckResult {
+            name: "security_headers".to_string(),
+            verdict: CheckVerdict::Warn,
+            messages: vec![],
+        }];
+        let item = &build_check_items(&checks, &HashMap::new())[0];
+        assert_eq!(item.guide_url, None);
+        assert_eq!(item.fix_hint, None);
+        assert_eq!(item.fix_owner, None);
     }
 
     #[test]
     fn guide_url_for_tls_reachable_is_some() {
-        assert!(guide_url_for("tls_reachable").is_some());
+        assert!(spec_by_name("tls_reachable").map(guide_url).is_some());
     }
 
     #[test]
     fn guide_url_for_http_checks_point_to_correct_pages() {
+        let url = |n: &str| spec_by_name(n).map(guide_url);
         assert_eq!(
-            guide_url_for("security_headers"),
-            Some("https://netray.info/guide/security-headers")
-        );
-        assert_eq!(
-            guide_url_for("cors"),
+            url("cors").as_deref(),
             Some("https://netray.info/guide/cors")
         );
         assert_eq!(
-            guide_url_for("cookie_secure"),
+            url("cookie_secure").as_deref(),
             Some("https://netray.info/guide/cookie-security")
-        );
-        assert_eq!(
-            guide_url_for("hygiene"),
-            Some("https://netray.info/guide/http-redirects")
         );
     }
 
@@ -2509,7 +2139,7 @@ pub mod tests {
 
     #[test]
     fn hard_fail_reason_populated_when_hard_fail_triggered() {
-        use crate::scoring::engine::OverallScore;
+        use crate::score::OverallScore;
 
         let score = OverallScore {
             sections: HashMap::new(),
@@ -2521,9 +2151,9 @@ pub mod tests {
             complete: true,
         };
         let sections = HashMap::new();
-        let thresholds = BTreeMap::new();
+        let profile = netray_engine::profile::Profiles::current();
 
-        let summary = summary_payload_from(&sections, &score, &thresholds);
+        let summary = summary_payload_from(&sections, &score, profile);
 
         assert!(summary.hard_fail);
         assert_eq!(
@@ -2536,7 +2166,7 @@ pub mod tests {
 
     #[test]
     fn hard_fail_reason_null_when_no_hard_fail() {
-        use crate::scoring::engine::OverallScore;
+        use crate::score::OverallScore;
 
         let score = OverallScore {
             sections: HashMap::new(),
@@ -2548,9 +2178,9 @@ pub mod tests {
             complete: true,
         };
         let sections = HashMap::new();
-        let thresholds = BTreeMap::new();
+        let profile = netray_engine::profile::Profiles::current();
 
-        let summary = summary_payload_from(&sections, &score, &thresholds);
+        let summary = summary_payload_from(&sections, &score, profile);
 
         assert!(!summary.hard_fail);
         assert_eq!(summary.hard_fail_reason, None);
@@ -2560,7 +2190,7 @@ pub mod tests {
 
     #[test]
     fn hard_fail_reason_in_sse_summary_payload() {
-        use crate::scoring::engine::OverallScore;
+        use crate::score::OverallScore;
 
         let score = OverallScore {
             sections: HashMap::new(),
@@ -2572,10 +2202,10 @@ pub mod tests {
             complete: true,
         };
         let sections = HashMap::new();
-        let thresholds = BTreeMap::new();
+        let profile = netray_engine::profile::Profiles::current();
 
         // summary_payload_from is used by summary_event_from — test its output directly.
-        let payload = summary_payload_from(&sections, &score, &thresholds);
+        let payload = summary_payload_from(&sections, &score, profile);
         let json_str = serde_json::to_string(&payload).unwrap();
         let json: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         assert!(
@@ -3079,10 +2709,7 @@ pub mod tests {
 
     #[test]
     fn summary_section_absent_from_profile_is_not_error() {
-        use crate::scoring::engine::{SectionInput, SectionStatus, compute_score};
-        use crate::scoring::profile::ScoringProfile;
-
-        let profile = ScoringProfile::from_toml(
+        let profile = Profile::from_toml(
             r#"
 [meta]
 name = "no-http"
@@ -3109,34 +2736,6 @@ chain_trusted = 5
         let tls_checks = vec![grade_integrity_check("chain_trusted", CheckVerdict::Pass)];
         let http_checks = vec![grade_integrity_check("hsts", CheckVerdict::Warn)];
 
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "dns".to_string(),
-            SectionInput {
-                checks: dns_checks.clone(),
-                status: SectionStatus::Scored,
-            },
-        );
-        inputs.insert(
-            "tls".to_string(),
-            SectionInput {
-                checks: tls_checks.clone(),
-                status: SectionStatus::Scored,
-            },
-        );
-        inputs.insert(
-            "http".to_string(),
-            SectionInput {
-                checks: http_checks.clone(),
-                status: SectionStatus::Scored,
-            },
-        );
-        let score = compute_score(&profile, &inputs);
-        assert!(
-            score.complete,
-            "an unprofiled section must not make the score incomplete"
-        );
-
         let mut sections: HashMap<String, Result<BackendResult, SectionError>> = HashMap::new();
         for (name, checks) in [("dns", dns_checks), ("tls", tls_checks)] {
             let extra = BackendExtra::Tls {
@@ -3146,8 +2745,13 @@ chain_trusted = 5
             sections.insert(name.to_string(), Ok(BackendResult { checks, extra }));
         }
         sections.insert("http".to_string(), grade_integrity_http_ok(http_checks));
+        let score = crate::score::score(&profile, &sections);
+        assert!(
+            score.complete,
+            "an unprofiled section must not make the score incomplete"
+        );
 
-        let summary = summary_payload_from(&sections, &score, &profile.thresholds);
+        let summary = summary_payload_from(&sections, &score, &profile);
         assert_eq!(summary.sections["http"], "warn");
         assert_ne!(summary.overall, "error");
         assert!(summary.complete);
@@ -3159,10 +2763,7 @@ chain_trusted = 5
 
     #[test]
     fn summary_profiled_section_with_nothing_possible_stays_error() {
-        use crate::scoring::engine::{SectionInput, SectionStatus, compute_score};
-        use crate::scoring::profile::ScoringProfile;
-
-        let profile = ScoringProfile::from_toml(
+        let profile = Profile::from_toml(
             r#"
 [meta]
 name = "http-only"
@@ -3180,23 +2781,15 @@ hsts = 5
         )
         .unwrap();
         let checks = vec![grade_integrity_check("hsts", CheckVerdict::Skip)];
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "http".to_string(),
-            SectionInput {
-                checks: checks.clone(),
-                status: SectionStatus::Scored,
-            },
-        );
-        let score = compute_score(&profile, &inputs);
         let mut sections = HashMap::new();
         sections.insert("http".to_string(), grade_integrity_http_ok(checks));
+        let score = crate::score::score(&profile, &sections);
 
-        let summary = summary_payload_from(&sections, &score, &profile.thresholds);
+        let summary = summary_payload_from(&sections, &score, &profile);
         assert_eq!(summary.sections["http"], "error");
         assert_eq!(summary.overall, "error");
 
-        let weights: HashMap<String, u32> = profile.sections["http"].checks.clone();
+        let weights = section_weights(&profile, "http");
         assert_eq!(
             http_payload_from(&sections["http"], &weights).status,
             "error"
@@ -3205,10 +2798,7 @@ hsts = 5
 
     #[test]
     fn not_applicable_ip_section_is_skip_and_not_overall_error() {
-        use crate::scoring::engine::{SectionInput, SectionStatus, compute_score};
-        use crate::scoring::profile::ScoringProfile;
-
-        let profile = ScoringProfile::from_toml(
+        let profile = Profile::from_toml(
             r#"
 [meta]
 name = "http-only"
@@ -3226,34 +2816,16 @@ hsts = 5
         )
         .unwrap();
         let checks = vec![grade_integrity_check("hsts", CheckVerdict::Pass)];
-        let mut inputs = HashMap::new();
-        inputs.insert(
-            "http".to_string(),
-            SectionInput {
-                checks: checks.clone(),
-                status: SectionStatus::Scored,
-            },
-        );
-        inputs.insert(
-            "ip".to_string(),
-            SectionInput {
-                checks: vec![],
-                status: SectionStatus::NotApplicable {
-                    reason: "no public addresses".to_string(),
-                },
-            },
-        );
-        let score = compute_score(&profile, &inputs);
-        assert!(score.complete);
-
         let ip_result: Result<BackendResult, SectionError> = Err(SectionError::NotApplicable {
             reason: "no public addresses".to_string(),
         });
         let mut sections = HashMap::new();
         sections.insert("http".to_string(), grade_integrity_http_ok(checks));
         sections.insert("ip".to_string(), ip_result);
+        let score = crate::score::score(&profile, &sections);
+        assert!(score.complete);
 
-        let summary = summary_payload_from(&sections, &score, &profile.thresholds);
+        let summary = summary_payload_from(&sections, &score, &profile);
         assert_eq!(summary.sections["ip"], "skip");
         assert_eq!(summary.sections["http"], "pass");
         assert_ne!(summary.overall, "error");

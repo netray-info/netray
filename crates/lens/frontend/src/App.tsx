@@ -384,7 +384,7 @@ export default function App() {
             <p class="help-desc">
               Weighted average across IP (10%), DNS (20%), TLS (35%), HTTP (20%), and Email (15%).
               HTTP and Email are optional — only scored when the respective backends are configured.
-              For domains without MX records, the three email receiving buckets are excluded from scoring automatically.
+              For domains without MX records, the seven MX-dependent email checks (MX, MTA-STS, TLS-RPT, BIMI, DANE, DNSBL, FCrDNS) are excluded from scoring automatically.
             </p>
             <Show when={meta()?.features?.profile}>
               {(profile) => (

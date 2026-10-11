@@ -191,9 +191,6 @@ async fn lens_registry(
     };
     let dns_config: netray_dns::ModuleConfig =
         table.try_into().map_err(|e| format!("modules.dns: {e}"))?;
-    if cfg.modules.contains_key("dns") && dns_config.backends.ip.is_none() {
-        tracing::warn!("modules.dns.backends.ip is not set: the infrastructure check is absent");
-    }
     let dns = Arc::new(
         netray_dns::DnsModule::new(dns_config)
             .await

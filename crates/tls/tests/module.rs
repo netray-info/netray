@@ -41,7 +41,6 @@ fn verdict_of(status: Status) -> &'static str {
         Status::Warn => "warn",
         Status::Fail => "fail",
         Status::NotApplicable | Status::NotTested | Status::Unmeasured => "skip",
-        other => panic!("unmapped status {other:?}"),
     }
 }
 

@@ -17,7 +17,7 @@ const email = {
   headline: 'Email',
   grade: 'A',
   detail_url: 'https://example.com/email',
-  checks: [{ name: 'email_authentication', verdict: 'pass', messages: ['ok'] }],
+  checks: [{ name: 'spf', verdict: 'pass', messages: ['ok'] }],
 };
 
 function input() {
@@ -28,15 +28,15 @@ describe('export covers http and email', () => {
   it('toJson contains http and email with their checks', () => {
     const j = JSON.parse((toJson as any)(input()));
     expect(j.http.checks.map((c: any) => c.name)).toEqual(['hsts', 'https_redirect']);
-    expect(j.email.checks[0].name).toBe('email_authentication');
+    expect(j.email.checks[0].name).toBe('spf');
   });
 
   it('toMarkdown has HTTP and Email sections', () => {
     const md = (toMarkdown as any)(input());
     expect(md).toContain('## HTTP');
     expect(md).toContain('HSTS');
-    expect(md).toContain('HTTPS Redirect');
+    expect(md).toContain('HTTPS redirect');
     expect(md).toContain('## Email');
-    expect(md).toContain('Authentication');
+    expect(md).toContain('SPF');
   });
 });

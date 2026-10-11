@@ -21,14 +21,8 @@ use crate::state::OutboundFetch;
 // Module
 // ---------------------------------------------------------------------------
 
-const AUTH: &str = "email_authentication";
-const INFRA: &str = "email_infrastructure";
-const TRANSPORT: &str = "email_transport";
-const BRAND: &str = "email_brand_policy";
-const BUCKET_NAMES: [&str; 4] = [AUTH, INFRA, TRANSPORT, BRAND];
-
 static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
-    BUCKET_NAMES
+    BUCKETED
         .iter()
         .map(|name| CheckId::parse(&format!("email.{name}")).expect("static check id"))
         .collect()
@@ -178,18 +172,22 @@ pub const BEACON_SENDS_NO_MAIL: &str = "sends_no_mail";
 
 const NOT_APPLICABLE: &str = "not applicable";
 
-/// Scored beacon categories and the bucket each feeds.
-pub const BUCKETED: &[(&str, &str)] = &[
-    ("spf", AUTH),
-    ("dkim", AUTH),
-    ("dmarc", AUTH),
-    ("mx", INFRA),
-    ("fcrdns", INFRA),
-    ("dnsbl", INFRA),
-    ("mta_sts", TRANSPORT),
-    ("tls_rpt", TRANSPORT),
-    ("dane", TRANSPORT),
-    ("bimi", BRAND),
+/// Scored beacon categories in catalogue order; each is scored as the `email.<category>` check.
+pub const BUCKETED: &[&str] = &[
+    "mx", "spf", "dkim", "dmarc", "mta_sts", "tls_rpt", "bimi", "dane", "dnsbl", "fcrdns",
+];
+
+/// Checks that do not apply to a domain without MX records or with a Null MX.
+const MX_DEPENDENT: &[&str] = &[
+    "mx", "mta_sts", "tls_rpt", "bimi", "dane", "dnsbl", "fcrdns",
+];
+
+/// The former V1 groups of the headline and the categories each covers.
+const HEADLINE_GROUPS: &[(&str, &[&str])] = &[
+    ("Auth", &["spf", "dkim", "dmarc"]),
+    ("Infra", &["mx", "fcrdns", "dnsbl"]),
+    ("Transport", &["mta_sts", "tls_rpt", "dane"]),
+    ("Brand", &["bimi"]),
 ];
 
 /// Beacon categories the email section does not score as email categories, with the reason.
@@ -201,14 +199,17 @@ pub const EXCLUDED: &[(&str, &str)] = &[
 /// Cross-validation sub-checks beacon emits that are ignored when the domain sends no mail.
 const IGNORED_WHEN_SENDS_NO_MAIL: &[&str] = &["reject_no_dkim", "spf_mx_coverage"];
 
-/// The bucket a beacon cross-validation sub-check is scored in; `None` for an unknown name.
+/// The category a beacon cross-validation sub-check is scored in; `None` for an unknown name.
 pub fn route_cross_validation(name: &str) -> Option<&'static str> {
     match name {
-        "null_mx_spf" | "reject_no_dkim" | "dmarc_rua_auth" | "dmarc_sp_gap"
-        | "spf_mx_coverage" | BEACON_SENDS_NO_MAIL => Some(AUTH),
-        "fcrdns_mismatch" => Some(INFRA),
-        "bimi_dmarc_policy" => Some(BRAND),
-        n if n.starts_with("mta_sts_") || n.starts_with("dane_") => Some(TRANSPORT),
+        "spf_mx_coverage" | "null_mx_spf" | BEACON_SENDS_NO_MAIL => Some("spf"),
+        "reject_no_dkim" => Some("dkim"),
+        "dmarc_rua_auth" | "dmarc_sp_gap" => Some("dmarc"),
+        "mta_sts_id_mismatch" | "mta_sts_mx_coverage" => Some("mta_sts"),
+        "mta_sts_without_tls_rpt" | "dane_without_tls_rpt" => Some("tls_rpt"),
+        "bimi_dmarc_policy" => Some("bimi"),
+        "dane_without_dnssec" => Some("dane"),
+        "fcrdns_mismatch" => Some("fcrdns"),
         _ => None,
     }
 }
@@ -248,7 +249,7 @@ enum Abort {
 // Translation
 // ---------------------------------------------------------------------------
 
-/// Maps beacon's events onto the four email buckets and the V1 headline and extras. A `skipped`
+/// Maps beacon's events onto the ten email checks and the V1 headline and extras. A `skipped`
 /// summary is a [`SectionOutcome::TimedOut`]; a stream that cannot be scored is `Incomplete`.
 pub fn translate(events: &[SseEvent]) -> SectionOutcome {
     let summary = match parse_summary(events) {
@@ -258,47 +259,32 @@ pub fn translate(events: &[SseEvent]) -> SectionOutcome {
     };
 
     let no_mx_reason = no_mx_reason(&summary);
-    let buckets = map_buckets(&summary, no_mx_reason);
-
-    let bucket_na: HashMap<String, String> = buckets
+    let checks: Vec<CheckResult> = BUCKETED
         .iter()
-        .filter(|b| b.status == Status::NotApplicable)
-        .map(|b| {
-            (
-                b.name.clone(),
-                no_mx_reason.unwrap_or(NOT_APPLICABLE).to_string(),
-            )
-        })
-        .collect();
-
-    let headline = build_headline(&buckets, &bucket_na);
-
-    let checks = buckets
-        .into_iter()
         .zip(email_checks())
-        .map(|(bucket, id)| CheckResult {
-            id: id.clone(),
-            status: bucket.status,
-            findings: bucket.messages,
-            evidence: vec![],
+        .map(|(&name, id)| {
+            let (status, findings) = match no_mx_reason.filter(|_| MX_DEPENDENT.contains(&name)) {
+                Some(reason) => (Status::NotApplicable, vec![reason.to_string()]),
+                None => fold_category(name, &summary),
+            };
+            CheckResult {
+                id: id.clone(),
+                status,
+                findings,
+                evidence: vec![],
+            }
         })
         .collect();
+
+    let headline = build_headline(&checks);
 
     SectionOutcome::Measured {
         checks,
         presentation: json!({
             "headline": headline,
             "grade": summary.grade,
-            "bucket_na": bucket_na,
         }),
     }
-}
-
-/// One scored bucket before it becomes a [`CheckResult`].
-struct Bucket {
-    name: String,
-    status: Status,
-    messages: Vec<String>,
 }
 
 fn category_name(category: &Category) -> String {
@@ -348,8 +334,7 @@ fn parse_summary(events: &[SseEvent]) -> Result<BeaconSummary, Abort> {
     let mut categories: Vec<CategoryVerdict> = Vec::new();
     let verdicts: BTreeMap<&String, &Verdict> = verdicts.iter().collect();
     for (name, verdict) in verdicts {
-        let known =
-            BUCKETED.iter().any(|(c, _)| c == name) || EXCLUDED.iter().any(|(c, _)| c == name);
+        let known = BUCKETED.contains(&name.as_str()) || EXCLUDED.iter().any(|(c, _)| c == name);
         if !known {
             return Err(Abort::Incomplete(format!("unknown verdict `{name}`")));
         }
@@ -395,16 +380,14 @@ fn parse_sub_checks(category_event: &CategoryResult) -> Vec<SubCheck> {
         .collect()
 }
 
-const NULL_MX_REASON: &str = "null MX";
-
-/// Why the receiving buckets do not apply: beacon's `mx` category carries the `no_mx` or the
+/// Why the MX-dependent checks do not apply: beacon's `mx` category carries the `no_mx` or the
 /// `null_mx` sub-check. Other `mx` failures (`mx_cname`, `mx_no_addr`, ...) mean MX records exist.
 fn no_mx_reason(summary: &BeaconSummary) -> Option<&'static str> {
     let mx = summary.categories.iter().find(|c| c.name == "mx")?;
     if mx.sub_checks.iter().any(|s| s.name == BEACON_NULL_MX) {
-        Some(NULL_MX_REASON)
+        Some("Null MX")
     } else if mx.sub_checks.iter().any(|s| s.name == "no_mx") {
-        Some("no MX records")
+        Some("no MX")
     } else {
         None
     }
@@ -416,95 +399,57 @@ pub fn detect_no_mx(summary: &BeaconSummary) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Bucket aggregation
+// Category fold
 // ---------------------------------------------------------------------------
 
-/// Map beacon's per-category verdicts into four scored buckets.
-fn map_buckets(summary: &BeaconSummary, no_mx: Option<&str>) -> Vec<Bucket> {
-    BUCKET_NAMES
-        .iter()
-        .map(|&name| {
-            if let Some(reason) = no_mx.filter(|_| name != AUTH) {
-                let na_msg = if reason == NULL_MX_REASON {
-                    "Null MX (RFC 7505) — domain does not accept mail"
-                } else {
-                    "No MX records — email receiving not configured"
-                }
-                .to_string();
-                return Bucket {
-                    name: name.to_string(),
-                    status: Status::NotApplicable,
-                    messages: vec![na_msg],
-                };
-            }
-            aggregate_bucket(name, summary)
-        })
-        .collect()
-}
-
-/// A bucket's verdict is the worst of its categories' and routed cross-validation verdicts;
-/// Info and Skip are neutral, and a bucket with no Pass, Warn or Fail is not applicable.
-fn aggregate_bucket(name: &str, summary: &BeaconSummary) -> Bucket {
-    let mut worst: Option<Status> = None;
-    let mut messages: Vec<String> = Vec::new();
-    let mut take = |verdict: Status, msgs: Vec<String>| {
-        if verdict == Status::NotApplicable {
-            return;
-        }
-        if matches!(verdict, Status::Warn | Status::Fail) {
-            messages.extend(msgs);
-        }
-        if worst
-            .as_ref()
-            .is_none_or(|w| verdict_rank(&verdict) > verdict_rank(w))
-        {
-            worst = Some(verdict);
-        }
-    };
+/// A check's status is the worst Warn or Fail over its category and the cross-validation
+/// sub-checks routed to it, else the category's Pass; a category that is only Info or Skip is
+/// not applicable with its detail as the finding.
+fn fold_category(name: &str, summary: &BeaconSummary) -> (Status, Vec<String>) {
+    let category = summary.categories.iter().find(|c| c.name == name);
 
     let sends_no_mail = summary.categories.iter().any(|c| {
         c.name == "cross_validation" && c.sub_checks.iter().any(|s| s.name == BEACON_SENDS_NO_MAIL)
     });
-
-    for (cat_name, bucket) in BUCKETED {
-        if *bucket != name {
-            continue;
-        }
-        if let Some(c) = summary.categories.iter().find(|c| c.name == *cat_name) {
-            take(c.verdict, category_messages(c));
-        }
-    }
-
-    if let Some(cv) = summary
+    let routed: Vec<&SubCheck> = summary
         .categories
         .iter()
-        .find(|c| c.name == "cross_validation")
-    {
-        for sub in &cv.sub_checks {
-            if route_cross_validation(&sub.name) != Some(name)
-                || (sends_no_mail && IGNORED_WHEN_SENDS_NO_MAIL.contains(&sub.name.as_str()))
-            {
-                continue;
-            }
-            take(sub.verdict, vec![sub.detail.clone()]);
-        }
-    }
+        .filter(|c| c.name == "cross_validation")
+        .flat_map(|c| &c.sub_checks)
+        .filter(|s| {
+            route_cross_validation(&s.name) == Some(name)
+                && !(sends_no_mail && IGNORED_WHEN_SENDS_NO_MAIL.contains(&s.name.as_str()))
+        })
+        .collect();
 
-    // Cap messages at 5 per bucket.
-    messages.truncate(5);
+    let worst = category
+        .map(|c| c.verdict)
+        .into_iter()
+        .chain(routed.iter().map(|s| s.verdict))
+        .filter(|v| matches!(v, Status::Warn | Status::Fail))
+        .max_by_key(verdict_rank);
 
-    match worst {
-        Some(status) => Bucket {
-            name: name.to_string(),
-            status,
-            messages,
-        },
-        None => Bucket {
-            name: name.to_string(),
-            status: Status::NotApplicable,
-            messages: vec![NOT_APPLICABLE.to_string()],
-        },
-    }
+    let category_pass = category.is_some_and(|c| c.verdict == Status::Pass);
+    let Some(status) = worst.or(category_pass.then_some(Status::Pass)) else {
+        let detail = category
+            .and_then(|c| c.message.clone())
+            .unwrap_or_else(|| NOT_APPLICABLE.to_string());
+        return (Status::NotApplicable, vec![detail]);
+    };
+
+    let mut findings: Vec<String> = category
+        .filter(|c| matches!(c.verdict, Status::Warn | Status::Fail))
+        .map(category_messages)
+        .unwrap_or_default();
+    findings.extend(
+        routed
+            .iter()
+            .filter(|s| {
+                matches!(s.verdict, Status::Warn | Status::Fail) || s.name == BEACON_SENDS_NO_MAIL
+            })
+            .map(|s| s.detail.clone()),
+    );
+    (status, findings)
 }
 
 /// Reasons for a category: the details of its warn/fail sub-checks, else the category detail.
@@ -540,36 +485,35 @@ fn verdict_rank(v: &Status) -> u8 {
     }
 }
 
-fn build_headline(buckets: &[Bucket], bucket_na: &HashMap<String, String>) -> String {
-    let label_of = |check_name: &str| -> String {
-        let display = match check_name {
-            "email_authentication" => "Auth",
-            "email_infrastructure" => "Infra",
-            "email_transport" => "Transport",
-            "email_brand_policy" => "Brand",
-            _ => check_name,
-        };
-        let bucket = buckets.iter().find(|b| b.name == check_name);
-        let symbol = if bucket_na.contains_key(check_name) {
-            "N/A".to_string()
-        } else {
-            match bucket.map(|b| &b.status) {
-                Some(Status::Pass) => "OK".to_string(),
-                Some(Status::Warn) => "Warn".to_string(),
-                Some(Status::Fail) => "Fail".to_string(),
-                _ => "N/A".to_string(),
-            }
-        };
-        format!("{display}: {symbol}")
-    };
-
-    [
-        label_of("email_authentication"),
-        label_of("email_infrastructure"),
-        label_of("email_transport"),
-        label_of("email_brand_policy"),
-    ]
-    .join("  ")
+/// The V1 headline: each former group shows the worst status over its checks.
+fn build_headline(checks: &[CheckResult]) -> String {
+    HEADLINE_GROUPS
+        .iter()
+        .map(|(display, members)| {
+            let worst = checks
+                .iter()
+                .filter(|c| {
+                    members
+                        .iter()
+                        .any(|m| c.id.to_string() == format!("email.{m}"))
+                })
+                .map(|c| c.status)
+                .max_by_key(|s| match s {
+                    Status::Fail => 3,
+                    Status::Warn => 2,
+                    Status::Pass => 1,
+                    _ => 0,
+                });
+            let symbol = match worst {
+                Some(Status::Pass) => "OK",
+                Some(Status::Warn) => "Warn",
+                Some(Status::Fail) => "Fail",
+                _ => "N/A",
+            };
+            format!("{display}: {symbol}")
+        })
+        .collect::<Vec<_>>()
+        .join("  ")
 }
 
 #[cfg(test)]
@@ -582,8 +526,8 @@ mod tests {
         let mut problems = Vec::new();
         for c in Category::ALL {
             let name = category_name(&c);
-            let known = BUCKETED.iter().any(|(cat, _)| *cat == name)
-                || EXCLUDED.iter().any(|(cat, _)| *cat == name);
+            let known =
+                BUCKETED.contains(&name.as_str()) || EXCLUDED.iter().any(|(cat, _)| *cat == name);
             if !known {
                 problems.push(format!(
                     "category `{name}` is neither BUCKETED nor EXCLUDED"
@@ -591,8 +535,11 @@ mod tests {
             }
         }
         for name in crate::checks::cross_validation::CROSS_VALIDATION_CHECKS {
-            if route_cross_validation(name).is_none() {
-                problems.push(format!("cross-validation check `{name}` has no bucket"));
+            match route_cross_validation(name) {
+                Some(category) if BUCKETED.contains(&category) => {}
+                _ => problems.push(format!(
+                    "cross-validation check `{name}` routes to no scored category"
+                )),
             }
         }
         assert!(problems.is_empty(), "{}", problems.join("\n"));

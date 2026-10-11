@@ -45,10 +45,11 @@ fmt-check:
 clippy:
     cargo clippy --workspace --all-features -- -D warnings
 
-# ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`), so only its unit tests run offline.
+# ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`), so offline only its unit tests and the module tests run.
 test-rust-offline:
     cargo test --workspace --exclude netray-ip
     cargo test -p netray-ip --lib
+    cargo test -p netray-ip --features testing --test module --test module_data --test module_v3
 
 # The full Rust suite. Most ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`,
 # MaxMind licence); without it they are skipped with a notice and run in CI with the data image.

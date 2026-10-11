@@ -21,10 +21,16 @@ static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
     [
         "https_redirect",
         "hsts",
-        "security_headers",
         "cors",
         "cookie_secure",
-        "hygiene",
+        "csp",
+        "x_frame_options",
+        "x_content_type_options",
+        "referrer_policy",
+        "permissions_policy",
+        "deprecated_headers",
+        "info_leakage",
+        "caching",
     ]
     .into_iter()
     .map(|name| CheckId::parse(&format!("http.{name}")).expect("static check id"))
@@ -126,80 +132,66 @@ impl Module for HttpModule {
     }
 }
 
-/// Maps the inspection onto the six HTTP checks and the V1 headline and extras.
+/// Maps the inspection onto the twelve HTTP checks and the V1 headline and extras.
 pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     let quality = &resp.quality.checks;
 
-    // https_redirect: synthesised from the http_upgrade field.
+    // https_redirect: synthesised from the http_upgrade field; a redirect_limit message rides on it.
     let https_redirect_status = match &resp.http_upgrade {
         None => CheckStatus::Skip,
-        Some(u) => {
-            if u.redirects_to_https {
-                CheckStatus::Pass
-            } else {
-                CheckStatus::Fail
-            }
-        }
+        Some(u) if u.redirects_to_https => CheckStatus::Pass,
+        Some(_) => CheckStatus::Fail,
     };
+    let mut https_redirect_findings = match &resp.http_upgrade {
+        None => vec![NOT_REPORTED.to_string()],
+        Some(_) if https_redirect_status == CheckStatus::Fail => {
+            vec!["HTTP port 80 does not redirect to HTTPS".to_string()]
+        }
+        Some(_) => vec![],
+    };
+    if let Some(message) = find_check(quality, "redirect_limit").and_then(|c| c.message.clone()) {
+        https_redirect_findings.push(message);
+    }
 
-    let hsts_status = lookup_check(quality, "hsts");
-    let cors_status = lookup_check(quality, "cors");
-    let cookie_secure_status = lookup_check(quality, "cookie_secure");
-
-    const SECURITY_HEADERS: [&str; 5] = [
-        "csp",
-        "x_frame_options",
-        "x_content_type_options",
-        "referrer_policy",
-        "permissions_policy",
-    ];
-    const HYGIENE: [&str; 4] = [
-        "deprecated_headers",
-        "info_leakage",
-        "caching",
-        "redirect_limit",
-    ];
-    let security_headers_status = aggregate_worst(quality, &SECURITY_HEADERS);
-    let hygiene_status = aggregate_worst(quality, &HYGIENE);
-
-    let results = [
-        (
-            https_redirect_status.clone(),
-            match https_redirect_status {
-                CheckStatus::Fail => vec!["HTTP port 80 does not redirect to HTTPS".to_string()],
-                _ => vec![],
-            },
-        ),
-        (
-            hsts_status.clone(),
-            check_messages(quality, "hsts", &hsts_status),
-        ),
-        (
-            security_headers_status,
-            aggregate_messages(quality, &SECURITY_HEADERS),
-        ),
-        (
-            cors_status.clone(),
-            check_messages(quality, "cors", &cors_status),
-        ),
-        (
-            cookie_secure_status.clone(),
-            check_messages(quality, "cookie_secure", &cookie_secure_status),
-        ),
-        (hygiene_status, aggregate_messages(quality, &HYGIENE)),
-    ];
     let checks = http_checks()
         .iter()
-        .zip(results)
-        .map(|(id, (status, findings))| CheckResult {
-            id: id.clone(),
-            status: status.into(),
-            findings,
-            evidence: vec![],
+        .map(|id| {
+            let name = id.to_string();
+            let name = name.strip_prefix("http.").unwrap_or(&name);
+            if name == "https_redirect" {
+                return CheckResult {
+                    id: id.clone(),
+                    status: https_redirect_status.clone().into(),
+                    findings: https_redirect_findings.clone(),
+                    evidence: vec![],
+                };
+            }
+            let (status, findings) = match find_check(quality, name) {
+                None => (CheckStatus::Skip, vec![NOT_REPORTED.to_string()]),
+                Some(c) => match c.status {
+                    CheckStatus::Pass => (CheckStatus::Pass, vec![]),
+                    CheckStatus::Skip => (
+                        CheckStatus::Skip,
+                        vec![
+                            c.message
+                                .clone()
+                                .unwrap_or_else(|| NOT_APPLICABLE.to_string()),
+                        ],
+                    ),
+                    _ => (c.status.clone(), c.message.clone().into_iter().collect()),
+                },
+            };
+            CheckResult {
+                id: id.clone(),
+                status: status.into(),
+                findings,
+                evidence: vec![],
+            }
         })
         .collect();
 
-    // Headline uses the individual csp check, not the aggregated security_headers.
+    let hsts_status = lookup_check(quality, "hsts");
+    let cors_status = lookup_check(quality, "cors");
     let csp_status = lookup_check(quality, "csp");
     let headline = format!(
         "HTTPS {}  HSTS {}  CSP {}  CORS {}",
@@ -225,49 +217,18 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     }
 }
 
-fn aggregate_worst(checks: &[QualityCheck], names: &[&str]) -> CheckStatus {
-    names
-        .iter()
-        .map(|name| lookup_check(checks, name))
-        .max()
-        .unwrap_or(CheckStatus::Skip)
+const NOT_REPORTED: &str = "not reported";
+/// Finding of a check spectra measured as not applicable without giving a reason.
+const NOT_APPLICABLE: &str = "not applicable";
+
+fn find_check<'a>(checks: &'a [QualityCheck], name: &str) -> Option<&'a QualityCheck> {
+    checks.iter().find(|c| c.name == name)
 }
 
 fn lookup_check(checks: &[QualityCheck], name: &str) -> CheckStatus {
-    checks
-        .iter()
-        .find(|c| c.name == name)
+    find_check(checks, name)
         .map(|c| c.status.clone())
         .unwrap_or(CheckStatus::Skip)
-}
-
-/// Return messages for a check — only for non-pass, non-skip verdicts.
-fn check_messages(checks: &[QualityCheck], name: &str, status: &CheckStatus) -> Vec<String> {
-    match status {
-        CheckStatus::Pass | CheckStatus::Skip => vec![],
-        _ => checks
-            .iter()
-            .find(|c| c.name == name)
-            .and_then(|c| c.message.clone())
-            .map(|m| vec![m])
-            .unwrap_or_default(),
-    }
-}
-
-/// Collect messages from constituent checks for an aggregated check, prefixed with their label.
-fn aggregate_messages(checks: &[QualityCheck], names: &[&str]) -> Vec<String> {
-    names
-        .iter()
-        .filter_map(|name| {
-            checks
-                .iter()
-                .find(|c| c.name == *name)
-                .and_then(|c| match c.status {
-                    CheckStatus::Pass | CheckStatus::Skip => None,
-                    _ => c.message.as_ref().map(|m| format!("{}: {m}", c.label)),
-                })
-        })
-        .collect()
 }
 
 fn verdict_symbol(s: &CheckStatus) -> &'static str {
@@ -333,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn six_checks_always_present() {
+    fn twelve_checks_always_present() {
         let resp = response(
             Some(true),
             &[
@@ -357,12 +318,30 @@ mod tests {
             [
                 "http.https_redirect",
                 "http.hsts",
-                "http.security_headers",
                 "http.cors",
                 "http.cookie_secure",
-                "http.hygiene",
+                "http.csp",
+                "http.x_frame_options",
+                "http.x_content_type_options",
+                "http.referrer_policy",
+                "http.permissions_policy",
+                "http.deprecated_headers",
+                "http.info_leakage",
+                "http.caching",
             ]
         );
+    }
+
+    #[test]
+    fn skip_without_message_is_not_applicable_not_unreported() {
+        let resp = response(Some(true), &[("cookie_secure", CheckStatus::Skip)]);
+        let (checks, _) = translated(&resp);
+        let c = checks
+            .iter()
+            .find(|c| c.id.to_string() == "http.cookie_secure")
+            .expect("cookie_secure");
+        assert_eq!(c.status, Status::NotApplicable);
+        assert_eq!(c.findings, vec!["not applicable".to_string()]);
     }
 
     #[test]
@@ -392,7 +371,7 @@ mod tests {
     }
 
     #[test]
-    fn security_headers_worst_verdict_is_fail() {
+    fn security_header_checks_carry_their_own_status() {
         let resp = response(
             None,
             &[
@@ -403,11 +382,17 @@ mod tests {
                 ("permissions_policy", CheckStatus::Skip),
             ],
         );
-        assert_eq!(status_of(&resp, "http.security_headers"), Status::Fail);
+        assert_eq!(status_of(&resp, "http.csp"), Status::Pass);
+        assert_eq!(status_of(&resp, "http.x_frame_options"), Status::Warn);
+        assert_eq!(status_of(&resp, "http.referrer_policy"), Status::Fail);
+        assert_eq!(
+            status_of(&resp, "http.permissions_policy"),
+            Status::NotApplicable
+        );
     }
 
     #[test]
-    fn hygiene_aggregation_absent_checks_is_warn() {
+    fn hygiene_checks_absent_are_not_applicable() {
         let resp = response(
             None,
             &[
@@ -415,7 +400,8 @@ mod tests {
                 ("info_leakage", CheckStatus::Skip),
             ],
         );
-        assert_eq!(status_of(&resp, "http.hygiene"), Status::Warn);
+        assert_eq!(status_of(&resp, "http.deprecated_headers"), Status::Warn);
+        assert_eq!(status_of(&resp, "http.caching"), Status::NotApplicable);
     }
 
     #[test]

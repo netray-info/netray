@@ -11,13 +11,13 @@ use moka::future::Cache;
 use netray_common::ip_extract::IpExtractor;
 use netray_common::rate_limit::KeyedLimiter;
 use netray_engine::Registry;
+use netray_engine::profile::{Profile, Profiles};
 use netray_model::Protocol;
 
 use crate::cache::CachedResult;
 use crate::check::CheckOutput;
 use crate::config::Config;
 use crate::modules::ModuleSection;
-use crate::scoring::ScoringProfile;
 use crate::security::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
 use crate::spa::{Assets, render_apex_html};
 
@@ -40,7 +40,7 @@ pub struct AppState {
     pub ip_extractor: Arc<IpExtractor>,
     pub badge_recompute_limiter: Arc<BadgeRecomputeLimiter>,
     pub cache: Option<Arc<Cache<String, Arc<CachedResult>>>>,
-    pub scoring_profile: Arc<ScoringProfile>,
+    pub scoring_profile: Arc<Profile>,
     /// The modules and the resolve stage a check runs through.
     pub registry: Arc<Registry>,
     /// The configured sections, one per registered module.
@@ -168,15 +168,27 @@ impl AppState {
     }
 }
 
-/// Load the scoring profile from a file path, or fall back to the embedded default.
-fn load_scoring_profile(path: Option<&str>) -> Result<ScoringProfile, Box<dyn std::error::Error>> {
+/// Load the scoring profile from a file path, or fall back to the engine's current profile.
+fn load_scoring_profile(path: Option<&str>) -> Result<Profile, Box<dyn std::error::Error>> {
     match path {
         Some(p) => {
             let contents = std::fs::read_to_string(p)?;
-            let profile = ScoringProfile::from_toml(&contents)?;
+            let profile = Profile::from_toml(&contents)?;
+            let catalogue = netray_engine::catalogue();
+            if let Some(unknown) = profile
+                .sections
+                .values()
+                .flat_map(|s| s.checks.keys())
+                .find(|id| catalogue.get(id).is_none())
+            {
+                return Err(format!(
+                    "[scoring] profile_path {p}: check {unknown} is not a catalogue ID"
+                )
+                .into());
+            }
             Ok(profile)
         }
-        None => Ok(ScoringProfile::embedded_default()),
+        None => Ok(Profiles::current().clone()),
     }
 }
 
@@ -259,6 +271,38 @@ mod tests {
             "embedded default profile must parse: {:?}",
             profile.err()
         );
+    }
+
+    #[test]
+    fn profile_with_unknown_check_id_is_refused() {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(
+            &mut file,
+            br#"
+[meta]
+name = "custom"
+version = 99
+
+[sections.dns]
+weight = 10
+
+[sections.dns.checks]
+dnssec = 5
+no_such_check = 3
+
+[thresholds]
+A = 90
+"#,
+        )
+        .unwrap();
+        let mut config = test_config();
+        config.scoring.profile_path = Some(file.path().to_string_lossy().into_owned());
+        let err = AppState::new(config)
+            .err()
+            .expect("unknown ID must be refused");
+        let msg = err.to_string();
+        assert!(msg.contains("[scoring] profile_path"), "{msg}");
+        assert!(msg.contains("dns.no_such_check"), "{msg}");
     }
 
     #[test]

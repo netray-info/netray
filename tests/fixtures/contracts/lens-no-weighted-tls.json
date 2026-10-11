@@ -1,7 +1,7 @@
 {
   "summary": {
     "grade": "incomplete",
-    "score": 68.3,
+    "score": 81.7,
     "overall": "error",
     "complete": false,
     "sections": {
@@ -13,8 +13,8 @@
     },
     "section_grades": {
       "dns": "C",
-      "email": "F",
-      "http": "B",
+      "email": "C",
+      "http": "A",
       "ip": "A+"
     },
     "hard_fail": false,
@@ -32,6 +32,38 @@
         {
           "name": "ns",
           "verdict": "pass"
+        },
+        {
+          "name": "cname_apex",
+          "verdict": "skip"
+        },
+        {
+          "name": "dnssec",
+          "verdict": "skip"
+        },
+        {
+          "name": "dnskey_algorithm",
+          "verdict": "skip"
+        },
+        {
+          "name": "dnssec_rollover",
+          "verdict": "skip"
+        },
+        {
+          "name": "https_svcb",
+          "verdict": "skip"
+        },
+        {
+          "name": "ns_lame",
+          "verdict": "skip"
+        },
+        {
+          "name": "ns_delegation",
+          "verdict": "skip"
+        },
+        {
+          "name": "ttl",
+          "verdict": "skip"
         }
       ]
     },
@@ -40,20 +72,44 @@
       "grade": "D",
       "checks": [
         {
-          "name": "email_authentication",
-          "verdict": "fail"
-        },
-        {
-          "name": "email_infrastructure",
+          "name": "mx",
           "verdict": "pass"
         },
         {
-          "name": "email_transport",
+          "name": "spf",
+          "verdict": "pass"
+        },
+        {
+          "name": "dkim",
+          "verdict": "fail"
+        },
+        {
+          "name": "dmarc",
           "verdict": "warn"
         },
         {
-          "name": "email_brand_policy",
+          "name": "mta_sts",
+          "verdict": "warn"
+        },
+        {
+          "name": "tls_rpt",
+          "verdict": "pass"
+        },
+        {
+          "name": "bimi",
           "verdict": "skip"
+        },
+        {
+          "name": "dane",
+          "verdict": "skip"
+        },
+        {
+          "name": "dnsbl",
+          "verdict": "pass"
+        },
+        {
+          "name": "fcrdns",
+          "verdict": "pass"
         }
       ]
     },
@@ -69,10 +125,6 @@
           "verdict": "pass"
         },
         {
-          "name": "security_headers",
-          "verdict": "warn"
-        },
-        {
           "name": "cors",
           "verdict": "pass"
         },
@@ -81,7 +133,35 @@
           "verdict": "skip"
         },
         {
-          "name": "hygiene",
+          "name": "csp",
+          "verdict": "warn"
+        },
+        {
+          "name": "x_frame_options",
+          "verdict": "pass"
+        },
+        {
+          "name": "x_content_type_options",
+          "verdict": "skip"
+        },
+        {
+          "name": "referrer_policy",
+          "verdict": "skip"
+        },
+        {
+          "name": "permissions_policy",
+          "verdict": "skip"
+        },
+        {
+          "name": "deprecated_headers",
+          "verdict": "skip"
+        },
+        {
+          "name": "info_leakage",
+          "verdict": "pass"
+        },
+        {
+          "name": "caching",
           "verdict": "skip"
         }
       ]
@@ -100,6 +180,86 @@
       "checks": [
         {
           "name": "tls_reachable",
+          "verdict": "skip"
+        },
+        {
+          "name": "chain_trusted",
+          "verdict": "skip"
+        },
+        {
+          "name": "not_expired",
+          "verdict": "skip"
+        },
+        {
+          "name": "hostname_match",
+          "verdict": "skip"
+        },
+        {
+          "name": "chain_complete",
+          "verdict": "skip"
+        },
+        {
+          "name": "strong_signature",
+          "verdict": "skip"
+        },
+        {
+          "name": "key_strength",
+          "verdict": "skip"
+        },
+        {
+          "name": "expiry_window",
+          "verdict": "skip"
+        },
+        {
+          "name": "cert_lifetime",
+          "verdict": "skip"
+        },
+        {
+          "name": "san_quality",
+          "verdict": "skip"
+        },
+        {
+          "name": "aia_reachability",
+          "verdict": "skip"
+        },
+        {
+          "name": "tls_version",
+          "verdict": "skip"
+        },
+        {
+          "name": "forward_secrecy",
+          "verdict": "skip"
+        },
+        {
+          "name": "aead_cipher",
+          "verdict": "skip"
+        },
+        {
+          "name": "ct_logged",
+          "verdict": "skip"
+        },
+        {
+          "name": "ocsp_stapled",
+          "verdict": "skip"
+        },
+        {
+          "name": "caa_compliant",
+          "verdict": "skip"
+        },
+        {
+          "name": "dane_valid",
+          "verdict": "skip"
+        },
+        {
+          "name": "consistency",
+          "verdict": "skip"
+        },
+        {
+          "name": "alpn_consistency",
+          "verdict": "skip"
+        },
+        {
+          "name": "ech_advertised",
           "verdict": "skip"
         }
       ]

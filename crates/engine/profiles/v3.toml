@@ -1,6 +1,9 @@
+# Scoring profile v3: weights every catalogue ID. The http and email weights are SDD §3.9's
+# mechanical split of the V1 composites, to be reviewed before 0.25.0.
+
 [meta]
-name = "default"
-version = 2
+name = "v3"
+version = 3
 
 [sections.dns]
 weight = 20
@@ -50,22 +53,34 @@ weight = 20
 hard_fail = []
 
 [sections.http.checks]
-https_redirect   = 5
-hsts             = 5
-security_headers = 5
-cors             = 3
-cookie_secure    = 2
-hygiene          = 2
+https_redirect         = 5
+hsts                   = 5
+cors                   = 3
+cookie_secure          = 2
+csp                    = 1
+x_frame_options        = 1
+x_content_type_options = 1
+referrer_policy        = 1
+permissions_policy     = 1
+deprecated_headers     = 1
+info_leakage           = 1
+caching                = 1
 
 [sections.email]
 weight = 15
 hard_fail = []
 
 [sections.email.checks]
-email_authentication = 10   # always scored; applies to every domain
-email_infrastructure = 5    # N/A (Skip) when no MX records
-email_transport      = 5    # N/A (Skip) when no MX records
-email_brand_policy   = 2    # N/A (Skip) when no MX records
+spf     = 3
+dkim    = 3
+dmarc   = 4
+mx      = 2
+dnsbl   = 2
+fcrdns  = 1
+mta_sts = 2
+dane    = 2
+tls_rpt = 1
+bimi    = 2
 
 [sections.ip]
 weight = 10

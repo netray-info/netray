@@ -40,6 +40,25 @@ impl CaaLookup {
             .collect()
     }
 
+    /// Parses records in presentation form, `{flags} {tag} "{value}"`; malformed lines are
+    /// skipped.
+    pub fn from_presentation(records: &[String]) -> Self {
+        let records = records
+            .iter()
+            .filter_map(|rr| {
+                let (flags, rest) = rr.trim().split_once(' ')?;
+                let (tag, value) = rest.split_once(' ')?;
+                let flags: u8 = flags.parse().ok()?;
+                let value = value
+                    .strip_prefix('"')
+                    .and_then(|v| v.strip_suffix('"'))
+                    .unwrap_or(value);
+                Some(caa_record(tag, value, flags & 128 != 0))
+            })
+            .collect();
+        CaaLookup { records }
+    }
+
     pub fn issuewild_present(&self) -> bool {
         self.records
             .iter()
@@ -130,6 +149,25 @@ mod tests {
         assert!(lookup.issuewild_present());
         assert_eq!(lookup.records[0].tag, "issue");
         assert_eq!(lookup.records[1].tag, "issuewild");
+    }
+
+    // --- presentation form ---
+
+    #[test]
+    fn from_presentation_parses_flags_tag_and_value() {
+        let lookup = CaaLookup::from_presentation(&[
+            "0 issue \"letsencrypt.org\"".into(),
+            "128 ISSUEWILD \";\"".into(),
+            "0 iodef \"mailto:admin@example.com\"".into(),
+            "garbage".into(),
+        ]);
+        assert_eq!(lookup.records.len(), 3);
+        assert_eq!(lookup.issue_domains(), vec!["letsencrypt.org"]);
+        assert!(!lookup.records[0].issuer_critical);
+        assert_eq!(lookup.records[1].tag, "issuewild");
+        assert_eq!(lookup.records[1].value, ";");
+        assert!(lookup.records[1].issuer_critical);
+        assert_eq!(lookup.records[2].value, "mailto:admin@example.com");
     }
 
     // --- parent_domain ---

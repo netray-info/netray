@@ -222,13 +222,13 @@ curl -s -H 'Accept: application/json' 'https://lens.netray.info/api/check/exampl
 
 ## Scoring
 
-This section is the authoritative description of the scoring algorithm. Any change to `src/scoring/` must update this section in the same commit.
+This section is the authoritative description of the scoring algorithm. lens scores through `netray_engine::score` with the engine's profile v3 (`crates/engine/profiles/v3.toml`); any change to `src/score.rs`, the engine's scoring or the profile must update this section in the same commit. Check titles, fix hints, fix owners and guide links come from the engine's catalogue (`crates/engine/catalogue/checks.toml`).
 
 ### Algorithm
 
 Each backend returns a set of named checks. Every check has a status: `pass`, `warn`, `fail`, `not_found`, `skip`, or `error`.
 
-1. **Per-check score**: `pass` = full weight, `warn` = half weight, `fail`/`not_found` = 0. `skip` and `error` are excluded entirely.
+1. **Per-check score**: `pass` = full weight, `warn` = exactly half the weight (a weight-5 warn earns 2.5), `fail`/`not_found` = 0. `skip` and `error` are excluded entirely.
 2. **Section score**: weighted sum of earned points ÷ weighted sum of possible points, as a percentage.
 3. **Overall score**: weighted average of section scores.
 4. **Section states**: a section can be `Scored` (contributes to overall), `Errored` (the backend failed, timed out or sent an unknown verdict), or `NotApplicable` (excluded; reason reported in `summary.not_applicable`).
@@ -250,27 +250,37 @@ The HTTP and Email sections are optional. When not configured, the scoring engin
 
 ### Email section: sending vs receiving
 
-The email section is split into four buckets:
+The email section scores one check per beacon category:
 
-| Bucket | Weight | Applies to |
+| Check | Weight | Applies to |
 |---|---|---|
-| `email_authentication` | 10 | Every domain — SPF, DKIM, DMARC |
-| `email_infrastructure` | 5  | Domains with MX records only — MX, FCrDNS, DNSBL |
-| `email_transport`      | 5  | Domains with MX records only — MTA-STS, TLS-RPT, DANE |
-| `email_brand_policy`   | 2  | Domains with MX records only — BIMI |
+| `spf`     | 3 | Every domain |
+| `dkim`    | 3 | Every domain |
+| `dmarc`   | 4 | Every domain |
+| `mx`      | 2 | Domains with MX records only |
+| `dnsbl`   | 2 | Domains with MX records only |
+| `fcrdns`  | 1 | Domains with MX records only |
+| `mta_sts` | 2 | Domains with MX records only |
+| `dane`    | 2 | Domains with MX records only |
+| `tls_rpt` | 1 | Domains with MX records only |
+| `bimi`    | 2 | Domains with MX records only |
 
-A bucket's verdict is the worst of its beacon categories' verdicts and of the cross-validation findings routed to it. Beacon's `info` is neutral: a bucket with none of pass, warn or fail (for example BIMI-less brand policy) is **not-applicable** (`CheckVerdict::Skip`, reason "not applicable") and contributes 0 to both earned and possible points. `dnssec` is scored in the DNS section, not here. Cross-validation is not a category of its own; its sub-checks are routed by name:
+A check's verdict is the worst of its beacon category's verdict and of the cross-validation findings routed to it. Beacon's `info` and `skip` give a **not-applicable** check (`CheckVerdict::Skip`, beacon's message as its finding), which contributes 0 to both earned and possible points. `dnssec` is scored in the DNS section, not here. Cross-validation is not a category of its own; its sub-checks are routed by name:
 
-| Bucket | Cross-validation sub-checks |
+| Check | Cross-validation sub-checks |
 |---|---|
-| `email_authentication` | `null_mx_spf`, `reject_no_dkim`, `dmarc_rua_auth`, `dmarc_sp_gap`, `spf_mx_coverage`, `sends_no_mail` |
-| `email_infrastructure` | `fcrdns_mismatch` |
-| `email_transport` | `mta_sts_*`, `dane_*` |
-| `email_brand_policy` | `bimi_dmarc_policy` |
+| `spf` | `spf_mx_coverage`, `null_mx_spf`, `sends_no_mail` |
+| `dkim` | `reject_no_dkim` |
+| `dmarc` | `dmarc_rua_auth`, `dmarc_sp_gap` |
+| `mta_sts` | `mta_sts_id_mismatch`, `mta_sts_mx_coverage` |
+| `tls_rpt` | `mta_sts_without_tls_rpt`, `dane_without_tls_rpt` |
+| `bimi` | `bimi_dmarc_policy` |
+| `dane` | `dane_without_dnssec` |
+| `fcrdns` | `fcrdns_mismatch` |
 
 When the domain declares it sends no mail (`sends_no_mail`), `reject_no_dkim` and `spf_mx_coverage` are ignored.
 
-When beacon reports no MX records (its `no_mx` sub-check; a parked domain) or a Null MX (`null_mx`, RFC 7505), the three receiving buckets are marked **not-applicable** and use `CheckVerdict::Skip`. They contribute 0 to both earned and possible points — no penalty. Only `email_authentication` (weight 10) is scored, as SPF/DKIM/DMARC apply to every domain for outbound mail protection. Any other MX failure (an MX pointing at a CNAME, an MX host without an address) means MX records exist: the receiving buckets are scored and fail accordingly.
+When beacon reports no MX records (its `no_mx` sub-check; a parked domain) or a Null MX (`null_mx`, RFC 7505), the seven MX-dependent checks are marked **not-applicable** (finding "no MX" or "Null MX") and contribute 0 to both earned and possible points — no penalty. `spf` and `dmarc` are always measured, as they apply to every domain for outbound mail protection. Any other MX failure (an MX pointing at a CNAME, an MX host without an address) means MX records exist: the receiving checks are scored and fail accordingly.
 
 **Timeouts and broken streams.** A beacon run whose own timeout fired (summary grade `skipped`) makes the email section a timeout, so the verdict is incomplete; it is never not-applicable. A category whose sub-check is `skipped`, a summary verdict without its category event, a category lens does not know, or an unrouted cross-validation sub-check makes the email section errored (the last two also increment `lens_unknown_verdict_total{section="email"}`).
 
@@ -312,7 +322,7 @@ These conditions force an **F** regardless of the numeric score:
 | `dns` | After DNS module | `status`, `headline`, `checks`, `detail_url` |
 | `tls` | After TLS module | `status`, `headline`, `checks`, `detail_url` |
 | `http` | After HTTP backend (optional) | `status`, `headline`, `checks`, `detail_url` |
-| `email` | After email backend (optional) | `status`, `grade`, `buckets`, `headline`, `detail_url` |
+| `email` | After email backend (optional) | `status`, `grade`, `checks`, `headline`, `detail_url` |
 | `ip` | After IP backend | `status`, `headline`, `checks`, `addresses`, `detail_url` |
 | `summary` | After all backends | `grade`, `complete`, `score`, `sections`, `not_applicable`, `hard_fail` |
 | `done` | Stream complete | `domain`, `duration_ms`, `cached`, `snapshot_id` (null for an incomplete result) |
@@ -322,72 +332,21 @@ The `summary` event includes `not_applicable: Record<string, string>` (always pr
 
 ### Custom profiles
 
-The scoring profile is defined in TOML. The default is embedded in the binary; override it with `scoring.profile_path` in `lens.toml`.
-
-<details>
-<summary>Profile format (v2)</summary>
+The scoring profile is defined in TOML. The default is the engine's current profile, embedded in the binary (`crates/engine/profiles/v3.toml`, pinned by `crates/engine/profiles/lock.toml`); override it with `scoring.profile_path` in `lens.toml`. Check names are the catalogue's, without the protocol prefix; the format:
 
 ```toml
 [meta]
-name = "default"
-version = 2
+name = "v3"
+version = 3
 
 [sections.tls]
 weight = 35
 hard_fail = ["chain_trusted", "not_expired", "tls_reachable"]
 
 [sections.tls.checks]
-tls_reachable    = 10
-chain_trusted    = 10
-not_expired      = 10
-hostname_match   = 10
-chain_complete   = 5
-strong_signature = 5
-key_strength     = 5
-expiry_window    = 5
-tls_version      = 5
-forward_secrecy  = 5
-aead_cipher      = 5
-ocsp_stapled     = 3
-ct_logged        = 3
-
-[sections.dns]
-weight = 20
-hard_fail = []
-
-[sections.dns.checks]
-dnssec = 5
-caa    = 5
-ns     = 3
-
-[sections.email]
-weight = 15
-hard_fail = []
-
-[sections.email.checks]
-email_authentication = 10
-email_infrastructure = 5
-email_transport      = 5
-email_brand_policy   = 2
-
-[sections.http]
-weight = 20
-hard_fail = []
-
-[sections.http.checks]
-https_redirect   = 5
-hsts             = 5
-security_headers = 5
-cors             = 3
-cookie_secure    = 2
-hygiene          = 2
-
-[sections.ip]
-weight = 10
-hard_fail = []
-
-[sections.ip.checks]
-reputation = 5
+tls_reachable = 10
+chain_trusted = 10
+# … one entry per weighted check
 
 [thresholds]
 "A+" = 97
@@ -397,8 +356,6 @@ reputation = 5
 "D"  = 40
 "F"  = 0
 ```
-
-</details>
 
 ---
 
@@ -436,7 +393,7 @@ global_per_minute = 100
 global_burst = 20
 
 [scoring]
-# profile_path = "profiles/default.toml"   # override built-in default
+# profile_path = "my-profile.toml"   # override the built-in profile v3
 ```
 
 Override any value with environment variables: `LENS_` prefix, `__` for nesting — e.g. `LENS_SERVER__BIND=0.0.0.0:8082`.

@@ -2,7 +2,7 @@
 
 ## Tool-specific rules
 
-- **SCORING SYNC RULE**: Any change to the scoring algorithm (`src/scoring/`),
+- **SCORING SYNC RULE**: Any change to the scoring algorithm (`src/score.rs`, `netray_engine::score`),
   profile schema, weight tiers, grade thresholds, or hard-fail rules MUST be
   reflected in `README.md` (the Scoring section) in the same commit. The README
   is the transparency contract.
@@ -21,7 +21,7 @@ letter-graded health score.
 - IP enrichment runs after DNS (needs resolved IPs)
 - Results stream as SSE events: `dns`, `tls`, `ip`, `summary`, `done`
 - 20s hard deadline — return whatever is ready
-- Scoring driven by external TOML profile (embedded default, file override)
+- Scoring through `netray_engine::score` with the engine's profile v3 (embedded, file override)
 
 ## Architecture
 
@@ -29,8 +29,6 @@ letter-graded health score.
 lens/
   Cargo.toml
   lens.example.toml
-  profiles/
-    default.toml          # Default scoring profile (embedded at compile time)
   src/
     main.rs               # Entry point, Axum server, graceful shutdown
     config.rs             # netray_common::config::load: TOML + LENS_ env vars, unknown keys rejected
@@ -44,10 +42,7 @@ lens/
       dns.rs              # Call prism, parse CollectedResponse, extract lint + IPs
       tls.rs              # Call tlsight, parse quality checks
       ip.rs               # Call ifconfig-rs /json?ip= per IP, map network.type to verdict
-    scoring/
-      mod.rs
-      profile.rs          # Profile, SectionProfile structs (serde from TOML)
-      engine.rs           # compute_section, compute_overall, apply_hard_fails
+    score.rs              # Section results scored by netray_engine::score; catalogue texts by check name
     cache.rs              # moka TTL cache keyed by domain
     security/
       mod.rs
@@ -78,7 +73,7 @@ Any code change to scoring must update README.md in the same commit.
 - `moka` 0.12 — In-process TTL cache
 - `tokio-stream` + `futures` — SSE streaming
 - `config` — TOML + env var layering (LENS_ prefix, __ separator)
-- `toml` — Scoring profile deserialization
+- `toml` — `[modules.*]` config tables
 - `sqlx` 0.8 (sqlite, runtime-tokio, migrate, chrono) — durable snapshot storage; WAL mode; auto-migrated at startup
 - `nanoid` 0.4 + `regex` 1 — 8-char base62 shortids for `GET /r/:shortid` (unknown, expired or malformed id → 404 "expired or unknown" HTML page)
 - `chrono` 0.4 — UTC timestamps in snapshots

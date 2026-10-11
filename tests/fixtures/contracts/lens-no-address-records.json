@@ -1,7 +1,7 @@
 {
   "summary": {
     "grade": "incomplete",
-    "score": 29.3,
+    "score": 46.4,
     "overall": "error",
     "complete": false,
     "sections": {
@@ -13,7 +13,7 @@
     },
     "section_grades": {
       "dns": "F",
-      "email": "F"
+      "email": "C"
     },
     "hard_fail": false,
     "hard_fail_checks": [],
@@ -30,6 +30,38 @@
         {
           "name": "ns",
           "verdict": "fail"
+        },
+        {
+          "name": "cname_apex",
+          "verdict": "skip"
+        },
+        {
+          "name": "dnssec",
+          "verdict": "skip"
+        },
+        {
+          "name": "dnskey_algorithm",
+          "verdict": "skip"
+        },
+        {
+          "name": "dnssec_rollover",
+          "verdict": "skip"
+        },
+        {
+          "name": "https_svcb",
+          "verdict": "skip"
+        },
+        {
+          "name": "ns_lame",
+          "verdict": "skip"
+        },
+        {
+          "name": "ns_delegation",
+          "verdict": "skip"
+        },
+        {
+          "name": "ttl",
+          "verdict": "skip"
         }
       ]
     },
@@ -38,20 +70,44 @@
       "grade": "D",
       "checks": [
         {
-          "name": "email_authentication",
-          "verdict": "fail"
-        },
-        {
-          "name": "email_infrastructure",
+          "name": "mx",
           "verdict": "pass"
         },
         {
-          "name": "email_transport",
+          "name": "spf",
+          "verdict": "pass"
+        },
+        {
+          "name": "dkim",
+          "verdict": "fail"
+        },
+        {
+          "name": "dmarc",
           "verdict": "warn"
         },
         {
-          "name": "email_brand_policy",
+          "name": "mta_sts",
+          "verdict": "warn"
+        },
+        {
+          "name": "tls_rpt",
+          "verdict": "pass"
+        },
+        {
+          "name": "bimi",
           "verdict": "skip"
+        },
+        {
+          "name": "dane",
+          "verdict": "skip"
+        },
+        {
+          "name": "dnsbl",
+          "verdict": "pass"
+        },
+        {
+          "name": "fcrdns",
+          "verdict": "pass"
         }
       ]
     },

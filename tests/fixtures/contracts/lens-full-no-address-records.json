@@ -2,7 +2,7 @@
   "dns": {
     "checks": [
       {
-        "fix_hint": "Add CAA records to specify which certificate authorities are allowed to issue certificates for your domain, reducing mis-issuance risk.",
+        "fix_hint": "Publish issue and issuewild CAA records naming the allowed certificate authorities, using only known tags.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/caa-records",
         "messages": [
@@ -13,8 +13,8 @@
         "weight": 5
       },
       {
-        "fix_hint": "Ensure your domain has at least two authoritative nameservers in separate networks for redundancy.",
-        "fix_owner": "your DNS provider or registrar",
+        "fix_hint": "Delegate the zone to at least two authoritative nameservers.",
+        "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
         "messages": [
           "Not found"
@@ -22,6 +22,94 @@
         "name": "ns",
         "verdict": "fail",
         "weight": 3
+      },
+      {
+        "fix_hint": "Replace the apex CNAME with A/AAAA records, or an ALIAS/ANAME record where the provider supports it.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/record-types",
+        "messages": [
+          "not reported"
+        ],
+        "name": "cname_apex",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Enable DNSSEC signing at the DNS provider, have its DS record published at the registrar and keep the signatures current.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dnssec",
+        "messages": [
+          "not reported"
+        ],
+        "name": "dnssec",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Re-sign the zone with ECDSA P-256 (algorithm 13) or Ed25519 (algorithm 15).",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dnssec",
+        "messages": [
+          "not reported"
+        ],
+        "name": "dnskey_algorithm",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Retire superseded KSKs from the zone so that one remains, and as part of it remove the DS records of retired keys at the registrar.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dnssec",
+        "messages": [
+          "not reported"
+        ],
+        "name": "dnssec_rollover",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Publish either one alias-mode or only service-mode HTTPS records that advertise the supported ALPN protocols.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/record-types",
+        "messages": [
+          "not reported"
+        ],
+        "name": "https_svcb",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Remove the lame nameserver from the zone's NS records and from the delegation at the registrar.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/lame-delegation",
+        "messages": [
+          "not reported"
+        ],
+        "name": "ns_lame",
+        "verdict": "skip",
+        "weight": 5
+      },
+      {
+        "fix_hint": "Make every authoritative nameserver serve the same NS set, matching the delegation at the registrar.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/lame-delegation",
+        "messages": [
+          "not reported"
+        ],
+        "name": "ns_delegation",
+        "verdict": "skip",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Keep TTLs at 60 seconds or more, NS and MX TTLs at one week or less, and the SOA minimum at one day or less.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/record-types",
+        "messages": [
+          "not reported"
+        ],
+        "name": "ttl",
+        "verdict": "skip",
+        "weight": 2
       }
     ],
     "detail_url": "https://dns.example.com/?q=example.com+%2Bcheck",
@@ -35,47 +123,100 @@
   "email": {
     "checks": [
       {
-        "fix_hint": "Publish an SPF record that covers your mail servers, configure DKIM signing with your email provider, and publish a DMARC policy at `p=quarantine` or `p=reject`.",
-        "fix_owner": "your DNS provider and email provider",
+        "fix_hint": "Point MX records at hostnames with their own A or AAAA records, spread over at least two servers in separate networks.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/email-deliverability",
+        "name": "mx",
+        "verdict": "pass",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Publish one SPF record that lists every server sending mail for the domain, including its own MX hosts that also send, and ends in -all, or ~all where the domain does not publish a Null MX.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/email-auth",
+        "name": "spf",
+        "verdict": "pass",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Rotate to a 2048-bit RSA or an Ed25519 DKIM key at the mail provider, publish it at the selector and sign all outgoing mail with it.",
+        "fix_owner": "your mail provider",
+        "guide_url": "https://netray.info/guide/dkim",
+        "messages": [
+          "selector 'default': RSA 512 bits < 1024"
+        ],
+        "name": "dkim",
+        "verdict": "fail",
+        "weight": 3
+      },
+      {
+        "fix_hint": "Publish one DMARC record with p=reject, without sp=none or pct=0, and with an rua address authorised to receive reports.",
+        "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/email-auth",
         "messages": [
-          "selector 'default': RSA 512 bits < 1024",
           "no enforcement"
         ],
-        "name": "email_authentication",
-        "verdict": "fail",
-        "weight": 10
+        "name": "dmarc",
+        "verdict": "warn",
+        "weight": 4
       },
       {
-        "fix_hint": "Ensure your domain has valid MX records pointing to functioning mail servers, and that each pointed hostname resolves to an A or AAAA record.",
-        "fix_owner": "your DNS provider and email provider",
-        "guide_url": "https://netray.info/guide/email-auth",
-        "name": "email_infrastructure",
-        "verdict": "pass",
-        "weight": 5
-      },
-      {
-        "fix_hint": "Publish an MTA-STS policy to enforce encrypted email transport and prevent SMTP downgrade attacks on mail delivered to your domain.",
-        "fix_owner": "your email provider and DNS provider",
-        "guide_url": "https://netray.info/guide/email-auth",
+        "fix_hint": "Serve a valid MTA-STS policy from the mta-sts web host in mode enforce, listing every MX host with a max_age of at least one day, and update the id in the _mta-sts TXT record on every change.",
+        "fix_owner": "your hosting provider",
+        "guide_url": "https://netray.info/guide/mta-sts",
         "messages": [
           "mode: testing",
           "max_age 3600 < 86400; suggest >= 604800"
         ],
-        "name": "email_transport",
+        "name": "mta_sts",
         "verdict": "warn",
-        "weight": 5
+        "weight": 2
       },
       {
-        "fix_hint": "Publish a BIMI record with a valid SVG Tiny PS logo once your DMARC policy is at `p=quarantine` or `p=reject`, to show your brand logo in supporting email clients.",
+        "fix_hint": "Publish a _smtp._tls TXT record with v=TLSRPTv1 and a mailto: or https: rua address.",
         "fix_owner": "your DNS provider",
-        "guide_url": "https://netray.info/guide/email-auth",
+        "guide_url": "https://netray.info/guide/tls-rpt",
+        "name": "tls_rpt",
+        "verdict": "pass",
+        "weight": 1
+      },
+      {
+        "fix_hint": "Serve the BIMI logo over HTTPS at a reachable URL and set DMARC to p=quarantine or p=reject.",
+        "fix_owner": "your hosting provider",
+        "guide_url": "https://netray.info/guide/bimi",
         "messages": [
-          "not applicable"
+          "No BIMI record"
         ],
-        "name": "email_brand_policy",
+        "name": "bimi",
         "verdict": "skip",
         "weight": 2
+      },
+      {
+        "fix_hint": "Sign the domain's zone with DNSSEC and keep the TLSA records at _25._tcp of every MX host within the valid usage, selector and matching-type values.",
+        "fix_owner": "your DNS provider",
+        "guide_url": "https://netray.info/guide/dane-tlsa",
+        "messages": [
+          "No DANE TLSA records"
+        ],
+        "name": "dane",
+        "verdict": "skip",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Stop the activity that caused the listing, then request delisting from each blocklist.",
+        "fix_owner": "your mail provider",
+        "guide_url": "https://netray.info/guide/dnsbl",
+        "name": "dnsbl",
+        "verdict": "pass",
+        "weight": 2
+      },
+      {
+        "fix_hint": "Set a PTR record for each mail server address that resolves back to the same address.",
+        "fix_owner": "your hosting provider",
+        "guide_url": "https://netray.info/guide/dnsbl",
+        "name": "fcrdns",
+        "verdict": "pass",
+        "weight": 1
       }
     ],
     "detail_url": "https://email.example.com/?domain=example.com",
@@ -104,10 +245,10 @@
     "hard_fail_reason": null,
     "not_applicable": {},
     "overall": "error",
-    "score": 29.3,
+    "score": 46.4,
     "section_grades": {
       "dns": "F",
-      "email": "F"
+      "email": "C"
     },
     "sections": {
       "dns": "fail",

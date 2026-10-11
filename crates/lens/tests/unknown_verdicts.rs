@@ -14,7 +14,7 @@ mod common;
 
 use lens::modules::ModuleSection;
 use lens::modules::{Backend, BackendContext};
-use lens::scoring::engine::CheckVerdict;
+use lens::score::CheckVerdict;
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
 use netray_email::quality::SseEvent;
 use netray_engine::{Registry, SectionOutcome};
@@ -55,7 +55,7 @@ fn json_with(name: &str, pointer: &str, to: &str) -> String {
 /// Run one section against `body`; the checks as (name, verdict), or the error text.
 async fn run(section: &str, body: String) -> Result<Vec<(String, CheckVerdict)>, String> {
     let fwd = reqwest::header::HeaderMap::new();
-    let pairs = |checks: &[lens::scoring::engine::CheckResult]| {
+    let pairs = |checks: &[lens::score::CheckResult]| {
         checks
             .iter()
             .map(|c| (c.name.clone(), c.verdict.clone()))
@@ -235,20 +235,17 @@ async fn known_verdicts_stay_ok_and_count_nothing() {
     let tls = run("tls", golden("tlsight-inspect.json"))
         .await
         .expect("tls Ok");
-    assert_eq!(verdict_of(&tls, "ocsp_stapled"), CheckVerdict::Fail);
+    assert_eq!(verdict_of(&tls, "ocsp_stapled"), CheckVerdict::Warn);
 
     let http = http_statuses(&golden("spectra-inspect.json")).expect("http Ok");
     assert_eq!(status_of(&http, "http.https_redirect"), Status::Pass);
-    assert_eq!(status_of(&http, "http.security_headers"), Status::Warn);
+    assert_eq!(status_of(&http, "http.csp"), Status::Warn);
 
-    // golden: dkim=fail, mta_sts=warn; brand (bimi `absent`, info only) is Skip
+    // golden: dkim=fail, mta_sts=warn; bimi (`absent`, info only) is Skip
     let email = run("email", golden("beacon.sse")).await.expect("email Ok");
-    assert_eq!(
-        verdict_of(&email, "email_authentication"),
-        CheckVerdict::Fail
-    );
-    assert_eq!(verdict_of(&email, "email_transport"), CheckVerdict::Warn);
-    assert_eq!(verdict_of(&email, "email_brand_policy"), CheckVerdict::Skip);
+    assert_eq!(verdict_of(&email, "dkim"), CheckVerdict::Fail);
+    assert_eq!(verdict_of(&email, "mta_sts"), CheckVerdict::Warn);
+    assert_eq!(verdict_of(&email, "bimi"), CheckVerdict::Skip);
 
     let ip = run("ip", golden("ifconfig-json.json"))
         .await

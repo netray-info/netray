@@ -1,5 +1,5 @@
 /// Mapping of lens scoring types onto the shared `netray-model` vocabulary.
-use lens::scoring::engine::{CheckVerdict, parse_grade};
+use lens::score::{CheckVerdict, parse_grade};
 use netray_model::{Grade, Status};
 
 // C3 + C11: exhaustive over CheckVerdict (no wildcard), so a new variant breaks the build.
