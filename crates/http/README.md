@@ -181,8 +181,8 @@ Each check produces a Pass / Warn / Fail / Skip verdict. The overall verdict is 
 
 **CORS**
 - Wildcard origin — Warn on `Access-Control-Allow-Origin: *`
-- Origin reflection — Warn if the response mirrors the request `Origin` header
-- Credentials — Fail if reflected origin and `Access-Control-Allow-Credentials: true` (credential theft vector)
+- Origin reflection — `Access-Control-Allow-Origin` equals the probe's `Origin` byte for byte, or is `null`
+- Credentials — Fail if reflected origin and `Access-Control-Allow-Credentials: true` (credential theft vector); any other named origin passes
 
 **Cookies**
 Per-cookie checks across all `Set-Cookie` response headers:
