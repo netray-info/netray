@@ -24,9 +24,18 @@ impl CaaLookup {
 
     /// Return values from all `issue` tags, stripped of parameters.
     pub fn issue_domains(&self) -> Vec<&str> {
+        self.property_domains("issue")
+    }
+
+    /// Return values from all `issuewild` tags, stripped of parameters.
+    pub fn issuewild_domains(&self) -> Vec<&str> {
+        self.property_domains("issuewild")
+    }
+
+    fn property_domains(&self, tag: &str) -> Vec<&str> {
         self.records
             .iter()
-            .filter(|r| r.tag.eq_ignore_ascii_case("issue"))
+            .filter(|r| r.tag.eq_ignore_ascii_case(tag))
             .map(|r| {
                 // Strip parameters: "letsencrypt.org; accounturi=..." → "letsencrypt.org"
                 // Strip surrounding double quotes: some DNS editors produce "\"letsencrypt.org\""

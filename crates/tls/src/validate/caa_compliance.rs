@@ -25,12 +25,17 @@ fn is_known_tag(tag: &str) -> bool {
 ///
 /// - No CAA records → Pass (RFC 8659: absence is permissive)
 /// - A critical record with an unknown tag → Fail (RFC 8659 §4.1)
-/// - Records exist but no `issue` tags → Pass (no issuance constraint)
-/// - Records with `issue` tags, issuer matches → Pass
-/// - Records with `issue` tags, no match → Fail
+/// - A wildcard SAN is judged by the `issuewild` records when there are any, otherwise by
+///   `issue` (RFC 8659 §4.3); the other names, or a leaf without SANs, by `issue`
+/// - A property set with no records places no constraint; one whose values do not name
+///   the issuer (an empty value names no CA) → Fail
 ///
 /// A critical record with a known tag is evaluated like a non-critical one.
-pub fn check_caa_compliance(caa: &CaaLookup, leaf_issuer: &str) -> CheckStatus {
+pub fn check_caa_compliance(
+    caa: &CaaLookup,
+    leaf_issuer: &str,
+    leaf_sans: &[String],
+) -> CheckStatus {
     if caa.is_empty() {
         return CheckStatus::Pass;
     }
@@ -44,23 +49,34 @@ pub fn check_caa_compliance(caa: &CaaLookup, leaf_issuer: &str) -> CheckStatus {
         return CheckStatus::Fail;
     }
 
-    let issue_domains = caa.issue_domains();
-    if issue_domains.is_empty() {
-        return CheckStatus::Pass;
-    }
+    let has_wildcard = leaf_sans.iter().any(|s| s.starts_with("*."));
+    let has_plain = leaf_sans.is_empty() || leaf_sans.iter().any(|s| !s.starts_with("*."));
 
-    let matches = issue_domains.iter().any(|&domain| {
-        if domain.is_empty() {
-            return false; // Empty issue value = deny all issuance
-        }
-        issuer_domain_matches(leaf_issuer, domain)
-    });
+    let issue = caa.issue_domains();
+    let issuewild = caa.issuewild_domains();
+    let wildcard_set = if issuewild.is_empty() {
+        &issue
+    } else {
+        &issuewild
+    };
 
-    if matches {
+    let authorised = (!has_plain || set_authorises(&issue, leaf_issuer))
+        && (!has_wildcard || set_authorises(wildcard_set, leaf_issuer));
+
+    if authorised {
         CheckStatus::Pass
     } else {
         CheckStatus::Fail
     }
+}
+
+/// Whether one property set authorises the issuer; an empty set places no constraint.
+fn set_authorises(domains: &[&str], leaf_issuer: &str) -> bool {
+    domains.is_empty()
+        || domains.iter().any(|&domain| {
+            // An empty value denies all issuance
+            !domain.is_empty() && issuer_domain_matches(leaf_issuer, domain)
+        })
 }
 
 /// Match a cert issuer DN against a CAA `issue` domain value.
@@ -144,7 +160,7 @@ mod tests {
     fn no_records_is_pass() {
         let caa = CaaLookup { records: vec![] };
         assert_eq!(
-            check_caa_compliance(&caa, "O=Let's Encrypt"),
+            check_caa_compliance(&caa, "O=Let's Encrypt", &[]),
             CheckStatus::Pass
         );
     }
@@ -159,7 +175,7 @@ mod tests {
             }],
         };
         assert_eq!(
-            check_caa_compliance(&caa, "O=Let's Encrypt"),
+            check_caa_compliance(&caa, "O=Let's Encrypt", &[]),
             CheckStatus::Pass
         );
     }
@@ -168,7 +184,7 @@ mod tests {
     fn matching_issuer_is_pass() {
         let caa = caa_with_issues(&["letsencrypt.org"]);
         assert_eq!(
-            check_caa_compliance(&caa, "CN=R3, O=Let's Encrypt, C=US"),
+            check_caa_compliance(&caa, "CN=R3, O=Let's Encrypt, C=US", &[]),
             CheckStatus::Pass
         );
     }
@@ -177,7 +193,7 @@ mod tests {
     fn non_matching_issuer_is_fail() {
         let caa = caa_with_issues(&["letsencrypt.org"]);
         assert_eq!(
-            check_caa_compliance(&caa, "CN=DigiCert Global Root G2, O=DigiCert Inc"),
+            check_caa_compliance(&caa, "CN=DigiCert Global Root G2, O=DigiCert Inc", &[]),
             CheckStatus::Fail
         );
     }
@@ -186,7 +202,7 @@ mod tests {
     fn multiple_issuers_any_match() {
         let caa = caa_with_issues(&["letsencrypt.org", "digicert.com"]);
         assert_eq!(
-            check_caa_compliance(&caa, "CN=DigiCert SHA2, O=DigiCert Inc"),
+            check_caa_compliance(&caa, "CN=DigiCert SHA2, O=DigiCert Inc", &[]),
             CheckStatus::Pass
         );
     }
@@ -201,14 +217,17 @@ mod tests {
                 issuer_critical: false,
             }],
         };
-        assert_eq!(check_caa_compliance(&caa, "O=Any CA"), CheckStatus::Fail);
+        assert_eq!(
+            check_caa_compliance(&caa, "O=Any CA", &[]),
+            CheckStatus::Fail
+        );
     }
 
     #[test]
     fn issue_with_parameters_matches() {
         let caa = caa_with_issues(&["digicert.com; cansignhttpexchanges=yes"]);
         assert_eq!(
-            check_caa_compliance(&caa, "O=DigiCert Inc"),
+            check_caa_compliance(&caa, "O=DigiCert Inc", &[]),
             CheckStatus::Pass
         );
     }
@@ -217,7 +236,7 @@ mod tests {
     fn sectigo_matches() {
         let caa = caa_with_issues(&["sectigo.com"]);
         assert_eq!(
-            check_caa_compliance(&caa, "O=Sectigo Limited"),
+            check_caa_compliance(&caa, "O=Sectigo Limited", &[]),
             CheckStatus::Pass
         );
     }
@@ -226,7 +245,7 @@ mod tests {
     fn google_trust_services_matches_pki_goog() {
         let caa = caa_with_issues(&["pki.goog"]);
         assert_eq!(
-            check_caa_compliance(&caa, "CN=WE2, O=Google Trust Services, C=US"),
+            check_caa_compliance(&caa, "CN=WE2, O=Google Trust Services, C=US", &[]),
             CheckStatus::Pass
         );
     }
@@ -236,7 +255,7 @@ mod tests {
         // A CAA domain not in the table cannot be matched.
         let caa = caa_with_issues(&["unknown-ca-not-in-table.example"]);
         assert_eq!(
-            check_caa_compliance(&caa, "O=Unknown CA"),
+            check_caa_compliance(&caa, "O=Unknown CA", &[]),
             CheckStatus::Fail
         );
     }
@@ -245,7 +264,7 @@ mod tests {
     fn amazon_issuer_matches_amazonaws_domain() {
         let caa = caa_with_issues(&["amazonaws.com"]);
         assert_eq!(
-            check_caa_compliance(&caa, "C=US, O=Amazon, CN=Amazon RSA 2048 M04"),
+            check_caa_compliance(&caa, "C=US, O=Amazon, CN=Amazon RSA 2048 M04", &[]),
             CheckStatus::Pass
         );
     }
@@ -260,7 +279,7 @@ mod tests {
             }],
         };
         assert_eq!(
-            check_caa_compliance(&caa, "CN=R3, O=Let's Encrypt, C=US"),
+            check_caa_compliance(&caa, "CN=R3, O=Let's Encrypt, C=US", &[]),
             CheckStatus::Fail
         );
     }

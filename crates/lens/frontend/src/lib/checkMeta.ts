@@ -78,7 +78,7 @@ export const CHECK_DESCRIPTIONS: Record<string, string> = {
   not_expired: 'All certificates in the chain must be within their validity period',
   hostname_match: 'The leaf certificate SAN must cover the queried hostname',
   chain_complete: 'All intermediate certificates must be present in correct order',
-  strong_signature: 'SHA-1 and MD5 signatures are deprecated and must not appear in the chain',
+  strong_signature: 'SHA-1, MD5 and MD2 signatures must not appear on the leaf or an intermediate',
   key_strength: 'RSA keys must be ≥ 2048 bits; ECDSA must use P-256 or better',
   expiry_window: 'Certificate expires within 30 days (warn) or 7 days (fail)',
   cert_lifetime: 'CA/Browser Forum requires certificates to be valid for ≤ 398 days',
