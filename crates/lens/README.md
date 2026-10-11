@@ -303,6 +303,7 @@ These conditions force an **F** regardless of the numeric score:
 |---|---|
 | Untrusted TLS chain | Certificate not signed by a trusted CA — browsers reject it |
 | Expired certificate | Any certificate in the chain |
+| Hostname mismatch | The leaf certificate does not cover the checked hostname (`hostname_match`) — browsers reject it |
 | TLS unreachable | No address completed a TLS handshake (`tls_reachable`) — a target-side failure |
 
 ### Check weight tiers

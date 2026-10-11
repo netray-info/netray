@@ -19,7 +19,7 @@ Each fix is proven by a unit test on the scenario the defect names.
 
 - Fetching intermediates over AIA. `tls.aia_reachability` keeps judging from the served chain.
 - Parsing RSASSA-PSS parameters.
-- Changing weights. Profile v3 changes only by R8 (one hard-fail entry); v3 is unreleased, so its lock hash moves with it. In `checks.toml` only the `finding` texts of `tls.strong_signature` (R4) and `http.cors` (R1) change.
+- Changing weights. Profile v3 changes only by R8 (one hard-fail entry); v3 is unreleased, so its lock hash moves with it. In `checks.toml` only the `finding` texts of `tls.strong_signature` (R4) and `http.cors` (R1) and the `severity` of `tls.hostname_match` (R8) change.
 - Regenerating the stored lens goldens (`tests/fixtures/contracts/lens-*.json`). They are recorded outputs, and none of the scenarios below occurs in them.
 
 ## Context and constraints
