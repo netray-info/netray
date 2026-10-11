@@ -71,7 +71,7 @@ Each fix is proven by a unit test on the scenario the defect names.
    - The check's explanations name the same scope: tlsight's `ValidationSummary.tsx`, `crates/tls/docs/quality.md` and lens's `checkMeta.ts` description.
 5. **Trust without the name.** `chain_trusted` reports whether the served chain builds to a trust anchor in the store at the current time, using `verify_server_cert_signed_by_trust_anchor` with no server name. A hostname mismatch no longer makes it false (`tls.hostname_match` keeps reporting the mismatch). A target without a hostname, such as an IP address, gets a real trust verdict.
 6. **Chain completeness.** Completeness is decided from the served certificates and the trust store's anchors, not from the trust verdict or its error.
-   - A chain in correct order passes `tls.chain_complete` when its last certificate is self-signed, or when its last certificate or that certificate's issuer is a trust anchor in the store (compared by subject name).
+   - A chain in correct order passes `tls.chain_complete` when a served certificate is self-signed, or when a served certificate or its issuer is a trust anchor in the store (compared by subject name); certificates served past that point do not count. The Pass detail says whether the chain reaches an anchor or ends at a self-signed certificate.
    - Otherwise a correctly ordered chain fails, including a leaf sent alone whose issuer is not an anchor, whether or not the leaf is expired.
    - Wrong order: trusted gives Warn and untrusted gives Fail, as today.
    - `tls.aia_reachability` follows from this without changes to its own rules.
@@ -147,6 +147,7 @@ GIVEN the fixtures of `crates/tls/tests/{module_v3, port_results_table, contract
 - Completeness from the anchors' subjects over the trust verdict or webpki's error kind: webpki reports expiry before an unknown issuer, so an expired lone leaf would pass. Consequence: a private-CA chain without its root also fails completeness, besides the hard-fail `chain_trusted` (operator, 2026-10-11).
 - Phase 1 reader amendments repaired in phase over noting them for later: the `http.cors` finding names `null`, R4's finding names MD2, `weakest_signature` excludes roots in the API too, the explanation texts follow (operator, 2026-10-11).
 - `issuewild` evaluated in this feature (R7) over a later one: the blanket critical Fail used to hide a critical `issuewild ";"`, so R2 alone would regress it (operator, 2026-10-11).
+- Completeness over every served certificate, not only the last: a trusted chain that also serves cross-certificates past its anchor is complete (phase 2 reading, 2026-10-11).
 - A separate feature before 0.25.0 over folding into v2-catalogue (operator, 2026-10-11).
 
 ## Open decisions
