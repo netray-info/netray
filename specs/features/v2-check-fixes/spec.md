@@ -19,7 +19,7 @@ Each fix is proven by a unit test on the scenario the defect names.
 
 - Fetching intermediates over AIA. `tls.aia_reachability` keeps judging from the served chain.
 - Parsing RSASSA-PSS parameters.
-- Changing weights or profile v3 (`crates/engine/profiles/v3.toml` stays byte-identical). In `checks.toml` only the `finding` texts of `tls.strong_signature` (R4) and `http.cors` (R1) change.
+- Changing weights. Profile v3 changes only by R8 (one hard-fail entry); v3 is unreleased, so its lock hash moves with it. In `checks.toml` only the `finding` texts of `tls.strong_signature` (R4) and `http.cors` (R1) change.
 - Regenerating the stored lens goldens (`tests/fixtures/contracts/lens-*.json`). They are recorded outputs, and none of the scenarios below occurs in them.
 
 ## Context and constraints
@@ -78,6 +78,8 @@ Each fix is proven by a unit test on the scenario the defect names.
 
 7. **CAA for wildcard certificates.** When the leaf carries a wildcard SAN and the CAA set holds `issuewild` records, those records decide whether the issuing CA is authorised for it, ignoring `issue` (RFC 8659 §4.3); without `issuewild` records `issue` decides as today. An empty `issuewild` value (`;`) authorises no CA. The leaf's non-wildcard SANs stay judged by `issue`; the check passes only when every applicable set authorises the CA.
 
+8. **A name mismatch stays a hard fail.** `tls.hostname_match` joins the TLS `hard_fail` list of profile v3, and its catalogue `severity` becomes `critical` (the header rule: a hard fail is critical). Every hard-fail check of the profile carries severity `critical` in the catalogue. An IP target, where `hostname_match` is not applicable, is unaffected.
+
 ## Phases
 
 ## Phase 1 — Independent check fixes
@@ -118,7 +120,7 @@ GIVEN a leaf with an `Unknown(...)` algorithm and an intermediate with SHA-1 WHE
 ## Phase 2 — Trust and chain completeness
 
 **Depends on:** Phase 1
-**Requirements:** 5, 6
+**Requirements:** 5, 6, 8
 
 `crates/tls/src/validate/chain_trust.rs` (trust via `verify_server_cert_signed_by_trust_anchor`; completeness from the anchors' subjects); `crates/tls/src/routes.rs` (pass the trust store to `validate_chain`); `crates/tls/src/quality/checks.rs` (`check_chain_complete`); `crates/tls/src/state.rs` only if the store or the supported algorithms must be passed differently.
 
@@ -133,6 +135,7 @@ GIVEN a single leaf, not self-signed, whose issuer is an anchor in the store WHE
 GIVEN a correctly ordered leaf + intermediate whose intermediate's issuer is an anchor, with the leaf expired WHEN chain_complete is assessed THEN Pass.
 GIVEN a correctly ordered chain ending in a self-signed root that is not in the store WHEN chain_complete is assessed THEN Pass.
 GIVEN a wrongly ordered trusted chain WHEN chain_complete is assessed THEN Warn (unchanged).
+GIVEN profile v3 WHEN its hard-fail checks are listed THEN they are `tls.chain_trusted`, `tls.hostname_match`, `tls.not_expired`, `tls.tls_reachable`, each with catalogue severity `critical`.
 GIVEN the fixtures of `crates/tls/tests/{module_v3, port_results_table, contract_golden}.rs` WHEN the suite runs THEN their asserted statuses hold unchanged; a new `ValidationResult` field may be added to their data (the fixture's lone leaf is trusted, so its issuer is an anchor), with an ADLC-Test-Change trailer.
 
 ## Decision log
@@ -148,6 +151,7 @@ GIVEN the fixtures of `crates/tls/tests/{module_v3, port_results_table, contract
 - Phase 1 reader amendments repaired in phase over noting them for later: the `http.cors` finding names `null`, R4's finding names MD2, `weakest_signature` excludes roots in the API too, the explanation texts follow (operator, 2026-10-11).
 - `issuewild` evaluated in this feature (R7) over a later one: the blanket critical Fail used to hide a critical `issuewild ";"`, so R2 alone would regress it (operator, 2026-10-11).
 - Completeness over every served certificate, not only the last: a trusted chain that also serves cross-certificates past its anchor is complete (phase 2 reading, 2026-10-11).
+- `tls.hostname_match` becomes a hard fail over leaving the mismatch at 10 points: R5 removed the name from `chain_trusted`, which was the only hard fail a name mismatch reached, and browsers block such a site (branch reading, operator, 2026-10-11).
 - A separate feature before 0.25.0 over folding into v2-catalogue (operator, 2026-10-11).
 
 ## Open decisions
