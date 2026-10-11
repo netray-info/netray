@@ -1,7 +1,8 @@
 # Spec: v2 check fixes
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-11
+Finished: 2026-10-11
 
 ## Goal
 
