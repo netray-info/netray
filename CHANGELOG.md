@@ -12,17 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **New check names in lens's output.** The JSON, SSE and snapshot shapes stay; each section's check list holds the v3 names.
-  - HTTP: `csp`, `x_frame_options`, `x_content_type_options`, `referrer_policy` and `permissions_policy` replace `security_headers`; `deprecated_headers`, `info_leakage` and `caching` replace `hygiene`, which 0.24.0 never scored.
+  - HTTP: `csp`, `x_frame_options`, `x_content_type_options`, `referrer_policy` and `permissions_policy` replace `security_headers`; `deprecated_headers`, `info_leakage` and `caching` replace `hygiene`, which 0.24.0 counted only against a site (a healthy site's `hygiene` read `skip`).
   - Email: `mx`, `spf`, `dkim`, `dmarc`, `mta_sts`, `tls_rpt`, `bimi`, `dane`, `dnsbl` and `fcrdns` replace `email_authentication`, `email_infrastructure`, `email_transport` and `email_brand_policy`.
   - DNS no longer reports `infrastructure`.
-  - TLS reports all 21 checks in every run, measured over every address that completed a handshake; the worst result counts and names the address. A check that does not apply is `not_applicable` with its reason ("no TLS handshake", "no MX", "not reported").
+  - TLS reports all 21 checks in every run, measured over every address that completed a handshake; the worst result counts and names the address. A check that does not apply is `not_applicable` with its reason, such as "no TLS handshake" in TLS, "no MX" in email or "not reported" where a module had no result.
   - Titles, fix hints, owners and guide links come from one catalogue (`crates/engine/catalogue/checks.toml`).
 - **Scoring.** A snapshot's `earned` is a decimal (a warn earns exactly half); snapshots taken by 0.24.0 still render with their old check names. `tls.hostname_match` is a fourth hard fail beside `chain_trusted`, `not_expired` and `tls_reachable`: a certificate that does not cover the checked name grades F.
 - **lens configuration.** `[backends] resolve_timeout_ms` must stay below `[backends.tls] timeout_ms` as well as `[backends.ip] timeout_ms`, because the TLS section now waits for the shared lookup inside its own window; startup refuses it otherwise. `[scoring] profile_path` refuses a check that is not in the catalogue, naming it. `[modules.dns.backends.ip]` is accepted and has no effect: the DNS section no longer enriches addresses.
 
 ### Fixed
 
-- **`http.cors`** flags only an `Access-Control-Allow-Origin` that echoes the probe's `Origin` exactly, or `null`; a site that names its own trusted origin passes.
+- **`http.cors`** counts an `Access-Control-Allow-Origin` as reflected only when it echoes the probe's `Origin` exactly or is `null`; together with `Access-Control-Allow-Credentials: true` that fails. A site that names its own trusted origin passes, with or without credentials; `*` still warns.
 - **`tls.caa_compliant`** fails on a critical flag only for an unknown CAA tag. For a wildcard certificate, `issuewild` records decide over `issue` (RFC 8659 §4.3).
 - **`tls.strong_signature`** ignores a root's self-signature. MD5, MD2, ECDSA-SHA1, DSA-SHA1 and the OIW SHA-1 identifier fail; an algorithm netray does not recognise warns instead of passing.
 - **`tls.chain_trusted`** checks the chain against the trust store without the hostname, so a name mismatch is reported only by `tls.hostname_match`, and an IP address target gets a trust verdict.
@@ -33,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`email.mx` is not applicable for some working MX setups.** When every MX sub-check is informational (for example, no MX host has an AAAA record), the check drops out of the grade instead of passing.
 - **`http.https_redirect` fails when the port-80 probe times out**, even if the site redirects.
-- **`email.dnsbl` is not applicable when every blocklist zone refuses the query**, instead of being reported as not measured.
+- **`email.dnsbl` is not applicable when a blocklist zone refuses the query or times out** and no zone lists the address, instead of being reported as not measured.
 
 ## [0.24.0] - 2026-10-10
 
