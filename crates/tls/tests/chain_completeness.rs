@@ -174,3 +174,35 @@ fn chain_completeness_table() {
         }
     }
 }
+
+#[test]
+fn certificates_served_past_the_anchor_do_not_make_the_chain_incomplete() {
+    // [leaf<-I, I<-R, X(subject R, issuer O), Y(subject O, issuer P)], store {R}: the path
+    // reaches R after I, so the extra cross-certificates must not fail completeness.
+    let r = root("Root R");
+    let o = root("Root O");
+    let p = root("Root P");
+    let i = intermediate("Intermediate I", &r);
+    let x = intermediate("Root R", &o);
+    let y = intermediate("Root O", &p);
+    let mut store = RootCertStore::empty();
+    store.add(r.der.clone()).unwrap();
+
+    let served = vec![leaf(&i, false), i.der.clone(), x.der.clone(), y.der.clone()];
+    let chain = parse_chain(&served);
+    let validation = validate_chain(&chain, Some(HOST), &store, &served);
+    assert!(validation.chain_order_correct);
+    assert_eq!(check_chain_complete(&validation).status, CheckStatus::Pass);
+}
+
+#[test]
+fn a_chain_ending_self_signed_outside_the_store_says_so() {
+    let x = root("Root X");
+    let store = RootCertStore::empty();
+    let served = vec![leaf(&x, false), x.der.clone()];
+    let chain = parse_chain(&served);
+    let validation = validate_chain(&chain, Some(HOST), &store, &served);
+    let check = check_chain_complete(&validation);
+    assert_eq!(check.status, CheckStatus::Pass);
+    assert_eq!(check.detail, "chain ends at a self-signed certificate");
+}

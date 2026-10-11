@@ -52,7 +52,7 @@ const DETAIL_EXPLANATIONS: Record<string, string> = {
   chain_trusted: 'Verifies the certificate chain terminates at a trusted root CA in the Mozilla trust store.',
   not_expired: 'Checks that no certificate in the chain has expired or is not yet valid.',
   hostname_match: 'Confirms the leaf certificate\'s SANs include the queried hostname.',
-  chain_complete: 'Verifies the chain is correctly ordered — each certificate\'s issuer matches the next certificate\'s subject.',
+  chain_complete: 'Verifies the chain is correctly ordered — each certificate\'s issuer matches the next certificate\'s subject — and reaches a trust anchor or a self-signed certificate, so no intermediate is missing.',
   strong_signature: 'Checks that the leaf and intermediates use no weak signature algorithm (SHA-1, MD5, MD2); root self-signatures are ignored, an unrecognised algorithm warns.',
   key_strength: 'Verifies RSA keys are at least 2048 bits. ECDSA and Ed25519 keys always pass.',
   expiry_window: 'Warns when any certificate expires within 30 days, fails within 7 days.',

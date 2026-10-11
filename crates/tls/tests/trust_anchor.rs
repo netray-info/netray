@@ -39,6 +39,14 @@ fn build_pki() -> Pki {
     }
 }
 
+type Row = (
+    &'static str,
+    Vec<CertificateDer<'static>>,
+    Option<&'static str>,
+    bool,
+    bool,
+);
+
 #[test]
 fn trust_is_decided_by_the_root_store_not_the_hostname() {
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -48,7 +56,7 @@ fn trust_is_decided_by_the_root_store_not_the_hostname() {
     roots.add(pki.ca_der.clone()).unwrap();
 
     // (label, raw chain, hostname, chain_trusted, leaf_covers_hostname)
-    let rows: Vec<(&str, Vec<CertificateDer<'static>>, Option<&str>, bool, bool)> = vec![
+    let rows: Vec<Row> = vec![
         (
             "C26 other hostname",
             vec![pki.leaf_der.clone()],

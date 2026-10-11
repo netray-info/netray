@@ -70,3 +70,47 @@ skipped: the phase changes pure check functions with no entry point of its own; 
 ### Verify
 
 `adlc verify`: contract passed, 101 tests collected (tree d05eb99).
+
+## Phase 2 — Trust and chain completeness
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C26 | R5: chain building to an anchor, hostname the leaf does not cover → `chain_trusted` true, `leaf_covers_hostname` false | green | crates/tls/tests/trust_anchor.rs |
+| C27 | R5: same chain, no hostname → `chain_trusted` true | green | crates/tls/tests/trust_anchor.rs |
+| C28 | R5: self-signed leaf not in the store → `chain_trusted` false | green | crates/tls/tests/trust_anchor.rs |
+| C29 | R6: lone leaf, issuer not an anchor → chain_complete Fail; aia Fail without, Warn with caIssuers URL | green | crates/tls/tests/chain_completeness.rs |
+| C30 | R6: same lone leaf, expired → chain_complete Fail | green | crates/tls/tests/chain_completeness.rs |
+| C31 | R6: lone leaf issued by an anchor → chain_complete Pass, aia Pass (module maps it to NotApplicable) | green | crates/tls/tests/chain_completeness.rs |
+| C32 | R6: leaf + intermediate, intermediate issued by an anchor, leaf expired → chain_complete Pass | green | crates/tls/tests/chain_completeness.rs |
+| C33 | R6: ordered chain ending in a self-signed root not in the store → chain_complete Pass | green | crates/tls/tests/chain_completeness.rs |
+| C34 | R6: wrongly ordered trusted chain → chain_complete Warn | green | crates/tls/tests/chain_completeness.rs |
+| C35 | R6: the stored fixtures' asserted statuses hold (`module_v3`, `port_results_table`, `contract_golden`) | green | existing tests |
+| C36 | R6 (amended): cross-certificates served past the anchor do not fail completeness | green | crates/tls/tests/chain_completeness.rs |
+| C37 | R6 (amended): a chain ending self-signed outside the store passes with "chain ends at a self-signed certificate" | green | crates/tls/tests/chain_completeness.rs |
+
+C36 and C37 come from the phase-2 reading and were written with their fix, not committed red first.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G4 trust and completeness | 2 | sonnet | 45138 | 76 |
+
+The coder's edit of the struct literals and the golden was blocked by the sandbox (`sed -i`); the orchestrator applied it and regenerated `tlsight-inspect.json` with `UPDATE_GOLDEN=1` (one added key, `ends_at_anchor`).
+
+### Reader
+
+| class | where | finding | outcome |
+|---|---|---|---|
+| BLOCKER | checks.rs `check_chain_complete` | Pass detail "chain reaches a trust anchor" for a chain ending self-signed outside the store | fixed: detail distinguishes the two; C37 |
+| AMENDMENT | chain_trust.rs `chain_ends_at_anchor` | only the last served certificate was judged, so cross-certificates past the anchor failed a trusted chain | repaired in phase 2 (R6 amended); C36 |
+| DEFERRED | checks.rs `check_aia_reachability` | the incomplete branch cites the first caIssuers URL, usually the leaf's, which points at the intermediate already served | listed; AIA rules are out of scope |
+| DEFERRED | tlsight `IpCard.tsx:29` | IP targets: the card is red with "hostname mismatch" because `leaf_covers_hostname` is false without a hostname | listed; predates the change, R5 exposes it |
+| NIT | tlsight `ValidationSummary.tsx` | `chain_complete` tooltip described ordering only | fixed |
+| NIT | chain_trust.rs `der_contents` | long-form DER header untested | fixed: unit test `der_contents_strips_short_and_long_form_headers` |
+
+### Behavioural verification
+
+skipped: no live target in the offline gate; `validate_chain` is driven end to end on real rcgen chains by `trust_anchor.rs` and `chain_completeness.rs`, the same call `routes.rs` makes.

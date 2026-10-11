@@ -90,7 +90,19 @@ pub fn check_hostname_match(validation: &ValidationResult, is_hostname: bool) ->
 
 pub fn check_chain_complete(validation: &ValidationResult) -> HealthCheck {
     let (status, detail) = if validation.chain_order_correct {
-        (CheckStatus::Pass, "chain order is correct".to_string())
+        if validation.ends_at_anchor {
+            let detail = if validation.chain_trusted || !validation.terminates_at_self_signed {
+                "chain reaches a trust anchor"
+            } else {
+                "chain ends at a self-signed certificate"
+            };
+            (CheckStatus::Pass, detail.to_string())
+        } else {
+            (
+                CheckStatus::Fail,
+                "chain does not reach a trust anchor; an intermediate is missing".to_string(),
+            )
+        }
     } else if validation.chain_trusted {
         (
             CheckStatus::Warn,
@@ -761,6 +773,7 @@ mod tests {
             chain_trusted: true,
             chain_trust_reason: None,
             terminates_at_self_signed: false,
+            ends_at_anchor: true,
             chain_order_correct: true,
             leaf_covers_hostname: true,
             any_expired: false,

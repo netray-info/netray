@@ -755,7 +755,7 @@ pub async fn inspect(
         for &port in &parsed.ports {
             let ips = inspected_ips.clone();
             let hostname = parsed.target.hostname().map(|h| h.to_string());
-            let verifier = state.cert_verifier.clone();
+            let trust_store = state.trust_store.load_full();
             let check_ct = config.validation.check_ct;
             let semaphore = Arc::clone(&state.handshake_semaphore);
             join_set.spawn(async move {
@@ -764,7 +764,7 @@ pub async fn inspect(
                     port,
                     hostname.as_deref(),
                     handshake_timeout,
-                    verifier,
+                    trust_store,
                     check_ct,
                     semaphore,
                 )
@@ -1075,7 +1075,7 @@ async fn inspect_port(
     port: u16,
     hostname: Option<&str>,
     timeout: Duration,
-    cert_verifier: Arc<dyn rustls::client::danger::ServerCertVerifier>,
+    trust_store: Arc<rustls::RootCertStore>,
     check_ct: bool,
     semaphore: Arc<tokio::sync::Semaphore>,
 ) -> PortResult {
@@ -1083,7 +1083,7 @@ async fn inspect_port(
 
     for (idx, &ip) in ips.iter().enumerate() {
         let semaphore = Arc::clone(&semaphore);
-        let cert_verifier = Arc::clone(&cert_verifier);
+        let trust_store = Arc::clone(&trust_store);
         let hostname = hostname.map(|h| h.to_string());
         join_set.spawn(async move {
             let _permit = semaphore.acquire().await.ok();
@@ -1098,7 +1098,7 @@ async fn inspect_port(
                 let validation = validate::chain_trust::validate_chain(
                     chain,
                     hostname.as_deref(),
-                    cert_verifier.as_ref(),
+                    trust_store.as_ref(),
                     raw_certs,
                 );
                 result.validation = Some(validation);

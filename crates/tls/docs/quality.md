@@ -96,10 +96,10 @@ Every check must be **actionable** — a warn or fail status should correspond t
 
 | ID | Label | Pass | Warn | Fail | Skip | Source |
 |----|-------|------|------|------|------|--------|
-| `chain_trusted` | Chain trusted | webpki verification passes | — | Verification fails (self-signed, unknown CA) | No chain available | `ValidationResult.chain_trusted` |
+| `chain_trusted` | Chain trusted | The served chain builds to a trust anchor (webpki, no hostname involved) | — | Verification fails (self-signed, unknown CA, expired) | No chain available | `ValidationResult.chain_trusted` |
 | `not_expired` | Certificate valid | All certs in validity period | — | Any cert expired or not yet valid | No chain available | `ValidationResult.any_expired`, `any_not_yet_valid` |
 | `hostname_match` | Hostname match | Leaf SAN covers requested hostname | — | No matching SAN | IP-mode input (no hostname to match) | `ValidationResult.leaf_covers_hostname` |
-| `chain_complete` | Chain complete | Chain order correct, intermediates present | `chain_order_correct` is false but `chain_trusted` is pass (webpki was lenient despite misordering) | — | No chain available | `ValidationResult.chain_order_correct`, `chain_trusted` |
+| `chain_complete` | Chain complete | Chain order correct and the last served certificate is self-signed, an anchor, or issued by an anchor | `chain_order_correct` is false but `chain_trusted` is pass (webpki was lenient despite misordering) | Order correct but the last certificate's issuer is no anchor (an intermediate is missing, also for a leaf sent alone); or order wrong and untrusted | No chain available | `ValidationResult.chain_order_correct`, `ends_at_anchor`, `chain_trusted` |
 | `strong_signature` | Signature algorithm | SHA-256 or stronger on the leaf and every intermediate (root self-signatures are ignored) | Unrecognised or unreadable signature algorithm | SHA-1, MD5 or MD2 on the leaf or an intermediate | No chain available | `ValidationResult.weakest_signature` |
 | `key_strength` | Key strength | RSA >= 2048 bits, or ECDSA P-256+ / Ed25519+ | — | RSA < 2048 bits | No chain available | `CertInfo.key_type`, `key_size` |
 | `expiry_window` | Expiry window | > 30 days remaining | 8–30 days remaining | <= 7 days remaining | No chain available | `CertInfo.days_remaining` (see note) |

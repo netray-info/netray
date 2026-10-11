@@ -35,6 +35,7 @@ fn validation(weakest: String) -> ValidationResult {
         chain_trusted: true,
         chain_trust_reason: None,
         terminates_at_self_signed: false,
+        ends_at_anchor: true,
         chain_order_correct: true,
         leaf_covers_hostname: true,
         any_expired: false,
