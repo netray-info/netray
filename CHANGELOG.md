@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-11
+
 **Grades change.** lens now scores with the check catalogue v3 and scoring profile v3: 54 checks instead of 42, with a check's weight split out of the old roll-ups. Measured against 0.24.0 at the same moment, netray.info moved from A 94.1 to A+ 97.7. Three other domains moved from B 86.6 to A 91.0, C 72.6 to C 75.5 and C 73.0 to C 73.8. Most of the shift comes from the HTTP header checks: each header is scored on its own, so one missing header no longer costs the whole `security_headers` weight. A warn now earns exactly half a check's weight.
 
 ### Changed
