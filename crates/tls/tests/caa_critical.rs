@@ -20,7 +20,10 @@ fn caa_critical_flag_handling() {
     let cases: Vec<(&str, Vec<CaaRecord>, CheckStatus)> = vec![
         (
             "C7 critical unknown tag fails",
-            vec![rec("issue", "letsencrypt.org", false), rec("foo", "bar", true)],
+            vec![
+                rec("issue", "letsencrypt.org", false),
+                rec("foo", "bar", true),
+            ],
             CheckStatus::Fail,
         ),
         (
