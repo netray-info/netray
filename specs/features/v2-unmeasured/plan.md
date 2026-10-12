@@ -84,3 +84,37 @@
 
 - `ttl` is unmeasured only when every batch errored; one REFUSED batch does not cost it the check. This follows from "measured parts count" (operator 2026-10-12, per-address decision).
 - An NS host that does not resolve stays a measured Warn, because `netray_common::fetch` turns every resolver error into an empty set. AMENDMENT A4 (operator 2026-10-12).
+
+## Phase 3 — TLS
+
+### Groups
+
+- G1: C1–C17. Every criterion lands in `translate` (`crates/tls/src/module.rs`) and its inputs.
+- Already green at 1f7c778: C6, C8, C9, C11, C13, C14, C16, C17, and the worst-status half of C4.
+
+### Plan
+
+1. **Error codes.**
+   - `crates/tls/src/tls/connect.rs`: a handshake timeout becomes `io::Error(TimedOut, "handshake timed out")`.
+   - `tls/mod.rs` `error_code`: `TimedOut` maps to `HANDSHAKE_TIMEOUT`.
+   - `status_of_error_code` maps `HANDSHAKE_FAILED` to Fail (Rule M), and `HANDSHAKE_TIMEOUT` or an unknown code to Unmeasured.
+   - `tests/error_codes.rs` gets the timeout row and a hung-listener pin test. `tests/model_status.rs` maps `HANDSHAKE_FAILED` to Fail. Both carry an ADLC-Test-Change.
+2. **Lookup errors.**
+   - `routes.rs` `DnsContext.lookup_errors`, with `#[serde(default, skip_serializing_if = "Vec::is_empty")]` so the goldens stay byte-identical.
+   - `tls/src/dns/mod.rs` `answered()`: true for a Response or a definite NxDomain.
+   - `lookup_caa`, `has_ech_advertised` and `lookup_tlsa` return `Option`, with None meaning the lookup failed. The CAA tree climb stops at a level that did not answer.
+   - `inspect` collects the names ("caa", "https", "tlsa").
+   - `tests/contract_golden.rs` needs the new field in its struct literal (ADLC-Test-Change).
+3. **`check_tls_reachable`.** On Fail, prefer the first `HANDSHAKE_FAILED` message.
+4. **`translate`.**
+   - `reachable()` replaces `check_status`:
+     - V1 Pass stays Pass, with a finding for each timed-out address;
+     - otherwise any Fail gives Fail;
+     - otherwise any Unmeasured gives Unmeasured;
+     - otherwise NotTested.
+   - With no handshake, the other 20 checks follow `tls_reachable`: N/A behind a Fail, NotTested behind NotTested, Unmeasured behind Unmeasured.
+   - `lookup_errors` overrides `caa_compliant`, `dane_valid`, and `ech_advertised` on port 443.
+   - `consistency` and `alpn_consistency` are Unmeasured when fewer than two addresses handshook and at least one timed out.
+5. **Docs.** `crates/tls/README.md` lists the codes and `lookup_errors`.
+
+Outside `translate`: the tlsight frontend and `site/api/tls.html` need no change, and the goldens stay byte-identical. The V1 `/api/inspect` keeps its CAA "pass" on a lookup error. That is a V1 defect and out of scope.

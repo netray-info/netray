@@ -16,7 +16,8 @@ pub use params::TlsParams;
 /// Per-IP error detail embedded in inspection results.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InspectionError {
-    /// Machine-readable error code (e.g. `HANDSHAKE_FAILED`).
+    /// Machine-readable error code: `HANDSHAKE_FAILED`, `HANDSHAKE_TIMEOUT` or
+    /// `NOT_TESTED_FROM_HERE`.
     pub code: String,
     /// Human-readable error message.
     pub message: String,
@@ -49,25 +50,29 @@ pub struct IpInspectionResult {
 /// Map a `connect::tls_handshake` error to the code `inspect_ip` reports.
 ///
 /// An error that says this host cannot reach the target at all (no route to the network, no
-/// usable source address) is not a verdict on the target: `NOT_TESTED_FROM_HERE`. A host
-/// unreachable (`EHOSTUNREACH`) is target-side: a remote ICMP reply or a firewall's
-/// admin-prohibited reject, so it stays `HANDSHAKE_FAILED`.
+/// usable source address) is not a verdict on the target: `NOT_TESTED_FROM_HERE`. A handshake
+/// that did not finish within the timeout is `HANDSHAKE_TIMEOUT`. A host unreachable
+/// (`EHOSTUNREACH`) is target-side: a remote ICMP reply or a firewall's admin-prohibited
+/// reject, so it stays `HANDSHAKE_FAILED`, as do a refusal, a reset and a TLS alert.
 pub fn error_code(err: &(dyn std::error::Error + Send + Sync + 'static)) -> &'static str {
-    if let Some(io_err) = err.downcast_ref::<std::io::Error>()
-        && matches!(
-            io_err.kind(),
-            std::io::ErrorKind::NetworkUnreachable | std::io::ErrorKind::AddrNotAvailable
-        )
-    {
-        return "NOT_TESTED_FROM_HERE";
+    if let Some(io_err) = err.downcast_ref::<std::io::Error>() {
+        match io_err.kind() {
+            std::io::ErrorKind::NetworkUnreachable | std::io::ErrorKind::AddrNotAvailable => {
+                return "NOT_TESTED_FROM_HERE";
+            }
+            std::io::ErrorKind::TimedOut => return "HANDSHAKE_TIMEOUT",
+            _ => {}
+        }
     }
     "HANDSHAKE_FAILED"
 }
 
-/// Maps an `error_code` value onto the shared model status; unknown codes are `Unmeasured`.
+/// Maps an `error_code` value onto the shared model status: a target-side failure is `Fail`,
+/// an untestable address `NotTested`, a timeout or an unknown code `Unmeasured`.
 pub fn status_of_error_code(code: &str) -> netray_model::Status {
     match code {
         "NOT_TESTED_FROM_HERE" => netray_model::Status::NotTested,
+        "HANDSHAKE_FAILED" => netray_model::Status::Fail,
         _ => netray_model::Status::Unmeasured,
     }
 }

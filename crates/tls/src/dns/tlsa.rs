@@ -30,30 +30,21 @@ impl TlsaLookup {
     }
 }
 
-/// Fetch TLSA records for `_port._tcp.hostname`.
-pub async fn lookup_tlsa(resolvers: &ResolverGroup, hostname: &str, port: u16) -> TlsaLookup {
+/// Fetch TLSA records for `_port._tcp.hostname`; `None` when the lookup failed or no
+/// nameserver answered definitively.
+pub async fn lookup_tlsa(
+    resolvers: &ResolverGroup,
+    hostname: &str,
+    port: u16,
+) -> Option<TlsaLookup> {
     let hostname = hostname.trim_end_matches('.');
     let qname = format!("_{port}._tcp.{hostname}");
 
-    let query = match UniQuery::new(&qname, RecordType::TLSA) {
-        Ok(q) => q,
-        Err(_) => {
-            return TlsaLookup {
-                records: vec![],
-                dnssec_signed: false,
-            };
-        }
-    };
-
-    let lookups = match resolvers.lookup(query).await {
-        Ok(l) => l,
-        Err(_) => {
-            return TlsaLookup {
-                records: vec![],
-                dnssec_signed: false,
-            };
-        }
-    };
+    let query = UniQuery::new(&qname, RecordType::TLSA).ok()?;
+    let lookups = resolvers.lookup(query).await.ok()?;
+    if !super::answered(&lookups) {
+        return None;
+    }
 
     // Deduplicate by (usage, selector, matching, data)
     let mut seen = HashSet::new();
@@ -81,10 +72,10 @@ pub async fn lookup_tlsa(resolvers: &ResolverGroup, hostname: &str, port: u16) -
         })
         .collect();
 
-    TlsaLookup {
+    Some(TlsaLookup {
         records,
         dnssec_signed: false, // DNSSEC validation deferred
-    }
+    })
 }
 
 fn hex_encode(data: &[u8]) -> String {

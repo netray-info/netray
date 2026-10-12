@@ -133,3 +133,58 @@ $ curl -sN http://127.0.0.1:18086/api/check/example.com | grep -A1 'event: summa
 
 netray.info gets the same grade as the main build, A+ 97.5. The real resolve path produces no spurious `unmeasured`.
 
+
+## Phase 3 — TLS
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R8: `tls_reachable` pass when any address handshakes, named timeouts as findings; fail when none did and one answered (refused, reset, alert); unmeasured when every tested address timed out; not-tested addresses excluded, all not-tested stays `not_tested` | green | `crates/tls/tests/reachable_unmeasured.rs` |
+| C2 | R9: other per-address checks are worst-of over handshaken addresses; with none they follow `tls_reachable` (N/A behind fail, unmeasured behind unmeasured, not_tested behind not_tested), taking precedence over R10 | green | `crates/tls/tests/reachable_unmeasured.rs` |
+| C3 | R10: CAA, HTTPS-record or TLSA lookup error → `caa_compliant`, `ech_advertised`, `dane_valid` unmeasured; consistency/alpn_consistency unmeasured when fewer than two handshakes because others timed out; N/A for fewer than two addresses or refused/alerted others | green | `crates/tls/tests/lookup_errors_unmeasured.rs` |
+| C4 | R11: TLS contract table, worst measured + unmeasured row per check, guard on the 21 IDs | green | `crates/tls/tests/contract_status.rs` |
+| C5 | two addresses both time out on 443 → `tls_reachable` unmeasured, the 20 others unmeasured | green | `crates/tls/tests/reachable_unmeasured.rs` |
+| C6 | two addresses both refuse 443 → `tls_reachable` fail, the 20 others N/A "no TLS handshake" | already_implemented | `crates/tls/tests/reachable_unmeasured.rs` |
+| C7 | one times out, one handshakes valid → `tls_reachable` pass with a finding naming the timed-out address | green | `crates/tls/tests/reachable_unmeasured.rs` |
+| C8 | one refuses, one handshakes valid → `tls_reachable` pass (unchanged) | already_implemented | `crates/tls/tests/reachable_unmeasured.rs` |
+| C9 | one refuses, one times out → `tls_reachable` fail, the other 20 incl. consistency N/A "no TLS handshake" | already_implemented | `crates/tls/tests/reachable_unmeasured.rs` |
+| C10 | one not tested from here, one times out → `tls_reachable` unmeasured | green | `crates/tls/tests/reachable_unmeasured.rs` |
+| C11 | every address not tested from here → `tls_reachable` stays `not_tested` | already_implemented | `crates/tls/tests/reachable_unmeasured.rs` |
+| C12 | CAA lookup SERVFAIL → `caa_compliant` unmeasured, not pass | green | `crates/tls/tests/lookup_errors_unmeasured.rs` |
+| C13 | definite empty CAA answer → `caa_compliant` pass | already_implemented | `crates/tls/tests/lookup_errors_unmeasured.rs` |
+| C14 | one address → `consistency` N/A | already_implemented | `crates/tls/tests/lookup_errors_unmeasured.rs` |
+| C15 | two addresses, one handshook, one timed out → `consistency` unmeasured | green | `crates/tls/tests/lookup_errors_unmeasured.rs` |
+| C16 | two addresses, one handshook, one refused → `consistency` N/A | already_implemented | `crates/tls/tests/lookup_errors_unmeasured.rs` |
+| C17 | TLS contract guard: table IDs equal the 21 TLS catalogue IDs | already_implemented | `crates/tls/tests/contract_status.rs` |
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 TLS | 2 (green on run 1, run 2 confirmed rustfmt) | opus | 96369 | 299 |
+
+Opus was chosen up front: the group is a single one that spans `translate`, three DNS lookups and the error-code mapping.
+
+### Reader (phase 3)
+
+| Class | Where | Finding | Action |
+|---|---|---|---|
+| NIT | `crates/tls/src/dns/tlsa.rs:43` | A TLSA owner name over 255 octets cannot be built, so the check reads "TLSA lookup failed" and is unmeasured where it should be N/A | listed |
+| NIT | `crates/tls/src/module.rs:273` | The unmeasured finding names the hostname, not the CAA tree level or `_443._tcp` name that failed | listed |
+| DEFERRED | `crates/tls/src/routes.rs:736` | V1 `/api/inspect` still reports CAA "pass" on a failed lookup, now next to `dns.lookup_errors: ["caa"]`; this was wrong before too | V1 defect, out of scope (plan) |
+
+The reader traced and found sound: the error codes (only tokio's timer yields `TimedOut`), `answered()` with CNAME chains and the CAA climb, `reachable()` for C5–C11, the per-address worst-of, the consistency rule, the meaning of the lens goldens, and the HSTS probe.
+
+Coder note: an empty address list now gives `NotTested` instead of `NotApplicable`. The module path cannot reach that case, because the section is already Incomplete when no address resolves.
+
+### Behavioural verification
+
+```
+$ cargo build -p netray   # branch build, run from ~/Documents/src/netray/target/debug/netray
+$ curl -sN http://127.0.0.1:18086/api/check/netray.info | grep -A1 'event: summary'
+{"sections":{"http":"warn","email":"pass","tls":"warn","dns":"pass"},"section_grades":{"email":"A+","tls":"A+","http":"A","dns":"A+"},"grade":"A+","complete":true,"score":97.5,...}
+tls section: status warn, verdicts {pass, skip, warn}
+```
+
+The grade matches main, A+ 97.5. No TLS check is spuriously unmeasured on a healthy domain.
+

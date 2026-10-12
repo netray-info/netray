@@ -98,16 +98,16 @@ fn parent_domain(domain: &str) -> Option<&str> {
 /// Fetch CAA records with RFC 8659 tree-climbing.
 ///
 /// Walks up the domain tree: www.example.com → example.com → com.
-/// Returns the first level that has CAA records, or empty if none found.
-pub async fn lookup_caa(resolvers: &ResolverGroup, hostname: &str) -> CaaLookup {
+/// Returns the first level that has CAA records, or empty if none found; `None` when a level
+/// did not answer, which ends the climb.
+pub async fn lookup_caa(resolvers: &ResolverGroup, hostname: &str) -> Option<CaaLookup> {
     let mut domain = hostname.trim_end_matches('.');
 
     // Walk up the domain tree (RFC 8659 §3); stop before bare TLD
     loop {
-        if let Some(lookup) = query_caa(resolvers, domain).await
-            && !lookup.is_empty()
-        {
-            return lookup;
+        let lookup = query_caa(resolvers, domain).await?;
+        if !lookup.is_empty() {
+            return Some(lookup);
         }
         match parent_domain(domain) {
             Some(parent) if parent.contains('.') => domain = parent,
@@ -115,12 +115,17 @@ pub async fn lookup_caa(resolvers: &ResolverGroup, hostname: &str) -> CaaLookup 
         }
     }
 
-    CaaLookup { records: vec![] }
+    Some(CaaLookup { records: vec![] })
 }
 
+/// The CAA records at `domain`; `None` when the lookup failed or no nameserver answered
+/// definitively.
 async fn query_caa(resolvers: &ResolverGroup, domain: &str) -> Option<CaaLookup> {
     let query = UniQuery::new(domain, RecordType::CAA).ok()?;
     let lookups = resolvers.lookup(query).await.ok()?;
+    if !super::answered(&lookups) {
+        return None;
+    }
 
     // Deduplicate by (tag, value) across nameservers
     let mut seen = HashSet::new();
