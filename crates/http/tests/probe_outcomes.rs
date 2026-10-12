@@ -185,7 +185,7 @@ fn rows() -> Vec<Row> {
         Row {
             name: "C12 https connection refused",
             mutate: |v| no_https_response(v, error("refused", "connection refused")),
-            want: all_ten(Status::NotApplicable),
+            want: all_ten(Status::Fail),
             finding: vec![
                 ("hsts", "no https response"),
                 ("info_leakage", "no https response"),
