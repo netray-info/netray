@@ -101,6 +101,11 @@ name = "spf_nested_errors"
 path = "tests/spf_nested_errors.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "spf_exists"
+path = "tests/spf_exists.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
 toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }

@@ -21,8 +21,105 @@ use std::str::FromStr;
 use ipnet::IpNet;
 
 use super::{LOOKUP_FAILED, lookup_failed, unmeasured_result};
-use crate::dns::DnsLookup;
+use crate::dns::{DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, SpfFlat, SubCheck, Verdict};
+
+/// Sub-check marking the authorised set incomplete for an address family; its detail is the
+/// token `ipv4`, `ipv6` or `both`. Cross-validation reads it; it is no finding.
+pub const INCOMPLETE: &str = "spf_incomplete";
+
+/// SPF mechanisms that name a DNS target; one with a macro (`%`) is not evaluated.
+const TARGET_MECHANISMS: &[&str] = &["include:", "redirect=", "exists:", "a:", "mx:"];
+
+/// The address families the authorised set is incomplete for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Unresolved {
+    pub ipv4: bool,
+    pub ipv6: bool,
+}
+
+impl Unresolved {
+    const BOTH: Self = Self {
+        ipv4: true,
+        ipv6: true,
+    };
+
+    /// The family of a failed address half; anything else leaves both unresolved.
+    fn of_failed_half(e: &LookupError) -> Self {
+        match e.record_type {
+            "A" => Self {
+                ipv4: true,
+                ipv6: false,
+            },
+            "AAAA" => Self {
+                ipv4: false,
+                ipv6: true,
+            },
+            _ => Self::BOTH,
+        }
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self {
+            ipv4: self.ipv4 || other.ipv4,
+            ipv6: self.ipv6 || other.ipv6,
+        }
+    }
+
+    fn token(self) -> Option<&'static str> {
+        match (self.ipv4, self.ipv6) {
+            (true, true) => Some("both"),
+            (true, false) => Some("ipv4"),
+            (false, true) => Some("ipv6"),
+            (false, false) => None,
+        }
+    }
+
+    fn from_token(token: &str) -> Self {
+        match token {
+            "ipv4" => Self {
+                ipv4: true,
+                ipv6: false,
+            },
+            "ipv6" => Self {
+                ipv4: false,
+                ipv6: true,
+            },
+            _ => Self::BOTH,
+        }
+    }
+
+    /// The families an SPF result marks as unresolved.
+    pub fn of(result: &CheckResult) -> Self {
+        result
+            .sub_checks
+            .iter()
+            .filter(|s| s.name == INCOMPLETE)
+            .fold(Self::default(), |acc, s| {
+                acc.union(Self::from_token(&s.detail))
+            })
+    }
+
+    /// Whether `ip`'s family is unresolved.
+    pub fn contains(self, ip: &IpAddr) -> bool {
+        if ip.is_ipv4() { self.ipv4 } else { self.ipv6 }
+    }
+
+    fn marker(self) -> Option<SubCheck> {
+        self.token().map(|token| SubCheck {
+            name: INCOMPLETE.to_string(),
+            verdict: Verdict::Info,
+            detail: token.to_string(),
+        })
+    }
+}
+
+/// Records a failed nested lookup: a `lookup_failed` finding and the families it leaves
+/// unresolved.
+fn unresolved(sub_checks: &mut Vec<SubCheck>, e: &LookupError, families: Unresolved) {
+    sub_checks.push(lookup_failed(e));
+    sub_checks.extend(families.marker());
+}
 
 /// Check SPF records for the domain.
 /// Returns (CheckResult, Option<SpfFlat>, has_dash_all).
@@ -192,11 +289,17 @@ pub async fn check_spf_detailed<R: DnsLookup>(
         });
     }
 
-    // A failed address lookup leaves the authorised set incomplete for its family; it is an
-    // Info that neither replaces the verdict nor counts against it.
-    let (unresolved, mut sub_checks): (Vec<SubCheck>, Vec<SubCheck>) = sub_checks
+    // A failed nested lookup leaves the authorised set incomplete; its finding and its marker
+    // neither replace the verdict nor count against it. The markers fold into one.
+    let (set_aside, mut sub_checks): (Vec<SubCheck>, Vec<SubCheck>) = sub_checks
         .into_iter()
-        .partition(|s| s.name == LOOKUP_FAILED);
+        .partition(|s| s.name == LOOKUP_FAILED || s.name == INCOMPLETE);
+    let incomplete = set_aside
+        .iter()
+        .filter(|s| s.name == INCOMPLETE)
+        .fold(Unresolved::default(), |acc, s| {
+            acc.union(Unresolved::from_token(&s.detail))
+        });
     if sub_checks.is_empty() {
         sub_checks.push(SubCheck {
             name: "spf_ok".to_string(),
@@ -208,7 +311,8 @@ pub async fn check_spf_detailed<R: DnsLookup>(
         });
     }
 
-    sub_checks.extend(unresolved);
+    sub_checks.extend(set_aside.into_iter().filter(|s| s.name == LOOKUP_FAILED));
+    sub_checks.extend(incomplete.marker());
 
     let detail = format!("SPF record: {}", spf);
     let spf_flat = SpfFlat {
@@ -219,8 +323,8 @@ pub async fn check_spf_detailed<R: DnsLookup>(
     (result, Some(spf_flat), has_dash_all, only_dash_all)
 }
 
-/// The addresses of an `a` or `mx` target. A failed half, or a failed lookup, is recorded as a
-/// `lookup_failed` Info: the authorised set is incomplete for that family, or for both.
+/// The addresses of an `a` or `mx` target. A failed half leaves its family unresolved, a failed
+/// lookup both.
 async fn authorised_addresses<R: DnsLookup>(
     resolver: &R,
     target: &str,
@@ -229,12 +333,12 @@ async fn authorised_addresses<R: DnsLookup>(
     match resolver.lookup_ips(target).await {
         Ok(lookup) => {
             if let Some(e) = &lookup.error {
-                sub_checks.push(lookup_failed(e));
+                unresolved(sub_checks, e, Unresolved::of_failed_half(e));
             }
             lookup.ips
         }
         Err(e) => {
-            sub_checks.push(lookup_failed(&e));
+            unresolved(sub_checks, &e, Unresolved::BOTH);
             Vec::new()
         }
     }
@@ -268,7 +372,7 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
         let txt_records = match resolver.lookup_txt(domain).await {
             Ok(records) => records,
             Err(e) => {
-                sub_checks.push(lookup_failed(&e));
+                unresolved(sub_checks, &e, Unresolved::BOTH);
                 return;
             }
         };
@@ -323,6 +427,19 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
     sub_checks: &'a mut Vec<SubCheck>,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
     Box::pin(async move {
+        let macro_target = TARGET_MECHANISMS
+            .iter()
+            .any(|m| body.strip_prefix(m).is_some_and(|t| t.contains('%')));
+        if macro_target {
+            *lookup_count = lookup_count.saturating_add(1);
+            sub_checks.push(SubCheck {
+                name: LOOKUP_FAILED.to_string(),
+                verdict: Verdict::Info,
+                detail: format!("{body} uses a macro and was not evaluated"),
+            });
+            sub_checks.extend(Unresolved::BOTH.marker());
+            return;
+        }
         if body.starts_with("ip4:") || body.starts_with("ip6:") {
             if let Some((_, cidr)) = body.split_once(':') {
                 let cidr = if cidr.contains('/') {
@@ -403,7 +520,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             let mx_records = match resolver.lookup_mx(target).await {
                 Ok(records) => records,
                 Err(e) => {
-                    sub_checks.push(lookup_failed(&e));
+                    unresolved(sub_checks, &e, Unresolved::BOTH);
                     Vec::new()
                 }
             };
@@ -426,7 +543,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
                 match resolver.lookup_exists(exists_domain).await {
                     Ok(true) => {}
                     Ok(false) => *void_count = void_count.saturating_add(1),
-                    Err(e) => sub_checks.push(lookup_failed(&e)),
+                    Err(e) => unresolved(sub_checks, &e, Unresolved::BOTH),
                 }
             }
         }

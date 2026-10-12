@@ -224,19 +224,6 @@ pub(crate) fn join_errors(errors: &[crate::dns::LookupError]) -> String {
         .join("; ")
 }
 
-/// Whether a `lookup_failed` sub-check of `result` leaves `ip`'s family unresolved: any failed
-/// lookup except an address half of the other family. Reads the record type that leads the
-/// detail (`LookupError`'s Display): `A` or `AAAA` is that family only; `address`, `TXT`, `MX`
-/// and every other failure leave both families unresolved.
-pub(crate) fn family_unresolved(result: &CheckResult, ip: &IpAddr) -> bool {
-    let other_family = if ip.is_ipv4() { "AAAA " } else { "A " };
-    result
-        .sub_checks
-        .iter()
-        .filter(|s| s.name == LOOKUP_FAILED)
-        .any(|s| !s.detail.starts_with(other_family))
-}
-
 pub(crate) fn unmeasured_result(category: Category, cause: String) -> CheckResult {
     CheckResult::new(
         category,
