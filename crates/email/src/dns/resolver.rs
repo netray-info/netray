@@ -11,7 +11,7 @@ use mhost::resolver::{
     Error as ResolverError, Lookups, MultiQuery, Resolver, ResolverGroup, ResolverGroupBuilder,
 };
 
-use super::LookupError;
+use super::{AddressLookup, LookupError};
 
 /// Map an mhost resolver error to the coarse taxonomy used by the
 /// `beacon_dns_queries_total` metric (see SDD Decision Log §12).
@@ -95,30 +95,33 @@ impl DnsResolver {
         &self.resolvers[idx]
     }
 
-    /// Resolve A + AAAA records for a hostname. An error when either the A or the AAAA
-    /// lookup failed, so a missing family is never read as a measured absence.
-    pub async fn lookup_ips(&self, hostname: &str) -> Result<Vec<IpAddr>, LookupError> {
+    /// Resolve A + AAAA records for a hostname. An error only when both halves failed; when
+    /// one did, the addresses of the other come with its error, so the missing family is never
+    /// read as a measured absence.
+    pub async fn lookup_ips(&self, hostname: &str) -> Result<AddressLookup, LookupError> {
         let hostname = hostname.trim_end_matches('.');
         let resolver = self.pick();
         let (a_result, aaaa_result) = tokio::join!(
             lookup_on(resolver, hostname, RecordType::A, "A"),
             lookup_on(resolver, hostname, RecordType::AAAA, "AAAA"),
         );
-        let (a, aaaa) = match (a_result, aaaa_result) {
-            (Ok(a), Ok(aaaa)) => (a, aaaa),
-            (Err(e), _) | (_, Err(e)) => {
-                return Err(LookupError {
-                    record_type: "address",
-                    ..e
-                });
-            }
-        };
+        if let (Err(e), Err(_)) = (&a_result, &aaaa_result) {
+            return Err(LookupError {
+                record_type: "address",
+                ..e.clone()
+            });
+        }
 
-        let mut ips = a.ips();
-        ips.extend(aaaa.ips());
+        let mut lookup = AddressLookup::default();
+        for half in [a_result, aaaa_result] {
+            match half {
+                Ok(lookups) => lookup.ips.extend(lookups.ips()),
+                Err(e) => lookup.error = Some(e),
+            }
+        }
         let mut seen = std::collections::HashSet::new();
-        ips.retain(|ip| seen.insert(*ip));
-        Ok(ips)
+        lookup.ips.retain(|ip| seen.insert(*ip));
+        Ok(lookup)
     }
 
     /// Resolve MX records. Returns (preference, exchange) tuples.

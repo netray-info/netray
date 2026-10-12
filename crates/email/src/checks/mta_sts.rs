@@ -133,7 +133,11 @@ pub(crate) async fn check_mta_sts_at(
 
     // Step 2: refuse a policy host with an address `allow` does not admit
     let sts_host = format!("mta-sts.{}", domain);
-    let sts_ips = resolver.lookup_ips(&sts_host).await.unwrap_or_default();
+    let sts_ips = resolver
+        .lookup_ips(&sts_host)
+        .await
+        .map(|a| a.ips)
+        .unwrap_or_default();
     if sts_ips.iter().any(|ip| !(fetch.allow)(*ip)) {
         record_upstream_error("mta_sts", "blocked");
         sub_checks.push(SubCheck {

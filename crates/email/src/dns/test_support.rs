@@ -14,7 +14,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use super::{DnsLookup, LookupError, TlsaRecord};
+use super::{AddressLookup, DnsLookup, LookupError, TlsaRecord};
 
 #[derive(Default)]
 pub struct TestDnsResolver {
@@ -142,7 +142,8 @@ impl TestDnsResolver {
         self
     }
 
-    /// The AAAA half of `lookup_ips(name)` errors, so `lookup_ips(name)` errors.
+    /// The AAAA half of `lookup_ips(name)` errors: it answers the IPv4 addresses with the
+    /// AAAA error.
     pub fn fail_aaaa(mut self, name: &str) -> Self {
         self.fail_aaaa.insert(name.to_string());
         self
@@ -233,19 +234,30 @@ impl DnsLookup for TestDnsResolver {
     fn lookup_ips(
         &self,
         name: &str,
-    ) -> impl Future<Output = Result<Vec<IpAddr>, LookupError>> + Send {
+    ) -> impl Future<Output = Result<AddressLookup, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.fail_ips.contains(&name) || self.fail_aaaa.contains(&name) {
+            if self.fail_ips.contains(&name) {
                 return Err(LookupError {
                     record_type: "address",
                     name,
                     cause: "SERVFAIL".to_string(),
                 });
             }
-            self.answer("address", &name, None, &self.ips)
+            let ips = self.answer("address", &name, None, &self.ips)?;
+            if self.fail_aaaa.contains(&name) {
+                return Ok(AddressLookup {
+                    ips: ips.into_iter().filter(IpAddr::is_ipv4).collect(),
+                    error: Some(LookupError {
+                        record_type: "AAAA",
+                        name,
+                        cause: "SERVFAIL".to_string(),
+                    }),
+                });
+            }
+            Ok(AddressLookup { ips, error: None })
         }
     }
 

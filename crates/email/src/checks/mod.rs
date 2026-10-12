@@ -929,7 +929,7 @@ mod tests {
         fn lookup_ips(
             &self,
             name: &str,
-        ) -> impl Future<Output = Result<Vec<IpAddr>, LookupError>> + Send {
+        ) -> impl Future<Output = Result<crate::dns::AddressLookup, LookupError>> + Send {
             self.0.lookup_ips(name)
         }
         fn lookup_cname(

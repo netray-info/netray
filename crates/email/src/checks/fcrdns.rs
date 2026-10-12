@@ -3,7 +3,7 @@ use std::net::IpAddr;
 use futures::future::join_all;
 
 use super::{LOOKUP_FAILED, unmeasured_result};
-use crate::dns::{DnsLookup, LookupError};
+use crate::dns::{AddressLookup, DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check Forward-Confirmed reverse DNS for each MX IP. `addr_error` is the failed MX address
@@ -49,7 +49,7 @@ pub async fn check_fcrdns(
         .collect();
 
     // Group forward results by IP
-    let forward_results: Vec<(IpAddr, Result<Vec<IpAddr>, LookupError>)> =
+    let forward_results: Vec<(IpAddr, Result<AddressLookup, LookupError>)> =
         join_all(forward_futures).await;
 
     let mut sub_checks = Vec::new();
@@ -80,8 +80,14 @@ pub async fn check_fcrdns(
         let forwards = forward_results.iter().filter(|(fwd_ip, _)| fwd_ip == ip);
         let confirmed = forwards
             .clone()
-            .any(|(_, fwd_ips)| fwd_ips.as_ref().is_ok_and(|ips| ips.contains(ip)));
-        let forward_error = forwards.filter_map(|(_, r)| r.as_ref().err()).next();
+            .any(|(_, fwd)| fwd.as_ref().is_ok_and(|a| a.ips.contains(ip)));
+        // Unconfirmed is unmeasured when a forward lookup failed for this IP's family.
+        let forward_error = forwards
+            .filter_map(|(_, fwd)| match fwd {
+                Ok(a) => a.missed(ip),
+                Err(e) => Some(e),
+            })
+            .next();
 
         if confirmed {
             sub_checks.push(SubCheck {

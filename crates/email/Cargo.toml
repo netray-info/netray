@@ -86,6 +86,11 @@ name = "unmeasured_partial"
 path = "tests/unmeasured_partial.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "partial_address_lookups"
+path = "tests/partial_address_lookups.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
 toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }

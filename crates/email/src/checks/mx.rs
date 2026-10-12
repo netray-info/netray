@@ -4,7 +4,7 @@ use std::net::IpAddr;
 use futures::future::join_all;
 
 use super::{lookup_failed, unmeasured_result};
-use crate::dns::DnsLookup;
+use crate::dns::{DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, IpEnrichment, SubCheck, Verdict};
 
 /// Sub-check name emitted when the domain has no MX records; lens relies on it.
@@ -89,15 +89,23 @@ pub async fn check_mx(
         }
 
         let ips = match resolver.lookup_ips(host).await {
-            Ok(ips) => {
-                if ips.is_empty() {
+            Ok(lookup) => {
+                if let Some(e) = lookup.error {
+                    // The family is not named: the other half's answer is no claim about it.
+                    let e = LookupError {
+                        record_type: "address",
+                        ..e
+                    };
+                    addr_errors.push(e.to_string());
+                    sub_checks.push(lookup_failed(&e));
+                } else if lookup.ips.is_empty() {
                     sub_checks.push(SubCheck {
                         name: "mx_no_addr".to_string(),
                         verdict: Verdict::Warn,
                         detail: format!("MX {} (priority {}) has no A/AAAA records", host, pref),
                     });
                 }
-                ips
+                lookup.ips
             }
             Err(e) => {
                 addr_errors.push(e.to_string());

@@ -18,7 +18,7 @@ impl<R: DnsLookup + 'static> netray_common::fetch::Resolve for FetchResolver<R> 
     fn resolve(&self, host: &str) -> Pin<Box<dyn Future<Output = Vec<IpAddr>> + Send>> {
         let r = self.0.clone();
         let h = host.to_owned();
-        Box::pin(async move { r.lookup_ips(&h).await.unwrap_or_default() })
+        Box::pin(async move { r.lookup_ips(&h).await.map(|a| a.ips).unwrap_or_default() })
     }
 }
 
@@ -32,6 +32,22 @@ pub struct LookupError {
     pub cause: String,
 }
 
+/// The addresses of an A + AAAA lookup in which at least one half answered definitively.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AddressLookup {
+    pub ips: Vec<IpAddr>,
+    /// The half that failed, if one did; its `record_type` is `"A"` or `"AAAA"`.
+    pub error: Option<LookupError>,
+}
+
+impl AddressLookup {
+    /// The error of the failed half when it is `ip`'s family, so `ip`'s absence is not measured.
+    pub fn missed(&self, ip: &IpAddr) -> Option<&LookupError> {
+        let family = if ip.is_ipv4() { "A" } else { "AAAA" };
+        self.error.as_ref().filter(|e| e.record_type == family)
+    }
+}
+
 /// Minimal DNS lookup surface required by the category `check_*` functions.
 ///
 /// Both the production [`DnsResolver`] and the in-memory
@@ -39,8 +55,8 @@ pub struct LookupError {
 /// inject deterministic responses without going over the network. A record
 /// lookup returns `Ok` with the records of a definite answer (empty for
 /// NXDOMAIN or NODATA) and [`LookupError`] when no nameserver answered
-/// definitively. `lookup_ips` is an error when either the A or the AAAA half
-/// failed. `check_dnssec_signed` is an error when the DNSKEY lookup failed
+/// definitively. `lookup_ips` is an error only when both the A and the AAAA
+/// half failed; when one did, [`AddressLookup::error`] carries it. `check_dnssec_signed` is an error when the DNSKEY lookup failed
 /// (unknown, not unsigned). `lookup_exists` folds errors into `false`.
 pub trait DnsLookup: Send + Sync {
     fn lookup_txt(
@@ -54,7 +70,7 @@ pub trait DnsLookup: Send + Sync {
     fn lookup_ips(
         &self,
         name: &str,
-    ) -> impl Future<Output = Result<Vec<IpAddr>, LookupError>> + Send;
+    ) -> impl Future<Output = Result<AddressLookup, LookupError>> + Send;
     fn lookup_cname(
         &self,
         name: &str,
@@ -94,7 +110,7 @@ impl DnsLookup for DnsResolver {
     fn lookup_ips(
         &self,
         name: &str,
-    ) -> impl Future<Output = Result<Vec<IpAddr>, LookupError>> + Send {
+    ) -> impl Future<Output = Result<AddressLookup, LookupError>> + Send {
         DnsResolver::lookup_ips(self, name)
     }
     fn lookup_cname(

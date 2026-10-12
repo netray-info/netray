@@ -348,7 +348,11 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             } else {
                 domain
             };
-            let ips = resolver.lookup_ips(target).await.unwrap_or_default();
+            let ips = resolver
+                .lookup_ips(target)
+                .await
+                .map(|a| a.ips)
+                .unwrap_or_default();
             for ip in ips {
                 let net = match ip {
                     IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
@@ -368,7 +372,11 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             let mx_records = resolver.lookup_mx(target).await.unwrap_or_default();
             for (_, exchange) in &mx_records {
                 let host = exchange.trim_end_matches('.');
-                let ips = resolver.lookup_ips(host).await.unwrap_or_default();
+                let ips = resolver
+                    .lookup_ips(host)
+                    .await
+                    .map(|a| a.ips)
+                    .unwrap_or_default();
                 for ip in ips {
                     let net = match ip {
                         IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
