@@ -17,6 +17,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use netray_common::fetch::Resolve;
 use netray_http::inspect::TaskResult;
+use netray_http::inspect::assembler::ProbeErrorKind;
 use netray_http::inspect::request::{Outbound, execute_request};
 use tokio::net::TcpListener;
 use url::Url;
@@ -114,9 +115,10 @@ async fn c10_redirect_to_refused_target_is_blocked_without_connecting() {
         let names = [("localhost", LO6), ("svc.invalid", LO6)];
         let r = run(&format!("http://127.0.0.1:{p1}/"), p1, &names).await;
 
-        assert_eq!(
-            r.error.as_deref(),
-            Some("Redirect destination blocked"),
+        let e = r.error.as_ref().expect(case);
+        assert_eq!(e.kind, ProbeErrorKind::Blocked, "{case}");
+        assert!(
+            e.message.starts_with("Redirect destination blocked"),
             "{case}"
         );
         assert_eq!(hits2.load(Ordering::SeqCst), 0, "{case}: p2 was reached");
@@ -182,7 +184,9 @@ async fn port80_redirect_to_refused_https_target_is_not_recorded() {
     let (l, p) = bind4().await;
     serve(l, vec![("/", 301, Some("https://10.0.0.1/".to_string()))]);
     let probe = run(&format!("http://a.test:{p}/"), p, &[("a.test", LO4)]).await;
-    assert_eq!(probe.error.as_deref(), Some("Redirect destination blocked"));
+    let e = probe.error.as_ref().expect("blocked");
+    assert_eq!(e.kind, ProbeErrorKind::Blocked);
+    assert!(e.message.starts_with("Redirect destination blocked"));
 
     let empty = || TaskResult {
         final_url: "https://a.test/".into(),

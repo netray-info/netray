@@ -18,7 +18,7 @@ use axum::Router;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode, Uri};
 use axum::response::IntoResponse;
 use netray_common::fetch::Resolve;
-use netray_http::inspect::assembler::RedirectHop;
+use netray_http::inspect::assembler::{ProbeErrorKind, RedirectHop};
 use netray_http::inspect::request::{Outbound, execute_request};
 use netray_http::inspect::{EnrichmentData, InspectResult, TaskResult, assemble_response};
 use netray_http::quality::types::CheckStatus;
@@ -277,9 +277,10 @@ async fn redirect_results_table() {
         let first = format!("http://127.0.0.1:{p1}/");
         let names = vec![("localhost", vec![IpAddr::V6(Ipv6Addr::LOCALHOST)])];
         let r = run(&first, p1, 10, &names).await;
-        assert_eq!(
-            r.error.as_deref(),
-            Some("Redirect destination blocked"),
+        let e = r.error.as_ref().expect("row 3");
+        assert_eq!(e.kind, ProbeErrorKind::Blocked, "row 3");
+        assert!(
+            e.message.starts_with("Redirect destination blocked"),
             "row 3"
         );
         assert_eq!(r.status, 0, "row 3");
@@ -317,9 +318,10 @@ async fn redirect_results_table() {
         let first = format!("http://127.0.0.1:{p1}/");
         let names = vec![("mixed.test", vec![v4(127, 0, 0, 1), v4(10, 0, 0, 1)])];
         let r = run(&first, p1, 10, &names).await;
-        assert_eq!(
-            r.error.as_deref(),
-            Some("Redirect destination blocked"),
+        let e = r.error.as_ref().expect("row 4");
+        assert_eq!(e.kind, ProbeErrorKind::Blocked, "row 4");
+        assert!(
+            e.message.starts_with("Redirect destination blocked"),
             "row 4"
         );
         assert_eq!(r.status, 0, "row 4");
