@@ -166,7 +166,13 @@ fn facts_from_lookups_holds_the_golden_records() {
     assert_eq!(ns, vec!["ns1.example.com", "ns2.example.com"]);
 
     let none = facts_from_lookups(&batch_lookups(&sse("prism-no-address.sse")));
-    assert_eq!(none, Facts::default());
+    assert_eq!(
+        none,
+        Facts {
+            no_address_definite: true,
+            ..Facts::default()
+        }
+    );
 }
 
 #[test]

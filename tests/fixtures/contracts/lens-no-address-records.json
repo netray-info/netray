@@ -1,15 +1,15 @@
 {
   "summary": {
-    "grade": "incomplete",
+    "grade": "D",
     "score": 46.4,
-    "overall": "error",
-    "complete": false,
+    "overall": "fail",
+    "complete": true,
     "sections": {
       "dns": "fail",
       "email": "fail",
-      "http": "error",
-      "ip": "error",
-      "tls": "error"
+      "http": "skip",
+      "ip": "skip",
+      "tls": "skip"
     },
     "section_grades": {
       "dns": "F",
@@ -17,7 +17,11 @@
     },
     "hard_fail": false,
     "hard_fail_checks": [],
-    "not_applicable": []
+    "not_applicable": [
+      "http",
+      "ip",
+      "tls"
+    ]
   },
   "sections": {
     "dns": {
@@ -112,15 +116,15 @@
       ]
     },
     "http": {
-      "status": "error",
+      "status": "skip",
       "checks": []
     },
     "ip": {
-      "status": "error",
+      "status": "skip",
       "checks": []
     },
     "tls": {
-      "status": "error",
+      "status": "skip",
       "checks": []
     }
   }

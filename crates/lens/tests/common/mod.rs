@@ -38,6 +38,9 @@ impl Module for Incomplete {
     fn volatile(&self) -> &'static [EvidencePath] {
         &[]
     }
+    fn needs_address_records(&self) -> bool {
+        matches!(self.0, Protocol::Ip | Protocol::Http | Protocol::Tls)
+    }
     fn run<'a>(&'a self, _ctx: &'a RunContext, _facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
         Box::pin(async {
             SectionOutcome::Incomplete {
