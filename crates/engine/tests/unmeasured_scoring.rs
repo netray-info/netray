@@ -3,7 +3,7 @@
 //! complete. An incomplete section is absent from `Score::sections`.
 
 use netray_engine::profile::Profile;
-use netray_engine::{score, SectionEvent, SectionOutcome};
+use netray_engine::{SectionEvent, SectionOutcome, score};
 use netray_model::{CheckId, CheckResult, Grade, Protocol, Status};
 
 const PROFILE: &str = r#"

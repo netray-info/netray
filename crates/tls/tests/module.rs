@@ -40,7 +40,8 @@ fn verdict_of(status: Status) -> &'static str {
         Status::Pass => "pass",
         Status::Warn => "warn",
         Status::Fail => "fail",
-        Status::NotApplicable | Status::NotTested | Status::Unmeasured => "skip",
+        Status::NotApplicable | Status::NotTested => "skip",
+        Status::Unmeasured => "unmeasured",
     }
 }
 

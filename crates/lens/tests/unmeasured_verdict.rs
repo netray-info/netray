@@ -12,10 +12,10 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
-use axum::body::{to_bytes, Body};
-use axum::extract::connect_info::MockConnectInfo;
-use axum::http::{header, Request, StatusCode};
 use axum::Router;
+use axum::body::{Body, to_bytes};
+use axum::extract::connect_info::MockConnectInfo;
+use axum::http::{Request, StatusCode, header};
 use common::{dns_golden_raw, facts_golden_raw, http_module, ip_golden, registry_with, tls_module};
 use lens::config::Config;
 use lens::routes::api_router;
@@ -23,7 +23,7 @@ use lens::snapshot::{Snapshot, SnapshotStore};
 use lens::state::AppState;
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 use tower::ServiceExt;
 
