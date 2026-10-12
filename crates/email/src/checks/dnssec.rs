@@ -1,11 +1,16 @@
+use super::unmeasured_result;
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check DNSSEC for the domain.
-/// Returns (CheckResult, dnssec_dnskey_present).
+/// Returns (CheckResult, dnssec_dnskey_present). A failed DNSKEY lookup is unmeasured: unknown,
+/// not unsigned.
 #[tracing::instrument(skip_all, fields(category = "dnssec", domain = %domain))]
 pub async fn check_dnssec(domain: &str, resolver: &impl DnsLookup) -> (CheckResult, bool) {
-    let signed = resolver.check_dnssec_signed(domain).await;
+    let signed = match resolver.check_dnssec_signed(domain).await {
+        Ok(signed) => signed,
+        Err(e) => return (unmeasured_result(Category::Dnssec, e.to_string()), false),
+    };
 
     let mut sub_checks = Vec::new();
 

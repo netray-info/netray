@@ -153,3 +153,44 @@ Outside `translate`: the tlsight frontend and `site/api/tls.html` need no change
 - A CORS probe that is refused, reset or fails TLS gives N/A, not Fail.
 - A network-unreachable error on our side gives kind unreachable and so Unmeasured: the answer was not obtained (Rule M). In TLS the same case is NotTested.
 - The V1 headline and the V1 `quality.checks` stay unchanged (DEFERRED). An unmeasured `hsts` still shows "HSTS ✗" in the transitional presentation.
+
+## Phase 5 — Email, IP
+
+### Groups
+
+- G1: the IP half of C2/C18 and C17.
+  - Add a `[[test]] contract_status` entry in `crates/ip/Cargo.toml`.
+  - Add `--test contract_status` in justfile `test-rust-offline`.
+- G2: the email half of C1–C18.
+
+### Plan (G2)
+
+1. **The seam.**
+   - `DnsLookup` methods return `Result<_, LookupError { record_type, name, cause }>`. `lookup_exists` and DNSSEC stay `bool`.
+   - The production resolver gets a private `answer()`: Ok for a Response or a definite NxDomain; Err for SERVFAIL, REFUSED, a timeout, a referral or any other error. It has a serde unit test.
+   - `FetchResolver` falls back with `unwrap_or_default`.
+   - `test_support` is public under `testing`, with the builders `fail_mx`, `fail_txt`, `fail_a`, `fail_ptr` and `fail_tlsa`.
+   - `OutboundFetch.mta_sts_port` and `with_mta_sts_port`.
+   - `[[test]]` entries.
+2. **Vocabulary.** A sentinel sub-check, `"unmeasured"` with verdict Skip and the cause in its detail. It sits next to SKIPPED, NULL_MX and NO_MX. There is no new `Verdict` variant, so the V1 enum, OpenAPI and the frontend stay the same (P03).
+3. **Checks.**
+   - mx, spf, dmarc, tls_rpt, bimi, mta_sts: a top-level lookup error emits the sentinel.
+   - dkim: the sentinel only when every selector errored.
+   - dane and fcrdns: worst-of over the measured hosts and IPs. Errored ones become Info, and the sentinel comes only when all errored.
+   - MTA-STS and BIMI fetches: only a timeout gives the sentinel.
+   - dnsbl, per zone:
+     - any listing → Fail;
+     - at least one zone answered → `clean` Pass, plus Info naming each unanswered zone;
+     - no zone answered → sentinel.
+   - A policy response (127.255.255.x) counts as not answered.
+4. **`translate`.**
+   - Order: no-MX first (Rule M precedence), then the mx sentinel for all of `MX_DEPENDENT`, then `fold_category`.
+   - `fold_category`: its own sentinel → Unmeasured. Otherwise mx with Info only → Pass. For mx and dnsbl on a Pass, the Info details become findings.
+5. **Prose** (`CLAUDE.md:61` and `crates/email/CLAUDE.md`) goes in the prose commit after Phase 5.
+
+### Decisions in the plan
+
+- **The sentinel sub-check over a new Verdict variant.** It keeps the V1 wire enum and P03.
+- **Errored sub-lookups that would read as a defect become Info**, not Warn, per Rule M. That covers an MX-host address lookup (`mx_no_addr`) and the DMARC rua/ruf authorisation (`rua_auth`).
+  - Nested SPF lookups and the MTA-STS pre-flight `lookup_ips` keep `unwrap_or_default`, and are listed as DEFERRED.
+- **Cross-validation.** `check_bimi_dmarc_policy` skips its rule when DMARC carries the sentinel. Otherwise an input that was never obtained produces a Warn.

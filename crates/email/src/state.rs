@@ -30,6 +30,8 @@ pub struct OutboundFetch {
     pub resolver: Arc<dyn Resolve>,
     pub allow: fn(IpAddr) -> bool,
     pub timeout: Duration,
+    /// The port the MTA-STS policy fetch connects to; `None` is HTTPS's 443.
+    pub mta_sts_port: Option<u16>,
 }
 
 impl OutboundFetch {
@@ -45,6 +47,14 @@ impl OutboundFetch {
             resolver,
             allow: is_allowed_target,
             timeout: Duration::from_millis(timeout_ms),
+            mta_sts_port: None,
+        }
+    }
+
+    pub fn with_mta_sts_port(self, port: u16) -> Self {
+        Self {
+            mta_sts_port: Some(port),
+            ..self
         }
     }
 }

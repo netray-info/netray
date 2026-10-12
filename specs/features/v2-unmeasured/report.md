@@ -245,3 +245,81 @@ http: https_redirect pass, hsts pass, cors warn, cookie_secure skip, csp warn, x
 
 The grade matches main, A+ 97.5. On a healthy domain no HTTP check comes out unmeasured.
 
+
+## Phase 5 — Email, IP
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R14: `DnsLookup` surfaces errors; MX error → mx + six dependents unmeasured; definite no-MX / Null MX → N/A "no MX" whatever the dependents' own lookups; mx with ≥1 host and no warn/fail → pass with Info as findings; absent BIMI/TLS-RPT/MTA-STS/DANE stays N/A; TXT error → spf/dmarc/dkim/bimi/tls_rpt/mta_sts unmeasured (dkim: every selector errored); MTA-STS/BIMI fetch timeout → unmeasured, other fetch errors stay; DNSBL fail on any listing, pass when ≥1 zone answered clean (unanswered zones named), unmeasured when none answered, policy response = not answered; beacon pipeline timeout → section TimedOut | green | `crates/email/tests/unmeasured_outcomes.rs` |
+| C2 | R15: email (10) and IP (1) contract tables; ip.reputation measured row only, guard lists the exception | green | `crates/email/tests/contract_status.rs, crates/ip/tests/contract_status.rs` |
+| C3 | MX lookup SERVFAIL → `email.mx` and six dependents unmeasured | green | `crates/email/tests/unmeasured_outcomes.rs` |
+| C4 | definite empty MX → they are N/A "no MX" | already_implemented | `crates/email/tests/unmeasured_outcomes.rs` |
+| C5 | one MX host, two addresses, no IPv6 → `email.mx` pass with findings for single_mx and no_ipv6 | green | `crates/email/tests/unmeasured_outcomes.rs` |
+| C6 | no BIMI record → `email.bimi` N/A | already_implemented | `crates/email/tests/unmeasured_outcomes.rs` |
+| C7 | three DNSBL zones, one lists, two time out → `email.dnsbl` fail | already_implemented | `crates/email/tests/unmeasured_outcomes.rs` |
+| C8 | three zones, one clean, two refuse → `email.dnsbl` pass, finding names the two | green | `crates/email/tests/unmeasured_outcomes.rs` |
+| C9 | every zone refuses or SERVFAILs → `email.dnsbl` unmeasured | green | `crates/email/tests/unmeasured_outcomes.rs` |
+| C10 | MTA-STS policy fetch timeout → `email.mta_sts` unmeasured | green | `crates/email/tests/unmeasured_outcomes.rs` |
+| C11 | MTA-STS policy fetch HTTP 404 → `email.mta_sts` fail | already_implemented | `crates/email/tests/unmeasured_outcomes.rs` |
+| C12 | `_mta-sts` record whose policy host does not resolve → `email.mta_sts` fail (unchanged) | already_implemented | `crates/email/tests/unmeasured_outcomes.rs` |
+| C13 | TXT lookup timeout → `email.spf` unmeasured | green | `crates/email/tests/unmeasured_outcomes.rs` |
+| C14 | no SPF record → `email.spf` fail | already_implemented | `crates/email/tests/unmeasured_outcomes.rs` |
+| C15 | beacon pipeline timeout → section TimedOut, run incomplete | already_implemented | `crates/email/tests/unmeasured_outcomes.rs` |
+| C16 | definite empty MX + TLS-RPT TXT SERVFAIL → `email.tls_rpt` N/A "no MX" | already_implemented | `crates/email/tests/unmeasured_outcomes.rs` |
+| C17 | only private addresses → IP section N/A "no public addresses" | already_implemented | `crates/ip/tests/contract_status.rs` |
+| C18 | email and IP contract guards: IDs equal the 10 email and 1 IP catalogue IDs, ip.reputation unmeasured row the listed exception | green | `crates/email/tests/contract_status.rs, crates/ip/tests/contract_status.rs` |
+| C19 | reader: one confirmed MX IP and one with PTR SERVFAIL → `email.fcrdns` pass with a finding naming the second | green | `crates/email/tests/unmeasured_partial.rs` |
+| C20 | reader: every MX-host address lookup errors → fcrdns and dnsbl unmeasured, not N/A "No MX IPs" | green | `crates/email/tests/unmeasured_partial.rs` |
+| C21 | reader: a partial A/AAAA error is not read as a measured absence (fcrdns unmeasured for that IP; mx without single_mx/no-AAAA claims) | green | `crates/email/tests/unmeasured_partial.rs` |
+| C22 | reader: one MX host whose addresses all error → `email.mx` pass with a lookup_failed finding | green | `crates/email/tests/unmeasured_partial.rs` |
+| C23 | reader: a DNSKEY lookup error does not fail `email.dane` through the DNSSEC cross-validation | green | `crates/email/tests/unmeasured_partial.rs` |
+| C24 | reader: MX error with a key only at a provider selector → `email.dkim` unmeasured | green | `crates/email/tests/unmeasured_partial.rs` |
+| C25 | operator 2026-10-12: any unmeasured category makes the V1 beacon grade `skipped` | green | `crates/email/tests/unmeasured_partial.rs` |
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 IP gate wiring + G2 email | 3 | opus | 185462 | 603 |
+| reader round (C19–C25) | 1 | opus (same agent) | 231665 | 394 |
+
+### Reader (phase 5)
+
+| Class | Where | Finding | Action |
+|---|---|---|---|
+| BLOCKER | `crates/email/src/checks/cross_validation.rs:334` | The Info sub-check `lookup_failed` triggered `fcrdns_mismatch` Warn | fixed (C19) |
+| BLOCKER | `crates/email/src/checks/fcrdns.rs:12`, `dnsbl.rs:53` | When no MX IP resolved because of an error, the check was N/A "no_ips" | fixed (C20) |
+| BLOCKER | `crates/email/src/dns/resolver.rs:118` | A partial `lookup_ips` error was read as a measured absence | fixed: `lookup_ips` is Err when either family errored (C21) |
+| BLOCKER | `crates/email/src/checks/mx.rs:131` | `single_mx` counted addresses from an errored lookup | fixed (C22) |
+| AMENDMENT | `crates/email/src/checks/mod.rs:223` | The sentinel is Skip, so the V1 grade improved | operator: V1 grade `skipped` (C25) |
+| AMENDMENT | `crates/email/src/dns/resolver.rs:234` | A DNSKEY error read as "unsigned" and failed DANE | repaired (C23): `check_dnssec_signed` returns Result; an unmeasured DNSSEC skips `dane_without_dnssec` |
+| AMENDMENT | `crates/email/src/checks/dkim.rs:81` | An MX error emptied the provider DKIM selectors | repaired (C24) in `checks/mod.rs`; `reject_no_dkim` skips when DKIM is unmeasured |
+| DEFERRED | `crates/email/src/dns/resolver.rs:263` | `beacon_dns_queries_total` counts SERVFAIL as `ok` (behaviour from before this change) | listed |
+| DEFERRED | `crates/email/src/checks/spf.rs:239` | Nested SPF lookup errors count as void lookups (decided in the plan) | listed |
+| NIT | `crates/email/src/module.rs:548` | The V1 headline shows Unmeasured as "N/A" | listed |
+| NIT | `crates/email/src/checks/dnsbl.rs:150` | When no zone was queried at all, the result is `clean` | listed |
+
+Coder decisions:
+- `translate` maps a `skipped` V1 grade to TimedOut only when every verdict is Skip, which is the shape of beacon's timeout summary.
+- `lookup_ips` drops partial addresses on error, a conservative choice under Rule M.
+- The dkim sentinel is set in `checks/mod.rs`, so `check_dkim`'s signature is unchanged.
+- The error label "address" is used for `lookup_ips`.
+
+The orchestrator added labels for `unmeasured` ("Could not check") and `lookup_failed` ("Lookup failed") in the email frontend `types.ts`.
+
+### Behavioural verification
+
+```
+$ curl -sN http://127.0.0.1:18086/api/check/netray.info   # branch build, from main's binary path
+summary: {"sections":{"email":"pass","dns":"pass","tls":"warn","http":"warn"},...,"grade":"A+","complete":true,"score":97.5,...}
+email: mx pass ["only one MX record, but it resolves to 4 IP addresses"], spf/dkim/dmarc/mta_sts/tls_rpt/bimi pass, dane skip ["No DANE TLSA records"], dnsbl pass ["zen.spamhaus.org rejected the query (127.255.255.254); results from this zone are unreliable"], fcrdns pass
+```
+
+Two of the R4 defects are fixed live:
+- `email.mx` now passes with its Info sub-checks as findings; in R4 it was N/A.
+- `email.dnsbl` now passes and names the zone that refused, here because Spamhaus refuses queries from the local resolver; locally it used to be N/A.
+
+The third R4 defect, the port-80 timeout, is fixed in Phase 4 and is not reproducible against netray.info.
+

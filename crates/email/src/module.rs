@@ -165,6 +165,10 @@ impl Module for EmailModule {
 /// Beacon's wire value for a check that did not run: the summary grade after its own timeout
 /// and the sub-check name of a category that did not complete.
 pub const BEACON_SKIPPED: &str = "skipped";
+/// Beacon's sub-check of a category whose lookup got no answer; its detail names the cause.
+pub const BEACON_UNMEASURED: &str = "unmeasured";
+/// Beacon's Info sub-check of a nested lookup that got no answer; its detail names the cause.
+pub const BEACON_LOOKUP_FAILED: &str = "lookup_failed";
 /// Beacon's `mx` sub-check for a Null MX (RFC 7505) domain.
 pub const BEACON_NULL_MX: &str = "null_mx";
 /// Beacon's cross-validation sub-check for a domain that declares it sends no mail.
@@ -250,7 +254,11 @@ enum Abort {
 // ---------------------------------------------------------------------------
 
 /// Maps beacon's events onto the ten email checks and the V1 headline and extras. A `skipped`
-/// summary is a [`SectionOutcome::TimedOut`]; a stream that cannot be scored is `Incomplete`.
+/// summary whose every verdict is Skip (beacon's own timeout) is a
+/// [`SectionOutcome::TimedOut`]; a stream that cannot be scored is `Incomplete`.
+///
+/// Precedence per check: no MX or a Null MX makes the MX-dependent checks not applicable; else
+/// an unmeasured `mx` makes them unmeasured with its cause; else [`fold_category`].
 pub fn translate(events: &[SseEvent]) -> SectionOutcome {
     let summary = match parse_summary(events) {
         Ok(summary) => summary,
@@ -259,13 +267,18 @@ pub fn translate(events: &[SseEvent]) -> SectionOutcome {
     };
 
     let no_mx_reason = no_mx_reason(&summary);
+    let mx_unmeasured = unmeasured_findings(&summary, "mx");
     let checks: Vec<CheckResult> = BUCKETED
         .iter()
         .zip(email_checks())
         .map(|(&name, id)| {
-            let (status, findings) = match no_mx_reason.filter(|_| MX_DEPENDENT.contains(&name)) {
-                Some(reason) => (Status::NotApplicable, vec![reason.to_string()]),
-                None => fold_category(name, &summary),
+            let mx_dependent = MX_DEPENDENT.contains(&name);
+            let (status, findings) = match (no_mx_reason, &mx_unmeasured) {
+                (Some(reason), _) if mx_dependent => {
+                    (Status::NotApplicable, vec![reason.to_string()])
+                }
+                (_, Some(cause)) if mx_dependent => (Status::Unmeasured, cause.clone()),
+                _ => fold_category(name, &summary),
             };
             CheckResult {
                 id: id.clone(),
@@ -319,7 +332,9 @@ fn parse_summary(events: &[SseEvent]) -> Result<BeaconSummary, Abort> {
     let grade = Some(grade_wire(grade));
 
     // Per-category events carry the detail and sub-checks; the summary carries the verdicts.
-    if grade.as_deref() == Some(BEACON_SKIPPED) {
+    // Beacon's own timeout skips every category; a `skipped` grade over measured categories
+    // only means some category is unmeasured.
+    if grade.as_deref() == Some(BEACON_SKIPPED) && verdicts.values().all(|v| *v == Verdict::Skip) {
         return Err(Abort::TimedOut);
     }
 
@@ -402,10 +417,28 @@ pub fn detect_no_mx(summary: &BeaconSummary) -> bool {
 // Category fold
 // ---------------------------------------------------------------------------
 
-/// A check's status is the worst Warn or Fail over its category and the cross-validation
-/// sub-checks routed to it, else the category's Pass; a category that is only Info or Skip is
-/// not applicable with its detail as the finding.
+/// The details of the `unmeasured` sub-check of category `name`, when it carries one.
+fn unmeasured_findings(summary: &BeaconSummary, name: &str) -> Option<Vec<String>> {
+    let category = summary.categories.iter().find(|c| c.name == name)?;
+    let details: Vec<String> = category
+        .sub_checks
+        .iter()
+        .filter(|s| s.name == BEACON_UNMEASURED)
+        .map(|s| s.detail.clone())
+        .collect();
+    (!details.is_empty()).then_some(details)
+}
+
+/// A category carrying the `unmeasured` sub-check is unmeasured with its cause, whatever the
+/// cross-validation routes to it. Otherwise a check's status is the worst Warn or Fail over its
+/// category and the cross-validation sub-checks routed to it, else the category's Pass; `mx`
+/// with records and no Warn or Fail is a Pass. On a Pass, the `lookup_failed` details stay as
+/// findings, and `mx` and `dnsbl` keep all their Info details. A category that is only Info or Skip is not applicable with its detail
+/// as the finding.
 fn fold_category(name: &str, summary: &BeaconSummary) -> (Status, Vec<String>) {
+    if let Some(cause) = unmeasured_findings(summary, name) {
+        return (Status::Unmeasured, cause);
+    }
     let category = summary.categories.iter().find(|c| c.name == name);
 
     let sends_no_mail = summary.categories.iter().any(|c| {
@@ -429,7 +462,7 @@ fn fold_category(name: &str, summary: &BeaconSummary) -> (Status, Vec<String>) {
         .filter(|v| matches!(v, Status::Warn | Status::Fail))
         .max_by_key(verdict_rank);
 
-    let category_pass = category.is_some_and(|c| c.verdict == Status::Pass);
+    let category_pass = category.is_some_and(|c| c.verdict == Status::Pass || c.name == "mx");
     let Some(status) = worst.or(category_pass.then_some(Status::Pass)) else {
         let detail = category
             .and_then(|c| c.message.clone())
@@ -449,6 +482,19 @@ fn fold_category(name: &str, summary: &BeaconSummary) -> (Status, Vec<String>) {
             })
             .map(|s| s.detail.clone()),
     );
+    if status == Status::Pass {
+        let keeps_info = matches!(name, "mx" | "dnsbl");
+        findings.extend(
+            category
+                .into_iter()
+                .flat_map(|c| &c.sub_checks)
+                .filter(|s| {
+                    s.name == BEACON_LOOKUP_FAILED
+                        || (keeps_info && s.verdict == Status::NotApplicable)
+                })
+                .map(|s| s.detail.clone()),
+        );
+    }
     (status, findings)
 }
 
@@ -544,6 +590,8 @@ mod tests {
         }
         assert!(problems.is_empty(), "{}", problems.join("\n"));
         assert_eq!(BEACON_SKIPPED, crate::checks::SKIPPED);
+        assert_eq!(BEACON_UNMEASURED, crate::checks::UNMEASURED);
+        assert_eq!(BEACON_LOOKUP_FAILED, crate::checks::LOOKUP_FAILED);
         assert_eq!(BEACON_NULL_MX, crate::checks::mx::NULL_MX);
         assert_eq!(
             BEACON_SENDS_NO_MAIL,

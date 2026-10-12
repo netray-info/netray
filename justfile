@@ -49,7 +49,7 @@ clippy:
 test-rust-offline:
     cargo test --workspace --exclude netray-ip
     cargo test -p netray-ip --lib
-    cargo test -p netray-ip --features testing --test module --test module_data --test module_v3
+    cargo test -p netray-ip --features testing --test module --test module_data --test module_v3 --test contract_status
 
 # The full Rust suite. Most ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`,
 # MaxMind licence); without it they are skipped with a notice and run in CI with the data image.

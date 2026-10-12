@@ -20,6 +20,7 @@ use std::str::FromStr;
 
 use ipnet::IpNet;
 
+use super::unmeasured_result;
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SpfFlat, SubCheck, Verdict};
 
@@ -41,7 +42,17 @@ pub async fn check_spf_detailed<R: DnsLookup>(
     domain: &str,
     resolver: &R,
 ) -> (CheckResult, Option<SpfFlat>, bool, bool) {
-    let txt_records = resolver.lookup_txt(domain).await;
+    let txt_records = match resolver.lookup_txt(domain).await {
+        Ok(records) => records,
+        Err(e) => {
+            return (
+                unmeasured_result(Category::Spf, e.to_string()),
+                None,
+                false,
+                false,
+            );
+        }
+    };
     let spf_records: Vec<&str> = txt_records
         .iter()
         .filter(|t| t.starts_with("v=spf1"))
@@ -225,7 +236,7 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
 
         visited.insert(domain.to_string());
 
-        let txt_records = resolver.lookup_txt(domain).await;
+        let txt_records = resolver.lookup_txt(domain).await.unwrap_or_default();
         let spf_records: Vec<&str> = txt_records
             .iter()
             .filter(|t| t.starts_with("v=spf1"))
@@ -337,7 +348,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             } else {
                 domain
             };
-            let ips = resolver.lookup_ips(target).await;
+            let ips = resolver.lookup_ips(target).await.unwrap_or_default();
             for ip in ips {
                 let net = match ip {
                     IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
@@ -354,10 +365,10 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             } else {
                 domain
             };
-            let mx_records = resolver.lookup_mx(target).await;
+            let mx_records = resolver.lookup_mx(target).await.unwrap_or_default();
             for (_, exchange) in &mx_records {
                 let host = exchange.trim_end_matches('.');
-                let ips = resolver.lookup_ips(host).await;
+                let ips = resolver.lookup_ips(host).await.unwrap_or_default();
                 for ip in ips {
                     let net = match ip {
                         IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),

@@ -20,7 +20,7 @@ use netray_common::fetch::{self, AtLimit, FetchError, FetchOptions};
 use reqwest::header::HeaderMap;
 use reqwest::{Method, StatusCode};
 
-use crate::checks::util;
+use crate::checks::{UNMEASURED, unmeasured_result, util};
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, MtaStsInfo, SubCheck, Verdict};
 use crate::state::OutboundFetch;
@@ -84,7 +84,10 @@ pub async fn check_mta_sts(
     resolver: &impl DnsLookup,
     fetch: &OutboundFetch,
 ) -> (CheckResult, Option<MtaStsInfo>) {
-    let policy_url = format!("https://mta-sts.{}/.well-known/mta-sts.txt", domain);
+    let policy_url = match fetch.mta_sts_port {
+        Some(port) => format!("https://mta-sts.{domain}:{port}/.well-known/mta-sts.txt"),
+        None => format!("https://mta-sts.{domain}/.well-known/mta-sts.txt"),
+    };
     check_mta_sts_at(domain, resolver, fetch, &policy_url).await
 }
 
@@ -99,7 +102,10 @@ pub(crate) async fn check_mta_sts_at(
 
     // Step 1: DNS TXT record at _mta-sts.<domain>
     let sts_name = format!("_mta-sts.{}", domain);
-    let txt_records = resolver.lookup_txt(&sts_name).await;
+    let txt_records = match resolver.lookup_txt(&sts_name).await {
+        Ok(records) => records,
+        Err(e) => return (unmeasured_result(Category::MtaSts, e.to_string()), None),
+    };
 
     let sts_records: Vec<&str> = txt_records
         .iter()
@@ -127,7 +133,7 @@ pub(crate) async fn check_mta_sts_at(
 
     // Step 2: refuse a policy host with an address `allow` does not admit
     let sts_host = format!("mta-sts.{}", domain);
-    let sts_ips = resolver.lookup_ips(&sts_host).await;
+    let sts_ips = resolver.lookup_ips(&sts_host).await.unwrap_or_default();
     if sts_ips.iter().any(|ip| !(fetch.allow)(*ip)) {
         record_upstream_error("mta_sts", "blocked");
         sub_checks.push(SubCheck {
@@ -176,10 +182,16 @@ async fn fetch_and_parse_policy(
             evaluate_policy(r.status, &r.headers, &r.body, r.body_truncated, dns_id)
         }
         Err(e) => {
-            record_upstream_error("mta_sts", classify_fetch_error(&e));
+            let kind = classify_fetch_error(&e);
+            record_upstream_error("mta_sts", kind);
+            let (name, verdict) = if kind == "timeout" {
+                (UNMEASURED, Verdict::Skip)
+            } else {
+                ("https_fetch_failed", Verdict::Fail)
+            };
             let sub_checks = vec![SubCheck {
-                name: "https_fetch_failed".to_string(),
-                verdict: Verdict::Fail,
+                name: name.to_string(),
+                verdict,
                 detail: fetch_error_detail(&e).to_string(),
             }];
             (

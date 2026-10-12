@@ -12,7 +12,7 @@
 //! The boolean companion return value is used by cross-validation to
 //! correlate TLS reporting coverage with MTA-STS and DANE posture.
 
-use crate::checks::util;
+use crate::checks::{unmeasured_result, util};
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
@@ -21,7 +21,10 @@ use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 #[tracing::instrument(skip_all, fields(category = "tls_rpt", domain = %domain))]
 pub async fn check_tls_rpt(domain: &str, resolver: &impl DnsLookup) -> (CheckResult, bool) {
     let name = format!("_smtp._tls.{}", domain);
-    let txt_records = resolver.lookup_txt(&name).await;
+    let txt_records = match resolver.lookup_txt(&name).await {
+        Ok(records) => records,
+        Err(e) => return (unmeasured_result(Category::TlsRpt, e.to_string()), false),
+    };
 
     let tls_rpt_records: Vec<&str> = txt_records
         .iter()

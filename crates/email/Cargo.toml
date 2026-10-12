@@ -71,6 +71,21 @@ name = "module"
 path = "tests/module.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "unmeasured_outcomes"
+path = "tests/unmeasured_outcomes.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "contract_status"
+path = "tests/contract_status.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "unmeasured_partial"
+path = "tests/unmeasured_partial.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
 toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }
