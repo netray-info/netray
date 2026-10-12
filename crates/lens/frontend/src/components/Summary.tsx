@@ -1,5 +1,5 @@
 import { For, Show, createSignal } from 'solid-js';
-import type { SummaryEvent, DoneEvent, IpAddress, Verdict } from '../lib/types';
+import type { SummaryEvent, DoneEvent, IpAddress, SectionStatus, Verdict } from '../lib/types';
 import { CHECK_LABELS } from '../lib/checkMeta';
 import { GRADE_LEGEND } from '../lib/gradeLegend';
 import VerdictDot from './VerdictDot';
@@ -82,10 +82,14 @@ export default function Summary(props: Props) {
   const [showBadgeModal, setShowBadgeModal] = createSignal(false);
   const s = () => props.summary;
   const isError = () => s().grade === 'error' || s().grade === 'incomplete';
-  const sectionVerdict = (name: string): Verdict => s().sections[name] ?? 'error';
+  const sectionVerdict = (name: string): SectionStatus => s().sections[name] ?? 'error';
   const sectionGrade = (name: string): string | undefined => s().section_grades[name];
   const hasErroredSection = () =>
     Object.values(s().sections).some(v => v === 'error');
+  const hasAnsweringSection = () =>
+    Object.values(s().sections).some(v => v !== 'error');
+  const hasUnmeasuredCheck = () =>
+    (props.checks ?? []).some(c => c.verdict === 'unmeasured');
   const hasAddresses = () => (props.addresses?.length ?? 0) > 0 || !!props.httpServerIp;
 
   const dots = () => (
@@ -97,10 +101,14 @@ export default function Summary(props: Props) {
               <VerdictDot verdict={sectionVerdict(section)} grade={sectionGrade(section)} />
               <span>{section.toUpperCase()}</span>
               <Show when={sectionVerdict(section) === 'error'} fallback={
-                <Show when={sectionGrade(section)}>
-                  <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade(section)!) }}>
-                    {sectionGrade(section)}
-                  </span>
+                <Show when={sectionVerdict(section) === 'incomplete'} fallback={
+                  <Show when={sectionGrade(section)}>
+                    <span class="summary-dot-grade" style={{ color: gradeStyle(sectionGrade(section)!) }}>
+                      {sectionGrade(section)}
+                    </span>
+                  </Show>
+                }>
+                  <span class="summary-dot-incomplete">incomplete</span>
                 </Show>
               }>
                 <span class="summary-dot-error">err</span>
@@ -169,7 +177,7 @@ export default function Summary(props: Props) {
                 </Show>
                 <span class="summary-overall">
                   {countHeadline(s().overall, rollup(props.checks))}
-                  <Show when={hasErroredSection()}>
+                  <Show when={hasErroredSection() || hasUnmeasuredCheck()}>
                     <span class="summary-incomplete">: incomplete — some checks failed to run</span>
                   </Show>
                 </span>
@@ -191,7 +199,14 @@ export default function Summary(props: Props) {
           <div class="summary-grade summary-grade--error" role="alert">
             <span class="summary-grade__letter grade--F" aria-label="Grade unavailable">?</span>
             <div class="summary-grade__meta">
-              <span class="summary-overall">Grade unavailable — all backends failed</span>
+              <span class="summary-overall">
+                {s().grade === 'incomplete' && hasAnsweringSection()
+                  ? 'Grade unavailable — incomplete'
+                  : 'Grade unavailable — all backends failed'}
+              </span>
+              <Show when={hasUnmeasuredCheck()}>
+                <span class="summary-incomplete">: incomplete — some checks failed to run</span>
+              </Show>
             </div>
           </div>
         </Show>

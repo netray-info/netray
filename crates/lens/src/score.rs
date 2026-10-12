@@ -22,9 +22,12 @@ pub enum CheckVerdict {
     NotFound,
     /// Excluded from both earned and possible totals.
     Skip,
+    /// Could not be checked; makes its section incomplete.
+    Unmeasured,
 }
 
-/// Maps onto the shared model vocabulary; `NotFound` is `Fail`, `Skip` is `NotApplicable`.
+/// Maps onto the shared model vocabulary; `NotFound` is `Fail`, `Skip` is `NotApplicable`,
+/// `Unmeasured` is `Unmeasured`.
 impl From<CheckVerdict> for netray_model::Status {
     fn from(verdict: CheckVerdict) -> Self {
         match verdict {
@@ -33,6 +36,7 @@ impl From<CheckVerdict> for netray_model::Status {
             CheckVerdict::Fail => netray_model::Status::Fail,
             CheckVerdict::NotFound => netray_model::Status::Fail,
             CheckVerdict::Skip => netray_model::Status::NotApplicable,
+            CheckVerdict::Unmeasured => netray_model::Status::Unmeasured,
         }
     }
 }
@@ -55,8 +59,9 @@ pub struct OverallScore {
     pub overall_percentage: f64,
     /// A letter grade, or `"incomplete"` when `complete` is false.
     pub grade: String,
-    /// False when any section is Errored or Scored with `possible == 0`. NotApplicable
-    /// sections are excluded without making the result incomplete.
+    /// False when any section is Errored, Scored with `possible == 0`, or has a weighted check
+    /// that is Unmeasured. NotApplicable sections are excluded without making the result
+    /// incomplete. A failed hard-fail check still gives grade `F` when incomplete.
     pub complete: bool,
     pub hard_fail_triggered: bool,
     /// Which specific checks triggered a hard fail, by bare name.

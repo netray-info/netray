@@ -1,4 +1,5 @@
-export type Verdict = 'pass' | 'warn' | 'fail' | 'error' | 'skip';
+export type Verdict = 'pass' | 'warn' | 'fail' | 'error' | 'skip' | 'unmeasured';
+export type SectionStatus = Verdict | 'incomplete';
 
 export interface CheckItem {
   name: string;
@@ -64,7 +65,7 @@ export interface EmailEvent {
 }
 
 export interface SummaryEvent {
-  sections: Record<string, Verdict>;
+  sections: Record<string, SectionStatus>;
   section_grades: Record<string, string>;
   overall: Verdict;
   grade: string;

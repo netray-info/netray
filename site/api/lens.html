@@ -164,7 +164,23 @@ curl -N -X POST https://lens.netray.info/api/check \
         <tr><td><code>pass</code></td><td>All weighted checks pass</td></tr>
         <tr><td><code>warn</code></td><td>One or more checks have warnings</td></tr>
         <tr><td><code>fail</code></td><td>One or more checks fail</td></tr>
+        <tr><td><code>incomplete</code></td><td>The section answered, but a weighted check could not be measured</td></tr>
         <tr><td><code>error</code></td><td>Backend unreachable or timed out</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Check verdict values</h3>
+    <p>Each entry of <code>checks[]</code> carries a <code>verdict</code> field:</p>
+    <table>
+      <thead>
+        <tr><th>Value</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>pass</code></td><td>The check passes</td></tr>
+        <tr><td><code>warn</code></td><td>The check has a warning</td></tr>
+        <tr><td><code>fail</code></td><td>The check fails</td></tr>
+        <tr><td><code>skip</code></td><td>Not applicable or not tested from here; excluded from the score</td></tr>
+        <tr><td><code>unmeasured</code></td><td>Could not be checked, e.g. a timeout; the section and the run are incomplete</td></tr>
       </tbody>
     </table>
 
@@ -238,8 +254,16 @@ data: {
   "hard_fail": false,
   "hard_fail_checks": [],
   "hard_fail_reason": null,
-  "not_applicable": {}
+  "not_applicable": {},
+  "complete": true
 }</code></pre>
+
+    <p>
+      <code>complete</code> is <code>false</code> when a weighted section errored or a weighted
+      check is <code>unmeasured</code>. The grade is then <code>incomplete</code>, unless a
+      failed hard-fail check already gives <code>F</code>. An incomplete result is neither
+      cached nor snapshotted.
+    </p>
 
     <p>
       <code>not_applicable</code> is always present. When the email backend times out
@@ -278,7 +302,8 @@ data: {
         <tr><td><strong>B</strong></td><td>&ge; 75%</td></tr>
         <tr><td><strong>C</strong></td><td>&ge; 60%</td></tr>
         <tr><td><strong>D</strong></td><td>&ge; 40%</td></tr>
-        <tr><td><strong>F</strong></td><td>&lt; 40%, or hard-fail override</td></tr>
+        <tr><td><strong>F</strong></td><td>&lt; 40%, or hard-fail override (also when the result is incomplete)</td></tr>
+        <tr><td><strong>incomplete</strong></td><td>No letter: a weighted section errored or a weighted check is unmeasured; a failed hard-fail check still gives F</td></tr>
       </tbody>
     </table>
 

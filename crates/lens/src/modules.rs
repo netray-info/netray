@@ -169,7 +169,8 @@ fn verdict(status: Status) -> CheckVerdict {
         Status::Pass => CheckVerdict::Pass,
         Status::Warn => CheckVerdict::Warn,
         Status::Fail => CheckVerdict::Fail,
-        Status::NotApplicable | Status::NotTested | Status::Unmeasured => CheckVerdict::Skip,
+        Status::NotApplicable | Status::NotTested => CheckVerdict::Skip,
+        Status::Unmeasured => CheckVerdict::Unmeasured,
     }
 }
 

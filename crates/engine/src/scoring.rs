@@ -1,5 +1,6 @@
 //! V1's scoring rules over the engine's section events: Pass earns the weight, Warn half, Fail
-//! nothing; excluded statuses count neither way; hard-fail checks force `F`.
+//! nothing; not-applicable and not-tested count neither way; a weighted unmeasured check makes its
+//! section incomplete; a failed hard-fail check forces `F`, even on an incomplete run.
 
 use std::collections::BTreeMap;
 
@@ -20,20 +21,22 @@ pub struct SectionScore {
 /// The score of one run.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Score {
-    /// The scored sections; missing are sections not run, not applicable, incomplete, timed out
-    /// or with nothing weighted to score.
+    /// The scored sections; missing are sections not run, not applicable, incomplete, timed out,
+    /// with nothing weighted to score or with a weighted check unmeasured.
     pub sections: BTreeMap<Protocol, SectionScore>,
     /// Weighted mean of the scored sections; informational when the score is incomplete.
     pub overall_percentage: f64,
     pub grade: Grade,
-    /// False when a section is incomplete, timed out or measured with possible 0.
+    /// False when a section is incomplete, timed out, measured with possible 0 or has a
+    /// weighted check unmeasured.
     pub complete: bool,
     pub hard_fail_checks: Vec<CheckId>,
     /// Not-applicable sections and their reasons.
     pub not_applicable: BTreeMap<Protocol, String>,
 }
 
-/// `None` when nothing weighted was scored: such a section carries no signal.
+/// `None` when nothing weighted was scored, or when a weighted check is `Unmeasured`: such a
+/// section carries no signal, or a partial one.
 fn score_section(weights: &BTreeMap<CheckId, u32>, checks: &[CheckResult]) -> Option<SectionScore> {
     let mut earned = 0.0;
     let mut possible = 0;
@@ -51,7 +54,8 @@ fn score_section(weights: &BTreeMap<CheckId, u32>, checks: &[CheckResult]) -> Op
                 possible += weight;
             }
             Status::Fail => possible += weight,
-            Status::NotApplicable | Status::NotTested | Status::Unmeasured => {}
+            Status::Unmeasured => return None,
+            Status::NotApplicable | Status::NotTested => {}
         }
     }
     if possible == 0 {
@@ -72,7 +76,8 @@ fn lookup_grade(thresholds: &[(Grade, u32)], percentage: f64) -> Grade {
 }
 
 /// Scores the finished sections against `profile`. A profile section without an event is
-/// ignored; no scored section at all is `Incomplete`.
+/// ignored. A hard-fail check with status Fail gives `F`, even when the score is incomplete;
+/// otherwise an incomplete score, or no scored section at all, is `Incomplete`.
 pub fn score(profile: &Profile, sections: &[SectionEvent]) -> Score {
     let mut scored = BTreeMap::new();
     let mut not_applicable = BTreeMap::new();
@@ -111,22 +116,28 @@ pub fn score(profile: &Profile, sections: &[SectionEvent]) -> Score {
         }
     }
 
+    // A measured hard fail is certain whatever else is missing, so it outranks incomplete.
+    let hard_failed = !hard_fail_checks.is_empty();
     if total_weight == 0 {
         return Score {
             sections: scored,
             overall_percentage: 0.0,
-            grade: Grade::Incomplete,
+            grade: if hard_failed {
+                Grade::F
+            } else {
+                Grade::Incomplete
+            },
             complete: false,
-            hard_fail_checks: vec![],
+            hard_fail_checks,
             not_applicable,
         };
     }
 
     let overall_percentage = weighted_sum / total_weight as f64;
-    let grade = if !complete {
-        Grade::Incomplete
-    } else if !hard_fail_checks.is_empty() {
+    let grade = if hard_failed {
         Grade::F
+    } else if !complete {
+        Grade::Incomplete
     } else {
         lookup_grade(&profile.thresholds, overall_percentage)
     };

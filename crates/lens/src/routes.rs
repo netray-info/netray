@@ -186,8 +186,9 @@ pub struct SummaryEvent {
     pub overall: String,
     /// A letter grade, or `"incomplete"` when `complete` is false.
     pub grade: String,
-    /// False when any section is errored or scored nothing possible; the grade is then
-    /// `incomplete`, and the result is neither cached nor snapshotted.
+    /// False when any section is errored, scored nothing possible, or has a weighted check that
+    /// is `unmeasured`; the grade is then `incomplete` (a failed hard-fail check still gives
+    /// `F`), and the result is neither cached nor snapshotted.
     pub complete: bool,
     pub score: f64,
     pub hard_fail: bool,
@@ -819,6 +820,7 @@ fn verdict_str(verdict: &CheckVerdict) -> &'static str {
         CheckVerdict::Fail => "fail",
         CheckVerdict::NotFound => "fail",
         CheckVerdict::Skip => "skip",
+        CheckVerdict::Unmeasured => "unmeasured",
     }
 }
 
@@ -827,16 +829,29 @@ pub fn is_unscored_grade(grade: &str) -> bool {
     grade == "error" || grade == "incomplete"
 }
 
-/// Section status for a section event: `"error"` also for a Scored section whose weighted
-/// checks earn nothing possible. A section absent from the profile (no weights at all)
-/// keeps its check-derived status.
+/// True when a weighted check of an answering section could not be measured.
+fn has_weighted_unmeasured(r: &BackendResult, weights: &HashMap<String, u32>) -> bool {
+    r.checks.iter().any(|c| {
+        matches!(c.verdict, CheckVerdict::Unmeasured)
+            && weights.get(&c.name).is_some_and(|w| *w > 0)
+    })
+}
+
+/// Section status for a section event: `"incomplete"` for an answering section with a weighted
+/// unmeasured check, `"error"` also for a Scored section whose weighted checks earn nothing
+/// possible. A section absent from the profile (no weights at all) keeps its check-derived
+/// status.
 fn section_status_from_checks(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
 ) -> &'static str {
     if let (Ok(r), false) = (result, weights.is_empty()) {
+        if has_weighted_unmeasured(r, weights) {
+            return "incomplete";
+        }
         let has_possible = r.checks.iter().any(|c| {
-            c.verdict != CheckVerdict::Skip && weights.get(&c.name).is_some_and(|w| *w > 0)
+            !matches!(c.verdict, CheckVerdict::Skip | CheckVerdict::Unmeasured)
+                && weights.get(&c.name).is_some_and(|w| *w > 0)
         });
         if !has_possible {
             return "error";
@@ -1121,12 +1136,16 @@ fn summary_payload_from(
 
     for (name, result) in sections {
         let status = match result {
-            Ok(_)
+            Ok(r)
                 if !score.complete
                     && !score.sections.contains_key(name)
                     && !score.not_applicable.contains_key(name) =>
             {
-                "error"
+                if has_weighted_unmeasured(r, &section_weights(profile, name)) {
+                    "incomplete"
+                } else {
+                    "error"
+                }
             }
             _ => section_status_from_verdicts(result),
         };
@@ -1140,6 +1159,8 @@ fn summary_payload_from(
         "error".to_string()
     } else if section_statuses.values().any(|s| s == "fail") {
         "fail".to_string()
+    } else if section_statuses.values().any(|s| s == "incomplete") {
+        "incomplete".to_string()
     } else if section_statuses.values().any(|s| s == "warn") {
         "warn".to_string()
     } else {
@@ -1428,6 +1449,8 @@ fn snapshot_section_results(
                 "N/A".to_string()
             } else if let Some(section_score) = output.score.sections.get(*key) {
                 grade_for(profile, section_score.percentage)
+            } else if matches!(output.sections.get(*key), Some(Ok(_))) {
+                "incomplete".to_string()
             } else {
                 "error".to_string()
             };
