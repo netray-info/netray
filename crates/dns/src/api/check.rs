@@ -110,9 +110,14 @@ pub struct LintEvent {
 
 impl<'de> Deserialize<'de> for LintEvent {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        fn ignore_content<'de, D: serde::Deserializer<'de>>(d: D) -> Result<(), D::Error> {
+            serde::de::IgnoredAny::deserialize(d).map(drop)
+        }
+
         #[derive(Deserialize)]
         enum WireResult {
-            NotFound(),
+            #[serde(deserialize_with = "ignore_content")]
+            NotFound,
             Ok(String),
             Warning(String),
             Failed(String),
@@ -137,7 +142,7 @@ impl<'de> Deserialize<'de> for LintEvent {
             .results
             .into_iter()
             .map(|r| match r {
-                WireResult::NotFound() => CheckResult::NotFound(),
+                WireResult::NotFound => CheckResult::NotFound(),
                 WireResult::Ok(m) => CheckResult::Ok(m),
                 WireResult::Warning(m) => CheckResult::Warning(m),
                 WireResult::Failed(m) => CheckResult::Failed(m),
@@ -174,6 +179,13 @@ pub enum CheckEvent {
     Error {
         code: &'static str,
         message: String,
+    },
+    /// Nameservers of an NS check (`ns_lame`, `ns_delegation`) that did not answer, after the
+    /// lints; not part of the `/api/check` stream.
+    Unanswered {
+        category: &'static str,
+        silent: Vec<String>,
+        none_answered: bool,
     },
     Done(CheckDoneEvent),
 }
@@ -392,6 +404,7 @@ async fn stream_check_events(
                     .unwrap_or_else(|_| Event::default().event("lint").data("{}"))
             }
             CheckEvent::Error { code, message } => make_error_event(code, &message),
+            CheckEvent::Unanswered { .. } => continue,
             CheckEvent::Done(mut done) => {
                 let cache_key = ResultCache::generate_key();
                 done.cache_key = Some(cache_key.clone());
@@ -610,7 +623,7 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
     // ------------------------------------------------------------------
     let query_timeout = Duration::from_secs(3);
     let unique = unique_records(&all_lookups);
-    let (lame_results, delegation_results, mta_sts_results) = tokio::join!(
+    let (lame, delegation, mta_sts_results) = tokio::join!(
         check_ns_lame_delegation(&unique, &domain, query_timeout, &raw_outbound),
         check_ns_delegation_consistency(&unique, &domain, query_timeout, &raw_outbound),
         check_mta_sts(&mta_sts_lookups, &domain, &unique, &outbound),
@@ -623,8 +636,8 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
     for (category, results) in lint_lookups(&all_lookups) {
         lint_checks.push((category, results));
         if category == "ns" {
-            lint_checks.push(("ns_lame", lame_results.clone()));
-            lint_checks.push(("ns_delegation", delegation_results.clone()));
+            lint_checks.push(("ns_lame", lame.results.clone()));
+            lint_checks.push(("ns_delegation", delegation.results.clone()));
         }
     }
     lint_checks.push(("dmarc", check_dmarc_records(&dmarc_txts)));
@@ -661,6 +674,13 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
             results,
         };
         if tx.send(CheckEvent::Lint(lint_event)).await.is_err() {
+            metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
+                .increment(1);
+            return;
+        }
+    }
+    for event in unanswered_events(&lame, &delegation) {
+        if tx.send(event).await.is_err() {
             metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
                 .increment(1);
             return;
@@ -1022,19 +1042,72 @@ fn check_infrastructure(
     results
 }
 
+/// The lint results of an NS check and the nameservers that did not answer it.
+pub(crate) struct NsCheck {
+    pub(crate) results: Vec<CheckResult>,
+    /// One finding per server that timed out, naming it.
+    pub(crate) silent: Vec<String>,
+    /// No server answered the query.
+    pub(crate) none_answered: bool,
+}
+
+impl NsCheck {
+    fn measured(results: Vec<CheckResult>) -> Self {
+        Self {
+            results,
+            silent: Vec::new(),
+            none_answered: false,
+        }
+    }
+}
+
+/// The `Unanswered` events of the lame-delegation and delegation-consistency checks, one per
+/// check with a silent server.
+pub(crate) fn unanswered_events(lame: &NsCheck, delegation: &NsCheck) -> Vec<CheckEvent> {
+    [("ns_lame", lame), ("ns_delegation", delegation)]
+        .into_iter()
+        .filter(|(_, check)| !check.silent.is_empty())
+        .map(|(category, check)| CheckEvent::Unanswered {
+            category,
+            silent: check.silent.clone(),
+            none_answered: check.none_answered,
+        })
+        .collect()
+}
+
+/// The finding for a server that did not answer, named by its NS host when known.
+fn silent_server(
+    server: SocketAddr,
+    servers: &[(SocketAddr, Option<String>)],
+    error: &dns_raw::RawError,
+) -> String {
+    let ip = server.ip();
+    match servers
+        .iter()
+        .find(|(addr, _)| *addr == server)
+        .and_then(|(_, name)| name.as_deref())
+    {
+        Some(name) => format!(
+            "{} ({ip}) did not answer: {error}",
+            name.trim_end_matches('.')
+        ),
+        None => format!("{ip} did not answer: {error}"),
+    }
+}
+
 /// NS lame delegation check: query each authoritative NS server with RD=0
 /// and check whether it answers authoritatively (AA=1) for the domain.
 /// A lame server answers but with AA=0 — indicating misconfiguration.
-async fn check_ns_lame_delegation(
+pub(crate) async fn check_ns_lame_delegation(
     lookups: &Lookups,
     domain: &str,
     timeout: Duration,
     raw: &RawOutbound,
-) -> Vec<CheckResult> {
+) -> NsCheck {
     let ns_names: Vec<String> = lookups.ns().into_iter().map(|n| n.to_ascii()).collect();
 
     if ns_names.is_empty() {
-        return vec![CheckResult::NotFound()];
+        return NsCheck::measured(vec![CheckResult::NotFound()]);
     }
 
     // Resolve NS hostnames to IPs.
@@ -1044,7 +1117,7 @@ async fn check_ns_lame_delegation(
 
     let domain_name = match hickory_proto::rr::Name::from_ascii(domain) {
         Ok(n) => n,
-        Err(_) => return vec![CheckResult::NotFound()],
+        Err(_) => return NsCheck::measured(vec![CheckResult::NotFound()]),
     };
 
     let list = raw.build_server_list(&ns_ips);
@@ -1052,11 +1125,11 @@ async fn check_ns_lame_delegation(
 
     if servers.is_empty() {
         if list.refused > 0 {
-            return vec![CheckResult::Warning(NOT_PUBLIC.to_owned())];
+            return NsCheck::measured(vec![CheckResult::Warning(NOT_PUBLIC.to_owned())]);
         }
-        return vec![CheckResult::Warning(
+        return NsCheck::measured(vec![CheckResult::Warning(
             "NS lame delegation: could not resolve any NS server IPs for direct query".to_owned(),
-        )];
+        )]);
     }
 
     let results_raw = raw
@@ -1068,19 +1141,24 @@ async fn check_ns_lame_delegation(
         )
         .await;
 
-    let mut results = judge_lame_delegation(&results_raw, domain);
+    let mut check = judge_lame_delegation(&results_raw, &list.servers, domain);
     if list.refused > 0 {
-        results.push(CheckResult::Warning(NOT_PUBLIC.to_owned()));
+        check
+            .results
+            .push(CheckResult::Warning(NOT_PUBLIC.to_owned()));
+        check.none_answered = false;
     }
-    results
+    check
 }
 
 fn judge_lame_delegation(
     results_raw: &[dns_raw::RawQueryResult],
+    servers: &[(SocketAddr, Option<String>)],
     domain: &str,
-) -> Vec<CheckResult> {
+) -> NsCheck {
     let mut lame_servers: Vec<String> = Vec::new();
     let mut ok_count = 0usize;
+    let mut silent: Vec<String> = Vec::new();
 
     for qr in results_raw {
         match &qr.result {
@@ -1091,16 +1169,18 @@ fn judge_lame_delegation(
                     lame_servers.push(qr.server.ip().to_string());
                 }
             }
-            Err(e) => {
-                tracing::debug!(server = %qr.server, error = %e, "lame delegation check query failed");
-            }
+            Err(e) => silent.push(silent_server(qr.server, servers, e)),
         }
     }
 
     if lame_servers.is_empty() && ok_count == 0 {
-        return vec![CheckResult::Warning(
-            "NS lame delegation: no servers responded to SOA query".to_owned(),
-        )];
+        return NsCheck {
+            results: vec![CheckResult::Warning(
+                "NS lame delegation: no servers responded to SOA query".to_owned(),
+            )],
+            silent,
+            none_answered: true,
+        };
     }
 
     let mut results = Vec::new();
@@ -1121,18 +1201,22 @@ fn judge_lame_delegation(
             )));
         }
     }
-    results
+    NsCheck {
+        results,
+        silent,
+        none_answered: false,
+    }
 }
 
 /// NS delegation consistency check: compare NS names from recursive resolution
 /// with NS names obtained by querying the zone's authoritative servers directly.
 /// Inconsistency indicates stale delegation or incomplete NS synchronization.
-async fn check_ns_delegation_consistency(
+pub(crate) async fn check_ns_delegation_consistency(
     lookups: &Lookups,
     domain: &str,
     timeout: Duration,
     raw: &RawOutbound,
-) -> Vec<CheckResult> {
+) -> NsCheck {
     // Recursive NS names (already collected).
     let mut recursive_ns: Vec<String> = lookups
         .ns()
@@ -1143,7 +1227,7 @@ async fn check_ns_delegation_consistency(
     recursive_ns.dedup();
 
     if recursive_ns.is_empty() {
-        return vec![CheckResult::NotFound()];
+        return NsCheck::measured(vec![CheckResult::NotFound()]);
     }
 
     // Query the authoritative NS servers directly for NS records.
@@ -1158,17 +1242,17 @@ async fn check_ns_delegation_consistency(
 
     if servers.is_empty() {
         if list.refused > 0 {
-            return vec![CheckResult::Warning(NOT_PUBLIC.to_owned())];
+            return NsCheck::measured(vec![CheckResult::Warning(NOT_PUBLIC.to_owned())]);
         }
-        return vec![CheckResult::Warning(
+        return NsCheck::measured(vec![CheckResult::Warning(
             "NS delegation consistency: could not resolve NS server IPs for direct query"
                 .to_owned(),
-        )];
+        )]);
     }
 
     let domain_name = match hickory_proto::rr::Name::from_ascii(domain) {
         Ok(n) => n,
-        Err(_) => return vec![CheckResult::NotFound()],
+        Err(_) => return NsCheck::measured(vec![CheckResult::NotFound()]),
     };
 
     let results_raw = raw
@@ -1180,47 +1264,62 @@ async fn check_ns_delegation_consistency(
         )
         .await;
 
-    let mut results = judge_ns_consistency(&recursive_ns, &results_raw);
+    let mut check = judge_ns_consistency(&recursive_ns, &results_raw, &list.servers);
     if list.refused > 0 {
-        results.push(CheckResult::Warning(NOT_PUBLIC.to_owned()));
+        check
+            .results
+            .push(CheckResult::Warning(NOT_PUBLIC.to_owned()));
+        check.none_answered = false;
     }
-    results
+    check
 }
 
 fn judge_ns_consistency(
     recursive_ns: &[String],
     results_raw: &[dns_raw::RawQueryResult],
-) -> Vec<CheckResult> {
+    servers: &[(SocketAddr, Option<String>)],
+) -> NsCheck {
     // Collect NS names from direct (authoritative) responses.
     let mut auth_ns: Vec<String> = Vec::new();
+    let mut silent: Vec<String> = Vec::new();
+    let mut answered = false;
     for qr in results_raw {
-        if let Ok(resp) = &qr.result {
-            for record in resp.answers() {
-                if let hickory_proto::rr::RData::NS(ns) = &record.data {
-                    let name = ns.0.to_ascii().to_ascii_lowercase();
-                    if !auth_ns.contains(&name) {
-                        auth_ns.push(name);
+        match &qr.result {
+            Ok(resp) => {
+                answered = true;
+                for record in resp.answers() {
+                    if let hickory_proto::rr::RData::NS(ns) = &record.data {
+                        let name = ns.0.to_ascii().to_ascii_lowercase();
+                        if !auth_ns.contains(&name) {
+                            auth_ns.push(name);
+                        }
                     }
                 }
             }
+            Err(e) => silent.push(silent_server(qr.server, servers, e)),
         }
     }
+    let check = |results: Vec<CheckResult>| NsCheck {
+        results,
+        silent: silent.clone(),
+        none_answered: !answered,
+    };
 
     if auth_ns.is_empty() {
-        return vec![CheckResult::Warning(
+        return check(vec![CheckResult::Warning(
             "NS delegation consistency: no NS records returned from direct authoritative query"
                 .to_owned(),
-        )];
+        )]);
     }
 
     auth_ns.sort();
     auth_ns.dedup();
 
     if recursive_ns == auth_ns.as_slice() {
-        vec![CheckResult::Ok(format!(
+        check(vec![CheckResult::Ok(format!(
             "NS delegation is consistent: {} name server(s) match between parent and child",
             recursive_ns.len()
-        ))]
+        ))])
     } else {
         let only_recursive: Vec<&String> = recursive_ns
             .iter()
@@ -1242,7 +1341,7 @@ fn judge_ns_consistency(
                 "NS '{ns}' is in child zone but not in parent delegation"
             )));
         }
-        results
+        check(results)
     }
 }
 

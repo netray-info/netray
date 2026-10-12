@@ -326,3 +326,4 @@ None.
 - The V2 frontend's unmeasured band and spectrum line: `specs/sdd/v2.md` §6 (planning repo), V2 frontend features.
 - The deferred v2-check-fixes items (AIA incomplete-branch URL, IpCard "hostname mismatch", repeated ACAO, ACAC case, `[modules.dns.backends.ip]`): `specs/features/v2-check-fixes/report.md`.
 - Re-weighting after V2: SDD §3.9.
+- **A4.** Requirement 6's "NS addresses cannot be resolved because of a resolver error → unmeasured" is not built. The NS checks resolve through `netray_common::fetch`, which returns an empty set for any failure. An unresolvable NS host stays a measured Warn, as with the MTA-STS fetch (operator, 2026-10-12).

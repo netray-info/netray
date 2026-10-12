@@ -178,6 +178,10 @@ impl Module for TlsModule {
         &[]
     }
 
+    fn needs_address_records(&self) -> bool {
+        true
+    }
+
     fn wants_facts(&self) -> bool {
         true
     }

@@ -73,6 +73,21 @@ name = "module_v3"
 path = "tests/module_v3.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "ns_timeouts"
+path = "tests/ns_timeouts.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "contract_status"
+path = "tests/contract_status.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "unmeasured_inputs"
+path = "tests/unmeasured_inputs.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
 toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }

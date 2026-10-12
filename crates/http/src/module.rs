@@ -120,6 +120,10 @@ impl Module for HttpModule {
         &[]
     }
 
+    fn needs_address_records(&self) -> bool {
+        true
+    }
+
     fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
         Box::pin(async move {
             match self.measure(ctx, facts).await {

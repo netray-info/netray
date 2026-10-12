@@ -188,6 +188,7 @@ impl ModuleSection {
             && report.resolve_error.is_none()
             && report.facts.a.is_empty()
             && report.facts.aaaa.is_empty()
+            && !report.facts.no_address_definite
         {
             return Err(SectionError::NoDnsResults);
         }
