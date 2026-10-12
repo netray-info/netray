@@ -14,20 +14,26 @@ pub const NO_MX: &str = "no_mx";
 pub const NULL_MX: &str = "null_mx";
 
 /// Check MX records for the domain.
-/// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag, address error). The
-/// address error names the failed address lookups when no MX IP was resolved and at least one
-/// of them failed, so the MX IP list is unmeasured rather than empty.
+/// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag, address errors). The
+/// address errors are every MX-host address lookup that failed in full or in one family, with
+/// the failed record type, so the MX-IP checks can name what they could not judge.
 #[tracing::instrument(skip_all, fields(category = "mx", domain = %domain))]
 pub async fn check_mx(
     domain: &str,
     resolver: &impl DnsLookup,
     enrichment: Option<&netray_common::enrichment::EnrichmentClient>,
-) -> (CheckResult, Vec<IpAddr>, Vec<String>, bool, Option<String>) {
+) -> (
+    CheckResult,
+    Vec<IpAddr>,
+    Vec<String>,
+    bool,
+    Vec<LookupError>,
+) {
     let mx_records = match resolver.lookup_mx(domain).await {
         Ok(records) => records,
         Err(e) => {
             let result = unmeasured_result(Category::Mx, e.to_string());
-            return (result, Vec::new(), Vec::new(), false, None);
+            return (result, Vec::new(), Vec::new(), false, Vec::new());
         }
     };
 
@@ -41,7 +47,7 @@ pub async fn check_mx(
             }],
             "No MX records found".to_string(),
         );
-        return (result, Vec::new(), Vec::new(), false, None);
+        return (result, Vec::new(), Vec::new(), false, Vec::new());
     }
 
     let mut sub_checks = Vec::new();
@@ -63,13 +69,13 @@ pub async fn check_mx(
             sub_checks,
             "Null MX: domain does not accept mail".to_string(),
         );
-        return (result, Vec::new(), Vec::new(), true, None);
+        return (result, Vec::new(), Vec::new(), true, Vec::new());
     }
     let null_mx = false;
 
     // Resolve IPs for each MX host
     let mut has_ipv6 = false;
-    let mut addr_errors: Vec<String> = Vec::new();
+    let mut addr_errors: Vec<LookupError> = Vec::new();
     let mut ipv4_prefixes: HashSet<u32> = HashSet::new();
     let mut ipv6_prefixes: HashSet<u64> = HashSet::new();
 
@@ -92,12 +98,11 @@ pub async fn check_mx(
             Ok(lookup) => {
                 if let Some(e) = lookup.error {
                     // The family is not named: the other half's answer is no claim about it.
-                    let e = LookupError {
+                    sub_checks.push(lookup_failed(&LookupError {
                         record_type: "address",
-                        ..e
-                    };
-                    addr_errors.push(e.to_string());
-                    sub_checks.push(lookup_failed(&e));
+                        ..e.clone()
+                    }));
+                    addr_errors.push(e);
                 } else if lookup.ips.is_empty() {
                     sub_checks.push(SubCheck {
                         name: "mx_no_addr".to_string(),
@@ -108,8 +113,8 @@ pub async fn check_mx(
                 lookup.ips
             }
             Err(e) => {
-                addr_errors.push(e.to_string());
                 sub_checks.push(lookup_failed(&e));
+                addr_errors.push(e);
                 Vec::new()
             }
         };
@@ -226,7 +231,5 @@ pub async fn check_mx(
     let mut result = CheckResult::new(Category::Mx, sub_checks, detail);
     result.enrichment = enrichment_data;
 
-    let addr_error =
-        (all_ips.is_empty() && !addr_errors.is_empty()).then(|| addr_errors.join("; "));
-    (result, all_ips, mx_hosts, null_mx, addr_error)
+    (result, all_ips, mx_hosts, null_mx, addr_errors)
 }

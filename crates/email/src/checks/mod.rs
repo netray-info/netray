@@ -128,7 +128,7 @@ enum Phase0Result {
         mx_hosts: Vec<String>,
         mx_ips: Vec<IpAddr>,
         null_mx: bool,
-        addr_error: Option<String>,
+        addr_errors: Vec<crate::dns::LookupError>,
     },
     Spf {
         result: CheckResult,
@@ -216,6 +216,26 @@ pub(crate) fn lookup_failed(e: &crate::dns::LookupError) -> crate::quality::SubC
     }
 }
 
+pub(crate) fn join_errors(errors: &[crate::dns::LookupError]) -> String {
+    errors
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// Whether a `lookup_failed` sub-check of `result` reports a failed address lookup of `ip`'s
+/// family. Reads the record type that leads the detail (`LookupError`'s Display): `A`, `AAAA`,
+/// or `address` for both.
+pub(crate) fn family_unresolved(result: &CheckResult, ip: &IpAddr) -> bool {
+    let family = if ip.is_ipv4() { "A " } else { "AAAA " };
+    result
+        .sub_checks
+        .iter()
+        .filter(|s| s.name == LOOKUP_FAILED)
+        .any(|s| s.detail.starts_with(family) || s.detail.starts_with("address "))
+}
+
 pub(crate) fn unmeasured_result(category: Category, cause: String) -> CheckResult {
     CheckResult::new(
         category,
@@ -258,7 +278,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     let mut mx_hosts: Vec<String> = Vec::new();
     let mut mx_ips: Vec<IpAddr> = Vec::new();
     let mut null_mx = false;
-    let mut mx_addr_error: Option<String> = None;
+    let mut mx_addr_errors: Vec<crate::dns::LookupError> = Vec::new();
     let mut spf_result: Option<CheckResult> = None;
     let mut spf_flat: Option<crate::quality::SpfFlat> = None;
     let mut spf_has_dash_all = false;
@@ -285,7 +305,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, ips, hosts, is_null_mx, addr_error) =
+                let (result, ips, hosts, is_null_mx, addr_errors) =
                     mx::check_mx(&domain, dns.as_ref(), enrichment_client.as_deref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "mx")
@@ -295,7 +315,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     mx_hosts: hosts,
                     mx_ips: ips,
                     null_mx: is_null_mx,
-                    addr_error,
+                    addr_errors,
                 }
             }
             .instrument(tracing::Span::current()),
@@ -421,13 +441,13 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                         mx_hosts: hosts,
                         mx_ips: ips,
                         null_mx: is_null_mx,
-                        addr_error,
+                        addr_errors,
                     } => {
                         mx_result = Some(result);
                         mx_hosts = hosts;
                         mx_ips = ips;
                         null_mx = is_null_mx;
-                        mx_addr_error = addr_error;
+                        mx_addr_errors = addr_errors;
                     }
                     Phase0Result::Spf {
                         result,
@@ -583,13 +603,12 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
 
     {
         let mx_ips_clone = mx_ips.clone();
-        let addr_error = mx_addr_error.clone();
+        let addr_errors = mx_addr_errors.clone();
         let dns = dns.clone();
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let result =
-                    fcrdns::check_fcrdns(&mx_ips_clone, addr_error.as_deref(), dns.as_ref()).await;
+                let result = fcrdns::check_fcrdns(&mx_ips_clone, &addr_errors, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "fcrdns")
                     .record(elapsed);
@@ -602,7 +621,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
 
     {
         let mx_ips_clone = mx_ips.clone();
-        let addr_error = mx_addr_error.clone();
+        let addr_errors = mx_addr_errors.clone();
         let domain = domain.clone();
         let dnsbl_config = config.dnsbl.clone();
         let dns = dnsbl_dns.clone();
@@ -611,7 +630,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let start = std::time::Instant::now();
                 let result = dnsbl::check_dnsbl(
                     &mx_ips_clone,
-                    addr_error.as_deref(),
+                    &addr_errors,
                     &domain,
                     &dnsbl_config,
                     dns.as_ref(),

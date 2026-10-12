@@ -165,9 +165,12 @@ fn check_spf_mx_coverage(r: &AllResults) -> Option<SubCheck> {
         return None;
     }
 
+    // An MX IP of a family whose SPF address lookup failed is not judged: the authorised set
+    // is incomplete for it.
     let uncovered: Vec<_> = r
         .mx_ips
         .iter()
+        .filter(|ip| !super::family_unresolved(&r.spf, ip))
         .filter(|ip| {
             !spf_flat
                 .authorized_prefixes

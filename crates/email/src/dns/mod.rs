@@ -147,3 +147,37 @@ impl DnsLookup for DnsResolver {
         DnsResolver::check_dnssec_signed(self, name)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missed_is_the_failed_family_only() {
+        let v4: IpAddr = "192.0.2.10".parse().unwrap();
+        let v6: IpAddr = "2001:db8::25".parse().unwrap();
+        let failed = |record_type| AddressLookup {
+            ips: vec![v4],
+            error: Some(LookupError {
+                record_type,
+                name: "mail.example.com".to_string(),
+                cause: "SERVFAIL".to_string(),
+            }),
+        };
+
+        let aaaa = failed("AAAA");
+        assert!(aaaa.missed(&v4).is_none());
+        assert_eq!(aaaa.missed(&v6), aaaa.error.as_ref());
+
+        let a = failed("A");
+        assert_eq!(a.missed(&v4), a.error.as_ref());
+        assert!(a.missed(&v6).is_none());
+
+        let answered = AddressLookup {
+            ips: vec![v4],
+            error: None,
+        };
+        assert!(answered.missed(&v4).is_none());
+        assert!(answered.missed(&v6).is_none());
+    }
+}

@@ -3,9 +3,9 @@ use std::time::Duration;
 
 use futures::future::join_all;
 
-use super::unmeasured_result;
+use super::{join_errors, lookup_failed, unmeasured_result};
 use crate::config::DnsblConfig;
-use crate::dns::DnsLookup;
+use crate::dns::{DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// IPv4 zones that don't support IPv6 lookups.
@@ -40,20 +40,20 @@ struct DnsblQuery {
     target: Target,
 }
 
-/// Check DNSBLs for MX IPs. `addr_error` is the failed MX address lookups when they left
-/// `mx_ips` empty; the check is then unmeasured.
+/// Check DNSBLs for MX IPs. `addr_errors` are the MX-host address lookups that failed: with no
+/// MX IP the check is unmeasured, otherwise each is an Info.
 #[tracing::instrument(skip_all, fields(category = "dnsbl", domain = %domain))]
 pub async fn check_dnsbl(
     mx_ips: &[IpAddr],
-    addr_error: Option<&str>,
+    addr_errors: &[LookupError],
     domain: &str,
     config: &DnsblConfig,
     resolver: &impl DnsLookup,
 ) -> CheckResult {
     let timeout = Duration::from_millis(config.timeout_ms);
 
-    if let Some(cause) = addr_error.filter(|_| mx_ips.is_empty()) {
-        return unmeasured_result(Category::Dnsbl, cause.to_string());
+    if mx_ips.is_empty() && !addr_errors.is_empty() {
+        return unmeasured_result(Category::Dnsbl, join_errors(addr_errors));
     }
 
     if mx_ips.is_empty() {
@@ -160,6 +160,7 @@ pub async fn check_dnsbl(
 
     let mut sub_checks = listed;
     sub_checks.extend(unanswered.into_iter().map(|(_, s)| s));
+    sub_checks.extend(addr_errors.iter().map(lookup_failed));
     if nothing_listed {
         sub_checks.push(SubCheck {
             name: "clean".to_string(),

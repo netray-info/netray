@@ -20,7 +20,7 @@ use std::str::FromStr;
 
 use ipnet::IpNet;
 
-use super::unmeasured_result;
+use super::{LOOKUP_FAILED, lookup_failed, unmeasured_result};
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SpfFlat, SubCheck, Verdict};
 
@@ -192,6 +192,11 @@ pub async fn check_spf_detailed<R: DnsLookup>(
         });
     }
 
+    // A failed address lookup leaves the authorised set incomplete for its family; it is an
+    // Info that neither replaces the verdict nor counts against it.
+    let (unresolved, mut sub_checks): (Vec<SubCheck>, Vec<SubCheck>) = sub_checks
+        .into_iter()
+        .partition(|s| s.name == LOOKUP_FAILED);
     if sub_checks.is_empty() {
         sub_checks.push(SubCheck {
             name: "spf_ok".to_string(),
@@ -203,6 +208,8 @@ pub async fn check_spf_detailed<R: DnsLookup>(
         });
     }
 
+    sub_checks.extend(unresolved);
+
     let detail = format!("SPF record: {}", spf);
     let spf_flat = SpfFlat {
         authorized_prefixes,
@@ -210,6 +217,27 @@ pub async fn check_spf_detailed<R: DnsLookup>(
     let result = CheckResult::new(Category::Spf, sub_checks, detail);
 
     (result, Some(spf_flat), has_dash_all, only_dash_all)
+}
+
+/// The addresses of an `a` or `mx` target. A failed half, or a failed lookup, is recorded as a
+/// `lookup_failed` Info: the authorised set is incomplete for that family.
+async fn authorised_addresses<R: DnsLookup>(
+    resolver: &R,
+    target: &str,
+    sub_checks: &mut Vec<SubCheck>,
+) -> Vec<IpAddr> {
+    match resolver.lookup_ips(target).await {
+        Ok(lookup) => {
+            if let Some(e) = &lookup.error {
+                sub_checks.push(lookup_failed(e));
+            }
+            lookup.ips
+        }
+        Err(e) => {
+            sub_checks.push(lookup_failed(&e));
+            Vec::new()
+        }
+    }
 }
 
 /// Recursively expand SPF includes.
@@ -348,11 +376,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             } else {
                 domain
             };
-            let ips = resolver
-                .lookup_ips(target)
-                .await
-                .map(|a| a.ips)
-                .unwrap_or_default();
+            let ips = authorised_addresses(resolver, target, sub_checks).await;
             for ip in ips {
                 let net = match ip {
                     IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
@@ -372,11 +396,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             let mx_records = resolver.lookup_mx(target).await.unwrap_or_default();
             for (_, exchange) in &mx_records {
                 let host = exchange.trim_end_matches('.');
-                let ips = resolver
-                    .lookup_ips(host)
-                    .await
-                    .map(|a| a.ips)
-                    .unwrap_or_default();
+                let ips = authorised_addresses(resolver, host, sub_checks).await;
                 for ip in ips {
                     let net = match ip {
                         IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),

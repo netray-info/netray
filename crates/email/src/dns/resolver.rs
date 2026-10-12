@@ -105,23 +105,7 @@ impl DnsResolver {
             lookup_on(resolver, hostname, RecordType::A, "A"),
             lookup_on(resolver, hostname, RecordType::AAAA, "AAAA"),
         );
-        if let (Err(e), Err(_)) = (&a_result, &aaaa_result) {
-            return Err(LookupError {
-                record_type: "address",
-                ..e.clone()
-            });
-        }
-
-        let mut lookup = AddressLookup::default();
-        for half in [a_result, aaaa_result] {
-            match half {
-                Ok(lookups) => lookup.ips.extend(lookups.ips()),
-                Err(e) => lookup.error = Some(e),
-            }
-        }
-        let mut seen = std::collections::HashSet::new();
-        lookup.ips.retain(|ip| seen.insert(*ip));
-        Ok(lookup)
+        combine(a_result.map(|l| l.ips()), aaaa_result.map(|l| l.ips()))
     }
 
     /// Resolve MX records. Returns (preference, exchange) tuples.
@@ -226,6 +210,30 @@ impl DnsResolver {
         let lookups = lookup_on(self.pick(), domain, RecordType::DNSKEY, "DNSKEY").await?;
         Ok(!lookups.dnskey().is_empty())
     }
+}
+
+/// Merges the A and the AAAA half of an address lookup: an error only when both failed,
+/// otherwise the answered addresses with the failed half's error, if any.
+fn combine(
+    a: Result<Vec<IpAddr>, LookupError>,
+    aaaa: Result<Vec<IpAddr>, LookupError>,
+) -> Result<AddressLookup, LookupError> {
+    if let (Err(e), Err(_)) = (&a, &aaaa) {
+        return Err(LookupError {
+            record_type: "address",
+            ..e.clone()
+        });
+    }
+    let mut lookup = AddressLookup::default();
+    for half in [a, aaaa] {
+        match half {
+            Ok(ips) => lookup.ips.extend(ips),
+            Err(e) => lookup.error = Some(e),
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    lookup.ips.retain(|ip| seen.insert(*ip));
+    Ok(lookup)
 }
 
 /// One query of `record_type` at `name` on `resolver`, as a definite answer or a [`LookupError`].
@@ -360,6 +368,36 @@ mod tests {
         answer("TXT", "example.com", lookups(results))
             .err()
             .map(|e| e.cause)
+    }
+
+    fn failed(record_type: &'static str) -> LookupError {
+        LookupError {
+            record_type,
+            name: "mail.example.com".to_string(),
+            cause: "SERVFAIL".to_string(),
+        }
+    }
+
+    #[test]
+    fn combine_keeps_the_answered_half() {
+        let v4: IpAddr = "192.0.2.10".parse().unwrap();
+        let v6: IpAddr = "2001:db8::25".parse().unwrap();
+
+        let both = combine(Ok(vec![v4]), Ok(vec![v6])).unwrap();
+        assert_eq!(both.ips, vec![v4, v6]);
+        assert_eq!(both.error, None);
+
+        let aaaa_failed = combine(Ok(vec![v4]), Err(failed("AAAA"))).unwrap();
+        assert_eq!(aaaa_failed.ips, vec![v4]);
+        assert_eq!(aaaa_failed.error, Some(failed("AAAA")));
+
+        let a_failed = combine(Err(failed("A")), Ok(vec![v6])).unwrap();
+        assert_eq!(a_failed.ips, vec![v6]);
+        assert_eq!(a_failed.error, Some(failed("A")));
+
+        let none = combine(Err(failed("A")), Err(failed("AAAA"))).unwrap_err();
+        assert_eq!(none.record_type, "address");
+        assert_eq!(none.name, "mail.example.com");
     }
 
     #[test]

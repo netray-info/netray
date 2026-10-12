@@ -2,20 +2,20 @@ use std::net::IpAddr;
 
 use futures::future::join_all;
 
-use super::{LOOKUP_FAILED, unmeasured_result};
+use super::{LOOKUP_FAILED, join_errors, lookup_failed, unmeasured_result};
 use crate::dns::{AddressLookup, DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
-/// Check Forward-Confirmed reverse DNS for each MX IP. `addr_error` is the failed MX address
-/// lookups when they left `mx_ips` empty; the check is then unmeasured.
+/// Check Forward-Confirmed reverse DNS for each MX IP. `addr_errors` are the MX-host address
+/// lookups that failed: with no MX IP the check is unmeasured, otherwise each is an Info.
 #[tracing::instrument(skip_all, fields(category = "fcrdns"))]
 pub async fn check_fcrdns(
     mx_ips: &[IpAddr],
-    addr_error: Option<&str>,
+    addr_errors: &[LookupError],
     resolver: &impl DnsLookup,
 ) -> CheckResult {
-    if let Some(cause) = addr_error.filter(|_| mx_ips.is_empty()) {
-        return unmeasured_result(Category::Fcrdns, cause.to_string());
+    if mx_ips.is_empty() && !addr_errors.is_empty() {
+        return unmeasured_result(Category::Fcrdns, join_errors(addr_errors));
     }
     if mx_ips.is_empty() {
         let sub_checks = vec![SubCheck {
@@ -113,6 +113,7 @@ pub async fn check_fcrdns(
     if unmeasured.len() == ptr_results.len() {
         return unmeasured_result(Category::Fcrdns, unmeasured.join("; "));
     }
+    sub_checks.extend(addr_errors.iter().map(lookup_failed));
 
     let detail = format!("FCrDNS checked for {} IP(s)", mx_ips.len());
     CheckResult::new(Category::Fcrdns, sub_checks, detail)
