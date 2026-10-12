@@ -197,6 +197,7 @@ fn response() -> InspectResponse {
                 issuewild_present: false,
             }),
             resolved_ips: vec!["192.0.2.10".to_string()],
+            lookup_errors: vec![],
         }),
         quality: Some(QualityResult {
             verdict: CheckStatus::Pass,
