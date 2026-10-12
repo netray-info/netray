@@ -29,7 +29,7 @@ use tower::ServiceExt;
 
 static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
     vec![
-        CheckId::parse("email.email_authentication").unwrap(),
+        CheckId::parse("email.spf").unwrap(),
         CheckId::parse("email.dnsbl").unwrap(),
     ]
 });
@@ -60,7 +60,7 @@ impl Module for StubEmail {
             };
             SectionOutcome::Measured {
                 checks: vec![
-                    result("email.email_authentication", Status::Pass),
+                    result("email.spf", Status::Pass),
                     result("email.dnsbl", dnsbl),
                 ],
                 presentation: json!({}),
