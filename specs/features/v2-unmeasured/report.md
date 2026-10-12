@@ -188,3 +188,60 @@ tls section: status warn, verdicts {pass, skip, warn}
 
 The grade matches main, A+ 97.5. No TLS check is spuriously unmeasured on a healthy domain.
 
+
+## Phase 4 — HTTP
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R12: port-80 timeout → `https_redirect` unmeasured; refused, reset or a non-redirect response stays fail; HTTPS probe timeout or a policy-cut redirect → the ten response checks unmeasured naming the timeout or blocked hop; HTTPS refused/reset/alert → the ten fail "no HTTPS response" (A5); `cors` follows its own probe | green | `crates/http/tests/probe_outcomes.rs` |
+| C2 | R13: HTTP contract table, worst measured + unmeasured row per check, guard on the 12 IDs | green | `crates/http/tests/contract_status.rs` |
+| C3 | port-80 probe times out → `https_redirect` unmeasured with a finding naming port 80 | green | `crates/http/tests/probe_outcomes.rs` |
+| C4 | port-80 connection refused → `https_redirect` fail | already_implemented | `crates/http/tests/probe_outcomes.rs` |
+| C5 | port-80 reset after accept → `https_redirect` fail | already_implemented | `crates/http/tests/probe_outcomes.rs` |
+| C6 | port-80 200 without redirect → `https_redirect` fail | already_implemented | `crates/http/tests/probe_outcomes.rs` |
+| C7 | HTTPS probe times out, CORS probe answers `ACAO: *` → ten response checks unmeasured, `cors` warn | green | `crates/http/tests/probe_outcomes.rs` |
+| C8 | HTTPS 200, CORS probe times out → `cors` unmeasured, response checks measured | green | `crates/http/tests/probe_outcomes.rs` |
+| C9 | HTTPS 301 to an address the fetch policy blocks → ten response checks unmeasured naming the blocked hop | green | `crates/http/tests/probe_outcomes.rs` |
+| C10 | HTTPS response without CSP → `csp` warn (unchanged) | already_implemented | `crates/http/tests/probe_outcomes.rs` |
+| C11 | HTTPS response without HSTS → `hsts` fail | already_implemented | `crates/http/tests/probe_outcomes.rs` |
+| C12 | HTTPS connection refused → response checks fail "no HTTPS response" (A5; was N/A) | green | `crates/http/tests/probe_outcomes.rs` |
+| C13 | HTTP contract guard: IDs equal the 12 HTTP catalogue IDs | already_implemented | `crates/http/tests/contract_status.rs` |
+| C14 | reader: port 80 redirected to https, then a later hop timed out → `https_redirect` stays pass with the message as a finding | green | `crates/http/tests/probe_outcomes_landing.rs` |
+| C15 | reader + A5: HTTPS refused, reset or tls → the ten response checks fail "no HTTPS response"; a refused CORS probe stays N/A | green | `crates/http/tests/probe_outcomes_landing.rs` |
+| C16 | HTTPS timeout still makes the ten unmeasured (pin) | already_implemented | `crates/http/tests/probe_outcomes_landing.rs` |
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 HTTP | 2 | opus | 91676 | 320 |
+| reader round (C14, C15, NoAddress, connect fallback) | 1 | opus (same agent) | 108733 | 95 |
+
+### Reader (phase 4)
+
+| Class | Where | Finding | Action |
+|---|---|---|---|
+| AMENDMENT | `crates/http/src/module.rs:165` | Port 80 redirected to https and a later hop timed out, yet the check reported unmeasured | repaired (C14) |
+| AMENDMENT | `crates/http/src/module.rs:179` | A refused redirect target made the response checks N/A, so nothing graded it | operator: fail (A5, C15) |
+| AMENDMENT | `crates/http/src/module.rs:178` | A refused HTTPS on the address HTTP probes was N/A while TLS passed on another address | operator: fail (A5, C15) |
+| AMENDMENT | `crates/http/src/inspect/request.rs:127` | An unresolvable redirect target was classed `blocked` and so unmeasured | repaired: kind `refused`, "Redirect destination does not resolve" |
+| AMENDMENT | `crates/http/src/inspect/request.rs:160` | A local connect error (EMFILE, EPERM) fell back to `reset`, an answer from the target | repaired: an unrecognised connect error is `unreachable`; in-src unit test `unexplained_connect_error_is_unreachable` |
+| NIT | `crates/http/src/module.rs:175` | An `unreachable` finding carries only reqwest's top-level text | listed |
+| NIT | `crates/http/src/module.rs:163` | An unanswered port 80 drops the `redirect_limit` warning | listed |
+
+DEFERRED from the plan:
+- The V1 headline and V1 `quality.checks` are unchanged, so an unmeasured `hsts` still reads "HSTS ✗" in the transitional presentation.
+- A port-80 error leaves `status_code: Some(0)` in V1 `http_upgrade`.
+
+### Behavioural verification
+
+```
+$ curl -sN http://127.0.0.1:18086/api/check/netray.info   # branch build, from main's binary path
+summary: {"sections":{"tls":"warn","http":"warn","dns":"pass","email":"pass"},"section_grades":{"http":"A",...},"grade":"A+","complete":true,"score":97.5,...}
+http: https_redirect pass, hsts pass, cors warn, cookie_secure skip, csp warn, x_frame_options pass, x_content_type_options pass, referrer_policy pass, permissions_policy pass, deprecated_headers pass, info_leakage pass, caching pass
+```
+
+The grade matches main, A+ 97.5. On a healthy domain no HTTP check comes out unmeasured.
+

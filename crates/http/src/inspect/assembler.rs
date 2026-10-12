@@ -32,6 +32,8 @@ pub struct InspectResponse {
     pub reporting: ReportingReport,
     pub quality: QualityReport,
     pub enrichment: EnrichmentInfo,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ProbeError>,
     /// Internal: set when redirect limit was reached. Not serialized.
     #[serde(skip)]
     pub redirect_limit_reached: Option<usize>,
@@ -54,6 +56,32 @@ pub struct HttpUpgrade {
     pub same_host: bool,
     pub message: String,
     pub redirects: Vec<RedirectHop>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ProbeError>,
+}
+
+/// Why a probe got no response.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct ProbeError {
+    pub kind: ProbeErrorKind,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ProbeErrorKind {
+    Timeout,
+    Refused,
+    Reset,
+    Tls,
+    Blocked,
+    Unreachable,
+}
+
+impl std::fmt::Display for ProbeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -104,6 +132,8 @@ pub struct CorsReport {
     pub allows_credentials: bool,
     pub status: CheckStatus,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<ProbeError>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

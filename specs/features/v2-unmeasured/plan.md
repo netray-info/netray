@@ -118,3 +118,38 @@
 5. **Docs.** `crates/tls/README.md` lists the codes and `lookup_errors`.
 
 Outside `translate`: the tlsight frontend and `site/api/tls.html` need no change, and the goldens stay byte-identical. The V1 `/api/inspect` keeps its CAA "pass" on a lookup error. That is a V1 defect and out of scope.
+
+## Phase 4 — HTTP
+
+### Groups
+
+- G1: C1–C13. Every criterion goes through `translate` and the new `error` fields.
+- Already green at f245b40: C4, C5, C6, C10, C11 and C13.
+
+### Plan
+
+1. **Error types.** `assembler.rs` gets `ProbeError { kind, message }`. The kinds are timeout, refused, reset, tls, blocked and unreachable.
+   - The field goes on `InspectResponse`, `HttpUpgrade` and `CorsReport`.
+   - It carries `#[serde(default, skip_serializing_if = "Option::is_none")]`, so the goldens stay byte-identical.
+2. **Classifying the error.** `request.rs` `probe_error(FetchError)` maps:
+   - Blocked or Scheme → blocked;
+   - Timeout → timeout;
+   - the io source chain: ConnectionRefused → refused; ConnectionReset, Aborted, BrokenPipe or UnexpectedEof → reset; TimedOut → timeout; InvalidData → tls; NetworkUnreachable, HostUnreachable or AddrNotAvailable → unreachable;
+   - anything else → reset.
+3. **Wiring.** `mod.rs` `TaskResult.error` becomes `Option<ProbeError>`, and `assemble_response` copies it onto the three structs.
+4. **`translate`.**
+   - `https_redirect`: timeout, blocked or unreachable → Unmeasured, with a finding that names port 80. Refused, reset or tls → Fail.
+   - The ten response checks: timeout, blocked or unreachable → Unmeasured, with the probe message as finding. Refused, reset or tls → N/A "no HTTPS response".
+   - `cors` follows `cors.error` the same way, with N/A "no CORS probe response".
+5. **OpenAPI and frontend.** The OpenAPI schemas and the spectra frontend `types.ts` gain the field, types only.
+6. **Tests and docs.**
+   - Protected tests that assert `error == "Redirect destination blocked"` now assert on the kind (ADLC-Test-Change). These are `outbound_redirects.rs` and `redirect_results_table.rs`, plus the in-src struct literals.
+   - New `tests/probe_error_kinds.rs` drives the classifier over loopback.
+   - README gets one sentence.
+
+### Decisions in the plan
+
+- A port-80 redirect that the fetch policy blocks is Unmeasured, per Rule M.
+- A CORS probe that is refused, reset or fails TLS gives N/A, not Fail.
+- A network-unreachable error on our side gives kind unreachable and so Unmeasured: the answer was not obtained (Rule M). In TLS the same case is NotTested.
+- The V1 headline and the V1 `quality.checks` stay unchanged (DEFERRED). An unmeasured `hsts` still shows "HSTS ✗" in the transitional presentation.

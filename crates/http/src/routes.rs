@@ -13,7 +13,7 @@ use crate::inspect;
 use crate::inspect::assembler::{
     CacheControlDirectives, CachingReport, CdnReport, CookieEntry, CorsReport, CspReport,
     EnrichmentInfo, FingerprintReport, HeaderCheck, HstsCheck, HttpUpgrade, InfoLeakage,
-    InspectResponse, RedirectHop, ReportingReport, SecurityReport,
+    InspectResponse, ProbeError, ProbeErrorKind, RedirectHop, ReportingReport, SecurityReport,
 };
 #[allow(unused_imports)] // Used in #[openapi] attribute
 use crate::quality::types::{CheckStatus, QualityCheck, QualityReport};
@@ -87,6 +87,8 @@ pub struct InspectQuery {
         CookieEntry,
         RedirectHop,
         HttpUpgrade,
+        ProbeError,
+        ProbeErrorKind,
         HstsCheck,
         HeaderCheck,
         CorsReport,
