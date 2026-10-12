@@ -220,7 +220,7 @@ pub async fn check_spf_detailed<R: DnsLookup>(
 }
 
 /// The addresses of an `a` or `mx` target. A failed half, or a failed lookup, is recorded as a
-/// `lookup_failed` Info: the authorised set is incomplete for that family.
+/// `lookup_failed` Info: the authorised set is incomplete for that family, or for both.
 async fn authorised_addresses<R: DnsLookup>(
     resolver: &R,
     target: &str,
@@ -264,7 +264,14 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
 
         visited.insert(domain.to_string());
 
-        let txt_records = resolver.lookup_txt(domain).await.unwrap_or_default();
+        // A failed lookup is not a void lookup: only a definite empty answer is.
+        let txt_records = match resolver.lookup_txt(domain).await {
+            Ok(records) => records,
+            Err(e) => {
+                sub_checks.push(lookup_failed(&e));
+                return;
+            }
+        };
         let spf_records: Vec<&str> = txt_records
             .iter()
             .filter(|t| t.starts_with("v=spf1"))
@@ -393,7 +400,13 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             } else {
                 domain
             };
-            let mx_records = resolver.lookup_mx(target).await.unwrap_or_default();
+            let mx_records = match resolver.lookup_mx(target).await {
+                Ok(records) => records,
+                Err(e) => {
+                    sub_checks.push(lookup_failed(&e));
+                    Vec::new()
+                }
+            };
             for (_, exchange) in &mx_records {
                 let host = exchange.trim_end_matches('.');
                 let ips = authorised_addresses(resolver, host, sub_checks).await;
@@ -410,9 +423,10 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
         } else if body.starts_with("exists:") {
             *lookup_count = lookup_count.saturating_add(1);
             if let Some(exists_domain) = body.strip_prefix("exists:") {
-                let found = resolver.lookup_exists(exists_domain).await;
-                if !found {
-                    *void_count = void_count.saturating_add(1);
+                match resolver.lookup_exists(exists_domain).await {
+                    Ok(true) => {}
+                    Ok(false) => *void_count = void_count.saturating_add(1),
+                    Err(e) => sub_checks.push(lookup_failed(&e)),
                 }
             }
         }

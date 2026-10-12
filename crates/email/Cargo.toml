@@ -96,6 +96,11 @@ name = "partial_address_findings"
 path = "tests/partial_address_findings.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "spf_nested_errors"
+path = "tests/spf_nested_errors.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
 toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }

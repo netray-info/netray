@@ -188,8 +188,8 @@ impl DnsResolver {
     }
 
     /// Query a name and check if we get any result (used for SPF exists:).
-    pub async fn lookup_exists(&self, name: &str) -> bool {
-        self.lookup_a(name).await.is_ok_and(|ips| !ips.is_empty())
+    pub async fn lookup_exists(&self, name: &str) -> Result<bool, LookupError> {
+        self.lookup_a(name).await.map(|ips| !ips.is_empty())
     }
 
     /// Resolve A records for a name, returning the actual Ipv4 values.

@@ -149,6 +149,12 @@ pub async fn check_dnsbl(
         }
     }
 
+    // No zone was queried and an MX address family is missing: the queries that would have
+    // run are unknown.
+    if zones.is_empty() && !addr_errors.is_empty() {
+        return unmeasured_result(Category::Dnsbl, join_errors(addr_errors));
+    }
+
     let answered_any = zones
         .iter()
         .any(|z| !unanswered.iter().any(|(u, _)| u == z));

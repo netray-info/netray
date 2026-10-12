@@ -57,7 +57,7 @@ impl AddressLookup {
 /// NXDOMAIN or NODATA) and [`LookupError`] when no nameserver answered
 /// definitively. `lookup_ips` is an error only when both the A and the AAAA
 /// half failed; when one did, [`AddressLookup::error`] carries it. `check_dnssec_signed` is an error when the DNSKEY lookup failed
-/// (unknown, not unsigned). `lookup_exists` folds errors into `false`.
+/// (unknown, not unsigned), as is `lookup_exists` when its A lookup failed.
 pub trait DnsLookup: Send + Sync {
     fn lookup_txt(
         &self,
@@ -87,7 +87,7 @@ pub trait DnsLookup: Send + Sync {
         &self,
         name: &str,
     ) -> impl Future<Output = Result<Vec<TlsaRecord>, LookupError>> + Send;
-    fn lookup_exists(&self, name: &str) -> impl Future<Output = bool> + Send;
+    fn lookup_exists(&self, name: &str) -> impl Future<Output = Result<bool, LookupError>> + Send;
     fn check_dnssec_signed(
         &self,
         name: &str,
@@ -137,7 +137,7 @@ impl DnsLookup for DnsResolver {
     ) -> impl Future<Output = Result<Vec<TlsaRecord>, LookupError>> + Send {
         DnsResolver::lookup_tlsa(self, name)
     }
-    fn lookup_exists(&self, name: &str) -> impl Future<Output = bool> + Send {
+    fn lookup_exists(&self, name: &str) -> impl Future<Output = Result<bool, LookupError>> + Send {
         DnsResolver::lookup_exists(self, name)
     }
     fn check_dnssec_signed(

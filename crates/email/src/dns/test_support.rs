@@ -124,7 +124,7 @@ impl TestDnsResolver {
         self
     }
 
-    /// The A lookup of `name` errors.
+    /// The A lookup of `name` errors, and the A half of `lookup_ips(name)`.
     pub fn fail_a(mut self, name: &str) -> Self {
         self.fail_a.insert(name.to_string());
         self
@@ -239,22 +239,27 @@ impl DnsLookup for TestDnsResolver {
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.fail_ips.contains(&name) {
-                return Err(LookupError {
-                    record_type: "address",
-                    name,
-                    cause: "SERVFAIL".to_string(),
-                });
+            let a_failed = self.fail_ips.contains(&name) || self.fail_a.contains(&name);
+            let aaaa_failed = self.fail_ips.contains(&name) || self.fail_aaaa.contains(&name);
+            let failed = |record_type| LookupError {
+                record_type,
+                name: name.clone(),
+                cause: "SERVFAIL".to_string(),
+            };
+            if a_failed && aaaa_failed {
+                return Err(failed("address"));
             }
             let ips = self.answer("address", &name, None, &self.ips)?;
-            if self.fail_aaaa.contains(&name) {
+            if a_failed {
+                return Ok(AddressLookup {
+                    ips: ips.into_iter().filter(IpAddr::is_ipv6).collect(),
+                    error: Some(failed("A")),
+                });
+            }
+            if aaaa_failed {
                 return Ok(AddressLookup {
                     ips: ips.into_iter().filter(IpAddr::is_ipv4).collect(),
-                    error: Some(LookupError {
-                        record_type: "AAAA",
-                        name,
-                        cause: "SERVFAIL".to_string(),
-                    }),
+                    error: Some(failed("AAAA")),
                 });
             }
             Ok(AddressLookup { ips, error: None })
@@ -309,7 +314,7 @@ impl DnsLookup for TestDnsResolver {
         }
     }
 
-    fn lookup_exists(&self, name: &str) -> impl Future<Output = bool> + Send {
+    fn lookup_exists(&self, name: &str) -> impl Future<Output = Result<bool, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
@@ -318,10 +323,14 @@ impl DnsLookup for TestDnsResolver {
                 || self.fail_a.contains(&name)
                 || self.fail_ips.contains(&name)
             {
-                return false;
+                return Err(LookupError {
+                    record_type: "A",
+                    name,
+                    cause: "SERVFAIL".to_string(),
+                });
             }
-            !self.a.get(&name).cloned().unwrap_or_default().is_empty()
-                || !self.ips.get(&name).cloned().unwrap_or_default().is_empty()
+            Ok(!self.a.get(&name).cloned().unwrap_or_default().is_empty()
+                || !self.ips.get(&name).cloned().unwrap_or_default().is_empty())
         }
     }
 
