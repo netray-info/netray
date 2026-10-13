@@ -2,8 +2,12 @@ use std::collections::HashSet;
 
 use mhost::RecordType;
 use mhost::resolver::{ResolverGroup, UniQuery};
+use mhost::resources::RData;
+use mhost::resources::rdata::CAA;
 use serde::Serialize;
 use utoipa::ToSchema;
+
+use super::AnsweredRecord;
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct CaaLookup {
@@ -98,16 +102,19 @@ fn parent_domain(domain: &str) -> Option<&str> {
 /// Fetch CAA records with RFC 8659 tree-climbing.
 ///
 /// Walks up the domain tree: www.example.com → example.com → com.
-/// Returns the first level that has CAA records, or empty if none found; `None` when a level
-/// did not answer, which ends the climb.
-pub async fn lookup_caa(resolvers: &ResolverGroup, hostname: &str) -> Option<CaaLookup> {
+/// Returns the first level that has CAA records with its answered records, or empty if none
+/// found; `None` when a level did not answer, which ends the climb.
+pub async fn lookup_caa(
+    resolvers: &ResolverGroup,
+    hostname: &str,
+) -> Option<(CaaLookup, Vec<AnsweredRecord>)> {
     let mut domain = hostname.trim_end_matches('.');
 
     // Walk up the domain tree (RFC 8659 §3); stop before bare TLD
     loop {
-        let lookup = query_caa(resolvers, domain).await?;
+        let (lookup, answered) = query_caa(resolvers, domain).await?;
         if !lookup.is_empty() {
-            return Some(lookup);
+            return Some((lookup, answered));
         }
         match parent_domain(domain) {
             Some(parent) if parent.contains('.') => domain = parent,
@@ -115,12 +122,15 @@ pub async fn lookup_caa(resolvers: &ResolverGroup, hostname: &str) -> Option<Caa
         }
     }
 
-    Some(CaaLookup { records: vec![] })
+    Some((CaaLookup { records: vec![] }, vec![]))
 }
 
-/// The CAA records at `domain`; `None` when the lookup failed or no nameserver answered
-/// definitively.
-async fn query_caa(resolvers: &ResolverGroup, domain: &str) -> Option<CaaLookup> {
+/// The CAA records at `domain` and their answered records; `None` when the lookup failed or no
+/// nameserver answered definitively.
+async fn query_caa(
+    resolvers: &ResolverGroup,
+    domain: &str,
+) -> Option<(CaaLookup, Vec<AnsweredRecord>)> {
     let query = UniQuery::new(domain, RecordType::CAA).ok()?;
     let lookups = resolvers.lookup(query).await.ok()?;
     if !super::answered(&lookups) {
@@ -142,7 +152,17 @@ async fn query_caa(resolvers: &ResolverGroup, domain: &str) -> Option<CaaLookup>
         })
         .collect();
 
-    Some(CaaLookup { records })
+    let answered = super::answered_records(&lookups, |data| match data {
+        RData::CAA(caa) => Some(presentation(caa)),
+        _ => None,
+    });
+    Some((CaaLookup { records }, answered))
+}
+
+/// A CAA record in presentation form, `flags tag "value"`, as `dns.caa` renders it.
+pub(super) fn presentation(caa: &CAA) -> String {
+    let flags = if caa.issuer_critical() { 128 } else { 0 };
+    format!("{flags} {} \"{}\"", caa.tag(), caa.value())
 }
 
 #[cfg(test)]

@@ -246,6 +246,7 @@ These requirements apply to every module.
 
 - **A1 (operator, 2026-10-13).** The DNS module projects every one of its 15 answered types itself, the six facts types included, and does not wait for the facts. The resolve stage still carries `dns.a`, `aaaa`, `mx`, `caa`, `ns` and `https`. This replaces 3a's "the DNS module does not project those six types itself".
 - **A2 (operator, 2026-10-13).** When the same id exists in both the facts and a section, the section's block wins. The facts fill in only the ids that no section carries, such as after a DNS timeout.
+- **A3 (phase 3).** `caa_compliant` references `dns.caa` only when TLS judged from the facts' CAA, otherwise `tls.caa`, otherwise the chain blocks. `dane_valid` references `tls.tlsa@<port>`, otherwise the chains. TLS blocks cover the judged port only.
 
 ## Open decisions
 
