@@ -22,5 +22,7 @@ data: {"category":"dnsbl","detail":"No MX IPs","sub_checks":[{"detail":"no MX IP
 
 data: {"category":"cross_validation","detail":"all cross-validation checks passed","sub_checks":[],"title":"Cross-Validation","type":"category","verdict":"pass"}
 
+data: {"blocks":[{"id":"email.mx","shape":{"data":{"columns":["host","preference","cname"],"key":"host","rows":[]},"kind":"table"},"title":"MX"},{"id":"email.mx_addresses","shape":{"data":{"columns":["address","host"],"key":"address","rows":[]},"kind":"table"},"title":"MX addresses"},{"id":"email.spf","shape":{"data":[],"kind":"fields"},"title":"SPF"},{"id":"email.dmarc","shape":{"data":[],"kind":"fields"},"title":"DMARC"},{"id":"email.mta_sts","shape":{"data":[],"kind":"fields"},"title":"MTA-STS"},{"id":"email.tls_rpt","shape":{"data":[],"kind":"fields"},"title":"TLS-RPT"},{"id":"email.bimi","shape":{"data":[],"kind":"fields"},"title":"BIMI"},{"id":"email.dnssec","shape":{"data":[["dnskey_present",{"t":"bool","v":false}]],"kind":"fields"},"title":"DNSSEC"},{"id":"email.dkim","shape":{"data":{"columns":["key","selector","state","key_type","bits"],"key":"key","rows":[]},"kind":"table"},"title":"DKIM keys"},{"id":"email.summary","shape":{"data":[["grade",{"t":"text","v":"F"}]],"kind":"fields"},"title":"Summary"}],"type":"evidence"}
+
 data: {"duration_ms":1234,"grade":"F","type":"summary","verdicts":{"bimi":"info","cross_validation":"pass","dane":"info","dkim":"info","dmarc":"fail","dnsbl":"info","dnssec":"info","fcrdns":"info","mta_sts":"info","mx":"fail","spf":"fail","tls_rpt":"info"}}
 
