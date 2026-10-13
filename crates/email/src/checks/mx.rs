@@ -5,7 +5,7 @@ use futures::future::join_all;
 
 use super::{lookup_failed, unmeasured_result};
 use crate::dns::{DnsLookup, LookupError};
-use crate::quality::{Category, CheckResult, IpEnrichment, SubCheck, Verdict};
+use crate::quality::{Category, CheckResult, IpEnrichment, MxHost, SubCheck, Verdict};
 
 /// Sub-check name emitted when the domain has no MX records; lens relies on it.
 pub const NO_MX: &str = "no_mx";
@@ -13,27 +13,32 @@ pub const NO_MX: &str = "no_mx";
 /// Sub-check name emitted for a Null MX (RFC 7505); lens relies on it.
 pub const NULL_MX: &str = "null_mx";
 
-/// Check MX records for the domain.
-/// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag, address errors). The
-/// address errors are every MX-host address lookup that failed in full or in one family, with
-/// the failed record type, so the MX-IP checks can name what they could not judge.
-#[tracing::instrument(skip_all, fields(category = "mx", domain = %domain))]
-pub async fn check_mx(
-    domain: &str,
-    resolver: &impl DnsLookup,
-    enrichment: Option<&netray_common::enrichment::EnrichmentClient>,
-) -> (
+/// What [`check_mx`] returns.
+pub type MxOutcome = (
     CheckResult,
     Vec<IpAddr>,
     Vec<String>,
     bool,
     Vec<LookupError>,
-) {
+    Option<Vec<MxHost>>,
+);
+
+/// Check MX records for the domain.
+/// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag, address errors, MX
+/// records with their addresses). The address errors are every MX-host address lookup that
+/// failed in full or in one family, with the failed record type, so the MX-IP checks can name
+/// what they could not judge. The MX records are `None` when the MX lookup got no answer.
+#[tracing::instrument(skip_all, fields(category = "mx", domain = %domain))]
+pub async fn check_mx(
+    domain: &str,
+    resolver: &impl DnsLookup,
+    enrichment: Option<&netray_common::enrichment::EnrichmentClient>,
+) -> MxOutcome {
     let mx_records = match resolver.lookup_mx(domain).await {
         Ok(records) => records,
         Err(e) => {
             let result = unmeasured_result(Category::Mx, e.to_string());
-            return (result, Vec::new(), Vec::new(), false, Vec::new());
+            return (result, Vec::new(), Vec::new(), false, Vec::new(), None);
         }
     };
 
@@ -47,12 +52,20 @@ pub async fn check_mx(
             }],
             "No MX records found".to_string(),
         );
-        return (result, Vec::new(), Vec::new(), false, Vec::new());
+        return (
+            result,
+            Vec::new(),
+            Vec::new(),
+            false,
+            Vec::new(),
+            Some(Vec::new()),
+        );
     }
 
     let mut sub_checks = Vec::new();
     let mut all_ips = Vec::new();
     let mut mx_hosts = Vec::new();
+    let mut measured = Vec::new();
 
     // Check for Null MX (RFC 7505: MX 0 .)
     if mx_records.len() == 1
@@ -69,7 +82,20 @@ pub async fn check_mx(
             sub_checks,
             "Null MX: domain does not accept mail".to_string(),
         );
-        return (result, Vec::new(), Vec::new(), true, Vec::new());
+        let measured = vec![MxHost {
+            preference: mx_records[0].0,
+            host: mx_records[0].1.clone(),
+            cname: None,
+            addresses: Vec::new(),
+        }];
+        return (
+            result,
+            Vec::new(),
+            Vec::new(),
+            true,
+            Vec::new(),
+            Some(measured),
+        );
     }
     let null_mx = false;
 
@@ -84,15 +110,21 @@ pub async fn check_mx(
         mx_hosts.push(host.to_string());
 
         // Check if MX points to a CNAME
-        match resolver.lookup_cname(host).await {
-            Ok(cnames) if !cnames.is_empty() => sub_checks.push(SubCheck {
-                name: "mx_cname".to_string(),
-                verdict: Verdict::Fail,
-                detail: format!("MX `{}` points to a CNAME (RFC 5321 §5.1)", host),
-            }),
-            Ok(_) => {}
-            Err(e) => sub_checks.push(lookup_failed(&e)),
-        }
+        let cname = match resolver.lookup_cname(host).await {
+            Ok(cnames) if !cnames.is_empty() => {
+                sub_checks.push(SubCheck {
+                    name: "mx_cname".to_string(),
+                    verdict: Verdict::Fail,
+                    detail: format!("MX `{}` points to a CNAME (RFC 5321 §5.1)", host),
+                });
+                Some(cnames.join(", "))
+            }
+            Ok(_) => Some(String::new()),
+            Err(e) => {
+                sub_checks.push(lookup_failed(&e));
+                None
+            }
+        };
 
         let ips = match resolver.lookup_ips(host).await {
             Ok(lookup) => {
@@ -137,6 +169,12 @@ pub async fn check_mx(
             }
         }
 
+        measured.push(MxHost {
+            preference: *pref,
+            host: host.to_string(),
+            cname,
+            addresses: ips.clone(),
+        });
         all_ips.extend(ips);
     }
 
@@ -231,5 +269,12 @@ pub async fn check_mx(
     let mut result = CheckResult::new(Category::Mx, sub_checks, detail);
     result.enrichment = enrichment_data;
 
-    (result, all_ips, mx_hosts, null_mx, addr_errors)
+    (
+        result,
+        all_ips,
+        mx_hosts,
+        null_mx,
+        addr_errors,
+        Some(measured),
+    )
 }

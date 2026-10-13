@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -162,6 +162,11 @@ pub enum SseEvent {
         verdicts: HashMap<String, Verdict>,
         duration_ms: u64,
     },
+    /// The evidence blocks of the run, sent once right before `Summary`.
+    Evidence {
+        #[schema(value_type = Vec<Object>)]
+        blocks: Vec<netray_model::evidence::Block>,
+    },
 }
 
 impl From<SseEvent> for axum::response::sse::Event {
@@ -201,6 +206,109 @@ pub struct AllResults {
     pub fcrdns: CheckResult,
     pub fcrdns_all_pass: bool,
     pub dnsbl: CheckResult,
+}
+
+/// What the checks measured, kept for the evidence blocks; `None` where the check's lookup got
+/// no answer.
+#[derive(Debug, Clone, Default)]
+pub struct Measured {
+    pub mx: Option<Vec<MxHost>>,
+    pub spf: Option<SpfMeasured>,
+    pub dmarc: Option<DmarcMeasured>,
+    /// The `v=TLSRPTv1` records at `_smtp._tls.<domain>`.
+    pub tls_rpt: Option<Vec<String>>,
+    pub bimi: Option<BimiMeasured>,
+    pub mta_sts: Option<MtaStsMeasured>,
+    /// Whether the domain has DNSKEY records.
+    pub dnssec: Option<bool>,
+    pub dkim: Option<Vec<DkimKey>>,
+    pub dane: Option<Vec<DaneRecord>>,
+    pub dnsbl: Option<Vec<DnsblAnswer>>,
+    pub fcrdns: Option<Vec<FcrdnsAnswer>>,
+}
+
+/// One MX record and the addresses its host resolved to.
+#[derive(Debug, Clone)]
+pub struct MxHost {
+    pub preference: u16,
+    pub host: String,
+    /// The CNAME target of the host, empty when it has none; `None` when the lookup failed.
+    pub cname: Option<String>,
+    pub addresses: Vec<IpAddr>,
+}
+
+/// The `v=spf1` records; the authorised prefixes and the lookup counts when exactly one record
+/// was evaluated.
+#[derive(Debug, Clone, Default)]
+pub struct SpfMeasured {
+    pub records: Vec<String>,
+    pub authorized_prefixes: Vec<ipnet::IpNet>,
+    pub lookup_count: Option<u16>,
+    pub void_lookups: Option<u16>,
+}
+
+/// The `v=DMARC1` records at `_dmarc.<domain>` and whether the external report destinations
+/// authorise them; `None` when no external destination was checked in full.
+#[derive(Debug, Clone, Default)]
+pub struct DmarcMeasured {
+    pub records: Vec<String>,
+    pub rua_authorized: Option<bool>,
+    pub ruf_authorized: Option<bool>,
+}
+
+/// The `v=BIMI1` records at `default._bimi.<domain>` and the outcome kind of the logo fetch.
+#[derive(Debug, Clone, Default)]
+pub struct BimiMeasured {
+    pub records: Vec<String>,
+    pub logo_fetch: Option<String>,
+}
+
+/// The `v=STSv1` records at `_mta-sts.<domain>` and what the policy fetch got: its status and
+/// Content-Type, the policy file when it came with a 2xx status as UTF-8, or the error kind.
+#[derive(Debug, Clone, Default)]
+pub struct MtaStsMeasured {
+    pub records: Vec<String>,
+    pub policy: Option<String>,
+    pub policy_status: Option<u16>,
+    pub content_type: Option<String>,
+    pub fetch_error: Option<String>,
+}
+
+/// A DKIM key record of a selector: its state (`ok`, `revoked`, `cname_loop`, `parse_error`,
+/// `no_key`), its key type and its size when read.
+#[derive(Debug, Clone)]
+pub struct DkimKey {
+    pub selector: String,
+    pub state: String,
+    pub key_type: String,
+    pub bits: Option<usize>,
+}
+
+/// A TLSA record at `_25._tcp.<host>`.
+#[derive(Debug, Clone)]
+pub struct DaneRecord {
+    pub host: String,
+    pub usage: u8,
+    pub selector: u8,
+    pub matching_type: u8,
+}
+
+/// One DNSBL query: the zone, the MX address or domain asked about, whether the zone answered
+/// (not on a timeout, an error or a policy response) and the raw answer codes.
+#[derive(Debug, Clone)]
+pub struct DnsblAnswer {
+    pub zone: String,
+    pub target: String,
+    pub answered: bool,
+    pub answer: Vec<Ipv4Addr>,
+}
+
+/// The PTR names of one MX address and whether one of them resolves back to it.
+#[derive(Debug, Clone)]
+pub struct FcrdnsAnswer {
+    pub address: IpAddr,
+    pub ptr: Vec<String>,
+    pub confirmed: bool,
 }
 
 pub struct SpfFlat {

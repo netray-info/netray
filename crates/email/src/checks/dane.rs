@@ -19,12 +19,16 @@ use futures::future::join_all;
 
 use super::{lookup_failed, unmeasured_result};
 use crate::dns::DnsLookup;
-use crate::quality::{Category, CheckResult, SubCheck, Verdict};
+use crate::quality::{Category, CheckResult, DaneRecord, SubCheck, Verdict};
 
 /// Check DANE/TLSA records for each MX hostname.
-/// Returns (CheckResult, dane_has_tlsa).
+/// Returns (CheckResult, dane_has_tlsa, TLSA records of the hosts whose lookup got an answer),
+/// the records `None` when no lookup ran or none got an answer.
 #[tracing::instrument(skip_all, fields(category = "dane"))]
-pub async fn check_dane(mx_hosts: &[String], resolver: &impl DnsLookup) -> (CheckResult, bool) {
+pub async fn check_dane(
+    mx_hosts: &[String],
+    resolver: &impl DnsLookup,
+) -> (CheckResult, bool, Option<Vec<DaneRecord>>) {
     if mx_hosts.is_empty() {
         let sub_checks = vec![SubCheck {
             name: "absent".to_string(),
@@ -32,7 +36,7 @@ pub async fn check_dane(mx_hosts: &[String], resolver: &impl DnsLookup) -> (Chec
             detail: "no MX hosts to check for DANE".to_string(),
         }];
         let result = CheckResult::new(Category::Dane, sub_checks, "No MX hosts".to_string());
-        return (result, false);
+        return (result, false, None);
     }
 
     // Parallelize TLSA lookups for all MX hosts
@@ -50,11 +54,16 @@ pub async fn check_dane(mx_hosts: &[String], resolver: &impl DnsLookup) -> (Chec
         .filter_map(|(_, r)| r.as_ref().err().map(ToString::to_string))
         .collect();
     if errors.len() == tlsa_results.len() {
-        return (unmeasured_result(Category::Dane, errors.join("; ")), false);
+        return (
+            unmeasured_result(Category::Dane, errors.join("; ")),
+            false,
+            None,
+        );
     }
 
     let mut sub_checks = Vec::new();
     let mut has_tlsa = false;
+    let mut measured = Vec::new();
 
     for (host, records) in tlsa_results {
         let records = match records {
@@ -72,6 +81,12 @@ pub async fn check_dane(mx_hosts: &[String], resolver: &impl DnsLookup) -> (Chec
         let host_had_error = sub_checks.len();
 
         for record in &records {
+            measured.push(DaneRecord {
+                host: host.clone(),
+                usage: record.usage,
+                selector: record.selector,
+                matching_type: record.matching_type,
+            });
             // Validate usage (0-3)
             if record.usage > 3 {
                 sub_checks.push(SubCheck {
@@ -130,5 +145,5 @@ pub async fn check_dane(mx_hosts: &[String], resolver: &impl DnsLookup) -> (Chec
     };
 
     let result = CheckResult::new(Category::Dane, sub_checks, detail);
-    (result, has_tlsa)
+    (result, has_tlsa, Some(measured))
 }

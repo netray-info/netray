@@ -185,3 +185,62 @@ skipped: lens drops evidence until Phase 6. The tlsight V1 wire and every golden
 
 skipped: lens drops evidence until Phase 6. The spectra V1 wire and every golden are byte-identical.
 
+
+## Phase 5 — Email, IP
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R4 (email): email emits `email.mx`, `email.spf`, `email.dmarc`, `email.mta_sts`, `email.mta_sts_policy`, `email.tls_rpt`, `email.bimi`, `email.dkim`, `email.dane`, `email.dnsbl`, `email.fcrdns`, `email.summary`; judged checks reference their block (MX dependents also `email.mx`); blocks validate | green | `crates/email/tests/evidence.rs` |
+| C2 | R4 (ip): `ip.addresses` (with spamhaus/c2/tor/vpn flags) validates; `ip.reputation` references it | green | `crates/ip/tests/evidence.rs` |
+| C3 | R5 (email, ip): volatile paths name registered keys | green | `crates/ip/tests/evidence.rs` |
+| C4 | R6: beacon keeps what the blocks need (MX preference and per-host addresses, SPF record and lookup count, DMARC/TLS-RPT/BIMI/MTA-STS records and policy text, DKIM selectors with key type/bits, DANE TLSA per host, DNSBL answers per query, FCrDNS per address) and emits one additive SSE `type:"evidence"` message before `summary`; translate builds blocks from it | green | `crates/email/tests/evidence.rs` |
+| C5 | healthy beacon run: mx, spf, dmarc, dnsbl blocks validate; each measured email check references its block | green | `crates/email/tests/evidence.rs` |
+| C6 | V1 SSE vs beacon-*.sse: pre-existing messages byte-identical; one `evidence` message precedes `summary` | green | `crates/email/tests/evidence.rs` |
+| C7 | V1 email frontend ignores `type:"evidence"` and keeps streaming | already_implemented | `crates/email/frontend/src/lib/evidence_event.test.ts` |
+| C8 | Spamhaus-listed address: `ip.addresses` row `spamhaus: true`; `ip.reputation` references the block | green | `crates/ip/tests/evidence.rs` |
+| C9 | reader: every judged email check's block holds what decided it (DNSBL rows per query incl. domain zones and policy answers; deduplicated MX addresses; one DKIM row per key with state; cross-validation inputs referenced; deciding facts: MX CNAME, SPF void lookups, DMARC rua/ruf authorisation, MTA-STS status/content type/fetch error, BIMI logo fetch; `email.dnssec`) | green | `crates/email/tests/evidence_reading.rs` |
+
+### Amendments
+
+- **A5.** The email blocks differ from the spec table, all forced by single-valued cells and by the rule that a block must hold what decided its check:
+  - `email.mx` (host, preference, cname) plus `email.mx_addresses` (address, host);
+  - `email.dnsbl` keyed `<target>@<zone>` with `target` Text and `answered` Bool, covering domain zones too;
+  - `email.dkim` keyed `<selector>#<n>`, with `state` and `bits` as Text;
+  - `email.dane` keyed by record string, with no certificate data, because `TlsaRecord` has none;
+  - `email.spf` `authorized_prefixes` repeated, plus `void_lookups`;
+  - new `email.dnssec`.
+- **Beacon goldens.** Scenarios healthy, partial and mx_cname had frames no real run could produce: one FCrDNS sub-check for 4 or 2 IPs, and SPF not covering the MX addresses with no coverage warning. They are corrected with the same verdicts, and the lens goldens are unchanged.
+- **For Phase 6.** Email references the cross-module `dns.dnskey` without a filter. Lens drops a reference that does not resolve within the run.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 email + IP | 2 + 2 + 1 (three rounds: build, reading, golden scenarios) | opus | 348384 (one agent) | 2209 |
+
+### Reader (phase 5)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | DNSBL domain-zone answers had no row | fixed (C9) |
+| BLOCKER | Duplicate MX addresses repeated table keys | fixed (C9) |
+| BLOCKER | Only the first DKIM key per selector got a row | fixed (C9) |
+| BLOCKER | Revoked keys and CNAME loops had no row | fixed (C9) |
+| BLOCKER | Cross-validation inputs were not referenced | fixed: `CROSS_VALIDATION_INPUTS` (C9) |
+| AMENDMENT | A policy response looked like an answer | repaired: `answered` column |
+| AMENDMENT | The golden `Measured` contradicted its frames | repaired: scenarios corrected |
+| AMENDMENT | DANE key and data | the key is the record string; no data column (A5) |
+| AMENDMENT | The SPF key name differed from the release | renamed `authorized_prefixes` |
+| AMENDMENT | Deciding facts sat in no block | repaired (C9); the MTA-STS truncation flag and a non-UTF-8 body remain gaps |
+| AMENDMENT | `dane_without_dnssec` | `email.dnssec` plus `dns.dnskey` |
+| DEFERRED | IP absent text values are `Text("")` | listed; the model has no "absent" cell |
+| NIT | One `email.mx` row per host | listed |
+| NIT | The goldens use a hand-written `Measured` | the capture path is covered by `evidence_reading.rs` |
+| NIT | The volatile test passes trivially (empty) | listed |
+
+### Behavioural verification
+
+skipped: lens drops evidence until Phase 6. The V1 beacon SSE keeps every pre-existing frame byte-identical apart from the corrected scenario frames, and adds one `evidence` frame before `summary`. The V1 email frontend ignores that frame (C7).
+

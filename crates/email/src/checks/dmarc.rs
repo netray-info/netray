@@ -17,15 +17,22 @@
 
 use crate::checks::{lookup_failed, unmeasured_result, util};
 use crate::dns::DnsLookup;
-use crate::quality::{Category, CheckResult, SubCheck, Verdict};
+use crate::quality::{Category, CheckResult, DmarcMeasured, SubCheck, Verdict};
 
 /// Check DMARC for the domain.
-/// Returns (CheckResult, dmarc_policy, dmarc_sp, rua_external_auth_ok).
+/// Returns (CheckResult, dmarc_policy, dmarc_sp, rua_external_auth_ok, what it measured), the
+/// last `None` when the TXT lookup got no answer.
 #[tracing::instrument(skip_all, fields(category = "dmarc", domain = %domain))]
 pub async fn check_dmarc(
     domain: &str,
     resolver: &impl DnsLookup,
-) -> (CheckResult, Option<String>, Option<String>, bool) {
+) -> (
+    CheckResult,
+    Option<String>,
+    Option<String>,
+    bool,
+    Option<DmarcMeasured>,
+) {
     let dmarc_name = format!("_dmarc.{}", domain);
     let txt_records = match resolver.lookup_txt(&dmarc_name).await {
         Ok(records) => records,
@@ -35,6 +42,7 @@ pub async fn check_dmarc(
                 None,
                 None,
                 true,
+                None,
             );
         }
     };
@@ -44,6 +52,10 @@ pub async fn check_dmarc(
         .filter(|t| t.starts_with("v=DMARC1"))
         .map(|s| s.as_str())
         .collect();
+    let mut measured = DmarcMeasured {
+        records: dmarc_records.iter().map(|r| r.to_string()).collect(),
+        ..DmarcMeasured::default()
+    };
 
     let mut sub_checks = Vec::new();
 
@@ -54,7 +66,7 @@ pub async fn check_dmarc(
             detail: "no DMARC record found".to_string(),
         });
         let result = CheckResult::new(Category::Dmarc, sub_checks, "No DMARC record".to_string());
-        return (result, None, None, true);
+        return (result, None, None, true, Some(measured));
     }
 
     if dmarc_records.len() > 1 {
@@ -68,7 +80,7 @@ pub async fn check_dmarc(
             sub_checks,
             "Multiple DMARC records".to_string(),
         );
-        return (result, None, None, true);
+        return (result, None, None, true, Some(measured));
     }
 
     let record = dmarc_records[0];
@@ -134,6 +146,8 @@ pub async fn check_dmarc(
 
     // Report URIs
     let mut rua_external_auth_ok = true;
+    let mut rua_auth: Vec<Option<bool>> = Vec::new();
+    let mut ruf_auth: Vec<Option<bool>> = Vec::new();
 
     if let Some(rua_val) = &rua {
         let rua_domains = extract_report_domains(rua_val);
@@ -145,10 +159,12 @@ pub async fn check_dmarc(
                     Ok(records) => records,
                     Err(e) => {
                         sub_checks.push(lookup_failed(&e));
+                        rua_auth.push(None);
                         continue;
                     }
                 };
                 let authorized = auth_records.iter().any(|t| t.starts_with("v=DMARC1"));
+                rua_auth.push(Some(authorized));
                 if !authorized {
                     rua_external_auth_ok = false;
                     sub_checks.push(SubCheck {
@@ -179,10 +195,12 @@ pub async fn check_dmarc(
                     Ok(records) => records,
                     Err(e) => {
                         sub_checks.push(lookup_failed(&e));
+                        ruf_auth.push(None);
                         continue;
                     }
                 };
                 let authorized = auth_records.iter().any(|t| t.starts_with("v=DMARC1"));
+                ruf_auth.push(Some(authorized));
                 if !authorized {
                     sub_checks.push(SubCheck {
                         name: "ruf_auth".to_string(),
@@ -223,7 +241,27 @@ pub async fn check_dmarc(
     let detail = format!("DMARC: {}", record);
     let result = CheckResult::new(Category::Dmarc, sub_checks, detail);
 
-    (result, policy, sub_policy, rua_external_auth_ok)
+    measured.rua_authorized = authorized(&rua_auth);
+    measured.ruf_authorized = authorized(&ruf_auth);
+    (
+        result,
+        policy,
+        sub_policy,
+        rua_external_auth_ok,
+        Some(measured),
+    )
+}
+
+/// Whether the external destinations authorise the reports: false when one does not, true
+/// when every one was checked and does, `None` when none was checked or a lookup failed.
+fn authorized(outcomes: &[Option<bool>]) -> Option<bool> {
+    if outcomes.contains(&Some(false)) {
+        Some(false)
+    } else if !outcomes.is_empty() && outcomes.iter().all(|o| *o == Some(true)) {
+        Some(true)
+    } else {
+        None
+    }
 }
 
 /// Extract domains from rua/ruf URIs like "mailto:reports@example.com,mailto:dmarc@third.example.com"

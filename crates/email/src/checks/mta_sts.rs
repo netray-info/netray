@@ -22,7 +22,7 @@ use reqwest::{Method, StatusCode};
 
 use crate::checks::{UNMEASURED, unmeasured_result, util};
 use crate::dns::DnsLookup;
-use crate::quality::{Category, CheckResult, MtaStsInfo, SubCheck, Verdict};
+use crate::quality::{Category, CheckResult, MtaStsInfo, MtaStsMeasured, SubCheck, Verdict};
 use crate::state::OutboundFetch;
 
 const MTA_STS_MAX_BODY_BYTES: usize = 65_536; // generous cap per RFC 8461; real policies are ~200 bytes
@@ -78,33 +78,60 @@ fn record_upstream_error(backend: &'static str, kind: &'static str) {
 
 /// Check MTA-STS for the domain.
 /// Returns (CheckResult, Option<MtaStsInfo>).
-#[tracing::instrument(skip_all, fields(category = "mta_sts", domain = %domain))]
 pub async fn check_mta_sts(
     domain: &str,
     resolver: &impl DnsLookup,
     fetch: &OutboundFetch,
 ) -> (CheckResult, Option<MtaStsInfo>) {
+    let (result, info, _) = check_mta_sts_measured(domain, resolver, fetch).await;
+    (result, info)
+}
+
+/// [`check_mta_sts`] with what it measured, `None` when the TXT lookup got no answer.
+#[tracing::instrument(skip_all, fields(category = "mta_sts", domain = %domain))]
+pub async fn check_mta_sts_measured(
+    domain: &str,
+    resolver: &impl DnsLookup,
+    fetch: &OutboundFetch,
+) -> (CheckResult, Option<MtaStsInfo>, Option<MtaStsMeasured>) {
     let policy_url = match fetch.mta_sts_port {
         Some(port) => format!("https://mta-sts.{domain}:{port}/.well-known/mta-sts.txt"),
         None => format!("https://mta-sts.{domain}/.well-known/mta-sts.txt"),
     };
-    check_mta_sts_at(domain, resolver, fetch, &policy_url).await
+    measure_mta_sts_at(domain, resolver, fetch, &policy_url).await
 }
 
 /// [`check_mta_sts`] with the policy fetched from `policy_url`.
+#[cfg(test)]
 pub(crate) async fn check_mta_sts_at(
     domain: &str,
     resolver: &impl DnsLookup,
     fetch: &OutboundFetch,
     policy_url: &str,
 ) -> (CheckResult, Option<MtaStsInfo>) {
+    let (result, info, _) = measure_mta_sts_at(domain, resolver, fetch, policy_url).await;
+    (result, info)
+}
+
+async fn measure_mta_sts_at(
+    domain: &str,
+    resolver: &impl DnsLookup,
+    fetch: &OutboundFetch,
+    policy_url: &str,
+) -> (CheckResult, Option<MtaStsInfo>, Option<MtaStsMeasured>) {
     let mut sub_checks = Vec::new();
 
     // Step 1: DNS TXT record at _mta-sts.<domain>
     let sts_name = format!("_mta-sts.{}", domain);
     let txt_records = match resolver.lookup_txt(&sts_name).await {
         Ok(records) => records,
-        Err(e) => return (unmeasured_result(Category::MtaSts, e.to_string()), None),
+        Err(e) => {
+            return (
+                unmeasured_result(Category::MtaSts, e.to_string()),
+                None,
+                None,
+            );
+        }
     };
 
     let sts_records: Vec<&str> = txt_records
@@ -112,6 +139,10 @@ pub(crate) async fn check_mta_sts_at(
         .filter(|t| t.starts_with("v=STSv1"))
         .map(|s| s.as_str())
         .collect();
+    let mut measured = MtaStsMeasured {
+        records: sts_records.iter().map(|r| r.to_string()).collect(),
+        ..MtaStsMeasured::default()
+    };
 
     if sts_records.is_empty() {
         sub_checks.push(SubCheck {
@@ -124,7 +155,7 @@ pub(crate) async fn check_mta_sts_at(
             sub_checks,
             "No MTA-STS record".to_string(),
         );
-        return (result, None);
+        return (result, None, Some(measured));
     }
 
     let dns_record = sts_records[0];
@@ -140,6 +171,7 @@ pub(crate) async fn check_mta_sts_at(
         .unwrap_or_default();
     if sts_ips.iter().any(|ip| !(fetch.allow)(*ip)) {
         record_upstream_error("mta_sts", "blocked");
+        measured.fetch_error = Some("blocked".to_string());
         sub_checks.push(SubCheck {
             name: "ssrf_blocked".to_string(),
             verdict: Verdict::Fail,
@@ -150,22 +182,24 @@ pub(crate) async fn check_mta_sts_at(
             sub_checks,
             "MTA-STS fetch blocked".to_string(),
         );
-        return (result, Some(info_without_policy(dns_id)));
+        return (result, Some(info_without_policy(dns_id)), Some(measured));
     }
 
     // Step 3: fetch and evaluate the HTTPS policy
-    let (fetch_sub_checks, info, detail) = fetch_and_parse_policy(policy_url, dns_id, fetch).await;
+    let (fetch_sub_checks, info, detail) =
+        fetch_and_parse_policy(policy_url, dns_id, fetch, &mut measured).await;
     sub_checks.extend(fetch_sub_checks);
     let result = CheckResult::new(Category::MtaSts, sub_checks, detail);
-    (result, info)
+    (result, info, Some(measured))
 }
 
 /// Fetch the MTA-STS policy from `policy_url` and evaluate it with
-/// [`evaluate_policy`].
+/// [`evaluate_policy`]; records in `measured` what the fetch got.
 async fn fetch_and_parse_policy(
     policy_url: &str,
     dns_id: String,
     fetch: &OutboundFetch,
+    measured: &mut MtaStsMeasured,
 ) -> (Vec<SubCheck>, Option<MtaStsInfo>, String) {
     let opts = FetchOptions {
         max_redirects: 0,
@@ -183,11 +217,23 @@ async fn fetch_and_parse_policy(
         Ok(r) => {
             metrics::histogram!("beacon_https_fetch_duration_seconds", "target" => "mta_sts")
                 .record(fetch_start.elapsed().as_secs_f64());
+            measured.policy_status = Some(r.status.as_u16());
+            measured.content_type = r
+                .headers
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string);
+            measured.policy = r
+                .status
+                .is_success()
+                .then(|| std::str::from_utf8(&r.body).ok().map(str::to_string))
+                .flatten();
             evaluate_policy(r.status, &r.headers, &r.body, r.body_truncated, dns_id)
         }
         Err(e) => {
             let kind = classify_fetch_error(&e);
             record_upstream_error("mta_sts", kind);
+            measured.fetch_error = Some(kind.to_string());
             let (name, verdict) = if kind == "timeout" {
                 (UNMEASURED, Verdict::Skip)
             } else {

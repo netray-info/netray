@@ -4,6 +4,7 @@ use std::sync::{Arc, LazyLock};
 use arc_swap::ArcSwap;
 use netray_common::target_policy::is_allowed_target;
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
+use netray_model::evidence::{Block, BlockId, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType};
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 use serde_json::json;
 
@@ -24,6 +25,38 @@ static CHECKS: LazyLock<Vec<CheckId>> =
 pub(crate) fn ip_checks() -> &'static [CheckId] {
     CHECKS.as_slice()
 }
+
+/// The IP register: one table row per looked-up public address.
+pub const REGISTER: Register = Register {
+    blocks: &[("ip.addresses", ShapeKind::Table)],
+    keys: &[
+        ("ip.addresses", "address", ValueType::Addr),
+        ("ip.addresses", "asn", ValueType::Text),
+        ("ip.addresses", "org", ValueType::Text),
+        ("ip.addresses", "prefix", ValueType::Text),
+        ("ip.addresses", "network_type", ValueType::Text),
+        ("ip.addresses", "country", ValueType::Text),
+        ("ip.addresses", "city", ValueType::Text),
+        ("ip.addresses", "spamhaus", ValueType::Bool),
+        ("ip.addresses", "c2", ValueType::Bool),
+        ("ip.addresses", "tor", ValueType::Bool),
+        ("ip.addresses", "vpn", ValueType::Bool),
+    ],
+};
+
+const ADDRESSES_COLUMNS: [&str; 11] = [
+    "address",
+    "asn",
+    "org",
+    "prefix",
+    "network_type",
+    "country",
+    "city",
+    "spamhaus",
+    "c2",
+    "tor",
+    "vpn",
+];
 
 /// The IP enrichment as an engine module: ifconfig's lookups run in-process.
 pub struct IpModule {
@@ -168,6 +201,7 @@ pub fn translate(lookups: &[(IpAddr, Result<Ifconfig, String>)], total: usize) -
     }
 
     let mut addresses: Vec<IpInfo> = Vec::new();
+    let mut rows: Vec<Row> = Vec::new();
     let mut worst = Status::Pass;
     let mut reputation_messages: Vec<String> = Vec::new();
 
@@ -200,6 +234,21 @@ pub fn translate(lookups: &[(IpAddr, Result<Ifconfig, String>)], total: usize) -
             reputation_messages.push(format!("{ip}: {flag}"));
         }
 
+        let text = |v: &Option<String>| EvValue::Text(v.clone().unwrap_or_default());
+        rows.push(vec![
+            EvValue::Addr(*ip),
+            EvValue::Text(n.asn.map(|asn| format!("AS{asn}")).unwrap_or_default()),
+            text(&n.org),
+            text(&n.prefix),
+            EvValue::Text(n.network_type.clone()),
+            text(&e.location.country),
+            text(&e.location.city),
+            EvValue::Bool(n.is_spamhaus),
+            EvValue::Bool(n.is_c2),
+            EvValue::Bool(n.is_tor),
+            EvValue::Bool(n.is_vpn),
+        ]);
+
         addresses.push(IpInfo {
             ip: *ip,
             org: n.org.clone(),
@@ -216,7 +265,7 @@ pub fn translate(lookups: &[(IpAddr, Result<Ifconfig, String>)], total: usize) -
         id: ip_checks()[0].clone(),
         status: worst,
         findings: reputation_messages,
-        evidence: vec![],
+        evidence: vec![BlockId::parse("ip.addresses").expect("static block id")],
     };
 
     let headline = build_headline(&addresses);
@@ -234,7 +283,15 @@ pub fn translate(lookups: &[(IpAddr, Result<Ifconfig, String>)], total: usize) -
                 }))
                 .collect::<Vec<_>>(),
         }),
-        evidence: vec![],
+        evidence: vec![Block {
+            id: BlockId::parse("ip.addresses").expect("static block id"),
+            title: "Addresses".into(),
+            shape: Shape::Table {
+                key: "address".into(),
+                columns: ADDRESSES_COLUMNS.map(String::from).into(),
+                rows,
+            },
+        }],
     }
 }
 

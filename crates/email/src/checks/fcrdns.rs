@@ -4,18 +4,22 @@ use futures::future::join_all;
 
 use super::{LOOKUP_FAILED, join_errors, lookup_failed, unmeasured_result};
 use crate::dns::{AddressLookup, DnsLookup, LookupError};
-use crate::quality::{Category, CheckResult, SubCheck, Verdict};
+use crate::quality::{Category, CheckResult, FcrdnsAnswer, SubCheck, Verdict};
 
 /// Check Forward-Confirmed reverse DNS for each MX IP. `addr_errors` are the MX-host address
 /// lookups that failed: with no MX IP the check is unmeasured, otherwise each is an Info.
+/// Also returns the answer of each IP whose outcome was measured, `None` when none was.
 #[tracing::instrument(skip_all, fields(category = "fcrdns"))]
 pub async fn check_fcrdns(
     mx_ips: &[IpAddr],
     addr_errors: &[LookupError],
     resolver: &impl DnsLookup,
-) -> CheckResult {
+) -> (CheckResult, Option<Vec<FcrdnsAnswer>>) {
     if mx_ips.is_empty() && !addr_errors.is_empty() {
-        return unmeasured_result(Category::Fcrdns, join_errors(addr_errors));
+        return (
+            unmeasured_result(Category::Fcrdns, join_errors(addr_errors)),
+            None,
+        );
     }
     if mx_ips.is_empty() {
         let sub_checks = vec![SubCheck {
@@ -23,7 +27,10 @@ pub async fn check_fcrdns(
             verdict: Verdict::Info,
             detail: "no MX IPs to check".to_string(),
         }];
-        return CheckResult::new(Category::Fcrdns, sub_checks, "No MX IPs".to_string());
+        return (
+            CheckResult::new(Category::Fcrdns, sub_checks, "No MX IPs".to_string()),
+            None,
+        );
     }
 
     // Parallelize PTR lookups for all IPs
@@ -54,6 +61,7 @@ pub async fn check_fcrdns(
 
     let mut sub_checks = Vec::new();
     let mut unmeasured = Vec::new();
+    let mut answers = Vec::new();
 
     for (ip, ptr_names) in &ptr_results {
         let ptr_names = match ptr_names {
@@ -64,7 +72,18 @@ pub async fn check_fcrdns(
                 continue;
             }
         };
+        let seen = answers.iter().any(|a: &FcrdnsAnswer| a.address == *ip);
+        let mut answer = |confirmed: bool| {
+            if !seen {
+                answers.push(FcrdnsAnswer {
+                    address: *ip,
+                    ptr: ptr_names.clone(),
+                    confirmed,
+                });
+            }
+        };
         if ptr_names.is_empty() {
+            answer(false);
             sub_checks.push(SubCheck {
                 name: "fcrdns_fail".to_string(),
                 verdict: Verdict::Warn,
@@ -90,6 +109,7 @@ pub async fn check_fcrdns(
             .next();
 
         if confirmed {
+            answer(true);
             sub_checks.push(SubCheck {
                 name: "fcrdns_pass".to_string(),
                 verdict: Verdict::Pass,
@@ -99,6 +119,7 @@ pub async fn check_fcrdns(
             unmeasured.push(e.to_string());
             sub_checks.push(unmeasured_ip(*ip, e));
         } else {
+            answer(false);
             sub_checks.push(SubCheck {
                 name: "fcrdns_fail".to_string(),
                 verdict: Verdict::Warn,
@@ -111,12 +132,18 @@ pub async fn check_fcrdns(
     }
 
     if unmeasured.len() == ptr_results.len() {
-        return unmeasured_result(Category::Fcrdns, unmeasured.join("; "));
+        return (
+            unmeasured_result(Category::Fcrdns, unmeasured.join("; ")),
+            None,
+        );
     }
     sub_checks.extend(addr_errors.iter().map(lookup_failed));
 
     let detail = format!("FCrDNS checked for {} IP(s)", mx_ips.len());
-    CheckResult::new(Category::Fcrdns, sub_checks, detail)
+    (
+        CheckResult::new(Category::Fcrdns, sub_checks, detail),
+        Some(answers),
+    )
 }
 
 /// Info for an MX IP whose PTR or forward lookup failed, naming the IP and the cause.

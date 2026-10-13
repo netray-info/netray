@@ -4,17 +4,23 @@ use std::time::Duration;
 
 use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
+use netray_model::evidence::{
+    Block, BlockId, Fields, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType,
+};
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 use serde_json::json;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 
 use crate::checks::run_all_checks;
+use crate::checks::util::parse_tags;
 use crate::config::{Config, ModuleConfig};
 use crate::dns::{DnsResolver, FetchResolver};
 use crate::error::MailError;
 use crate::input;
-use crate::quality::types::{Category, CheckResult as CategoryResult, SseEvent, Verdict};
+use crate::quality::types::{
+    Category, CheckResult as CategoryResult, Grade, Measured, SseEvent, Verdict,
+};
 use crate::state::OutboundFetch;
 
 // ---------------------------------------------------------------------------
@@ -31,6 +37,83 @@ static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
 pub(crate) fn email_checks() -> &'static [CheckId] {
     CHECKS.as_slice()
 }
+
+/// The email register: the MX records and their addresses, the policy records at the domain's
+/// names with their tags and what checking them got, the MTA-STS policy file, DNSKEY presence,
+/// the DKIM key records, the TLSA records of the MX hosts, the DNSBL queries, the FCrDNS
+/// answers and the V1 grade.
+pub const REGISTER: Register = Register {
+    blocks: &[
+        ("email.mx", ShapeKind::Table),
+        ("email.mx_addresses", ShapeKind::Table),
+        ("email.spf", ShapeKind::Fields),
+        ("email.dmarc", ShapeKind::Fields),
+        ("email.mta_sts", ShapeKind::Fields),
+        ("email.mta_sts_policy", ShapeKind::Text),
+        ("email.tls_rpt", ShapeKind::Fields),
+        ("email.bimi", ShapeKind::Fields),
+        ("email.dnssec", ShapeKind::Fields),
+        ("email.dkim", ShapeKind::Table),
+        ("email.dane", ShapeKind::Table),
+        ("email.dnsbl", ShapeKind::Table),
+        ("email.fcrdns", ShapeKind::Table),
+        ("email.summary", ShapeKind::Fields),
+    ],
+    keys: &[
+        ("email.mx", "host", ValueType::Text),
+        ("email.mx", "preference", ValueType::Int),
+        ("email.mx", "cname", ValueType::Text),
+        ("email.mx_addresses", "address", ValueType::Addr),
+        ("email.mx_addresses", "host", ValueType::Text),
+        ("email.spf", "record", ValueType::Text),
+        ("email.spf", "authorized_prefixes", ValueType::Text),
+        ("email.spf", "lookup_count", ValueType::Int),
+        ("email.spf", "void_lookups", ValueType::Int),
+        ("email.dmarc", "record", ValueType::Text),
+        ("email.dmarc", "p", ValueType::Text),
+        ("email.dmarc", "sp", ValueType::Text),
+        ("email.dmarc", "pct", ValueType::Text),
+        ("email.dmarc", "rua", ValueType::Text),
+        ("email.dmarc", "ruf", ValueType::Text),
+        ("email.dmarc", "adkim", ValueType::Text),
+        ("email.dmarc", "aspf", ValueType::Text),
+        ("email.dmarc", "fo", ValueType::Text),
+        ("email.dmarc", "ri", ValueType::Text),
+        ("email.dmarc", "rua_authorized", ValueType::Bool),
+        ("email.dmarc", "ruf_authorized", ValueType::Bool),
+        ("email.mta_sts", "record", ValueType::Text),
+        ("email.mta_sts", "id", ValueType::Text),
+        ("email.mta_sts", "policy_status", ValueType::Int),
+        ("email.mta_sts", "content_type", ValueType::Text),
+        ("email.mta_sts", "fetch_error", ValueType::Text),
+        ("email.tls_rpt", "record", ValueType::Text),
+        ("email.tls_rpt", "rua", ValueType::Text),
+        ("email.bimi", "record", ValueType::Text),
+        ("email.bimi", "l", ValueType::Text),
+        ("email.bimi", "a", ValueType::Text),
+        ("email.bimi", "logo_fetch", ValueType::Text),
+        ("email.dnssec", "dnskey_present", ValueType::Bool),
+        ("email.dkim", "key", ValueType::Text),
+        ("email.dkim", "selector", ValueType::Text),
+        ("email.dkim", "state", ValueType::Text),
+        ("email.dkim", "key_type", ValueType::Text),
+        ("email.dkim", "bits", ValueType::Text),
+        ("email.dane", "record", ValueType::Text),
+        ("email.dane", "host", ValueType::Text),
+        ("email.dane", "usage", ValueType::Int),
+        ("email.dane", "selector", ValueType::Int),
+        ("email.dane", "matching_type", ValueType::Int),
+        ("email.dnsbl", "query", ValueType::Text),
+        ("email.dnsbl", "zone", ValueType::Text),
+        ("email.dnsbl", "target", ValueType::Text),
+        ("email.dnsbl", "answered", ValueType::Bool),
+        ("email.dnsbl", "answer", ValueType::Text),
+        ("email.fcrdns", "address", ValueType::Addr),
+        ("email.fcrdns", "ptr", ValueType::Text),
+        ("email.fcrdns", "confirmed", ValueType::Bool),
+        ("email.summary", "grade", ValueType::Text),
+    ],
+};
 
 /// The email inspection as an engine module: beacon's checks run in-process.
 pub struct EmailModule {
@@ -203,6 +286,20 @@ pub const EXCLUDED: &[(&str, &str)] = &[
 /// Cross-validation sub-checks beacon emits that are ignored when the domain sends no mail.
 const IGNORED_WHEN_SENDS_NO_MAIL: &[&str] = &["reject_no_dkim", "spf_mx_coverage"];
 
+/// The blocks a cross-validation sub-check judged from, which the check it is routed to
+/// references besides its own; a block of another module is kept even when this section does
+/// not hold it.
+const CROSS_VALIDATION_INPUTS: &[(&str, &[&str])] = &[
+    ("reject_no_dkim", &["email.dmarc", "email.spf"]),
+    ("spf_mx_coverage", &["email.mx_addresses"]),
+    ("bimi_dmarc_policy", &["email.dmarc"]),
+    ("mta_sts_without_tls_rpt", &["email.tls_rpt"]),
+    ("dane_without_tls_rpt", &["email.dane"]),
+    ("dane_without_dnssec", &["email.dnssec", "dns.dnskey"]),
+    ("null_mx_spf", &["email.mx"]),
+    (BEACON_SENDS_NO_MAIL, &["email.mx"]),
+];
+
 /// The category a beacon cross-validation sub-check is scored in; `None` for an unknown name.
 pub fn route_cross_validation(name: &str) -> Option<&'static str> {
     match name {
@@ -266,6 +363,13 @@ pub fn translate(events: &[SseEvent]) -> SectionOutcome {
         Err(Abort::Incomplete(reason)) => return SectionOutcome::Incomplete { reason },
     };
 
+    let evidence: Vec<Block> = events
+        .iter()
+        .find_map(|e| match e {
+            SseEvent::Evidence { blocks } => Some(blocks.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
     let no_mx_reason = no_mx_reason(&summary);
     let mx_unmeasured = unmeasured_findings(&summary, "mx");
     let checks: Vec<CheckResult> = BUCKETED
@@ -280,11 +384,16 @@ pub fn translate(events: &[SseEvent]) -> SectionOutcome {
                 (_, Some(cause)) if mx_dependent => (Status::Unmeasured, cause.clone()),
                 _ => fold_category(name, &summary),
             };
+            let mut refs = Vec::new();
+            if matches!(status, Status::Pass | Status::Warn | Status::Fail) {
+                refs = references(name, &summary);
+                refs.retain(|id| id.module() != "email" || evidence.iter().any(|b| b.id == *id));
+            }
             CheckResult {
                 id: id.clone(),
                 status,
                 findings,
-                evidence: vec![],
+                evidence: refs,
             }
         })
         .collect();
@@ -297,8 +406,357 @@ pub fn translate(events: &[SseEvent]) -> SectionOutcome {
             "headline": headline,
             "grade": summary.grade,
         }),
-        evidence: vec![],
+        evidence,
     }
+}
+
+/// The blocks a judged check references: its own, the MTA-STS policy file for `mta_sts`, the
+/// MX addresses for `mx`, the MX records for the MX-dependent checks and the inputs of the
+/// cross-validation sub-checks routed to it. Absent email blocks are dropped by the caller.
+fn references(name: &str, summary: &BeaconSummary) -> Vec<BlockId> {
+    let mut refs = vec![format!("email.{name}")];
+    match name {
+        "mx" => refs.push("email.mx_addresses".into()),
+        "mta_sts" => refs.push("email.mta_sts_policy".into()),
+        _ => {}
+    }
+    if name != "mx" && MX_DEPENDENT.contains(&name) {
+        refs.push("email.mx".into());
+    }
+    for sub in routed(name, summary) {
+        let inputs = CROSS_VALIDATION_INPUTS
+            .iter()
+            .filter(|(n, _)| *n == sub.name)
+            .flat_map(|(_, blocks)| blocks.iter());
+        for input in inputs {
+            if !refs.iter().any(|r| r == input) {
+                refs.push(input.to_string());
+            }
+        }
+    }
+    refs.iter().map(|r| block_id(r)).collect()
+}
+
+/// The cross-validation sub-checks routed to check `name`, without those a domain that sends
+/// no mail ignores.
+fn routed<'a>(name: &str, summary: &'a BeaconSummary) -> Vec<&'a SubCheck> {
+    let sends_no_mail = summary.categories.iter().any(|c| {
+        c.name == "cross_validation" && c.sub_checks.iter().any(|s| s.name == BEACON_SENDS_NO_MAIL)
+    });
+    summary
+        .categories
+        .iter()
+        .filter(|c| c.name == "cross_validation")
+        .flat_map(|c| &c.sub_checks)
+        .filter(|s| {
+            route_cross_validation(&s.name) == Some(name)
+                && !(sends_no_mail && IGNORED_WHEN_SENDS_NO_MAIL.contains(&s.name.as_str()))
+        })
+        .collect()
+}
+
+fn block_id(id: &str) -> BlockId {
+    BlockId::parse(id).expect("static block id")
+}
+
+fn block(id: &str, title: &str, shape: Shape) -> Block {
+    Block {
+        id: block_id(id),
+        title: title.into(),
+        shape,
+    }
+}
+
+fn table(id: &str, title: &str, columns: &[&str], rows: Vec<Row>) -> Block {
+    block(
+        id,
+        title,
+        Shape::Table {
+            key: columns[0].into(),
+            columns: columns.iter().map(|c| c.to_string()).collect(),
+            rows,
+        },
+    )
+}
+
+/// A `record` per policy record and, for a single record, its tags among `tags`.
+fn record_fields(records: &[String], tags: &[&str]) -> Fields {
+    let mut fields: Fields = records
+        .iter()
+        .map(|r| ("record".into(), EvValue::Text(r.clone())))
+        .collect();
+    if let [record] = records {
+        let parsed = parse_tags(record);
+        fields.extend(tags.iter().filter_map(|t| {
+            parsed
+                .get(*t)
+                .map(|v| (t.to_string(), EvValue::Text(v.clone())))
+        }));
+    }
+    fields
+}
+
+/// `fields` with `(key, value)` appended when there is a value.
+fn with(mut fields: Fields, extra: &[(&str, Option<EvValue>)]) -> Fields {
+    fields.extend(
+        extra
+            .iter()
+            .filter_map(|(k, v)| Some((k.to_string(), v.clone()?))),
+    );
+    fields
+}
+
+/// Answer codes in canonical order, joined with `, `.
+fn codes(answer: &[std::net::Ipv4Addr]) -> String {
+    let mut codes: Vec<String> = answer.iter().map(|ip| ip.to_string()).collect();
+    codes.sort();
+    codes.dedup();
+    codes.join(", ")
+}
+
+/// The blocks of what beacon measured, beacon's `evidence` message. A check whose lookup got
+/// no answer gives no block; a lookup that answered with nothing gives an empty one.
+pub fn evidence_blocks(m: &Measured, grade: Grade) -> Vec<Block> {
+    let mut blocks = Vec::new();
+    if let Some(hosts) = &m.mx {
+        blocks.push(mx_block(hosts));
+        blocks.push(mx_addresses_block(hosts));
+    }
+    if let Some(spf) = &m.spf {
+        let mut fields = record_fields(&spf.records, &[]);
+        fields.extend(
+            spf.authorized_prefixes
+                .iter()
+                .map(|p| ("authorized_prefixes".into(), EvValue::Text(p.to_string()))),
+        );
+        let fields = with(
+            fields,
+            &[
+                (
+                    "lookup_count",
+                    spf.lookup_count.map(|n| EvValue::Int(i64::from(n))),
+                ),
+                (
+                    "void_lookups",
+                    spf.void_lookups.map(|n| EvValue::Int(i64::from(n))),
+                ),
+            ],
+        );
+        blocks.push(block("email.spf", "SPF", Shape::Fields(fields)));
+    }
+    if let Some(dmarc) = &m.dmarc {
+        let tags = ["p", "sp", "pct", "rua", "ruf", "adkim", "aspf", "fo", "ri"];
+        let fields = with(
+            record_fields(&dmarc.records, &tags),
+            &[
+                ("rua_authorized", dmarc.rua_authorized.map(EvValue::Bool)),
+                ("ruf_authorized", dmarc.ruf_authorized.map(EvValue::Bool)),
+            ],
+        );
+        blocks.push(block("email.dmarc", "DMARC", Shape::Fields(fields)));
+    }
+    if let Some(sts) = &m.mta_sts {
+        let fields = with(
+            record_fields(&sts.records, &["id"]),
+            &[
+                (
+                    "policy_status",
+                    sts.policy_status.map(|s| EvValue::Int(i64::from(s))),
+                ),
+                ("content_type", sts.content_type.clone().map(EvValue::Text)),
+                ("fetch_error", sts.fetch_error.clone().map(EvValue::Text)),
+            ],
+        );
+        blocks.push(block("email.mta_sts", "MTA-STS", Shape::Fields(fields)));
+        if let Some(policy) = &sts.policy {
+            blocks.push(block(
+                "email.mta_sts_policy",
+                "MTA-STS policy",
+                Shape::Text(policy.clone()),
+            ));
+        }
+    }
+    if let Some(records) = &m.tls_rpt {
+        blocks.push(block(
+            "email.tls_rpt",
+            "TLS-RPT",
+            Shape::Fields(record_fields(records, &["rua"])),
+        ));
+    }
+    if let Some(bimi) = &m.bimi {
+        let fields = with(
+            record_fields(&bimi.records, &["l", "a"]),
+            &[("logo_fetch", bimi.logo_fetch.clone().map(EvValue::Text))],
+        );
+        blocks.push(block("email.bimi", "BIMI", Shape::Fields(fields)));
+    }
+    if let Some(present) = m.dnssec {
+        blocks.push(block(
+            "email.dnssec",
+            "DNSSEC",
+            Shape::Fields(vec![("dnskey_present".into(), EvValue::Bool(present))]),
+        ));
+    }
+    if let Some(keys) = &m.dkim {
+        blocks.push(dkim_block(keys));
+    }
+    if let Some(records) = &m.dane {
+        blocks.push(dane_block(records));
+    }
+    if let Some(answers) = &m.dnsbl {
+        let rows = answers
+            .iter()
+            .map(|a| {
+                vec![
+                    EvValue::Text(format!("{}@{}", a.target, a.zone)),
+                    EvValue::Text(a.zone.clone()),
+                    EvValue::Text(a.target.clone()),
+                    EvValue::Bool(a.answered),
+                    EvValue::Text(codes(&a.answer)),
+                ]
+            })
+            .collect();
+        blocks.push(table(
+            "email.dnsbl",
+            "DNSBL",
+            &["query", "zone", "target", "answered", "answer"],
+            rows,
+        ));
+    }
+    if let Some(answers) = &m.fcrdns {
+        let rows = answers
+            .iter()
+            .map(|a| {
+                vec![
+                    EvValue::Addr(a.address),
+                    EvValue::Text(a.ptr.join(", ")),
+                    EvValue::Bool(a.confirmed),
+                ]
+            })
+            .collect();
+        blocks.push(table(
+            "email.fcrdns",
+            "FCrDNS",
+            &["address", "ptr", "confirmed"],
+            rows,
+        ));
+    }
+    blocks.push(block(
+        "email.summary",
+        "Summary",
+        Shape::Fields(vec![("grade".into(), EvValue::Text(grade_wire(&grade)))]),
+    ));
+    blocks
+}
+
+/// One row per MX host, the first record of a repeated host; the `cname` column only when every
+/// host's CNAME lookup got an answer.
+fn mx_block(hosts: &[crate::quality::MxHost]) -> Block {
+    let with_cname = hosts.iter().all(|h| h.cname.is_some());
+    let mut seen = std::collections::HashSet::new();
+    let rows = hosts
+        .iter()
+        .filter(|h| seen.insert(h.host.as_str()))
+        .map(|h| {
+            let mut row = vec![
+                EvValue::Text(h.host.clone()),
+                EvValue::Int(i64::from(h.preference)),
+            ];
+            if with_cname {
+                row.push(EvValue::Text(h.cname.clone().unwrap_or_default()));
+            }
+            row
+        })
+        .collect();
+    let columns: &[&str] = if with_cname {
+        &["host", "preference", "cname"]
+    } else {
+        &["host", "preference"]
+    };
+    table("email.mx", "MX", columns, rows)
+}
+
+/// One row per MX address with the hosts that resolve to it, joined with `, `.
+fn mx_addresses_block(hosts: &[crate::quality::MxHost]) -> Block {
+    let mut addresses: Vec<(std::net::IpAddr, Vec<&str>)> = Vec::new();
+    for h in hosts {
+        for ip in &h.addresses {
+            match addresses.iter_mut().find(|(a, _)| a == ip) {
+                Some((_, names)) if !names.contains(&h.host.as_str()) => names.push(&h.host),
+                Some(_) => {}
+                None => addresses.push((*ip, vec![&h.host])),
+            }
+        }
+    }
+    table(
+        "email.mx_addresses",
+        "MX addresses",
+        &["address", "host"],
+        addresses
+            .into_iter()
+            .map(|(ip, names)| vec![EvValue::Addr(ip), EvValue::Text(names.join(", "))])
+            .collect(),
+    )
+}
+
+/// One row per key record, keyed `<selector>#<n>` with `n` counting the selector's records from
+/// 1; `bits` is empty when the size was not read.
+fn dkim_block(keys: &[crate::quality::DkimKey]) -> Block {
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    let rows = keys
+        .iter()
+        .map(|k| {
+            let n = counts.entry(k.selector.as_str()).or_insert(0);
+            *n += 1;
+            vec![
+                EvValue::Text(format!("{}#{n}", k.selector)),
+                EvValue::Text(k.selector.clone()),
+                EvValue::Text(k.state.clone()),
+                EvValue::Text(k.key_type.clone()),
+                EvValue::Text(k.bits.map(|b| b.to_string()).unwrap_or_default()),
+            ]
+        })
+        .collect();
+    table(
+        "email.dkim",
+        "DKIM keys",
+        &["key", "selector", "state", "key_type", "bits"],
+        rows,
+    )
+}
+
+/// One row per TLSA record, keyed `_25._tcp.<host> <usage> <selector> <matching type>` with the
+/// suffix `#<n>` on a repeat.
+fn dane_block(records: &[crate::quality::DaneRecord]) -> Block {
+    let mut keys = std::collections::HashSet::new();
+    let rows = records
+        .iter()
+        .map(|r| {
+            let base = format!(
+                "_25._tcp.{} {} {} {}",
+                r.host, r.usage, r.selector, r.matching_type
+            );
+            let mut key = base.clone();
+            let mut n = 1;
+            while !keys.insert(key.clone()) {
+                n += 1;
+                key = format!("{base}#{n}");
+            }
+            vec![
+                EvValue::Text(key),
+                EvValue::Text(r.host.clone()),
+                EvValue::Int(i64::from(r.usage)),
+                EvValue::Int(i64::from(r.selector)),
+                EvValue::Int(i64::from(r.matching_type)),
+            ]
+        })
+        .collect();
+    table(
+        "email.dane",
+        "DANE TLSA",
+        &["record", "host", "usage", "selector", "matching_type"],
+        rows,
+    )
 }
 
 fn category_name(category: &Category) -> String {
@@ -441,20 +899,7 @@ fn fold_category(name: &str, summary: &BeaconSummary) -> (Status, Vec<String>) {
         return (Status::Unmeasured, cause);
     }
     let category = summary.categories.iter().find(|c| c.name == name);
-
-    let sends_no_mail = summary.categories.iter().any(|c| {
-        c.name == "cross_validation" && c.sub_checks.iter().any(|s| s.name == BEACON_SENDS_NO_MAIL)
-    });
-    let routed: Vec<&SubCheck> = summary
-        .categories
-        .iter()
-        .filter(|c| c.name == "cross_validation")
-        .flat_map(|c| &c.sub_checks)
-        .filter(|s| {
-            route_cross_validation(&s.name) == Some(name)
-                && !(sends_no_mail && IGNORED_WHEN_SENDS_NO_MAIL.contains(&s.name.as_str()))
-        })
-        .collect();
+    let routed = routed(name, summary);
 
     let worst = category
         .map(|c| c.verdict)

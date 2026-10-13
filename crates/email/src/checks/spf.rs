@@ -22,7 +22,7 @@ use ipnet::IpNet;
 
 use super::{LOOKUP_FAILED, lookup_failed, unmeasured_result};
 use crate::dns::{DnsLookup, LookupError};
-use crate::quality::{Category, CheckResult, SpfFlat, SubCheck, Verdict};
+use crate::quality::{Category, CheckResult, SpfFlat, SpfMeasured, SubCheck, Verdict};
 
 /// Sub-check marking which MX IPs the authorised set cannot judge; its detail is the token
 /// `ipv4` or `ipv6` (incomplete for that family), `both`, or `any` (a positive `exists:` matched,
@@ -152,11 +152,26 @@ pub async fn check_spf<R: DnsLookup>(
 /// Check SPF records for the domain.
 /// Returns (CheckResult, Option<SpfFlat>, has_dash_all, only_dash_all), where
 /// `only_dash_all` is true when the record's only mechanism is `-all`.
-#[tracing::instrument(skip_all, fields(category = "spf", domain = %domain))]
 pub async fn check_spf_detailed<R: DnsLookup>(
     domain: &str,
     resolver: &R,
 ) -> (CheckResult, Option<SpfFlat>, bool, bool) {
+    let (result, flat, has_dash_all, only_dash_all, _) = check_spf_measured(domain, resolver).await;
+    (result, flat, has_dash_all, only_dash_all)
+}
+
+/// [`check_spf_detailed`] with what it measured: `None` when the TXT lookup got no answer.
+#[tracing::instrument(skip_all, fields(category = "spf", domain = %domain))]
+pub async fn check_spf_measured<R: DnsLookup>(
+    domain: &str,
+    resolver: &R,
+) -> (
+    CheckResult,
+    Option<SpfFlat>,
+    bool,
+    bool,
+    Option<SpfMeasured>,
+) {
     let txt_records = match resolver.lookup_txt(domain).await {
         Ok(records) => records,
         Err(e) => {
@@ -165,6 +180,7 @@ pub async fn check_spf_detailed<R: DnsLookup>(
                 None,
                 false,
                 false,
+                None,
             );
         }
     };
@@ -173,6 +189,10 @@ pub async fn check_spf_detailed<R: DnsLookup>(
         .filter(|t| t.starts_with("v=spf1"))
         .map(|s| s.as_str())
         .collect();
+    let mut measured = SpfMeasured {
+        records: spf_records.iter().map(|r| r.to_string()).collect(),
+        ..SpfMeasured::default()
+    };
 
     let mut sub_checks = Vec::new();
 
@@ -183,7 +203,7 @@ pub async fn check_spf_detailed<R: DnsLookup>(
             detail: "no SPF record found".to_string(),
         });
         let result = CheckResult::new(Category::Spf, sub_checks, "No SPF record".to_string());
-        return (result, None, false, false);
+        return (result, None, false, false, Some(measured));
     }
 
     if spf_records.len() > 1 {
@@ -200,7 +220,7 @@ pub async fn check_spf_detailed<R: DnsLookup>(
             sub_checks,
             "Multiple SPF records".to_string(),
         );
-        return (result, None, false, false);
+        return (result, None, false, false, Some(measured));
     }
 
     let spf = spf_records[0];
@@ -334,12 +354,21 @@ pub async fn check_spf_detailed<R: DnsLookup>(
     sub_checks.extend(incomplete.marker());
 
     let detail = format!("SPF record: {}", spf);
+    measured.authorized_prefixes = authorized_prefixes.clone();
+    measured.lookup_count = Some(lookup_count);
+    measured.void_lookups = Some(void_count);
     let spf_flat = SpfFlat {
         authorized_prefixes,
     };
     let result = CheckResult::new(Category::Spf, sub_checks, detail);
 
-    (result, Some(spf_flat), has_dash_all, only_dash_all)
+    (
+        result,
+        Some(spf_flat),
+        has_dash_all,
+        only_dash_all,
+        Some(measured),
+    )
 }
 
 /// The addresses of an `a` or `mx` target. A failed half leaves its family unresolved, a failed
