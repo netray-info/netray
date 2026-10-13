@@ -37,6 +37,10 @@ pub struct InspectResponse {
     /// Internal: set when redirect limit was reached. Not serialized.
     #[serde(skip)]
     pub redirect_limit_reached: Option<usize>,
+    /// Internal: every HTTPS response header as received, lowercased name and value, repeats
+    /// kept. Not serialized; empty after a JSON replay.
+    #[serde(skip)]
+    pub raw_headers: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -58,6 +62,13 @@ pub struct HttpUpgrade {
     pub redirects: Vec<RedirectHop>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<ProbeError>,
+    /// Internal: the probed port-80 URL. Not serialized.
+    #[serde(skip)]
+    pub url: Option<String>,
+    /// Internal: the `Location` of the response that ended the followed port-80 chain, not of
+    /// port 80's own first answer. Not serialized.
+    #[serde(skip)]
+    pub location: Option<String>,
 }
 
 /// Why a probe got no response.
@@ -134,6 +145,12 @@ pub struct CorsReport {
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<ProbeError>,
+    /// Internal: the raw `Access-Control-Allow-Origin` value. Not serialized.
+    #[serde(skip)]
+    pub allow_origin: Option<String>,
+    /// Internal: the raw `Access-Control-Allow-Credentials` value. Not serialized.
+    #[serde(skip)]
+    pub allow_credentials_header: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

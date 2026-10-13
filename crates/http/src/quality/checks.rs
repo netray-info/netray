@@ -275,6 +275,8 @@ mod tests {
                 status: CheckStatus::Pass,
                 message: "No CORS headers".into(),
                 error: None,
+                allow_origin: None,
+                allow_credentials_header: None,
             },
             cookies: vec![],
             compression: None,
@@ -321,6 +323,7 @@ mod tests {
             },
             error: None,
             redirect_limit_reached: None,
+            raw_headers: vec![],
         }
     }
 

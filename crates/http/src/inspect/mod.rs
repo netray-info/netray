@@ -68,9 +68,7 @@ pub async fn inspect(
         if url.scheme() != "https" {
             return None;
         }
-        let mut http_url = url.clone();
-        let _ = http_url.set_scheme("http");
-        let _ = http_url.set_port(Some(80));
+        let http_url = port80_url(url);
         let upgrade_addr = SocketAddr::new(resolved_addr.ip(), 80);
         Some(
             request::execute_request(
@@ -126,6 +124,14 @@ pub async fn inspect(
         }
         Err(_) => Err(crate::error::AppError::Timeout(config.total_timeout_secs)),
     }
+}
+
+/// The URL the port-80 probe requests: `url` with scheme `http` on port 80.
+fn port80_url(url: &Url) -> Url {
+    let mut http_url = url.clone();
+    let _ = http_url.set_scheme("http");
+    let _ = http_url.set_port(Some(80));
+    http_url
 }
 
 /// Enrichment fields extracted from the ifconfig-rs lookup, passed to [`assemble_response`].
@@ -246,6 +252,12 @@ pub fn assemble_response(
             status_code: Some(upgrade.status),
             same_host,
             message,
+            url: Some(port80_url(original_url).to_string()),
+            location: upgrade
+                .headers
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .map(String::from),
             redirects: upgrade.redirects,
             error: upgrade.error,
         }
@@ -296,6 +308,16 @@ pub fn assemble_response(
         },
         error: https.error.clone(),
         redirect_limit_reached,
+        raw_headers: https
+            .headers
+            .iter()
+            .filter_map(|(name, value)| {
+                Some((
+                    name.as_str().to_lowercase(),
+                    value.to_str().ok()?.to_string(),
+                ))
+            })
+            .collect(),
     };
 
     // Run quality checks and update the report

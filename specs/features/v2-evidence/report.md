@@ -142,3 +142,46 @@ skipped: lens drops evidence until Phase 6, so no entry point shows the blocks y
 
 skipped: lens drops evidence until Phase 6. The tlsight V1 wire and every golden are byte-identical (the fixture-diff check is green).
 
+
+## Phase 4 — HTTP
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R4 (http): HTTP emits `http.redirects`, `http.port80`, `http.headers`, `http.server`, `http.cors`, `http.cookies`; judged checks reference per the HTTP row; blocks validate against the HTTP register | green | `crates/http/tests/evidence.rs` |
+| C2 | R5 (http): volatile paths (`http.server/response_ms`, `http.headers/value@<name>` for date, age, set-cookie, server-timing, etag, last-modified, request-id headers) name registered keys | green | `crates/http/tests/evidence.rs` |
+| C3 | spectra-inspect.json: `http.headers`, `http.redirects`, `http.server` validate; `hsts` refs `http.headers`; `https_redirect` refs `http.port80` | green | `crates/http/tests/evidence.rs` |
+| C4 | HTTPS probe timeout: no `http.headers` block; unmeasured checks reference nothing | green | `crates/http/tests/evidence.rs` |
+| C5 | gaps: repeated headers joined from raw values; `http.port80_probe`; cookie key; raw CORS headers | green | `crates/http/tests/evidence_probes.rs` |
+| C6 | reader: duplicate cookies keep a row each; unknown hop version omitted; redirect-limit refs `http.redirects` | green | `crates/http/tests/evidence_reading.rs` |
+| C7 | reader: `redirects_to_https` only on an answered probe; CDN/tracing request-ID headers volatile | green | `crates/http/tests/evidence_probes.rs`, `evidence.rs` |
+
+### Amendments
+
+- **A4.** HTTP adds a `http.port80_probe` fields block (`url`, `status_code`, `location`, `redirects_to_https`, `error_kind`), each key present only when it is known. `https_redirect` references `http.port80` and `http.port80_probe`, plus `http.redirects` at the redirect limit. `http.cookies` is keyed by `<name>; <domain>; <path>`, with an ordinal suffix on a repeat. `http.server` carries `error_kind`; after a refused, reset or TLS-failed HTTPS probe, the ten response checks reference it.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 HTTP | 1 + 1 + 1 (three rounds: build, gaps, the reading) | opus | 127612 (one agent) | 768 |
+
+### Reader (phase 4)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | A duplicate cookie key dropped a judged cookie | fixed: ordinal suffix |
+| BLOCKER | An unknown hop `http_version` was published as `""` | fixed: omitted |
+| BLOCKER | `redirects_to_https` was published without an answer | fixed: only on an answered probe |
+| AMENDMENT | Request-ID headers were missing from the volatile set | repaired: `cf-ray`, `x-amz-cf-id`, `x-correlation-id`, `x-trace-id`, `traceparent`, `x-amzn-requestid` |
+| AMENDMENT | CSP nonces cannot be marked volatile, because a path addresses a whole row | DEFERRED to the Phase 2 history comparison (normalising before the diff) |
+| AMENDMENT | `http.server/address` is the first-hop target | kept as V1 reports it, now documented; Phase 6 derives `server_ip` from it |
+| AMENDMENT | `port80_probe` `status_code`/`location` describe the end of the followed chain | documented |
+| NIT | A JSON replay joins only the first header value | listed |
+| NIT | `response_ms` is the whole inspection duration | documented |
+
+### Behavioural verification
+
+skipped: lens drops evidence until Phase 6. The spectra V1 wire and every golden are byte-identical.
+

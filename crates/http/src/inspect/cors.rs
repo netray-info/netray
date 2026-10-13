@@ -53,6 +53,8 @@ pub fn analyze_cors(headers: &HeaderMap) -> CorsReport {
         status,
         message,
         error: None,
+        allow_origin: acao.map(String::from),
+        allow_credentials_header: acac.map(String::from),
     }
 }
 
