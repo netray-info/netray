@@ -20,14 +20,46 @@ use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
 
+use netray_model::evidence::{Block, BlockId};
 use netray_model::{CheckId, CheckResult, Protocol};
 
 /// A boxed, sendable future; keeps the traits usable as trait objects.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// A dotted path into a check's evidence, e.g. `tls.handshake_ms`.
+/// A path into a module's evidence: `<block name>/<key>`, e.g. `tls.handshake/handshake_ms`, or
+/// `<block name>/<column>@<row key>` for one table row, e.g. `http.headers/value@date`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EvidencePath(pub &'static str);
+
+impl EvidencePath {
+    /// Splits `path` into block id, key and optional row key: at the first `/`, then at the
+    /// first `@` after it.
+    pub fn parse(path: &str) -> Result<(BlockId, &str, Option<&str>), EvidencePathError> {
+        let err = |why: &str| EvidencePathError(format!("evidence path {path:?} {why}"));
+        let (block, rest) = path.split_once('/').ok_or_else(|| err("has no '/'"))?;
+        let block = BlockId::parse(block).map_err(|e| err(&e.to_string()))?;
+        let (key, row) = match rest.split_once('@') {
+            Some((key, row)) => (key, Some(row)),
+            None => (rest, None),
+        };
+        if key.is_empty() || row.is_some_and(str::is_empty) {
+            return Err(err("has an empty key or row"));
+        }
+        Ok((block, key, row))
+    }
+}
+
+/// Why a string is not a valid evidence path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidencePathError(String);
+
+impl fmt::Display for EvidencePathError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Error for EvidencePathError {}
 
 /// The domain under test.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -77,9 +109,10 @@ pub struct Facts {
 pub enum SectionOutcome {
     Measured {
         checks: Vec<CheckResult>,
-        /// Transitional: the V1 headline and extras, carried as JSON until the evidence shapes
-        /// of phase 1b replace it.
+        /// Transitional: the V1 headline and extras, carried as JSON until lens derives them
+        /// from `evidence`.
         presentation: serde_json::Value,
+        evidence: Vec<Block>,
     },
     NotApplicable {
         reason: String,

@@ -319,6 +319,7 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     SectionOutcome::Measured {
         checks,
         presentation: json!({ "headline": build_headline(&resp.ports) }),
+        evidence: vec![],
     }
 }
 

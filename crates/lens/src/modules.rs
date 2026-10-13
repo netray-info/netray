@@ -196,6 +196,7 @@ impl ModuleSection {
             SectionOutcome::Measured {
                 checks,
                 presentation,
+                evidence: _,
             } => {
                 let checks = checks
                     .into_iter()

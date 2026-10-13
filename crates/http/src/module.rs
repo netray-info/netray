@@ -258,6 +258,7 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     SectionOutcome::Measured {
         checks,
         presentation,
+        evidence: vec![],
     }
 }
 
@@ -332,6 +333,7 @@ mod tests {
             SectionOutcome::Measured {
                 checks,
                 presentation,
+                evidence: _,
             } => (checks, presentation),
             other => panic!("expected Measured, got {other:?}"),
         }

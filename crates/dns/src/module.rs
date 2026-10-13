@@ -509,6 +509,7 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     SectionOutcome::Measured {
         checks: results,
         presentation: json!({ "headline": headline, "resolved_ips": resolved_ips }),
+        evidence: vec![],
     }
 }
 

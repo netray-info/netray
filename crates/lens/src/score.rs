@@ -171,6 +171,7 @@ fn event(section: &str, result: &Result<BackendResult, SectionError>) -> Option<
                 })
                 .collect(),
             presentation: serde_json::Value::Null,
+            evidence: vec![],
         },
         Err(SectionError::NotApplicable { reason }) => SectionOutcome::NotApplicable {
             reason: reason.clone(),

@@ -297,6 +297,7 @@ pub fn translate(events: &[SseEvent]) -> SectionOutcome {
             "headline": headline,
             "grade": summary.grade,
         }),
+        evidence: vec![],
     }
 }
 

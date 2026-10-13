@@ -234,6 +234,7 @@ pub fn translate(lookups: &[(IpAddr, Result<Ifconfig, String>)], total: usize) -
                 }))
                 .collect::<Vec<_>>(),
         }),
+        evidence: vec![],
     }
 }
 
