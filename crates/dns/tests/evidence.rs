@@ -6,11 +6,11 @@
 // Interface assumed (does not exist yet):
 // - `netray_dns::module::REGISTER: netray_model::evidence::Register`
 // - `translate` returns `SectionOutcome::Measured { evidence, .. }` with one records block
-//   `dns.<type>` per answered batch among cname, dnskey, ds, nsec, nsec3, rrsig, soa, svcb, txt;
-//   a definite empty answer is a block with zero records, an errored batch has no block. The six
-//   facts types (a, aaaa, mx, caa, ns, https) get no block from the DNS section.
-// - a measured check references its CHECK_INPUTS blocks, facts blocks by id; `dns.ttl`
-//   references every records block of the run.
+//   `dns.<type>` per answered base-name batch, the six facts types (a, aaaa, mx, caa, ns, https)
+//   included; a definite empty answer is a block with zero records, an errored batch has no
+//   block. Where the facts carry the same id, the run keeps the facts block.
+// - a judged check references its CHECK_INPUTS blocks as they exist in the section's output;
+//   `dns.ttl` references every records block of the section.
 // - `DnsModule::volatile()` lists `dns.<type>/ttl` for every records block of the register.
 //
 // No `testing` feature is needed: the seam is `translate` and `DnsModule::new`.
@@ -24,7 +24,7 @@ use netray_dns::module::REGISTER;
 use netray_dns::{CheckEvent, DnsModule, ModuleConfig, translate};
 use netray_engine::{EvidencePath, Module, SectionOutcome};
 use netray_model::Status;
-use netray_model::evidence::{Block, Shape, validate};
+use netray_model::evidence::{Block, BlockId, Shape, check_evidence_rule, validate};
 use serde_json::json;
 
 const FACTS_BLOCKS: &[&str] = &[
@@ -115,7 +115,7 @@ fn fixtures_validate_and_checks_reference_their_inputs() {
                 check.id
             );
             let short = check.id.to_string().replace("dns.", "");
-            if check.status != Status::Unmeasured
+            if matches!(check.status, Status::Pass | Status::Warn | Status::Fail)
                 && let Some((_, types)) = CHECK_INPUTS.iter().find(|(c, _)| *c == short)
             {
                 let want: BTreeSet<String> = types
@@ -132,6 +132,45 @@ fn fixtures_validate_and_checks_reference_their_inputs() {
             }
         }
     }
+}
+
+#[test]
+fn own_caa_batch_backs_dns_caa_when_the_facts_lack_it() {
+    // prism.sse carries the check run's own CAA batch.
+    let (checks, evidence) = measured(&parse_events(&sse("prism.sse")));
+    validate("dns", &REGISTER, &evidence).expect("validates");
+
+    let block = evidence
+        .iter()
+        .find(|b| b.id.to_string() == "dns.caa")
+        .unwrap_or_else(|| panic!("translate emits dns.caa: {evidence:?}"));
+    match &block.shape {
+        Shape::Records(records) => assert_eq!(records.len(), 1, "{records:?}"),
+        other => panic!("dns.caa must be records, got {other:?}"),
+    }
+    let caa = checks
+        .iter()
+        .find(|c| c.id.to_string() == "dns.caa")
+        .expect("dns.caa");
+    assert_eq!(ids(&caa.evidence), BTreeSet::from(["dns.caa".to_string()]));
+
+    // The run's blocks as `RunReport::blocks` keeps them: facts first, one block per id.
+    let facts: Vec<Block> = FACTS_BLOCKS
+        .iter()
+        .filter(|id| **id != "dns.caa")
+        .map(|id| Block {
+            id: BlockId::parse(id).unwrap(),
+            title: id.to_string(),
+            shape: Shape::Records(vec![]),
+        })
+        .collect();
+    let mut blocks = facts;
+    for b in evidence {
+        if !blocks.iter().any(|f| f.id == b.id) {
+            blocks.push(b);
+        }
+    }
+    assert_eq!(check_evidence_rule(&checks, &blocks), Ok(()));
 }
 
 const DOMAIN: &str = "example.com.";

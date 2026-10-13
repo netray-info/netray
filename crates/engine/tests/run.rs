@@ -35,6 +35,7 @@ fn facts() -> Facts {
         ns: vec!["ns.example.com".into()],
         https: vec!["1 . alpn=h2".into()],
         no_address_definite: false,
+        blocks: vec![],
     }
 }
 

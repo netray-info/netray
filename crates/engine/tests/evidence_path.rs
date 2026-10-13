@@ -29,7 +29,7 @@ fn parse_splits_block_key_and_row() {
         let (b, k, r) = EvidencePath::parse(path).unwrap_or_else(|_| panic!("{path:?} must parse"));
         assert_eq!(b, BlockId::parse(block).unwrap(), "{path}");
         assert_eq!(k, key, "{path}");
-        assert_eq!(r.as_deref(), row, "{path}");
+        assert_eq!(r, row, "{path}");
     }
 }
 

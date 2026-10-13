@@ -21,6 +21,7 @@ use mhost::resolver::Lookups;
 use netray_dns::api::{BatchEvent, CheckDoneEvent, LintEvent};
 use netray_dns::{CheckEvent, DnsModule, ModuleConfig, facts_from_lookups, testing, translate};
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
+use netray_model::evidence::{Block, BlockId, Shape};
 use netray_model::{Protocol, Status};
 use serde_json::{Value, json};
 
@@ -157,7 +158,7 @@ fn facts_from_lookups_holds_the_golden_records() {
     );
     assert!(facts.aaaa.is_empty());
     assert!(facts.mx.is_empty());
-    assert!(facts.caa.is_empty());
+    assert_eq!(facts.caa, vec!["0 issue \"letsencrypt.org\"".to_string()]);
     let mut ns: Vec<String> = facts
         .ns
         .iter()
@@ -171,6 +172,15 @@ fn facts_from_lookups_holds_the_golden_records() {
         none,
         Facts {
             no_address_definite: true,
+            blocks: ["dns.a", "dns.aaaa", "dns.caa", "dns.ns"]
+                .into_iter()
+                .zip(["A", "AAAA", "CAA", "NS"])
+                .map(|(id, title)| Block {
+                    id: BlockId::parse(id).unwrap(),
+                    title: title.into(),
+                    shape: Shape::Records(vec![]),
+                })
+                .collect(),
             ..Facts::default()
         }
     );

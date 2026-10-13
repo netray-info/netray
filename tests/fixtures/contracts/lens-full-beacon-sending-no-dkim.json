@@ -6,7 +6,7 @@
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/caa-records",
         "messages": [
-          "No CAA records found: any Certificate Authority can issue certificates for this domain; cf. RFC 8659"
+          "CAA 'issue' is set but 'issuewild' is not: wildcard certificate issuance is unrestricted"
         ],
         "name": "caa",
         "verdict": "warn",
