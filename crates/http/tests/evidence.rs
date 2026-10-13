@@ -151,6 +151,12 @@ fn volatile_paths_name_registered_keys() {
         "etag",
         "last-modified",
         "x-request-id",
+        "cf-ray",
+        "x-amz-cf-id",
+        "x-correlation-id",
+        "x-trace-id",
+        "traceparent",
+        "x-amzn-requestid",
     ] {
         want.insert(format!("http.headers/value@{h}"));
     }

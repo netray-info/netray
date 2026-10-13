@@ -185,10 +185,7 @@ fn port80_refused_fails_https_redirect_against_the_probe() {
     let probe = "http.port80_probe";
     assert_eq!(field(&blocks, probe, "error_kind"), Some(&text("refused")));
     assert_eq!(field(&blocks, probe, "status_code"), None);
-    assert_eq!(
-        field(&blocks, probe, "redirects_to_https"),
-        Some(&Ev::Bool(false))
-    );
+    assert_eq!(field(&blocks, probe, "redirects_to_https"), None);
 }
 
 #[test]
