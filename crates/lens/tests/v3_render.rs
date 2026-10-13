@@ -64,7 +64,7 @@ impl Module for FixedHttp {
     }
     fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
         Box::pin(async move {
-            let SectionOutcome::Measured { presentation, .. } = self.0.run(ctx, facts).await else {
+            let SectionOutcome::Measured { evidence, .. } = self.0.run(ctx, facts).await else {
                 panic!("the http golden must be measured");
             };
             let checks = HTTP_IDS
@@ -80,11 +80,7 @@ impl Module for FixedHttp {
                     evidence: vec![],
                 })
                 .collect();
-            SectionOutcome::Measured {
-                checks,
-                presentation,
-                evidence: vec![],
-            }
+            SectionOutcome::Measured { checks, evidence }
         })
     }
 }

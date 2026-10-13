@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use netray_email::quality::types::SseEvent;
 use netray_email::{EmailModule, ModuleConfig, testing, translate};
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
+use netray_model::evidence::{Shape, Value as EvValue};
 use netray_model::{Protocol, Status};
 use serde_json::Value;
 
@@ -97,14 +98,7 @@ fn translate_equals_lens_email_section_for_every_fixture() {
             (Expect::Incomplete, SectionOutcome::Incomplete { .. }) => {
                 assert_eq!(email["headline"], "backend error", "{sse_name}");
             }
-            (
-                Expect::Measured,
-                SectionOutcome::Measured {
-                    checks,
-                    presentation,
-                    evidence: _,
-                },
-            ) => {
+            (Expect::Measured, SectionOutcome::Measured { checks, evidence }) => {
                 let lens_checks = email["checks"].as_array().unwrap();
                 assert_eq!(checks.len(), lens_checks.len(), "{sse_name}: check count");
                 for lc in lens_checks {
@@ -127,15 +121,60 @@ fn translate_equals_lens_email_section_for_every_fixture() {
                     assert_eq!(got.findings, want, "{sse_name}: {id} findings");
                 }
 
-                // Translation-derived keys of lens's email object. Not asserted: `detail_url`
-                // (built from lens's public URL and the domain, not from beacon's events) and
-                // `status` (the section status lens computes from its scoring).
-                for key in ["headline", "grade"] {
-                    assert_eq!(
-                        presentation[key], email[key],
-                        "{sse_name}: presentation.{key}"
-                    );
-                }
+                // Lens's email keys as it derives them: the headline from the check statuses,
+                // the grade from `email.summary`. Not asserted: `detail_url` (built from lens's
+                // public URL and the domain, not from beacon's events) and `status` (the section
+                // status lens computes from its scoring).
+                let headline = [
+                    ("Auth", &["spf", "dkim", "dmarc"][..]),
+                    ("Infra", &["mx", "fcrdns", "dnsbl"]),
+                    ("Transport", &["mta_sts", "tls_rpt", "dane"]),
+                    ("Brand", &["bimi"]),
+                ]
+                .iter()
+                .map(|(group, members)| {
+                    let worst = checks
+                        .iter()
+                        .filter(|c| {
+                            members
+                                .iter()
+                                .any(|m| c.id.to_string() == format!("email.{m}"))
+                        })
+                        .map(|c| match c.status {
+                            Status::Fail => 3,
+                            Status::Warn => 2,
+                            Status::Pass => 1,
+                            _ => 0,
+                        })
+                        .max();
+                    let symbol = match worst {
+                        Some(1) => "OK",
+                        Some(2) => "Warn",
+                        Some(3) => "Fail",
+                        _ => "N/A",
+                    };
+                    format!("{group}: {symbol}")
+                })
+                .collect::<Vec<_>>()
+                .join("  ");
+                assert_eq!(
+                    Value::from(headline),
+                    email["headline"],
+                    "{sse_name}: headline"
+                );
+                let grade = evidence
+                    .iter()
+                    .find(|b| b.id.to_string() == "email.summary")
+                    .and_then(|b| match &b.shape {
+                        Shape::Fields(f) => f.iter().find(|(k, _)| k == "grade"),
+                        _ => None,
+                    })
+                    .map(|(_, v)| v.clone());
+                assert_eq!(
+                    grade,
+                    email["grade"].as_str().map(|g| EvValue::Text(g.into())),
+                    "{sse_name}: email.summary/grade"
+                );
             }
             (_, other) => panic!("{sse_name}: unexpected outcome {other:?}"),
         }

@@ -1,5 +1,5 @@
 //! C5: a stub Module reads the domain and DKIM selectors from `RunContext` and returns
-//! `Measured { checks, presentation }`; the `Registry` hands modules and facts out by protocol.
+//! `Measured { checks, evidence }`; the `Registry` hands modules and facts out by protocol.
 
 use std::net::Ipv4Addr;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -10,7 +10,6 @@ use netray_engine::{
     RunContext, RunOptions, SectionOutcome,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::json;
 
 fn http_check() -> CheckId {
     CheckId::parse("http.https_reachable").unwrap()
@@ -51,7 +50,6 @@ impl Module for RecordingModule {
         Box::pin(async {
             SectionOutcome::Measured {
                 checks: vec![result()],
-                presentation: json!({"headline": "x"}),
                 evidence: vec![],
             }
         })
@@ -103,7 +101,6 @@ async fn registry_runs_module_with_domain_and_selectors_from_context() {
         outcome,
         SectionOutcome::Measured {
             checks: vec![result()],
-            presentation: json!({"headline": "x"}),
             evidence: vec![],
         }
     );

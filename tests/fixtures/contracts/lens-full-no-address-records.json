@@ -2,6 +2,9 @@
   "dns": {
     "checks": [
       {
+        "evidence": [
+          "dns.caa"
+        ],
         "fix_hint": "Publish issue and issuewild CAA records naming the allowed certificate authorities, using only known tags.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/caa-records",
@@ -13,6 +16,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "dns.ns"
+        ],
         "fix_hint": "Delegate the zone to at least two authoritative nameservers.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
@@ -24,6 +30,7 @@
         "weight": 3
       },
       {
+        "evidence": [],
         "fix_hint": "Replace the apex CNAME with A/AAAA records, or an ALIAS/ANAME record where the provider supports it.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
@@ -35,6 +42,7 @@
         "weight": 5
       },
       {
+        "evidence": [],
         "fix_hint": "Enable DNSSEC signing at the DNS provider, have its DS record published at the registrar and keep the signatures current.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/dnssec",
@@ -46,6 +54,7 @@
         "weight": 5
       },
       {
+        "evidence": [],
         "fix_hint": "Re-sign the zone with ECDSA P-256 (algorithm 13) or Ed25519 (algorithm 15).",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/dnssec",
@@ -57,6 +66,7 @@
         "weight": 3
       },
       {
+        "evidence": [],
         "fix_hint": "Retire superseded KSKs from the zone so that one remains, and as part of it remove the DS records of retired keys at the registrar.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/dnssec",
@@ -68,6 +78,7 @@
         "weight": 2
       },
       {
+        "evidence": [],
         "fix_hint": "Publish either one alias-mode or only service-mode HTTPS records that advertise the supported ALPN protocols.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
@@ -79,6 +90,9 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "dns.ns"
+        ],
         "fix_hint": "Remove the lame nameserver from the zone's NS records and from the delegation at the registrar.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/lame-delegation",
@@ -90,6 +104,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "dns.ns"
+        ],
         "fix_hint": "Make every authoritative nameserver serve the same NS set, matching the delegation at the registrar.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/lame-delegation",
@@ -101,6 +118,12 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "dns.a",
+          "dns.aaaa",
+          "dns.caa",
+          "dns.ns"
+        ],
         "fix_hint": "Keep TTLs at 60 seconds or more, NS and MX TTLs at one week or less, and the SOA minimum at one day or less.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
@@ -113,6 +136,40 @@
       }
     ],
     "detail_url": "https://dns.example.com/?q=example.com+%2Bcheck",
+    "evidence": [
+      {
+        "id": "dns.a",
+        "shape": {
+          "data": [],
+          "kind": "records"
+        },
+        "title": "A"
+      },
+      {
+        "id": "dns.aaaa",
+        "shape": {
+          "data": [],
+          "kind": "records"
+        },
+        "title": "AAAA"
+      },
+      {
+        "id": "dns.caa",
+        "shape": {
+          "data": [],
+          "kind": "records"
+        },
+        "title": "CAA"
+      },
+      {
+        "id": "dns.ns",
+        "shape": {
+          "data": [],
+          "kind": "records"
+        },
+        "title": "NS"
+      }
+    ],
     "headline": "DNSSEC –  CAA ~  NS –  CNAME-apex –",
     "status": "fail"
   },
@@ -123,6 +180,10 @@
   "email": {
     "checks": [
       {
+        "evidence": [
+          "email.mx",
+          "email.mx_addresses"
+        ],
         "fix_hint": "Point MX records at hostnames with their own A or AAAA records, spread over at least two servers in separate networks.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/email-deliverability",
@@ -131,6 +192,9 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "email.spf"
+        ],
         "fix_hint": "Publish one SPF record that lists every server sending mail for the domain, including its own MX hosts that also send, and ends in -all, or ~all where the domain does not publish a Null MX.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/email-auth",
@@ -139,6 +203,9 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "email.dkim"
+        ],
         "fix_hint": "Rotate to a 2048-bit RSA or an Ed25519 DKIM key at the mail provider, publish it at the selector and sign all outgoing mail with it.",
         "fix_owner": "your mail provider",
         "guide_url": "https://netray.info/guide/dkim",
@@ -150,6 +217,9 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "email.dmarc"
+        ],
         "fix_hint": "Publish one DMARC record with p=reject, without sp=none or pct=0, and with an rua address authorised to receive reports.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/email-auth",
@@ -161,6 +231,11 @@
         "weight": 4
       },
       {
+        "evidence": [
+          "email.mta_sts",
+          "email.mta_sts_policy",
+          "email.mx"
+        ],
         "fix_hint": "Serve a valid MTA-STS policy from the mta-sts web host in mode enforce, listing every MX host with a max_age of at least one day, and update the id in the _mta-sts TXT record on every change.",
         "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/mta-sts",
@@ -173,6 +248,10 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "email.tls_rpt",
+          "email.mx"
+        ],
         "fix_hint": "Publish a _smtp._tls TXT record with v=TLSRPTv1 and a mailto: or https: rua address.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/tls-rpt",
@@ -181,6 +260,7 @@
         "weight": 1
       },
       {
+        "evidence": [],
         "fix_hint": "Serve the BIMI logo over HTTPS at a reachable URL and set DMARC to p=quarantine or p=reject.",
         "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/bimi",
@@ -192,6 +272,7 @@
         "weight": 2
       },
       {
+        "evidence": [],
         "fix_hint": "Sign the domain's zone with DNSSEC and keep the TLSA records at _25._tcp of every MX host within the valid usage, selector and matching-type values.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/dane-tlsa",
@@ -203,6 +284,10 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "email.dnsbl",
+          "email.mx"
+        ],
         "fix_hint": "Stop the activity that caused the listing, then request delisting from each blocklist.",
         "fix_owner": "your mail provider",
         "guide_url": "https://netray.info/guide/dnsbl",
@@ -211,6 +296,10 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "email.fcrdns",
+          "email.mx"
+        ],
         "fix_hint": "Set a PTR record for each mail server address that resolves back to the same address.",
         "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/dnsbl",
@@ -220,6 +309,728 @@
       }
     ],
     "detail_url": "https://email.example.com/?domain=example.com",
+    "evidence": [
+      {
+        "id": "email.mx",
+        "shape": {
+          "data": {
+            "columns": [
+              "host",
+              "preference",
+              "cname"
+            ],
+            "key": "host",
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "mx1.example.com"
+                },
+                {
+                  "t": "int",
+                  "v": 10
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "mx2.example.com"
+                },
+                {
+                  "t": "int",
+                  "v": 20
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ]
+            ]
+          },
+          "kind": "table"
+        },
+        "title": "MX"
+      },
+      {
+        "id": "email.mx_addresses",
+        "shape": {
+          "data": {
+            "columns": [
+              "address",
+              "host"
+            ],
+            "key": "address",
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.example.com"
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.example.com"
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.11"
+                },
+                {
+                  "t": "text",
+                  "v": "mx2.example.com"
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "text",
+                  "v": "mx2.example.com"
+                }
+              ]
+            ]
+          },
+          "kind": "table"
+        },
+        "title": "MX addresses"
+      },
+      {
+        "id": "email.spf",
+        "shape": {
+          "data": [
+            [
+              "record",
+              {
+                "t": "text",
+                "v": "v=spf1 ip4:192.0.2.0/24 ip6:2001:db8::/32 -all"
+              }
+            ],
+            [
+              "authorized_prefixes",
+              {
+                "t": "text",
+                "v": "192.0.2.0/24"
+              }
+            ],
+            [
+              "authorized_prefixes",
+              {
+                "t": "text",
+                "v": "2001:db8::/32"
+              }
+            ],
+            [
+              "lookup_count",
+              {
+                "t": "int",
+                "v": 0
+              }
+            ],
+            [
+              "void_lookups",
+              {
+                "t": "int",
+                "v": 0
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "SPF"
+      },
+      {
+        "id": "email.dmarc",
+        "shape": {
+          "data": [
+            [
+              "record",
+              {
+                "t": "text",
+                "v": "v=DMARC1; p=none; rua=mailto:dmarc@example.com"
+              }
+            ],
+            [
+              "p",
+              {
+                "t": "text",
+                "v": "none"
+              }
+            ],
+            [
+              "rua",
+              {
+                "t": "text",
+                "v": "mailto:dmarc@example.com"
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "DMARC"
+      },
+      {
+        "id": "email.mta_sts",
+        "shape": {
+          "data": [
+            [
+              "record",
+              {
+                "t": "text",
+                "v": "v=STSv1; id=20260101"
+              }
+            ],
+            [
+              "id",
+              {
+                "t": "text",
+                "v": "20260101"
+              }
+            ],
+            [
+              "policy_status",
+              {
+                "t": "int",
+                "v": 200
+              }
+            ],
+            [
+              "content_type",
+              {
+                "t": "text",
+                "v": "text/plain"
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "MTA-STS"
+      },
+      {
+        "id": "email.mta_sts_policy",
+        "shape": {
+          "data": "version: STSv1\nmode: testing\nmx: *.example.com\nmax_age: 3600\n",
+          "kind": "text"
+        },
+        "title": "MTA-STS policy"
+      },
+      {
+        "id": "email.tls_rpt",
+        "shape": {
+          "data": [
+            [
+              "record",
+              {
+                "t": "text",
+                "v": "v=TLSRPTv1; rua=mailto:tls@example.com"
+              }
+            ],
+            [
+              "rua",
+              {
+                "t": "text",
+                "v": "mailto:tls@example.com"
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "TLS-RPT"
+      },
+      {
+        "id": "email.bimi",
+        "shape": {
+          "data": [],
+          "kind": "fields"
+        },
+        "title": "BIMI"
+      },
+      {
+        "id": "email.dnssec",
+        "shape": {
+          "data": [
+            [
+              "dnskey_present",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "DNSSEC"
+      },
+      {
+        "id": "email.dkim",
+        "shape": {
+          "data": {
+            "columns": [
+              "key",
+              "selector",
+              "state",
+              "key_type",
+              "bits"
+            ],
+            "key": "key",
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "default#1"
+                },
+                {
+                  "t": "text",
+                  "v": "default"
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": "rsa"
+                },
+                {
+                  "t": "text",
+                  "v": "512"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "selector1#1"
+                },
+                {
+                  "t": "text",
+                  "v": "selector1"
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": "rsa"
+                },
+                {
+                  "t": "text",
+                  "v": "2048"
+                }
+              ]
+            ]
+          },
+          "kind": "table"
+        },
+        "title": "DKIM keys"
+      },
+      {
+        "id": "email.dane",
+        "shape": {
+          "data": {
+            "columns": [
+              "record",
+              "host",
+              "usage",
+              "selector",
+              "matching_type"
+            ],
+            "key": "record",
+            "rows": []
+          },
+          "kind": "table"
+        },
+        "title": "DANE TLSA"
+      },
+      {
+        "id": "email.dnsbl",
+        "shape": {
+          "data": {
+            "columns": [
+              "query",
+              "zone",
+              "target",
+              "answered",
+              "answer"
+            ],
+            "key": "query",
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.10@bl1.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl1.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "2001:db8::10@bl1.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl1.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.11@bl1.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl1.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.11"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "2001:db8::11@bl1.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl1.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.10@bl2.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl2.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "2001:db8::10@bl2.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl2.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.11@bl2.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl2.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.11"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "2001:db8::11@bl2.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl2.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.10@bl3.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl3.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "2001:db8::10@bl3.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl3.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "192.0.2.11@bl3.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl3.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "192.0.2.11"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "2001:db8::11@bl3.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "bl3.example.com"
+                },
+                {
+                  "t": "text",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ]
+            ]
+          },
+          "kind": "table"
+        },
+        "title": "DNSBL"
+      },
+      {
+        "id": "email.fcrdns",
+        "shape": {
+          "data": {
+            "columns": [
+              "address",
+              "ptr",
+              "confirmed"
+            ],
+            "key": "address",
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.example.com"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::10"
+                },
+                {
+                  "t": "text",
+                  "v": "mx1.example.com"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.11"
+                },
+                {
+                  "t": "text",
+                  "v": "mx2.example.com"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ],
+              [
+                {
+                  "t": "addr",
+                  "v": "2001:db8::11"
+                },
+                {
+                  "t": "text",
+                  "v": "mx2.example.com"
+                },
+                {
+                  "t": "bool",
+                  "v": true
+                }
+              ]
+            ]
+          },
+          "kind": "table"
+        },
+        "title": "FCrDNS"
+      },
+      {
+        "id": "email.summary",
+        "shape": {
+          "data": [
+            [
+              "grade",
+              {
+                "t": "text",
+                "v": "D"
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "Summary"
+      }
+    ],
     "grade": "D",
     "headline": "Auth: Fail  Infra: OK  Transport: Warn  Brand: N/A",
     "status": "fail"
@@ -227,6 +1038,7 @@
   "http": {
     "checks": [],
     "detail_url": "",
+    "evidence": [],
     "headline": "not applicable",
     "status": "skip"
   },
@@ -234,11 +1046,13 @@
     "addresses": [],
     "checks": [],
     "detail_url": "",
+    "evidence": [],
     "headline": "not applicable",
     "status": "skip"
   },
   "summary": {
     "complete": true,
+    "evidence_schema": 1,
     "grade": "D",
     "hard_fail": false,
     "hard_fail_checks": [],
@@ -265,6 +1079,7 @@
   "tls": {
     "checks": [],
     "detail_url": "",
+    "evidence": [],
     "headline": "not applicable",
     "status": "skip"
   }

@@ -63,7 +63,6 @@ impl Module for StubEmail {
                     result("email.spf", Status::Pass),
                     result("email.dnsbl", dnsbl),
                 ],
-                presentation: json!({}),
                 evidence: vec![],
             }
         })

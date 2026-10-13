@@ -21,9 +21,9 @@ use mhost::resolver::Lookups;
 use netray_dns::api::{BatchEvent, CheckDoneEvent, LintEvent};
 use netray_dns::{CheckEvent, DnsModule, ModuleConfig, facts_from_lookups, testing, translate};
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
-use netray_model::evidence::{Block, BlockId, Shape};
+use netray_model::evidence::{Block, BlockId, Shape, Value as EvValue};
 use netray_model::{Protocol, Status};
-use serde_json::{Value, json};
+use serde_json::Value;
 
 fn contracts_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -101,12 +101,7 @@ fn translate_equals_lens_dns_section_for_every_fixture() {
         let lens = contracts(lens_name);
         let dns = lens["dns"].as_object().expect("lens dns section");
 
-        let SectionOutcome::Measured {
-            checks,
-            presentation,
-            evidence: _,
-        } = outcome
-        else {
+        let SectionOutcome::Measured { checks, evidence } = outcome else {
             panic!("{sse_name}: expected Measured, got {outcome:?}");
         };
 
@@ -137,15 +132,23 @@ fn translate_equals_lens_dns_section_for_every_fixture() {
             "{sse_name}: spf belongs to the email module"
         );
 
-        // Translation-derived keys of lens's dns object. Not asserted: `detail_url` (lens's
-        // public URL) and `status` (lens's scoring). `resolved_ips` is not in the lens
-        // golden (the IP section reads it) but must be present, from the batch A/AAAA records.
-        assert_eq!(presentation["headline"], dns["headline"], "{sse_name}");
-        assert_eq!(
-            presentation["resolved_ips"],
-            json!(ips),
-            "{sse_name}: presentation.resolved_ips"
-        );
+        // Lens derives the headline from these statuses and `resolved_ips` from the A/AAAA
+        // records of `dns.a` and `dns.aaaa`; `resolved_ips` is not in the lens golden (the IP
+        // section reads it) but must come from the batch A/AAAA records.
+        let addresses: Vec<String> = evidence
+            .iter()
+            .filter(|b| ["dns.a", "dns.aaaa"].contains(&b.id.to_string().as_str()))
+            .flat_map(|b| match &b.shape {
+                Shape::Records(records) => records.clone(),
+                _ => vec![],
+            })
+            .filter(|r| matches!(&r.rtype, EvValue::Text(t) if t == "A" || t == "AAAA"))
+            .filter_map(|r| match r.data {
+                EvValue::Text(data) => Some(data),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(addresses, *ips, "{sse_name}: dns.a/dns.aaaa addresses");
     }
 }
 

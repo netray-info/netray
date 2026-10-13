@@ -11,6 +11,7 @@ use std::time::{Duration, Instant};
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
 use netray_ip::backend::Ifconfig;
 use netray_ip::{IpModule, ModuleConfig, testing, translate};
+use netray_model::evidence::{Block, Shape, Value as EvValue};
 use netray_model::{Protocol, Status};
 use serde_json::Value;
 
@@ -23,14 +24,74 @@ fn contracts(name: &str) -> Value {
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
-fn measured(outcome: SectionOutcome) -> (Vec<netray_model::CheckResult>, Value) {
+fn measured(outcome: SectionOutcome) -> (Vec<netray_model::CheckResult>, Vec<Block>) {
     match outcome {
-        SectionOutcome::Measured {
-            checks,
-            presentation,
-            evidence: _,
-        } => (checks, presentation),
+        SectionOutcome::Measured { checks, evidence } => (checks, evidence),
         other => panic!("expected Measured, got {other:?}"),
+    }
+}
+
+/// Lens's `addresses` from the `ip.addresses` rows: an empty text is an absent value, `geo` is
+/// `<city>, <country>` or whichever of them is present.
+fn addresses(evidence: &[Block]) -> Value {
+    let Some(Shape::Table { columns, rows, .. }) = evidence
+        .iter()
+        .find(|b| b.id.to_string() == "ip.addresses")
+        .map(|b| &b.shape)
+    else {
+        panic!("no ip.addresses table in {evidence:?}");
+    };
+    let rows: Vec<Value> = rows
+        .iter()
+        .map(|row| {
+            let get = |key: &str| &row[columns.iter().position(|c| c == key).unwrap()];
+            let text = |key: &str| match get(key) {
+                EvValue::Text(t) if !t.is_empty() => Some(t.clone()),
+                _ => None,
+            };
+            let EvValue::Addr(ip) = get("address") else {
+                panic!("address is not an addr");
+            };
+            let geo = match (text("city"), text("country")) {
+                (Some(city), Some(country)) => Some(format!("{city}, {country}")),
+                (city, country) => city.or(country),
+            };
+            let mut a = serde_json::json!({
+                "ip": ip.to_string(),
+                "network_type": text("network_type").unwrap_or_default(),
+            });
+            if let Some(org) = text("org") {
+                a["org"] = org.into();
+            }
+            if let Some(geo) = geo {
+                a["geo"] = geo.into();
+            }
+            a
+        })
+        .collect();
+    Value::from(rows)
+}
+
+/// Lens's headline from the addresses: the organisations, then the locations.
+fn headline(addresses: &Value) -> String {
+    let unique = |key: &str, max: usize| {
+        let mut v: Vec<&str> = Vec::new();
+        for a in addresses.as_array().unwrap() {
+            if let Some(s) = a[key].as_str()
+                && !v.contains(&s)
+            {
+                v.push(s);
+            }
+        }
+        v.truncate(max);
+        v
+    };
+    let (orgs, geos) = (unique("org", 3), unique("geo", 2));
+    match (orgs.is_empty(), geos.is_empty()) {
+        (false, false) => format!("{} + {}", orgs.join(", "), geos.join(" + ")),
+        (false, true) => orgs.join(", "),
+        (true, false) => geos.join(" + "),
+        (true, true) => format!("{} address(es)", addresses.as_array().unwrap().len()),
     }
 }
 
@@ -64,7 +125,7 @@ fn v6(s: &str) -> Ipv6Addr {
 fn translate_equals_lens_ip_section() {
     let ifc: Ifconfig = serde_json::from_str(IFCONFIG_JSON).unwrap();
     let ip: IpAddr = "1.1.1.1".parse().unwrap();
-    let (checks, presentation) = measured(translate(&[(ip, Ok(ifc))], 1));
+    let (checks, evidence) = measured(translate(&[(ip, Ok(ifc))], 1));
 
     let lens = contracts("lens-full-healthy.json");
     let section = lens["ip"].as_object().expect("lens ip section");
@@ -86,9 +147,11 @@ fn translate_equals_lens_ip_section() {
         assert_eq!(got.findings, want, "{id} findings");
     }
 
-    // Not asserted: `detail_url` (lens-side) and `status` (lens's scoring).
-    assert_eq!(presentation["headline"], section["headline"], "headline");
-    assert_eq!(presentation["addresses"], section["addresses"], "addresses");
+    // As lens derives them from the evidence. Not asserted: `detail_url` (lens-side) and
+    // `status` (lens's scoring).
+    let addresses = addresses(&evidence);
+    assert_eq!(Value::from(headline(&addresses)), section["headline"], "headline");
+    assert_eq!(addresses, section["addresses"], "addresses");
 }
 
 #[test]
@@ -143,9 +206,9 @@ async fn run_samples_four_ipv4_and_four_ipv6_public_sorted() {
         ..Facts::default()
     };
     let module = testing::golden_module(IFCONFIG_JSON);
-    let (_, presentation) = measured(module.run(&ctx(), &facts).await);
+    let (_, evidence) = measured(module.run(&ctx(), &facts).await);
 
-    let got: Vec<String> = presentation["addresses"]
+    let got: Vec<String> = addresses(&evidence)
         .as_array()
         .expect("addresses list")
         .iter()

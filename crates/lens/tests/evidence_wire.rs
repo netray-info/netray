@@ -284,8 +284,9 @@ async fn output_without_evidence_equals_goldens() {
         let mut actual = run_full(&f).await;
         strip_evidence(&mut actual);
         let path = contracts_dir().join(format!("lens-full-{}.json", f.name));
-        let expected: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap())
+        let mut expected: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap())
             .unwrap_or_else(|e| panic!("golden {} is not JSON: {e}", path.display()));
+        strip_evidence(&mut expected);
         for d in diff_paths(&expected, &actual) {
             failures.push(format!("{}: {d}", f.name));
         }

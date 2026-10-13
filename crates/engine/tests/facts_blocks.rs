@@ -60,7 +60,6 @@ impl Module for Tls {
                     findings: vec![],
                     evidence: vec![BlockId::parse("dns.caa").unwrap()],
                 }],
-                presentation: serde_json::Value::Null,
                 evidence: vec![],
             }
         })

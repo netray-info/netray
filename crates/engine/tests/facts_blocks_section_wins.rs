@@ -100,7 +100,6 @@ async fn the_dns_section_block_wins_over_the_facts_block_of_the_same_id() {
     let measured = Dns {
         outcome: SectionOutcome::Measured {
             checks: vec![],
-            presentation: serde_json::Value::Null,
             evidence: vec![section_block.clone()],
         },
         delay: MS(0),

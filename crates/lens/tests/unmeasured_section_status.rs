@@ -21,7 +21,7 @@ use lens::routes::api_router;
 use lens::state::AppState;
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::{Value, json};
+use serde_json::Value;
 use tower::ServiceExt;
 
 static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
@@ -60,7 +60,6 @@ impl Module for StubEmail {
                     result("email.spf", Status::Pass),
                     result("email.dnsbl", dnsbl),
                 ],
-                presentation: json!({}),
                 evidence: vec![],
             }
         })
