@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - tlsight gives a timed-out address the code `HANDSHAKE_TIMEOUT` and adds `dns.lookup_errors`.
   - spectra adds `error: {kind, message}` to the HTTPS, port-80 and CORS probes.
   - beacon gives a category whose answer was not obtained the sub-check `unmeasured`, and a failed side lookup the sub-check `lookup_failed`. Any unmeasured category makes beacon's own grade `skipped`.
+- **Evidence on the lens wire (additive).** Every section event, sync JSON section and MCP section carries `evidence`: typed blocks of what the module measured (DNS records, certificate chains and handshakes per address, redirect chains, the header table, CAA/TLSA records, MX, SPF, DMARC, DKIM, DNSBL and FCrDNS tables, IP addresses with reputation flags). Values are tagged `{"t", "v"}`. Every check item carries `evidence`, the ids of the blocks it relies on, and the summary carries `evidence_schema: 1`. Existing fields keep their values; `headline`, `ip.addresses`, the `http` server fields and `email.grade` are now derived from the evidence. On error inputs a headline symbol follows the check's verdict, and `http.status_code`/`http_version` are absent when the HTTPS probe got no response.
+- **beacon** sends one additional SSE message `{"type":"evidence","blocks":[...]}` before `summary`; the V1 email page ignores it.
 - **lens configuration.** `[backends] resolve_timeout_ms` must also stay below `[backends.http] timeout_ms`, because the HTTP section now waits for the shared lookup inside its own window.
 - mhost 0.12.1.
 
