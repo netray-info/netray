@@ -77,7 +77,10 @@ fn fixture_blocks_fit_the_register_and_checks_reference_them() {
     check_evidence_rule(&checks, &blocks).expect("evidence rule holds");
 
     assert_eq!(refs(&checks, "hsts"), vec!["http.headers"]);
-    assert_eq!(refs(&checks, "https_redirect"), vec!["http.port80"]);
+    assert_eq!(
+        refs(&checks, "https_redirect"),
+        vec!["http.port80", "http.port80_probe"]
+    );
 
     let headers = block(&blocks, "http.headers").expect("http.headers block");
     let Shape::Table { key, columns, rows } = &headers.shape else {
