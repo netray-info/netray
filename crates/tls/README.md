@@ -187,13 +187,15 @@ curl -s 'https://tls.netray.info/api/inspect?h=example.com' | jq '{
 
 **Certificate** — `chain_trusted`, `not_expired`, `hostname_match`, `chain_complete`, `strong_signature`, `key_strength`, `expiry_window`, `cert_lifetime`, `san_quality`, `aia_reachability`
 
-**Protocol** — `tls_reachable` (Pass when an address completed the handshake, Fail when every address failed at the target, Skip with code `NOT_TESTED_FROM_HERE` when every failure was local), `tls_version`, `forward_secrecy`, `aead_cipher`, `ocsp_stapled`, `ct_logged`
+**Protocol** — `tls_reachable` (Pass when an address completed the handshake, Fail when every address failed, Skip when every failure was `NOT_TESTED_FROM_HERE`), `tls_version`, `forward_secrecy`, `aead_cipher`, `ocsp_stapled`, `ct_logged`
 
 **Configuration** — `caa_compliant`, `dane_valid`, `ech_advertised`, `consistency`, `alpn_consistency`
 
 **Hostname-scoped** — `hsts`, `https_redirect`
 
 Each check returns `pass`, `warn`, `fail`, or `skip`. The `validation.verdict` is the worst result across all checks.
+
+An address without a handshake carries `error.code`: `HANDSHAKE_FAILED` (refused, reset, TLS alert), `HANDSHAKE_TIMEOUT` (no handshake within the timeout), or `NOT_TESTED_FROM_HERE` (this host has no route or source address for it). `dns.lookup_errors` names the DNS lookups that failed or got no definitive answer (`caa`, `tlsa`, `https`); it is absent when every lookup answered.
 
 ### CI / Pipeline integration
 

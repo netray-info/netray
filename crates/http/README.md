@@ -67,6 +67,8 @@ GET  /api/inspect?url=https://example.com
 
 Returns a structured JSON document with the full inspection result. See the [API docs](/docs) or [OpenAPI spec](/api-docs/openapi.json) for the full schema.
 
+A probe that got no response carries `error: {kind, message}` on the response (HTTPS probe), on `http_upgrade` (port 80) or on `cors` (CORS probe); `kind` is one of `timeout`, `refused`, `reset`, `tls`, `blocked` or `unreachable`.
+
 ```sh
 curl -s 'https://http.netray.info/api/inspect?url=example.com' | jq .quality
 ```

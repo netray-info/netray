@@ -10,6 +10,7 @@ fn expected(v: &CheckVerdict) -> Status {
         CheckVerdict::Fail => Status::Fail,
         CheckVerdict::NotFound => Status::Fail,
         CheckVerdict::Skip => Status::NotApplicable,
+        CheckVerdict::Unmeasured => Status::Unmeasured,
     }
 }
 
@@ -21,6 +22,7 @@ fn check_verdict_maps_to_status() {
         CheckVerdict::Fail,
         CheckVerdict::NotFound,
         CheckVerdict::Skip,
+        CheckVerdict::Unmeasured,
     ];
     for v in all {
         let want = expected(&v);

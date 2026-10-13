@@ -21,7 +21,7 @@
 use netray_common::fetch::{self, AtLimit, BlockReason, FetchError, FetchOptions};
 use reqwest::Method;
 
-use crate::checks::util;
+use crate::checks::{UNMEASURED, unmeasured_result, util};
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 use crate::state::OutboundFetch;
@@ -80,16 +80,10 @@ fn fetch_error_sub_check(e: &FetchError, initial_is_name: bool) -> SubCheck {
             Verdict::Warn,
             "logo unreachable: redirect to non-HTTPS URL",
         ),
-        FetchError::Timeout => (
-            "logo_unreachable",
-            Verdict::Warn,
-            "logo unreachable: timeout",
-        ),
-        FetchError::Http(e) if e.is_timeout() => (
-            "logo_unreachable",
-            Verdict::Warn,
-            "logo unreachable: timeout",
-        ),
+        FetchError::Timeout => (UNMEASURED, Verdict::Skip, "logo unreachable: timeout"),
+        FetchError::Http(e) if e.is_timeout() => {
+            (UNMEASURED, Verdict::Skip, "logo unreachable: timeout")
+        }
         FetchError::Http(e) if e.is_connect() => (
             "logo_unreachable",
             Verdict::Warn,
@@ -136,7 +130,10 @@ pub async fn check_bimi(
     fetch: &OutboundFetch,
 ) -> (CheckResult, bool) {
     let bimi_name = format!("default._bimi.{}", domain);
-    let txt_records = resolver.lookup_txt(&bimi_name).await;
+    let txt_records = match resolver.lookup_txt(&bimi_name).await {
+        Ok(records) => records,
+        Err(e) => return (unmeasured_result(Category::Bimi, e.to_string()), false),
+    };
 
     let bimi_records: Vec<&str> = txt_records
         .iter()

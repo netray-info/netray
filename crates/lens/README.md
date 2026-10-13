@@ -226,14 +226,14 @@ This section is the authoritative description of the scoring algorithm. lens sco
 
 ### Algorithm
 
-Each backend returns a set of named checks. Every check has a status: `pass`, `warn`, `fail`, `not_found`, `skip`, or `error`.
+Each backend returns a set of named checks. Every check has a status: `pass`, `warn`, `fail`, `not_found`, `skip`, `unmeasured`, or `error`. `unmeasured` means the check could not be measured (e.g. a timeout); like `skip` it earns and costs nothing, but unlike `skip` it makes the result incomplete.
 
-1. **Per-check score**: `pass` = full weight, `warn` = exactly half the weight (a weight-5 warn earns 2.5), `fail`/`not_found` = 0. `skip` and `error` are excluded entirely.
+1. **Per-check score**: `pass` = full weight, `warn` = exactly half the weight (a weight-5 warn earns 2.5), `fail`/`not_found` = 0. `skip`, `unmeasured` and `error` are excluded entirely.
 2. **Section score**: weighted sum of earned points ÷ weighted sum of possible points, as a percentage.
 3. **Overall score**: weighted average of section scores.
 4. **Section states**: a section can be `Scored` (contributes to overall), `Errored` (the backend failed, timed out or sent an unknown verdict), or `NotApplicable` (excluded; reason reported in `summary.not_applicable`).
-5. **Incomplete results**: when any weighted section is `Errored` or `Scored` with no possible points (every weighted check `skip`), the result is incomplete: grade `incomplete`, `summary.complete` is `false`, finished sections keep their own scores and grades, and the result is never cached, snapshotted, or shown as a letter on the badge or OG card (both show `?`). `NotApplicable` sections do not make a result incomplete.
-6. **Hard-fail overrides**: certain failures force the overall grade to **F** regardless of the numeric score, unless the result is incomplete.
+5. **Incomplete results**: when any weighted section is `Errored`, `Scored` with no possible points (every weighted check `skip`), or has a weighted check that is `unmeasured`, the result is incomplete: grade `incomplete`, `summary.complete` is `false`, finished sections keep their own scores and grades, a section that answered but has an unmeasured weighted check reports status `incomplete` (in its section event and in `summary.sections`) and `summary.overall` is `incomplete` rather than `error`, a failed hard-fail check still gives grade **F** even though the result is incomplete, and the result is never cached, snapshotted, or shown as a letter on the badge or OG card (both show `?`). `NotApplicable` sections do not make a result incomplete.
+6. **Hard-fail overrides**: certain failures force the overall grade to **F** regardless of the numeric score, including when the result is incomplete (the F is shown, but the result is still never cached or snapshotted).
 7. **Letter grade**: score mapped to thresholds.
 
 ### Section weights

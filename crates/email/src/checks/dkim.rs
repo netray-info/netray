@@ -2,6 +2,7 @@ use std::sync::OnceLock;
 
 use futures::future::join_all;
 
+use super::{lookup_failed, unmeasured_result};
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
@@ -96,7 +97,10 @@ pub async fn check_dkim(
             let mut current_name = name.clone();
             let mut hops = 0;
             loop {
-                let cnames = resolver.lookup_cname(&current_name).await;
+                let cnames = match resolver.lookup_cname(&current_name).await {
+                    Ok(cnames) => cnames,
+                    Err(e) => return (selector, source, hops, Err(e)),
+                };
                 if cnames.is_empty() {
                     break;
                 }
@@ -107,7 +111,7 @@ pub async fn check_dkim(
                 current_name = cnames[0].trim_end_matches('.').to_string();
             }
             let txt_records = if hops > 5 {
-                Vec::new()
+                Ok(Vec::new())
             } else {
                 resolver.lookup_txt(&current_name).await
             };
@@ -117,10 +121,27 @@ pub async fn check_dkim(
 
     let results = join_all(lookup_futures).await;
 
+    let errors: Vec<String> = results
+        .iter()
+        .filter_map(|(_, _, _, r)| r.as_ref().err().map(ToString::to_string))
+        .collect();
+    if !errors.is_empty() && errors.len() == results.len() {
+        return (unmeasured_result(Category::Dkim, errors.join("; ")), false);
+    }
+
     let mut found_any = false;
     let mut revoked_any = false;
 
     for (selector, source, hops, txt_records) in results {
+        let txt_records = match txt_records {
+            Ok(records) => records,
+            Err(e) => {
+                if matches!(source, SelectorSource::User) {
+                    sub_checks.push(lookup_failed(&e));
+                }
+                continue;
+            }
+        };
         if hops > 5 {
             sub_checks.push(SubCheck {
                 name: "cname_loop".to_string(),

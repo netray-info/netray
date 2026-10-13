@@ -82,7 +82,7 @@ impl Snapshot {
                                 CheckVerdict::Pass => (weight as f64, weight),
                                 CheckVerdict::Warn => (weight as f64 / 2.0, weight),
                                 CheckVerdict::Fail | CheckVerdict::NotFound => (0.0, weight),
-                                CheckVerdict::Skip => (0.0, 0),
+                                CheckVerdict::Skip | CheckVerdict::Unmeasured => (0.0, 0),
                             };
                             SnapshotFinding {
                                 check_name: c.name.clone(),
@@ -163,6 +163,7 @@ fn verdict_str(v: &CheckVerdict) -> &'static str {
         CheckVerdict::Warn => "warn",
         CheckVerdict::Fail | CheckVerdict::NotFound => "fail",
         CheckVerdict::Skip => "skip",
+        CheckVerdict::Unmeasured => "unmeasured",
     }
 }
 

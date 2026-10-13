@@ -17,6 +17,7 @@
 
 use futures::future::join_all;
 
+use super::{lookup_failed, unmeasured_result};
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
@@ -44,10 +45,25 @@ pub async fn check_dane(mx_hosts: &[String], resolver: &impl DnsLookup) -> (Chec
     });
     let tlsa_results = join_all(tlsa_futures).await;
 
+    let errors: Vec<String> = tlsa_results
+        .iter()
+        .filter_map(|(_, r)| r.as_ref().err().map(ToString::to_string))
+        .collect();
+    if errors.len() == tlsa_results.len() {
+        return (unmeasured_result(Category::Dane, errors.join("; ")), false);
+    }
+
     let mut sub_checks = Vec::new();
     let mut has_tlsa = false;
 
     for (host, records) in tlsa_results {
+        let records = match records {
+            Ok(records) => records,
+            Err(e) => {
+                sub_checks.push(lookup_failed(&e));
+                continue;
+            }
+        };
         if records.is_empty() {
             continue;
         }

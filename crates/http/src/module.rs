@@ -8,12 +8,12 @@ use governor::{Quota, RateLimiter};
 use netray_common::enrichment::EnrichmentClient;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
-use netray_model::{CheckId, CheckResult, Protocol};
+use netray_model::{CheckId, CheckResult, Protocol, Status};
 use serde_json::json;
 
 use crate::config::{InspectConfig, ModuleConfig};
 use crate::error::AppError;
-use crate::inspect::assembler::InspectResponse;
+use crate::inspect::assembler::{InspectResponse, ProbeError, ProbeErrorKind};
 use crate::inspect::request::Outbound;
 use crate::quality::types::{CheckStatus, QualityCheck};
 
@@ -120,6 +120,10 @@ impl Module for HttpModule {
         &[]
     }
 
+    fn needs_address_records(&self) -> bool {
+        true
+    }
+
     fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
         Box::pin(async move {
             match self.measure(ctx, facts).await {
@@ -142,6 +146,7 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
         Some(u) if u.redirects_to_https => CheckStatus::Pass,
         Some(_) => CheckStatus::Fail,
     };
+    let upgrade_error = resp.http_upgrade.as_ref().and_then(|u| u.error.as_ref());
     let mut https_redirect_findings = match &resp.http_upgrade {
         None => vec![NOT_REPORTED.to_string()],
         Some(_) if https_redirect_status == CheckStatus::Fail => {
@@ -149,9 +154,35 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
         }
         Some(_) => vec![],
     };
+    https_redirect_findings.extend(upgrade_error.map(|e| e.message.clone()));
     if let Some(message) = find_check(quality, "redirect_limit").and_then(|c| c.message.clone()) {
         https_redirect_findings.push(message);
     }
+    let https_redirect = match upgrade_error {
+        Some(e) if unanswered(e) && https_redirect_status != CheckStatus::Pass => (
+            Status::Unmeasured,
+            vec![format!("HTTP port 80 probe got no answer: {}", e.message)],
+        ),
+        _ => (
+            https_redirect_status.clone().into(),
+            https_redirect_findings,
+        ),
+    };
+
+    let response_override = resp.error.as_ref().map(|e| {
+        if unanswered(e) {
+            (Status::Unmeasured, format!("HTTPS probe: {}", e.message))
+        } else {
+            (Status::Fail, format!("no HTTPS response: {}", e.message))
+        }
+    });
+    let cors_override = resp.cors.error.as_ref().map(|e| {
+        if unanswered(e) {
+            (Status::Unmeasured, format!("CORS probe: {}", e.message))
+        } else {
+            (Status::NotApplicable, "no CORS probe response".to_string())
+        }
+    });
 
     let checks = http_checks()
         .iter()
@@ -161,8 +192,21 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
             if name == "https_redirect" {
                 return CheckResult {
                     id: id.clone(),
-                    status: https_redirect_status.clone().into(),
-                    findings: https_redirect_findings.clone(),
+                    status: https_redirect.0,
+                    findings: https_redirect.1.clone(),
+                    evidence: vec![],
+                };
+            }
+            let probe_override = if name == "cors" {
+                &cors_override
+            } else {
+                &response_override
+            };
+            if let Some((status, finding)) = probe_override {
+                return CheckResult {
+                    id: id.clone(),
+                    status: *status,
+                    findings: vec![finding.clone()],
                     evidence: vec![],
                 };
             }
@@ -221,6 +265,14 @@ const NOT_REPORTED: &str = "not reported";
 /// Finding of a check spectra measured as not applicable without giving a reason.
 const NOT_APPLICABLE: &str = "not applicable";
 
+/// A probe that got no answer, as opposed to one that was answered with a refusal.
+fn unanswered(e: &ProbeError) -> bool {
+    matches!(
+        e.kind,
+        ProbeErrorKind::Timeout | ProbeErrorKind::Blocked | ProbeErrorKind::Unreachable
+    )
+}
+
 fn find_check<'a>(checks: &'a [QualityCheck], name: &str) -> Option<&'a QualityCheck> {
     checks.iter().find(|c| c.name == name)
 }
@@ -260,6 +312,7 @@ mod tests {
             same_host: true,
             message: String::new(),
             redirects: vec![],
+            error: None,
         });
         resp.quality.checks = checks
             .iter()

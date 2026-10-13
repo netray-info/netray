@@ -3,8 +3,9 @@ use std::time::Duration;
 
 use futures::future::join_all;
 
+use super::{join_errors, lookup_failed, unmeasured_result};
 use crate::config::DnsblConfig;
-use crate::dns::DnsLookup;
+use crate::dns::{DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// IPv4 zones that don't support IPv6 lookups.
@@ -39,15 +40,21 @@ struct DnsblQuery {
     target: Target,
 }
 
-/// Check DNSBLs for MX IPs.
+/// Check DNSBLs for MX IPs. `addr_errors` are the MX-host address lookups that failed: with no
+/// MX IP the check is unmeasured, otherwise each is an Info.
 #[tracing::instrument(skip_all, fields(category = "dnsbl", domain = %domain))]
 pub async fn check_dnsbl(
     mx_ips: &[IpAddr],
+    addr_errors: &[LookupError],
     domain: &str,
     config: &DnsblConfig,
     resolver: &impl DnsLookup,
 ) -> CheckResult {
     let timeout = Duration::from_millis(config.timeout_ms);
+
+    if mx_ips.is_empty() && !addr_errors.is_empty() {
+        return unmeasured_result(Category::Dnsbl, join_errors(addr_errors));
+    }
 
     if mx_ips.is_empty() {
         let sub_checks = vec![SubCheck {
@@ -93,55 +100,74 @@ pub async fn check_dnsbl(
 
     let results = join_all(futures).await;
 
-    let mut sub_checks = Vec::new();
-    let mut timed_out_zones: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // A zone answered when every one of its queries is clean (a definite empty answer) or
+    // listed; a timeout, an error or a policy response leaves it unanswered.
+    let mut listed = Vec::new();
+    let mut unanswered: Vec<(&str, SubCheck)> = Vec::new();
+    let mut zones: Vec<&str> = Vec::new();
 
     for (query, lookup) in results {
+        let zone = query.zone.as_str();
+        if !zones.contains(&zone) {
+            zones.push(zone);
+        }
         let values = match lookup {
-            Ok(v) => v,
+            Ok(Ok(values)) => values,
+            Ok(Err(e)) => {
+                tracing::debug!(zone = %query.zone, query_name = %query.query_name, error = %e, "DNSBL query failed");
+                note_unanswered(&mut unanswered, zone, unreachable(zone, &e.cause));
+                continue;
+            }
             Err(_) => {
                 tracing::debug!(zone = %query.zone, query_name = %query.query_name, "DNSBL query timed out");
-                timed_out_zones.insert(query.zone.clone());
+                note_unanswered(&mut unanswered, zone, unreachable(zone, "timeout"));
                 continue;
             }
         };
-
-        if values.is_empty() {
-            continue;
-        }
 
         let (policy, listing): (Vec<_>, Vec<_>) = values.into_iter().partition(is_policy_response);
         let zone_slug = query.zone.replace('.', "_");
 
         if !listing.is_empty() {
             let codes = format_codes(&listing);
-            sub_checks.push(SubCheck {
+            listed.push(SubCheck {
                 name: format!("listed_{}", zone_slug),
                 verdict: Verdict::Fail,
                 detail: format!("{} listed in {} ({})", query.target, query.zone, codes),
             });
         } else if !policy.is_empty() {
             let codes = format_codes(&policy);
-            sub_checks.push(SubCheck {
+            let sub_check = SubCheck {
                 name: format!("policy_response_{}", zone_slug),
                 verdict: Verdict::Info,
                 detail: format!(
                     "{} rejected the query ({}); results from this zone are unreliable",
                     query.zone, codes
                 ),
-            });
+            };
+            note_unanswered(&mut unanswered, zone, sub_check);
         }
     }
 
-    for zone in timed_out_zones {
-        sub_checks.push(SubCheck {
-            name: "zone_unreachable".to_string(),
-            verdict: Verdict::Info,
-            detail: format!("zone {} unreachable", zone),
-        });
+    // No zone was queried and an MX address family is missing: the queries that would have
+    // run are unknown.
+    if zones.is_empty() && !addr_errors.is_empty() {
+        return unmeasured_result(Category::Dnsbl, join_errors(addr_errors));
     }
 
-    if sub_checks.is_empty() {
+    let answered_any = zones
+        .iter()
+        .any(|z| !unanswered.iter().any(|(u, _)| u == z));
+    let nothing_listed = listed.is_empty();
+    if nothing_listed && !answered_any && !unanswered.is_empty() {
+        let causes: Vec<String> = unanswered.into_iter().map(|(_, s)| s.detail).collect();
+        return unmeasured_result(Category::Dnsbl, causes.join("; "));
+    }
+
+    let mut sub_checks = listed;
+    sub_checks.extend(unanswered.into_iter().map(|(_, s)| s));
+    sub_checks.extend(addr_errors.iter().map(lookup_failed));
+    if nothing_listed {
         sub_checks.push(SubCheck {
             name: "clean".to_string(),
             verdict: Verdict::Pass,
@@ -155,6 +181,25 @@ pub async fn check_dnsbl(
         mx_ips.len()
     );
     CheckResult::new(Category::Dnsbl, sub_checks, detail)
+}
+
+/// Keeps the first reason a zone went unanswered.
+fn note_unanswered<'a>(
+    unanswered: &mut Vec<(&'a str, SubCheck)>,
+    zone: &'a str,
+    sub_check: SubCheck,
+) {
+    if !unanswered.iter().any(|(z, _)| *z == zone) {
+        unanswered.push((zone, sub_check));
+    }
+}
+
+fn unreachable(zone: &str, cause: &str) -> SubCheck {
+    SubCheck {
+        name: "zone_unreachable".to_string(),
+        verdict: Verdict::Info,
+        detail: format!("zone {zone} unreachable: {cause}"),
+    }
 }
 
 /// DNSBL error/policy responses live in `127.255.255.0/24`. Every major DNSBL

@@ -178,6 +178,10 @@ impl Module for TlsModule {
         &[]
     }
 
+    fn needs_address_records(&self) -> bool {
+        true
+    }
+
     fn wants_facts(&self) -> bool {
         true
     }
@@ -196,7 +200,10 @@ impl Module for TlsModule {
 
 /// Maps port 443 (else the first port) onto all 21 `tls.<id>` checks and the V1 headline. Each
 /// per-address check is measured on every address that completed a handshake and reports the
-/// worst of them; CAA, DANE and OCSP come once from the summary.
+/// worst of them; CAA, DANE and OCSP come once from the summary. A failed CAA, TLSA or HTTPS
+/// lookup makes its check `Unmeasured`, and so do the consistency checks when a timeout left
+/// fewer than two handshakes. Without any handshake the other 20 checks follow
+/// `tls_reachable`: not applicable behind a Fail, `NotTested` or `Unmeasured` otherwise.
 pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     let port = resp
         .ports
@@ -207,12 +214,9 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     let handshakes: Vec<&IpInspectionResult> = ips.iter().filter(|r| r.error.is_none()).collect();
 
     let mut by_id: HashMap<String, CheckResult> = HashMap::new();
-    let reachable = checks::check_tls_reachable(ips);
-    let reachable_status = check_status(&reachable, ips);
-    by_id.insert(
-        reachable.id.clone(),
-        result(&reachable.id, reachable_status, findings(&reachable)),
-    );
+    let reachable = reachable(&checks::check_tls_reachable(ips), ips);
+    let reachable_status = reachable.status;
+    by_id.insert("tls_reachable".to_string(), reachable);
 
     if let (Some(port), false) = (port, handshakes.is_empty()) {
         let is_hostname = resp.input_mode == "hostname";
@@ -254,12 +258,52 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
                 result(&hc.id, hc.status.into(), findings(&hc)),
             );
         }
+
+        let lookup_errors = resp
+            .dns
+            .as_ref()
+            .map_or(&[][..], |d| d.lookup_errors.as_slice());
+        for (lookup, name, record) in [
+            ("caa", "caa_compliant", "CAA"),
+            ("tlsa", "dane_valid", "TLSA"),
+            ("https", "ech_advertised", "HTTPS"),
+        ] {
+            if lookup_errors.iter().any(|e| e == lookup) && (lookup != "https" || port.port == 443)
+            {
+                let finding = format!("{record} lookup for {} failed", resp.hostname);
+                by_id.insert(
+                    name.to_string(),
+                    result(name, Status::Unmeasured, vec![finding]),
+                );
+            }
+        }
+
+        let timed_out = timed_out(ips);
+        if handshakes.len() < 2 && !timed_out.is_empty() {
+            let finding = format!(
+                "fewer than 2 handshakes to compare, timed out: {}",
+                timed_out.join(", ")
+            );
+            for name in ["consistency", "alpn_consistency"] {
+                by_id.insert(
+                    name.to_string(),
+                    result(name, Status::Unmeasured, vec![finding.clone()]),
+                );
+            }
+        }
     }
 
-    let fallback = if handshakes.is_empty() {
-        "no TLS handshake"
+    let (fallback_status, fallback) = if !handshakes.is_empty() {
+        (Status::NotApplicable, "not reported")
     } else {
-        "not reported"
+        match reachable_status {
+            Status::NotTested => (Status::NotTested, "no TLS handshake"),
+            Status::Unmeasured => (
+                Status::Unmeasured,
+                "no TLS handshake: every tested address timed out",
+            ),
+            _ => (Status::NotApplicable, "no TLS handshake"),
+        }
     };
     let checks = tls_checks()
         .iter()
@@ -268,7 +312,7 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
             let name = name.trim_start_matches("tls.");
             by_id
                 .remove(name)
-                .unwrap_or_else(|| result(name, Status::NotApplicable, vec![fallback.to_string()]))
+                .unwrap_or_else(|| result(name, fallback_status, vec![fallback.to_string()]))
         })
         .collect();
 
@@ -334,19 +378,50 @@ fn worst_of(name: &str, hcs: &[(&str, &HealthCheck)]) -> Option<CheckResult> {
     Some(result(name, worst.into(), findings))
 }
 
-/// tlsight's status; a `tls_reachable` skip because this host cannot reach the target is
-/// `NotTested`.
-fn check_status(hc: &HealthCheck, ips: &[IpInspectionResult]) -> Status {
-    if hc.id == "tls_reachable"
-        && hc.status == CheckStatus::Skip
-        && let Some(err) = ips.iter().find_map(|r| r.error.as_ref())
-    {
-        let status = crate::tls::status_of_error_code(&err.code);
-        if status == Status::NotTested {
-            return status;
-        }
+/// `tls_reachable` from tlsight's verdict and the per-address error codes. A pass names each
+/// address that timed out; otherwise a target-side failure on any tested address is `Fail`, a
+/// timeout `Unmeasured`, and only untestable addresses `NotTested`.
+fn reachable(hc: &HealthCheck, ips: &[IpInspectionResult]) -> CheckResult {
+    if hc.status == CheckStatus::Pass {
+        let findings = ips
+            .iter()
+            .filter_map(|r| Some((&r.ip, r.error.as_ref()?)))
+            .filter(|(_, e)| e.code == "HANDSHAKE_TIMEOUT")
+            .map(|(ip, e)| format!("{ip}: {}", e.message))
+            .collect();
+        return result(&hc.id, Status::Pass, findings);
     }
-    hc.status.into()
+    let statuses: Vec<Status> = ips
+        .iter()
+        .filter_map(|r| r.error.as_ref())
+        .map(|e| crate::tls::status_of_error_code(&e.code))
+        .filter(|s| *s != Status::NotTested)
+        .collect();
+    if statuses.contains(&Status::Fail) {
+        result(&hc.id, Status::Fail, vec![hc.detail.clone()])
+    } else if statuses.contains(&Status::Unmeasured) {
+        let unmeasured: Vec<String> = ips
+            .iter()
+            .filter_map(|r| Some((&r.ip, r.error.as_ref()?)))
+            .filter(|(_, e)| crate::tls::status_of_error_code(&e.code) == Status::Unmeasured)
+            .map(|(ip, e)| format!("{ip}: {}", e.message))
+            .collect();
+        result(&hc.id, Status::Unmeasured, unmeasured)
+    } else {
+        result(&hc.id, Status::NotTested, vec![hc.detail.clone()])
+    }
+}
+
+/// The addresses whose handshake timed out.
+fn timed_out(ips: &[IpInspectionResult]) -> Vec<&str> {
+    ips.iter()
+        .filter(|r| {
+            r.error
+                .as_ref()
+                .is_some_and(|e| e.code == "HANDSHAKE_TIMEOUT")
+        })
+        .map(|r| r.ip.as_str())
+        .collect()
 }
 
 /// Build a human-readable headline from the first port's first IP result.

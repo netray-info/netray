@@ -70,6 +70,11 @@ name = "module_v3"
 path = "tests/module_v3.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "contract_status"
+path = "tests/contract_status.rs"
+required-features = ["testing"]
+
 # Explicit test binary so admin tests always run in their own process.
 # The Prometheus metrics recorder is a global singleton; declaring admin as a
 # separate [[test]] binary guarantees it gets exactly one installation attempt,

@@ -7,6 +7,7 @@ use std::time::Duration;
 use governor::{Quota, RateLimiter};
 use mhost::RecordType;
 use mhost::lints::CheckResult as LintResult;
+use mhost::resolver::lookup::LookupResult;
 use mhost::resolver::{Lookups, MultiQuery};
 use mhost::resources::{RData, Record};
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
@@ -286,7 +287,21 @@ pub fn facts_from_lookups(lookups: &Lookups) -> Facts {
                     rr
                 }),
         ),
+        no_address_definite: definite_negative(lookups, RecordType::A)
+            && definite_negative(lookups, RecordType::AAAA),
     }
+}
+
+/// Whether `lookups` hold at least one lookup of `record_type` and every one is a definite
+/// negative (NXDOMAIN, or NODATA that is not a referral).
+fn definite_negative(lookups: &Lookups, record_type: RecordType) -> bool {
+    let mut of_type = lookups
+        .iter()
+        .filter(|lookup| lookup.query().record_type() == record_type)
+        .peekable();
+    of_type.peek().is_some()
+        && of_type
+            .all(|lookup| matches!(lookup.result(), LookupResult::NxDomain(nx) if nx.is_definite()))
 }
 
 /// The record data of the lookups that queried `record_type`, CNAME chain targets included.
@@ -323,6 +338,8 @@ enum Verdict {
     NotFound,
     /// Excluded from both earned and possible totals.
     Skip,
+    /// The input of the check could not be obtained.
+    Unmeasured,
 }
 
 impl From<Verdict> for Status {
@@ -332,6 +349,7 @@ impl From<Verdict> for Status {
             Verdict::Warn => Status::Warn,
             Verdict::Fail | Verdict::NotFound => Status::Fail,
             Verdict::Skip => Status::NotApplicable,
+            Verdict::Unmeasured => Status::Unmeasured,
         }
     }
 }
@@ -342,24 +360,95 @@ struct LintCheck {
     messages: Vec<String>,
 }
 
+/// The record types whose batches each lint-over-batch check reads.
+const CHECK_INPUTS: &[(&str, &[&str])] = &[
+    ("caa", &["CAA"]),
+    ("cname_apex", &["CNAME", "SOA"]),
+    ("dnssec", &["DNSKEY", "DS"]),
+    ("dnskey_algorithm", &["DNSKEY"]),
+    ("dnssec_rollover", &["DNSKEY", "DS"]),
+    ("https_svcb", &["HTTPS", "SVCB"]),
+    ("ns", &["NS"]),
+    ("ns_lame", &["NS"]),
+    ("ns_delegation", &["NS"]),
+];
+
 /// Maps prism's check events onto `dns.<category>` checks (the email categories dropped), the
 /// V1 headline and the addresses of the A/AAAA batches.
 pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     let mut checks: Vec<LintCheck> = Vec::new();
     let mut resolved_ips: Vec<IpAddr> = Vec::new();
     let mut seen_ips: HashSet<IpAddr> = HashSet::new();
+    let mut batch_errors: Vec<(&str, Option<String>)> = Vec::new();
+    let mut unanswered: Vec<(&'static str, &[String], bool)> = Vec::new();
+    let mut stream_timed_out = false;
 
     for event in events {
         match event {
             CheckEvent::Batch(batch) => {
                 collect_ips_from_batch(batch, &mut resolved_ips, &mut seen_ips);
+                batch_errors.push((batch.record_type.as_str(), batch_error(batch)));
             }
             CheckEvent::Lint(lint) => {
                 if let Some(check) = parse_lint_event(lint) {
                     checks.push(check);
                 }
             }
+            CheckEvent::Unanswered {
+                category,
+                silent,
+                none_answered,
+            } => unanswered.push((*category, silent.as_slice(), *none_answered)),
+            CheckEvent::Error {
+                code: "STREAM_TIMEOUT",
+                ..
+            } => stream_timed_out = true,
             _ => {}
+        }
+    }
+
+    for check in &mut checks {
+        let findings: Vec<String> = if check.name == "ttl" {
+            let base: Vec<_> = batch_errors
+                .iter()
+                .filter(|(record_type, _)| !record_type.starts_with('_'))
+                .collect();
+            if !base.is_empty() && base.iter().all(|(_, error)| error.is_some()) {
+                base.iter().filter_map(|(_, error)| error.clone()).collect()
+            } else {
+                Vec::new()
+            }
+        } else {
+            let inputs = CHECK_INPUTS
+                .iter()
+                .find(|(name, _)| *name == check.name)
+                .map_or(&[][..], |(_, inputs)| *inputs);
+            batch_errors
+                .iter()
+                .filter(|(record_type, _)| inputs.contains(record_type))
+                .filter_map(|(_, error)| error.clone())
+                .collect()
+        };
+        if !findings.is_empty() {
+            check.verdict = Verdict::Unmeasured;
+            check.messages = findings;
+        }
+    }
+
+    for (category, silent, none_answered) in unanswered {
+        match checks.iter_mut().find(|c| c.name == category) {
+            Some(check) if check.verdict == Verdict::Unmeasured => {}
+            Some(check) if none_answered => {
+                check.verdict = Verdict::Unmeasured;
+                check.messages = silent.to_vec();
+            }
+            Some(check) => check.messages.extend(silent.iter().cloned()),
+            None if none_answered => checks.push(LintCheck {
+                name: category,
+                verdict: Verdict::Unmeasured,
+                messages: silent.to_vec(),
+            }),
+            None => {}
         }
     }
 
@@ -399,10 +488,18 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     }
     for id in dns_checks() {
         if !results.iter().any(|r| r.id == *id) {
+            let (status, finding) = if stream_timed_out {
+                (
+                    Status::Unmeasured,
+                    "DNS check stream timed out before this check was reported",
+                )
+            } else {
+                (Status::NotApplicable, "not reported")
+            };
             results.push(CheckResult {
                 id: id.clone(),
-                status: Status::NotApplicable,
-                findings: vec!["not reported".to_string()],
+                status,
+                findings: vec![finding.to_string()],
                 evidence: vec![],
             });
         }
@@ -413,6 +510,43 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
         checks: results,
         presentation: json!({ "headline": headline, "resolved_ips": resolved_ips }),
     }
+}
+
+/// The finding of a batch that measured nothing: no lookups, or every lookup an error or a
+/// negative answer that is not definite. Names the record type, the causes and the resolvers.
+fn batch_error(batch: &BatchEvent) -> Option<String> {
+    let record_type = &batch.record_type;
+    if batch.lookups.is_empty() {
+        return Some(format!("{record_type} lookup failed: no resolver answered"));
+    }
+    let mut causes: Vec<(String, Vec<String>)> = Vec::new();
+    for lookup in batch.lookups.iter() {
+        let cause = match lookup.result() {
+            LookupResult::Error(e) => e.to_string(),
+            LookupResult::NxDomain(nx) if !nx.is_definite() => {
+                if nx.is_referral() {
+                    "referral".to_string()
+                } else {
+                    nx.response_code()
+                        .map_or_else(|| "no response code".to_string(), |rc| rc.to_string())
+                }
+            }
+            _ => return None,
+        };
+        let server = lookup.name_server().to_string();
+        match causes.iter_mut().find(|(c, _)| *c == cause) {
+            Some((_, servers)) => servers.push(server),
+            None => causes.push((cause, vec![server])),
+        }
+    }
+    let causes: Vec<String> = causes
+        .into_iter()
+        .map(|(cause, servers)| format!("{cause} from {}", servers.join(", ")))
+        .collect();
+    Some(format!(
+        "{record_type} lookup failed: {}",
+        causes.join("; ")
+    ))
 }
 
 /// The A or AAAA addresses of an A or AAAA batch, each once.
@@ -495,7 +629,7 @@ fn parse_lint_event(lint: &LintEvent) -> Option<LintCheck> {
 /// Order: Pass < NotFound < Warn < Fail.
 fn verdict_rank(v: Verdict) -> u8 {
     match v {
-        Verdict::Pass | Verdict::Skip => 0,
+        Verdict::Pass | Verdict::Skip | Verdict::Unmeasured => 0,
         Verdict::NotFound => 1,
         Verdict::Warn => 2,
         Verdict::Fail => 3,
@@ -527,6 +661,7 @@ fn build_headline(checks: &[LintCheck]) -> String {
                     Verdict::Warn => "~",
                     Verdict::Fail => "\u{2717}",
                     Verdict::NotFound | Verdict::Skip => "\u{2013}",
+                    Verdict::Unmeasured => "?",
                 },
                 None => "\u{2013}",
             };

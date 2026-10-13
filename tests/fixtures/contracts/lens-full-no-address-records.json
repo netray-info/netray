@@ -227,24 +227,28 @@
   "http": {
     "checks": [],
     "detail_url": "",
-    "headline": "backend error",
-    "status": "error"
+    "headline": "not applicable",
+    "status": "skip"
   },
   "ip": {
     "addresses": [],
     "checks": [],
     "detail_url": "",
-    "headline": "no DNS results",
-    "status": "error"
+    "headline": "not applicable",
+    "status": "skip"
   },
   "summary": {
-    "complete": false,
-    "grade": "incomplete",
+    "complete": true,
+    "grade": "D",
     "hard_fail": false,
     "hard_fail_checks": [],
     "hard_fail_reason": null,
-    "not_applicable": {},
-    "overall": "error",
+    "not_applicable": {
+      "http": "no A or AAAA record",
+      "ip": "no A or AAAA record",
+      "tls": "no A or AAAA record"
+    },
+    "overall": "fail",
     "score": 46.4,
     "section_grades": {
       "dns": "F",
@@ -253,15 +257,15 @@
     "sections": {
       "dns": "fail",
       "email": "fail",
-      "http": "error",
-      "ip": "error",
-      "tls": "error"
+      "http": "skip",
+      "ip": "skip",
+      "tls": "skip"
     }
   },
   "tls": {
     "checks": [],
     "detail_url": "",
-    "headline": "backend error",
-    "status": "error"
+    "headline": "not applicable",
+    "status": "skip"
   }
 }

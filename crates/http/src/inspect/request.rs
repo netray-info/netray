@@ -5,7 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use netray_common::fetch::{
-    self, AtLimit, ClientSettings, FetchError, FetchOptions, Hop, Resolve, SystemResolver,
+    self, AtLimit, BlockReason, ClientSettings, FetchError, FetchOptions, Hop, Resolve,
+    SystemResolver,
 };
 use netray_common::target_policy::is_allowed_target;
 use reqwest::Method;
@@ -13,7 +14,7 @@ use reqwest::header::{ACCEPT_ENCODING, HeaderMap, HeaderValue, USER_AGENT};
 use url::Url;
 
 use super::TaskResult;
-use super::assembler::RedirectHop;
+use super::assembler::{ProbeError, ProbeErrorKind, RedirectHop};
 
 /// Name resolution and address predicate for outbound inspection requests.
 #[derive(Clone)]
@@ -104,21 +105,90 @@ pub async fn execute_request(
             redirect_limit_reached: response.limit_reached,
             error: None,
         },
-        Err(FetchError::Blocked { mut hops, hop, .. }) => {
-            if hop >= 1 {
-                hops.pop();
-            }
-            failed(
-                &url,
-                redirect_hops(hops),
-                "Redirect destination blocked".to_string(),
-            )
+        Err(e) => {
+            let error = probe_error(&e, timeout);
+            let hops = match e {
+                FetchError::Blocked { mut hops, hop, .. } => {
+                    if hop >= 1 {
+                        hops.pop();
+                    }
+                    hops
+                }
+                _ => hops,
+            };
+            failed(&url, redirect_hops(hops), error)
         }
-        Err(e) => failed(&url, redirect_hops(hops), format!("Request failed: {e}")),
     }
 }
 
-fn failed(url: &Url, redirects: Vec<RedirectHop>, error: String) -> TaskResult {
+fn probe_error(e: &FetchError, timeout: Duration) -> ProbeError {
+    let (kind, message) = match e {
+        FetchError::Blocked {
+            url,
+            reason: BlockReason::NoAddress,
+            ..
+        } => (
+            ProbeErrorKind::Refused,
+            format!("Redirect destination does not resolve: {url}"),
+        ),
+        FetchError::Blocked { url, .. } => (
+            ProbeErrorKind::Blocked,
+            format!("Redirect destination blocked: {url}"),
+        ),
+        FetchError::Scheme(_) => (ProbeErrorKind::Blocked, format!("Request failed: {e}")),
+        FetchError::Timeout => (
+            ProbeErrorKind::Timeout,
+            format!("timed out after {}s", timeout.as_secs()),
+        ),
+        FetchError::Http(source) => (io_kind(source), format!("Request failed: {e}")),
+        _ => (ProbeErrorKind::Reset, format!("Request failed: {e}")),
+    };
+    ProbeError { kind, message }
+}
+
+fn io_kind(e: &reqwest::Error) -> ProbeErrorKind {
+    classify(first_io_kind(e), e.is_connect())
+}
+
+fn first_io_kind(e: &reqwest::Error) -> Option<std::io::ErrorKind> {
+    let mut source: Option<&(dyn std::error::Error + 'static)> = Some(e);
+    while let Some(err) = source {
+        if let Some(io) = err.downcast_ref::<std::io::Error>() {
+            // hyper-rustls wraps the handshake error in `io::Error::other`, and io::Error's
+            // `source()` skips its payload.
+            if io.kind() == std::io::ErrorKind::Other
+                && let Some(inner) = io.get_ref()
+            {
+                source = Some(inner as &(dyn std::error::Error + 'static));
+                continue;
+            }
+            return Some(io.kind());
+        }
+        source = err.source();
+    }
+    None
+}
+
+/// `connect`: the error arose before a connection was established, so an unexplained one
+/// means nothing left the host.
+fn classify(io: Option<std::io::ErrorKind>, connect: bool) -> ProbeErrorKind {
+    use std::io::ErrorKind as Io;
+    match io {
+        Some(Io::ConnectionRefused) => ProbeErrorKind::Refused,
+        Some(Io::TimedOut) => ProbeErrorKind::Timeout,
+        Some(Io::InvalidData) => ProbeErrorKind::Tls,
+        Some(Io::NetworkUnreachable | Io::HostUnreachable | Io::AddrNotAvailable) => {
+            ProbeErrorKind::Unreachable
+        }
+        Some(Io::ConnectionReset | Io::ConnectionAborted | Io::BrokenPipe | Io::UnexpectedEof) => {
+            ProbeErrorKind::Reset
+        }
+        _ if connect => ProbeErrorKind::Unreachable,
+        _ => ProbeErrorKind::Reset,
+    }
+}
+
+fn failed(url: &Url, redirects: Vec<RedirectHop>, error: ProbeError) -> TaskResult {
     TaskResult {
         final_url: url.to_string(),
         status: 0,
@@ -177,6 +247,37 @@ mod tests {
             resolver: Arc::new(NoNames),
             allow: |ip| ip == IpAddr::V4(Ipv4Addr::LOCALHOST),
         }
+    }
+
+    #[test]
+    fn unexplained_connect_error_is_unreachable() {
+        use std::io::{Error, ErrorKind};
+        let emfile = Error::from_raw_os_error(24).kind();
+        let eperm = Error::from_raw_os_error(1).kind();
+        for kind in [Some(emfile), Some(eperm), None] {
+            assert_eq!(
+                classify(kind, true),
+                ProbeErrorKind::Unreachable,
+                "{kind:?}"
+            );
+            assert_eq!(classify(kind, false), ProbeErrorKind::Reset, "{kind:?}");
+        }
+        assert_eq!(
+            classify(Some(ErrorKind::ConnectionRefused), true),
+            ProbeErrorKind::Refused
+        );
+        assert_eq!(
+            classify(Some(ErrorKind::TimedOut), true),
+            ProbeErrorKind::Timeout
+        );
+        assert_eq!(
+            classify(Some(ErrorKind::InvalidData), true),
+            ProbeErrorKind::Tls
+        );
+        assert_eq!(
+            classify(Some(ErrorKind::UnexpectedEof), true),
+            ProbeErrorKind::Reset
+        );
     }
 
     #[tokio::test]

@@ -20,12 +20,20 @@ export interface RedirectHop {
   http_version: string;
 }
 
+export type ProbeErrorKind = 'timeout' | 'refused' | 'reset' | 'tls' | 'blocked' | 'unreachable';
+
+export interface ProbeError {
+  kind: ProbeErrorKind;
+  message: string;
+}
+
 export interface HttpUpgrade {
   redirects_to_https: boolean;
   status_code?: number;
   same_host: boolean;
   message: string;
   redirects: RedirectHop[];
+  error?: ProbeError;
 }
 
 export interface HstsCheck {
@@ -67,6 +75,7 @@ export interface CorsReport {
   allows_credentials: boolean;
   status: CheckStatus;
   message: string;
+  error?: ProbeError;
 }
 
 export interface CookieEntry {
@@ -147,4 +156,5 @@ export interface InspectResponse {
   reporting: ReportingReport;
   quality: QualityReport;
   enrichment: EnrichmentInfo;
+  error?: ProbeError;
 }

@@ -20,8 +20,124 @@ use std::str::FromStr;
 
 use ipnet::IpNet;
 
-use crate::dns::DnsLookup;
+use super::{LOOKUP_FAILED, lookup_failed, unmeasured_result};
+use crate::dns::{DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, SpfFlat, SubCheck, Verdict};
+
+/// Sub-check marking which MX IPs the authorised set cannot judge; its detail is the token
+/// `ipv4` or `ipv6` (incomplete for that family), `both`, or `any` (a positive `exists:` matched,
+/// so every client IP may be authorised). Cross-validation reads it; it is no finding.
+pub const INCOMPLETE: &str = "spf_incomplete";
+
+/// SPF mechanisms that name a DNS target; one with a macro (`%`) is not evaluated.
+const TARGET_MECHANISMS: &[&str] = &["include:", "redirect=", "exists:", "a:", "mx:"];
+
+/// The address families the authorised set is incomplete for; `any` when a positive `exists:`
+/// matched and the set may hold every client IP.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Unresolved {
+    pub ipv4: bool,
+    pub ipv6: bool,
+    pub any: bool,
+}
+
+impl Unresolved {
+    const BOTH: Self = Self {
+        ipv4: true,
+        ipv6: true,
+        any: false,
+    };
+    const ANY: Self = Self {
+        ipv4: true,
+        ipv6: true,
+        any: true,
+    };
+    const IPV4: Self = Self {
+        ipv4: true,
+        ipv6: false,
+        any: false,
+    };
+    const IPV6: Self = Self {
+        ipv4: false,
+        ipv6: true,
+        any: false,
+    };
+
+    /// The family of a failed address half; anything else leaves both unresolved.
+    fn of_failed_half(e: &LookupError) -> Self {
+        match e.record_type {
+            "A" => Self::IPV4,
+            "AAAA" => Self::IPV6,
+            _ => Self::BOTH,
+        }
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self {
+            ipv4: self.ipv4 || other.ipv4,
+            ipv6: self.ipv6 || other.ipv6,
+            any: self.any || other.any,
+        }
+    }
+
+    fn token(self) -> Option<&'static str> {
+        match (self.any, self.ipv4, self.ipv6) {
+            (true, _, _) => Some("any"),
+            (false, true, true) => Some("both"),
+            (false, true, false) => Some("ipv4"),
+            (false, false, true) => Some("ipv6"),
+            (false, false, false) => None,
+        }
+    }
+
+    fn from_token(token: &str) -> Self {
+        match token {
+            "any" => Self::ANY,
+            "ipv4" => Self::IPV4,
+            "ipv6" => Self::IPV6,
+            _ => Self::BOTH,
+        }
+    }
+
+    /// The families an SPF result marks as unresolved.
+    pub fn of(result: &CheckResult) -> Self {
+        result
+            .sub_checks
+            .iter()
+            .filter(|s| s.name == INCOMPLETE)
+            .fold(Self::default(), |acc, s| {
+                acc.union(Self::from_token(&s.detail))
+            })
+    }
+
+    /// Whether coverage of `ip` cannot be judged.
+    pub fn contains(self, ip: &IpAddr) -> bool {
+        self.any || if ip.is_ipv4() { self.ipv4 } else { self.ipv6 }
+    }
+
+    fn marker(self) -> Option<SubCheck> {
+        self.token().map(|token| SubCheck {
+            name: INCOMPLETE.to_string(),
+            verdict: Verdict::Info,
+            detail: token.to_string(),
+        })
+    }
+}
+
+/// Records a failed nested lookup: a `lookup_failed` finding, and, under a positive qualifier,
+/// the families it leaves unresolved. A `-`, `~` or `?` mechanism never authorises, so its
+/// failure hides no authorisation.
+fn unresolved(
+    sub_checks: &mut Vec<SubCheck>,
+    e: &LookupError,
+    families: Unresolved,
+    positive: bool,
+) {
+    sub_checks.push(lookup_failed(e));
+    if positive {
+        sub_checks.extend(families.marker());
+    }
+}
 
 /// Check SPF records for the domain.
 /// Returns (CheckResult, Option<SpfFlat>, has_dash_all).
@@ -41,7 +157,17 @@ pub async fn check_spf_detailed<R: DnsLookup>(
     domain: &str,
     resolver: &R,
 ) -> (CheckResult, Option<SpfFlat>, bool, bool) {
-    let txt_records = resolver.lookup_txt(domain).await;
+    let txt_records = match resolver.lookup_txt(domain).await {
+        Ok(records) => records,
+        Err(e) => {
+            return (
+                unmeasured_result(Category::Spf, e.to_string()),
+                None,
+                false,
+                false,
+            );
+        }
+    };
     let spf_records: Vec<&str> = txt_records
         .iter()
         .filter(|t| t.starts_with("v=spf1"))
@@ -130,6 +256,7 @@ pub async fn check_spf_detailed<R: DnsLookup>(
 
         dispatch_mechanism(
             body,
+            qualifier == '+',
             domain,
             resolver,
             &mut visited,
@@ -181,6 +308,17 @@ pub async fn check_spf_detailed<R: DnsLookup>(
         });
     }
 
+    // A failed nested lookup leaves the authorised set incomplete; its finding and its marker
+    // neither replace the verdict nor count against it. The markers fold into one.
+    let (set_aside, mut sub_checks): (Vec<SubCheck>, Vec<SubCheck>) = sub_checks
+        .into_iter()
+        .partition(|s| s.name == LOOKUP_FAILED || s.name == INCOMPLETE);
+    let incomplete = set_aside
+        .iter()
+        .filter(|s| s.name == INCOMPLETE)
+        .fold(Unresolved::default(), |acc, s| {
+            acc.union(Unresolved::from_token(&s.detail))
+        });
     if sub_checks.is_empty() {
         sub_checks.push(SubCheck {
             name: "spf_ok".to_string(),
@@ -192,6 +330,9 @@ pub async fn check_spf_detailed<R: DnsLookup>(
         });
     }
 
+    sub_checks.extend(set_aside.into_iter().filter(|s| s.name == LOOKUP_FAILED));
+    sub_checks.extend(incomplete.marker());
+
     let detail = format!("SPF record: {}", spf);
     let spf_flat = SpfFlat {
         authorized_prefixes,
@@ -201,10 +342,34 @@ pub async fn check_spf_detailed<R: DnsLookup>(
     (result, Some(spf_flat), has_dash_all, only_dash_all)
 }
 
-/// Recursively expand SPF includes.
+/// The addresses of an `a` or `mx` target. A failed half leaves its family unresolved, a failed
+/// lookup both.
+async fn authorised_addresses<R: DnsLookup>(
+    resolver: &R,
+    target: &str,
+    positive: bool,
+    sub_checks: &mut Vec<SubCheck>,
+) -> Vec<IpAddr> {
+    match resolver.lookup_ips(target).await {
+        Ok(lookup) => {
+            if let Some(e) = &lookup.error {
+                unresolved(sub_checks, e, Unresolved::of_failed_half(e), positive);
+            }
+            lookup.ips
+        }
+        Err(e) => {
+            unresolved(sub_checks, &e, Unresolved::BOTH, positive);
+            Vec::new()
+        }
+    }
+}
+
+/// Recursively expand SPF includes. `positive` is whether a match here would authorise: every
+/// enclosing `include:` is `+`-qualified.
 #[allow(clippy::too_many_arguments)]
 fn expand_spf<'a, R: DnsLookup + 'a>(
     domain: &'a str,
+    positive: bool,
     resolver: &'a R,
     visited: &'a mut HashSet<String>,
     depth: u8,
@@ -225,7 +390,14 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
 
         visited.insert(domain.to_string());
 
-        let txt_records = resolver.lookup_txt(domain).await;
+        // A failed lookup is not a void lookup: only a definite empty answer is.
+        let txt_records = match resolver.lookup_txt(domain).await {
+            Ok(records) => records,
+            Err(e) => {
+                unresolved(sub_checks, &e, Unresolved::BOTH, positive);
+                return;
+            }
+        };
         let spf_records: Vec<&str> = txt_records
             .iter()
             .filter(|t| t.starts_with("v=spf1"))
@@ -241,9 +413,10 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
         let mechanisms: Vec<&str> = spf.split_whitespace().skip(1).collect();
 
         for mech in &mechanisms {
-            let (_qualifier, body) = parse_mechanism(mech);
+            let (qualifier, body) = parse_mechanism(mech);
             dispatch_mechanism(
                 body,
+                positive && qualifier == '+',
                 domain,
                 resolver,
                 visited,
@@ -263,10 +436,12 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
 ///
 /// Does NOT handle `all` or `ptr` — those are top-level grading signals and are
 /// the caller's responsibility. Handles `ip4:`, `ip6:`, `include:`, `redirect=`,
-/// `a`/`a:`, `mx`/`mx:`, and `exists:`. Unknown mechanisms are skipped.
+/// `a`/`a:`, `mx`/`mx:`, and `exists:`. Unknown mechanisms are skipped. `positive` is whether
+/// the mechanism, with its enclosing includes, is `+`-qualified and so can authorise.
 #[allow(clippy::too_many_arguments)]
 fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
     body: &'a str,
+    positive: bool,
     domain: &'a str,
     resolver: &'a R,
     visited: &'a mut HashSet<String>,
@@ -277,6 +452,21 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
     sub_checks: &'a mut Vec<SubCheck>,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
     Box::pin(async move {
+        let macro_target = TARGET_MECHANISMS
+            .iter()
+            .any(|m| body.strip_prefix(m).is_some_and(|t| t.contains('%')));
+        if macro_target {
+            *lookup_count = lookup_count.saturating_add(1);
+            sub_checks.push(SubCheck {
+                name: LOOKUP_FAILED.to_string(),
+                verdict: Verdict::Info,
+                detail: format!("{body} uses a macro and was not evaluated"),
+            });
+            if positive {
+                sub_checks.extend(Unresolved::BOTH.marker());
+            }
+            return;
+        }
         if body.starts_with("ip4:") || body.starts_with("ip6:") {
             if let Some((_, cidr)) = body.split_once(':') {
                 let cidr = if cidr.contains('/') {
@@ -302,6 +492,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
                 } else {
                     expand_spf(
                         include_domain,
+                        positive,
                         resolver,
                         visited,
                         depth + 1,
@@ -319,6 +510,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
                 if !visited.contains(redirect_domain) {
                     expand_spf(
                         redirect_domain,
+                        positive,
                         resolver,
                         visited,
                         depth + 1,
@@ -337,7 +529,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             } else {
                 domain
             };
-            let ips = resolver.lookup_ips(target).await;
+            let ips = authorised_addresses(resolver, target, positive, sub_checks).await;
             for ip in ips {
                 let net = match ip {
                     IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
@@ -354,10 +546,16 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             } else {
                 domain
             };
-            let mx_records = resolver.lookup_mx(target).await;
+            let mx_records = match resolver.lookup_mx(target).await {
+                Ok(records) => records,
+                Err(e) => {
+                    unresolved(sub_checks, &e, Unresolved::BOTH, positive);
+                    Vec::new()
+                }
+            };
             for (_, exchange) in &mx_records {
                 let host = exchange.trim_end_matches('.');
-                let ips = resolver.lookup_ips(host).await;
+                let ips = authorised_addresses(resolver, host, positive, sub_checks).await;
                 for ip in ips {
                     let net = match ip {
                         IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
@@ -371,9 +569,12 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
         } else if body.starts_with("exists:") {
             *lookup_count = lookup_count.saturating_add(1);
             if let Some(exists_domain) = body.strip_prefix("exists:") {
-                let found = resolver.lookup_exists(exists_domain).await;
-                if !found {
-                    *void_count = void_count.saturating_add(1);
+                // A positive match authorises every client IP.
+                match resolver.lookup_exists(exists_domain).await {
+                    Ok(true) if positive => sub_checks.extend(Unresolved::ANY.marker()),
+                    Ok(true) => {}
+                    Ok(false) => *void_count = void_count.saturating_add(1),
+                    Err(e) => unresolved(sub_checks, &e, Unresolved::BOTH, positive),
                 }
             }
         }

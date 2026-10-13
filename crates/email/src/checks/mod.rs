@@ -128,6 +128,7 @@ enum Phase0Result {
         mx_hosts: Vec<String>,
         mx_ips: Vec<IpAddr>,
         null_mx: bool,
+        addr_errors: Vec<crate::dns::LookupError>,
     },
     Spf {
         result: CheckResult,
@@ -200,6 +201,41 @@ impl Phase1Result {
 /// Sub-check name of a category that did not run; lens relies on it.
 pub const SKIPPED: &str = "skipped";
 
+/// Sub-check name of a category whose lookup got no answer (Rule M); the detail names the
+/// cause. lens relies on it.
+pub const UNMEASURED: &str = "unmeasured";
+
+/// Sub-check name of a nested lookup that got no answer; an Info whose detail names the cause.
+pub const LOOKUP_FAILED: &str = "lookup_failed";
+
+pub(crate) fn lookup_failed(e: &crate::dns::LookupError) -> crate::quality::SubCheck {
+    crate::quality::SubCheck {
+        name: LOOKUP_FAILED.to_string(),
+        verdict: Verdict::Info,
+        detail: e.to_string(),
+    }
+}
+
+pub(crate) fn join_errors(errors: &[crate::dns::LookupError]) -> String {
+    errors
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+pub(crate) fn unmeasured_result(category: Category, cause: String) -> CheckResult {
+    CheckResult::new(
+        category,
+        vec![crate::quality::SubCheck {
+            name: UNMEASURED.to_string(),
+            verdict: Verdict::Skip,
+            detail: cause,
+        }],
+        "unmeasured".to_string(),
+    )
+}
+
 fn skip_result(category: Category) -> CheckResult {
     CheckResult::new(
         category,
@@ -230,6 +266,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     let mut mx_hosts: Vec<String> = Vec::new();
     let mut mx_ips: Vec<IpAddr> = Vec::new();
     let mut null_mx = false;
+    let mut mx_addr_errors: Vec<crate::dns::LookupError> = Vec::new();
     let mut spf_result: Option<CheckResult> = None;
     let mut spf_flat: Option<crate::quality::SpfFlat> = None;
     let mut spf_has_dash_all = false;
@@ -256,7 +293,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, ips, hosts, is_null_mx) =
+                let (result, ips, hosts, is_null_mx, addr_errors) =
                     mx::check_mx(&domain, dns.as_ref(), enrichment_client.as_deref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "mx")
@@ -266,6 +303,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     mx_hosts: hosts,
                     mx_ips: ips,
                     null_mx: is_null_mx,
+                    addr_errors,
                 }
             }
             .instrument(tracing::Span::current()),
@@ -391,11 +429,13 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                         mx_hosts: hosts,
                         mx_ips: ips,
                         null_mx: is_null_mx,
+                        addr_errors,
                     } => {
                         mx_result = Some(result);
                         mx_hosts = hosts;
                         mx_ips = ips;
                         null_mx = is_null_mx;
+                        mx_addr_errors = addr_errors;
                     }
                     Phase0Result::Spf {
                         result,
@@ -451,6 +491,13 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     }
 
     let sends_no_mail = null_mx || spf_only_dash_all;
+    // The MX lookup failed: the provider-mapped DKIM selectors are unknown.
+    let mx_unmeasured: Option<String> = mx_result.as_ref().and_then(|r| {
+        r.sub_checks
+            .iter()
+            .find(|s| s.name == UNMEASURED)
+            .map(|s| s.detail.clone())
+    });
 
     // Accumulated phase-1 data
     let mut dkim_result: Option<CheckResult> = None;
@@ -473,10 +520,11 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let selectors = selectors.clone();
         let dns = dns.clone();
         let max_sels = config.dkim.max_user_selectors;
+        let mx_unmeasured = mx_unmeasured.clone();
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, found) = dkim::check_dkim(
+                let (mut result, found) = dkim::check_dkim(
                     &domain,
                     &mx_hosts_clone,
                     &selectors,
@@ -485,6 +533,12 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     sends_no_mail,
                 )
                 .await;
+                if let Some(cause) = mx_unmeasured.filter(|_| !found) {
+                    result = unmeasured_result(
+                        Category::Dkim,
+                        format!("provider DKIM selectors unknown: {cause}"),
+                    );
+                }
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dkim")
                     .record(elapsed);
@@ -537,11 +591,12 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
 
     {
         let mx_ips_clone = mx_ips.clone();
+        let addr_errors = mx_addr_errors.clone();
         let dns = dns.clone();
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let result = fcrdns::check_fcrdns(&mx_ips_clone, dns.as_ref()).await;
+                let result = fcrdns::check_fcrdns(&mx_ips_clone, &addr_errors, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "fcrdns")
                     .record(elapsed);
@@ -554,14 +609,21 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
 
     {
         let mx_ips_clone = mx_ips.clone();
+        let addr_errors = mx_addr_errors.clone();
         let domain = domain.clone();
         let dnsbl_config = config.dnsbl.clone();
         let dns = dnsbl_dns.clone();
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let result =
-                    dnsbl::check_dnsbl(&mx_ips_clone, &domain, &dnsbl_config, dns.as_ref()).await;
+                let result = dnsbl::check_dnsbl(
+                    &mx_ips_clone,
+                    &addr_errors,
+                    &domain,
+                    &dnsbl_config,
+                    dns.as_ref(),
+                )
+                .await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dnsbl")
                     .record(elapsed);
@@ -660,9 +722,11 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         }
     }
 
+    // Over the measured sub-checks only: an IP whose lookups failed is neither pass nor fail.
     let fcrdns_all_pass = fcrdns_r
         .sub_checks
         .iter()
+        .filter(|s| s.name != LOOKUP_FAILED && s.name != UNMEASURED)
         .all(|s| s.verdict == Verdict::Pass);
 
     let all_results = AllResults {
@@ -727,7 +791,15 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     ];
 
     let verdicts_list: Vec<Verdict> = all_check_results.iter().map(|r| r.verdict).collect();
-    let grade = compute_grade(&verdicts_list);
+    // A category that could not be measured leaves the V1 grade without a basis, as a timeout.
+    let any_unmeasured = all_check_results
+        .iter()
+        .any(|r| r.sub_checks.iter().any(|s| s.name == UNMEASURED));
+    let grade = if any_unmeasured {
+        Grade::Skipped
+    } else {
+        compute_grade(&verdicts_list)
+    };
     metrics::counter!("beacon_grade_total", "grade" => grade.as_str()).increment(1);
 
     let verdicts_map: HashMap<String, Verdict> = all_check_results
@@ -834,7 +906,7 @@ mod tests {
 
     // ---- email-scoring Phase 1 ------------------------------------------
 
-    use crate::dns::TlsaRecord;
+    use crate::dns::{LookupError, TlsaRecord};
     use std::future::Future;
     use std::net::Ipv4Addr;
 
@@ -843,7 +915,10 @@ mod tests {
     struct PanicOnDkim(TestDnsResolver);
 
     impl DnsLookup for PanicOnDkim {
-        fn lookup_txt(&self, name: &str) -> impl Future<Output = Vec<String>> + Send {
+        fn lookup_txt(
+            &self,
+            name: &str,
+        ) -> impl Future<Output = Result<Vec<String>, LookupError>> + Send {
             let name = name.to_string();
             async move {
                 if name.contains("._domainkey.") {
@@ -852,28 +927,52 @@ mod tests {
                 self.0.lookup_txt(&name).await
             }
         }
-        fn lookup_mx(&self, name: &str) -> impl Future<Output = Vec<(u16, String)>> + Send {
+        fn lookup_mx(
+            &self,
+            name: &str,
+        ) -> impl Future<Output = Result<Vec<(u16, String)>, LookupError>> + Send {
             self.0.lookup_mx(name)
         }
-        fn lookup_ips(&self, name: &str) -> impl Future<Output = Vec<IpAddr>> + Send {
+        fn lookup_ips(
+            &self,
+            name: &str,
+        ) -> impl Future<Output = Result<crate::dns::AddressLookup, LookupError>> + Send {
             self.0.lookup_ips(name)
         }
-        fn lookup_cname(&self, name: &str) -> impl Future<Output = Vec<String>> + Send {
+        fn lookup_cname(
+            &self,
+            name: &str,
+        ) -> impl Future<Output = Result<Vec<String>, LookupError>> + Send {
             self.0.lookup_cname(name)
         }
-        fn lookup_ptr(&self, ip: IpAddr) -> impl Future<Output = Vec<String>> + Send {
+        fn lookup_ptr(
+            &self,
+            ip: IpAddr,
+        ) -> impl Future<Output = Result<Vec<String>, LookupError>> + Send {
             self.0.lookup_ptr(ip)
         }
-        fn lookup_a(&self, name: &str) -> impl Future<Output = Vec<Ipv4Addr>> + Send {
+        fn lookup_a(
+            &self,
+            name: &str,
+        ) -> impl Future<Output = Result<Vec<Ipv4Addr>, LookupError>> + Send {
             self.0.lookup_a(name)
         }
-        fn lookup_tlsa(&self, name: &str) -> impl Future<Output = Vec<TlsaRecord>> + Send {
+        fn lookup_tlsa(
+            &self,
+            name: &str,
+        ) -> impl Future<Output = Result<Vec<TlsaRecord>, LookupError>> + Send {
             self.0.lookup_tlsa(name)
         }
-        fn lookup_exists(&self, name: &str) -> impl Future<Output = bool> + Send {
+        fn lookup_exists(
+            &self,
+            name: &str,
+        ) -> impl Future<Output = Result<bool, LookupError>> + Send {
             self.0.lookup_exists(name)
         }
-        fn check_dnssec_signed(&self, name: &str) -> impl Future<Output = bool> + Send {
+        fn check_dnssec_signed(
+            &self,
+            name: &str,
+        ) -> impl Future<Output = Result<bool, LookupError>> + Send {
             self.0.check_dnssec_signed(name)
         }
     }

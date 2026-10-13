@@ -8,6 +8,7 @@ function verdictIcon(v: string): string {
     case 'warn':  return '!';
     case 'fail':
     case 'error': return '✗';
+    case 'unmeasured': return '?';
     default:      return '–';
   }
 }
@@ -28,8 +29,9 @@ function headlineChecks(checks: CheckItem[] | undefined): CheckItem[] {
   if (nonSkip.length <= 1) return [];
   const byWeight = (a: CheckItem, b: CheckItem) => (b.weight ?? 0) - (a.weight ?? 0);
   const failing = checks.filter(c => c.verdict === 'fail' || c.verdict === 'error').sort(byWeight);
+  const unmeasured = checks.filter(c => c.verdict === 'unmeasured').sort(byWeight);
   const warning = checks.filter(c => c.verdict === 'warn').sort(byWeight);
-  const notable = [...failing, ...warning].slice(0, 5);
+  const notable = [...failing, ...unmeasured, ...warning].slice(0, 5);
   if (notable.length > 0) return notable;
   return nonSkip.sort(byWeight).slice(0, 4);
 }

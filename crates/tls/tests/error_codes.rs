@@ -42,7 +42,6 @@ fn local_network_errors_are_not_tested_from_here() {
 fn target_side_errors_stay_handshake_failed() {
     for kind in [
         io::ErrorKind::ConnectionRefused,
-        io::ErrorKind::TimedOut,
         io::ErrorKind::HostUnreachable,
     ] {
         let e: BoxErr = Box::new(io::Error::from(kind));
@@ -57,6 +56,12 @@ fn target_side_errors_stay_handshake_failed() {
     }
     let e: BoxErr = "handshake timed out".into();
     assert_eq!(error_code(&*e), "HANDSHAKE_FAILED");
+}
+
+#[test]
+fn timed_out_is_handshake_timeout() {
+    let e: BoxErr = Box::new(io::Error::from(io::ErrorKind::TimedOut));
+    assert_eq!(error_code(&*e), "HANDSHAKE_TIMEOUT");
 }
 
 // Pinning test: connect.rs must keep the io::Error boxed so error_code can classify it.
@@ -83,4 +88,29 @@ async fn pin_tls_handshake_keeps_io_error_boxed_for_refused_connection() {
         .expect("error must downcast to io::Error");
     assert_eq!(io_err.kind(), io::ErrorKind::ConnectionRefused);
     assert_eq!(error_code(&*err), "HANDSHAKE_FAILED");
+}
+
+// Pinning test: a handshake that never completes surfaces as HANDSHAKE_TIMEOUT.
+#[tokio::test]
+async fn pin_tls_handshake_timeout_is_handshake_timeout() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let server = tokio::spawn(async move {
+        let (_stream, _) = listener.accept().await.unwrap();
+        std::future::pending::<()>().await;
+    });
+    let err = match netray_tls::tls::connect::tls_handshake(
+        "127.0.0.1".parse().unwrap(),
+        port,
+        None,
+        std::time::Duration::from_millis(100),
+    )
+    .await
+    {
+        Ok(_) => panic!("handshake to a silent server must time out"),
+        Err(e) => e,
+    };
+    server.abort();
+    assert_eq!(error_code(&*err), "HANDSHAKE_TIMEOUT");
 }

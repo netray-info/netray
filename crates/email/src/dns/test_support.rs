@@ -1,8 +1,10 @@
 //! Test-only DNS resolver stub.
 //!
-//! `TestDnsResolver` is an in-memory fake used by Wave-2 check tests (Track E).
-//! It implements [`super::DnsLookup`] so `check_*` functions can consume it
-//! generically.
+//! `TestDnsResolver` is an in-memory fake used by the check tests and, under the
+//! `testing` feature, by the integration tests. It implements [`super::DnsLookup`]
+//! so `check_*` functions can consume it generically. A name without records is a
+//! definite empty answer; a name marked with a `fail_*` builder errors with
+//! SERVFAIL.
 
 #![allow(dead_code)]
 
@@ -12,7 +14,7 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use super::{DnsLookup, TlsaRecord};
+use super::{AddressLookup, DnsLookup, LookupError, TlsaRecord};
 
 #[derive(Default)]
 pub struct TestDnsResolver {
@@ -25,6 +27,14 @@ pub struct TestDnsResolver {
     tlsa: HashMap<String, Vec<TlsaRecord>>,
     dnssec_signed: HashSet<String>,
     error_names: HashSet<String>,
+    fail_mx: HashSet<String>,
+    fail_txt: HashSet<String>,
+    fail_a: HashSet<String>,
+    fail_ptr: HashSet<String>,
+    fail_tlsa: HashSet<String>,
+    fail_aaaa: HashSet<String>,
+    fail_ips: HashSet<String>,
+    fail_dnskey: HashSet<String>,
     delay: Option<Duration>,
     /// Per-name counter: how many times the name was queried (any record type).
     query_counts: std::sync::Mutex<HashMap<String, usize>>,
@@ -96,8 +106,58 @@ impl TestDnsResolver {
         self
     }
 
+    /// Every lookup of `name`, of any record type, errors.
     pub fn fail_with(mut self, name: &str) -> Self {
         self.error_names.insert(name.to_string());
+        self
+    }
+
+    /// The MX lookup of `name` errors.
+    pub fn fail_mx(mut self, name: &str) -> Self {
+        self.fail_mx.insert(name.to_string());
+        self
+    }
+
+    /// The TXT lookup of `name` errors.
+    pub fn fail_txt(mut self, name: &str) -> Self {
+        self.fail_txt.insert(name.to_string());
+        self
+    }
+
+    /// The A lookup of `name` errors, and the A half of `lookup_ips(name)`.
+    pub fn fail_a(mut self, name: &str) -> Self {
+        self.fail_a.insert(name.to_string());
+        self
+    }
+
+    /// The PTR lookup of `ip` errors.
+    pub fn fail_ptr(mut self, ip: IpAddr) -> Self {
+        self.fail_ptr.insert(ip.to_string());
+        self
+    }
+
+    /// The TLSA lookup of `name` errors.
+    pub fn fail_tlsa(mut self, name: &str) -> Self {
+        self.fail_tlsa.insert(name.to_string());
+        self
+    }
+
+    /// The AAAA half of `lookup_ips(name)` errors: it answers the IPv4 addresses with the
+    /// AAAA error.
+    pub fn fail_aaaa(mut self, name: &str) -> Self {
+        self.fail_aaaa.insert(name.to_string());
+        self
+    }
+
+    /// Both the A and the AAAA half of `lookup_ips(name)` error.
+    pub fn fail_ips(mut self, name: &str) -> Self {
+        self.fail_ips.insert(name.to_string());
+        self
+    }
+
+    /// The DNSKEY lookup behind `check_dnssec_signed(name)` errors.
+    pub fn fail_dnskey(mut self, name: &str) -> Self {
+        self.fail_dnskey.insert(name.to_string());
         self
     }
 
@@ -121,6 +181,24 @@ impl TestDnsResolver {
         }
     }
 
+    /// The records of `name` in `map`, or SERVFAIL when `name` is marked failing.
+    fn answer<T: Clone>(
+        &self,
+        record_type: &'static str,
+        name: &str,
+        failing: Option<&HashSet<String>>,
+        map: &HashMap<String, Vec<T>>,
+    ) -> Result<Vec<T>, LookupError> {
+        if self.error_names.contains(name) || failing.is_some_and(|f| f.contains(name)) {
+            return Err(LookupError {
+                record_type,
+                name: name.to_string(),
+                cause: "SERVFAIL".to_string(),
+            });
+        }
+        Ok(map.get(name).cloned().unwrap_or_default())
+    }
+
     async fn maybe_sleep(&self) {
         if let Some(d) = self.delay {
             tokio::time::sleep(d).await;
@@ -129,109 +207,149 @@ impl TestDnsResolver {
 }
 
 impl DnsLookup for TestDnsResolver {
-    fn lookup_txt(&self, name: &str) -> impl Future<Output = Vec<String>> + Send {
+    fn lookup_txt(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Vec<String>, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.error_names.contains(&name) {
-                return Vec::new();
-            }
-            self.txt.get(&name).cloned().unwrap_or_default()
+            self.answer("TXT", &name, Some(&self.fail_txt), &self.txt)
         }
     }
 
-    fn lookup_mx(&self, name: &str) -> impl Future<Output = Vec<(u16, String)>> + Send {
+    fn lookup_mx(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Vec<(u16, String)>, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.error_names.contains(&name) {
-                return Vec::new();
-            }
-            self.mx.get(&name).cloned().unwrap_or_default()
+            self.answer("MX", &name, Some(&self.fail_mx), &self.mx)
         }
     }
 
-    fn lookup_ips(&self, name: &str) -> impl Future<Output = Vec<IpAddr>> + Send {
+    fn lookup_ips(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<AddressLookup, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.error_names.contains(&name) {
-                return Vec::new();
+            let a_failed = self.fail_ips.contains(&name) || self.fail_a.contains(&name);
+            let aaaa_failed = self.fail_ips.contains(&name) || self.fail_aaaa.contains(&name);
+            let failed = |record_type| LookupError {
+                record_type,
+                name: name.clone(),
+                cause: "SERVFAIL".to_string(),
+            };
+            if a_failed && aaaa_failed {
+                return Err(failed("address"));
             }
-            self.ips.get(&name).cloned().unwrap_or_default()
+            let ips = self.answer("address", &name, None, &self.ips)?;
+            if a_failed {
+                return Ok(AddressLookup {
+                    ips: ips.into_iter().filter(IpAddr::is_ipv6).collect(),
+                    error: Some(failed("A")),
+                });
+            }
+            if aaaa_failed {
+                return Ok(AddressLookup {
+                    ips: ips.into_iter().filter(IpAddr::is_ipv4).collect(),
+                    error: Some(failed("AAAA")),
+                });
+            }
+            Ok(AddressLookup { ips, error: None })
         }
     }
 
-    fn lookup_cname(&self, name: &str) -> impl Future<Output = Vec<String>> + Send {
+    fn lookup_cname(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Vec<String>, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.error_names.contains(&name) {
-                return Vec::new();
-            }
-            self.cname.get(&name).cloned().unwrap_or_default()
+            self.answer("CNAME", &name, None, &self.cname)
         }
     }
 
-    fn lookup_ptr(&self, ip: IpAddr) -> impl Future<Output = Vec<String>> + Send {
+    fn lookup_ptr(
+        &self,
+        ip: IpAddr,
+    ) -> impl Future<Output = Result<Vec<String>, LookupError>> + Send {
         let key = ip.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&key);
-            if self.error_names.contains(&key) {
-                return Vec::new();
-            }
-            self.ptr.get(&key).cloned().unwrap_or_default()
+            self.answer("PTR", &key, Some(&self.fail_ptr), &self.ptr)
         }
     }
 
-    fn lookup_a(&self, name: &str) -> impl Future<Output = Vec<Ipv4Addr>> + Send {
+    fn lookup_a(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Vec<Ipv4Addr>, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.error_names.contains(&name) {
-                return Vec::new();
-            }
-            self.a.get(&name).cloned().unwrap_or_default()
+            self.answer("A", &name, Some(&self.fail_a), &self.a)
         }
     }
 
-    fn lookup_tlsa(&self, name: &str) -> impl Future<Output = Vec<TlsaRecord>> + Send {
+    fn lookup_tlsa(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<Vec<TlsaRecord>, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.error_names.contains(&name) {
-                return Vec::new();
-            }
-            self.tlsa.get(&name).cloned().unwrap_or_default()
+            self.answer("TLSA", &name, Some(&self.fail_tlsa), &self.tlsa)
         }
     }
 
-    fn lookup_exists(&self, name: &str) -> impl Future<Output = bool> + Send {
+    fn lookup_exists(&self, name: &str) -> impl Future<Output = Result<bool, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            if self.error_names.contains(&name) {
-                return false;
+            if self.error_names.contains(&name)
+                || self.fail_a.contains(&name)
+                || self.fail_ips.contains(&name)
+            {
+                return Err(LookupError {
+                    record_type: "A",
+                    name,
+                    cause: "SERVFAIL".to_string(),
+                });
             }
-            !self.a.get(&name).cloned().unwrap_or_default().is_empty()
-                || !self.ips.get(&name).cloned().unwrap_or_default().is_empty()
+            Ok(!self.a.get(&name).cloned().unwrap_or_default().is_empty()
+                || !self.ips.get(&name).cloned().unwrap_or_default().is_empty())
         }
     }
 
-    fn check_dnssec_signed(&self, name: &str) -> impl Future<Output = bool> + Send {
+    fn check_dnssec_signed(
+        &self,
+        name: &str,
+    ) -> impl Future<Output = Result<bool, LookupError>> + Send {
         let name = name.to_string();
         async move {
             self.maybe_sleep().await;
             self.record_query(&name);
-            self.dnssec_signed.contains(&name)
+            if self.error_names.contains(&name) || self.fail_dnskey.contains(&name) {
+                return Err(LookupError {
+                    record_type: "DNSKEY",
+                    name,
+                    cause: "SERVFAIL".to_string(),
+                });
+            }
+            Ok(self.dnssec_signed.contains(&name))
         }
     }
 }

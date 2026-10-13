@@ -9,6 +9,7 @@ function verdictIcon(v: Verdict): string {
     case 'fail':  return '✗';
     case 'error': return '✗';
     case 'skip':  return '–';
+    case 'unmeasured': return '?';
   }
 }
 
@@ -19,6 +20,7 @@ function verdictColor(v: Verdict): string {
     case 'fail':  return 'var(--verdict-fail)';
     case 'error': return 'var(--verdict-error)';
     case 'skip':  return 'var(--verdict-skip)';
+    case 'unmeasured': return 'var(--verdict-skip)';
   }
 }
 
@@ -62,6 +64,9 @@ export default function CheckList(props: Props) {
             </span>
             <div class="check-item__name">
               {CHECK_LABELS[check.name] ?? check.name}
+              <Show when={check.verdict === 'unmeasured'}>
+                {' '}<span class="check-item__unmeasured">could not check</span>
+              </Show>
               <Show when={check.guide_url}>
                 <a
                   class="check-item__guide-link"
@@ -98,7 +103,7 @@ export default function CheckList(props: Props) {
                 </div>
               </Show>
             </div>
-            <Show when={check.weight !== undefined && check.verdict !== 'skip'}>
+            <Show when={check.weight !== undefined && check.verdict !== 'skip' && check.verdict !== 'unmeasured'}>
               <span class={scoreClass(check.verdict)}>
                 {formatPoints(scoreNumerator(check.verdict, check.weight!))}/{formatPoints(check.weight!)}
               </span>

@@ -15,7 +15,7 @@
 //! successfully; these values flow into the cross-validation phase for
 //! consistency checks with SPF and DKIM.
 
-use crate::checks::util;
+use crate::checks::{lookup_failed, unmeasured_result, util};
 use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
@@ -27,7 +27,17 @@ pub async fn check_dmarc(
     resolver: &impl DnsLookup,
 ) -> (CheckResult, Option<String>, Option<String>, bool) {
     let dmarc_name = format!("_dmarc.{}", domain);
-    let txt_records = resolver.lookup_txt(&dmarc_name).await;
+    let txt_records = match resolver.lookup_txt(&dmarc_name).await {
+        Ok(records) => records,
+        Err(e) => {
+            return (
+                unmeasured_result(Category::Dmarc, e.to_string()),
+                None,
+                None,
+                true,
+            );
+        }
+    };
 
     let dmarc_records: Vec<&str> = txt_records
         .iter()
@@ -131,7 +141,13 @@ pub async fn check_dmarc(
             if *rua_domain != domain {
                 // External domain — check authorization
                 let auth_name = format!("{}._report._dmarc.{}", domain, rua_domain);
-                let auth_records = resolver.lookup_txt(&auth_name).await;
+                let auth_records = match resolver.lookup_txt(&auth_name).await {
+                    Ok(records) => records,
+                    Err(e) => {
+                        sub_checks.push(lookup_failed(&e));
+                        continue;
+                    }
+                };
                 let authorized = auth_records.iter().any(|t| t.starts_with("v=DMARC1"));
                 if !authorized {
                     rua_external_auth_ok = false;
@@ -159,7 +175,13 @@ pub async fn check_dmarc(
         for ruf_domain in &ruf_domains {
             if *ruf_domain != domain {
                 let auth_name = format!("{}._report._dmarc.{}", domain, ruf_domain);
-                let auth_records = resolver.lookup_txt(&auth_name).await;
+                let auth_records = match resolver.lookup_txt(&auth_name).await {
+                    Ok(records) => records,
+                    Err(e) => {
+                        sub_checks.push(lookup_failed(&e));
+                        continue;
+                    }
+                };
                 let authorized = auth_records.iter().any(|t| t.starts_with("v=DMARC1"));
                 if !authorized {
                     sub_checks.push(SubCheck {

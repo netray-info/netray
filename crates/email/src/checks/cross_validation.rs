@@ -82,8 +82,16 @@ pub fn cross_validate(results: &AllResults) -> CheckResult {
     result
 }
 
+/// Whether `result` carries the unmeasured sentinel: its input was never obtained.
+fn unmeasured(result: &CheckResult) -> bool {
+    result
+        .sub_checks
+        .iter()
+        .any(|s| s.name == super::UNMEASURED)
+}
+
 fn check_dane_without_dnssec(r: &AllResults) -> Option<SubCheck> {
-    if r.dane_has_tlsa && !r.dnssec_dnskey_present {
+    if r.dane_has_tlsa && !r.dnssec_dnskey_present && !unmeasured(&r.dnssec) {
         Some(SubCheck {
             name: "dane_without_dnssec".to_string(),
             verdict: Verdict::Fail,
@@ -157,9 +165,12 @@ fn check_spf_mx_coverage(r: &AllResults) -> Option<SubCheck> {
         return None;
     }
 
+    // An MX IP of a family the authorised set is incomplete for is not judged.
+    let unresolved = super::spf::Unresolved::of(&r.spf);
     let uncovered: Vec<_> = r
         .mx_ips
         .iter()
+        .filter(|ip| !unresolved.contains(ip))
         .filter(|ip| {
             !spf_flat
                 .authorized_prefixes
@@ -202,7 +213,7 @@ fn check_spf_mx_coverage(r: &AllResults) -> Option<SubCheck> {
 }
 
 fn check_bimi_dmarc_policy(r: &AllResults) -> Option<SubCheck> {
-    if !r.bimi_present {
+    if !r.bimi_present || unmeasured(&r.dmarc) {
         return None;
     }
     match r.dmarc_policy.as_deref() {
@@ -228,7 +239,11 @@ fn check_null_mx_spf(r: &AllResults) -> Option<SubCheck> {
 }
 
 fn check_reject_no_dkim(r: &AllResults) -> Option<SubCheck> {
-    if r.dmarc_policy.as_deref() == Some("reject") && r.spf_has_dash_all && !r.dkim_found {
+    if r.dmarc_policy.as_deref() == Some("reject")
+        && r.spf_has_dash_all
+        && !r.dkim_found
+        && !unmeasured(&r.dkim)
+    {
         Some(SubCheck {
             name: "reject_no_dkim".to_string(),
             verdict: Verdict::Warn,

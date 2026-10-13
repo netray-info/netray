@@ -186,7 +186,8 @@ fn nx_lookups(name: &str, record_type: &str) -> Lookups {
             "query": { "name": name, "record_type": record_type },
             "name_server": "udp:192.0.2.53:53",
             "result": { "NxDomain": {
-                "response_time": { "secs": 0, "nanos": 12_000_000 }
+                "response_time": { "secs": 0, "nanos": 12_000_000 },
+                "response_code": "NOERROR"
             }}
         }]
     }))

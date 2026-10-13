@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Grades change.** A check that could not be measured no longer reads as passed, failed or not applicable. Timeouts, SERVFAIL or REFUSED answers, and redirects the fetch policy refuses all count as `unmeasured`. A weighted unmeasured check makes its section incomplete, and the run gets no letter unless a hard-fail check failed, which still grades F. A domain whose A and AAAA lookups both get a definite NXDOMAIN or NODATA now gets a letter from DNS and email, with IP, HTTP and TLS not applicable ("no A or AAAA record"); before, such a run was incomplete.
+
+### Changed
+
+- **lens wire.**
+  - The check verdict `"unmeasured"` is new; the frontend shows it as "could not check".
+  - A section that answered but holds a weighted unmeasured check reports status `"incomplete"`, in its event, in `summary.sections` and in `summary.overall`. `"error"` stays reserved for a backend that failed.
+- **When a check fails or is unmeasured.** A check fails only when the target answered wrongly: a refused connection, a reset, a TLS alert, an HTTP error status, NXDOMAIN or NODATA.
+  - TLS: `tls_reachable` stays pass when any address completed a handshake. It is unmeasured when every tested address timed out, and the checks that need a handshake follow it.
+  - HTTP: a refused, reset or TLS-failed HTTPS probe makes the ten response checks fail with "no HTTPS response". That includes a redirect target that refuses. CORS follows its own probe.
+  - DNS: `ns_lame` and `ns_delegation` judge the nameservers that answered and name the silent ones. They are unmeasured only when no nameserver answered.
+  - Email: `dnsbl` passes when at least one zone answered without a listing, names the zones that did not answer, and is unmeasured only when none answered. An MTA-STS policy fetch or a BIMI logo fetch is unmeasured only on a timeout.
+- **Backend responses (additive; each field is absent when empty).**
+  - tlsight gives a timed-out address the code `HANDSHAKE_TIMEOUT` and adds `dns.lookup_errors`.
+  - spectra adds `error: {kind, message}` to the HTTPS, port-80 and CORS probes.
+  - beacon gives a category whose answer was not obtained the sub-check `unmeasured`, and a failed side lookup the sub-check `lookup_failed`. Any unmeasured category makes beacon's own grade `skipped`.
+- **lens configuration.** `[backends] resolve_timeout_ms` must also stay below `[backends.http] timeout_ms`, because the HTTP section now waits for the shared lookup inside its own window.
+- mhost 0.12.1.
+
+### Fixed
+
+The three known issues of 0.25.0:
+- `email.mx` passes for a working MX whose sub-checks are only notes (one MX host with several addresses, no IPv6).
+- An `http.https_redirect` port-80 timeout is unmeasured instead of failing.
+- A DNSBL zone that refuses or does not answer no longer turns the check not applicable.
+
 ## [0.25.0] - 2026-10-11
 
 **Grades change.** lens now scores with the check catalogue v3 and scoring profile v3: 54 checks instead of 42, with a check's weight split out of the old roll-ups. Measured against 0.24.0 at the same moment, netray.info moved from A 94.1 to A+ 97.7. Three other domains moved from B 86.6 to A 91.0, C 72.6 to C 75.5 and C 73.0 to C 73.8. Most of the shift comes from the HTTP header checks: each header is scored on its own, so one missing header no longer costs the whole `security_headers` weight. A warn now earns exactly half a check's weight.

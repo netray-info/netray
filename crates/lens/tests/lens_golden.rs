@@ -410,22 +410,28 @@ async fn lens_golden_mx_cname() {
     assert_no_error_section("mx-cname", &p);
 }
 
-/// Phase 2 decides these fields; they are asserted before the golden file is compared, so the
-/// test fails on them while the verdict is still a letter grade.
 #[tokio::test]
 async fn lens_golden_no_address_records() {
     let projection: Value = serde_json::from_str(&run_fixture("no-address-records").await).unwrap();
     let summary = &projection["summary"];
-    assert_eq!(
+    assert_ne!(
         summary["grade"], "incomplete",
-        "no-address-records: tlsight and spectra error, so the grade is `incomplete`; summary: {summary}"
+        "no-address-records: a definite negative keeps a letter grade; summary: {summary}"
     );
     assert_eq!(
-        summary["complete"], false,
-        "no-address-records: the summary must say `complete: false`; summary: {summary}"
+        summary["complete"], true,
+        "no-address-records: the summary must say `complete: true`; summary: {summary}"
     );
-    // The full projection is pinned by lens-no-address-records.json, generated with
-    // UPDATE_GOLDEN=1 once Phase 2's code lands.
+    let not_applicable = summary["not_applicable"]
+        .as_array()
+        .expect("not_applicable");
+    for section in ["ip", "http", "tls"] {
+        assert!(
+            not_applicable.iter().any(|s| s == section),
+            "no-address-records: {section} must be not applicable; summary: {summary}"
+        );
+    }
+    // The full projection is pinned by lens-no-address-records.json.
     let path = contracts_dir().join("lens-no-address-records.json");
     assert!(
         path.exists(),

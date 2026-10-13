@@ -278,6 +278,8 @@ a:hover { text-decoration: underline; }
 .verdict-dot--fail { background: var(--verdict-fail); box-shadow: 0 0 4px var(--verdict-fail); }
 .verdict-dot--error { background: var(--verdict-error); box-shadow: 0 0 4px var(--verdict-error); }
 .verdict-dot--skip { background: var(--verdict-skip); }
+.verdict-dot--incomplete { background: var(--verdict-warn); }
+.verdict-dot--unmeasured { background: var(--verdict-skip); }
 
 /* Grade-based dot colours — used for section-level dots in summary and section cards */
 .verdict-dot--grade-a { background: var(--grade-a); }
@@ -602,8 +604,23 @@ a:hover { text-decoration: underline; }
   letter-spacing: 0.04em;
 }
 
+.summary-dot-incomplete {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--verdict-warn);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .summary-incomplete {
   color: var(--verdict-error);
+}
+
+.check-item__unmeasured {
+  margin-left: 0.5rem;
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 .summary-actions {
@@ -1002,6 +1019,11 @@ a:hover { text-decoration: underline; }
 .chip--fail {
   background: color-mix(in srgb, var(--verdict-fail) 12%, transparent);
   color: var(--verdict-fail);
+}
+
+.chip--unmeasured {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .chip--skip {

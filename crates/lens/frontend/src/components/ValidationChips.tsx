@@ -9,9 +9,10 @@ const CHIP_META: Record<string, { label: string }> = {
   warn: { label: 'warnings' },
   fail: { label: 'failed' },
   skip: { label: 'skipped' },
+  unmeasured: { label: 'could not check' },
 };
 
-const CHIP_ORDER = ['fail', 'warn', 'pass', 'skip'];
+const CHIP_ORDER = ['fail', 'unmeasured', 'warn', 'pass', 'skip'];
 
 export default function ValidationChips(props: Props) {
   const counts = () => {

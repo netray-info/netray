@@ -26,6 +26,7 @@ Axum 0.8 service with embedded SolidJS 1.9 frontend. Follows suite patterns.
 - **DKIM selectors**: Static provider map (Google, Outlook, Amazon SES, Proofpoint, Mimecast) + user-supplied. No brute-force enumeration.
 - **DNSSEC**: Uses DNSKEY record presence as proxy (mhost doesn't expose AD bit).
 - **MTA-STS**: No-redirect HTTP client per RFC 8461 section 3.3. Policy body capped at 64KB.
+- **Lookup errors**: `DnsLookup` returns `Result<_, LookupError>`. A definite NXDOMAIN/NODATA is `Ok(empty)`; SERVFAIL, REFUSED, a timeout or a referral is `Err`. A check whose own answer was not obtained emits the `unmeasured` sentinel sub-check (Skip), which `translate` maps to `Unmeasured`; a failed side lookup is an Info `lookup_failed`, never a Warn.
 - **SPF expansion**: Recursive with depth cap (10), loop detection via visited set, void lookup counting (u16 + saturating_add).
 
 ## Config
@@ -47,8 +48,8 @@ the values startup rejects (unparsable or zero `per_ip`), and exits 0
 The retired `BEACON__*` / `BEACON_CONFIG` variables are refused at load, naming
 `NETRAY_EMAIL_`. `ModuleConfig` (`[modules.email]` in lens's config: `dns`, `dnsbl`,
 `http`, `dkim`, `backends`, `inspections.max_concurrent`) feeds `EmailModule`, which
-runs `run_all_checks` in-process; `module::translate` maps the events onto the four
-`email.<bucket>` checks and the V1 headline.
+runs `run_all_checks` in-process; `module::translate` maps the events onto the ten
+`email.*` checks and the V1 headline.
 
 ## Development
 

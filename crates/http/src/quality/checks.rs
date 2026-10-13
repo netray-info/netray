@@ -274,6 +274,7 @@ mod tests {
                 allows_credentials: false,
                 status: CheckStatus::Pass,
                 message: "No CORS headers".into(),
+                error: None,
             },
             cookies: vec![],
             compression: None,
@@ -318,6 +319,7 @@ mod tests {
                 detail_url: Some("https://ip.example.com/192.0.2.1".into()),
                 ..Default::default()
             },
+            error: None,
             redirect_limit_reached: None,
         }
     }

@@ -533,6 +533,14 @@ impl Config {
                 b.resolve_timeout_ms, b.tls.timeout_ms
             )));
         }
+        if let Some(http) = &b.http
+            && b.resolve_timeout_ms >= http.timeout_ms
+        {
+            return Err(ConfigError::Message(format!(
+                "invalid configuration: backends.resolve_timeout_ms {} must stay below [backends.http] timeout_ms {}: the HTTP section waits for the resolve inside its own window, both counted from the start of a check",
+                b.resolve_timeout_ms, http.timeout_ms
+            )));
+        }
 
         Ok(())
     }

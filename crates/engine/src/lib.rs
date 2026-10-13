@@ -68,6 +68,8 @@ pub struct Facts {
     pub ns: Vec<String>,
     /// HTTPS records in presentation form, e.g. `1 . alpn=h2`.
     pub https: Vec<String>,
+    /// A and AAAA both definite negatives on every resolver asked.
+    pub no_address_definite: bool,
 }
 
 /// What a module returns for its section.
@@ -118,6 +120,11 @@ pub trait Module: Send + Sync {
     /// `Facts`.
     fn wants_facts(&self) -> bool {
         false
+    }
+    /// Whether the module has nothing to measure on a name without A and AAAA records; when the
+    /// facts are a definite negative such a module is not run and its section is not applicable.
+    fn needs_address_records(&self) -> bool {
+        self.needs_addresses()
     }
     fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome>;
 }
@@ -189,7 +196,11 @@ pub struct RunReport {
 /// start and `base.deadline`. Modules that need addresses wait for the resolve inside their own
 /// window and, after a failed resolve, are not run and yield `Incomplete`; modules that want
 /// facts also wait inside their own window and, after a failed resolve, run with empty `Facts`;
-/// all others start at the run start with empty `Facts`. Each section is sent on `tx` the moment it finishes; a
+/// all others start at the run start with empty `Facts`. A module with `needs_address_records`
+/// also waits for the resolve; when the facts are `no_address_definite` it is not run and yields
+/// `NotApplicable`, and one that only has `needs_address_records` runs with empty `Facts` after
+/// a resolve that succeeded without a definite negative or failed. Each section is sent on `tx`
+/// the moment it finishes; a
 /// module that overruns its deadline yields `TimedOut`. Protocols without a registered module
 /// are skipped, and a closed receiver only drops the events.
 pub async fn run(
@@ -228,18 +239,26 @@ pub async fn run(
             let (resolve, no_facts, tx) = (resolve.clone(), &no_facts, &tx);
             Some(async move {
                 let work = async {
-                    if !module.needs_addresses() {
-                        if module.wants_facts() {
-                            let facts = resolve.await.unwrap_or_default();
-                            return module.run(&ctx, &facts).await;
-                        }
+                    if !(module.needs_addresses()
+                        || module.wants_facts()
+                        || module.needs_address_records())
+                    {
                         return module.run(&ctx, no_facts).await;
                     }
                     match resolve.await {
-                        Ok(facts) => module.run(&ctx, &facts).await,
-                        Err(e) => SectionOutcome::Incomplete {
+                        Ok(f) if f.no_address_definite && module.needs_address_records() => {
+                            SectionOutcome::NotApplicable {
+                                reason: "no A or AAAA record".into(),
+                            }
+                        }
+                        Ok(f) if module.needs_addresses() || module.wants_facts() => {
+                            module.run(&ctx, &f).await
+                        }
+                        Err(e) if module.needs_addresses() => SectionOutcome::Incomplete {
                             reason: format!("address resolution failed: {e}"),
                         },
+                        Err(_) if module.wants_facts() => module.run(&ctx, &Facts::default()).await,
+                        _ => module.run(&ctx, no_facts).await,
                     }
                 };
                 let outcome = tokio::time::timeout_at(deadline.into(), work)

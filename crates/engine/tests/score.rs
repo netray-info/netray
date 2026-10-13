@@ -109,7 +109,6 @@ fn per_check_status_rules() {
         (Status::Fail, Status::Fail, 0.0, 8),
         (Status::Pass, Status::NotApplicable, 5.0, 5),
         (Status::Pass, Status::NotTested, 5.0, 5),
-        (Status::Pass, Status::Unmeasured, 5.0, 5),
         (Status::Warn, Status::Fail, 2.5, 8),
     ];
     for (spf, dmarc, earned, possible) in cases {

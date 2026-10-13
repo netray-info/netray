@@ -1,4 +1,4 @@
-import type { Verdict } from '../lib/types';
+import type { SectionStatus } from '../lib/types';
 
 function gradeClass(grade: string): string {
   switch (grade) {
@@ -12,7 +12,7 @@ function gradeClass(grade: string): string {
 }
 
 interface Props {
-  verdict: Verdict;
+  verdict: SectionStatus;
   grade?: string;
 }
 

@@ -288,10 +288,10 @@ pub fn check_tls_reachable(ips: &[IpInspectionResult]) -> HealthCheck {
             "not tested from here: this host cannot reach the target".to_string(),
         )
     } else {
-        let message = failures
-            .iter()
-            .filter_map(|r| r.error.as_ref())
-            .find(|e| e.code != "NOT_TESTED_FROM_HERE")
+        let errors = || failures.iter().filter_map(|r| r.error.as_ref());
+        let message = errors()
+            .find(|e| e.code == "HANDSHAKE_FAILED")
+            .or_else(|| errors().find(|e| e.code != "NOT_TESTED_FROM_HERE"))
             .map(|e| e.message.as_str())
             .unwrap_or_default();
         (

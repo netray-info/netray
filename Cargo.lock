@@ -2611,9 +2611,9 @@ dependencies = [
 
 [[package]]
 name = "mhost"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd594f6c96a0d4385e85ae50ea4bf10834ec2cbbc6e085803316e8e08f6d90aa"
+checksum = "9533ce22f11bb16aedef30b004bc675dd02805226bf99c8c4bb2176fb2ef64c7"
 dependencies = [
  "chrono",
  "clap",

@@ -101,7 +101,9 @@ async fn lame_check_with_only_a_refused_address_sends_nothing_and_warns() {
     let raw = test_outbound(sender.clone(), resolver);
     let lookups = ns_lookups(&["ns1.example.com."]);
 
-    let results = check_ns_lame_delegation(&lookups, DOMAIN, TIMEOUT, &raw).await;
+    let results = check_ns_lame_delegation(&lookups, DOMAIN, TIMEOUT, &raw)
+        .await
+        .results;
 
     assert!(sender.recorded_ips().is_empty());
     assert_eq!(results, vec![warning(NOT_PUBLIC)]);
@@ -117,7 +119,9 @@ async fn lame_check_queries_the_allowed_address_and_warns_about_the_refused_one(
     let raw = test_outbound(sender.clone(), resolver);
     let lookups = ns_lookups(&["ns1.example.com.", "ns2.example.com."]);
 
-    let results = check_ns_lame_delegation(&lookups, DOMAIN, TIMEOUT, &raw).await;
+    let results = check_ns_lame_delegation(&lookups, DOMAIN, TIMEOUT, &raw)
+        .await
+        .results;
 
     assert_eq!(sender.recorded_ips(), vec![v4(192, 0, 2, 53)]);
     assert_eq!(
@@ -139,7 +143,9 @@ async fn lame_check_warns_once_when_every_address_is_refused() {
     let raw = test_outbound(sender.clone(), resolver);
     let lookups = ns_lookups(&["ns1.example.com.", "ns2.example.com."]);
 
-    let results = check_ns_lame_delegation(&lookups, DOMAIN, TIMEOUT, &raw).await;
+    let results = check_ns_lame_delegation(&lookups, DOMAIN, TIMEOUT, &raw)
+        .await
+        .results;
 
     assert!(sender.recorded_ips().is_empty());
     assert_eq!(count_not_public(&results), 1);
@@ -156,7 +162,9 @@ async fn delegation_check_queries_the_allowed_address_and_warns_once_about_the_r
     let raw = test_outbound(sender.clone(), resolver);
     let lookups = ns_lookups(&["ns1.example.com.", "ns2.example.com."]);
 
-    let results = check_ns_delegation_consistency(&lookups, DOMAIN, TIMEOUT, &raw).await;
+    let results = check_ns_delegation_consistency(&lookups, DOMAIN, TIMEOUT, &raw)
+        .await
+        .results;
 
     assert_eq!(sender.recorded_ips(), vec![v4(192, 0, 2, 53)]);
     assert_eq!(count_not_public(&results), 1);
@@ -179,7 +187,9 @@ async fn delegation_check_with_only_a_refused_address_yields_just_the_warning() 
     let raw = test_outbound(sender.clone(), resolver);
     let lookups = ns_lookups(&["ns1.example.com."]);
 
-    let results = check_ns_delegation_consistency(&lookups, DOMAIN, TIMEOUT, &raw).await;
+    let results = check_ns_delegation_consistency(&lookups, DOMAIN, TIMEOUT, &raw)
+        .await
+        .results;
 
     assert!(sender.recorded_ips().is_empty());
     assert_eq!(results, vec![warning(NOT_PUBLIC)]);
@@ -195,7 +205,9 @@ async fn lame_check_with_only_allowed_addresses_judges_as_before_without_a_warni
     let raw = test_outbound(sender.clone(), resolver);
     let lookups = ns_lookups(&["ns1.example.com.", "ns2.example.com."]);
 
-    let results = check_ns_lame_delegation(&lookups, DOMAIN, TIMEOUT, &raw).await;
+    let results = check_ns_lame_delegation(&lookups, DOMAIN, TIMEOUT, &raw)
+        .await
+        .results;
 
     assert_eq!(
         sorted_ips(sender.recorded_ips()),
@@ -224,7 +236,9 @@ async fn delegation_check_with_only_allowed_addresses_judges_as_before_without_a
     let raw = test_outbound(sender.clone(), resolver);
     let lookups = ns_lookups(&["ns1.example.com.", "ns2.example.com."]);
 
-    let results = check_ns_delegation_consistency(&lookups, DOMAIN, TIMEOUT, &raw).await;
+    let results = check_ns_delegation_consistency(&lookups, DOMAIN, TIMEOUT, &raw)
+        .await
+        .results;
 
     assert_eq!(
         sorted_ips(sender.recorded_ips()),

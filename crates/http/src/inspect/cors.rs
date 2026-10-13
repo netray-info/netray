@@ -52,6 +52,7 @@ pub fn analyze_cors(headers: &HeaderMap) -> CorsReport {
         allows_credentials,
         status,
         message,
+        error: None,
     }
 }
 

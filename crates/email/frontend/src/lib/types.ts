@@ -227,6 +227,9 @@ const SUB_CHECK_LABELS: Record<string, string> = {
   fcrdns_pass: 'FCrDNS verified',
   // DNSBL
   zone_unreachable: 'Zone unreachable',
+  unmeasured: 'Could not check',
+  lookup_failed: 'Lookup failed',
+  spf_incomplete: 'SPF set incomplete',
   clean: 'Not listed',
   // Cross-validation
   dane_without_dnssec: 'DANE without DNSSEC',
@@ -323,6 +326,9 @@ const SUB_CHECK_EXPLANATIONS: Record<string, string> = {
   fcrdns_pass: 'All MX IPs have matching forward-confirmed reverse DNS entries.',
   // DNSBL
   zone_unreachable: 'This DNSBL zone did not respond in time.',
+  unmeasured: 'A lookup or fetch this check needs did not get an answer, so the check could not be made.',
+  lookup_failed: 'One lookup this check uses did not get an answer; the check is judged on the rest.',
+  spf_incomplete: 'Part of the SPF authorised set could not be resolved (ipv4, ipv6 or both), so MX coverage is not judged for it.',
   clean: 'No MX IP addresses are listed in any checked blocklist zone.',
   // Cross-validation
   dane_without_dnssec: 'DANE TLSA records are only meaningful when DNSSEC is enabled.',

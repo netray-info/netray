@@ -3,7 +3,8 @@ use std::net::IpAddr;
 
 use futures::future::join_all;
 
-use crate::dns::DnsLookup;
+use super::{lookup_failed, unmeasured_result};
+use crate::dns::{DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, IpEnrichment, SubCheck, Verdict};
 
 /// Sub-check name emitted when the domain has no MX records; lens relies on it.
@@ -13,14 +14,28 @@ pub const NO_MX: &str = "no_mx";
 pub const NULL_MX: &str = "null_mx";
 
 /// Check MX records for the domain.
-/// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag).
+/// Returns (CheckResult, resolved MX IPs, MX hostnames, null_mx flag, address errors). The
+/// address errors are every MX-host address lookup that failed in full or in one family, with
+/// the failed record type, so the MX-IP checks can name what they could not judge.
 #[tracing::instrument(skip_all, fields(category = "mx", domain = %domain))]
 pub async fn check_mx(
     domain: &str,
     resolver: &impl DnsLookup,
     enrichment: Option<&netray_common::enrichment::EnrichmentClient>,
-) -> (CheckResult, Vec<IpAddr>, Vec<String>, bool) {
-    let mx_records = resolver.lookup_mx(domain).await;
+) -> (
+    CheckResult,
+    Vec<IpAddr>,
+    Vec<String>,
+    bool,
+    Vec<LookupError>,
+) {
+    let mx_records = match resolver.lookup_mx(domain).await {
+        Ok(records) => records,
+        Err(e) => {
+            let result = unmeasured_result(Category::Mx, e.to_string());
+            return (result, Vec::new(), Vec::new(), false, Vec::new());
+        }
+    };
 
     if mx_records.is_empty() {
         let result = CheckResult::new(
@@ -32,7 +47,7 @@ pub async fn check_mx(
             }],
             "No MX records found".to_string(),
         );
-        return (result, Vec::new(), Vec::new(), false);
+        return (result, Vec::new(), Vec::new(), false, Vec::new());
     }
 
     let mut sub_checks = Vec::new();
@@ -54,12 +69,13 @@ pub async fn check_mx(
             sub_checks,
             "Null MX: domain does not accept mail".to_string(),
         );
-        return (result, Vec::new(), Vec::new(), true);
+        return (result, Vec::new(), Vec::new(), true, Vec::new());
     }
     let null_mx = false;
 
     // Resolve IPs for each MX host
     let mut has_ipv6 = false;
+    let mut addr_errors: Vec<LookupError> = Vec::new();
     let mut ipv4_prefixes: HashSet<u32> = HashSet::new();
     let mut ipv6_prefixes: HashSet<u64> = HashSet::new();
 
@@ -68,23 +84,40 @@ pub async fn check_mx(
         mx_hosts.push(host.to_string());
 
         // Check if MX points to a CNAME
-        let cnames = resolver.lookup_cname(host).await;
-        if !cnames.is_empty() {
-            sub_checks.push(SubCheck {
+        match resolver.lookup_cname(host).await {
+            Ok(cnames) if !cnames.is_empty() => sub_checks.push(SubCheck {
                 name: "mx_cname".to_string(),
                 verdict: Verdict::Fail,
                 detail: format!("MX `{}` points to a CNAME (RFC 5321 §5.1)", host),
-            });
+            }),
+            Ok(_) => {}
+            Err(e) => sub_checks.push(lookup_failed(&e)),
         }
 
-        let ips = resolver.lookup_ips(host).await;
-        if ips.is_empty() {
-            sub_checks.push(SubCheck {
-                name: "mx_no_addr".to_string(),
-                verdict: Verdict::Warn,
-                detail: format!("MX {} (priority {}) has no A/AAAA records", host, pref),
-            });
-        }
+        let ips = match resolver.lookup_ips(host).await {
+            Ok(lookup) => {
+                if let Some(e) = lookup.error {
+                    // The family is not named: the other half's answer is no claim about it.
+                    sub_checks.push(lookup_failed(&LookupError {
+                        record_type: "address",
+                        ..e.clone()
+                    }));
+                    addr_errors.push(e);
+                } else if lookup.ips.is_empty() {
+                    sub_checks.push(SubCheck {
+                        name: "mx_no_addr".to_string(),
+                        verdict: Verdict::Warn,
+                        detail: format!("MX {} (priority {}) has no A/AAAA records", host, pref),
+                    });
+                }
+                lookup.ips
+            }
+            Err(e) => {
+                sub_checks.push(lookup_failed(&e));
+                addr_errors.push(e);
+                Vec::new()
+            }
+        };
 
         for ip in &ips {
             match ip {
@@ -111,7 +144,10 @@ pub async fn check_mx(
     // single MX resolves to multiple IPs (address-level redundancy still
     // exists). `low_network_diversity` below flags the case where those
     // IPs share a prefix.
-    if mx_records.len() == 1 {
+    // An address count, the IPv6 side or the network spread taken from failed address lookups
+    // is not measured, so none of them is claimed.
+    let addrs_measured = addr_errors.is_empty();
+    if mx_records.len() == 1 && addrs_measured {
         let (verdict, detail) = if all_ips.len() > 1 {
             (
                 Verdict::Info,
@@ -134,7 +170,7 @@ pub async fn check_mx(
     }
 
     // No IPv6 check
-    if !has_ipv6 && !all_ips.is_empty() {
+    if addrs_measured && !has_ipv6 && !all_ips.is_empty() {
         sub_checks.push(SubCheck {
             name: "no_ipv6".to_string(),
             verdict: Verdict::Info,
@@ -144,7 +180,7 @@ pub async fn check_mx(
 
     // Network diversity check
     let total_prefixes = ipv4_prefixes.len() + ipv6_prefixes.len();
-    if total_prefixes == 1 && all_ips.len() > 1 {
+    if addrs_measured && total_prefixes == 1 && all_ips.len() > 1 {
         sub_checks.push(SubCheck {
             name: "low_network_diversity".to_string(),
             verdict: Verdict::Warn,
@@ -195,5 +231,5 @@ pub async fn check_mx(
     let mut result = CheckResult::new(Category::Mx, sub_checks, detail);
     result.enrichment = enrichment_data;
 
-    (result, all_ips, mx_hosts, null_mx)
+    (result, all_ips, mx_hosts, null_mx, addr_errors)
 }

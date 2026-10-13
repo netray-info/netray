@@ -34,8 +34,7 @@ pub struct TaskResult {
     pub headers: reqwest::header::HeaderMap,
     pub redirects: Vec<RedirectHop>,
     pub redirect_limit_reached: bool,
-    #[allow(dead_code)] // Available for future error reporting in assembler
-    pub error: Option<String>,
+    pub error: Option<ProbeError>,
 }
 
 /// Execute the full inspection: HTTPS + HTTP-upgrade probe + CORS probe.
@@ -202,7 +201,8 @@ pub fn assemble_response(
     // Parse all header categories from the HTTPS response
     let raw_headers = headers::dump_headers(&https.headers);
     let security_report = security::analyze_security_headers(&https.headers);
-    let cors_report = cors::analyze_cors(&result.cors.headers);
+    let mut cors_report = cors::analyze_cors(&result.cors.headers);
+    cors_report.error = result.cors.error.clone();
     let cookie_entries = cookies::parse_cookies(&https.headers);
     let fingerprint_report = fingerprint::analyze_fingerprint(&https.headers);
     let caching_report = caching::analyze_caching(&https.headers);
@@ -247,6 +247,7 @@ pub fn assemble_response(
             same_host,
             message,
             redirects: upgrade.redirects,
+            error: upgrade.error,
         }
     });
 
@@ -293,6 +294,7 @@ pub fn assemble_response(
             threat: enrichment.threat,
             role: enrichment.role,
         },
+        error: https.error.clone(),
         redirect_limit_reached,
     };
 

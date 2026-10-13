@@ -39,7 +39,8 @@ fn check_status_maps_to_model_status() {
 fn error_code_maps_to_model_status() {
     let cases = [
         ("NOT_TESTED_FROM_HERE", Status::NotTested),
-        ("HANDSHAKE_FAILED", Status::Unmeasured),
+        ("HANDSHAKE_FAILED", Status::Fail),
+        ("HANDSHAKE_TIMEOUT", Status::Unmeasured),
     ];
     for (code, want) in cases {
         assert_eq!(
