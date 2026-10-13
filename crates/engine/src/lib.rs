@@ -9,6 +9,7 @@ pub mod scoring;
 pub use catalogue::catalogue;
 pub use scoring::score;
 
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
@@ -102,6 +103,8 @@ pub struct Facts {
     pub https: Vec<String>,
     /// A and AAAA both definite negatives on every resolver asked.
     pub no_address_definite: bool,
+    /// The records blocks of the lookups that answered.
+    pub blocks: Vec<Block>,
 }
 
 /// What a module returns for its section.
@@ -220,6 +223,23 @@ pub struct RunReport {
     /// The resolved facts; empty when the resolve stage failed or no provider is registered.
     pub facts: Facts,
     pub resolve_error: Option<ResolveError>,
+    /// The evidence of every measured section.
+    sections_evidence: Vec<Block>,
+}
+
+impl RunReport {
+    /// The blocks of the run, one per id: the evidence of every measured section, then the
+    /// facts blocks whose id no section carries. A section's block wins over the facts block
+    /// of the same id; a facts block fills in where no section has it, e.g. after a DNS
+    /// timeout.
+    pub fn blocks(&self) -> Vec<&Block> {
+        let mut seen = HashSet::new();
+        self.sections_evidence
+            .iter()
+            .chain(&self.facts.blocks)
+            .filter(|b| seen.insert(&b.id))
+            .collect()
+    }
 }
 
 /// Runs one check. The resolve stage calls the registry's provider once (none registered: empty
@@ -297,20 +317,33 @@ pub async fn run(
                 let outcome = tokio::time::timeout_at(deadline.into(), work)
                     .await
                     .unwrap_or(SectionOutcome::TimedOut);
+                let evidence = match &outcome {
+                    SectionOutcome::Measured { evidence, .. } => evidence.clone(),
+                    _ => Vec::new(),
+                };
                 let _ = tx.send(SectionEvent { protocol, outcome }).await;
+                evidence
             })
         })
         .collect();
-    let (resolved, ()) = futures::join!(resolve, async { while running.next().await.is_some() {} });
+    let (resolved, sections_evidence) = futures::join!(resolve, async {
+        let mut all = Vec::new();
+        while let Some(evidence) = running.next().await {
+            all.extend(evidence);
+        }
+        all
+    });
 
     match resolved {
         Ok(facts) => RunReport {
             facts,
             resolve_error: None,
+            sections_evidence,
         },
         Err(e) => RunReport {
             facts: Facts::default(),
             resolve_error: Some(e),
+            sections_evidence,
         },
     }
 }

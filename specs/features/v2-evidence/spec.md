@@ -242,6 +242,11 @@ These requirements apply to every module.
 - Beacon carries its blocks in an additive SSE message `evidence`, over in-process goldens. Replay and production take one path (operator, 2026-10-13).
 - Block names, keys and titles as in the table above, over renaming them before release. They are on the wire but not rendered until Phase 4, and a released key is never reused with another meaning (§3.7) (operator, 2026-10-13).
 
+### Amendments
+
+- **A1 (operator, 2026-10-13).** The DNS module projects every one of its 15 answered types itself, the six facts types included, and does not wait for the facts. The resolve stage still carries `dns.a`, `aaaa`, `mx`, `caa`, `ns` and `https`. This replaces 3a's "the DNS module does not project those six types itself".
+- **A2 (operator, 2026-10-13).** When the same id exists in both the facts and a section, the section's block wins. The facts fill in only the ids that no section carries, such as after a DNS timeout.
+
 ## Open decisions
 
 None.

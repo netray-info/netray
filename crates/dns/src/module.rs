@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::{Arc, LazyLock};
@@ -8,12 +8,16 @@ use governor::{Quota, RateLimiter};
 use mhost::RecordType;
 use mhost::lints::CheckResult as LintResult;
 use mhost::resolver::lookup::LookupResult;
-use mhost::resolver::{Lookups, MultiQuery};
+use mhost::resolver::{Lookup, Lookups, MultiQuery};
+use mhost::resources::rdata::{CAA, DigestType, DnssecAlgorithm, SVCB};
 use mhost::resources::{RData, Record};
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{
     BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, ResolveError, RunContext,
     SectionOutcome,
+};
+use netray_model::evidence::{
+    Block, BlockId, Record as EvRecord, Register, Shape, ShapeKind, Value as EvValue, ValueType,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 use serde_json::json;
@@ -53,6 +57,42 @@ static CHECKS: LazyLock<Vec<CheckId>> = LazyLock::new(|| {
 pub(crate) fn dns_checks() -> &'static [CheckId] {
     CHECKS.as_slice()
 }
+
+macro_rules! records_blocks {
+    ($($t:literal),+ $(,)?) => {
+        /// The DNS register: one records block `dns.<type>` per record type, keys `owner`,
+        /// `type`, `ttl` and `data`.
+        pub const REGISTER: Register = Register {
+            blocks: &[$((concat!("dns.", $t), ShapeKind::Records)),+],
+            keys: &[$(
+                (concat!("dns.", $t), "owner", ValueType::Text),
+                (concat!("dns.", $t), "type", ValueType::Text),
+                (concat!("dns.", $t), "ttl", ValueType::Int),
+                (concat!("dns.", $t), "data", ValueType::Text),
+            )+],
+        };
+
+        const VOLATILE: &[EvidencePath] = &[$(EvidencePath(concat!("dns.", $t, "/ttl"))),+];
+    };
+}
+
+records_blocks!(
+    "a", "aaaa", "mx", "caa", "ns", "https", "cname", "dnskey", "ds", "nsec", "nsec3", "rrsig",
+    "soa", "svcb", "txt",
+);
+
+/// The record types of the check run's base-name batches besides the facts types.
+const MODULE_RECORD_TYPES: [RecordType; 9] = [
+    RecordType::CNAME,
+    RecordType::DNSKEY,
+    RecordType::DS,
+    RecordType::NSEC,
+    RecordType::NSEC3,
+    RecordType::RRSIG,
+    RecordType::SOA,
+    RecordType::SVCB,
+    RecordType::TXT,
+];
 
 /// The record types of the shared DNS facts.
 const FACT_RECORD_TYPES: [RecordType; 6] = [
@@ -204,7 +244,7 @@ impl Module for DnsModule {
     }
 
     fn volatile(&self) -> &'static [EvidencePath] {
-        &[]
+        VOLATILE
     }
 
     fn run<'a>(&'a self, ctx: &'a RunContext, _facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
@@ -262,10 +302,7 @@ pub fn facts_from_lookups(lookups: &Lookups) -> Facts {
         caa: first_seen(
             rdata_of(lookups, RecordType::CAA)
                 .filter_map(RData::caa)
-                .map(|caa| {
-                    let flags = if caa.issuer_critical() { 128 } else { 0 };
-                    format!("{flags} {} \"{}\"", caa.tag(), caa.value())
-                }),
+                .map(caa_presentation),
         ),
         ns: first_seen(
             rdata_of(lookups, RecordType::NS)
@@ -275,20 +312,195 @@ pub fn facts_from_lookups(lookups: &Lookups) -> Facts {
         https: first_seen(
             rdata_of(lookups, RecordType::HTTPS)
                 .filter_map(RData::https)
-                .map(|svcb| {
-                    let mut rr = format!("{} {}", svcb.svc_priority(), svcb.target_name());
-                    for param in svcb.svc_params() {
-                        rr.push_str(&format!(
-                            " {}={}",
-                            param.key(),
-                            param.value().trim_end_matches(',')
-                        ));
-                    }
-                    rr
-                }),
+                .map(svcb_presentation),
         ),
         no_address_definite: definite_negative(lookups, RecordType::A)
             && definite_negative(lookups, RecordType::AAAA),
+        blocks: FACT_RECORD_TYPES
+            .iter()
+            .filter_map(|&record_type| {
+                records_block(
+                    record_type,
+                    lookups
+                        .iter()
+                        .filter(|lookup| lookup.query().record_type() == record_type),
+                )
+            })
+            .collect(),
+    }
+}
+
+/// The id of the records block of `record_type`, `dns.<type>`.
+fn block_id(record_type: &str) -> BlockId {
+    BlockId::parse(&format!("dns.{}", record_type.to_lowercase())).expect("static block id")
+}
+
+/// Whether `lookup` is an answer: a response or a definite negative.
+fn answered(lookup: &Lookup) -> bool {
+    match lookup.result() {
+        LookupResult::Response(_) => true,
+        LookupResult::NxDomain(nx) => nx.is_definite(),
+        LookupResult::Error(_) => false,
+    }
+}
+
+/// The records block `dns.<type>` of `lookups`: their records, each (owner, type, data) once
+/// with the highest TTL seen, in (owner, type, data) order. `None` when no lookup answered
+/// (Rule M).
+fn records_block<'a>(
+    record_type: RecordType,
+    lookups: impl IntoIterator<Item = &'a Lookup>,
+) -> Option<Block> {
+    let mut any_answered = false;
+    let mut ttls: BTreeMap<(String, String, String), u32> = BTreeMap::new();
+    for lookup in lookups.into_iter().filter(|lookup| answered(lookup)) {
+        any_answered = true;
+        for record in lookup.records() {
+            let key = (
+                record.name().to_string(),
+                record.record_type().to_string(),
+                presentation(record.data()),
+            );
+            let ttl = ttls.entry(key).or_default();
+            *ttl = (*ttl).max(record.ttl());
+        }
+    }
+    let records = ttls
+        .into_iter()
+        .map(|((owner, rtype, data), ttl)| EvRecord {
+            owner: EvValue::Text(owner),
+            rtype: EvValue::Text(rtype),
+            ttl: EvValue::Int(i64::from(ttl)),
+            data: EvValue::Text(data),
+        })
+        .collect();
+    let title = record_type.to_string();
+    any_answered.then(|| Block {
+        id: block_id(&title),
+        title,
+        shape: Shape::Records(records),
+    })
+}
+
+/// A CAA record in presentation form, e.g. `0 issue "ca.example.com"`.
+fn caa_presentation(caa: &CAA) -> String {
+    let flags = if caa.issuer_critical() { 128 } else { 0 };
+    format!("{flags} {} \"{}\"", caa.tag(), caa.value())
+}
+
+/// An SVCB or HTTPS record in presentation form, e.g. `1 . alpn=h2`.
+fn svcb_presentation(svcb: &SVCB) -> String {
+    let mut rr = format!("{} {}", svcb.svc_priority(), svcb.target_name());
+    for param in svcb.svc_params() {
+        rr.push_str(&format!(
+            " {}={}",
+            param.key(),
+            param.value().trim_end_matches(',')
+        ));
+    }
+    rr
+}
+
+fn algorithm_number(algorithm: DnssecAlgorithm) -> u8 {
+    match algorithm {
+        DnssecAlgorithm::RsaMd5 => 1,
+        DnssecAlgorithm::Dsa => 3,
+        DnssecAlgorithm::RsaSha1 => 5,
+        DnssecAlgorithm::RsaSha1Nsec3Sha1 => 7,
+        DnssecAlgorithm::RsaSha256 => 8,
+        DnssecAlgorithm::RsaSha512 => 10,
+        DnssecAlgorithm::EcdsaP256Sha256 => 13,
+        DnssecAlgorithm::EcdsaP384Sha384 => 14,
+        DnssecAlgorithm::Ed25519 => 15,
+        DnssecAlgorithm::Ed448 => 16,
+        DnssecAlgorithm::Unassigned(n) => n,
+    }
+}
+
+fn digest_type_number(digest_type: DigestType) -> u8 {
+    match digest_type {
+        DigestType::Sha1 => 1,
+        DigestType::Sha256 => 2,
+        DigestType::Sha384 => 4,
+        DigestType::Unassigned(n) => n,
+    }
+}
+
+/// The record data in presentation form.
+fn presentation(data: &RData) -> String {
+    match data {
+        RData::A(ip) => ip.to_string(),
+        RData::AAAA(ip) => ip.to_string(),
+        RData::ANAME(name) | RData::CNAME(name) | RData::NS(name) | RData::PTR(name) => {
+            name.to_string()
+        }
+        RData::CAA(caa) => caa_presentation(caa),
+        RData::HTTPS(svcb) | RData::SVCB(svcb) => svcb_presentation(svcb),
+        RData::MX(mx) => format!("{} {}", mx.preference(), mx.exchange()),
+        RData::SOA(soa) => format!(
+            "{} {} {} {} {} {} {}",
+            soa.mname(),
+            soa.rname(),
+            soa.serial(),
+            soa.refresh(),
+            soa.retry(),
+            soa.expire(),
+            soa.minimum()
+        ),
+        RData::TXT(txt) => txt
+            .iter()
+            .map(|s| format!("\"{}\"", String::from_utf8_lossy(s)))
+            .collect::<Vec<_>>()
+            .join(" "),
+        RData::DNSKEY(key) => format!(
+            "{} {} {} {}",
+            key.flags(),
+            key.protocol(),
+            algorithm_number(key.algorithm()),
+            key.public_key()
+        ),
+        RData::DS(ds) => format!(
+            "{} {} {} {}",
+            ds.key_tag(),
+            algorithm_number(ds.algorithm()),
+            digest_type_number(ds.digest_type()),
+            ds.digest()
+        ),
+        RData::RRSIG(sig) => format!(
+            "{} {} {} {} {} {} {} {} {}",
+            sig.type_covered(),
+            algorithm_number(sig.algorithm()),
+            sig.labels(),
+            sig.original_ttl(),
+            sig.expiration(),
+            sig.inception(),
+            sig.key_tag(),
+            sig.signer_name(),
+            sig.signature()
+        ),
+        RData::NSEC(nsec) => std::iter::once(nsec.next_domain_name().to_string())
+            .chain(nsec.types().iter().cloned())
+            .collect::<Vec<_>>()
+            .join(" "),
+        RData::NSEC3(nsec3) => {
+            let salt = if nsec3.salt().is_empty() {
+                "-"
+            } else {
+                nsec3.salt()
+            };
+            [
+                nsec3.hash_algorithm().to_string(),
+                u8::from(nsec3.opt_out()).to_string(),
+                nsec3.iterations().to_string(),
+                salt.to_string(),
+                nsec3.next_hashed_owner().to_string(),
+            ]
+            .into_iter()
+            .chain(nsec3.types().iter().cloned())
+            .collect::<Vec<_>>()
+            .join(" ")
+        }
+        other => format!("{other:?}"),
     }
 }
 
@@ -373,13 +585,19 @@ const CHECK_INPUTS: &[(&str, &[&str])] = &[
     ("ns_delegation", &["NS"]),
 ];
 
+/// Record types a check references as evidence beyond its `CHECK_INPUTS`; a failed batch of
+/// one of them does not make the check unmeasured.
+const EVIDENCE_ONLY_INPUTS: &[(&str, &[&str])] = &[("dnssec", &["RRSIG", "NSEC", "NSEC3"])];
+
 /// Maps prism's check events onto `dns.<category>` checks (the email categories dropped), the
-/// V1 headline and the addresses of the A/AAAA batches.
+/// V1 headline, the addresses of the A/AAAA batches and the records blocks of the answered
+/// base-name batches. A check references the blocks of its inputs that the section holds.
 pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     let mut checks: Vec<LintCheck> = Vec::new();
     let mut resolved_ips: Vec<IpAddr> = Vec::new();
     let mut seen_ips: HashSet<IpAddr> = HashSet::new();
     let mut batch_errors: Vec<(&str, Option<String>)> = Vec::new();
+    let mut batches: Vec<&BatchEvent> = Vec::new();
     let mut unanswered: Vec<(&'static str, &[String], bool)> = Vec::new();
     let mut stream_timed_out = false;
 
@@ -388,6 +606,7 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
             CheckEvent::Batch(batch) => {
                 collect_ips_from_batch(batch, &mut resolved_ips, &mut seen_ips);
                 batch_errors.push((batch.record_type.as_str(), batch_error(batch)));
+                batches.push(batch);
             }
             CheckEvent::Lint(lint) => {
                 if let Some(check) = parse_lint_event(lint) {
@@ -505,12 +724,52 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
         }
     }
 
+    let evidence: Vec<Block> = FACT_RECORD_TYPES
+        .iter()
+        .chain(&MODULE_RECORD_TYPES)
+        .filter_map(|&record_type| {
+            let label = record_type.to_string();
+            records_block(
+                record_type,
+                batches
+                    .iter()
+                    .filter(|batch| batch.record_type == label)
+                    .flat_map(|batch| batch.lookups.iter()),
+            )
+        })
+        .collect();
+    for result in &mut results {
+        if result.status != Status::Unmeasured {
+            result.evidence = check_evidence(result.id.name(), &evidence);
+        }
+    }
+
     let resolved_ips: Vec<String> = resolved_ips.iter().map(ToString::to_string).collect();
     SectionOutcome::Measured {
         checks: results,
         presentation: json!({ "headline": headline, "resolved_ips": resolved_ips }),
-        evidence: vec![],
+        evidence,
     }
+}
+
+/// The blocks of `blocks` a check judged by: those of its inputs and evidence-only inputs;
+/// `ttl` references every records block.
+fn check_evidence(check: &str, blocks: &[Block]) -> Vec<BlockId> {
+    if check == "ttl" {
+        return blocks.iter().map(|b| b.id.clone()).collect();
+    }
+    let inputs = |table: &[(&str, &'static [&'static str])]| {
+        table
+            .iter()
+            .find(|(name, _)| *name == check)
+            .map_or(&[][..], |(_, inputs)| *inputs)
+    };
+    inputs(CHECK_INPUTS)
+        .iter()
+        .chain(inputs(EVIDENCE_ONLY_INPUTS))
+        .map(|input| block_id(input))
+        .filter(|id| blocks.iter().any(|b| b.id == *id))
+        .collect()
 }
 
 /// The finding of a batch that measured nothing: no lookups, or every lookup an error or a
