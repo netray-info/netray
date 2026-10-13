@@ -102,6 +102,7 @@ fn translate_equals_lens_email_section_for_every_fixture() {
                 SectionOutcome::Measured {
                     checks,
                     presentation,
+                    evidence: _,
                 },
             ) => {
                 let lens_checks = email["checks"].as_array().unwrap();

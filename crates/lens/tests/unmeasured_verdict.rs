@@ -64,6 +64,7 @@ impl Module for StubEmail {
                     result("email.dnsbl", dnsbl),
                 ],
                 presentation: json!({}),
+                evidence: vec![],
             }
         })
     }

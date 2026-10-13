@@ -47,6 +47,7 @@ impl Module for RecordingHttp {
                     evidence: vec![],
                 }],
                 presentation: json!({"headline": "stub module"}),
+                evidence: vec![],
             }
         })
     }

@@ -56,6 +56,7 @@ impl Module for RecordingEmail {
                     evidence: vec![],
                 }],
                 presentation: json!({}),
+                evidence: vec![],
             }
         })
     }

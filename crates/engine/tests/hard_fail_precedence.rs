@@ -20,6 +20,7 @@ fn measured(protocol: Protocol, checks: Vec<CheckResult>) -> SectionEvent {
         outcome: SectionOutcome::Measured {
             checks,
             presentation: serde_json::Value::Null,
+            evidence: vec![],
         },
     }
 }

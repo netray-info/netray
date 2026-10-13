@@ -52,6 +52,7 @@ impl Module for RecordingModule {
             SectionOutcome::Measured {
                 checks: vec![result()],
                 presentation: json!({"headline": "x"}),
+                evidence: vec![],
             }
         })
     }
@@ -103,6 +104,7 @@ async fn registry_runs_module_with_domain_and_selectors_from_context() {
         SectionOutcome::Measured {
             checks: vec![result()],
             presentation: json!({"headline": "x"}),
+            evidence: vec![],
         }
     );
 }

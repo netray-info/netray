@@ -29,6 +29,7 @@ fn measured(outcome: SectionOutcome) -> (Vec<netray_model::CheckResult>, Value) 
         SectionOutcome::Measured {
             checks,
             presentation,
+            evidence: _,
         } => (checks, presentation),
         other => panic!("expected Measured, got {other:?}"),
     }

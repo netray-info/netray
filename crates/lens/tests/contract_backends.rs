@@ -104,6 +104,7 @@ fn netray_http_translates_spectra_golden() {
         SectionOutcome::Measured {
             checks,
             presentation,
+            evidence: _,
         } => (checks, presentation),
         other => panic!("expected Measured, got {other:?}"),
     };

@@ -22,6 +22,7 @@ fn measured() -> SectionOutcome {
     SectionOutcome::Measured {
         checks: vec![],
         presentation: json!({}),
+        evidence: vec![],
     }
 }
 

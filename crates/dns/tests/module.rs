@@ -103,6 +103,7 @@ fn translate_equals_lens_dns_section_for_every_fixture() {
         let SectionOutcome::Measured {
             checks,
             presentation,
+            evidence: _,
         } = outcome
         else {
             panic!("{sse_name}: expected Measured, got {outcome:?}");

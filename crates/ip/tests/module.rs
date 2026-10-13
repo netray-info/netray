@@ -25,7 +25,11 @@ fn contracts(name: &str) -> Value {
 
 fn measured(outcome: SectionOutcome) -> (Vec<netray_model::CheckResult>, Value) {
     match outcome {
-        SectionOutcome::Measured { checks, presentation } => (checks, presentation),
+        SectionOutcome::Measured {
+            checks,
+            presentation,
+            evidence: _,
+        } => (checks, presentation),
         other => panic!("expected Measured, got {other:?}"),
     }
 }

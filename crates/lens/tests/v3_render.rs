@@ -83,6 +83,7 @@ impl Module for FixedHttp {
             SectionOutcome::Measured {
                 checks,
                 presentation,
+                evidence: vec![],
             }
         })
     }
