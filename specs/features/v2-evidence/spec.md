@@ -1,6 +1,6 @@
 # Spec: v2 evidence
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-13
 
 ## Goal
@@ -240,7 +240,7 @@ These requirements apply to every module.
 - Check items carry their evidence ids on the wire, cross-module included, over not carrying them (R28, R29) (operator, 2026-10-13).
 - The resolve stage owns the shared lookups' blocks (`dns.a`, `aaaa`, `mx`, `caa`, `ns`, `https`), as in SDD §3.6, over letting a reference dangle. A judged check always shows its evidence (operator, 2026-10-13).
 - Beacon carries its blocks in an additive SSE message `evidence`, over in-process goldens. Replay and production take one path (operator, 2026-10-13).
-- Block names, keys and titles as in the table above (default, not interviewed). They are on the wire but not rendered until Phase 4. A released key is never reused with another meaning (§3.7).
+- Block names, keys and titles as in the table above, over renaming them before release. They are on the wire but not rendered until Phase 4, and a released key is never reused with another meaning (§3.7) (operator, 2026-10-13).
 
 ## Open decisions
 
