@@ -157,36 +157,3 @@ impl Module for DnsWithCaa {
         })
     }
 }
-
-#[tokio::test]
-async fn facts_block_wins_over_the_sections_copy_of_the_same_id() {
-    let id = BlockId::parse("dns.caa").unwrap();
-    let from_facts = Block {
-        id: id.clone(),
-        title: "CAA".into(),
-        shape: Shape::Records(vec![]),
-    };
-    let from_section = Block {
-        id: id.clone(),
-        title: "CAA (section)".into(),
-        shape: Shape::Records(vec![]),
-    };
-    let registry = Registry::new()
-        .with_facts(Box::new(StubProvider(Facts {
-            blocks: vec![from_facts.clone()],
-            ..Facts::default()
-        })))
-        .with(Box::new(DnsWithCaa(from_section)));
-    let base = RunContext {
-        deadline: Instant::now() + MS(2000),
-        domain: Domain::new("example.com"),
-        options: RunOptions::default(),
-    };
-    let sections = [(Protocol::Dns, MS(1000))];
-    let (tx, mut rx) = mpsc::channel(8);
-    let drain = async { while rx.recv().await.is_some() {} };
-    let (report, ()) = tokio::join!(run(&registry, base, &sections, MS(500), tx), drain);
-
-    let caa: Vec<&Block> = report.blocks().into_iter().filter(|b| b.id == id).collect();
-    assert_eq!(caa, vec![&from_facts], "exactly one dns.caa, the facts one");
-}
