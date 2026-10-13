@@ -132,28 +132,3 @@ async fn facts_blocks_survive_a_dns_timeout_and_resolve_references() {
     assert_eq!(checks.len(), 1);
     assert_eq!(check_evidence_rule(&checks, &blocks), Ok(()));
 }
-
-/// Measures and carries its own `dns.caa`, which the facts also carry.
-struct DnsWithCaa(Block);
-
-impl Module for DnsWithCaa {
-    fn protocol(&self) -> Protocol {
-        Protocol::Dns
-    }
-    fn checks(&self) -> &'static [CheckId] {
-        &[]
-    }
-    fn volatile(&self) -> &'static [EvidencePath] {
-        &[]
-    }
-    fn run<'a>(&'a self, _ctx: &'a RunContext, _facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
-        let block = self.0.clone();
-        Box::pin(async move {
-            SectionOutcome::Measured {
-                checks: vec![],
-                presentation: serde_json::Value::Null,
-                evidence: vec![block],
-            }
-        })
-    }
-}
