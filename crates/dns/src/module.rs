@@ -1,5 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
-use std::net::IpAddr;
+use std::collections::BTreeMap;
 use std::num::NonZeroU32;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
@@ -20,7 +19,6 @@ use netray_model::evidence::{
     Block, BlockId, Record as EvRecord, Register, Shape, ShapeKind, Value as EvValue, ValueType,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::json;
 use tokio::sync::{Semaphore, mpsc};
 
 use crate::api::check::{
@@ -277,7 +275,7 @@ impl FactsProvider for DnsModule {
     }
 }
 
-/// The A, AAAA, MX (exchange), CAA (presentation form), NS and HTTPS (presentation form)
+/// The A, AAAA, MX (exchange), CAA (zone-file form), NS and HTTPS (zone-file form)
 /// records of `lookups`, each once, in lookup order. A field reads only the lookups of its own
 /// record type, as the A and AAAA batches of `translate` do: an A or AAAA lookup keeps every
 /// address it answers (the CNAME chain target included), the others keep the records owned by
@@ -359,7 +357,7 @@ fn records_block<'a>(
             let key = (
                 record.name().to_string(),
                 record.record_type().to_string(),
-                presentation(record.data()),
+                rdata_text(record.data()),
             );
             let ttl = ttls.entry(key).or_default();
             *ttl = (*ttl).max(record.ttl());
@@ -382,13 +380,13 @@ fn records_block<'a>(
     })
 }
 
-/// A CAA record in presentation form, e.g. `0 issue "ca.example.com"`.
+/// A CAA record in zone-file form, e.g. `0 issue "ca.example.com"`.
 fn caa_presentation(caa: &CAA) -> String {
     let flags = if caa.issuer_critical() { 128 } else { 0 };
     format!("{flags} {} \"{}\"", caa.tag(), caa.value())
 }
 
-/// An SVCB or HTTPS record in presentation form, e.g. `1 . alpn=h2`.
+/// An SVCB or HTTPS record in zone-file form, e.g. `1 . alpn=h2`.
 fn svcb_presentation(svcb: &SVCB) -> String {
     let mut rr = format!("{} {}", svcb.svc_priority(), svcb.target_name());
     for param in svcb.svc_params() {
@@ -426,8 +424,8 @@ fn digest_type_number(digest_type: DigestType) -> u8 {
     }
 }
 
-/// The record data in presentation form.
-fn presentation(data: &RData) -> String {
+/// The record data in zone-file form.
+fn rdata_text(data: &RData) -> String {
     match data {
         RData::A(ip) => ip.to_string(),
         RData::AAAA(ip) => ip.to_string(),
@@ -589,13 +587,10 @@ const CHECK_INPUTS: &[(&str, &[&str])] = &[
 /// one of them does not make the check unmeasured.
 const EVIDENCE_ONLY_INPUTS: &[(&str, &[&str])] = &[("dnssec", &["RRSIG", "NSEC", "NSEC3"])];
 
-/// Maps prism's check events onto `dns.<category>` checks (the email categories dropped), the
-/// V1 headline, the addresses of the A/AAAA batches and the records blocks of the answered
-/// base-name batches. A check references the blocks of its inputs that the section holds.
+/// Maps prism's check events onto `dns.<category>` checks (the email categories dropped) and the
+/// records blocks of the answered base-name batches. A check references the blocks of its inputs that the section holds.
 pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     let mut checks: Vec<LintCheck> = Vec::new();
-    let mut resolved_ips: Vec<IpAddr> = Vec::new();
-    let mut seen_ips: HashSet<IpAddr> = HashSet::new();
     let mut batch_errors: Vec<(&str, Option<String>)> = Vec::new();
     let mut batches: Vec<&BatchEvent> = Vec::new();
     let mut unanswered: Vec<(&'static str, &[String], bool)> = Vec::new();
@@ -604,7 +599,6 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
     for event in events {
         match event {
             CheckEvent::Batch(batch) => {
-                collect_ips_from_batch(batch, &mut resolved_ips, &mut seen_ips);
                 batch_errors.push((batch.record_type.as_str(), batch_error(batch)));
                 batches.push(batch);
             }
@@ -686,8 +680,6 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
         }
     }
 
-    let headline = build_headline(&checks);
-
     let mut results = Vec::with_capacity(checks.len());
     for check in checks {
         let id = match CheckId::parse(&format!("dns.{}", check.name)) {
@@ -744,10 +736,8 @@ pub fn translate(events: &[CheckEvent]) -> SectionOutcome {
         }
     }
 
-    let resolved_ips: Vec<String> = resolved_ips.iter().map(ToString::to_string).collect();
     SectionOutcome::Measured {
         checks: results,
-        presentation: json!({ "headline": headline, "resolved_ips": resolved_ips }),
         evidence,
     }
 }
@@ -807,35 +797,6 @@ fn batch_error(batch: &BatchEvent) -> Option<String> {
         "{record_type} lookup failed: {}",
         causes.join("; ")
     ))
-}
-
-/// The A or AAAA addresses of an A or AAAA batch, each once.
-fn collect_ips_from_batch(
-    batch: &BatchEvent,
-    resolved_ips: &mut Vec<IpAddr>,
-    seen: &mut HashSet<IpAddr>,
-) {
-    let ips: Vec<IpAddr> = match batch.record_type.as_str() {
-        "A" => batch
-            .lookups
-            .a()
-            .into_iter()
-            .map(|ip| IpAddr::V4(*ip))
-            .collect(),
-        "AAAA" => batch
-            .lookups
-            .aaaa()
-            .into_iter()
-            .map(|ip| IpAddr::V6(*ip))
-            .collect(),
-        _ => return,
-    };
-
-    for ip in ips {
-        if seen.insert(ip) {
-            resolved_ips.push(ip);
-        }
-    }
 }
 
 /// A lint event as a single check carrying the worst verdict.
@@ -906,35 +867,10 @@ fn classify_lint_result(result: &LintResult) -> (Verdict, Option<String>) {
     }
 }
 
-/// Build a summary headline from the collected checks.
-fn build_headline(checks: &[LintCheck]) -> String {
-    let keys = ["dnssec", "caa", "ns", "cname_apex"];
-    let labels = ["DNSSEC", "CAA", "NS", "CNAME-apex"];
-
-    let parts: Vec<String> = keys
-        .iter()
-        .zip(labels.iter())
-        .map(|(key, label)| {
-            let symbol = match checks.iter().find(|c| c.name == *key) {
-                Some(c) => match c.verdict {
-                    Verdict::Pass => "\u{2713}",
-                    Verdict::Warn => "~",
-                    Verdict::Fail => "\u{2717}",
-                    Verdict::NotFound | Verdict::Skip => "\u{2013}",
-                    Verdict::Unmeasured => "?",
-                },
-                None => "\u{2013}",
-            };
-            format!("{label} {symbol}")
-        })
-        .collect();
-
-    parts.join("  ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn lookup(query_type: &str, records: serde_json::Value) -> serde_json::Value {
         json!({

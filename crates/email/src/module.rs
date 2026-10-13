@@ -8,7 +8,6 @@ use netray_model::evidence::{
     Block, BlockId, Fields, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::json;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 
@@ -269,14 +268,6 @@ const MX_DEPENDENT: &[&str] = &[
     "mx", "mta_sts", "tls_rpt", "bimi", "dane", "dnsbl", "fcrdns",
 ];
 
-/// The former V1 groups of the headline and the categories each covers.
-const HEADLINE_GROUPS: &[(&str, &[&str])] = &[
-    ("Auth", &["spf", "dkim", "dmarc"]),
-    ("Infra", &["mx", "fcrdns", "dnsbl"]),
-    ("Transport", &["mta_sts", "tls_rpt", "dane"]),
-    ("Brand", &["bimi"]),
-];
-
 /// Beacon categories the email section does not score as email categories, with the reason.
 pub const EXCLUDED: &[(&str, &str)] = &[
     ("dnssec", "scored in DNS section"),
@@ -350,7 +341,7 @@ enum Abort {
 // Translation
 // ---------------------------------------------------------------------------
 
-/// Maps beacon's events onto the ten email checks and the V1 headline and extras. A `skipped`
+/// Maps beacon's events onto the ten email checks and beacon's blocks. A `skipped`
 /// summary whose every verdict is Skip (beacon's own timeout) is a
 /// [`SectionOutcome::TimedOut`]; a stream that cannot be scored is `Incomplete`.
 ///
@@ -398,16 +389,7 @@ pub fn translate(events: &[SseEvent]) -> SectionOutcome {
         })
         .collect();
 
-    let headline = build_headline(&checks);
-
-    SectionOutcome::Measured {
-        checks,
-        presentation: json!({
-            "headline": headline,
-            "grade": summary.grade,
-        }),
-        evidence,
-    }
+    SectionOutcome::Measured { checks, evidence }
 }
 
 /// The blocks a judged check references: its own, the MTA-STS policy file for `mta_sts`, the
@@ -975,37 +957,6 @@ fn verdict_rank(v: &Status) -> u8 {
         Status::Warn => 2,
         _ => 0,
     }
-}
-
-/// The V1 headline: each former group shows the worst status over its checks.
-fn build_headline(checks: &[CheckResult]) -> String {
-    HEADLINE_GROUPS
-        .iter()
-        .map(|(display, members)| {
-            let worst = checks
-                .iter()
-                .filter(|c| {
-                    members
-                        .iter()
-                        .any(|m| c.id.to_string() == format!("email.{m}"))
-                })
-                .map(|c| c.status)
-                .max_by_key(|s| match s {
-                    Status::Fail => 3,
-                    Status::Warn => 2,
-                    Status::Pass => 1,
-                    _ => 0,
-                });
-            let symbol = match worst {
-                Some(Status::Pass) => "OK",
-                Some(Status::Warn) => "Warn",
-                Some(Status::Fail) => "Fail",
-                _ => "N/A",
-            };
-            format!("{display}: {symbol}")
-        })
-        .collect::<Vec<_>>()
-        .join("  ")
 }
 
 #[cfg(test)]

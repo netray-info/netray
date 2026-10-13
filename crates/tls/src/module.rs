@@ -13,7 +13,6 @@ use netray_model::evidence::{
     ValueType,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::json;
 
 use crate::config::{ConfigError, ModuleConfig};
 use crate::dns::AnsweredRecord;
@@ -262,7 +261,7 @@ impl Module for TlsModule {
     }
 }
 
-/// Maps port 443 (else the first port) onto all 21 `tls.<id>` checks and the V1 headline. Each
+/// Maps port 443 (else the first port) onto all 21 `tls.<id>` checks and its blocks. Each
 /// per-address check is measured on every address that completed a handshake and reports the
 /// worst of them; CAA, DANE and OCSP come once from the summary. A failed CAA, TLSA or HTTPS
 /// lookup makes its check `Unmeasured`, and so do the consistency checks when a timeout left
@@ -395,11 +394,7 @@ pub fn translate_with_facts(resp: &InspectResponse, facts: &[BlockId]) -> Sectio
         })
         .collect();
 
-    SectionOutcome::Measured {
-        checks,
-        presentation: json!({ "headline": build_headline(&resp.ports) }),
-        evidence,
-    }
+    SectionOutcome::Measured { checks, evidence }
 }
 
 /// The id `tls.<name>@<addr>:<port>`, `None` for an address or port no block id can hold.
@@ -779,26 +774,6 @@ fn timed_out(ips: &[IpInspectionResult]) -> Vec<&str> {
         })
         .map(|r| r.ip.as_str())
         .collect()
-}
-
-/// Build a human-readable headline from the first port's first IP result.
-fn build_headline(ports: &[PortResult]) -> String {
-    let first_ip = ports.first().and_then(|p| p.ips.first());
-
-    let version = first_ip
-        .and_then(|ip| ip.tls.as_ref())
-        .map(|t| t.version.as_str())
-        .unwrap_or("TLS");
-
-    let expiry = first_ip
-        .and_then(|ip| ip.chain.as_ref())
-        .and_then(|chain| chain.first())
-        .map(|cert| format!(", expires in {}d", cert.days_remaining));
-
-    match expiry {
-        Some(e) => format!("{version}{e}"),
-        None => "TLS inspection complete".to_string(),
-    }
 }
 
 #[cfg(test)]

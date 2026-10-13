@@ -8,7 +8,6 @@ description = "V2 engine seams for the netray.info suite: the Module trait and F
 [dependencies]
 netray-model = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 toml = { workspace = true }
 sha2 = { workspace = true }
 futures = { workspace = true }

@@ -244,3 +244,51 @@ skipped: lens drops evidence until Phase 6. The spectra V1 wire and every golden
 
 skipped: lens drops evidence until Phase 6. The V1 beacon SSE keeps every pre-existing frame byte-identical apart from the corrected scenario frames, and adds one `evidence` frame before `summary`. The V1 email frontend ignores that frame (C7).
 
+
+## Phase 6 — Lens
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R7: lens derives headline, ip.addresses, http status_code/http_version/server_ip/server_org/server_network_type/response_duration_ms, email.grade, DNS resolved_ips and snapshot server_addresses from evidence; `presentation` removed from SectionOutcome, modules and lens; pre-existing lens-full fields byte-identical | green | `crates/lens/tests/evidence_wire.rs` |
+| C2 | R8: every section event (SSE, sync JSON, MCP) carries `evidence: [Block]`; every check item `evidence: [block-id]`; summary `evidence_schema: 1`; facts blocks published in the dns section where no section carries the id; references that do not resolve within the run are dropped; `site/api/lens.html` documents them; frontend `types.ts` gains the types | green | `crates/lens/tests/evidence_wire.rs` |
+| C3 | R9: every lens-full fixture: every check item's evidence ids resolve to a block in the run's evidence across sections | green | `crates/lens/tests/evidence_wire.rs` |
+| C4 | every lens-full fixture: every pre-existing field equals the golden; `evidence` fields are new | green | `crates/lens/tests/evidence_wire.rs` |
+| C5 | no `presentation` field remains in engine, modules or lens | green | `tests/repo/test_no_presentation.sh` |
+| C6 | reader: the HTTP headline's HTTPS symbol follows the `https_redirect` verdict | green | `crates/lens/src/modules.rs` (unit test `http_headline_https_follows_the_redirect_check`) |
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 lens + removal of `presentation` | 2 (C4 compared against the regenerated goldens; I fixed the test to strip evidence on both sides) | opus | 252314 | 1188 |
+
+### Reader (phase 6)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | HTTP headline `HTTPS ✗` next to a passing `https_redirect` (port 80 redirected, a later hop failed) | fixed: the symbol follows the check verdict (C6) |
+| AMENDMENT | `http.status_code` and `http_version` are absent when the HTTPS probe got no response (previously `0` / `""`) | documented in `site/api/lens.html`; the fields stay optional on the wire |
+| AMENDMENT | Headline symbols follow the Rule-M verdicts on error inputs: HSTS/CSP `-` after an HTTPS timeout; DNS `?` after a stream timeout | recorded; the goldens are unchanged |
+| DEFERRED | `not_applicable` "not reported" checks still carry references | `lens.html` wording is now "relies on"; only judged checks are guaranteed a reference |
+| NIT | The DNS example in `lens.html` referenced blocks it did not show | fixed |
+
+### Behavioural verification
+
+Branch build, run as `netray lens lens.dev.toml` from main's binary path:
+
+```
+$ curl -sN http://127.0.0.1:18086/api/check/netray.info   (SSE, parsed)
+grade A+ score 97.5 schema 1
+dns 'DNSSEC ✓  CAA ✓  NS ✓  CNAME-apex ✓' 14 blocks
+tls 'TLSv1.3, expires in 54d' 4 blocks
+http 'HTTPS ✓  HSTS ✓  CSP ~  CORS ~' 7 blocks
+email 'Auth: OK  Infra: OK  Transport: OK  Brand: OK' 14 blocks
+ip 'backend error' 0 blocks            (no GeoIP data locally)
+dangling []
+judged without ref []
+```
+
+The grade matches main. Every reference resolves within the run, and every judged check names at least one block.
+

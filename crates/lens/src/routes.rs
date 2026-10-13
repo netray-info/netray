@@ -16,11 +16,14 @@ use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
 use netray_engine::profile::Profile;
+use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION};
 
 use crate::badge::render::svg_for_grade;
 use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
 use crate::cache::{CachedResult, cache_key, is_fresh};
-use crate::check::{CheckInput, CheckOutput, SectionError, run_check, run_check_with_input};
+use crate::check::{
+    CheckInput, CheckOutput, HARD_DEADLINE, SectionError, run_check, run_check_with_evidence,
+};
 use crate::input::validate_domain;
 use crate::modules::{BackendExtra, BackendResult};
 use crate::score::{
@@ -60,6 +63,9 @@ pub struct CheckItem {
     pub weight: Option<u32>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub messages: Vec<String>,
+    /// The ids of the run's blocks the check judged by.
+    #[schema(value_type = Vec<String>)]
+    pub evidence: Vec<BlockId>,
 }
 
 /// Validate and split a comma-separated `dkim_selectors` string.
@@ -122,6 +128,9 @@ pub struct DnsEvent {
     pub headline: String,
     pub checks: Vec<CheckItem>,
     pub detail_url: String,
+    /// The section's evidence blocks.
+    #[schema(value_type = Vec<Object>)]
+    pub evidence: Vec<Block>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -131,6 +140,9 @@ pub struct TlsEvent {
     pub headline: String,
     pub checks: Vec<CheckItem>,
     pub detail_url: String,
+    /// The section's evidence blocks.
+    #[schema(value_type = Vec<Object>)]
+    pub evidence: Vec<Block>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -152,6 +164,9 @@ pub struct HttpEvent {
     pub server_org: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server_network_type: Option<String>,
+    /// The section's evidence blocks.
+    #[schema(value_type = Vec<Object>)]
+    pub evidence: Vec<Block>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -165,6 +180,9 @@ pub struct IpEvent {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub guide_url: Option<&'static str>,
+    /// The section's evidence blocks.
+    #[schema(value_type = Vec<Object>)]
+    pub evidence: Vec<Block>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -176,6 +194,9 @@ pub struct EmailEvent {
     pub detail_url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grade: Option<String>,
+    /// The section's evidence blocks.
+    #[schema(value_type = Vec<Object>)]
+    pub evidence: Vec<Block>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -197,6 +218,8 @@ pub struct SummaryEvent {
     pub hard_fail_reason: Option<String>,
     /// Section name → reason. Always present (may be empty). Populated only for NotApplicable.
     pub not_applicable: HashMap<String, String>,
+    /// The version of the evidence vocabulary of the sections' blocks.
+    pub evidence_schema: u32,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -752,7 +775,7 @@ async fn run_check_handler(
     state.client_runs.record(client_ip);
     let run_guard = crate::metrics::RunGuard::new();
     let run_started = std::time::Instant::now();
-    let output = run_check_with_input(
+    let (output, facts_evidence) = run_check_with_evidence(
         &state,
         CheckInput {
             domain: domain.clone(),
@@ -760,6 +783,7 @@ async fn run_check_handler(
             client_ip: Some(client_ip),
             request_id,
         },
+        HARD_DEADLINE,
     )
     .await;
     crate::metrics::observe_run(run_started.elapsed());
@@ -796,6 +820,7 @@ async fn run_check_handler(
             false,
             &state.scoring_profile,
             snapshot_id,
+            &facts_evidence,
         )
     } else {
         let events = build_sse_events(
@@ -804,6 +829,7 @@ async fn run_check_handler(
             false,
             &state.scoring_profile,
             snapshot_id,
+            &facts_evidence,
         );
         make_sse_stream(events, "MISS")
     }
@@ -892,9 +918,18 @@ fn build_check_items(checks: &[CheckResult], weights: &HashMap<String, u32>) -> 
                 verdict,
                 weight: weights.get(&c.name).copied(),
                 messages: c.messages.clone(),
+                evidence: c.evidence.clone(),
             }
         })
         .collect()
+}
+
+/// The blocks of an answering section; none for one that did not answer.
+fn section_evidence(result: &Result<BackendResult, SectionError>) -> Vec<Block> {
+    result
+        .as_ref()
+        .map(|r| r.evidence.clone())
+        .unwrap_or_default()
 }
 
 fn error_headline(e: &SectionError) -> String {
@@ -906,9 +941,12 @@ fn error_headline(e: &SectionError) -> String {
     }
 }
 
+/// The DNS section; one that did not answer still carries `facts_evidence`, the facts blocks no
+/// section carries.
 fn dns_payload_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
+    facts_evidence: &[Block],
 ) -> DnsEvent {
     let status = section_status_from_checks(result, weights);
     let (headline, checks, detail_url) = match result {
@@ -926,11 +964,16 @@ fn dns_payload_from(
         }
         Err(e) => (error_headline(e), vec![], String::new()),
     };
+    let evidence = match result {
+        Ok(r) => r.evidence.clone(),
+        Err(_) => facts_evidence.to_vec(),
+    };
     DnsEvent {
         status,
         headline,
         checks,
         detail_url,
+        evidence,
     }
 }
 
@@ -958,6 +1001,7 @@ fn tls_payload_from(
         headline,
         checks,
         detail_url,
+        evidence: section_evidence(result),
     }
 }
 
@@ -1035,6 +1079,7 @@ fn http_payload_from(
         server_ip,
         server_org,
         server_network_type,
+        evidence: section_evidence(result),
     }
 }
 
@@ -1081,6 +1126,7 @@ fn ip_payload_from(
         addresses,
         detail_url,
         guide_url,
+        evidence: section_evidence(result),
     }
 }
 
@@ -1096,6 +1142,7 @@ fn email_payload_from(
             checks: vec![],
             detail_url: String::new(),
             grade: None,
+            evidence: vec![],
         },
         Err(e) => EmailEvent {
             status,
@@ -1103,6 +1150,7 @@ fn email_payload_from(
             checks: vec![],
             detail_url: String::new(),
             grade: None,
+            evidence: vec![],
         },
         Ok(r) => {
             let items = build_check_items(&r.checks, weights);
@@ -1121,6 +1169,7 @@ fn email_payload_from(
                 checks: items,
                 detail_url,
                 grade,
+                evidence: r.evidence.clone(),
             }
         }
     }
@@ -1184,6 +1233,7 @@ fn summary_payload_from(
         hard_fail_reason,
         not_applicable: score.not_applicable.clone(),
         complete: score.complete,
+        evidence_schema: EVIDENCE_SCHEMA_VERSION,
     }
 }
 
@@ -1208,8 +1258,9 @@ fn done_payload(
 fn dns_event_from(
     result: &Result<BackendResult, SectionError>,
     weights: &HashMap<String, u32>,
+    facts_evidence: &[Block],
 ) -> Event {
-    let payload = dns_payload_from(result, weights);
+    let payload = dns_payload_from(result, weights, facts_evidence);
     Event::default()
         .event("dns")
         .data(serde_json::to_string(&payload).unwrap_or_default())
@@ -1279,6 +1330,7 @@ fn build_sse_events(
     cached: bool,
     profile: &Profile,
     snapshot_id: Option<String>,
+    facts_evidence: &[Block],
 ) -> Vec<Event> {
     let duration_ms = output.duration_ms;
     let empty_err: Result<BackendResult, SectionError> =
@@ -1289,7 +1341,11 @@ fn build_sse_events(
     let ip_checks = &section_weights(profile, "ip");
     let email_checks = &section_weights(profile, "email");
     let mut events = vec![
-        dns_event_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
+        dns_event_from(
+            output.sections.get("dns").unwrap_or(&empty_err),
+            dns_checks,
+            facts_evidence,
+        ),
         tls_event_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
     ];
     if let Some(http_result) = output.sections.get("http") {
@@ -1324,6 +1380,7 @@ fn build_sse_events_from_cached(
         true,
         profile,
         cached.snapshot_id.clone(),
+        &[],
     )
 }
 
@@ -1360,6 +1417,7 @@ fn build_sync_response(
     cached: bool,
     profile: &Profile,
     snapshot_id: Option<String>,
+    facts_evidence: &[Block],
 ) -> Response {
     let empty_err: Result<BackendResult, SectionError> =
         Err(SectionError::BackendError("absent".to_string()));
@@ -1370,7 +1428,11 @@ fn build_sync_response(
     let email_checks = &section_weights(profile, "email");
     let duration_ms = output.duration_ms;
     let response = SyncCheckResponse {
-        dns: dns_payload_from(output.sections.get("dns").unwrap_or(&empty_err), dns_checks),
+        dns: dns_payload_from(
+            output.sections.get("dns").unwrap_or(&empty_err),
+            dns_checks,
+            facts_evidence,
+        ),
         tls: tls_payload_from(output.sections.get("tls").unwrap_or(&empty_err), tls_checks),
         http: output
             .sections
@@ -1413,6 +1475,7 @@ fn sync_response_from_cached(
         is_cached,
         profile,
         cached.snapshot_id.clone(),
+        &[],
     )
 }
 
@@ -1901,6 +1964,7 @@ pub mod tests {
             fix_owner: None,
             weight: Some(10),
             messages: vec!["max-age too short".to_string()],
+            evidence: vec![],
         };
         let json = serde_json::to_value(&item).unwrap();
         assert!(
@@ -1923,6 +1987,7 @@ pub mod tests {
             fix_owner: Some("Your web server config"),
             weight: Some(10),
             messages: vec![],
+            evidence: vec![],
         };
         let json = serde_json::to_value(&item).unwrap();
         assert_eq!(json["fix_hint"], "HSTS max-age should be at least 1 year.");
@@ -1938,6 +2003,7 @@ pub mod tests {
                 name: spec.id.name().to_string(),
                 verdict: CheckVerdict::Warn,
                 messages: vec![],
+                evidence: vec![],
             })
             .collect();
         for item in build_check_items(&checks, &HashMap::new()) {
@@ -1956,6 +2022,7 @@ pub mod tests {
             name: "security_headers".to_string(),
             verdict: CheckVerdict::Warn,
             messages: vec![],
+            evidence: vec![],
         }];
         let item = &build_check_items(&checks, &HashMap::new())[0];
         assert_eq!(item.guide_url, None);
@@ -2711,6 +2778,7 @@ pub mod tests {
             name: name.to_string(),
             verdict,
             messages: vec![],
+            evidence: vec![],
         }
     }
 
@@ -2727,6 +2795,7 @@ pub mod tests {
                 server_org: None,
                 server_network_type: None,
             },
+            evidence: vec![],
         })
     }
 
@@ -2765,7 +2834,14 @@ chain_trusted = 5
                 raw_headline: String::new(),
                 detail_url: String::new(),
             };
-            sections.insert(name.to_string(), Ok(BackendResult { checks, extra }));
+            sections.insert(
+                name.to_string(),
+                Ok(BackendResult {
+                    checks,
+                    extra,
+                    evidence: vec![],
+                }),
+            );
         }
         sections.insert("http".to_string(), grade_integrity_http_ok(http_checks));
         let score = crate::score::score(&profile, &sections);

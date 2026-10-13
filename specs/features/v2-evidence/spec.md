@@ -249,6 +249,7 @@ These requirements apply to every module.
 - **A3 (phase 3).** `caa_compliant` references `dns.caa` only when TLS judged from the facts' CAA, otherwise `tls.caa`, otherwise the chain blocks. `dane_valid` references `tls.tlsa@<port>`, otherwise the chains. TLS blocks cover the judged port only.
 - **A4 (phase 4).** HTTP adds a `http.port80_probe` fields block. `https_redirect` references `http.port80` and `http.port80_probe`. `http.cookies` is keyed by `<name>; <domain>; <path>` with an ordinal suffix on a repeat. After an HTTPS refusal, `http.server` carries `error_kind`, and the ten response checks reference it. CSP nonces are left for the Phase 2 comparison.
 - **A5 (phase 5).** The email block set and keys are as listed in the report's Phase 5 amendment: `email.mx` plus `email.mx_addresses`, DNSBL rows per query with `answered`, DKIM rows per key with `state`, deciding facts as keys, and `email.dnssec`. Lens drops cross-module references that do not resolve within a run (Phase 6).
+- **A6 (phase 6).** Headline symbols follow the check verdicts, so a headline never contradicts its check items. On error inputs this moves V1 symbols (e.g. `-` or `?` instead of a raw quality symbol). `http.status_code` and `http_version` are absent when the HTTPS probe got no response.
 
 ## Open decisions
 

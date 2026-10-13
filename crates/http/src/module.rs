@@ -13,7 +13,6 @@ use netray_model::evidence::{
     Block, BlockId, Fields, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::json;
 
 use crate::config::{InspectConfig, ModuleConfig};
 use crate::error::AppError;
@@ -209,7 +208,7 @@ impl Module for HttpModule {
     }
 }
 
-/// Maps the inspection onto the twelve HTTP checks and the V1 headline and extras.
+/// Maps the inspection onto the twelve HTTP checks and their blocks.
 pub fn translate(resp: &InspectResponse) -> SectionOutcome {
     let quality = &resp.quality.checks;
 
@@ -278,32 +277,7 @@ pub fn translate(resp: &InspectResponse) -> SectionOutcome {
         })
         .collect();
 
-    let hsts_status = lookup_check(quality, "hsts");
-    let cors_status = lookup_check(quality, "cors");
-    let csp_status = lookup_check(quality, "csp");
-    let headline = format!(
-        "HTTPS {}  HSTS {}  CSP {}  CORS {}",
-        verdict_symbol(&https_redirect_status),
-        verdict_symbol(&hsts_status),
-        verdict_symbol(&csp_status),
-        verdict_symbol(&cors_status),
-    );
-
-    let presentation = json!({
-        "headline": headline,
-        "status_code": resp.status,
-        "http_version": resp.http_version,
-        "response_duration_ms": resp.duration_ms,
-        "server_ip": resp.enrichment.ip,
-        "server_org": resp.enrichment.org,
-        "server_network_type": resp.enrichment.ip_type,
-    });
-
-    SectionOutcome::Measured {
-        checks,
-        presentation,
-        evidence,
-    }
+    SectionOutcome::Measured { checks, evidence }
 }
 
 /// The status and findings of one check, before its references.
@@ -646,21 +620,6 @@ fn find_check<'a>(checks: &'a [QualityCheck], name: &str) -> Option<&'a QualityC
     checks.iter().find(|c| c.name == name)
 }
 
-fn lookup_check(checks: &[QualityCheck], name: &str) -> CheckStatus {
-    find_check(checks, name)
-        .map(|c| c.status.clone())
-        .unwrap_or(CheckStatus::Skip)
-}
-
-fn verdict_symbol(s: &CheckStatus) -> &'static str {
-    match s {
-        CheckStatus::Pass => "✓",
-        CheckStatus::Fail => "✗",
-        CheckStatus::Warn => "~",
-        CheckStatus::Skip => "-",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -698,13 +657,9 @@ mod tests {
         resp
     }
 
-    fn translated(resp: &InspectResponse) -> (Vec<CheckResult>, serde_json::Value) {
+    fn translated(resp: &InspectResponse) -> (Vec<CheckResult>, Vec<Block>) {
         match translate(resp) {
-            SectionOutcome::Measured {
-                checks,
-                presentation,
-                evidence: _,
-            } => (checks, presentation),
+            SectionOutcome::Measured { checks, evidence } => (checks, evidence),
             other => panic!("expected Measured, got {other:?}"),
         }
     }
@@ -830,7 +785,7 @@ mod tests {
     }
 
     #[test]
-    fn headline_format() {
+    fn headline_inputs() {
         let resp = response(
             Some(true),
             &[
@@ -839,7 +794,17 @@ mod tests {
                 ("cors", CheckStatus::Pass),
             ],
         );
-        let (_, presentation) = translated(&resp);
-        assert_eq!(presentation["headline"], "HTTPS ✓  HSTS ✓  CSP ✗  CORS ✓");
+        let (_, evidence) = translated(&resp);
+        let probe = evidence
+            .iter()
+            .find(|b| b.id.to_string() == "http.port80_probe")
+            .expect("port-80 probe block");
+        let Shape::Fields(fields) = &probe.shape else {
+            panic!("http.port80_probe is not fields: {probe:?}");
+        };
+        assert!(fields.contains(&("redirects_to_https".into(), EvValue::Bool(true))));
+        assert_eq!(status_of(&resp, "http.hsts"), Status::Pass);
+        assert_eq!(status_of(&resp, "http.csp"), Status::Fail);
+        assert_eq!(status_of(&resp, "http.cors"), Status::Pass);
     }
 }

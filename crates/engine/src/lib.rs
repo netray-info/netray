@@ -99,7 +99,7 @@ pub struct Facts {
     pub mx: Vec<String>,
     pub caa: Vec<String>,
     pub ns: Vec<String>,
-    /// HTTPS records in presentation form, e.g. `1 . alpn=h2`.
+    /// HTTPS records in zone-file form, e.g. `1 . alpn=h2`.
     pub https: Vec<String>,
     /// A and AAAA both definite negatives on every resolver asked.
     pub no_address_definite: bool,
@@ -112,9 +112,6 @@ pub struct Facts {
 pub enum SectionOutcome {
     Measured {
         checks: Vec<CheckResult>,
-        /// Transitional: the V1 headline and extras, carried as JSON until lens derives them
-        /// from `evidence`.
-        presentation: serde_json::Value,
         evidence: Vec<Block>,
     },
     NotApplicable {
