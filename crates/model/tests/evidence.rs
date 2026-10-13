@@ -1,6 +1,7 @@
 //! Contract tests for the evidence vocabulary (spec v2-evidence, Phase 1, C4-C8).
 use netray_model::evidence::{
-    Block, BlockId, EVIDENCE_SCHEMA_VERSION, Shape, Value, ValueType, check_references, validate,
+    Block, BlockId, EVIDENCE_SCHEMA_VERSION, Register, Shape, ShapeKind, Value, ValueType,
+    check_references, validate,
 };
 use netray_model::{CheckId, CheckResult, Status};
 use serde_json::{json, to_value};
@@ -78,18 +79,21 @@ fn block_id_refuses_malformed_input() {
     }
 }
 
-const REGISTER: &[(&str, &str, ValueType)] = &[("dns.caa", "data", ValueType::Text)];
+const REGISTER: Register = Register {
+    blocks: &[("dns.caa", ShapeKind::Fields)],
+    keys: &[("dns.caa", "data", ValueType::Text)],
+};
 
 #[test]
 fn validate_accepts_registered_key_and_type() {
     let blocks = [fields_block("dns.caa", "data", Value::Text("x".into()))];
-    assert!(validate("dns", REGISTER, &blocks).is_ok());
+    assert!(validate("dns", &REGISTER, &blocks).is_ok());
 }
 
 #[test]
 fn validate_refuses_unregistered_key() {
     let blocks = [fields_block("dns.caa", "extra", Value::Text("x".into()))];
-    let errs = validate("dns", REGISTER, &blocks).expect_err("unregistered key");
+    let errs = validate("dns", &REGISTER, &blocks).expect_err("unregistered key");
     assert!(
         errs.iter().any(|e| e.to_string().contains("extra")),
         "{errs:?}"
@@ -99,7 +103,7 @@ fn validate_refuses_unregistered_key() {
 #[test]
 fn validate_refuses_mistyped_value() {
     let blocks = [fields_block("dns.caa", "data", Value::Int(1))];
-    let errs = validate("dns", REGISTER, &blocks).expect_err("type mismatch");
+    let errs = validate("dns", &REGISTER, &blocks).expect_err("type mismatch");
     assert!(
         errs.iter().any(|e| e.to_string().contains("data")),
         "{errs:?}"
@@ -109,7 +113,7 @@ fn validate_refuses_mistyped_value() {
 #[test]
 fn validate_refuses_foreign_module_block() {
     let blocks = [fields_block("dns.caa", "data", Value::Text("x".into()))];
-    let errs = validate("tls", REGISTER, &blocks).expect_err("foreign module");
+    let errs = validate("tls", &REGISTER, &blocks).expect_err("foreign module");
     assert!(
         errs.iter().any(|e| e.to_string().contains("dns.caa")),
         "{errs:?}"
@@ -123,7 +127,7 @@ fn validate_refuses_unregistered_block_name() {
         title: "t".into(),
         shape: Shape::Fields(vec![]),
     }];
-    let errs = validate("dns", REGISTER, &blocks).expect_err("unregistered block");
+    let errs = validate("dns", &REGISTER, &blocks).expect_err("unregistered block");
     assert!(
         errs.iter().any(|e| e.to_string().contains("dns.nsec")),
         "{errs:?}"
