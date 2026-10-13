@@ -116,3 +116,7 @@ Requirements:
 ## Cargo Features
 
 - Shared crates (`netray-common`, and any dependency two services use) must not switch behaviour on a Cargo feature: in the one `netray` binary features unify, so one service's feature changes every other service. Expose the choice at runtime instead (e.g. `EnrichmentMode`, beacon's UDP/TCP resolver filter). unenforced
+
+## Measured or Unmeasured
+
+- A failed lookup or probe (timeout, SERVFAIL, REFUSED, a policy-refused redirect, a local network error) makes a check `unmeasured`, never `pass`, `warn`, `fail` or `not_applicable`; a partial failure keeps what answered and names what did not. Enforced by the per-module contract tables `crates/{dns,tls,http,email,ip}/tests/contract_status.rs`, which hold a worst-measured and an `unmeasured` row per catalogue check and a guard against the catalogue.

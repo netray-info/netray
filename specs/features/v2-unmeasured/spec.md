@@ -1,7 +1,8 @@
 # Spec: v2 unmeasured
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-12
+Finished: 2026-10-13
 
 ## Goal
 
