@@ -24,37 +24,50 @@ use super::{LOOKUP_FAILED, lookup_failed, unmeasured_result};
 use crate::dns::{DnsLookup, LookupError};
 use crate::quality::{Category, CheckResult, SpfFlat, SubCheck, Verdict};
 
-/// Sub-check marking the authorised set incomplete for an address family; its detail is the
-/// token `ipv4`, `ipv6` or `both`. Cross-validation reads it; it is no finding.
+/// Sub-check marking which MX IPs the authorised set cannot judge; its detail is the token
+/// `ipv4` or `ipv6` (incomplete for that family), `both`, or `any` (a positive `exists:` matched,
+/// so every client IP may be authorised). Cross-validation reads it; it is no finding.
 pub const INCOMPLETE: &str = "spf_incomplete";
 
 /// SPF mechanisms that name a DNS target; one with a macro (`%`) is not evaluated.
 const TARGET_MECHANISMS: &[&str] = &["include:", "redirect=", "exists:", "a:", "mx:"];
 
-/// The address families the authorised set is incomplete for.
+/// The address families the authorised set is incomplete for; `any` when a positive `exists:`
+/// matched and the set may hold every client IP.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Unresolved {
     pub ipv4: bool,
     pub ipv6: bool,
+    pub any: bool,
 }
 
 impl Unresolved {
     const BOTH: Self = Self {
         ipv4: true,
         ipv6: true,
+        any: false,
+    };
+    const ANY: Self = Self {
+        ipv4: true,
+        ipv6: true,
+        any: true,
+    };
+    const IPV4: Self = Self {
+        ipv4: true,
+        ipv6: false,
+        any: false,
+    };
+    const IPV6: Self = Self {
+        ipv4: false,
+        ipv6: true,
+        any: false,
     };
 
     /// The family of a failed address half; anything else leaves both unresolved.
     fn of_failed_half(e: &LookupError) -> Self {
         match e.record_type {
-            "A" => Self {
-                ipv4: true,
-                ipv6: false,
-            },
-            "AAAA" => Self {
-                ipv4: false,
-                ipv6: true,
-            },
+            "A" => Self::IPV4,
+            "AAAA" => Self::IPV6,
             _ => Self::BOTH,
         }
     }
@@ -63,28 +76,25 @@ impl Unresolved {
         Self {
             ipv4: self.ipv4 || other.ipv4,
             ipv6: self.ipv6 || other.ipv6,
+            any: self.any || other.any,
         }
     }
 
     fn token(self) -> Option<&'static str> {
-        match (self.ipv4, self.ipv6) {
-            (true, true) => Some("both"),
-            (true, false) => Some("ipv4"),
-            (false, true) => Some("ipv6"),
-            (false, false) => None,
+        match (self.any, self.ipv4, self.ipv6) {
+            (true, _, _) => Some("any"),
+            (false, true, true) => Some("both"),
+            (false, true, false) => Some("ipv4"),
+            (false, false, true) => Some("ipv6"),
+            (false, false, false) => None,
         }
     }
 
     fn from_token(token: &str) -> Self {
         match token {
-            "ipv4" => Self {
-                ipv4: true,
-                ipv6: false,
-            },
-            "ipv6" => Self {
-                ipv4: false,
-                ipv6: true,
-            },
+            "any" => Self::ANY,
+            "ipv4" => Self::IPV4,
+            "ipv6" => Self::IPV6,
             _ => Self::BOTH,
         }
     }
@@ -100,9 +110,9 @@ impl Unresolved {
             })
     }
 
-    /// Whether `ip`'s family is unresolved.
+    /// Whether coverage of `ip` cannot be judged.
     pub fn contains(self, ip: &IpAddr) -> bool {
-        if ip.is_ipv4() { self.ipv4 } else { self.ipv6 }
+        self.any || if ip.is_ipv4() { self.ipv4 } else { self.ipv6 }
     }
 
     fn marker(self) -> Option<SubCheck> {
@@ -114,11 +124,19 @@ impl Unresolved {
     }
 }
 
-/// Records a failed nested lookup: a `lookup_failed` finding and the families it leaves
-/// unresolved.
-fn unresolved(sub_checks: &mut Vec<SubCheck>, e: &LookupError, families: Unresolved) {
+/// Records a failed nested lookup: a `lookup_failed` finding, and, under a positive qualifier,
+/// the families it leaves unresolved. A `-`, `~` or `?` mechanism never authorises, so its
+/// failure hides no authorisation.
+fn unresolved(
+    sub_checks: &mut Vec<SubCheck>,
+    e: &LookupError,
+    families: Unresolved,
+    positive: bool,
+) {
     sub_checks.push(lookup_failed(e));
-    sub_checks.extend(families.marker());
+    if positive {
+        sub_checks.extend(families.marker());
+    }
 }
 
 /// Check SPF records for the domain.
@@ -238,6 +256,7 @@ pub async fn check_spf_detailed<R: DnsLookup>(
 
         dispatch_mechanism(
             body,
+            qualifier == '+',
             domain,
             resolver,
             &mut visited,
@@ -328,26 +347,29 @@ pub async fn check_spf_detailed<R: DnsLookup>(
 async fn authorised_addresses<R: DnsLookup>(
     resolver: &R,
     target: &str,
+    positive: bool,
     sub_checks: &mut Vec<SubCheck>,
 ) -> Vec<IpAddr> {
     match resolver.lookup_ips(target).await {
         Ok(lookup) => {
             if let Some(e) = &lookup.error {
-                unresolved(sub_checks, e, Unresolved::of_failed_half(e));
+                unresolved(sub_checks, e, Unresolved::of_failed_half(e), positive);
             }
             lookup.ips
         }
         Err(e) => {
-            unresolved(sub_checks, &e, Unresolved::BOTH);
+            unresolved(sub_checks, &e, Unresolved::BOTH, positive);
             Vec::new()
         }
     }
 }
 
-/// Recursively expand SPF includes.
+/// Recursively expand SPF includes. `positive` is whether a match here would authorise: every
+/// enclosing `include:` is `+`-qualified.
 #[allow(clippy::too_many_arguments)]
 fn expand_spf<'a, R: DnsLookup + 'a>(
     domain: &'a str,
+    positive: bool,
     resolver: &'a R,
     visited: &'a mut HashSet<String>,
     depth: u8,
@@ -372,7 +394,7 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
         let txt_records = match resolver.lookup_txt(domain).await {
             Ok(records) => records,
             Err(e) => {
-                unresolved(sub_checks, &e, Unresolved::BOTH);
+                unresolved(sub_checks, &e, Unresolved::BOTH, positive);
                 return;
             }
         };
@@ -391,9 +413,10 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
         let mechanisms: Vec<&str> = spf.split_whitespace().skip(1).collect();
 
         for mech in &mechanisms {
-            let (_qualifier, body) = parse_mechanism(mech);
+            let (qualifier, body) = parse_mechanism(mech);
             dispatch_mechanism(
                 body,
+                positive && qualifier == '+',
                 domain,
                 resolver,
                 visited,
@@ -413,10 +436,12 @@ fn expand_spf<'a, R: DnsLookup + 'a>(
 ///
 /// Does NOT handle `all` or `ptr` — those are top-level grading signals and are
 /// the caller's responsibility. Handles `ip4:`, `ip6:`, `include:`, `redirect=`,
-/// `a`/`a:`, `mx`/`mx:`, and `exists:`. Unknown mechanisms are skipped.
+/// `a`/`a:`, `mx`/`mx:`, and `exists:`. Unknown mechanisms are skipped. `positive` is whether
+/// the mechanism, with its enclosing includes, is `+`-qualified and so can authorise.
 #[allow(clippy::too_many_arguments)]
 fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
     body: &'a str,
+    positive: bool,
     domain: &'a str,
     resolver: &'a R,
     visited: &'a mut HashSet<String>,
@@ -437,7 +462,9 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
                 verdict: Verdict::Info,
                 detail: format!("{body} uses a macro and was not evaluated"),
             });
-            sub_checks.extend(Unresolved::BOTH.marker());
+            if positive {
+                sub_checks.extend(Unresolved::BOTH.marker());
+            }
             return;
         }
         if body.starts_with("ip4:") || body.starts_with("ip6:") {
@@ -465,6 +492,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
                 } else {
                     expand_spf(
                         include_domain,
+                        positive,
                         resolver,
                         visited,
                         depth + 1,
@@ -482,6 +510,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
                 if !visited.contains(redirect_domain) {
                     expand_spf(
                         redirect_domain,
+                        positive,
                         resolver,
                         visited,
                         depth + 1,
@@ -500,7 +529,7 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             } else {
                 domain
             };
-            let ips = authorised_addresses(resolver, target, sub_checks).await;
+            let ips = authorised_addresses(resolver, target, positive, sub_checks).await;
             for ip in ips {
                 let net = match ip {
                     IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
@@ -520,13 +549,13 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
             let mx_records = match resolver.lookup_mx(target).await {
                 Ok(records) => records,
                 Err(e) => {
-                    unresolved(sub_checks, &e, Unresolved::BOTH);
+                    unresolved(sub_checks, &e, Unresolved::BOTH, positive);
                     Vec::new()
                 }
             };
             for (_, exchange) in &mx_records {
                 let host = exchange.trim_end_matches('.');
-                let ips = authorised_addresses(resolver, host, sub_checks).await;
+                let ips = authorised_addresses(resolver, host, positive, sub_checks).await;
                 for ip in ips {
                     let net = match ip {
                         IpAddr::V4(_) => IpNet::from_str(&format!("{}/32", ip)),
@@ -540,10 +569,12 @@ fn dispatch_mechanism<'a, R: DnsLookup + 'a>(
         } else if body.starts_with("exists:") {
             *lookup_count = lookup_count.saturating_add(1);
             if let Some(exists_domain) = body.strip_prefix("exists:") {
+                // A positive match authorises every client IP.
                 match resolver.lookup_exists(exists_domain).await {
+                    Ok(true) if positive => sub_checks.extend(Unresolved::ANY.marker()),
                     Ok(true) => {}
                     Ok(false) => *void_count = void_count.saturating_add(1),
-                    Err(e) => unresolved(sub_checks, &e, Unresolved::BOTH),
+                    Err(e) => unresolved(sub_checks, &e, Unresolved::BOTH, positive),
                 }
             }
         }
