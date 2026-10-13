@@ -184,9 +184,14 @@ async fn volatile_paths_are_registered_keys() {
         .iter()
         .map(|p: &EvidencePath| p.0.to_string())
         .collect();
-    let want: BTreeSet<String> = ["tls.chain/days_remaining", "tls.handshake/handshake_ms"]
-        .map(String::from)
-        .into();
+    let want: BTreeSet<String> = [
+        "tls.chain/days_remaining",
+        "tls.handshake/handshake_ms",
+        "tls.tlsa/ttl",
+        "tls.caa/ttl",
+    ]
+    .map(String::from)
+    .into();
     assert_eq!(got, want);
 
     for path in module.volatile() {
