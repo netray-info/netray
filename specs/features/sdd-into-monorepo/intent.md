@@ -14,8 +14,8 @@ Agents and the operator working in this repository; no service, no wire, no rele
 
 ## Constraints
 
-Step 2 of the repo-layout plan (operator, 2026-10-14). Lands only after argus-oci reports 0.26.0 deployed.
+Step 2 of the repo-layout plan (operator, 2026-10-14). Decoupled from the 0.26.0 deploy (operator via netray-v2, 2026-10-14).
 
 ## Open questions
 
-- The two real domains in citations (`v2.md:50`, `v2.md:633`): with netray-v2.
+None.

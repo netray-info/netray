@@ -1,6 +1,6 @@
 # Spec: SDD into the monorepo
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-14
 
 ## Goal
@@ -23,7 +23,7 @@ Created: 2026-10-14
 
 ## Requirements
 
-1. `specs/sdd/v2.md` is the planning repository's `specs/sdd/v2.md` at e28b9fc, byte for byte except: the §8.1 `tokens.json` row says the source sits at `specs/sdd/v2-tokens.json` until V4.1 moves it into `netray-web`; and the citation domains as decided (open decision 1).
+1. `specs/sdd/v2.md` is the planning repository's `specs/sdd/v2.md` at e28b9fc, byte for byte except: the §8.1 `tokens.json` row says the source sits at `specs/sdd/v2-tokens.json` until V4.1 moves it into `netray-web`; `v2.md:50` cites "Datastar security reference, read 2026-10-09" and `v2.md:633` cites "WHATWG HTML Standard, `rel=icon`", both without URL.
 2. `specs/sdd/v2-tokens.json` is the planning repository's `specs/prd/v2-tokens.json`, byte for byte.
 3. `CLAUDE.md` names `specs/sdd/v2.md` as this repository's SDD, maintained in the same commit as the code that amends it, and cites PRD, reviews and baseline as "(private)"; no "planning SDD" remains.
 4. `tests/repo/test_sdd_in_repo.sh` fails when `specs/sdd/v2.md` is missing, when `specs/sdd/v2-tokens.json` is missing or not valid JSON, or when `CLAUDE.md` does not name `specs/sdd/v2.md` or still says "planning SDD".
@@ -42,11 +42,13 @@ Created: 2026-10-14
 ## Decision log
 
 - Tokens at `specs/sdd/v2-tokens.json` over a stub `crates/web/` crate or deferring them to V4.1: no build risk in a docs feature; §8.1 says where they sit until V4.1 (operator, 2026-10-14).
+- Citations by name without URL over keeping the URLs: the domain rule covers docs, a name keeps the source findable (netray-v2, 2026-10-14).
+- Land when ready, not after the 0.26.0 deploy (operator, 2026-10-14).
 - Copy verbatim, no history (netray-v2 relaying the repo-layout plan, operator-approved 2026-10-14).
 
 ## Open decisions
 
-1. The citation domains at `v2.md:50` and `v2.md:633`: keep as citations, or cite by name without URL. Asked of netray-v2 (2026-10-14).
+None.
 
 ## Out of scope
 
