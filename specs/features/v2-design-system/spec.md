@@ -1,6 +1,6 @@
 # Spec: V2 design system (Phase 4a)
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-14
 
 ## Goal
@@ -93,8 +93,8 @@ A library crate `netray-web` at `crates/web` generates `tokens.css` and a Rust `
 - Favicon and badge tile at most 2 px radius, over the canvas's 7/4 px or no tile: the SDD (R43, V4.14) wins (operator, 2026-10-14).
 - Component macros typed against view structs in `netray-web` over `netray-model` types: 4a stays independent of history and API (operator, 2026-10-14).
 - Tagline "Every check of a domain, in one spectrum." (operator, 2026-10-14).
-- `netray-web` depends on `netray-common` now, over adding it to the C1 exception list: C1 requires it, and `web`'s rate limits (§3.1) belong to `common`'s rate limiter; §3.1 gains `common` (implementer, after the spec reading; operator to confirm at approval).
-- Gate rule 1 scans templates, stylesheets and islands as §8.5 says, not the SVGs in `static/`; the SVGs carry the ink token values as literals, checked by a test against the tokens: a file fetched as its own image cannot read `tokens.css` (implementer, after the spec reading).
+- `netray-web` depends on `netray-common` now, over adding it to the C1 exception list: C1 requires it, and `web`'s rate limits (§3.1) belong to `common`'s rate limiter; §3.1 gains `common` (implementer, after the spec reading; operator confirmed 2026-10-14).
+- Gate rule 1 scans templates, stylesheets and islands as §8.5 says, not the SVGs in `static/`; the SVGs carry the ink token values as literals, checked by a test against the tokens: a file fetched as its own image cannot read `tokens.css` (implementer, after the spec reading; operator confirmed 2026-10-14).
 - A `…Phone` token overrides its base property in the phone query, and glow is dark-only (`none` on `:root`), as `v2-tokens.json` describes (implementer, after the spec reading).
 
 ## Open decisions
