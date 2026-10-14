@@ -224,9 +224,18 @@ fn verdict_of<'a>(checks: &'a [CheckResult], name: &str) -> Option<&'a CheckResu
     checks.iter().find(|c| c.name == name)
 }
 
-/// `DNSSEC ✓  CAA –  NS ✓  CNAME-apex ✓`: a check prism found nothing for fails with the sole
-/// finding `Not found` and shows `–`.
-fn dns_headline(checks: &[CheckResult]) -> String {
+/// `DNSSEC ✓  CAA –  NS ✓  CNAME-apex ✓`: a failed check whose referenced records blocks are all
+/// empty found nothing, and shows `–`; read from the evidence, never from a finding's text.
+fn dns_headline(checks: &[CheckResult], evidence: &[Block]) -> String {
+    let found_nothing = |c: &CheckResult| {
+        !c.evidence.is_empty()
+            && c.evidence.iter().all(|id| {
+                evidence
+                    .iter()
+                    .find(|b| b.id == *id)
+                    .is_some_and(|b| matches!(&b.shape, Shape::Records(r) if r.is_empty()))
+            })
+    };
     [
         ("dnssec", "DNSSEC"),
         ("caa", "CAA"),
@@ -239,11 +248,7 @@ fn dns_headline(checks: &[CheckResult]) -> String {
             Some(c) => match c.verdict {
                 CheckVerdict::Pass => "\u{2713}",
                 CheckVerdict::Warn => "~",
-                CheckVerdict::Fail
-                    if c.messages.first().map(String::as_str) == Some("Not found") =>
-                {
-                    "\u{2013}"
-                }
+                CheckVerdict::Fail if found_nothing(c) => "\u{2013}",
                 CheckVerdict::Fail => "\u{2717}",
                 CheckVerdict::Unmeasured => "?",
                 CheckVerdict::NotFound | CheckVerdict::Skip => "\u{2013}",
@@ -448,7 +453,7 @@ impl ModuleSection {
                     }
                     Protocol::Dns => BackendExtra::Dns {
                         resolved_ips: resolved_ips(&evidence),
-                        raw_headline: dns_headline(&checks),
+                        raw_headline: dns_headline(&checks, &evidence),
                         detail_url: format!(
                             "{}/?q={}+%2Bcheck",
                             self.public_url.trim_end_matches('/'),

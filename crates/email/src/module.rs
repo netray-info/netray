@@ -284,7 +284,7 @@ const CROSS_VALIDATION_INPUTS: &[(&str, &[&str])] = &[
     ("reject_no_dkim", &["email.dmarc", "email.spf"]),
     ("spf_mx_coverage", &["email.mx_addresses"]),
     ("bimi_dmarc_policy", &["email.dmarc"]),
-    ("mta_sts_without_tls_rpt", &["email.tls_rpt"]),
+    ("mta_sts_without_tls_rpt", &["email.mta_sts"]),
     ("dane_without_tls_rpt", &["email.dane"]),
     ("dane_without_dnssec", &["email.dnssec", "dns.dnskey"]),
     ("null_mx_spf", &["email.mx"]),
@@ -961,6 +961,19 @@ fn verdict_rank(v: &Status) -> u8 {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn mta_sts_without_tls_rpt_names_the_mta_sts_block() {
+        // The warning is decided by MTA-STS being present (cross_validation.rs), so the tls_rpt
+        // check it is routed to must reference `email.mta_sts`.
+        let inputs = CROSS_VALIDATION_INPUTS
+            .iter()
+            .find(|(name, _)| *name == "mta_sts_without_tls_rpt")
+            .map(|(_, blocks)| *blocks)
+            .expect("entry");
+        assert!(inputs.contains(&"email.mta_sts"), "{inputs:?}");
+    }
+
     use super::*;
 
     // The routing tables cover everything beacon can emit, and the sentinels are beacon's.

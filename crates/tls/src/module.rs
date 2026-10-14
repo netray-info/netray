@@ -388,6 +388,10 @@ pub fn translate_with_facts(resp: &InspectResponse, facts: &[BlockId]) -> Sectio
             if let Some(refs) = shared_references(name, &evidence, caa_from_facts) {
                 r.evidence = refs;
             }
+            // Rule M: a check whose answer was not obtained points at no block.
+            if r.status == Status::Unmeasured {
+                r.evidence.clear();
+            }
             r.evidence
                 .retain(|id| evidence.iter().any(|b| b.id == *id) || facts.contains(id));
             r
