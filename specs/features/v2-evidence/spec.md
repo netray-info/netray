@@ -1,7 +1,8 @@
 # Spec: v2 evidence
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-13
+Finished: 2026-10-14
 
 ## Goal
 
