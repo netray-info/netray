@@ -12,6 +12,7 @@
 use std::collections::BTreeSet;
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
@@ -71,7 +72,11 @@ fn check<'a>(checks: &'a [CheckResult], id: &str) -> Option<&'a CheckResult> {
 }
 
 async fn module_with_listed_address() -> (IpModule, PathBuf) {
-    let dir = std::env::temp_dir().join(format!("netray-ip-contract-{}", std::process::id()));
+    // Tests run in parallel and each removes its directory after the run; a per-call directory
+    // keeps one test's cleanup from deleting another's list before its module loads it.
+    static CALL: AtomicUsize = AtomicUsize::new(0);
+    let call = CALL.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("netray-ip-contract-{}-{call}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let list = dir.join("feodo.txt");
     std::fs::write(&list, format!("# feodo\n{LISTED}\n")).unwrap();
