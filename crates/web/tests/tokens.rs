@@ -88,8 +88,8 @@ fn phone() -> Vec<(String, String)> {
     let all = blocks(CSS);
     find(
         &all,
-        |s| s.starts_with("@media") && s.contains("max-width:390px"),
-        "@media (max-width: 390px)",
+        |s| s.starts_with("@media") && s.contains("max-width:480px"),
+        "@media (max-width: 480px)",
     )
     .iter()
     .flat_map(|b| decls(&b.body))
