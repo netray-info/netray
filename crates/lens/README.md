@@ -337,7 +337,7 @@ or `text`) whose values are tagged `{"t": "<type>", "v": <value>}`. Every check 
 `evidence`, the ids of the blocks it relies on; a passed, warned or failed check names at least one,
 and every id resolves within the run. The `dns` section also carries the shared lookups (`dns.a`,
 `dns.aaaa`, `dns.mx`, `dns.caa`, `dns.ns`, `dns.https`) that no section holds itself.
-`headline`, `addresses`, the `http` server fields and `grade` are derived from that evidence.
+`addresses`, the `http` server fields and `grade` are derived from that evidence; `headline` from the check verdicts and the evidence.
 
 ### Custom profiles
 
