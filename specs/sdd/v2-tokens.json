@@ -1,0 +1,439 @@
+{
+  "$description": "netray V2 design tokens (PRD v2, D27). Source for R41: the app and the static pages load the token set generated from this file. Format is modelled on the W3C design-tokens draft ($value/$type) but keeps CSS strings where the draft is stricter (rgba() colours, shadow strings, em tracking); the generator emits CSS custom properties, not a draft-conformant file. Contrast ratios are WCAG 2.x against color.<theme>.bg.",
+  "color": {
+    "light": {
+      "bg": {
+        "$type": "color",
+        "$value": "#f7f8fa"
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#ffffff"
+      },
+      "ink": {
+        "$type": "color",
+        "$value": "#0f1216",
+        "$description": "text, primary actions, marker; 17.7:1"
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "#59606a",
+        "$description": "secondary text; 6.0:1"
+      },
+      "line": {
+        "$type": "color",
+        "$value": "#e0e3e8",
+        "$description": "decorative rules and borders"
+      },
+      "plate": {
+        "$type": "color",
+        "$value": "#ffffff",
+        "$description": "spectrum window"
+      },
+      "plateBorder": {
+        "$type": "color",
+        "$value": "#d5d9df"
+      },
+      "grid": {
+        "$type": "color",
+        "$value": "rgba(15,18,22,0.06)"
+      }
+    },
+    "dark": {
+      "bg": {
+        "$type": "color",
+        "$value": "#07080a"
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#0d0f12"
+      },
+      "ink": {
+        "$type": "color",
+        "$value": "#e7e9ec",
+        "$description": "16.5:1"
+      },
+      "muted": {
+        "$type": "color",
+        "$value": "#8b929c",
+        "$description": "6.4:1"
+      },
+      "line": {
+        "$type": "color",
+        "$value": "#1d2127"
+      },
+      "plate": {
+        "$type": "color",
+        "$value": "#000000"
+      },
+      "plateBorder": {
+        "$type": "color",
+        "$value": "#1d2127"
+      },
+      "grid": {
+        "$type": "color",
+        "$value": "rgba(255,255,255,0.05)"
+      }
+    }
+  },
+  "status": {
+    "$description": "Status colours carry meaning only (D24, R42). 'mark' is for graphics (spectrum lines, trace dots, glyphs; needs 3:1), 'text' for words in that colour (needs 4.5:1), 'hair' for a passing run in a trace (1 px, ≥ 3:1, R42); 'untested.mark' for a run in which the check was not tested or not applicable.",
+    "light": {
+      "pass": {
+        "mark": {
+          "$type": "color",
+          "$value": "#3a9a66",
+          "$description": "3.3:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#1e7a4c",
+          "$description": "5.0:1"
+        },
+        "hair": {
+          "$type": "color",
+          "$value": "#3a9a66",
+          "$description": "1 px; 3.5:1 on the plate (R42)"
+        }
+      },
+      "warn": {
+        "mark": {
+          "$type": "color",
+          "$value": "#c77d00",
+          "$description": "3.1:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#9a5f00",
+          "$description": "4.9:1"
+        }
+      },
+      "fail": {
+        "mark": {
+          "$type": "color",
+          "$value": "#c42b22",
+          "$description": "5.3:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#c42b22",
+          "$description": "5.3:1"
+        }
+      },
+      "fix": {
+        "mark": {
+          "$type": "color",
+          "$value": "#0f8a4f",
+          "$description": "4.1:1, hollow line with ring"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#1e7a4c",
+          "$description": "5.0:1"
+        }
+      },
+      "untested": {
+        "mark": {
+          "$type": "color",
+          "$value": "#59606a",
+          "$description": "trace mark for not tested / not applicable; 6.0:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#59606a",
+          "$description": "6.0:1"
+        }
+      }
+    },
+    "dark": {
+      "pass": {
+        "mark": {
+          "$type": "color",
+          "$value": "#3fb97a",
+          "$description": "8.0:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#4fd18f",
+          "$description": "10.4:1"
+        },
+        "hair": {
+          "$type": "color",
+          "$value": "#2c6b4a",
+          "$description": "1 px; 3.3:1 on the plate"
+        }
+      },
+      "warn": {
+        "mark": {
+          "$type": "color",
+          "$value": "#f0a93b",
+          "$description": "10.0:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#f0a93b"
+        }
+      },
+      "fail": {
+        "mark": {
+          "$type": "color",
+          "$value": "#ff5d55",
+          "$description": "6.6:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#ff5d55"
+        }
+      },
+      "fix": {
+        "mark": {
+          "$type": "color",
+          "$value": "#7af0b2",
+          "$description": "14.3:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#7af0b2"
+        }
+      },
+      "untested": {
+        "mark": {
+          "$type": "color",
+          "$value": "#8b929c",
+          "$description": "6.4:1"
+        },
+        "text": {
+          "$type": "color",
+          "$value": "#8b929c",
+          "$description": "6.4:1"
+        }
+      }
+    },
+    "glow": {
+      "$description": "Dark theme only; never in light.",
+      "warn": {
+        "$type": "shadow",
+        "$value": "0 0 6px rgba(240,169,59,0.6)"
+      },
+      "fail": {
+        "$type": "shadow",
+        "$value": "0 0 8px rgba(255,93,85,0.75)"
+      },
+      "pass": {
+        "$type": "shadow",
+        "$value": "0 0 3px rgba(63,185,122,0.35)"
+      }
+    }
+  },
+  "font": {
+    "sans": {
+      "$type": "fontFamily",
+      "$value": [
+        "ui-sans-serif",
+        "system-ui",
+        "-apple-system",
+        "Segoe UI",
+        "sans-serif"
+      ],
+      "$description": "prose, headings, wordmark"
+    },
+    "mono": {
+      "$type": "fontFamily",
+      "$value": [
+        "ui-monospace",
+        "SF Mono",
+        "Menlo",
+        "Consolas",
+        "monospace"
+      ],
+      "$description": "scales, codes, data, labels"
+    },
+    "weight": {
+      "regular": {
+        "$type": "fontWeight",
+        "$value": 400,
+        "$description": "context"
+      },
+      "strong": {
+        "$type": "fontWeight",
+        "$value": 650,
+        "$description": "headings"
+      },
+      "bold": {
+        "$type": "fontWeight",
+        "$value": 700,
+        "$description": "values, active state, grade"
+      }
+    },
+    "size": {
+      "caption": {
+        "$type": "dimension",
+        "$value": "11px",
+        "$description": "mono captions, scale labels (10px at phone width)"
+      },
+      "label": {
+        "$type": "dimension",
+        "$value": "12px",
+        "$description": "mono labels, codes"
+      },
+      "small": {
+        "$type": "dimension",
+        "$value": "13px"
+      },
+      "body": {
+        "$type": "dimension",
+        "$value": "15px"
+      },
+      "h2": {
+        "$type": "dimension",
+        "$value": "20px"
+      },
+      "h1": {
+        "$type": "dimension",
+        "$value": "40px",
+        "$description": "26px at phone width"
+      },
+      "grade": {
+        "$type": "dimension",
+        "$value": "88px",
+        "$description": "64px at phone width"
+      },
+      "h1Phone": {
+        "$type": "dimension",
+        "$value": "26px"
+      },
+      "gradePhone": {
+        "$type": "dimension",
+        "$value": "64px"
+      },
+      "captionPhone": {
+        "$type": "dimension",
+        "$value": "10px"
+      }
+    },
+    "tracking": {
+      "display": {
+        "$type": "dimension",
+        "$value": "-0.03em"
+      },
+      "caps": {
+        "$type": "dimension",
+        "$value": "0.12em",
+        "$description": "mono uppercase run lines and scale labels"
+      }
+    }
+  },
+  "space": {
+    "$description": "4 px base.",
+    "1": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "2": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "3": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "4": {
+      "$type": "dimension",
+      "$value": "16px",
+      "$description": "side gutter at phone width"
+    },
+    "5": {
+      "$type": "dimension",
+      "$value": "20px"
+    },
+    "6": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "8": {
+      "$type": "dimension",
+      "$value": "32px",
+      "$description": "side gutter on desktop"
+    },
+    "9": {
+      "$type": "dimension",
+      "$value": "36px",
+      "$description": "gap between page sections"
+    }
+  },
+  "radius": {
+    "max": {
+      "$type": "dimension",
+      "$value": "2px",
+      "$description": "D24: square geometry"
+    }
+  },
+  "line": {
+    "hair": {
+      "$type": "dimension",
+      "$value": "1px",
+      "$description": "rules, scale ticks, passing trace dot"
+    },
+    "pass": {
+      "$type": "dimension",
+      "$value": "2px"
+    },
+    "warn": {
+      "$type": "dimension",
+      "$value": "3px"
+    },
+    "fail": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "marker": {
+      "$type": "dimension",
+      "$value": "3px",
+      "$description": "the only sign for active/current (D24)"
+    },
+    "fix": {
+      "$type": "dimension",
+      "$value": "5px",
+      "$description": "hollow, 1px stroke, 9px ring on top"
+    }
+  },
+  "spectrum": {
+    "plateHeight": {
+      "$type": "dimension",
+      "$value": "92px",
+      "$description": "80px at phone width"
+    },
+    "linePitchMin": {
+      "$type": "dimension",
+      "$value": "8px",
+      "$description": "below this the spectrum scrolls sideways (R26); 41 checks at 390 px with 16 px gutters give 8.7 px"
+    },
+    "traceRow": {
+      "$type": "dimension",
+      "$value": "5px",
+      "$description": "6px at phone width"
+    },
+    "lineHeight": {
+      "$description": "proportional to the check's weight in the grade"
+    },
+    "plateHeightPhone": {
+      "$type": "dimension",
+      "$value": "80px"
+    },
+    "traceRowPhone": {
+      "$type": "dimension",
+      "$value": "6px"
+    }
+  },
+  "layout": {
+    "maxWidth": {
+      "$type": "dimension",
+      "$value": "1120px"
+    },
+    "phone": {
+      "$type": "dimension",
+      "$value": "390px",
+      "$description": "reference width for the tiered mobile layout (D20, D26)"
+    }
+  }
+}
