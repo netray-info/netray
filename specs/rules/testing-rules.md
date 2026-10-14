@@ -8,3 +8,4 @@ Governs the repository's own checks: `tests/repo/*.sh`, Rust tests, and the acce
 - mhost's test constructors (`Lookup::new_for_test` and friends) are `#[cfg(test)]`; an integration test builds `Lookups` through mhost's serde form. Unenforced.
 - A dependency bump that changes how a parser normalises input (case, whitespace, empty records) gets a test of the normalised value at our boundary before the bump lands; the CAA tag case slipped through hickory 0.26. Unenforced.
 - A test that rewrites a golden (SSE, JSON) keeps its framing byte for byte (final blank line, event separators); a rewrite that drops it lets the test pass through the error path instead of the one it names (C5, grade-integrity). Unenforced.
+- A test that writes temp files names its directory per call (process id plus an atomic counter, or `tempfile`); a pid-only path races between parallel tests of one binary and failed only in CI (`crates/ip/tests/evidence.rs`, `contract_status.rs`). Unenforced.

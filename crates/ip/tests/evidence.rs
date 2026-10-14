@@ -14,6 +14,7 @@
 // `required-features = ["testing"]`, and `--test evidence` in the justfile `test-rust-offline`.
 
 use std::net::Ipv4Addr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use netray_engine::{Domain, EvidencePath, Facts, Module, RunContext, RunOptions, SectionOutcome};
@@ -34,7 +35,11 @@ fn ctx() -> RunContext {
 
 /// Runs the module over `LISTED` with `config_key` pointing at a list file holding `content`.
 async fn run(config_key: &str, content: &str) -> (IpModule, Vec<CheckResult>, Vec<Block>) {
-    let dir = std::env::temp_dir().join(format!("netray-ip-evidence-{}-{config_key}", std::process::id()));
+    // Tests run in parallel and several use the same list key; a per-call directory keeps one
+    // test's cleanup from deleting another's list before its module loads it.
+    static CALL: AtomicUsize = AtomicUsize::new(0);
+    let call = CALL.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("netray-ip-evidence-{}-{call}-{config_key}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let list = dir.join("list.txt");
     std::fs::write(&list, content).unwrap();
