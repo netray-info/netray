@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # specs/features/sdd-into-monorepo: the V2 SDD and its token source live in this repository, and
 # CLAUDE.md points at them as its own (R4). A self-test runs the same check on scratch trees it
-# must refuse: CLAUDE.md still citing the planning SDD, and tokens that are not valid JSON.
+# must refuse: CLAUDE.md still citing the planning SDD, and tokens that are not valid JSON (a
+# trailing comma, NaN).
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
@@ -10,7 +11,11 @@ problems() {
     [ -s "$1/specs/sdd/v2.md" ] || echo "specs/sdd/v2.md is missing or empty"
     if [ ! -f "$1/specs/sdd/v2-tokens.json" ]; then
         echo "specs/sdd/v2-tokens.json is missing"
-    elif ! python3 -I -c 'import json, sys; json.load(open(sys.argv[1]))' "$1/specs/sdd/v2-tokens.json" 2>/dev/null; then
+    elif ! python3 -I -c '
+import json, sys
+def refuse(name):
+    raise ValueError(name)
+json.load(open(sys.argv[1]), parse_constant=refuse)' "$1/specs/sdd/v2-tokens.json" 2>/dev/null; then
         echo "specs/sdd/v2-tokens.json is not valid JSON"
     fi
     grep -q 'specs/sdd/v2\.md' "$1/CLAUDE.md" || echo "CLAUDE.md does not name specs/sdd/v2.md"
@@ -24,7 +29,14 @@ fail() { echo "FAIL: $1"; fails=1; }
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-# Self-test: a tree with every fault must report each one.
+# Self-test: a tree with every fault must report each one; NaN is not JSON (RFC 8259), though
+# Python's json accepts it by default.
+mkdir -p "$tmp/nan/specs/sdd"
+echo '# SDD' > "$tmp/nan/specs/sdd/v2.md"
+echo '{"a": NaN}' > "$tmp/nan/specs/sdd/v2-tokens.json"
+echo '`specs/sdd/v2.md`' > "$tmp/nan/CLAUDE.md"
+problems "$tmp/nan" | grep -q "not valid JSON" || fail "self-test: NaN in the tokens was accepted"
+
 mkdir -p "$tmp/bad/specs/sdd"
 echo '# SDD' > "$tmp/bad/specs/sdd/v2.md"
 echo '{"a": 1,}' > "$tmp/bad/specs/sdd/v2-tokens.json"
