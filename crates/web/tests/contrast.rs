@@ -13,9 +13,15 @@ fn ratio_matches_wcag_reference_values() {
     ];
     for (a, b, want) in rows {
         let got = ratio(a, b);
-        assert!((got - want).abs() < 0.01, "ratio({a}, {b}) = {got}, want {want}");
+        assert!(
+            (got - want).abs() < 0.01,
+            "ratio({a}, {b}) = {got}, want {want}"
+        );
         let swapped = ratio(b, a);
-        assert!((got - swapped).abs() < 1e-9, "ratio must be order-independent");
+        assert!(
+            (got - swapped).abs() < 1e-9,
+            "ratio must be order-independent"
+        );
     }
 }
 
@@ -39,6 +45,12 @@ fn weak_status_text_is_reported_with_path_hex_ground_and_ratio() {
                 && m.contains("color.light.bg")
         })
         .unwrap_or_else(|| panic!("no matching violation in {found:#?}"));
-    let expected = format!("{:.2}", ratio("#9aa0a6", tokens["color"]["light"]["bg"].as_str().unwrap()));
-    assert!(hit.contains(&expected), "message {hit:?} must carry ratio {expected}");
+    let expected = format!(
+        "{:.2}",
+        ratio("#9aa0a6", tokens["color"]["light"]["bg"].as_str().unwrap())
+    );
+    assert!(
+        hit.contains(&expected),
+        "message {hit:?} must carry ratio {expected}"
+    );
 }

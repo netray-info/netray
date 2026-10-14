@@ -1,5 +1,5 @@
 //! Contract tests for the generated design tokens (V2 spec v2-design-system, R3 and R4).
-use netray_web::tokens::{values, CSS};
+use netray_web::tokens::{CSS, values};
 
 /// A parsed top-level CSS block: selector or at-rule prelude (whitespace removed) and raw body.
 struct Block {
@@ -97,7 +97,10 @@ fn phone() -> Vec<(String, String)> {
 }
 
 fn get<'a>(set: &'a [(String, String)], name: &str) -> Option<&'a str> {
-    set.iter().rev().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+    set.iter()
+        .rev()
+        .find(|(k, _)| k == name)
+        .map(|(_, v)| v.as_str())
 }
 
 #[test]
@@ -130,7 +133,8 @@ fn dark_values_sit_in_both_dark_blocks() {
 fn theme_segment_is_dropped_from_property_names() {
     for (label, set) in [("root", root()), ("dark", dark_media())] {
         assert!(
-            set.iter().all(|(k, _)| !k.contains("-light-") && !k.contains("-dark-")),
+            set.iter()
+                .all(|(k, _)| !k.contains("-light-") && !k.contains("-dark-")),
             "{label} block leaks a theme segment: {set:?}"
         );
     }
@@ -167,7 +171,11 @@ fn glow_is_none_on_root_and_set_only_in_dark_blocks() {
     ] {
         assert_eq!(get(&root, name), Some("none"), "{name} on :root");
         assert_eq!(get(&dark_media(), name), Some(dark), "{name} in dark media");
-        assert_eq!(get(&dark_attr(), name), Some(dark), "{name} in data-theme dark");
+        assert_eq!(
+            get(&dark_attr(), name),
+            Some(dark),
+            "{name} in data-theme dark"
+        );
     }
 }
 
@@ -176,8 +184,16 @@ fn rust_constants_carry_every_value() {
     let rows: [(&str, &str, &str); 9] = [
         ("COLOR_LIGHT_BG", values::COLOR_LIGHT_BG, "#f7f8fa"),
         ("COLOR_DARK_BG", values::COLOR_DARK_BG, "#07080a"),
-        ("STATUS_DARK_PASS_HAIR", values::STATUS_DARK_PASS_HAIR, "#2c6b4a"),
-        ("STATUS_LIGHT_WARN_TEXT", values::STATUS_LIGHT_WARN_TEXT, "#9a5f00"),
+        (
+            "STATUS_DARK_PASS_HAIR",
+            values::STATUS_DARK_PASS_HAIR,
+            "#2c6b4a",
+        ),
+        (
+            "STATUS_LIGHT_WARN_TEXT",
+            values::STATUS_LIGHT_WARN_TEXT,
+            "#9a5f00",
+        ),
         ("FONT_SIZE_H1_PHONE", values::FONT_SIZE_H1_PHONE, "26px"),
         ("FONT_WEIGHT_REGULAR", values::FONT_WEIGHT_REGULAR, "400"),
         ("LAYOUT_PHONE", values::LAYOUT_PHONE, "390px"),
