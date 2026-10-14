@@ -2,17 +2,23 @@
   "dns": {
     "checks": [
       {
+        "evidence": [
+          "dns.caa"
+        ],
         "fix_hint": "Publish issue and issuewild CAA records naming the allowed certificate authorities, using only known tags.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/caa-records",
         "messages": [
-          "No CAA records found: any Certificate Authority can issue certificates for this domain; cf. RFC 8659"
+          "CAA 'issue' is set but 'issuewild' is not: wildcard certificate issuance is unrestricted"
         ],
         "name": "caa",
         "verdict": "warn",
         "weight": 5
       },
       {
+        "evidence": [
+          "dns.ns"
+        ],
         "fix_hint": "Delegate the zone to at least two authoritative nameservers.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
@@ -21,6 +27,7 @@
         "weight": 3
       },
       {
+        "evidence": [],
         "fix_hint": "Replace the apex CNAME with A/AAAA records, or an ALIAS/ANAME record where the provider supports it.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
@@ -32,6 +39,7 @@
         "weight": 5
       },
       {
+        "evidence": [],
         "fix_hint": "Enable DNSSEC signing at the DNS provider, have its DS record published at the registrar and keep the signatures current.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/dnssec",
@@ -43,6 +51,7 @@
         "weight": 5
       },
       {
+        "evidence": [],
         "fix_hint": "Re-sign the zone with ECDSA P-256 (algorithm 13) or Ed25519 (algorithm 15).",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/dnssec",
@@ -54,6 +63,7 @@
         "weight": 3
       },
       {
+        "evidence": [],
         "fix_hint": "Retire superseded KSKs from the zone so that one remains, and as part of it remove the DS records of retired keys at the registrar.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/dnssec",
@@ -65,6 +75,7 @@
         "weight": 2
       },
       {
+        "evidence": [],
         "fix_hint": "Publish either one alias-mode or only service-mode HTTPS records that advertise the supported ALPN protocols.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
@@ -76,6 +87,9 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "dns.ns"
+        ],
         "fix_hint": "Remove the lame nameserver from the zone's NS records and from the delegation at the registrar.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/lame-delegation",
@@ -87,6 +101,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "dns.ns"
+        ],
         "fix_hint": "Make every authoritative nameserver serve the same NS set, matching the delegation at the registrar.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/lame-delegation",
@@ -98,6 +115,12 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "dns.a",
+          "dns.caa",
+          "dns.ns",
+          "dns.txt"
+        ],
         "fix_hint": "Keep TTLs at 60 seconds or more, NS and MX TTLs at one week or less, and the SOA minimum at one day or less.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/record-types",
@@ -110,6 +133,134 @@
       }
     ],
     "detail_url": "https://dns.example.com/?q=example.com+%2Bcheck",
+    "evidence": [
+      {
+        "id": "dns.a",
+        "shape": {
+          "data": [
+            {
+              "data": {
+                "t": "text",
+                "v": "1.1.1.1"
+              },
+              "owner": {
+                "t": "text",
+                "v": "example.com."
+              },
+              "ttl": {
+                "t": "int",
+                "v": 300
+              },
+              "type": {
+                "t": "text",
+                "v": "A"
+              }
+            }
+          ],
+          "kind": "records"
+        },
+        "title": "A"
+      },
+      {
+        "id": "dns.caa",
+        "shape": {
+          "data": [
+            {
+              "data": {
+                "t": "text",
+                "v": "0 issue \"letsencrypt.org\""
+              },
+              "owner": {
+                "t": "text",
+                "v": "example.com."
+              },
+              "ttl": {
+                "t": "int",
+                "v": 300
+              },
+              "type": {
+                "t": "text",
+                "v": "CAA"
+              }
+            }
+          ],
+          "kind": "records"
+        },
+        "title": "CAA"
+      },
+      {
+        "id": "dns.ns",
+        "shape": {
+          "data": [
+            {
+              "data": {
+                "t": "text",
+                "v": "ns1.example.com."
+              },
+              "owner": {
+                "t": "text",
+                "v": "example.com."
+              },
+              "ttl": {
+                "t": "int",
+                "v": 300
+              },
+              "type": {
+                "t": "text",
+                "v": "NS"
+              }
+            },
+            {
+              "data": {
+                "t": "text",
+                "v": "ns2.example.com."
+              },
+              "owner": {
+                "t": "text",
+                "v": "example.com."
+              },
+              "ttl": {
+                "t": "int",
+                "v": 300
+              },
+              "type": {
+                "t": "text",
+                "v": "NS"
+              }
+            }
+          ],
+          "kind": "records"
+        },
+        "title": "NS"
+      },
+      {
+        "id": "dns.txt",
+        "shape": {
+          "data": [
+            {
+              "data": {
+                "t": "text",
+                "v": "\"v=spf1 -all\""
+              },
+              "owner": {
+                "t": "text",
+                "v": "example.com."
+              },
+              "ttl": {
+                "t": "int",
+                "v": 300
+              },
+              "type": {
+                "t": "text",
+                "v": "TXT"
+              }
+            }
+          ],
+          "kind": "records"
+        },
+        "title": "TXT"
+      }
+    ],
     "headline": "DNSSEC –  CAA ~  NS ✓  CNAME-apex –",
     "status": "warn"
   },
@@ -120,12 +271,17 @@
   "email": {
     "checks": [],
     "detail_url": "",
+    "evidence": [],
     "headline": "backend error",
     "status": "error"
   },
   "http": {
     "checks": [
       {
+        "evidence": [
+          "http.port80",
+          "http.port80_probe"
+        ],
         "fix_hint": "Serve HTTP on port 80 and redirect every request to HTTPS with a 301 before serving content.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/hsts",
@@ -134,6 +290,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/hsts",
@@ -142,6 +301,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "http.cors"
+        ],
         "fix_hint": "Allow only an explicit list of trusted origins and send Access-Control-Allow-Credentials only for those.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/cors",
@@ -150,6 +312,9 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "http.cookies"
+        ],
         "fix_hint": "Set the Secure flag on every cookie.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/cookie-security",
@@ -161,6 +326,9 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Send an enforced Content-Security-Policy with default-src, object-src 'none' and base-uri that restricts scripts to trusted origins.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/csp",
@@ -172,6 +340,9 @@
         "weight": 1
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Send X-Frame-Options: DENY, or SAMEORIGIN where the site frames its own pages.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/security-headers",
@@ -180,6 +351,9 @@
         "weight": 1
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Send X-Content-Type-Options: nosniff on all responses.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/security-headers",
@@ -191,6 +365,9 @@
         "weight": 1
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Send Referrer-Policy: strict-origin-when-cross-origin or stricter.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/security-headers",
@@ -202,6 +379,9 @@
         "weight": 1
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Send a Permissions-Policy that disables the browser features the site does not use.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/security-headers",
@@ -213,6 +393,9 @@
         "weight": 1
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Remove deprecated security headers from the server's responses.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/http-redirects",
@@ -224,6 +407,9 @@
         "weight": 1
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Remove the Server, X-Powered-By and similar technology headers from the server's responses.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/http-redirects",
@@ -232,6 +418,9 @@
         "weight": 1
       },
       {
+        "evidence": [
+          "http.headers"
+        ],
         "fix_hint": "Send an explicit Cache-Control header on each response and pair max-age=0 with no-cache or must-revalidate.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/http-redirects",
@@ -244,6 +433,189 @@
       }
     ],
     "detail_url": "https://http.example.com/?url=https%3A%2F%2Fexample.com",
+    "evidence": [
+      {
+        "id": "http.redirects",
+        "shape": {
+          "data": [],
+          "kind": "chain"
+        },
+        "title": "Redirects"
+      },
+      {
+        "id": "http.port80",
+        "shape": {
+          "data": [],
+          "kind": "chain"
+        },
+        "title": "Port 80 redirects"
+      },
+      {
+        "id": "http.port80_probe",
+        "shape": {
+          "data": [
+            [
+              "status_code",
+              {
+                "t": "int",
+                "v": 301
+              }
+            ],
+            [
+              "redirects_to_https",
+              {
+                "t": "bool",
+                "v": true
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "Port 80 probe"
+      },
+      {
+        "id": "http.headers",
+        "shape": {
+          "data": {
+            "columns": [
+              "name",
+              "value"
+            ],
+            "key": "name",
+            "rows": [
+              [
+                {
+                  "t": "text",
+                  "v": "content-type"
+                },
+                {
+                  "t": "text",
+                  "v": "text/html"
+                }
+              ],
+              [
+                {
+                  "t": "text",
+                  "v": "strict-transport-security"
+                },
+                {
+                  "t": "text",
+                  "v": "max-age=31536000"
+                }
+              ]
+            ]
+          },
+          "kind": "table"
+        },
+        "title": "Response headers"
+      },
+      {
+        "id": "http.server",
+        "shape": {
+          "data": [
+            [
+              "final_url",
+              {
+                "t": "text",
+                "v": "https://example.com/"
+              }
+            ],
+            [
+              "status_code",
+              {
+                "t": "int",
+                "v": 200
+              }
+            ],
+            [
+              "http_version",
+              {
+                "t": "text",
+                "v": "HTTP/2"
+              }
+            ],
+            [
+              "response_ms",
+              {
+                "t": "duration",
+                "v": 87
+              }
+            ],
+            [
+              "address",
+              {
+                "t": "addr",
+                "v": "192.0.2.10"
+              }
+            ],
+            [
+              "org",
+              {
+                "t": "text",
+                "v": "Example Hosting"
+              }
+            ],
+            [
+              "network_type",
+              {
+                "t": "text",
+                "v": "datacenter"
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "Server"
+      },
+      {
+        "id": "http.cors",
+        "shape": {
+          "data": [
+            [
+              "allows_any_origin",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "reflects_origin",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "allows_credentials",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "CORS"
+      },
+      {
+        "id": "http.cookies",
+        "shape": {
+          "data": {
+            "columns": [
+              "cookie",
+              "name",
+              "secure",
+              "http_only",
+              "same_site"
+            ],
+            "key": "cookie",
+            "rows": []
+          },
+          "kind": "table"
+        },
+        "title": "Cookies"
+      }
+    ],
     "headline": "HTTPS ✓  HSTS ✓  CSP ~  CORS ✓",
     "http_version": "HTTP/2",
     "server_ip": "192.0.2.10",
@@ -263,6 +635,9 @@
     ],
     "checks": [
       {
+        "evidence": [
+          "ip.addresses"
+        ],
         "fix_hint": "Investigate the flagged address, request delisting where the source offers it, or stop using the address for the service.",
         "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/ip-enrichment",
@@ -272,11 +647,85 @@
       }
     ],
     "detail_url": "https://ip.example.com",
+    "evidence": [
+      {
+        "id": "ip.addresses",
+        "shape": {
+          "data": {
+            "columns": [
+              "address",
+              "asn",
+              "org",
+              "prefix",
+              "network_type",
+              "country",
+              "city",
+              "spamhaus",
+              "c2",
+              "tor",
+              "vpn"
+            ],
+            "key": "address",
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "1.1.1.1"
+                },
+                {
+                  "t": "text",
+                  "v": "AS64496"
+                },
+                {
+                  "t": "text",
+                  "v": "Example Cloud GmbH"
+                },
+                {
+                  "t": "text",
+                  "v": "203.0.113.0/24"
+                },
+                {
+                  "t": "text",
+                  "v": "cloud"
+                },
+                {
+                  "t": "text",
+                  "v": "Germany"
+                },
+                {
+                  "t": "text",
+                  "v": "Berlin"
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                },
+                {
+                  "t": "bool",
+                  "v": false
+                }
+              ]
+            ]
+          },
+          "kind": "table"
+        },
+        "title": "Addresses"
+      }
+    ],
     "headline": "Example Cloud GmbH + Berlin, Germany",
     "status": "pass"
   },
   "summary": {
     "complete": false,
+    "evidence_schema": 1,
     "grade": "incomplete",
     "hard_fail": false,
     "hard_fail_checks": [],
@@ -301,6 +750,9 @@
   "tls": {
     "checks": [
       {
+        "evidence": [
+          "tls.addresses"
+        ],
         "fix_hint": "Serve HTTPS on port 443 and allow inbound connections to it through the firewall.",
         "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/tls-protocol",
@@ -309,6 +761,9 @@
         "weight": 10
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Install a certificate from a public CA together with its full intermediate chain.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/certificate-chain",
@@ -317,6 +772,9 @@
         "weight": 10
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Renew the leaf certificate and remove expired intermediates and cross-signs from the chain the server sends.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/certificate-chain",
@@ -325,6 +783,9 @@
         "weight": 10
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Reissue the certificate with every hostname served on this server in its SAN list.",
         "fix_owner": "your certificate provider",
         "guide_url": "https://netray.info/guide/certificate-chain",
@@ -333,6 +794,9 @@
         "weight": 10
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Configure the server to send the leaf followed by every intermediate in issuing order.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/certificate-chain",
@@ -341,6 +805,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Replace the affected certificates with ones signed using SHA-256 or stronger.",
         "fix_owner": "your certificate provider",
         "guide_url": "https://netray.info/guide/certificate-chain",
@@ -349,6 +816,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Reissue the certificate with at least a 2048-bit RSA or a 256-bit ECDSA key from a CA whose intermediates meet the same minimum.",
         "fix_owner": "your certificate provider",
         "guide_url": "https://netray.info/guide/certificate-chain",
@@ -357,6 +827,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Renew the certificate now and automate future renewals.",
         "fix_owner": "your certificate provider",
         "guide_url": "https://netray.info/guide/certificate-management",
@@ -365,6 +838,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Reissue the certificate with a lifetime of 398 days or less.",
         "fix_owner": "your certificate provider",
         "guide_url": "https://netray.info/guide/certificate-management",
@@ -373,6 +849,9 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Reissue the certificate with public hostnames only and split very large SAN lists across several certificates.",
         "fix_owner": "your certificate provider",
         "guide_url": "https://netray.info/guide/certificate-management",
@@ -381,6 +860,9 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Configure the server to send the full chain, leaf plus all intermediates.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/certificate-management",
@@ -392,6 +874,9 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "tls.handshake@192.0.2.10:443"
+        ],
         "fix_hint": "Enable TLS 1.3 in the server's TLS configuration.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/tls-protocol",
@@ -400,6 +885,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "tls.handshake@192.0.2.10:443"
+        ],
         "fix_hint": "Prefer ECDHE cipher suites in the server's TLS configuration.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/tls-protocol",
@@ -408,6 +896,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "tls.handshake@192.0.2.10:443"
+        ],
         "fix_hint": "Allow only AEAD ciphers such as AES-GCM and ChaCha20-Poly1305.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/tls-protocol",
@@ -416,6 +907,7 @@
         "weight": 5
       },
       {
+        "evidence": [],
         "fix_hint": "Obtain a certificate from a CA that embeds SCTs from at least two Certificate Transparency logs.",
         "fix_owner": "your certificate provider",
         "guide_url": "https://netray.info/guide/certificate-transparency",
@@ -427,6 +919,9 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "tls.handshake@192.0.2.10:443"
+        ],
         "fix_hint": "Enable OCSP stapling in the server's TLS configuration.",
         "fix_owner": "your web server configuration",
         "guide_url": "https://netray.info/guide/certificate-chain",
@@ -438,6 +933,9 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "tls.caa"
+        ],
         "fix_hint": "Authorise the issuing CA in the CAA records or reissue from a CA they already allow, and drop the critical flag from records with unknown tags.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/caa-records",
@@ -449,6 +947,9 @@
         "weight": 5
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443"
+        ],
         "fix_hint": "Update the TLSA record to match the current certificate or key on every rotation.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/dane-tlsa",
@@ -460,6 +961,10 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "tls.chain@192.0.2.10:443",
+          "tls.handshake@192.0.2.10:443"
+        ],
         "fix_hint": "Serve the same certificate and TLS configuration on every address of the domain.",
         "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/multi-ip-tls",
@@ -471,6 +976,9 @@
         "weight": 3
       },
       {
+        "evidence": [
+          "tls.handshake@192.0.2.10:443"
+        ],
         "fix_hint": "Align the ALPN configuration across all servers behind the domain.",
         "fix_owner": "your hosting provider",
         "guide_url": "https://netray.info/guide/multi-ip-tls",
@@ -482,6 +990,9 @@
         "weight": 2
       },
       {
+        "evidence": [
+          "tls.handshake@192.0.2.10:443"
+        ],
         "fix_hint": "Publish the server's ECH configuration in the ech= parameter of the HTTPS record, once Encrypted Client Hello is enabled on the server.",
         "fix_owner": "your DNS provider",
         "guide_url": "https://netray.info/guide/encrypted-client-hello",
@@ -494,6 +1005,191 @@
       }
     ],
     "detail_url": "https://tls.example.com/?h=example.com",
+    "evidence": [
+      {
+        "id": "tls.addresses",
+        "shape": {
+          "data": {
+            "columns": [
+              "address",
+              "port",
+              "outcome",
+              "message"
+            ],
+            "key": "address",
+            "rows": [
+              [
+                {
+                  "t": "addr",
+                  "v": "192.0.2.10"
+                },
+                {
+                  "t": "int",
+                  "v": 443
+                },
+                {
+                  "t": "text",
+                  "v": "ok"
+                },
+                {
+                  "t": "text",
+                  "v": ""
+                }
+              ]
+            ]
+          },
+          "kind": "table"
+        },
+        "title": "Addresses"
+      },
+      {
+        "id": "tls.chain@192.0.2.10:443",
+        "shape": {
+          "data": [
+            [
+              [
+                "position",
+                {
+                  "t": "text",
+                  "v": "leaf"
+                }
+              ],
+              [
+                "subject",
+                {
+                  "t": "text",
+                  "v": "CN=example.com"
+                }
+              ],
+              [
+                "issuer",
+                {
+                  "t": "text",
+                  "v": "CN=Example Test CA"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "example.com"
+                }
+              ],
+              [
+                "sans",
+                {
+                  "t": "text",
+                  "v": "www.example.com"
+                }
+              ],
+              [
+                "not_before",
+                {
+                  "t": "time",
+                  "v": "2030-01-01T00:00:00Z"
+                }
+              ],
+              [
+                "not_after",
+                {
+                  "t": "time",
+                  "v": "2030-04-01T00:00:00Z"
+                }
+              ],
+              [
+                "days_remaining",
+                {
+                  "t": "int",
+                  "v": 60
+                }
+              ],
+              [
+                "key",
+                {
+                  "t": "text",
+                  "v": "ECDSA 256"
+                }
+              ],
+              [
+                "signature_algorithm",
+                {
+                  "t": "text",
+                  "v": "ecdsa-with-SHA256"
+                }
+              ],
+              [
+                "fingerprint_sha256",
+                {
+                  "t": "text",
+                  "v": "AA:BB"
+                }
+              ]
+            ]
+          ],
+          "kind": "chain"
+        },
+        "title": "Certificate chain 192.0.2.10:443"
+      },
+      {
+        "id": "tls.handshake@192.0.2.10:443",
+        "shape": {
+          "data": [
+            [
+              "version",
+              {
+                "t": "text",
+                "v": "TLSv1.3"
+              }
+            ],
+            [
+              "cipher_suite",
+              {
+                "t": "text",
+                "v": "TLS13_AES_256_GCM_SHA384"
+              }
+            ],
+            [
+              "alpn",
+              {
+                "t": "text",
+                "v": "h2"
+              }
+            ],
+            [
+              "key_exchange_group",
+              {
+                "t": "text",
+                "v": "X25519"
+              }
+            ],
+            [
+              "ocsp_stapled",
+              {
+                "t": "bool",
+                "v": false
+              }
+            ],
+            [
+              "handshake_ms",
+              {
+                "t": "duration",
+                "v": 42
+              }
+            ]
+          ],
+          "kind": "fields"
+        },
+        "title": "Handshake 192.0.2.10:443"
+      },
+      {
+        "id": "tls.caa",
+        "shape": {
+          "data": [],
+          "kind": "records"
+        },
+        "title": "CAA"
+      }
+    ],
     "headline": "TLSv1.3, expires in 60d",
     "status": "warn"
   }

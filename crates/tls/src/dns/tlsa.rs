@@ -2,13 +2,21 @@ use std::collections::HashSet;
 
 use mhost::RecordType;
 use mhost::resolver::{ResolverGroup, UniQuery};
+use mhost::resources::RData;
+use mhost::resources::rdata::TLSA;
 use serde::Serialize;
 use utoipa::ToSchema;
+
+use super::AnsweredRecord;
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct TlsaLookup {
     pub records: Vec<TlsaRecord>,
     pub dnssec_signed: bool,
+    /// The answered records with owner and TTL, not serialized.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub answered: Vec<AnsweredRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -58,12 +66,11 @@ pub async fn lookup_tlsa(
             let data = tlsa.cert_data().to_vec();
             let key = (usage, selector, matching, data.clone());
             if seen.insert(key) {
-                let hex = hex_encode(&data);
                 Some(TlsaRecord {
                     cert_usage: usage,
                     selector,
                     matching_type: matching,
-                    display: format!("{usage} {selector} {matching} {hex}"),
+                    display: presentation(tlsa),
                     cert_data: data,
                 })
             } else {
@@ -72,10 +79,27 @@ pub async fn lookup_tlsa(
         })
         .collect();
 
+    let answered = super::answered_records(&lookups, |data| match data {
+        RData::TLSA(tlsa) => Some(presentation(tlsa)),
+        _ => None,
+    });
+
     Some(TlsaLookup {
         records,
         dnssec_signed: false, // DNSSEC validation deferred
+        answered,
     })
+}
+
+/// A TLSA record's data in presentation form, `usage selector matching hex`.
+fn presentation(tlsa: &TLSA) -> String {
+    format!(
+        "{} {} {} {}",
+        cert_usage_to_u8(tlsa.cert_usage()),
+        selector_to_u8(tlsa.selector()),
+        matching_to_u8(tlsa.matching()),
+        hex_encode(tlsa.cert_data())
+    )
 }
 
 fn hex_encode(data: &[u8]) -> String {

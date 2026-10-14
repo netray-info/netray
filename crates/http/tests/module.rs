@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
 use netray_http::inspect::assembler::InspectResponse;
 use netray_http::{HttpModule, ModuleConfig, testing, translate};
+use netray_model::evidence::{Block, Shape, Value as EvValue};
 use netray_model::{Protocol, Status};
 use serde_json::Value;
 
@@ -20,12 +21,9 @@ fn contracts(name: &str) -> Value {
     serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
-fn measured(outcome: SectionOutcome) -> (Vec<netray_model::CheckResult>, Value) {
+fn measured(outcome: SectionOutcome) -> (Vec<netray_model::CheckResult>, Vec<Block>) {
     match outcome {
-        SectionOutcome::Measured {
-            checks,
-            presentation,
-        } => (checks, presentation),
+        SectionOutcome::Measured { checks, evidence } => (checks, evidence),
         other => panic!("expected Measured, got {other:?}"),
     }
 }
@@ -43,7 +41,7 @@ fn status_of(verdict: &str) -> Status {
 #[test]
 fn translate_equals_lens_http_section() {
     let resp: InspectResponse = serde_json::from_str(SPECTRA_JSON).unwrap();
-    let (checks, presentation) = measured(translate(&resp));
+    let (checks, evidence) = measured(translate(&resp));
 
     let lens = contracts("lens-full-healthy.json");
     let http = lens["http"].as_object().expect("lens http section");
@@ -70,19 +68,65 @@ fn translate_equals_lens_http_section() {
         assert_eq!(got.findings, want, "{id} findings");
     }
 
-    // Translation-derived keys of lens's http object. Not asserted: `detail_url` (built from
-    // lens's ecosystem base URL and the domain, not from the spectra response) and `status`
-    // (the section status lens computes from its scoring, not a translation output).
-    for key in [
-        "headline",
-        "http_version",
-        "status_code",
-        "server_ip",
-        "server_network_type",
-        "server_org",
+    // Lens's http keys as lens derives them from the evidence. Not asserted: `detail_url`
+    // (built from lens's ecosystem base URL and the domain, not from the spectra response) and
+    // `status` (the section status lens computes from its scoring, not a translation output).
+    let fields = |id: &str| -> Vec<(String, EvValue)> {
+        match evidence
+            .iter()
+            .find(|b| b.id.to_string() == id)
+            .map(|b| &b.shape)
+        {
+            Some(Shape::Fields(f)) => f.clone(),
+            other => panic!("{id} is not a fields block: {other:?}"),
+        }
+    };
+    let server = fields("http.server");
+    let json_of = |key: &str| -> Value {
+        match server.iter().find(|(k, _)| k == key).map(|(_, v)| v) {
+            Some(EvValue::Text(t)) => Value::from(t.clone()),
+            Some(EvValue::Int(i)) => Value::from(*i),
+            Some(EvValue::Addr(a)) => Value::from(a.to_string()),
+            other => panic!("http.server/{key}: {other:?}"),
+        }
+    };
+    for (lens_key, key) in [
+        ("http_version", "http_version"),
+        ("status_code", "status_code"),
+        ("server_ip", "address"),
+        ("server_network_type", "network_type"),
+        ("server_org", "org"),
     ] {
-        assert_eq!(presentation[key], http[key], "presentation.{key}");
+        assert_eq!(
+            json_of(key),
+            http[lens_key],
+            "http.server/{key} as {lens_key}"
+        );
     }
+    let https = if fields("http.port80_probe")
+        .contains(&("redirects_to_https".into(), EvValue::Bool(true)))
+    {
+        "✓"
+    } else {
+        "✗"
+    };
+    let symbol = |name: &str| match checks
+        .iter()
+        .find(|c| c.id.to_string() == format!("http.{name}"))
+        .map(|c| c.status)
+    {
+        Some(Status::Pass) => "✓",
+        Some(Status::Fail) => "✗",
+        Some(Status::Warn) => "~",
+        _ => "-",
+    };
+    let headline = format!(
+        "HTTPS {https}  HSTS {}  CSP {}  CORS {}",
+        symbol("hsts"),
+        symbol("csp"),
+        symbol("cors")
+    );
+    assert_eq!(Value::from(headline), http["headline"], "headline");
 }
 
 #[test]

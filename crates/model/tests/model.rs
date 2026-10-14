@@ -1,4 +1,5 @@
 //! Contract tests for the shared check model (V2 SDD).
+use netray_model::evidence::BlockId;
 use netray_model::{CheckId, CheckResult, FixOwner, Grade, Protocol, Severity, Status};
 use serde_json::{json, to_value};
 
@@ -102,11 +103,11 @@ fn check_result_serialises_all_fields() {
         id: CheckId::parse("dns.dnssec_valid").unwrap(),
         status: Status::Warn,
         findings: vec!["DS record missing".to_string()],
-        evidence: vec!["example.com. IN DS".to_string()],
+        evidence: vec![BlockId::parse("dns.ds").unwrap()],
     };
     let value = to_value(&result).unwrap();
     assert_eq!(value["id"], json!("dns.dnssec_valid"));
     assert_eq!(value["status"], json!("warn"));
     assert_eq!(value["findings"], json!(["DS record missing"]));
-    assert_eq!(value["evidence"], json!(["example.com. IN DS"]));
+    assert_eq!(value["evidence"], json!(["dns.ds"]));
 }

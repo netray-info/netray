@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
+use netray_model::evidence::{Block, Shape, Value as EvValue};
 use netray_model::{Protocol, Status};
 use netray_tls::routes::InspectResponse;
 use netray_tls::{ModuleConfig, TlsModule, testing, translate};
@@ -24,13 +25,54 @@ fn contracts(name: &str) -> Value {
     serde_json::from_str(&read(name)).unwrap()
 }
 
-fn measured(outcome: SectionOutcome) -> (Vec<netray_model::CheckResult>, Value) {
+fn measured(outcome: SectionOutcome) -> (Vec<netray_model::CheckResult>, Vec<Block>) {
     match outcome {
-        SectionOutcome::Measured {
-            checks,
-            presentation,
-        } => (checks, presentation),
+        SectionOutcome::Measured { checks, evidence } => (checks, evidence),
         other => panic!("expected Measured, got {other:?}"),
+    }
+}
+
+/// The headline lens derives from the evidence: the handshake version and the leaf's days
+/// remaining of the first tested address.
+fn headline(evidence: &[Block]) -> String {
+    let block = |id: String| evidence.iter().find(|b| b.id.to_string() == id);
+    let field = |fields: &[(String, EvValue)], key: &str| {
+        fields
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+    };
+    let first = block("tls.addresses".into()).and_then(|b| match &b.shape {
+        Shape::Table { rows, .. } => match rows.first()?.as_slice() {
+            [EvValue::Addr(ip), EvValue::Int(port), ..] => {
+                Some(std::net::SocketAddr::new(*ip, u16::try_from(*port).ok()?))
+            }
+            _ => None,
+        },
+        _ => None,
+    });
+    let version = first
+        .and_then(|a| block(format!("tls.handshake@{a}")))
+        .and_then(|b| match &b.shape {
+            Shape::Fields(f) => match field(f, "version") {
+                Some(EvValue::Text(v)) => Some(v),
+                _ => None,
+            },
+            _ => None,
+        })
+        .unwrap_or_else(|| "TLS".into());
+    let days = first
+        .and_then(|a| block(format!("tls.chain@{a}")))
+        .and_then(|b| match &b.shape {
+            Shape::Chain(certs) => match field(certs.first()?, "days_remaining") {
+                Some(EvValue::Int(d)) => Some(d),
+                _ => None,
+            },
+            _ => None,
+        });
+    match days {
+        Some(d) => format!("{version}, expires in {d}d"),
+        None => "TLS inspection complete".into(),
     }
 }
 
@@ -64,7 +106,7 @@ const CASES: [(&str, &str, bool); 3] = [
 fn translate_equals_lens_tls_section() {
     for (golden, lens_file, not_tested) in CASES {
         let resp: InspectResponse = serde_json::from_str(&read(golden)).unwrap();
-        let (checks, presentation) = measured(translate(&resp));
+        let (checks, evidence) = measured(translate(&resp));
 
         let lens = contracts(lens_file);
         let tls = lens["tls"].as_object().expect("lens tls section");
@@ -94,13 +136,10 @@ fn translate_equals_lens_tls_section() {
             }
         }
 
-        // Translation-derived key of lens's tls object. Not asserted: `detail_url` (lens's
-        // ecosystem base URL and the domain) and `status` (lens's scoring, not a translation
-        // output).
-        assert_eq!(
-            presentation["headline"], tls["headline"],
-            "{golden}: headline"
-        );
+        // The headline lens derives from the translation's evidence. Not asserted:
+        // `detail_url` (lens's ecosystem base URL and the domain) and `status` (lens's scoring,
+        // not a translation output).
+        assert_eq!(headline(&evidence), tls["headline"], "{golden}: headline");
     }
 }
 

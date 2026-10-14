@@ -2,6 +2,8 @@
 //!
 //! Pure data types with no I/O and no dependency on any other workspace crate.
 
+pub mod evidence;
+
 use std::fmt;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -112,7 +114,7 @@ impl fmt::Display for CheckIdError {
 impl std::error::Error for CheckIdError {}
 
 /// The outcome of one check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Pass,
@@ -159,11 +161,11 @@ pub enum Grade {
     Incomplete,
 }
 
-/// One check's id, status and supporting text.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// One check's id, status, findings and the evidence blocks it was judged by.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CheckResult {
     pub id: CheckId,
     pub status: Status,
     pub findings: Vec<String>,
-    pub evidence: Vec<String>,
+    pub evidence: Vec<evidence::BlockId>,
 }

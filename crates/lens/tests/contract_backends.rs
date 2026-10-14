@@ -19,6 +19,7 @@ use netray_engine::SectionOutcome;
 use netray_http::inspect::assembler::InspectResponse;
 use netray_http::translate;
 use netray_model::Status;
+use netray_model::evidence::{Shape, Value};
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -100,11 +101,8 @@ fn netray_http_translates_spectra_golden() {
     let resp: InspectResponse = serde_json::from_str(&golden("spectra-inspect.json"))
         .expect("netray-http must decode spectra's golden");
 
-    let (checks, presentation) = match translate(&resp) {
-        SectionOutcome::Measured {
-            checks,
-            presentation,
-        } => (checks, presentation),
+    let (checks, evidence) = match translate(&resp) {
+        SectionOutcome::Measured { checks, evidence } => (checks, evidence),
         other => panic!("expected Measured, got {other:?}"),
     };
 
@@ -129,6 +127,13 @@ fn netray_http_translates_spectra_golden() {
         "findings {:?} do not come from the golden's csp check",
         headers.findings
     );
-    assert_eq!(presentation["status_code"], 200);
-    assert_eq!(presentation["server_org"], "Example Hosting");
+    let server = evidence
+        .iter()
+        .find(|b| b.id.to_string() == "http.server")
+        .expect("http.server block missing");
+    let Shape::Fields(fields) = &server.shape else {
+        panic!("http.server is not fields: {server:?}");
+    };
+    assert!(fields.contains(&("status_code".into(), Value::Int(200))));
+    assert!(fields.contains(&("org".into(), Value::Text("Example Hosting".into()))));
 }

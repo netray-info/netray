@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use super::store::MAX_FINDINGS_PER_SECTION;
 use crate::check::SectionError;
-use crate::modules::{BackendExtra, BackendResult};
+use crate::modules::{BackendResult, HttpServer, ip_addresses};
 use crate::score::{CheckVerdict, OverallScore, section_weights};
 use netray_engine::profile::Profile;
 
@@ -114,28 +114,27 @@ impl Snapshot {
             })
             .collect();
 
-        // Extract server addresses from HTTP (server_ip) and IP (resolved addresses)
+        // Server addresses from the evidence: the HTTP server and the IP section's addresses.
         let mut server_addresses: Vec<SnapshotAddress> = Vec::new();
         for sr in sections {
             if let Ok(br) = &sr.backend_result {
-                match &br.extra {
-                    BackendExtra::Http {
-                        server_ip: Some(ip),
-                        server_org,
-                        ..
-                    } => {
-                        server_addresses.push(SnapshotAddress {
-                            role: "HTTP".to_string(),
-                            ip: ip.clone(),
-                            org: server_org.clone(),
-                        });
+                match sr.name.as_str() {
+                    "http" => {
+                        let server = HttpServer::from_evidence(&br.evidence);
+                        if let Some(ip) = server.address {
+                            server_addresses.push(SnapshotAddress {
+                                role: "HTTP".to_string(),
+                                ip,
+                                org: server.org,
+                            });
+                        }
                     }
-                    BackendExtra::Ip { addresses, .. } => {
-                        for addr in addresses {
+                    "ip" => {
+                        for addr in ip_addresses(&br.evidence) {
                             server_addresses.push(SnapshotAddress {
                                 role: "IP".to_string(),
                                 ip: addr.ip.to_string(),
-                                org: addr.org.clone(),
+                                org: addr.org,
                             });
                         }
                     }

@@ -320,16 +320,24 @@ These conditions force an **F** regardless of the numeric score:
 
 | Event | When emitted | Key fields |
 |---|---|---|
-| `dns` | After DNS module | `status`, `headline`, `checks`, `detail_url` |
-| `tls` | After TLS module | `status`, `headline`, `checks`, `detail_url` |
-| `http` | After HTTP backend (optional) | `status`, `headline`, `checks`, `detail_url` |
-| `email` | After email backend (optional) | `status`, `grade`, `checks`, `headline`, `detail_url` |
-| `ip` | After IP backend | `status`, `headline`, `checks`, `addresses`, `detail_url` |
-| `summary` | After all backends | `grade`, `complete`, `score`, `sections`, `not_applicable`, `hard_fail` |
+| `dns` | After DNS module | `status`, `headline`, `checks`, `evidence`, `detail_url` |
+| `tls` | After TLS module | `status`, `headline`, `checks`, `evidence`, `detail_url` |
+| `http` | After HTTP backend (optional) | `status`, `headline`, `checks`, `evidence`, `detail_url` |
+| `email` | After email backend (optional) | `status`, `grade`, `checks`, `evidence`, `headline`, `detail_url` |
+| `ip` | After IP backend | `status`, `headline`, `checks`, `evidence`, `addresses`, `detail_url` |
+| `summary` | After all backends | `grade`, `complete`, `score`, `sections`, `not_applicable`, `hard_fail`, `evidence_schema` |
 | `done` | Stream complete | `domain`, `duration_ms`, `cached`, `snapshot_id` (null for an incomplete result) |
 
 The `email` event `status` is one of: `pass`, `warn`, `fail`, `error`, `not_applicable`.
 The `summary` event includes `not_applicable: Record<string, string>` (always present, may be empty).
+
+Every section carries `evidence`: the blocks its module measured, each with an `id` (e.g. `dns.caa`,
+`tls.chain@192.0.2.1:443`), a `title` and a `shape` (`records`, `table`, `chain`, `tree`, `fields`
+or `text`) whose values are tagged `{"t": "<type>", "v": <value>}`. Every check item carries
+`evidence`, the ids of the blocks it relies on; a passed, warned or failed check names at least one,
+and every id resolves within the run. The `dns` section also carries the shared lookups (`dns.a`,
+`dns.aaaa`, `dns.mx`, `dns.caa`, `dns.ns`, `dns.https`) that no section holds itself.
+`addresses`, the `http` server fields and `grade` are derived from that evidence; `headline` from the check verdicts and the evidence.
 
 ### Custom profiles
 

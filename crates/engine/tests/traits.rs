@@ -44,7 +44,7 @@ impl Module for StubModule {
         Box::pin(async {
             SectionOutcome::Measured {
                 checks: vec![result()],
-                presentation: serde_json::Value::Null,
+                evidence: vec![],
             }
         })
     }
@@ -91,7 +91,7 @@ async fn boxed_module_declares_and_returns_its_outcome() {
         outcome,
         SectionOutcome::Measured {
             checks: vec![result()],
-            presentation: serde_json::Value::Null,
+            evidence: vec![],
         }
     );
 }

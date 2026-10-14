@@ -1,0 +1,294 @@
+# Report: v2-evidence
+
+## Phase 1 — Model and engine
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R1: evidence model (Block, Shape ×6, Value ×6 tagged `{t,v}`, BlockId grammar, schema version 1, `CheckResult.evidence: Vec<BlockId>`, Serialize + Deserialize) | green | `crates/model/tests/evidence.rs` |
+| C2 | R2: per-module `Register` and `validate` (unregistered key, wrong type, foreign prefix, unregistered block name) | green | `crates/model/tests/evidence.rs` |
+| C3 | R3: `SectionOutcome::Measured.evidence`, `volatile()` path forms, cross-module reference check helper | green | `crates/model/tests/evidence.rs` |
+| C4 | Value round trip, each of the six types tagged | green | `crates/model/tests/evidence.rs` |
+| C5 | BlockId parse: `tls.chain@192.0.2.1:443` ok; `tls..chain`, `chain` refused | green | `crates/model/tests/evidence.rs` |
+| C6 | validate: ok / unregistered key / type error | green | `crates/model/tests/evidence.rs` |
+| C7 | validate: foreign module prefix refused | green | `crates/model/tests/evidence.rs` |
+| C8 | reference check: cross-module ref resolves; dangling ref is an error naming it | green | `crates/model/tests/evidence.rs` |
+| C9 | reader: BlockId canonical qualifier, strict ports | green | `crates/model/tests/evidence_rules.rs` |
+| C10 | reader: register declares shape kind; duplicate ids, duplicate row keys and non-RFC-3339 times refused; tagged records; repeated keys allowed | green | `crates/model/tests/evidence_rules.rs` |
+| C11 | reader: `check_evidence_rule` (judged checks need a resolving reference) | green | `crates/model/tests/evidence_rules.rs` |
+| C12 | reader: `EvidencePath::parse` with row keys | green | `crates/engine/tests/evidence_path.rs` |
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 model + engine | 1 (GROUP_CMD lacked the gate's ip subset; the rest green) | opus | 64596 | 346 |
+| reader round | 1 | opus (same agent) | — | — |
+
+### Reader (phase 1)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | A port qualifier accepted `+443`, `0443` and `0` | fixed (C9) |
+| AMENDMENT | A qualifier had no canonical form | repaired (C9) |
+| AMENDMENT | `Value::Time` was unchecked | repaired: strict RFC 3339 (C10) |
+| AMENDMENT | Record fields were untagged | repaired (C10) |
+| AMENDMENT | There was no list value for multi-valued keys | repaired: Fields and Chain may repeat a key, and a Table's key column is unique (C10). This keeps the six value types closed. |
+| AMENDMENT | Duplicate block ids were not refused | repaired (C10) |
+| AMENDMENT | The register declared no shape | repaired (C10) |
+| AMENDMENT | References were not checked against status | repaired (C11) |
+| AMENDMENT | No test covered the non-Fields `validate` branches | repaired (C10) |
+| DEFERRED | `EvidencePath` had no parser | repaired (C12); module paths come in Phases 2–5 |
+| DEFERRED | Lens drops evidence | Phase 6 |
+
+### Behavioural verification
+
+skipped: Phase 1 adds model and engine types only; no entry point changes behaviour, and every module emits `evidence: vec![]`.
+
+## Phase 2 — DNS
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R3a: the resolve stage projects `dns.a`, `aaaa`, `mx`, `caa`, `ns`, `https` (records, with TTL) into Facts; the DNS section publishes them even when the DNS module timed out; DNS module does not project those six; an errored lookup gives no block | green | `crates/dns/tests/facts_blocks.rs` |
+| C2 | R4 (dns): DNS emits `dns.<type>` records blocks for the other base-name types; measured checks reference their input blocks (CHECK_INPUTS + facts blocks; `dns.ttl` every records block); the blocks validate against the DNS register | green | `crates/dns/tests/evidence.rs` |
+| C3 | R5 (dns): DNS volatile paths (`dns.<type>/ttl` per records block) name registered keys | green | `crates/dns/tests/evidence.rs` |
+| C4 | DNS fixtures with CAA (and NS/CAA for no-address) batches added: blocks validate; `dns.caa` references `dns.caa` | green | `crates/dns/tests/evidence.rs` |
+| C5 | Facts CAA answered + DNS section timed out → `dns.caa` still published; `tls.caa_compliant` reference resolves | green | `crates/engine/tests/facts_blocks.rs` |
+| C6 | CAA batch errored → `dns.caa` unmeasured, no `dns.caa` block claims records | green | `crates/dns/tests/evidence.rs` |
+| C7 | DNS volatile list: every `dns.<type>/ttl` path registered | green | `crates/dns/tests/evidence.rs` |
+| C8 | reader: records keep the highest TTL across resolvers | green | `crates/dns/tests/evidence_records.rs` |
+| C9 | reader: records in canonical order (owner, type, data) | green | `crates/dns/tests/evidence_records.rs` |
+| C10 | reader: `dns.dnssec` also references RRSIG/NSEC/NSEC3 blocks | green | `crates/dns/tests/evidence_records.rs` |
+| C11 | operator: a section's block wins over the facts block of the same id | green | `crates/engine/tests/facts_blocks_section_wins.rs` |
+
+### Amendments (operator, 2026-10-13)
+
+- **A1, replacing requirement 3a's "the DNS module does not project those six types".** The DNS module projects every one of its 15 answered types itself and stays independent of the facts, so it no longer waits on the resolve stage. Requirement 3a's earlier version cost up to the resolve budget in latency and turned a DNS check unmeasured when only the facts lookup failed. The facts still carry `dns.a`, `aaaa`, `mx`, `caa`, `ns` and `https`.
+- **A2.** When the same id exists in both the facts and a section, the section's block wins: a DNS check points at what it judged. The facts fill in only ids that no section carries, as after a DNS timeout. A first version let the facts win; the reader showed that a passing DNS check could then point at another resolver's empty answer.
+- **Fixtures.** `prism.sse` gains a CAA batch, and `prism-no-address.sse` gains NS and CAA NODATA batches, as the Phase 2 scenario asks. Nine lens-full goldens change only the `dns.caa` lint message; verdicts and grades are unchanged.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 DNS + facts + engine | 1 + 1 + 1 + 3 + 1 (five rounds: plan, test conflicts, the A1 rework, fixtures, the reading) | opus | 179232 (cumulative, one agent) | 1211 |
+
+### Reader (phase 2)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | The first TTL across resolvers was kept, against `dns.ttl`'s highest-copy rule | fixed (C8) |
+| AMENDMENT | `dns.dnssec` evidence lacked RRSIG, NSEC and NSEC3 | repaired through `EVIDENCE_ONLY_INPUTS` (C10); CHECK_INPUTS is unchanged |
+| AMENDMENT | With facts winning, a DNS check could point at records it never judged | operator: the section wins (A2, C11) |
+| DEFERRED | Record order was not canonical | repaired (C9) |
+| NIT | TXT quoting does not escape `"` and `\` | listed |
+| NIT | SVCB `no-default-alpn` renders with a trailing `=` | listed |
+| NIT | NSEC3 hash algorithm shows a name, not its number | listed |
+| NIT | A "not reported" N/A `dns.ttl` still references every block | listed |
+
+### Behavioural verification
+
+skipped: lens drops evidence until Phase 6, so no entry point shows the blocks yet. The lens goldens run the DNS module through the gate and are byte-identical apart from the CAA lint message caused by the fixture change.
+
+
+## Phase 3 — TLS
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R4 (tls): TLS emits `tls.addresses`, `tls.chain@a:p`, `tls.handshake@a:p`, `tls.tlsa@p`, `tls.ct`; judged checks reference per the TLS row; blocks validate against the TLS register | green | `crates/tls/tests/evidence.rs` |
+| C2 | R5 (tls): TLS volatile paths (`tls.chain@…/days_remaining`, `tls.handshake@…/handshake_ms`) name registered keys | green | `crates/tls/tests/evidence.rs` |
+| C3 | tlsight-inspect.json: chain and handshake blocks validate; `not_expired` references the worst address's chain | green | `crates/tls/tests/evidence.rs` |
+| C4 | `caa_compliant` references `dns.caa` (facts) — or, when the facts lack it, TLS's own `tls.caa` block | green | `crates/tls/tests/evidence.rs` |
+| C5 | timed-out address: no chain/handshake block; `tls.addresses` row with outcome HANDSHAKE_TIMEOUT | green | `crates/tls/tests/evidence.rs` |
+| C6 | tlsight-unreachable.json: `tls_reachable` fail references `tls.addresses` | green | `crates/tls/tests/evidence.rs` |
+| C7 | reader: `caa_compliant` references `dns.caa` only when TLS judged from the facts' CAA; otherwise `tls.caa` or the chains | green | `crates/tls/tests/evidence_refs.rs` |
+| C8 | reader: no `ech` key in handshake blocks after a failed HTTPS lookup | green | `crates/tls/tests/evidence_refs.rs` |
+| C9 | reader: `consistency` also references the chains | green | `crates/tls/tests/evidence_refs.rs` |
+| C10 | reader: chain items carry `ca_issuers_url` | green | `crates/tls/tests/evidence_refs.rs` |
+| C11 | reader: `tls.tlsa/ttl` and `tls.caa/ttl` volatile | green | `crates/tls/tests/evidence_refs.rs` |
+| C12 | reference kind for every judged per-address check | already_implemented | `crates/tls/tests/evidence_refs.rs` |
+| C13 | reader: no placeholder `days_remaining`, `key` without size 0 | green | `crates/tls/tests/evidence_refs.rs` |
+
+### Amendments
+
+- **A3.** `caa_compliant` references `dns.caa` when TLS judged from the facts' CAA. Otherwise it references TLS's own `tls.caa` (projected from its climb, with the real owner, TTL and flags), else the chain blocks. `dane_valid` references `tls.tlsa@<port>`, else the chains. Blocks cover the judged port only.
+- Records from JSON carry no TTL or owner, so a JSON-replayed response emits no `tls.tlsa` or `tls.caa` with records; nothing is invented.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 TLS | 2 + 1 + 2 + 2 (four rounds: build, real TTLs, CAA literals, the reading) | opus | 181185 (one agent) | 1627 |
+
+### Reader (phase 3)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | `caa_compliant` pointed at an empty `dns.caa` while parent-level records decided | fixed (C7, `CaaSource`) |
+| BLOCKER | A failed HTTPS lookup was published as `ech: false` | fixed (C8) |
+| AMENDMENT | `consistency` lacked the chains | repaired (C9) |
+| AMENDMENT | Chain items lacked the AIA URL | repaired (C10) |
+| AMENDMENT | The TLSA and CAA TTLs were not volatile | repaired (C11) |
+| DEFERRED | `days_remaining` carried a placeholder; `key` showed "0" | repaired (C13) |
+| DEFERRED | The record projection was untested | in-src unit tests in `crates/tls/src/dns/mod.rs` |
+| DEFERRED | Only 3 checks' references were asserted | repaired (C12) |
+
+### Behavioural verification
+
+skipped: lens drops evidence until Phase 6. The tlsight V1 wire and every golden are byte-identical (the fixture-diff check is green).
+
+
+## Phase 4 — HTTP
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R4 (http): HTTP emits `http.redirects`, `http.port80`, `http.headers`, `http.server`, `http.cors`, `http.cookies`; judged checks reference per the HTTP row; blocks validate against the HTTP register | green | `crates/http/tests/evidence.rs` |
+| C2 | R5 (http): volatile paths (`http.server/response_ms`, `http.headers/value@<name>` for date, age, set-cookie, server-timing, etag, last-modified, request-id headers) name registered keys | green | `crates/http/tests/evidence.rs` |
+| C3 | spectra-inspect.json: `http.headers`, `http.redirects`, `http.server` validate; `hsts` refs `http.headers`; `https_redirect` refs `http.port80` | green | `crates/http/tests/evidence.rs` |
+| C4 | HTTPS probe timeout: no `http.headers` block; unmeasured checks reference nothing | green | `crates/http/tests/evidence.rs` |
+| C5 | gaps: repeated headers joined from raw values; `http.port80_probe`; cookie key; raw CORS headers | green | `crates/http/tests/evidence_probes.rs` |
+| C6 | reader: duplicate cookies keep a row each; unknown hop version omitted; redirect-limit refs `http.redirects` | green | `crates/http/tests/evidence_reading.rs` |
+| C7 | reader: `redirects_to_https` only on an answered probe; CDN/tracing request-ID headers volatile | green | `crates/http/tests/evidence_probes.rs`, `evidence.rs` |
+
+### Amendments
+
+- **A4.** HTTP adds a `http.port80_probe` fields block (`url`, `status_code`, `location`, `redirects_to_https`, `error_kind`), each key present only when it is known. `https_redirect` references `http.port80` and `http.port80_probe`, plus `http.redirects` at the redirect limit. `http.cookies` is keyed by `<name>; <domain>; <path>`, with an ordinal suffix on a repeat. `http.server` carries `error_kind`; after a refused, reset or TLS-failed HTTPS probe, the ten response checks reference it.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 HTTP | 1 + 1 + 1 (three rounds: build, gaps, the reading) | opus | 127612 (one agent) | 768 |
+
+### Reader (phase 4)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | A duplicate cookie key dropped a judged cookie | fixed: ordinal suffix |
+| BLOCKER | An unknown hop `http_version` was published as `""` | fixed: omitted |
+| BLOCKER | `redirects_to_https` was published without an answer | fixed: only on an answered probe |
+| AMENDMENT | Request-ID headers were missing from the volatile set | repaired: `cf-ray`, `x-amz-cf-id`, `x-correlation-id`, `x-trace-id`, `traceparent`, `x-amzn-requestid` |
+| AMENDMENT | CSP nonces cannot be marked volatile, because a path addresses a whole row | DEFERRED to the Phase 2 history comparison (normalising before the diff) |
+| AMENDMENT | `http.server/address` is the first-hop target | kept as V1 reports it, now documented; Phase 6 derives `server_ip` from it |
+| AMENDMENT | `port80_probe` `status_code`/`location` describe the end of the followed chain | documented |
+| NIT | A JSON replay joins only the first header value | listed |
+| NIT | `response_ms` is the whole inspection duration | documented |
+
+### Behavioural verification
+
+skipped: lens drops evidence until Phase 6. The spectra V1 wire and every golden are byte-identical.
+
+
+## Phase 5 — Email, IP
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R4 (email): email emits `email.mx`, `email.spf`, `email.dmarc`, `email.mta_sts`, `email.mta_sts_policy`, `email.tls_rpt`, `email.bimi`, `email.dkim`, `email.dane`, `email.dnsbl`, `email.fcrdns`, `email.summary`; judged checks reference their block (MX dependents also `email.mx`); blocks validate | green | `crates/email/tests/evidence.rs` |
+| C2 | R4 (ip): `ip.addresses` (with spamhaus/c2/tor/vpn flags) validates; `ip.reputation` references it | green | `crates/ip/tests/evidence.rs` |
+| C3 | R5 (email, ip): volatile paths name registered keys | green | `crates/ip/tests/evidence.rs` |
+| C4 | R6: beacon keeps what the blocks need (MX preference and per-host addresses, SPF record and lookup count, DMARC/TLS-RPT/BIMI/MTA-STS records and policy text, DKIM selectors with key type/bits, DANE TLSA per host, DNSBL answers per query, FCrDNS per address) and emits one additive SSE `type:"evidence"` message before `summary`; translate builds blocks from it | green | `crates/email/tests/evidence.rs` |
+| C5 | healthy beacon run: mx, spf, dmarc, dnsbl blocks validate; each measured email check references its block | green | `crates/email/tests/evidence.rs` |
+| C6 | V1 SSE vs beacon-*.sse: pre-existing messages byte-identical; one `evidence` message precedes `summary` | green | `crates/email/tests/evidence.rs` |
+| C7 | V1 email frontend ignores `type:"evidence"` and keeps streaming | already_implemented | `crates/email/frontend/src/lib/evidence_event.test.ts` |
+| C8 | Spamhaus-listed address: `ip.addresses` row `spamhaus: true`; `ip.reputation` references the block | green | `crates/ip/tests/evidence.rs` |
+| C9 | reader: every judged email check's block holds what decided it (DNSBL rows per query incl. domain zones and policy answers; deduplicated MX addresses; one DKIM row per key with state; cross-validation inputs referenced; deciding facts: MX CNAME, SPF void lookups, DMARC rua/ruf authorisation, MTA-STS status/content type/fetch error, BIMI logo fetch; `email.dnssec`) | green | `crates/email/tests/evidence_reading.rs` |
+
+### Amendments
+
+- **A5.** The email blocks differ from the spec table, all forced by single-valued cells and by the rule that a block must hold what decided its check:
+  - `email.mx` (host, preference, cname) plus `email.mx_addresses` (address, host);
+  - `email.dnsbl` keyed `<target>@<zone>` with `target` Text and `answered` Bool, covering domain zones too;
+  - `email.dkim` keyed `<selector>#<n>`, with `state` and `bits` as Text;
+  - `email.dane` keyed by record string, with no certificate data, because `TlsaRecord` has none;
+  - `email.spf` `authorized_prefixes` repeated, plus `void_lookups`;
+  - new `email.dnssec`.
+- **Beacon goldens.** Scenarios healthy, partial and mx_cname had frames no real run could produce: one FCrDNS sub-check for 4 or 2 IPs, and SPF not covering the MX addresses with no coverage warning. They are corrected with the same verdicts, and the lens goldens are unchanged.
+- **For Phase 6.** Email references the cross-module `dns.dnskey` without a filter. Lens drops a reference that does not resolve within the run.
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 email + IP | 2 + 2 + 1 (three rounds: build, reading, golden scenarios) | opus | 348384 (one agent) | 2209 |
+
+### Reader (phase 5)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | DNSBL domain-zone answers had no row | fixed (C9) |
+| BLOCKER | Duplicate MX addresses repeated table keys | fixed (C9) |
+| BLOCKER | Only the first DKIM key per selector got a row | fixed (C9) |
+| BLOCKER | Revoked keys and CNAME loops had no row | fixed (C9) |
+| BLOCKER | Cross-validation inputs were not referenced | fixed: `CROSS_VALIDATION_INPUTS` (C9) |
+| AMENDMENT | A policy response looked like an answer | repaired: `answered` column |
+| AMENDMENT | The golden `Measured` contradicted its frames | repaired: scenarios corrected |
+| AMENDMENT | DANE key and data | the key is the record string; no data column (A5) |
+| AMENDMENT | The SPF key name differed from the release | renamed `authorized_prefixes` |
+| AMENDMENT | Deciding facts sat in no block | repaired (C9); the MTA-STS truncation flag and a non-UTF-8 body remain gaps |
+| AMENDMENT | `dane_without_dnssec` | `email.dnssec` plus `dns.dnskey` |
+| DEFERRED | IP absent text values are `Text("")` | listed; the model has no "absent" cell |
+| NIT | One `email.mx` row per host | listed |
+| NIT | The goldens use a hand-written `Measured` | the capture path is covered by `evidence_reading.rs` |
+| NIT | The volatile test passes trivially (empty) | listed |
+
+### Behavioural verification
+
+skipped: lens drops evidence until Phase 6. The V1 beacon SSE keeps every pre-existing frame byte-identical apart from the corrected scenario frames, and adds one `evidence` frame before `summary`. The V1 email frontend ignores that frame (C7).
+
+
+## Phase 6 — Lens
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R7: lens derives headline, ip.addresses, http status_code/http_version/server_ip/server_org/server_network_type/response_duration_ms, email.grade, DNS resolved_ips and snapshot server_addresses from evidence; `presentation` removed from SectionOutcome, modules and lens; pre-existing lens-full fields byte-identical | green | `crates/lens/tests/evidence_wire.rs` |
+| C2 | R8: every section event (SSE, sync JSON, MCP) carries `evidence: [Block]`; every check item `evidence: [block-id]`; summary `evidence_schema: 1`; facts blocks published in the dns section where no section carries the id; references that do not resolve within the run are dropped; `site/api/lens.html` documents them; frontend `types.ts` gains the types | green | `crates/lens/tests/evidence_wire.rs` |
+| C3 | R9: every lens-full fixture: every check item's evidence ids resolve to a block in the run's evidence across sections | green | `crates/lens/tests/evidence_wire.rs` |
+| C4 | every lens-full fixture: every pre-existing field equals the golden; `evidence` fields are new | green | `crates/lens/tests/evidence_wire.rs` |
+| C5 | no `presentation` field remains in engine, modules or lens | green | `tests/repo/test_no_presentation.sh` |
+| C6 | reader: the HTTP headline's HTTPS symbol follows the `https_redirect` verdict | green | `crates/lens/src/modules.rs` (unit test `http_headline_https_follows_the_redirect_check`) |
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 lens + removal of `presentation` | 2 (C4 compared against the regenerated goldens; I fixed the test to strip evidence on both sides) | opus | 252314 | 1188 |
+
+### Reader (phase 6)
+
+| Class | Finding | Action |
+|---|---|---|
+| BLOCKER | HTTP headline `HTTPS ✗` next to a passing `https_redirect` (port 80 redirected, a later hop failed) | fixed: the symbol follows the check verdict (C6) |
+| AMENDMENT | `http.status_code` and `http_version` are absent when the HTTPS probe got no response (previously `0` / `""`) | documented in `site/api/lens.html`; the fields stay optional on the wire |
+| AMENDMENT | Headline symbols follow the Rule-M verdicts on error inputs: HSTS/CSP `-` after an HTTPS timeout; DNS `?` after a stream timeout | recorded; the goldens are unchanged |
+| DEFERRED | `not_applicable` "not reported" checks still carry references | `lens.html` wording is now "relies on"; only judged checks are guaranteed a reference |
+| NIT | The DNS example in `lens.html` referenced blocks it did not show | fixed |
+
+### Behavioural verification
+
+Branch build, run as `netray lens lens.dev.toml` from main's binary path:
+
+```
+$ curl -sN http://127.0.0.1:18086/api/check/netray.info   (SSE, parsed)
+grade A+ score 97.5 schema 1
+dns 'DNSSEC ✓  CAA ✓  NS ✓  CNAME-apex ✓' 14 blocks
+tls 'TLSv1.3, expires in 54d' 4 blocks
+http 'HTTPS ✓  HSTS ✓  CSP ~  CORS ~' 7 blocks
+email 'Auth: OK  Infra: OK  Transport: OK  Brand: OK' 14 blocks
+ip 'backend error' 0 blocks            (no GeoIP data locally)
+dangling []
+judged without ref []
+```
+
+The grade matches main. Every reference resolves within the run, and every judged check names at least one block.
+

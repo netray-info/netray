@@ -12,7 +12,6 @@ use netray_engine::{
     RunContext, RunOptions, SectionEvent, SectionOutcome, run,
 };
 use netray_model::{CheckId, Protocol};
-use serde_json::json;
 use tokio::sync::mpsc;
 
 const MS: fn(u64) -> Duration = Duration::from_millis;
@@ -20,7 +19,7 @@ const MS: fn(u64) -> Duration = Duration::from_millis;
 fn measured() -> SectionOutcome {
     SectionOutcome::Measured {
         checks: vec![],
-        presentation: json!({}),
+        evidence: vec![],
     }
 }
 

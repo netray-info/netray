@@ -21,7 +21,6 @@ use lens::routes::api_router;
 use lens::state::AppState;
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, Registry, RunContext, SectionOutcome};
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::json;
 use tower::ServiceExt;
 
 static CHECKS: LazyLock<Vec<CheckId>> =
@@ -55,7 +54,7 @@ impl Module for RecordingEmail {
                     findings: vec![],
                     evidence: vec![],
                 }],
-                presentation: json!({}),
+                evidence: vec![],
             }
         })
     }

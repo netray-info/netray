@@ -14,7 +14,7 @@ use utoipa::ToSchema;
 use utoipa::OpenApi;
 
 use crate::config::Config;
-use crate::dns::{CaaLookup, TlsaLookup};
+use crate::dns::{AnsweredRecord, CaaLookup, TlsaLookup};
 use crate::error::{AppError, ErrorResponse};
 use crate::input::{self, Target};
 use crate::security::rate_limit::select_representative_ips;
@@ -93,6 +93,19 @@ pub struct CaaInfo {
     pub records: Vec<String>,
     pub issuer_allowed: Option<bool>,
     pub issuewild_present: bool,
+    /// What the CAA verdict was judged from; `None` when the lookup failed or the response was
+    /// read from JSON.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub answered: Option<CaaSource>,
+}
+
+/// The CAA records TLS judged by: the facts' records, or its own climb's answered records with
+/// owner and TTL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CaaSource {
+    Facts,
+    Lookup(Vec<AnsweredRecord>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -100,6 +113,10 @@ pub struct TlsaInfo {
     pub records: Vec<String>,
     pub dnssec_signed: bool,
     pub dane_valid: Option<bool>,
+    /// The answered records with owner and TTL; `None` when the response was read from JSON.
+    #[serde(skip)]
+    #[schema(ignore)]
+    pub answered: Option<Vec<AnsweredRecord>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -728,15 +745,16 @@ pub async fn inspect(
         Some(tokio::task::spawn_blocking(move || {
             rt.block_on(async move {
                 let mut errors = Vec::new();
-                let caa = match (check_caa, known_caa) {
-                    (false, _) => None,
-                    (true, Some(caa)) => Some(caa),
-                    (true, None) => {
-                        Some(resolver.lookup_caa(&hostname).await.unwrap_or_else(|| {
+                let (caa, caa_answered) = match (check_caa, known_caa) {
+                    (false, _) => (None, None),
+                    (true, Some(caa)) => (Some(caa), Some(CaaSource::Facts)),
+                    (true, None) => match resolver.lookup_caa(&hostname).await {
+                        Some((caa, answered)) => (Some(caa), Some(CaaSource::Lookup(answered))),
+                        None => {
                             errors.push("caa".to_string());
-                            CaaLookup { records: vec![] }
-                        }))
-                    }
+                            (Some(CaaLookup { records: vec![] }), None)
+                        }
+                    },
                 };
 
                 let mut tlsa = HashMap::new();
@@ -750,6 +768,7 @@ pub async fn inspect(
                             TlsaLookup {
                                 records: vec![],
                                 dnssec_signed: false,
+                                answered: vec![],
                             }
                         });
                         tlsa.insert(port, lookup);
@@ -767,7 +786,7 @@ pub async fn inspect(
                         }),
                 };
 
-                (caa, tlsa, ech, errors)
+                (caa, caa_answered, tlsa, ech, errors)
             })
         }))
     } else {
@@ -807,31 +826,31 @@ pub async fn inspect(
     .map_err(|_| AppError::RequestTimeout)?;
 
     // Collect DNS results
-    let (caa_lookup, tlsa_lookups, ech_advertised, lookup_errors) = if let Some(handle) = dns_handle
-    {
-        match handle.await {
-            Ok(result) => result,
-            Err(e) => {
-                tracing::warn!(error = %e, "DNS task failed or was cancelled");
-                let enabled = [
-                    ("caa", config.validation.check_caa),
-                    (
-                        "tlsa",
-                        config.validation.check_dane && !parsed.ports.is_empty(),
-                    ),
-                    ("https", true),
-                ];
-                let errors = enabled
-                    .into_iter()
-                    .filter(|(_, on)| *on)
-                    .map(|(name, _)| name.to_string())
-                    .collect();
-                (None, HashMap::new(), false, errors)
+    let (caa_lookup, caa_answered, tlsa_lookups, ech_advertised, lookup_errors) =
+        if let Some(handle) = dns_handle {
+            match handle.await {
+                Ok(result) => result,
+                Err(e) => {
+                    tracing::warn!(error = %e, "DNS task failed or was cancelled");
+                    let enabled = [
+                        ("caa", config.validation.check_caa),
+                        (
+                            "tlsa",
+                            config.validation.check_dane && !parsed.ports.is_empty(),
+                        ),
+                        ("https", true),
+                    ];
+                    let errors = enabled
+                        .into_iter()
+                        .filter(|(_, on)| *on)
+                        .map(|(name, _)| name.to_string())
+                        .collect();
+                    (None, None, HashMap::new(), false, errors)
+                }
             }
-        }
-    } else {
-        (None, HashMap::new(), false, Vec::new())
-    };
+        } else {
+            (None, None, HashMap::new(), false, Vec::new())
+        };
 
     // Collect enrichment results
     let enrichments = if let Some(handle) = enrichment_handle {
@@ -918,6 +937,7 @@ pub async fn inspect(
                     .collect(),
                 issuer_allowed,
                 issuewild_present: caa.issuewild_present(),
+                answered: caa_answered.clone(),
             }
         });
 
@@ -964,6 +984,7 @@ pub async fn inspect(
                 records: tlsa.records.iter().map(|r| r.display.clone()).collect(),
                 dnssec_signed: tlsa.dnssec_signed,
                 dane_valid: port_dane_valid.get(&pr.port).copied().flatten(),
+                answered: Some(tlsa.answered.clone()),
             });
         }
     }

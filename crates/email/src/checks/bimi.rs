@@ -23,7 +23,7 @@ use reqwest::Method;
 
 use crate::checks::{UNMEASURED, unmeasured_result, util};
 use crate::dns::DnsLookup;
-use crate::quality::{Category, CheckResult, SubCheck, Verdict};
+use crate::quality::{BimiMeasured, Category, CheckResult, SubCheck, Verdict};
 use crate::state::OutboundFetch;
 
 /// Map a [`FetchError`] to the coarse `kind` label for the
@@ -123,16 +123,33 @@ fn record_upstream_error(kind: &'static str) {
 
 /// Check BIMI at default._bimi.<domain>.
 /// Returns (CheckResult, bimi_present).
-#[tracing::instrument(skip_all, fields(category = "bimi", domain = %domain))]
 pub async fn check_bimi(
     domain: &str,
     resolver: &impl DnsLookup,
     fetch: &OutboundFetch,
 ) -> (CheckResult, bool) {
+    let (result, present, _) = check_bimi_measured(domain, resolver, fetch).await;
+    (result, present)
+}
+
+/// [`check_bimi`] with the BIMI records and the outcome kind of the logo fetch, `None` when the
+/// TXT lookup got no answer.
+#[tracing::instrument(skip_all, fields(category = "bimi", domain = %domain))]
+pub async fn check_bimi_measured(
+    domain: &str,
+    resolver: &impl DnsLookup,
+    fetch: &OutboundFetch,
+) -> (CheckResult, bool, Option<BimiMeasured>) {
     let bimi_name = format!("default._bimi.{}", domain);
     let txt_records = match resolver.lookup_txt(&bimi_name).await {
         Ok(records) => records,
-        Err(e) => return (unmeasured_result(Category::Bimi, e.to_string()), false),
+        Err(e) => {
+            return (
+                unmeasured_result(Category::Bimi, e.to_string()),
+                false,
+                None,
+            );
+        }
     };
 
     let bimi_records: Vec<&str> = txt_records
@@ -140,6 +157,10 @@ pub async fn check_bimi(
         .filter(|t| t.starts_with("v=BIMI1"))
         .map(|s| s.as_str())
         .collect();
+    let mut measured = BimiMeasured {
+        records: bimi_records.iter().map(|r| r.to_string()).collect(),
+        logo_fetch: None,
+    };
 
     let mut sub_checks = Vec::new();
 
@@ -150,7 +171,7 @@ pub async fn check_bimi(
             detail: "no BIMI record".to_string(),
         });
         let result = CheckResult::new(Category::Bimi, sub_checks, "No BIMI record".to_string());
-        return (result, false);
+        return (result, false, Some(measured));
     }
 
     let record = bimi_records[0];
@@ -172,7 +193,7 @@ pub async fn check_bimi(
                 });
                 let result =
                     CheckResult::new(Category::Bimi, sub_checks, "BIMI record found".to_string());
-                return (result, true);
+                return (result, true, Some(measured));
             };
             let initial_is_name = matches!(parsed.host(), Some(url::Host::Domain(_)));
 
@@ -189,6 +210,7 @@ pub async fn check_bimi(
             let fetch_start = std::time::Instant::now();
             match fetch::fetch(&fetch.settings, fetch.resolver.clone(), url, &opts).await {
                 Ok(resp) if resp.status.is_success() => {
+                    measured.logo_fetch = Some("ok".to_string());
                     sub_checks.push(SubCheck {
                         name: "logo_reachable".to_string(),
                         verdict: Verdict::Pass,
@@ -202,6 +224,7 @@ pub async fn check_bimi(
                         _ => "other",
                     };
                     record_upstream_error(kind);
+                    measured.logo_fetch = Some(kind.to_string());
                     sub_checks.push(SubCheck {
                         name: "logo_unreachable".to_string(),
                         verdict: Verdict::Warn,
@@ -210,6 +233,7 @@ pub async fn check_bimi(
                 }
                 Err(e) => {
                     record_upstream_error(classify_fetch_error(&e));
+                    measured.logo_fetch = Some(classify_fetch_error(&e).to_string());
                     sub_checks.push(fetch_error_sub_check(&e, initial_is_name));
                 }
             }
@@ -237,5 +261,5 @@ pub async fn check_bimi(
 
     let result = CheckResult::new(Category::Bimi, sub_checks, "BIMI record found".to_string());
 
-    (result, true)
+    (result, true, Some(measured))
 }

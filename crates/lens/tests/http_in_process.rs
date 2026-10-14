@@ -13,7 +13,6 @@ use lens::config::Config;
 use lens::state::AppState;
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, Registry, RunContext, SectionOutcome};
 use netray_model::{CheckId, CheckResult, Protocol, Status};
-use serde_json::json;
 
 static CHECKS: LazyLock<Vec<CheckId>> =
     LazyLock::new(|| vec![CheckId::parse("http.https_redirect").unwrap()]);
@@ -46,7 +45,7 @@ impl Module for RecordingHttp {
                     findings: vec![],
                     evidence: vec![],
                 }],
-                presentation: json!({"headline": "stub module"}),
+                evidence: vec![],
             }
         })
     }

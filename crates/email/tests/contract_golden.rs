@@ -11,6 +11,7 @@
 
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::net::IpAddr;
 use std::path::PathBuf;
 
 use axum::response::IntoResponse;
@@ -19,7 +20,11 @@ use http_body_util::BodyExt;
 use netray_email::checks::SKIPPED;
 use netray_email::checks::cross_validation::SENDS_NO_MAIL;
 use netray_email::checks::mx::{NO_MX, NULL_MX};
-use netray_email::quality::{Category, CheckResult, SseEvent, SubCheck, Verdict, compute_grade};
+use netray_email::module::evidence_blocks;
+use netray_email::quality::{
+    BimiMeasured, Category, CheckResult, DkimKey, DmarcMeasured, DnsblAnswer, FcrdnsAnswer,
+    Measured, MtaStsMeasured, MxHost, SpfMeasured, SseEvent, SubCheck, Verdict, compute_grade,
+};
 use serde_json::{Map, Value};
 
 fn fixture_path(name: &str) -> PathBuf {
@@ -88,11 +93,11 @@ fn scenario_healthy() -> Vec<CheckResult> {
         ),
         cat(
             Category::Spf,
-            "SPF record: v=spf1 ip4:192.0.2.0/24 -all",
+            "SPF record: v=spf1 ip4:192.0.2.0/24 ip6:2001:db8::/32 -all",
             vec![sub(
                 "spf_ok",
                 Verdict::Pass,
-                "valid SPF with 1 authorized prefix(es)",
+                "valid SPF with 2 authorized prefix(es)",
             )],
         ),
         cat(
@@ -162,11 +167,28 @@ fn scenario_healthy() -> Vec<CheckResult> {
         cat(
             Category::Fcrdns,
             "FCrDNS checked for 4 IP(s)",
-            vec![sub(
-                "fcrdns_pass",
-                Verdict::Pass,
-                "FCrDNS confirmed for 192.0.2.10",
-            )],
+            vec![
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 192.0.2.10",
+                ),
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 2001:db8::10",
+                ),
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 192.0.2.11",
+                ),
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 2001:db8::11",
+                ),
+            ],
         ),
         cat(
             Category::Dnsbl,
@@ -278,11 +300,11 @@ fn scenario_mx_cname() -> Vec<CheckResult> {
         ),
         cat(
             Category::Spf,
-            "SPF record: v=spf1 ip4:192.0.2.0/24 -all",
+            "SPF record: v=spf1 ip4:192.0.2.0/24 ip4:198.51.100.0/24 -all",
             vec![sub(
                 "spf_ok",
                 Verdict::Pass,
-                "valid SPF with 1 authorized prefix(es)",
+                "valid SPF with 2 authorized prefix(es)",
             )],
         ),
         cat(
@@ -334,11 +356,18 @@ fn scenario_mx_cname() -> Vec<CheckResult> {
         cat(
             Category::Fcrdns,
             "FCrDNS checked for 2 IP(s)",
-            vec![sub(
-                "fcrdns_pass",
-                Verdict::Pass,
-                "FCrDNS confirmed for 192.0.2.10",
-            )],
+            vec![
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 192.0.2.10",
+                ),
+                sub(
+                    "fcrdns_pass",
+                    Verdict::Pass,
+                    "FCrDNS confirmed for 198.51.100.10",
+                ),
+            ],
         ),
         cat(
             Category::Dnsbl,
@@ -593,7 +622,239 @@ fn scenario_partial() -> Vec<CheckResult> {
         .collect()
 }
 
-async fn produce(results: Vec<CheckResult>) -> String {
+fn ip(s: &str) -> IpAddr {
+    s.parse().unwrap()
+}
+
+fn records(records: &[&str]) -> Vec<String> {
+    records.iter().map(|r| r.to_string()).collect()
+}
+
+/// One evaluated SPF record whose mechanisms need no DNS lookup.
+fn spf(record: &str, prefixes: &[&str]) -> Option<SpfMeasured> {
+    Some(SpfMeasured {
+        records: vec![record.to_string()],
+        authorized_prefixes: prefixes.iter().map(|p| p.parse().unwrap()).collect(),
+        lookup_count: Some(0),
+        void_lookups: Some(0),
+    })
+}
+
+fn dmarc(record: &str) -> Option<DmarcMeasured> {
+    Some(DmarcMeasured {
+        records: records(&[record]),
+        ..DmarcMeasured::default()
+    })
+}
+
+/// A policy fetched with 200 and `text/plain`.
+fn mta_sts(record: &str, policy: &str) -> Option<MtaStsMeasured> {
+    Some(MtaStsMeasured {
+        records: records(&[record]),
+        policy: Some(policy.to_string()),
+        policy_status: Some(200),
+        content_type: Some("text/plain".to_string()),
+        fetch_error: None,
+    })
+}
+
+/// RSA keys whose size was read.
+fn dkim(keys: &[(&str, usize)]) -> Option<Vec<DkimKey>> {
+    Some(
+        keys.iter()
+            .map(|(selector, bits)| DkimKey {
+                selector: selector.to_string(),
+                state: "ok".to_string(),
+                key_type: "rsa".to_string(),
+                bits: Some(*bits),
+            })
+            .collect(),
+    )
+}
+
+/// One answered query per zone and address; `listed` holds the (address, zone, code) that are
+/// listed.
+fn dnsbl(zones: &[&str], addresses: &[&str], listed: &[(&str, &str, &str)]) -> Vec<DnsblAnswer> {
+    zones
+        .iter()
+        .flat_map(|zone| {
+            addresses.iter().map(move |a| DnsblAnswer {
+                zone: zone.to_string(),
+                target: a.to_string(),
+                answered: true,
+                answer: listed
+                    .iter()
+                    .filter(|(la, lz, _)| la == a && lz == zone)
+                    .map(|(_, _, code)| code.parse().unwrap())
+                    .collect(),
+            })
+        })
+        .collect()
+}
+
+fn fcrdns(answers: &[(&str, &str)]) -> Option<Vec<FcrdnsAnswer>> {
+    Some(
+        answers
+            .iter()
+            .map(|(a, ptr)| FcrdnsAnswer {
+                address: ip(a),
+                ptr: vec![ptr.to_string()],
+                confirmed: true,
+            })
+            .collect(),
+    )
+}
+
+/// The domain answered every name of the scenario without a record.
+fn none_published() -> Measured {
+    Measured {
+        mx: Some(Vec::new()),
+        spf: Some(SpfMeasured::default()),
+        dmarc: Some(DmarcMeasured::default()),
+        tls_rpt: Some(Vec::new()),
+        bimi: Some(BimiMeasured::default()),
+        mta_sts: Some(MtaStsMeasured::default()),
+        dnssec: Some(false),
+        dkim: Some(Vec::new()),
+        ..Measured::default()
+    }
+}
+
+const MX_ADDRESSES: [&str; 4] = ["192.0.2.10", "2001:db8::10", "192.0.2.11", "2001:db8::11"];
+const ZONES: [&str; 3] = ["bl1.example.com", "bl2.example.com", "bl3.example.com"];
+
+fn two_mx_hosts() -> Option<Vec<MxHost>> {
+    Some(vec![
+        MxHost {
+            preference: 10,
+            host: "mx1.example.com".to_string(),
+            cname: Some(String::new()),
+            addresses: vec![ip(MX_ADDRESSES[0]), ip(MX_ADDRESSES[1])],
+        },
+        MxHost {
+            preference: 20,
+            host: "mx2.example.com".to_string(),
+            cname: Some(String::new()),
+            addresses: vec![ip(MX_ADDRESSES[2]), ip(MX_ADDRESSES[3])],
+        },
+    ])
+}
+
+fn two_mx_fcrdns() -> Option<Vec<FcrdnsAnswer>> {
+    fcrdns(&[
+        (MX_ADDRESSES[0], "mx1.example.com"),
+        (MX_ADDRESSES[1], "mx1.example.com"),
+        (MX_ADDRESSES[2], "mx2.example.com"),
+        (MX_ADDRESSES[3], "mx2.example.com"),
+    ])
+}
+
+/// What the checks of `scenario_healthy` measured.
+fn measured_healthy() -> Measured {
+    Measured {
+        mx: two_mx_hosts(),
+        spf: spf(
+            "v=spf1 ip4:192.0.2.0/24 ip6:2001:db8::/32 -all",
+            &["192.0.2.0/24", "2001:db8::/32"],
+        ),
+        dmarc: dmarc("v=DMARC1; p=none; rua=mailto:dmarc@example.com"),
+        tls_rpt: Some(records(&["v=TLSRPTv1; rua=mailto:tls@example.com"])),
+        bimi: Some(BimiMeasured::default()),
+        mta_sts: mta_sts(
+            "v=STSv1; id=20260101",
+            "version: STSv1\nmode: testing\nmx: *.example.com\nmax_age: 3600\n",
+        ),
+        dnssec: Some(true),
+        dkim: dkim(&[("default", 512), ("selector1", 2048)]),
+        dane: Some(Vec::new()),
+        dnsbl: Some(dnsbl(&ZONES, &MX_ADDRESSES, &[])),
+        fcrdns: two_mx_fcrdns(),
+    }
+}
+
+/// What the checks of `scenario_no_mx` measured.
+fn measured_no_mx() -> Measured {
+    none_published()
+}
+
+/// What the checks of `scenario_mx_cname` measured.
+fn measured_mx_cname() -> Measured {
+    let addresses = ["192.0.2.10", "198.51.100.10"];
+    let zones = ["zen.spamhaus.org", "bl2.example.com", "bl3.example.com"];
+    Measured {
+        mx: Some(vec![MxHost {
+            preference: 10,
+            host: "mail.example.com".to_string(),
+            cname: Some("relay.example.com".to_string()),
+            addresses: addresses.iter().map(|a| ip(a)).collect(),
+        }]),
+        spf: spf(
+            "v=spf1 ip4:192.0.2.0/24 ip4:198.51.100.0/24 -all",
+            &["192.0.2.0/24", "198.51.100.0/24"],
+        ),
+        dmarc: dmarc("v=DMARC1; p=reject; rua=mailto:dmarc@example.com"),
+        dkim: dkim(&[("default", 2048)]),
+        dane: Some(Vec::new()),
+        dnsbl: Some(dnsbl(
+            &zones,
+            &addresses,
+            &[("192.0.2.10", "zen.spamhaus.org", "127.0.0.2")],
+        )),
+        fcrdns: fcrdns(&[
+            ("192.0.2.10", "mail.example.com"),
+            ("198.51.100.10", "mail.example.com"),
+        ]),
+        ..none_published()
+    }
+}
+
+/// What the checks of `scenario_null_mx` measured.
+fn measured_null_mx() -> Measured {
+    Measured {
+        mx: Some(vec![MxHost {
+            preference: 0,
+            host: ".".to_string(),
+            cname: None,
+            addresses: Vec::new(),
+        }]),
+        spf: spf("v=spf1 -all", &[]),
+        dmarc: dmarc("v=DMARC1; p=reject; rua=mailto:d@example.com"),
+        ..none_published()
+    }
+}
+
+/// What the checks of `scenario_sending_no_dkim` measured.
+fn measured_sending_no_dkim() -> Measured {
+    Measured {
+        mx: two_mx_hosts(),
+        spf: spf(
+            "v=spf1 ip4:192.0.2.0/24 ip6:2001:db8::/32 -all",
+            &["192.0.2.0/24", "2001:db8::/32"],
+        ),
+        dmarc: dmarc("v=DMARC1; p=reject; rua=mailto:dmarc@example.com"),
+        tls_rpt: Some(records(&["v=TLSRPTv1; rua=mailto:tls@example.com"])),
+        bimi: Some(BimiMeasured::default()),
+        mta_sts: mta_sts(
+            "v=STSv1; id=20260101",
+            "version: STSv1\nmode: enforce\nmx: *.example.com\nmax_age: 604800\n",
+        ),
+        dnssec: Some(true),
+        dkim: Some(Vec::new()),
+        dane: Some(Vec::new()),
+        dnsbl: Some(dnsbl(&ZONES, &MX_ADDRESSES, &[])),
+        fcrdns: two_mx_fcrdns(),
+    }
+}
+
+/// `measured_healthy` without the DNSBL answers: that check did not complete.
+fn measured_partial() -> Measured {
+    Measured {
+        dnsbl: None,
+        ..measured_healthy()
+    }
+}
+
+async fn produce(results: Vec<CheckResult>, measured: Measured) -> String {
     let verdict_list: Vec<Verdict> = results.iter().map(|r| r.verdict).collect();
     let verdicts: HashMap<String, Verdict> = results
         .iter()
@@ -607,9 +868,13 @@ async fn produce(results: Vec<CheckResult>) -> String {
         })
         .collect();
 
+    let grade = compute_grade(&verdict_list);
     let mut events: Vec<SseEvent> = results.into_iter().map(SseEvent::Category).collect();
+    events.push(SseEvent::Evidence {
+        blocks: evidence_blocks(&measured, grade),
+    });
     events.push(SseEvent::Summary {
-        grade: compute_grade(&verdict_list),
+        grade,
         verdicts,
         duration_ms: 1234,
     });
@@ -625,18 +890,26 @@ async fn produce(results: Vec<CheckResult>) -> String {
 
 #[tokio::test]
 async fn sse_wire_format_matches_golden() {
-    let scenarios: [(&str, Vec<CheckResult>); 6] = [
-        ("beacon.sse", scenario_healthy()),
-        ("beacon-no-mx.sse", scenario_no_mx()),
-        ("beacon-mx-cname.sse", scenario_mx_cname()),
-        ("beacon-null-mx.sse", scenario_null_mx()),
-        ("beacon-sending-no-dkim.sse", scenario_sending_no_dkim()),
-        ("beacon-partial.sse", scenario_partial()),
+    let scenarios: [(&str, Vec<CheckResult>, Measured); 6] = [
+        ("beacon.sse", scenario_healthy(), measured_healthy()),
+        ("beacon-no-mx.sse", scenario_no_mx(), measured_no_mx()),
+        (
+            "beacon-mx-cname.sse",
+            scenario_mx_cname(),
+            measured_mx_cname(),
+        ),
+        ("beacon-null-mx.sse", scenario_null_mx(), measured_null_mx()),
+        (
+            "beacon-sending-no-dkim.sse",
+            scenario_sending_no_dkim(),
+            measured_sending_no_dkim(),
+        ),
+        ("beacon-partial.sse", scenario_partial(), measured_partial()),
     ];
     let update = std::env::var("UPDATE_GOLDEN").as_deref() == Ok("1");
 
-    for (file, results) in scenarios {
-        let produced = produce(results).await;
+    for (file, results, measured) in scenarios {
+        let produced = produce(results, measured).await;
         let path = fixture_path(file);
 
         if update {

@@ -9,6 +9,7 @@ pub mod scoring;
 pub use catalogue::catalogue;
 pub use scoring::score;
 
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
@@ -20,14 +21,46 @@ use futures::FutureExt;
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
 
+use netray_model::evidence::{Block, BlockId};
 use netray_model::{CheckId, CheckResult, Protocol};
 
 /// A boxed, sendable future; keeps the traits usable as trait objects.
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
-/// A dotted path into a check's evidence, e.g. `tls.handshake_ms`.
+/// A path into a module's evidence: `<block name>/<key>`, e.g. `tls.handshake/handshake_ms`, or
+/// `<block name>/<column>@<row key>` for one table row, e.g. `http.headers/value@date`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EvidencePath(pub &'static str);
+
+impl EvidencePath {
+    /// Splits `path` into block id, key and optional row key: at the first `/`, then at the
+    /// first `@` after it.
+    pub fn parse(path: &str) -> Result<(BlockId, &str, Option<&str>), EvidencePathError> {
+        let err = |why: &str| EvidencePathError(format!("evidence path {path:?} {why}"));
+        let (block, rest) = path.split_once('/').ok_or_else(|| err("has no '/'"))?;
+        let block = BlockId::parse(block).map_err(|e| err(&e.to_string()))?;
+        let (key, row) = match rest.split_once('@') {
+            Some((key, row)) => (key, Some(row)),
+            None => (rest, None),
+        };
+        if key.is_empty() || row.is_some_and(str::is_empty) {
+            return Err(err("has an empty key or row"));
+        }
+        Ok((block, key, row))
+    }
+}
+
+/// Why a string is not a valid evidence path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidencePathError(String);
+
+impl fmt::Display for EvidencePathError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Error for EvidencePathError {}
 
 /// The domain under test.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,10 +99,12 @@ pub struct Facts {
     pub mx: Vec<String>,
     pub caa: Vec<String>,
     pub ns: Vec<String>,
-    /// HTTPS records in presentation form, e.g. `1 . alpn=h2`.
+    /// HTTPS records in zone-file form, e.g. `1 . alpn=h2`.
     pub https: Vec<String>,
     /// A and AAAA both definite negatives on every resolver asked.
     pub no_address_definite: bool,
+    /// The records blocks of the lookups that answered.
+    pub blocks: Vec<Block>,
 }
 
 /// What a module returns for its section.
@@ -77,9 +112,7 @@ pub struct Facts {
 pub enum SectionOutcome {
     Measured {
         checks: Vec<CheckResult>,
-        /// Transitional: the V1 headline and extras, carried as JSON until the evidence shapes
-        /// of phase 1b replace it.
-        presentation: serde_json::Value,
+        evidence: Vec<Block>,
     },
     NotApplicable {
         reason: String,
@@ -187,6 +220,23 @@ pub struct RunReport {
     /// The resolved facts; empty when the resolve stage failed or no provider is registered.
     pub facts: Facts,
     pub resolve_error: Option<ResolveError>,
+    /// The evidence of every measured section.
+    sections_evidence: Vec<Block>,
+}
+
+impl RunReport {
+    /// The blocks of the run, one per id: the evidence of every measured section, then the
+    /// facts blocks whose id no section carries. A section's block wins over the facts block
+    /// of the same id; a facts block fills in where no section has it, e.g. after a DNS
+    /// timeout.
+    pub fn blocks(&self) -> Vec<&Block> {
+        let mut seen = HashSet::new();
+        self.sections_evidence
+            .iter()
+            .chain(&self.facts.blocks)
+            .filter(|b| seen.insert(&b.id))
+            .collect()
+    }
 }
 
 /// Runs one check. The resolve stage calls the registry's provider once (none registered: empty
@@ -264,20 +314,33 @@ pub async fn run(
                 let outcome = tokio::time::timeout_at(deadline.into(), work)
                     .await
                     .unwrap_or(SectionOutcome::TimedOut);
+                let evidence = match &outcome {
+                    SectionOutcome::Measured { evidence, .. } => evidence.clone(),
+                    _ => Vec::new(),
+                };
                 let _ = tx.send(SectionEvent { protocol, outcome }).await;
+                evidence
             })
         })
         .collect();
-    let (resolved, ()) = futures::join!(resolve, async { while running.next().await.is_some() {} });
+    let (resolved, sections_evidence) = futures::join!(resolve, async {
+        let mut all = Vec::new();
+        while let Some(evidence) = running.next().await {
+            all.extend(evidence);
+        }
+        all
+    });
 
     match resolved {
         Ok(facts) => RunReport {
             facts,
             resolve_error: None,
+            sections_evidence,
         },
         Err(e) => RunReport {
             facts: Facts::default(),
             resolve_error: Some(e),
+            sections_evidence,
         },
     }
 }

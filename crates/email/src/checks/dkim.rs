@@ -4,7 +4,7 @@ use futures::future::join_all;
 
 use super::{lookup_failed, unmeasured_result};
 use crate::dns::DnsLookup;
-use crate::quality::{Category, CheckResult, SubCheck, Verdict};
+use crate::quality::{Category, CheckResult, DkimKey, SubCheck, Verdict};
 
 static PROVIDER_MAP: OnceLock<Vec<(&'static str, Vec<&'static str>)>> = OnceLock::new();
 
@@ -46,7 +46,6 @@ fn provider_selectors(mx_hosts: &[String]) -> Vec<String> {
 
 /// Check DKIM for the domain.
 /// Returns (CheckResult, dkim_found). A revoked key (empty `p=`) is not a usable key.
-#[tracing::instrument(skip_all, fields(category = "dkim", domain = %domain))]
 pub async fn check_dkim(
     domain: &str,
     mx_hosts: &[String],
@@ -55,6 +54,29 @@ pub async fn check_dkim(
     resolver: &impl DnsLookup,
     sends_no_mail: bool,
 ) -> (CheckResult, bool) {
+    let (result, found, _) = check_dkim_measured(
+        domain,
+        mx_hosts,
+        user_selectors,
+        max_user_selectors,
+        resolver,
+        sends_no_mail,
+    )
+    .await;
+    (result, found)
+}
+
+/// [`check_dkim`] with every key record of the selectors that answered, and a CNAME loop as a
+/// row of its own; `None` when no selector lookup got an answer.
+#[tracing::instrument(skip_all, fields(category = "dkim", domain = %domain))]
+pub async fn check_dkim_measured(
+    domain: &str,
+    mx_hosts: &[String],
+    user_selectors: &[String],
+    max_user_selectors: usize,
+    resolver: &impl DnsLookup,
+    sends_no_mail: bool,
+) -> (CheckResult, bool, Option<Vec<DkimKey>>) {
     // The route layer (`validate_and_rate_limit` in `src/routes.rs`) rejects
     // requests where `user_selectors.len() > max_user_selectors` with
     // `MailError::TooManySelectors`, so this path should never be reached.
@@ -126,9 +148,22 @@ pub async fn check_dkim(
         .filter_map(|(_, _, _, r)| r.as_ref().err().map(ToString::to_string))
         .collect();
     if !errors.is_empty() && errors.len() == results.len() {
-        return (unmeasured_result(Category::Dkim, errors.join("; ")), false);
+        return (
+            unmeasured_result(Category::Dkim, errors.join("; ")),
+            false,
+            None,
+        );
     }
 
+    let mut keys: Vec<DkimKey> = Vec::new();
+    let mut key = |selector: &str, state: &str, key_type: &str, bits: Option<usize>| {
+        keys.push(DkimKey {
+            selector: selector.to_string(),
+            state: state.to_string(),
+            key_type: key_type.to_string(),
+            bits,
+        });
+    };
     let mut found_any = false;
     let mut revoked_any = false;
 
@@ -143,6 +178,7 @@ pub async fn check_dkim(
             }
         };
         if hops > 5 {
+            key(selector, "cname_loop", "", None);
             sub_checks.push(SubCheck {
                 name: "cname_loop".to_string(),
                 verdict: Verdict::Fail,
@@ -167,10 +203,12 @@ pub async fn check_dkim(
         // Parse DKIM key record
         for record in &txt_records {
             let tags = parse_dkim_tags(record);
+            let declared_type = tags.get("k").map(String::as_str).unwrap_or_default();
 
             // Check for revoked key
             if let Some(p_val) = tags.get("p") {
                 if p_val.is_empty() {
+                    key(selector, "revoked", declared_type, None);
                     revoked_any = true;
                     sub_checks.push(SubCheck {
                         name: "key_revoked".to_string(),
@@ -185,6 +223,7 @@ pub async fn check_dkim(
                 let key_type = tags.get("k").map(|s| s.as_str()).unwrap_or("rsa");
 
                 if key_type == "ed25519" {
+                    key(selector, "ok", key_type, key_bits(p_val));
                     sub_checks.push(SubCheck {
                         name: "ed25519_key".to_string(),
                         verdict: Verdict::Pass,
@@ -192,7 +231,10 @@ pub async fn check_dkim(
                     });
                 } else {
                     // RSA: parse key size via x509-parser
-                    match check_rsa_key_size(p_val) {
+                    let size = check_rsa_key_size(p_val);
+                    let state = if size.is_some() { "ok" } else { "parse_error" };
+                    key(selector, state, key_type, size);
+                    match size {
                         Some(bits) if bits < 1024 => {
                             sub_checks.push(SubCheck {
                                 name: "weak_rsa_key".to_string(),
@@ -230,6 +272,7 @@ pub async fn check_dkim(
                     }
                 }
             } else {
+                key(selector, "no_key", declared_type, None);
                 found_any = true;
             }
         }
@@ -256,7 +299,16 @@ pub async fn check_dkim(
     if revoked_only && result.verdict < Verdict::Warn && !sends_no_mail {
         result.verdict = Verdict::Warn;
     }
-    (result, found_any)
+    (result, found_any, Some(keys))
+}
+
+/// The size in bits of a raw key `p=` value, e.g. an Ed25519 public key.
+fn key_bits(p_value: &str) -> Option<usize> {
+    use base64::Engine;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(p_value.replace(' ', ""))
+        .ok()?;
+    Some(decoded.len() * 8)
 }
 
 /// Parse DKIM TXT record tags into key-value pairs.

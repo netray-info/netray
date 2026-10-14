@@ -1,8 +1,9 @@
 pub mod types;
 
 pub use types::{
-    AllResults, Category, CheckResult, Grade, IpEnrichment, MtaStsInfo, SpfFlat, SseEvent,
-    SubCheck, Verdict,
+    AllResults, BimiMeasured, Category, CheckResult, DaneRecord, DkimKey, DmarcMeasured,
+    DnsblAnswer, FcrdnsAnswer, Grade, IpEnrichment, Measured, MtaStsInfo, MtaStsMeasured, MxHost,
+    SpfFlat, SpfMeasured, SseEvent, SubCheck, Verdict,
 };
 
 /// Compute aggregate grade from category-level verdicts.

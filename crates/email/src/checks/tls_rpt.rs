@@ -17,13 +17,23 @@ use crate::dns::DnsLookup;
 use crate::quality::{Category, CheckResult, SubCheck, Verdict};
 
 /// Check TLS-RPT at _smtp._tls.<domain>.
-/// Returns (CheckResult, tls_rpt_present).
+/// Returns (CheckResult, tls_rpt_present, TLS-RPT records), the records `None` when the TXT
+/// lookup got no answer.
 #[tracing::instrument(skip_all, fields(category = "tls_rpt", domain = %domain))]
-pub async fn check_tls_rpt(domain: &str, resolver: &impl DnsLookup) -> (CheckResult, bool) {
+pub async fn check_tls_rpt(
+    domain: &str,
+    resolver: &impl DnsLookup,
+) -> (CheckResult, bool, Option<Vec<String>>) {
     let name = format!("_smtp._tls.{}", domain);
     let txt_records = match resolver.lookup_txt(&name).await {
         Ok(records) => records,
-        Err(e) => return (unmeasured_result(Category::TlsRpt, e.to_string()), false),
+        Err(e) => {
+            return (
+                unmeasured_result(Category::TlsRpt, e.to_string()),
+                false,
+                None,
+            );
+        }
     };
 
     let tls_rpt_records: Vec<&str> = txt_records
@@ -31,6 +41,7 @@ pub async fn check_tls_rpt(domain: &str, resolver: &impl DnsLookup) -> (CheckRes
         .filter(|t| t.starts_with("v=TLSRPTv1"))
         .map(|s| s.as_str())
         .collect();
+    let records: Vec<String> = tls_rpt_records.iter().map(|r| r.to_string()).collect();
 
     let mut sub_checks = Vec::new();
 
@@ -45,7 +56,7 @@ pub async fn check_tls_rpt(domain: &str, resolver: &impl DnsLookup) -> (CheckRes
             sub_checks,
             "No TLS-RPT record".to_string(),
         );
-        return (result, false);
+        return (result, false, Some(records));
     }
 
     let record = tls_rpt_records[0];
@@ -59,7 +70,7 @@ pub async fn check_tls_rpt(domain: &str, resolver: &impl DnsLookup) -> (CheckRes
             detail: "malformed TLS-RPT record: missing required fields".to_string(),
         });
         let result = CheckResult::new(Category::TlsRpt, sub_checks, format!("TLS-RPT: {}", record));
-        return (result, true);
+        return (result, true, Some(records));
     }
 
     // Check rua
@@ -94,5 +105,5 @@ pub async fn check_tls_rpt(domain: &str, resolver: &impl DnsLookup) -> (CheckRes
 
     let result = CheckResult::new(Category::TlsRpt, sub_checks, format!("TLS-RPT: {}", record));
 
-    (result, true)
+    (result, true, Some(records))
 }

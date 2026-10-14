@@ -1,9 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
 use netray_engine::{Domain, RunContext, RunOptions};
 use netray_model::Protocol;
+use netray_model::evidence::Block;
 use tokio::sync::mpsc;
 
 use crate::modules::{Backend, BackendResult};
@@ -81,6 +82,16 @@ pub async fn run_check_with_deadline(
     input: CheckInput,
     hard_deadline: Duration,
 ) -> CheckOutput {
+    run_check_with_evidence(state, input, hard_deadline).await.0
+}
+
+/// [`run_check_with_deadline`], also returning the facts blocks no section carries when the DNS
+/// section, which publishes them, did not answer. An answering DNS section holds them itself.
+pub(crate) async fn run_check_with_evidence(
+    state: &AppState,
+    input: CheckInput,
+    hard_deadline: Duration,
+) -> (CheckOutput, Vec<Block>) {
     let start = Instant::now();
     let domain = input.domain.clone();
     let base = RunContext {
@@ -128,6 +139,21 @@ pub async fn run_check_with_deadline(
             .or_insert(Err(SectionError::Timeout));
     }
 
+    let carried: HashSet<_> = sections
+        .values()
+        .flatten()
+        .flat_map(|r| r.evidence.iter().map(|b| b.id.clone()))
+        .collect();
+    let mut facts_evidence: Vec<Block> = report
+        .blocks()
+        .into_iter()
+        .filter(|b| !carried.contains(&b.id))
+        .cloned()
+        .collect();
+    if let Some(Ok(dns)) = sections.get_mut("dns") {
+        dns.evidence.append(&mut facts_evidence);
+    }
+
     // Warn about profile sections with no registered backend.
     for protocol in state.scoring_profile.sections.keys() {
         let name = protocol.as_str();
@@ -138,10 +164,13 @@ pub async fn run_check_with_deadline(
 
     let score = crate::score::score(&state.scoring_profile, &sections);
 
-    CheckOutput {
-        domain,
-        sections,
-        score,
-        duration_ms: start.elapsed().as_millis() as u64,
-    }
+    (
+        CheckOutput {
+            domain,
+            sections,
+            score,
+            duration_ms: start.elapsed().as_millis() as u64,
+        },
+        facts_evidence,
+    )
 }

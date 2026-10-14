@@ -144,12 +144,12 @@ curl -N -X POST https://lens.netray.info/api/check \
         <tr><th>Event</th><th>When</th><th>Key fields</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>dns</code></td><td>After DNS backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>detail_url</code></td></tr>
-        <tr><td><code>tls</code></td><td>After TLS backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>detail_url</code></td></tr>
-        <tr><td><code>http</code></td><td>After HTTP backend (optional)</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>status_code</code>, <code>detail_url</code></td></tr>
-        <tr><td><code>email</code></td><td>After Email backend (optional)</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>grade</code>, <code>detail_url</code></td></tr>
-        <tr><td><code>ip</code></td><td>After IP backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>addresses[]</code>, <code>detail_url</code></td></tr>
-        <tr><td><code>summary</code></td><td>After all backends</td><td><code>grade</code>, <code>score</code>, <code>sections</code>, <code>section_grades</code>, <code>hard_fail</code>, <code>not_applicable</code></td></tr>
+        <tr><td><code>dns</code></td><td>After DNS backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>evidence[]</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>tls</code></td><td>After TLS backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>evidence[]</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>http</code></td><td>After HTTP backend (optional)</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>evidence[]</code>, <code>status_code</code> (absent when the HTTPS probe got no response), <code>detail_url</code></td></tr>
+        <tr><td><code>email</code></td><td>After Email backend (optional)</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>evidence[]</code>, <code>grade</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>ip</code></td><td>After IP backend</td><td><code>status</code>, <code>headline</code>, <code>checks[]</code>, <code>evidence[]</code>, <code>addresses[]</code>, <code>detail_url</code></td></tr>
+        <tr><td><code>summary</code></td><td>After all backends</td><td><code>grade</code>, <code>score</code>, <code>sections</code>, <code>section_grades</code>, <code>hard_fail</code>, <code>not_applicable</code>, <code>evidence_schema</code></td></tr>
         <tr><td><code>done</code></td><td>Stream complete</td><td><code>domain</code>, <code>duration_ms</code>, <code>cached</code></td></tr>
       </tbody>
     </table>
@@ -190,10 +190,26 @@ data: {
   "status": "warn",
   "headline": "DNSSEC ~  CAA ✓  NS ✓  CNAME-apex ✓",
   "checks": [
-    {"name": "dnssec",     "verdict": "warn", "weight": 5, "messages": ["DNSKEY present but no RRSIG found"]},
-    {"name": "caa",        "verdict": "pass", "weight": 5},
-    {"name": "ns",         "verdict": "pass", "weight": 3},
-    {"name": "cname_apex", "verdict": "pass", "weight": 5}
+    {"name": "dnssec",     "verdict": "warn", "weight": 5, "messages": ["DNSKEY present but no RRSIG found"], "evidence": ["dns.dnskey"]},
+    {"name": "caa",        "verdict": "pass", "weight": 5, "evidence": ["dns.caa"]}
+  ],
+  "evidence": [
+    {
+      "id": "dns.caa",
+      "title": "CAA",
+      "shape": {"kind": "records", "data": [
+        {"owner": {"t": "text", "v": "example.com."}, "type": {"t": "text", "v": "CAA"},
+         "ttl": {"t": "int", "v": 3600}, "data": {"t": "text", "v": "0 issue \"ca.example.com\""}}
+      ]}
+    },
+    {
+      "id": "dns.dnskey",
+      "title": "DNSKEY",
+      "shape": {"kind": "records", "data": [
+        {"owner": {"t": "text", "v": "example.com."}, "type": {"t": "text", "v": "DNSKEY"},
+         "ttl": {"t": "int", "v": 3600}, "data": {"t": "text", "v": "257 3 13 mdsswUyr3DPW132mOi8V9xESWE8jTo0dxCjjnopKl+GqJxpVXckHAeF+KkxLbxILfDLUT0rAK9iUzy1L53eKGQ=="}}
+      ]}
+    }
   ],
   "detail_url": "https://dns.netray.info/?q=example.com+%2Bcheck"
 }</code></pre>
@@ -255,7 +271,8 @@ data: {
   "hard_fail_checks": [],
   "hard_fail_reason": null,
   "not_applicable": {},
-  "complete": true
+  "complete": true,
+  "evidence_schema": 1
 }</code></pre>
 
     <p>
@@ -269,6 +286,44 @@ data: {
       <code>not_applicable</code> is always present. When the email backend times out
       internally it contains <code>{"email": "beacon timeout"}</code> and the email section
       is excluded from scoring without penalising the overall grade.
+    </p>
+
+    <h3>Evidence</h3>
+    <p>
+      Every section event carries <code>evidence</code>, the blocks of data the section's checks
+      judged by; a section that did not answer carries an empty list. The <code>dns</code>
+      section also carries the shared DNS lookups (<code>dns.a</code>, <code>dns.aaaa</code>,
+      <code>dns.mx</code>, <code>dns.caa</code>, <code>dns.ns</code>, <code>dns.https</code>)
+      that no section holds itself, e.g. after the DNS backend timed out. Every entry of
+      <code>checks[]</code> carries <code>evidence</code>, the ids of the blocks it relies on (a passed, warned or failed check always names at least one);
+      each id names a block in the <code>evidence</code> of some section of the same run, and an
+      id that does not is left out. The summary's <code>evidence_schema</code> is the version of
+      the block vocabulary, currently <code>1</code>.
+    </p>
+    <p>
+      A block is <code>{"id", "title", "shape"}</code>. The id is
+      <code>&lt;module&gt;.&lt;name&gt;[@&lt;qualifier&gt;]</code>, the qualifier an address, an
+      <code>address:port</code> or a port, e.g. <code>tls.chain@192.0.2.1:443</code>. The shape
+      is <code>{"kind", "data"}</code>:
+    </p>
+    <table>
+      <thead>
+        <tr><th>Kind</th><th><code>data</code></th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>records</code></td><td>DNS records, each <code>{"owner", "type", "ttl", "data"}</code></td></tr>
+        <tr><td><code>table</code></td><td><code>{"key", "columns", "rows"}</code>: <code>key</code> names the column that identifies a row, each row holds one value per column</td></tr>
+        <tr><td><code>chain</code></td><td>An ordered list of fields, e.g. the certificates of a chain or the hops of a redirect chain</td></tr>
+        <tr><td><code>tree</code></td><td>A node <code>{"fields", "children"}</code></td></tr>
+        <tr><td><code>fields</code></td><td>A list of <code>[key, value]</code> pairs in order; a key may repeat</td></tr>
+        <tr><td><code>text</code></td><td>A string, e.g. a policy file</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Every value is tagged with its type as <code>{"t", "v"}</code>:
+      <code>text</code> (string), <code>int</code> (integer), <code>bool</code>,
+      <code>time</code> (RFC&nbsp;3339 string), <code>duration</code> (milliseconds) and
+      <code>addr</code> (IP address string), e.g. <code>{"t": "int", "v": 3600}</code>.
     </p>
 
     <h2>Scoring</h2>

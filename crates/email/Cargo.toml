@@ -111,6 +111,16 @@ name = "spf_exists_qualifier"
 path = "tests/spf_exists_qualifier.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "evidence"
+path = "tests/evidence.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "evidence_reading"
+path = "tests/evidence_reading.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
 toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }

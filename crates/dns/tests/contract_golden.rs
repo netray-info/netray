@@ -125,7 +125,20 @@ async fn prism_check_stream_matches_golden() {
             serde_json::json!({ "TXT": { "txt_data": [b"v=spf1 -all".to_vec()] } })
         )]),
     );
-    let all = a.clone().merge(ns.clone()).merge(txt.clone());
+    let caa = lookups(
+        "example.com.",
+        "CAA",
+        serde_json::json!([record(
+            "example.com.",
+            "CAA",
+            serde_json::json!({ "CAA": { "issuer_critical": false, "tag": "issue", "value": "letsencrypt.org" } })
+        )]),
+    );
+    let all = a
+        .clone()
+        .merge(ns.clone())
+        .merge(txt.clone())
+        .merge(caa.clone());
 
     let lints = [
         ("caa", check_caa(&all)),
@@ -150,6 +163,7 @@ async fn prism_check_stream_matches_golden() {
         batch_event("A", &a, 1),
         batch_event("NS", &ns, 2),
         batch_event("TXT", &txt, 3),
+        batch_event("CAA", &caa, 4),
     ];
     for (category, results) in lints {
         events.push(lint_event(category, results));
@@ -194,12 +208,19 @@ fn nx_lookups(name: &str, record_type: &str) -> Lookups {
     .expect("NxDomain fixture must deserialize into mhost Lookups")
 }
 
-// A domain whose A and AAAA lookups are NxDomain: lens's `no-address-records` fixture reads it.
+// A domain whose A, AAAA, NS and CAA lookups are NxDomain: lens's `no-address-records` fixture
+// reads it.
 #[tokio::test]
 async fn prism_check_stream_without_address_records_matches_golden() {
     let a = nx_lookups("example.com.", "A");
     let aaaa = nx_lookups("example.com.", "AAAA");
-    let all = a.clone().merge(aaaa.clone());
+    let ns = nx_lookups("example.com.", "NS");
+    let caa = nx_lookups("example.com.", "CAA");
+    let all = a
+        .clone()
+        .merge(aaaa.clone())
+        .merge(ns.clone())
+        .merge(caa.clone());
 
     let lints = [
         ("caa", check_caa(&all)),
@@ -220,7 +241,12 @@ async fn prism_check_stream_without_address_records_matches_golden() {
         }
     }
 
-    let mut events = vec![batch_event("A", &a, 1), batch_event("AAAA", &aaaa, 2)];
+    let mut events = vec![
+        batch_event("A", &a, 1),
+        batch_event("AAAA", &aaaa, 2),
+        batch_event("NS", &ns, 3),
+        batch_event("CAA", &caa, 4),
+    ];
     for (category, results) in lints {
         events.push(lint_event(category, results));
     }

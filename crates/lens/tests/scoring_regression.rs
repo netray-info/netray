@@ -23,6 +23,7 @@ fn check(name: &str, verdict: CheckVerdict) -> CheckResult {
         name: name.to_string(),
         verdict,
         messages: vec![],
+        evidence: vec![],
     }
 }
 
@@ -49,6 +50,7 @@ fn no_error(checks: Vec<CheckResult>) -> Section {
             raw_headline: String::new(),
             detail_url: String::new(),
         },
+        evidence: vec![],
     })
 }
 

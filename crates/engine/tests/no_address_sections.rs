@@ -27,7 +27,7 @@ fn passing(ids: &[&str]) -> SectionOutcome {
                 evidence: vec![],
             })
             .collect(),
-        presentation: serde_json::Value::Null,
+        evidence: vec![],
     }
 }
 

@@ -48,6 +48,8 @@ pub struct CheckResult {
     /// Diagnostic messages explaining a non-passing verdict (warn/fail/not-found), or the reason
     /// of a not-applicable check.
     pub messages: Vec<String>,
+    /// The blocks of the run the check judged by.
+    pub evidence: Vec<netray_model::evidence::BlockId>,
 }
 
 #[derive(Debug, Clone)]
@@ -170,7 +172,7 @@ fn event(section: &str, result: &Result<BackendResult, SectionError>) -> Option<
                     })
                 })
                 .collect(),
-            presentation: serde_json::Value::Null,
+            evidence: vec![],
         },
         Err(SectionError::NotApplicable { reason }) => SectionOutcome::NotApplicable {
             reason: reason.clone(),

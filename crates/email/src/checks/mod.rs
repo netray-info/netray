@@ -58,7 +58,11 @@ use tracing::Instrument;
 
 use crate::config::Config;
 use crate::dns::DnsLookup;
-use crate::quality::{AllResults, Category, CheckResult, Grade, SseEvent, Verdict, compute_grade};
+use crate::quality::{
+    AllResults, BimiMeasured, Category, CheckResult, DaneRecord, DkimKey, DmarcMeasured,
+    DnsblAnswer, FcrdnsAnswer, Grade, Measured, MtaStsMeasured, MxHost, SpfMeasured, SseEvent,
+    Verdict, compute_grade,
+};
 use crate::state::OutboundFetch;
 use netray_common::enrichment::EnrichmentClient;
 
@@ -129,22 +133,26 @@ enum Phase0Result {
         mx_ips: Vec<IpAddr>,
         null_mx: bool,
         addr_errors: Vec<crate::dns::LookupError>,
+        measured: Option<Vec<MxHost>>,
     },
     Spf {
         result: CheckResult,
         flat: Option<crate::quality::SpfFlat>,
         has_dash_all: bool,
         only_dash_all: bool,
+        measured: Option<SpfMeasured>,
     },
     Dmarc {
         result: CheckResult,
         policy: Option<String>,
         sp: Option<String>,
         rua_ok: bool,
+        records: Option<DmarcMeasured>,
     },
     TlsRpt {
         result: CheckResult,
         present: bool,
+        records: Option<Vec<String>>,
     },
     Dnssec {
         result: CheckResult,
@@ -153,6 +161,7 @@ enum Phase0Result {
     Bimi {
         result: CheckResult,
         present: bool,
+        records: Option<BimiMeasured>,
     },
 }
 
@@ -174,17 +183,27 @@ enum Phase1Result {
     Dkim {
         result: CheckResult,
         found: bool,
+        keys: Option<Vec<DkimKey>>,
     },
     MtaSts {
         result: CheckResult,
         present: bool,
         info: Option<crate::quality::MtaStsInfo>,
+        records: Option<MtaStsMeasured>,
     },
     Dane {
         result: CheckResult,
         has_tlsa: bool,
+        records: Option<Vec<DaneRecord>>,
     },
-    Other(CheckResult),
+    Fcrdns {
+        result: CheckResult,
+        answers: Option<Vec<FcrdnsAnswer>>,
+    },
+    Dnsbl {
+        result: CheckResult,
+        answers: Option<Vec<DnsblAnswer>>,
+    },
 }
 
 impl Phase1Result {
@@ -192,8 +211,9 @@ impl Phase1Result {
         match self {
             Phase1Result::Dkim { result, .. }
             | Phase1Result::MtaSts { result, .. }
-            | Phase1Result::Dane { result, .. } => result,
-            Phase1Result::Other(result) => result,
+            | Phase1Result::Dane { result, .. }
+            | Phase1Result::Fcrdns { result, .. }
+            | Phase1Result::Dnsbl { result, .. } => result,
         }
     }
 }
@@ -260,6 +280,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     tx: mpsc::Sender<SseEvent>,
 ) {
     let inspection_start = std::time::Instant::now();
+    let mut measured = Measured::default();
 
     // Accumulated phase-0 data
     let mut mx_result: Option<CheckResult> = None;
@@ -293,7 +314,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, ips, hosts, is_null_mx, addr_errors) =
+                let (result, ips, hosts, is_null_mx, addr_errors, measured) =
                     mx::check_mx(&domain, dns.as_ref(), enrichment_client.as_deref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "mx")
@@ -304,6 +325,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     mx_ips: ips,
                     null_mx: is_null_mx,
                     addr_errors,
+                    measured,
                 }
             }
             .instrument(tracing::Span::current()),
@@ -317,8 +339,8 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, flat, dash_all, only_dash_all) =
-                    spf::check_spf_detailed(&domain, dns.as_ref()).await;
+                let (result, flat, dash_all, only_dash_all, measured) =
+                    spf::check_spf_measured(&domain, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "spf")
                     .record(elapsed);
@@ -327,6 +349,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     flat,
                     has_dash_all: dash_all,
                     only_dash_all,
+                    measured,
                 }
             }
             .instrument(tracing::Span::current()),
@@ -340,7 +363,8 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, policy, sp, rua_ok) = dmarc::check_dmarc(&domain, dns.as_ref()).await;
+                let (result, policy, sp, rua_ok, records) =
+                    dmarc::check_dmarc(&domain, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dmarc")
                     .record(elapsed);
@@ -349,6 +373,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     policy,
                     sp,
                     rua_ok,
+                    records,
                 }
             }
             .instrument(tracing::Span::current()),
@@ -362,11 +387,16 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, present) = tls_rpt::check_tls_rpt(&domain, dns.as_ref()).await;
+                let (result, present, records) =
+                    tls_rpt::check_tls_rpt(&domain, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "tls_rpt")
                     .record(elapsed);
-                Phase0Result::TlsRpt { result, present }
+                Phase0Result::TlsRpt {
+                    result,
+                    present,
+                    records,
+                }
             }
             .instrument(tracing::Span::current()),
         );
@@ -400,11 +430,16 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase0.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, present) = bimi::check_bimi(&domain, dns.as_ref(), &fetch).await;
+                let (result, present, records) =
+                    bimi::check_bimi_measured(&domain, dns.as_ref(), &fetch).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "bimi")
                     .record(elapsed);
-                Phase0Result::Bimi { result, present }
+                Phase0Result::Bimi {
+                    result,
+                    present,
+                    records,
+                }
             }
             .instrument(tracing::Span::current()),
         );
@@ -430,49 +465,67 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                         mx_ips: ips,
                         null_mx: is_null_mx,
                         addr_errors,
+                        measured: mx,
                     } => {
                         mx_result = Some(result);
                         mx_hosts = hosts;
                         mx_ips = ips;
                         null_mx = is_null_mx;
                         mx_addr_errors = addr_errors;
+                        measured.mx = mx;
                     }
                     Phase0Result::Spf {
                         result,
                         flat,
                         has_dash_all,
                         only_dash_all,
+                        measured: spf,
                     } => {
                         spf_result = Some(result);
                         spf_flat = flat;
                         spf_has_dash_all = has_dash_all;
                         spf_only_dash_all = only_dash_all;
+                        measured.spf = spf;
                     }
                     Phase0Result::Dmarc {
                         result,
                         policy,
                         sp,
                         rua_ok,
+                        records,
                     } => {
                         dmarc_result = Some(result);
                         dmarc_policy = policy;
                         dmarc_sp = sp;
                         dmarc_rua_external_auth_ok = rua_ok;
+                        measured.dmarc = records;
                     }
-                    Phase0Result::TlsRpt { result, present } => {
+                    Phase0Result::TlsRpt {
+                        result,
+                        present,
+                        records,
+                    } => {
                         tls_rpt_result = Some(result);
                         tls_rpt_present = present;
+                        measured.tls_rpt = records;
                     }
                     Phase0Result::Dnssec {
                         result,
                         dnskey_present,
                     } => {
+                        measured.dnssec = (!result.sub_checks.iter().any(|s| s.name == UNMEASURED))
+                            .then_some(dnskey_present);
                         dnssec_result = Some(result);
                         dnssec_dnskey_present = dnskey_present;
                     }
-                    Phase0Result::Bimi { result, present } => {
+                    Phase0Result::Bimi {
+                        result,
+                        present,
+                        records,
+                    } => {
                         bimi_result = Some(result);
                         bimi_present = present;
+                        measured.bimi = records;
                     }
                 }
             }
@@ -524,7 +577,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (mut result, found) = dkim::check_dkim(
+                let (mut result, found, keys) = dkim::check_dkim_measured(
                     &domain,
                     &mx_hosts_clone,
                     &selectors,
@@ -542,7 +595,11 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dkim")
                     .record(elapsed);
-                Phase1Result::Dkim { result, found }
+                Phase1Result::Dkim {
+                    result,
+                    found,
+                    keys,
+                }
             }
             .instrument(tracing::Span::current()),
         );
@@ -556,7 +613,8 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, info) = mta_sts::check_mta_sts(&domain, dns.as_ref(), &fetch).await;
+                let (result, info, records) =
+                    mta_sts::check_mta_sts_measured(&domain, dns.as_ref(), &fetch).await;
                 let present = info.is_some();
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "mta_sts")
@@ -565,6 +623,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     result,
                     present,
                     info,
+                    records,
                 }
             }
             .instrument(tracing::Span::current()),
@@ -578,11 +637,16 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let (result, has_tlsa) = dane::check_dane(&mx_hosts_clone, dns.as_ref()).await;
+                let (result, has_tlsa, records) =
+                    dane::check_dane(&mx_hosts_clone, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dane")
                     .record(elapsed);
-                Phase1Result::Dane { result, has_tlsa }
+                Phase1Result::Dane {
+                    result,
+                    has_tlsa,
+                    records,
+                }
             }
             .instrument(tracing::Span::current()),
         );
@@ -596,11 +660,12 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let result = fcrdns::check_fcrdns(&mx_ips_clone, &addr_errors, dns.as_ref()).await;
+                let (result, answers) =
+                    fcrdns::check_fcrdns(&mx_ips_clone, &addr_errors, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "fcrdns")
                     .record(elapsed);
-                Phase1Result::Other(result)
+                Phase1Result::Fcrdns { result, answers }
             }
             .instrument(tracing::Span::current()),
         );
@@ -616,7 +681,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         let handle = phase1.spawn(
             async move {
                 let start = std::time::Instant::now();
-                let result = dnsbl::check_dnsbl(
+                let (result, answers) = dnsbl::check_dnsbl(
                     &mx_ips_clone,
                     &addr_errors,
                     &domain,
@@ -627,7 +692,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let elapsed = start.elapsed().as_secs_f64();
                 metrics::histogram!("beacon_check_duration_seconds", "category" => "dnsbl")
                     .record(elapsed);
-                Phase1Result::Other(result)
+                Phase1Result::Dnsbl { result, answers }
             }
             .instrument(tracing::Span::current()),
         );
@@ -647,37 +712,43 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     return;
                 }
                 match output {
-                    Phase1Result::Dkim { result, found } => {
+                    Phase1Result::Dkim {
+                        result,
+                        found,
+                        keys,
+                    } => {
                         dkim_result = Some(result);
                         dkim_found = found;
+                        measured.dkim = keys;
                     }
                     Phase1Result::MtaSts {
                         result,
                         present,
                         info,
+                        records,
                     } => {
                         mta_sts_result = Some(result);
                         mta_sts_present = present;
                         mta_sts_info = info;
+                        measured.mta_sts = records;
                     }
-                    Phase1Result::Dane { result, has_tlsa } => {
+                    Phase1Result::Dane {
+                        result,
+                        has_tlsa,
+                        records,
+                    } => {
                         dane_result = Some(result);
                         dane_has_tlsa = has_tlsa;
+                        measured.dane = records;
                     }
-                    Phase1Result::Other(result) => match result.category {
-                        Category::Fcrdns => {
-                            fcrdns_result = Some(result);
-                        }
-                        Category::Dnsbl => {
-                            dnsbl_result = Some(result);
-                        }
-                        _ => {
-                            tracing::error!(
-                                category = ?result.category,
-                                "unexpected phase-1 Other category"
-                            );
-                        }
-                    },
+                    Phase1Result::Fcrdns { result, answers } => {
+                        fcrdns_result = Some(result);
+                        measured.fcrdns = answers;
+                    }
+                    Phase1Result::Dnsbl { result, answers } => {
+                        dnsbl_result = Some(result);
+                        measured.dnsbl = answers;
+                    }
                 }
             }
             Err(e) => {
@@ -813,6 +884,11 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
         })
         .collect();
 
+    let blocks = crate::module::evidence_blocks(&measured, grade);
+    if tx.send(SseEvent::Evidence { blocks }).await.is_err() {
+        return;
+    }
+
     // B4: if the client has disconnected, the send will error; no further work
     // remains after the Summary event, so we simply let the function exit.
     let _ = tx
@@ -876,7 +952,7 @@ mod tests {
                     summary_verdicts = Some(verdicts);
                     break;
                 }
-                SseEvent::Category(_) => {}
+                SseEvent::Category(_) | SseEvent::Evidence { .. } => {}
             }
         }
         handle.await.unwrap();
