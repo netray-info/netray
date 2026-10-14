@@ -34,7 +34,7 @@ fn real_tokens_have_no_contrast_violations() {
 #[test]
 fn weak_status_text_is_reported_with_path_hex_ground_and_ratio() {
     let mut tokens: Value = serde_json::from_str(TOKENS).expect("tokens.json is JSON");
-    tokens["status"]["light"]["pass"]["text"] = Value::String("#9aa0a6".into());
+    tokens["status"]["light"]["pass"]["text"]["$value"] = Value::String("#9aa0a6".into());
     let found = violations(&tokens.to_string());
 
     let hit = found
@@ -47,7 +47,10 @@ fn weak_status_text_is_reported_with_path_hex_ground_and_ratio() {
         .unwrap_or_else(|| panic!("no matching violation in {found:#?}"));
     let expected = format!(
         "{:.2}",
-        ratio("#9aa0a6", tokens["color"]["light"]["bg"].as_str().unwrap())
+        ratio(
+            "#9aa0a6",
+            tokens["color"]["light"]["bg"]["$value"].as_str().unwrap()
+        )
     );
     assert!(
         hit.contains(&expected),
