@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-14
+
 **Grades change.** A check that could not be measured no longer reads as passed, failed or not applicable. Timeouts, SERVFAIL or REFUSED answers, and redirects the fetch policy refuses all count as `unmeasured`. A weighted unmeasured check makes its section incomplete, and the run gets no letter unless a hard-fail check failed, which still grades F. A domain whose A and AAAA lookups both get a definite NXDOMAIN or NODATA now gets a letter from DNS and email, with IP, HTTP and TLS not applicable ("no A or AAAA record"); before, such a run was incomplete.
 
 ### Changed
