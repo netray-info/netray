@@ -1,7 +1,8 @@
 # Spec: SDD into the monorepo
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-14
+Finished: 2026-10-14
 
 ## Goal
 
