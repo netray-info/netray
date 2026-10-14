@@ -1,7 +1,8 @@
 # Spec: fix ip evidence race
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-14
+Finished: 2026-10-14
 
 ## Goal
 
