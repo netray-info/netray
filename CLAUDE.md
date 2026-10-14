@@ -14,13 +14,14 @@ carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
 |---|---|
 | `crates/{lens,dns,tls,http,email,ip}` | the services; each a library with its frontend in `frontend/` |
 | `crates/common` | `netray-common`, shared Rust (workspace member, not published) |
-| `crates/{model,engine}` | V2 core (planning SDD `v2.md` §3): `netray-model` the check vocabulary, no workspace dependency; `netray-engine` the `Module`/`FactsProvider` traits, depends on `netray-model` only (`tests/repo/test_engine_names_no_module.sh`). Each V1 crate maps its status word onto `netray_model::Status` once |
+| `crates/{model,engine}` | V2 core (`specs/sdd/v2.md` §3): `netray-model` the check vocabulary, no workspace dependency; `netray-engine` the `Module`/`FactsProvider` traits, depends on `netray-model` only (`tests/repo/test_engine_names_no_module.sh`). Each V1 crate maps its status word onto `netray_model::Status` once |
 | `crates/netray` | the binary: subcommands `lens dns tls http email ip site`; all but `site` take `--check-config <path>` (exit 0 `config ok: <path>`, exit 1 with the error) |
 | `packages/common-frontend` | `@netray-info/common-frontend` (workspace member, not published) |
 | `site/` | static site, served by `netray site` |
 | `tests/repo` | repository structure checks (`just test-repo`), one script per check |
 | `tests/acceptance` | Playwright suite against a deployed environment (own `package-lock.json`) |
 | `specs/rules`, `specs/features` | engineering rules; feature specs |
+| `specs/sdd/v2.md` | the V2 SDD, this repository's own: amend it in the same commit as the code that changes what it says. Its token source is `specs/sdd/v2-tokens.json` until V4.1 moves it into `netray-web`. PRD, reviews and baseline stay private; cite them as "(private)" |
 
 ## Verbs and the gate
 
