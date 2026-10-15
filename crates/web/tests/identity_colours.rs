@@ -5,11 +5,20 @@ use serde_json::Value;
 
 const TOKENS: &str = include_str!("../tokens.json");
 
-/// (file, carries the wordmark and therefore a font stack)
-const FILES: [(&str, bool); 3] = [
-    ("logo.svg", true),
-    ("favicon.svg", false),
-    ("badge-mark.svg", false),
+/// How an SVG meets the viewer's colour scheme.
+#[derive(Clone, Copy)]
+enum Scheme {
+    /// Light ink outside, dark ink only inside an embedded `prefers-color-scheme: dark` block.
+    Switching,
+    /// No scheme rule: a light-ink tile with the cut-out filled in dark ink.
+    Fixed,
+}
+
+/// (file, carries the wordmark and therefore a font stack, scheme mode)
+const FILES: [(&str, bool, Scheme); 3] = [
+    ("logo.svg", true, Scheme::Switching),
+    ("favicon.svg", false, Scheme::Switching),
+    ("badge-mark.svg", false, Scheme::Fixed),
 ];
 
 const COLOUR_FUNCTIONS: [&str; 10] = [
@@ -91,6 +100,29 @@ fn dark_block(s: &str) -> Option<(usize, usize)> {
     None
 }
 
+/// `(selector, body)` of each flat `selector { ... }` block in the `<style>` element.
+fn style_rules(s: &str) -> Vec<(String, String)> {
+    let Some(start) = s.find("<style") else {
+        return Vec::new();
+    };
+    let Some(open) = s[start..].find('>') else {
+        return Vec::new();
+    };
+    let body = &s[start + open + 1..];
+    let css = &body[..body.find("</style>").unwrap_or(body.len())];
+    let mut out = Vec::new();
+    let mut rest = css;
+    while let Some(o) = rest.find('{') {
+        let Some(c) = rest[o..].find('}') else { break };
+        out.push((
+            rest[..o].trim().to_string(),
+            rest[o + 1..o + c].trim().to_string(),
+        ));
+        rest = &rest[o + c + 1..];
+    }
+    out
+}
+
 /// Values of a property, as CSS declaration (`name: v;`) or attribute (`name="v"`).
 fn prop_values(s: &str, name: &str) -> Vec<String> {
     let mut out = Vec::new();
@@ -120,7 +152,64 @@ fn norm_font(v: &str) -> String {
         .join(" ")
 }
 
-fn check(name: &str, is_logo: bool) -> Vec<String> {
+fn check_switching(name: &str, svg: &str, light: &str, dark: &str) -> Vec<String> {
+    let mut bad = Vec::new();
+    match dark_block(svg) {
+        None => bad.push(format!(
+            "{name}: no @media (prefers-color-scheme: dark) block"
+        )),
+        Some((a, z)) => {
+            let hexes = hex_literals(svg);
+            let in_dark = |at: usize| at >= a && at < z;
+            for (at, lit) in &hexes {
+                let l = lit.to_ascii_lowercase();
+                if l == light && in_dark(*at) {
+                    bad.push(format!("{name}: light ink {lit} inside the dark block"));
+                }
+                if l == dark && !in_dark(*at) {
+                    bad.push(format!("{name}: dark ink {lit} outside the dark block"));
+                }
+            }
+            for (want, label) in [(light, "light"), (dark, "dark")] {
+                if !hexes.iter().any(|(_, l)| l.to_ascii_lowercase() == *want) {
+                    bad.push(format!("{name}: {label} ink {want} does not occur"));
+                }
+            }
+        }
+    }
+
+    bad
+}
+
+fn check_fixed(name: &str, svg: &str, light: &str, dark: &str) -> Vec<String> {
+    let mut bad = Vec::new();
+    if svg.contains("prefers-color-scheme") {
+        bad.push(format!("{name}: prefers-color-scheme must not occur"));
+    }
+    let hexes = hex_literals(svg);
+    for (want, label) in [(light, "light"), (dark, "dark")] {
+        if !hexes.iter().any(|(_, l)| l.to_ascii_lowercase() == want) {
+            bad.push(format!("{name}: {label} ink {want} does not occur"));
+        }
+    }
+    let rules = style_rules(svg);
+    for (needle, want, label) in [("tile", light, "light"), ("mark", dark, "dark")] {
+        let ok = rules.iter().any(|(sel, body)| {
+            sel.contains(needle)
+                && prop_values(body, "fill")
+                    .iter()
+                    .any(|v| v.to_ascii_lowercase() == want)
+        });
+        if !ok {
+            bad.push(format!(
+                "{name}: no style rule with {needle:?} in its selector and fill {label} ink {want}"
+            ));
+        }
+    }
+    bad
+}
+
+fn check(name: &str, is_logo: bool, scheme: Scheme) -> Vec<String> {
     let svg = read(name);
     let low = svg.to_ascii_lowercase();
     let (light, dark) = (
@@ -156,28 +245,9 @@ fn check(name: &str, is_logo: bool) -> Vec<String> {
         }
     }
 
-    match dark_block(&svg) {
-        None => bad.push(format!(
-            "{name}: no @media (prefers-color-scheme: dark) block"
-        )),
-        Some((a, z)) => {
-            let hexes = hex_literals(&svg);
-            let in_dark = |at: usize| at >= a && at < z;
-            for (at, lit) in &hexes {
-                let l = lit.to_ascii_lowercase();
-                if l == light && in_dark(*at) {
-                    bad.push(format!("{name}: light ink {lit} inside the dark block"));
-                }
-                if l == dark && !in_dark(*at) {
-                    bad.push(format!("{name}: dark ink {lit} outside the dark block"));
-                }
-            }
-            for (want, label) in [(&light, "light"), (&dark, "dark")] {
-                if !hexes.iter().any(|(_, l)| l.to_ascii_lowercase() == *want) {
-                    bad.push(format!("{name}: {label} ink {want} does not occur"));
-                }
-            }
-        }
+    match scheme {
+        Scheme::Switching => bad.extend(check_switching(name, &svg, &light, &dark)),
+        Scheme::Fixed => bad.extend(check_fixed(name, &svg, &light, &dark)),
     }
 
     for s in status_colours() {
@@ -217,8 +287,8 @@ fn check(name: &str, is_logo: bool) -> Vec<String> {
 #[test]
 fn identity_svgs_are_monochrome_ink_only() {
     let mut failures = Vec::new();
-    for (name, is_logo) in FILES {
-        failures.extend(check(name, is_logo));
+    for (name, is_logo, scheme) in FILES {
+        failures.extend(check(name, is_logo, scheme));
     }
     assert!(
         failures.is_empty(),
