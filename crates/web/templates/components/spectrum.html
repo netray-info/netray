@@ -1,0 +1,29 @@
+{% macro spectrum(view) %}
+<div class="spectrum">
+  <div class="spectrum__labels">
+    {% for line in view.lines %}
+    {% if let Some(label) = line.label %}{% if line.tone.as_str() == "warn" || line.tone.as_str() == "fail" || line.tone.as_str() == "fix" %}<span class="spectrum__line-label" data-tone="{{ line.tone.as_str() }}" style="left: {{ line.x }}%">{{ label }}</span>{% endif %}{% endif %}
+    {% endfor %}
+  </div>
+  <svg class="spectrum__plate" role="img" aria-label="{{ view.label }}">
+    {% for region in view.regions %}
+    {% if !loop.first %}<line class="spectrum__boundary" x1="{{ region.x }}%" x2="{{ region.x }}%" y1="0" y2="100%" />{% endif %}
+    {% endfor %}
+    {% for line in view.lines %}
+    {% if line.is_fix() %}
+    <g class="spectrum__line" data-tone="{{ line.tone.as_str() }}" data-code="{{ line.code }}">
+      <rect class="spectrum__outline" x="{{ line.x }}%" y="{{ line.top() }}%" style="height: calc({{ line.height }}% + var(--line-fix))" />
+      <circle class="spectrum__ring" cx="{{ line.x }}%" cy="{{ line.top() }}%" />
+    </g>
+    {% else %}
+    <line class="spectrum__line" data-tone="{{ line.tone.as_str() }}" data-code="{{ line.code }}" x1="{{ line.x }}%" x2="{{ line.x }}%" y1="100%" y2="{{ line.top() }}%" />
+    {% endif %}
+    {% endfor %}
+  </svg>
+  <div class="spectrum__axis">
+    {% for region in view.regions %}
+    <span class="spectrum__region-label" style="left: {{ region.x }}%">{{ region.label }}</span>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}

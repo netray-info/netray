@@ -21,7 +21,7 @@ carries no deploy instructions for third parties (policy: `CONTRIBUTING.md`).
 | `tests/repo` | repository structure checks (`just test-repo`), one script per check |
 | `tests/acceptance` | Playwright suite against a deployed environment (own `package-lock.json`) |
 | `specs/rules`, `specs/features` | engineering rules; feature specs |
-| `specs/sdd/v2.md` | the V2 SDD, this repository's own: amend it in the same commit as the code that changes what it says. Its token source is `specs/sdd/v2-tokens.json` until V4.1 moves it into `netray-web`. PRD, reviews and baseline stay private; cite them as "(private)" |
+| `specs/sdd/v2.md` | the V2 SDD, this repository's own: amend it in the same commit as the code that changes what it says. Its token source is `crates/web/tokens.json`. PRD, reviews and baseline stay private; cite them as "(private)" |
 
 ## Verbs and the gate
 
@@ -86,6 +86,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Features unify.** A dependency feature one crate enables reaches every service in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
 - **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
+- **askama 0.16 closes every `{% call %}` with `{% endcall %}`**; without it the component macro does not compile.
+- **Identifier-valued CSS properties** (`grid-area`, `transition`) go into `IDENTIFIER_PROPERTIES` in `crates/web/src/gate.rs`, or the gate refuses colour words in them.
 
 ## Rules
 

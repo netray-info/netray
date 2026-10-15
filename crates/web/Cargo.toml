@@ -1,0 +1,14 @@
+[package]
+name = "netray-web"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+description = "Templates, components and design tokens for the netray.info V2 suite"
+
+[dependencies]
+netray-common = { workspace = true }
+askama = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+serde_json = { workspace = true }

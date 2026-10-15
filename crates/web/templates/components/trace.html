@@ -1,0 +1,11 @@
+{% macro trace(view) %}
+<ol class="trace">
+  {% for row in view.rows %}
+  <li class="trace__row marker"{% if row.current %} aria-current="true"{% endif %}>
+    <span class="trace__date">{{ row.date }}</span>
+    <span class="trace__grade">{{ row.grade }}</span>
+    <span class="trace__cells">{% for cell in row.cells %}<span class="trace__cell" data-tone="{{ cell.as_str() }}"></span>{% endfor %}</span>
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}

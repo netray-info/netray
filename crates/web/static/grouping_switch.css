@@ -1,0 +1,20 @@
+.grouping-switch {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+.grouping-switch__option {
+  padding: var(--space-1) var(--space-3);
+  border-block: var(--line-hair) solid var(--color-line);
+  border-inline-end: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-label);
+  cursor: pointer;
+}
+.grouping-switch__option[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-weight: var(--font-weight-strong);
+}

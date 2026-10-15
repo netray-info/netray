@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 160">
+<title>netray</title>
+<style>
+text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 100px }
+text, rect { fill: #0f1216 }
+@media (prefers-color-scheme: dark) {
+text, rect { fill: #e7e9ec }
+}
+</style>
+<text x="0" y="93" font-weight="400" textLength="125" lengthAdjust="spacingAndGlyphs">net</text>
+<text x="141" y="93" font-weight="700" textLength="135" lengthAdjust="spacingAndGlyphs">ray</text>
+<g id="scale-net">
+<rect class="axis" x="0" y="118" width="125" height="3.5"/>
+<rect class="tick" x="0" y="121.5" width="3" height="24"/>
+<rect class="tick" x="24.4" y="121.5" width="3" height="10"/>
+<rect class="tick" x="48.8" y="121.5" width="3" height="10"/>
+<rect class="tick" x="73.2" y="121.5" width="3" height="10"/>
+<rect class="tick" x="97.6" y="121.5" width="3" height="10"/>
+<rect class="tick" x="122" y="121.5" width="3" height="24"/>
+</g>
+<g id="scale-ray">
+<rect class="axis" x="125" y="118" width="151" height="3.5"/>
+<rect class="tick" x="141" y="121.5" width="3" height="10"/>
+<rect class="tick" x="174" y="121.5" width="3" height="10"/>
+<rect class="tick" x="207" y="121.5" width="3" height="10"/>
+<rect class="tick" x="240" y="121.5" width="3" height="10"/>
+<rect class="tick" x="273" y="121.5" width="3" height="24"/>
+</g>
+<rect id="marker" x="129.5" y="0" width="7.5" height="160"/>
+</svg>

@@ -1,0 +1,6 @@
+.run-line {
+  margin: 0;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}

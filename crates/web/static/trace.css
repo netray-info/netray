@@ -1,0 +1,40 @@
+.trace {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trace__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-inline-start: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+.trace__date { color: var(--color-muted); }
+.trace__grade {
+  min-width: var(--space-6);
+  color: var(--color-ink);
+  font-weight: var(--font-weight-strong);
+}
+.trace__cells {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--spectrum-trace-row);
+}
+.trace__cell {
+  flex: 1;
+  height: var(--spectrum-trace-row);
+  background: var(--status-untested-mark);
+}
+.trace__cell[data-tone="pass"] {
+  height: var(--line-hair);
+  background: var(--status-pass-hair);
+}
+.trace__cell[data-tone="warn"] { background: var(--status-warn-mark); }
+.trace__cell[data-tone="fail"] { background: var(--status-fail-mark); }
+.trace__cell[data-tone="fix"] { background: var(--status-fix-mark); }

@@ -1,0 +1,18 @@
+/* Base page rules for the V2 view layer. Tokens only: every value comes from tokens.json. */
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+}
+
+/* The marker (R43): a line at the inline start of the active element. */
+.marker {
+  border-inline-start: var(--line-marker) solid transparent;
+}
+.marker[aria-pressed="true"],
+.marker[aria-current]:not([aria-current="false"]),
+.marker[aria-selected="true"] {
+  border-inline-start-color: var(--color-ink);
+}

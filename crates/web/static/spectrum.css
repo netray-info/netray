@@ -1,0 +1,74 @@
+.spectrum {
+  position: relative;
+}
+.spectrum__labels,
+.spectrum__axis {
+  position: relative;
+  height: var(--space-5);
+}
+.spectrum__plate {
+  display: block;
+  width: 100%;
+  height: var(--spectrum-plate-height);
+  border: var(--line-hair) solid var(--color-plate-border);
+  background: var(--color-plate);
+  box-sizing: border-box;
+}
+.spectrum__boundary {
+  stroke: var(--color-grid);
+  stroke-width: var(--line-hair);
+}
+.spectrum__line {
+  stroke: var(--status-untested-mark);
+  stroke-width: var(--line-hair);
+}
+.spectrum__line[data-tone="pass"] {
+  stroke: var(--status-pass-mark);
+  stroke-width: var(--line-pass);
+  filter: drop-shadow(var(--status-glow-pass));
+}
+.spectrum__line[data-tone="warn"] {
+  stroke: var(--status-warn-mark);
+  stroke-width: var(--line-warn);
+  filter: drop-shadow(var(--status-glow-warn));
+}
+.spectrum__line[data-tone="fail"] {
+  stroke: var(--status-fail-mark);
+  stroke-width: var(--line-fail);
+  filter: drop-shadow(var(--status-glow-fail));
+}
+.spectrum__outline {
+  width: var(--line-fix);
+  transform: translateX(calc(var(--line-fix) / -2));
+  fill: none;
+  stroke: var(--status-fix-mark);
+  stroke-width: var(--line-hair);
+}
+.spectrum__ring {
+  r: calc(var(--space-1) - var(--line-hair) / 2);
+  fill: var(--color-plate);
+  stroke: var(--status-fix-mark);
+  stroke-width: var(--line-pass);
+}
+.spectrum__region-label,
+.spectrum__line-label {
+  position: absolute;
+  font-size: var(--font-size-caption);
+  white-space: nowrap;
+}
+.spectrum__region-label {
+  inset-block-start: 0;
+  padding-inline-start: var(--space-1);
+  color: var(--color-muted);
+  letter-spacing: var(--font-tracking-caps);
+  text-transform: uppercase;
+}
+.spectrum__line-label {
+  inset-block-end: 0;
+  padding-inline-start: var(--space-1);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+}
+.spectrum__line-label[data-tone="warn"] { color: var(--status-warn-text); }
+.spectrum__line-label[data-tone="fail"] { color: var(--status-fail-text); }
+.spectrum__line-label[data-tone="fix"] { color: var(--status-fix-text); }
