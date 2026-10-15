@@ -96,8 +96,18 @@ fn is_glow(t: &Token) -> bool {
     t.path.len() == 3 && t.path[0] == "status" && t.path[1] == "glow"
 }
 
-fn block(out: &mut String, indent: &str, selector: &str, decls: &[(String, String)]) {
+/// One rule: an optional `color-scheme` (so embedded SVGs follow the theme), then the tokens.
+fn block(
+    out: &mut String,
+    indent: &str,
+    selector: &str,
+    scheme: Option<&str>,
+    decls: &[(String, String)],
+) {
     writeln!(out, "{indent}{selector} {{").unwrap();
+    if let Some(scheme) = scheme {
+        writeln!(out, "{indent}  color-scheme: {scheme};").unwrap();
+    }
     for (name, value) in decls {
         writeln!(out, "{indent}  --{name}: {value};").unwrap();
     }
@@ -143,13 +153,13 @@ fn main() {
         .clone();
 
     let mut css = String::new();
-    block(&mut css, "", ":root", &light);
+    block(&mut css, "", ":root", Some("light dark"), &light);
     writeln!(css, "@media (prefers-color-scheme: dark) {{").unwrap();
-    block(&mut css, "  ", ":root", &dark);
+    block(&mut css, "  ", ":root", None, &dark);
     writeln!(css, "}}").unwrap();
-    block(&mut css, "", "[data-theme=\"dark\"]", &dark);
+    block(&mut css, "", "[data-theme=\"dark\"]", Some("dark"), &dark);
     writeln!(css, "@media (max-width: {phone_width}) {{").unwrap();
-    block(&mut css, "  ", ":root", &phone);
+    block(&mut css, "  ", ":root", None, &phone);
     writeln!(css, "}}").unwrap();
 
     let mut rs = String::new();

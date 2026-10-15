@@ -199,3 +199,9 @@ Reader over the working tree (production files only): 2 BLOCKER, 3 AMENDMENT, 1 
 skipped: no route or CLI; the SVGs were rendered with Quick Look (`qlmanage -t`) after the fix: words at natural width, the marker through the axis between "net" and "ray", the "y" inside the viewBox; the reader rendered all three in headless Firefox in both schemes.
 
 After the amendments the favicon and badge mark were rendered with Quick Look: a solid ink tile with the axis, ticks and marker cut out.
+
+### After the merge
+
+The forced-dark amendment was repaired in the feature's checkout after merging both phases: `tokens.css` declares `color-scheme: light dark` on `:root` and `color-scheme: dark` on `[data-theme="dark"]` (requirement 3 amended in 721d968, test `color_scheme_follows_the_theme` in c612de4, `crates/web/build.rs`).
+
+DEFERRED to the pages phase: `[data-theme="light"]` does not override the `prefers-color-scheme: dark` block, so a page forced light under a dark OS keeps the dark values; the theme switch of SDD Phase 4 owns it.
