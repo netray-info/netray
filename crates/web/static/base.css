@@ -1,0 +1,8 @@
+/* Base page rules for the V2 view layer. Tokens only: every value comes from tokens.json. */
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-body);
+}

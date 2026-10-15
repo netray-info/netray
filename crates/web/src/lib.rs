@@ -2,4 +2,5 @@
 //! components and the gate; no route is served from here yet.
 
 pub mod contrast;
+pub mod gate;
 pub mod tokens;
