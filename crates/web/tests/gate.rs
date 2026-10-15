@@ -395,6 +395,184 @@ const CASES: &[Case] = &[
         )],
         expect: None,
     },
+    // Amended requirement 6, third reading.
+    Case {
+        name: "askama expression in an SVG tag still checks its colour",
+        files: &[(
+            "templates/x.html",
+            "<svg><rect {% if n > 0 %}fill=\"#c42b22\"{% endif %}/></svg>\n",
+        )],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "askama expression in a foreign template tag still checks ownership",
+        files: &[(
+            "templates/pages/x.html",
+            "<p {% if n > 0 %}class=\"check-row\"{% endif %}>x</p>\n",
+        )],
+        expect: Some((OWNERSHIP_RULE, "templates/pages/x.html")),
+    },
+    Case {
+        name: "askama comparison does not hide an inline script",
+        files: &[(
+            "templates/x.html",
+            "{% if rows.len()<max %}\n<script>alert(1)</script>{% endif %}\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "literal font-size SVG attribute",
+        files: &[(
+            "templates/x.html",
+            "<svg><text font-size=\"40\">net</text></svg>\n",
+        )],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "literal font-family SVG attribute",
+        files: &[(
+            "templates/x.html",
+            "<svg><text font-family=\"Arial\">net</text></svg>\n",
+        )],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "vendor-prefixed radius",
+        files: &[("static/x.css", ".a { -webkit-border-radius: 50%; }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "vendor-prefixed radius longhand",
+        files: &[(
+            "static/x.css",
+            ".a { -webkit-border-top-left-radius: 9px; }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "deprecated system colours",
+        files: &[(
+            "static/x.css",
+            ".a { color: WindowText; background: ButtonHighlight; }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "colour literal in a data URI",
+        files: &[(
+            "static/x.css",
+            ".a { background-image: url(\"data:image/svg+xml;utf8,<svg><rect fill='red'/></svg>\"); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "literal rx SVG attribute",
+        files: &[(
+            "templates/x.html",
+            "<svg><rect rx=\"8\" width=\"10\" height=\"10\"/></svg>\n",
+        )],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "rx as a CSS property",
+        files: &[("static/x.css", ".a { rx: 6px; }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "literal outline width",
+        files: &[(
+            "static/x.css",
+            ".a { outline: 2px solid var(--color-ink); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "literal text-decoration-thickness",
+        files: &[("static/x.css", ".a { text-decoration-thickness: 3px; }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "inline event handler",
+        files: &[(
+            "templates/x.html",
+            "<button onclick=\"alert(1)\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "javascript URL",
+        files: &[(
+            "templates/x.html",
+            "<a href=\"javascript:alert(1)\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "literal outline-width",
+        files: &[("static/x.css", ".a { outline-width: 3px; }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "non-colour words that look like colours pass",
+        files: &[(
+            "static/x.css",
+            ".a { grid-area: mark; animation-name: highlight; background-image: url(/static/red.png); }\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "tan() is no colour",
+        files: &[(
+            "static/x.css",
+            ".a { width: calc(tan(45deg) * var(--space-1)); }\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "fill with a url reference passes",
+        files: &[(
+            "templates/x.html",
+            "<svg><rect fill=\"url(#fade)\"/></svg>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "font tokens in SVG attributes pass",
+        files: &[(
+            "templates/x.html",
+            "<svg><text font-size=\"var(--font-size-caption)\" font-family=\"var(--font-mono)\">x</text></svg>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "outline and decoration line tokens pass",
+        files: &[(
+            "static/x.css",
+            ".a { outline: var(--line-marker) solid var(--color-ink); text-decoration-thickness: var(--line-hair); }\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "rx token passes",
+        files: &[(
+            "templates/x.html",
+            "<svg><rect rx=\"var(--radius-max)\"/></svg>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "data-on attribute is no event handler",
+        files: &[(
+            "templates/x.html",
+            "<button type=\"button\" data-on=\"x\">x</button>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "less-than in an askama condition passes",
+        files: &[("templates/x.html", "<p>{% if a < b %}x{% endif %}</p>\n")],
+        expect: None,
+    },
 ];
 
 #[test]
