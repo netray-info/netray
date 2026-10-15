@@ -3035,6 +3035,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "netray-store"
+version = "0.26.0"
+dependencies = [
+ "netray-model",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "netray-tls"
 version = "0.26.0"
 dependencies = [
