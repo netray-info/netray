@@ -109,8 +109,8 @@ The phase's implement record says "58 planted rows"; the table holds 78 (20 + 34
 | ID | Criterion | Status | Test file |
 |---|---|---|---|
 | C1 | R8: `static/logo.svg` is W5b: "net" regular and "ray" bold as SVG `<text>` in the `font.sans` stack, a tick scale under each, the marker line through the scale axis between them | green | `crates/web/tests/identity_logo.rs` |
-| C2 | R8: `static/favicon.svg` and `static/badge-mark.svg` are the marker crossing the axis on a tile with at most 2 px radius | green | `crates/web/tests/identity_marks.rs` |
-| C3 | R8: all three SVGs are monochrome: only `color.light.ink` and `color.dark.ink` (the dark one under an embedded `prefers-color-scheme: dark` rule), no status colour, no gradient; the logo's `font-family` is the `font.sans` stack; a test compares the literals with the token values | green | `crates/web/tests/identity_colours.rs` |
+| C2 | R8 (amended 2026-10-15): `static/favicon.svg` and `static/badge-mark.svg` are the marker crossing the axis knocked out of a solid ink tile with at most 2 px radius, one ink-only `fill-rule="evenodd"` path, canvas icon S = 20 inset 6 on 32 px / S = 11 inset 2.5 on 16 px | green | `crates/web/tests/identity_marks.rs` |
+| C3 | R8: all three SVGs are monochrome: only `color.light.ink` and `color.dark.ink` (logo and favicon switch under an embedded `prefers-color-scheme: dark` rule; the badge mark is fixed, dark-ink marks on a light-ink tile, no scheme rule), no status colour, no gradient; the logo's `font-family` is the `font.sans` stack; a test compares the literals with the token values | green | `crates/web/tests/identity_colours.rs` |
 | C4 | R9: `templates/partials/tagline.html` holds the one tagline "Every check of a domain, in one spectrum."; no other template or stylesheet contains it | green | `crates/web/tests/tagline.rs` |
 | C5 | GIVEN the three SVGs WHEN a test reads them THEN every colour equals `color.light.ink` or `color.dark.ink`, none is a status colour, there is no gradient, no radius over 2 px, and the logo's font stack equals `font.sans` | green | `crates/web/tests/identity_colours.rs` |
 | C6 | GIVEN the tagline WHEN a test searches templates and stylesheets THEN it appears only in `templates/partials/tagline.html` | already_implemented | `crates/web/tests/tagline.rs` |
@@ -124,8 +124,9 @@ C6 passes before the phase (no copy of the tagline exists yet); its test is kept
 | G1 (tagline partial) | 0 (done by the implementer: one line of text) | implementer | 0 | 0 |
 | G2 (logo, favicon, badge mark) | 1 | sonnet | 31915 | 30 |
 | G2 fix, reading (logo widths) | 1 | sonnet | 19772 | 13 |
+| G2 amendments (knock-out tile, fixed badge mark) | 1 | sonnet | 31829 | 20 |
 
-The favicon and badge tile is the ink at `fill-opacity: 0.12` with the marks in full ink, not the canvas's solid ink tile with knocked-out marks. The plan took a knock-out to need `url(`/mask; the reader showed an ink-only `fill-rule="evenodd"` path draws it (first AMENDMENT below), which needs the operator's choice and a test change (the marks test reads `rect#tile`, `#axis`, `#marker`).
+The first build drew the favicon and badge tile as the ink at `fill-opacity: 0.12` behind full-ink marks, on the premise that a knock-out needs `url(`/mask; the reader showed an ink-only `fill-rule="evenodd"` path draws it. After the operator's decision (below) both are the canvas knock-out.
 
 ### Review
 
@@ -135,11 +136,13 @@ Reader over the working tree (production files only): 2 BLOCKER, 3 AMENDMENT, 1 
 |---|---|---|---|
 | BLOCKER | `static/logo.svg:10` | `textLength` 160/175 stretched both words ~30% past their natural width in the system font (SF Pro: "net" 125.0, "ray" 134.6 at em 100); W5b sizes each scale to its word | fixed: `textLength` 125/135, scales and marker recomputed, viewBox `0 0 280 160` |
 | BLOCKER | `static/logo.svg:11` | the trailing `letter-spacing: -0.03em` inside `textLength` pushed the "y" past the viewBox; clipped as `<img>` | fixed: `letter-spacing` dropped (`textLength` sets the run), 4 units right margin |
-| AMENDMENT (phase 4, repairable) | `static/favicon.svg:10` | the canvas favicon is the icon at S=20 centred (6 px inset) and knocked out of a solid ink tile; the build draws it at S=32 edge to edge in full ink over a 12% ink tile. R8 is silent on tile fill and inset; an ink-only evenodd path reproduces the canvas | open: operator's choice (see the return question) |
-| AMENDMENT (phase 4, not repaired) | `static/logo.svg:6` | the SVGs switch ink on `prefers-color-scheme` only; `[data-theme="dark"]` (R3) sets no `color-scheme`, so a forced-dark page under a light OS shows `#0f1216` on `#07080a` (1.07:1) | open: `[data-theme="dark"]{color-scheme: dark}` belongs to R3 / `tokens.css` |
-| AMENDMENT (phase 4, not repaired) | `static/badge-mark.svg:6` | the badge mark follows the viewer's scheme, but sits on the badge label colour the spec does not define (canvas: `#2a2f36` both schemes, mark `#ffffff`); light scheme gives 1.39:1 | open: badge label colour and mark ink for the badge renderer |
+| AMENDMENT (phase 4, repairable) | `static/favicon.svg:10` | the canvas favicon is the icon at S=20 centred (6 px inset) and knocked out of a solid ink tile; the build draws it at S=32 edge to edge in full ink over a 12% ink tile. R8 is silent on tile fill and inset; an ink-only evenodd path reproduces the canvas | operator 2026-10-15: canvas knock-out; R8 and the decision log amended, `identity_marks.rs` rewritten (evenodd point tests), favicon S = 20 inset 6 on 32 px, badge mark S = 11 inset 2.5 on 16 px (the canvas's 16 px board, implementer) |
+| AMENDMENT (phase 4, not repaired) | `static/logo.svg:6` | the SVGs switch ink on `prefers-color-scheme` only; `[data-theme="dark"]` (R3) sets no `color-scheme`, so a forced-dark page under a light OS shows `#0f1216` on `#07080a` (1.07:1) | handed to the main checkout: it adds `color-scheme` to `tokens.css` after the merge (operator 2026-10-15); `build.rs` untouched here |
+| AMENDMENT (phase 4, not repaired) | `static/badge-mark.svg:6` | the badge mark follows the viewer's scheme, but sits on the badge label colour the spec does not define (canvas: `#2a2f36` both schemes, mark `#ffffff`); light scheme gives 1.39:1 | operator 2026-10-15: the badge mark is fixed, `color.dark.ink` marks on a `color.light.ink` tile, no scheme rule; R8 amended, `identity_colours.rs` gains a fixed-scheme row |
 | DEFERRED | `static/badge-mark.svg:4`, `logo.svg:5` | element selectors (`rect`, `text, rect`) restyle every rect/text of a host document when the SVG is inlined | pages phase: inline use (badge renderer, `base.html`) scopes or drops the embedded style |
 
 ### Behavioural verification
 
 skipped: no route or CLI; the SVGs were rendered with Quick Look (`qlmanage -t`) after the fix: words at natural width, the marker through the axis between "net" and "ray", the "y" inside the viewBox; the reader rendered all three in headless Firefox in both schemes.
+
+After the amendments the favicon and badge mark were rendered with Quick Look: a solid ink tile with the axis, ticks and marker cut out.
