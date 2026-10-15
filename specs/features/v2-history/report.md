@@ -51,3 +51,34 @@ The forward amendments were decided by the implementer under the operator's auto
 ### Behavioural verification
 
 skipped: Phase 1 is a library with no entry point (no route, no CLI); lens calls it in Phase 4.
+
+## Phase 2 — Profile-effect grade in netray-engine
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R7 grade change; two steps when profile versions differ; re-scored grade computed by `netray-engine` from a stored `Run` and any loadable profile | green | crates/engine/tests/history.rs |
+| C2 | S: predecessor under A, current under in-memory B reweighting one check → two steps | green | crates/engine/tests/history.rs |
+| C3 | S: same profile → one step | green | crates/engine/tests/history.rs |
+| C4 | S: stored `Run` re-scored under its own profile → stored grade | green | crates/engine/tests/history.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 31578 | 81 |
+
+### Reader
+
+COUNTS blocker=0 amendment=0 deferred=0 nit=1
+
+| class | finding | outcome |
+|---|---|---|
+| NIT | `history::diff` does not check `cur_profile.version == cur.profile_version` | listed; the Phase 4 caller passes the profile it scored with |
+
+The Phase 1 DEFERRED (`rescored_prev` `None` across profile versions) is closed: `history::diff` derives it from the versions.
+
+### Behavioural verification
+
+skipped: library function without an entry point; lens calls it in Phase 4.

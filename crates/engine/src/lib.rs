@@ -3,6 +3,7 @@
 //! drives one check through them. The engine never names a module crate (P40).
 
 pub mod catalogue;
+pub mod history;
 pub mod profile;
 pub mod scoring;
 

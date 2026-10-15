@@ -17,3 +17,17 @@ G1: C1–C19 (one group: `lib.rs` declares `run` and `diff`; fingerprint and evi
 6. SDD §3.7 (repeated fields keys) and §4.3 (not measured, precedence, release classes) amended in the phase commit (CLAUDE.md: SDD in the same commit as the code; R16 lists them for Phase 4, done here instead).
 
 Group command: `cargo test -p netray-model`
+
+## Phase 2 — Profile-effect grade in netray-engine
+
+## Groups
+
+G1: C1–C4 (one new module).
+
+## Plan
+
+### G1
+1. `crates/engine/src/history.rs` (new): `rescore(run, profile)` rebuilds one `SectionEvent` per `RunSection` (Measured with the run's checks of that protocol as `CheckResult`, NotApplicable, Incomplete, TimedOut) and calls `scoring::score`; `diff(prev, cur, volatile, cur_profile)` calls `netray_model::diff::diff` with `Some(rescore(prev, cur_profile))` exactly when the profile versions differ.
+2. `crates/engine/src/lib.rs`: `pub mod history;`.
+
+Group command: `cargo test -p netray-engine --test history`
