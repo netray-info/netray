@@ -154,13 +154,6 @@ pub struct SpectrumRegion {
     pub width: f32,
 }
 
-impl SpectrumRegion {
-    /// The region's right edge, in percent of the plate.
-    fn end(&self) -> f32 {
-        self.x + self.width
-    }
-}
-
 /// The spectrum plate.
 #[derive(Debug, Clone)]
 pub struct SpectrumView {

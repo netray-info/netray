@@ -111,6 +111,7 @@ The phase's implement record says "58 planted rows"; the table holds 78 (20 + 34
 | C1 | R7: each R44 component exists once as a macro in `templates/components/<name>.html` and once as `static/<name>.css`, typed against its own view struct in `netray-web`; `static/base.css` holds the marker rule (R43) | green | `crates/web/tests/component_files.rs` |
 | C2 | a fixed view per component renders markup carrying the component's root class and the view's values | green | `crates/web/tests/components.rs` |
 | C3 | with the ten components in place the gate passes | green | `crates/web/tests/component_gate.rs` |
+| C4 | R7 (amended 2026-10-15): spectrum and trace keep SDD §5.4/§5.6 drawing rules — state width tokens, hollow fixed line with ring, muted unmeasured, one hairline per group boundary, axis row below and label row above the plate, trace pass hairline and fail block | green | `crates/web/tests/drawing_rules.rs` |
 
 ### Runs
 
@@ -154,6 +155,10 @@ No entry point (a library). A throwaway example (deleted) rendered `grade`, `spe
 
 `adlc verify`: `verified: contract passed: 154 tests collected`.
 ||||||| 6117980
+
+### Drawing rules
+
+Added after the merge on the operator's decision (c40911a). Of six tests in 4f1f58c five passed at once and guard the repaired drawing; `spectrum_one_hairline_separates_the_two_groups` failed: the template drew a boundary at each region's start and end, doubling every shared edge and marking the plate edges. Fixed by one coder run set (3 runs, sonnet, 22835 tokens, 37 s): a hairline at each region's start but the first.
 
 ## Phase 4 — Identity
 
