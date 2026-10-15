@@ -212,3 +212,35 @@ fn rust_constants_carry_every_value() {
         assert_eq!(got, want, "{name}");
     }
 }
+
+/// The plain `color-scheme` declarations of the top-level blocks matching `pred`.
+fn color_scheme(pred: impl Fn(&str) -> bool) -> Vec<String> {
+    blocks(CSS)
+        .iter()
+        .filter(|b| pred(&b.selector))
+        .flat_map(|b| {
+            b.body
+                .split(';')
+                .filter_map(|d| d.trim().split_once(':'))
+                .filter(|(k, _)| k.trim() == "color-scheme")
+                .map(|(_, v)| v.trim().to_string())
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// Embedded SVGs read `prefers-color-scheme` from the document's used colour scheme, so a page
+/// forced dark by `[data-theme="dark"]` must say so, or the logo keeps its light ink.
+#[test]
+fn color_scheme_follows_the_theme() {
+    assert_eq!(
+        color_scheme(|s| s == ":root"),
+        ["light dark"],
+        ":root color-scheme"
+    );
+    assert_eq!(
+        color_scheme(|s| s == "[data-theme=\"dark\"]"),
+        ["dark"],
+        "[data-theme=\"dark\"] color-scheme"
+    );
+}
