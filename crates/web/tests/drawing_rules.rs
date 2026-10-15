@@ -275,6 +275,39 @@ fn spectrum_group_names_below_and_short_names_above_the_plate() {
 }
 
 #[test]
+fn spectrum_pass_and_unmeasured_lines_carry_no_short_name_above_the_plate() {
+    let html = spectrum(&SpectrumView {
+        label: "Findings by position".into(),
+        lines: vec![
+            line("DNS-001", 5.0, Tone::Pass, Some("MX")),
+            line("DNS-002", 15.0, Tone::Untested, Some("SPF")),
+            line("DNS-003", 25.0, Tone::Warn, Some("DKIM")),
+        ],
+        regions: vec![SpectrumRegion {
+            label: "DNS".into(),
+            x: 0.0,
+            width: 100.0,
+        }],
+    })
+    .unwrap();
+    let labels = html.find("spectrum__labels").unwrap();
+    let plate_open = html.find("<svg").unwrap();
+    let above = &html[labels..plate_open];
+    assert!(above.contains(">DKIM<"), "warn short name missing: {above}");
+    for short in ["MX", "SPF"] {
+        assert!(
+            !above.contains(&format!(">{short}<")),
+            "{short} must not appear above the plate for pass or unmeasured: {above}"
+        );
+    }
+    assert_eq!(
+        above.matches("spectrum__line-label").count(),
+        1,
+        "only the warn line carries a short name: {above}"
+    );
+}
+
+#[test]
 fn trace_pass_row_is_a_hairline_and_fail_row_a_block() {
     let html = trace(&TraceView {
         rows: vec![

@@ -573,6 +573,64 @@ const CASES: &[Case] = &[
         files: &[("templates/x.html", "<p>{% if a < b %}x{% endif %}</p>\n")],
         expect: None,
     },
+    Case {
+        name: "askama-valued script src is an external script",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"module\" src=\"{{ asset }}\"></script>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "askama-valued script src with whitespace control passes",
+        files: &[(
+            "templates/x.html",
+            "<script src=\"{{- asset -}}\" defer></script>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "empty script src is still inline",
+        files: &[("templates/x.html", "<script src=\"\">alert(1)</script>\n")],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "mask-image gradient is refused",
+        files: &[(
+            "static/x.css",
+            ".a { mask-image: linear-gradient(to right, black 90%, transparent); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "vendor-prefixed colour property is refused",
+        files: &[("static/x.css", ".a { -webkit-tap-highlight-color: red; }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "backdrop-filter drop-shadow is refused",
+        files: &[(
+            "static/x.css",
+            ".a { backdrop-filter: drop-shadow(0 0 4px black); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "list-style-image gradient is refused",
+        files: &[(
+            "static/x.css",
+            ".a { list-style-image: linear-gradient(red, blue); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "colour-like identifiers and strings stay allowed",
+        files: &[(
+            "static/x.css",
+            ".a { grid-area: mark; animation-name: highlight; counter-reset: red; font-family: var(--font-sans); content: \"red\"; }\n",
+        )],
+        expect: None,
+    },
 ];
 
 #[test]
