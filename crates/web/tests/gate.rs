@@ -162,6 +162,239 @@ const CASES: &[Case] = &[
         )],
         expect: None,
     },
+    // Amended requirement 6: comments, custom properties, SVG attributes, logical sides, case.
+    Case {
+        name: "comment line before a declaration does not hide its colour",
+        files: &[("static/x.css", ".a {\n  /* marker */\n  color: #fff;\n}\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "declaration after a comment is still checked",
+        files: &[(
+            "static/x.css",
+            ".a { margin: 0; /* x */ border-radius: 50%; }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "colour literal in a custom property value",
+        files: &[("static/x.css", ".a { --c: #fff; color: var(--c); }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "stylesheet redefines a token",
+        files: &[(
+            "static/x.css",
+            ".a { --radius-max: 50%; border-radius: var(--radius-max); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "colour literal in a custom property in a style attribute",
+        files: &[("templates/x.html", "<p style=\"--c: red\">x</p>\n")],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "colour literal in an SVG presentation attribute",
+        files: &[(
+            "templates/x.html",
+            "<svg><line stroke=\"#c42b22\"/></svg>\n",
+        )],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "literal stroke-width SVG attribute",
+        files: &[(
+            "templates/x.html",
+            "<svg><line stroke-width=\"3\"/></svg>\n",
+        )],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "style element with attributes is scanned",
+        files: &[(
+            "templates/x.html",
+            "<style media=\"screen\">.a { color: #fff; }</style>\n",
+        )],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "uppercase style element is scanned",
+        files: &[("templates/x.html", "<STYLE>.a { color: #fff; }</STYLE>\n")],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "logical border side with literal width",
+        files: &[(
+            "static/x.css",
+            ".a { border-inline-start: 4px solid var(--color-line); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "radius longhand with literal",
+        files: &[("static/x.css", ".a { border-top-left-radius: 8px; }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "logical border width longhand with literal",
+        files: &[("static/x.css", ".a { border-block-end-width: 2px; }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "component class defined in a style element of a foreign template",
+        files: &[(
+            "templates/pages/x.html",
+            "<style>.check-row { display: block; }</style>\n",
+        )],
+        expect: Some((OWNERSHIP_RULE, "templates/pages/x.html")),
+    },
+    Case {
+        name: "component class next to template syntax in a foreign template",
+        files: &[(
+            "templates/pages/x.html",
+            "<div class=\"check-row{% if open %} is-open{% endif %}\">x</div>\n",
+        )],
+        expect: Some((OWNERSHIP_RULE, "templates/pages/x.html")),
+    },
+    Case {
+        name: "uppercase inline script",
+        files: &[("templates/x.html", "<SCRIPT>alert(1)</SCRIPT>\n")],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "data-src is no src",
+        files: &[(
+            "templates/x.html",
+            "<script data-src=\"x\">alert(1)</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "self-closing slash script",
+        files: &[("templates/x.html", "<script/>alert(1)</script>\n")],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "radius from the wrong token family",
+        files: &[(
+            "static/x.css",
+            ".a { border-radius: var(--font-size-grade); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "font-size from the wrong token family",
+        files: &[("static/x.css", ".a { font-size: var(--space-9); }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "oklab colour function",
+        files: &[("static/x.css", ".a { color: oklab(0.6 0.1 0.1); }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "system colour",
+        files: &[("static/x.css", ".a { color: CanvasText; }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "color-mix function",
+        files: &[(
+            "static/x.css",
+            ".a { color: color-mix(in srgb, var(--color-ink) 40%, var(--color-bg)); }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "lch colour function",
+        files: &[("static/x.css", ".a { color: lch(50% 30 40); }\n")],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "component element class in a foreign stylesheet",
+        files: &[(
+            "static/other.css",
+            ".check-row__title { color: var(--color-ink); }\n",
+        )],
+        expect: Some((OWNERSHIP_RULE, "static/other.css")),
+    },
+    Case {
+        name: "component prefixed class in a foreign template",
+        files: &[(
+            "templates/pages/x.html",
+            "<span class=\"check-row-status\">x</span>\n",
+        )],
+        expect: Some((OWNERSHIP_RULE, "templates/pages/x.html")),
+    },
+    Case {
+        name: "named colour in an island string literal",
+        files: &[("islands/x.ts", "el.style.color = \"red\";\n")],
+        expect: Some((TOKEN_RULE, "islands/x.ts")),
+    },
+    Case {
+        name: "border-left with line token and transparent passes",
+        files: &[(
+            "static/x.css",
+            ".a { border-left: var(--line-marker) solid transparent; }\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "marker comment naming a component is no definition",
+        files: &[(
+            "static/base.css",
+            "/* marker rule, used by .grouping-switch */\nbody { margin: 0; }\n",
+        )],
+        expect: None,
+    },
+    // A string literal is a colour only when it is exactly a hex colour or the hex follows a CSS
+    // value context; the selector `#feed` is no colour, and comments never count.
+    Case {
+        name: "island selector string and comment words are no colour",
+        files: &[(
+            "islands/x.ts",
+            "const a = Math.tan(theta); // the red line\ndocument.querySelector('#feed');\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "CSS-wide keywords and zero pass",
+        files: &[(
+            "static/x.css",
+            ".a { font: inherit; border: 0; border-radius: 0; }\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "component class with element in its own macro file",
+        files: &[(
+            "templates/components/check_row.html",
+            "<div class=\"check-row\"><span class=\"check-row__title\">x</span></div>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "component prefixed class in its own stylesheet",
+        files: &[(
+            "static/check_row.css",
+            ".check-row-status { color: var(--color-ink); }\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "script with src passes",
+        files: &[("templates/x.html", "<script src=\"/x.js\"></script>\n")],
+        expect: None,
+    },
+    Case {
+        name: "font and stroke tokens pass",
+        files: &[(
+            "static/x.css",
+            ".a { font-family: var(--font-mono); font-size: var(--font-size-body); stroke-width: var(--line-hair); }\n",
+        )],
+        expect: None,
+    },
 ];
 
 #[test]
