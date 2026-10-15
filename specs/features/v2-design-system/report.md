@@ -99,3 +99,5 @@ Known limits after the fix, inside the threat model: a token attribute filled by
 ### Behavioural verification
 
 skipped: the phase adds a library function and a test, no CLI, route or UI action.
+
+The phase's implement record says "58 planted rows"; the table holds 78 (20 + 34 + 24). Records are not edited, so the count is corrected here.
