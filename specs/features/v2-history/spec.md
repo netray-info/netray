@@ -37,10 +37,10 @@ Every complete lens run with default options, whatever route started it, is reco
 
 1. `netray-model` holds a serialisable `Run`: per check its ID and status, the evidence blocks, `profile_version`, `engine_version`, `grade` and `complete`, and per section the outcome kind and reason. `Grade` gains `Deserialize`; a `Run` round-trips through JSON unchanged.
 2. lens builds the `Run` from what it scored: the `SectionOutcome`s of `crates/lens/src/score.rs`, the `grade` and `complete` of its `OverallScore`, and the blocks of `run_check_with_evidence`. Every catalogue check of a section appears in the `Run`: a measured section with its statuses, a not-applicable section with every check `not_applicable`, an incomplete or timed-out section with every check `unmeasured`.
-3. `netray-model` computes a run's fingerprint as SHA-256 over canonical JSON of: the profile version; every check's ID and status; every evidence block with the volatile paths removed (a path matches a block by name, whatever its address qualifier), every set in canonical order (records; table rows by key; repeated keys of a fields block by value; headers by name), and CSP nonce sources (`'nonce-…'`) in `content-security-policy` and `content-security-policy-report-only` values replaced by one fixed token. Two runs that differ only in volatile values, set order or nonce values have equal fingerprints.
+3. `netray-model` computes a run's fingerprint as SHA-256 over canonical JSON of: the profile version; every check's ID and status; every evidence block with the volatile paths removed (a path matches a block by name, whatever its address qualifier; a row path removes the whole row), every set in canonical order (records; table rows by key; repeated keys of a fields block by value; headers by name), and CSP nonce sources (`'nonce-…'`) in `content-security-policy` and `content-security-policy-report-only` values replaced by one fixed token. Two runs that differ only in volatile values, set order or nonce values have equal fingerprints.
 4. `netray-model` diffs a current run against a predecessor run per check by status transition: fixed (warn or fail → pass), improved (fail → warn), new (pass → warn or fail), worse (warn → fail), now applicable (not_applicable → measured), no longer applicable (measured → not_applicable), into or out of not tested, into or out of not measured (`unmeasured`). When both statuses are not_tested or unmeasured, the current status decides: into not tested or into not measured. Neither not-tested nor not-measured transitions ever count as fixed or worse. A check whose status is unchanged produces no row.
 5. A check ID present in only one run is `added` or `removed`; when the two runs' `engine_version` differ it is `added by release` or `removed by release` instead, and the diff marks that the predecessor has another engine version.
-6. The diff reports evidence changes per block by one algorithm over the six shapes, only for blocks of sections measured in both runs: changed keys (fields), added, removed or changed rows by key (table), added or removed records (records), changed positions (chain), changed node paths (tree), changed (text); added or removed blocks. Volatile paths and nonce values are never reported; set order is never a change.
+6. The diff reports evidence changes per block by one algorithm over the six shapes, only for blocks of sections measured in both runs: changed keys (fields), added, removed or changed rows by key (table), each item signed `+`, `-` or `~`, added or removed records (records), changed positions (chain), changed node paths (tree), changed (text); added or removed blocks. Volatile paths and nonce values are never reported; set order is never a change.
 7. The diff reports the grade change; when the profile versions differ it reports two steps, predecessor grade → predecessor re-scored with the current profile (profile effect) → current grade (domain effect). The re-scored grade is an input to the model's diff; `netray-engine` computes it from a stored `Run` and any loadable profile.
 8. `netray-store` creates `history.db` with the schema of SDD §4.1 (columns, `ON DELETE SET NULL` on `predecessor_id`, index on `(domain, created_at DESC)`) through sqlx migrations that use no SQLite-only types or functions; the entry ID is an 8-character nanoid over `[0-9A-Za-z]` with collision retry.
 9. `netray-store` records a complete run in one transaction: read the domain's latest entry; equal fingerprint → move its `last_seen_at` to now and store nothing else; otherwise insert a new entry with `predecessor_id` = latest, the run JSON (with the evidence schema version), the fingerprint and the diff (none for a first entry). Record returns which of first, identical or changed happened, and the diff. The store serialises its writes (record and sweep) within the process, so concurrent records of one domain chain or match and never fail on each other.
@@ -51,6 +51,7 @@ Every complete lens run with default options, whatever route started it, is reco
 14. The badge route renders an incomplete run (`complete` false) as unscored, with the short Cache-Control of `is_unscored_grade` (`crates/lens/src/routes.rs:854`), whatever its grade.
 15. A failed record logs at `error` and increments `lens_history_record_errors_total` (name default, not interviewed); the client's response is unaffected. The metric is registered at startup.
 16. `specs/sdd/v2.md` is amended: §4.3 names the not-measured class, the precedence of requirement 4 and the release-added/removed classes; §3.1 says the profile-effect grade is computed by `netray-engine` and passed to the model's diff, keeping `netray-store` on `netray-model` only; §3.7 adds repeated fields keys to the canonical sets; §4.1 says the store serialises its writes until §4.4's one-run-per-domain exists; §4.4's moka citation names `Cache::builder` in `crates/lens/src/state.rs` instead of a line; the Phase 2 table marks V2.1–V2.5 as built by `v2-history`.
+17. The modules' volatile lists cover values that change between identical responses: http adds the header rows `expires`, `x-timer`, `x-served-by`, `x-cache`, `x-cache-hits`, `cf-cache-status` and the `http.server` keys `address`, `org`, `network_type` (the first A record in resolver order, `crates/http/src/input.rs:70`); dns adds `dns.rrsig/data` (expiration, inception and signature in one text value, `crates/dns/src/module.rs:467`). SDD §3.7's volatile table lists them.
 
 ## Phases
 
@@ -116,7 +117,7 @@ GIVEN an entry last seen 89 days ago WHEN swept THEN it remains.
 ## Phase 4 — lens records every run
 
 **Depends on:** Phase 2, Phase 3
-**Requirements:** 2, 12, 13, 14, 15, 16
+**Requirements:** 2, 12, 13, 14, 15, 16, 17
 
 `crates/lens`: `[history]` config, store open/migrate/sweep at startup beside the snapshot store, one record call at the end of `run_check_with_evidence` for runs without options, building the `Run` from lens's scored sections, the badge's incomplete branch, the error metric, the gate-script overrides and the startup test, the SDD amendments.
 
@@ -134,6 +135,8 @@ GIVEN a `db_path` in a nonexistent directory WHEN lens starts THEN it exits non-
 GIVEN a store whose writes fail WHEN a run completes THEN the response is unchanged and `lens_history_record_errors_total` is 1.
 GIVEN an unknown key under `[history]` WHEN the config loads THEN it is rejected.
 GIVEN `just adlc-verify` on a clean checkout WHEN it finishes THEN `git status --porcelain` lists no `history.db*`.
+GIVEN two http module runs differing only in `Expires`, `cf-cache-status` and the order of the A records WHEN fingerprinted with http's volatile list THEN the fingerprints are equal.
+GIVEN two dns module runs differing only in an RRSIG's `data` WHEN fingerprinted with dns's volatile list THEN the fingerprints are equal.
 
 ## Decision log
 
@@ -150,6 +153,7 @@ GIVEN `just adlc-verify` on a clean checkout WHEN it finishes THEN `git status -
 - Section-level outcomes expanded into per-check statuses (not_applicable, unmeasured) over diffing sections: a domain gaining an A record reads as "now applicable", a timeout as "into not measured", never as added or removed (independent reading; implementer, 2026-10-15).
 - The `Run` built from lens's scored result over the raw engine events: what lens reported as incomplete is never stored (independent reading; implementer, 2026-10-15).
 - Writes serialised in the store over relying on §4.4's one run per domain: §4.4 comes with `v2-admission`, and concurrent `/api/check` requests exist today (independent reading; implementer, 2026-10-15).
+- Phase 1 reader findings, implementer under the operator's autonomy mandate (2026-10-15): a volatile row path covers the whole row, presence included (SDD §3.7 "a path addresses a whole row"), over comparing the row's presence; table and fields items carry their sign (`~`, `-`, `+`) over a flat key list, because a stored diff outlives its predecessor (R11); a nonce source ends at its closing quote only before whitespace or `;`, over swallowing up to any later quote; the volatile lists gain cache, expiry and resolver-order values and RRSIG data (R17) over storing an entry per CDN hit or re-signature.
 
 ## Open decisions
 

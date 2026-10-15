@@ -2,7 +2,10 @@
 //!
 //! Pure data types with no I/O and no dependency on any other workspace crate.
 
+mod canonical;
+pub mod diff;
 pub mod evidence;
+pub mod run;
 
 use std::fmt;
 
@@ -148,7 +151,7 @@ pub enum FixOwner {
 }
 
 /// The overall grade of a scan.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Grade {
     #[serde(rename = "A+")]
     APlus,

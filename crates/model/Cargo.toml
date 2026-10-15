@@ -7,6 +7,5 @@ description = "Shared check vocabulary for the netray.info V2 suite"
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
-
-[dev-dependencies]
 serde_json = { workspace = true }
+sha2 = { workspace = true }
