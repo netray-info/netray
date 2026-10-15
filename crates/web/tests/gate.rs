@@ -631,6 +631,48 @@ const CASES: &[Case] = &[
         )],
         expect: None,
     },
+    Case {
+        name: "multi-value transition passes",
+        files: &[(
+            "static/x.css",
+            ".a { transition: background 150ms ease, color 150ms ease; }\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "animation naming highlight passes",
+        files: &[(
+            "static/x.css",
+            ".a { animation: highlight 1s ease-in-out; }\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "transition does not excuse a colour in background",
+        files: &[(
+            "static/x.css",
+            ".a { transition: color 150ms ease; background: red; }\n",
+        )],
+        expect: Some((TOKEN_RULE, "static/x.css")),
+    },
+    Case {
+        name: "unquoted askama script src is an external script",
+        files: &[("templates/x.html", "<script src={{ asset }}></script>\n")],
+        expect: None,
+    },
+    Case {
+        name: "unquoted askama script src with other attributes passes",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"module\" src={{ asset }} defer></script>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "empty unquoted script src is still inline",
+        files: &[("templates/x.html", "<script src=>alert(1)</script>\n")],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
 ];
 
 #[test]
