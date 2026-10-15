@@ -86,6 +86,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Features unify.** A dependency feature one crate enables reaches every service in the `netray` binary; select behaviour at runtime, never with `cfg!(feature)`.
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
 - **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
+- **askama 0.16 closes every `{% call %}` with `{% endcall %}`**; without it the component macro does not compile.
+- **Identifier-valued CSS properties** (`grid-area`, `transition`) go into `IDENTIFIER_PROPERTIES` in `crates/web/src/gate.rs`, or the gate refuses colour words in them.
 
 ## Rules
 

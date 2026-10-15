@@ -1,7 +1,8 @@
 # Spec: V2 design system (Phase 4a)
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-14
+Finished: 2026-10-15
 
 ## Goal
 
