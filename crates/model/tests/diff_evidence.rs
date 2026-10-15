@@ -105,7 +105,7 @@ fn evidence_diff_per_shape_with_deterministic_items() {
             Protocol::Tls,
             Shape::Fields(vec![("a".into(), t("1")), ("b".into(), t("2"))]),
             Shape::Fields(vec![("a".into(), t("1")), ("b".into(), t("3"))]),
-            vec![changed("tls.handshake@192.0.2.1:443", &["b"])],
+            vec![changed("tls.handshake@192.0.2.1:443", &["~ b"])],
         ),
         (
             "http.headers",
@@ -120,7 +120,7 @@ fn evidence_diff_per_shape_with_deterministic_items() {
                 vec![t("b"), t("9")],
                 vec![t("d"), t("4")],
             ]),
-            vec![changed("http.headers", &["b", "c", "d"])],
+            vec![changed("http.headers", &["~ b", "- c", "+ d"])],
         ),
         (
             "tls.chain@192.0.2.1:443",
@@ -226,7 +226,7 @@ fn table_row_move_is_not_a_change_only_the_changed_row_is_reported() {
     );
     assert_eq!(
         diff(&prev, &cur, &[], None).evidence,
-        vec![changed("http.headers", &["b"])]
+        vec![changed("http.headers", &["~ b"])]
     );
 }
 
@@ -253,7 +253,7 @@ fn volatile_paths_suppress_evidence_changes() {
     // without the volatile list the same pair is a change
     assert_eq!(
         diff(&prev, &cur, &[], None).evidence,
-        vec![changed("http.headers", &["date"])]
+        vec![changed("http.headers", &["~ date"])]
     );
 
     let hs = |ms| {

@@ -188,3 +188,26 @@ fn csp_other_directive_change_changes_fingerprint() {
     let b = run(vec![csp("script-src 'self' cdn.example.com")]);
     assert_ne!(fingerprint(&a, &[]), fingerprint(&b, &[]));
 }
+
+#[test]
+fn unterminated_nonce_does_not_hide_other_sources() {
+    let a = run(vec![csp(
+        "script-src 'nonce-r4nd0m https://cdn-a.example.com 'strict-dynamic'",
+    )]);
+    let b = run(vec![csp(
+        "script-src 'nonce-r4nd0m https://cdn-b.example.com 'strict-dynamic'",
+    )]);
+    assert_ne!(fingerprint(&a, &[]), fingerprint(&b, &[]));
+    assert!(!diff(&a, &b, &[], None).evidence.is_empty());
+}
+
+#[test]
+fn volatile_row_path_covers_the_whole_row() {
+    let miss = run(vec![headers(&[("server", "example")])]);
+    let hit = run(vec![headers(&[("server", "example"), ("age", "37")])]);
+    let volatile = ["http.headers/value@age"];
+    assert_eq!(fingerprint(&miss, &volatile), fingerprint(&hit, &volatile));
+    assert!(diff(&miss, &hit, &volatile, None).evidence.is_empty());
+    // the same pair without the path is a change
+    assert_ne!(fingerprint(&miss, &[]), fingerprint(&hit, &[]));
+}
