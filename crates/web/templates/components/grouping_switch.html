@@ -1,0 +1,7 @@
+{% macro grouping_switch(view) %}
+<div class="grouping-switch" role="group" aria-label="{{ view.label }}">
+  {% for option in view.options %}
+  <button type="button" class="grouping-switch__option marker" data-group="{{ option.value }}" aria-pressed="{% if option.pressed %}true{% else %}false{% endif %}">{{ option.label }}</button>
+  {% endfor %}
+</div>
+{% endmacro %}

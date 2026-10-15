@@ -30,3 +30,18 @@
 - `pub mod gate;` in `crates/web/src/lib.rs`.
 
 **G2.** `crates/web/static/base.css`: a `body` rule with tokens only (`--color-bg`, `--color-ink`, `--font-sans`, `--font-size-body`); the R43 marker rule comes in Phase 3.
+
+## Phase 3 — Components
+
+### Groups
+
+- G1: C1, C2, C3 — the ten components share `components.rs`, `lib.rs` and the macro files every test reads; the marker rule in `base.css` is part of C1.
+
+### Plan
+
+**G1.** The API (names, fields, markup contract) as fixed by `crates/web/tests/components.rs`.
+- `crates/web/src/lib.rs`: `pub mod components;`.
+- `crates/web/src/components.rs`: `Tone`, `SegmentState`, `EvidenceShape` with `as_str()` (no `*Status`/`*Verdict` enum, P03); `RecordRow`, `Field`, `TreeItem`; the ten `*View` structs and their row types (`RaySegment`, `SpectrumLine`, `SpectrumRegion`, `TraceRow`, `DiffEntry`, `GroupingOption`), fields `pub`, `Debug, Clone`; per component a private askama template struct whose inline source imports `components/<name>.html` and calls the macro, and `pub fn <name>(view) -> askama::Result<String>`.
+- `crates/web/templates/components/<name>.html` ×10: `{% macro <name>(view) %}` once; root class `<root>`, inner `<root>__<part>`, tone as `data-tone`; no colour, width or font attribute in the spectrum SVG (CSS on `data-tone` draws them); no other component's class; trace rows and grouping-switch options carry `marker`; no script, no `on*`.
+- `crates/web/static/<name>.css` ×10: only the component's own selectors; colours `var(--color-*)`/`var(--status-*)`; radius, font size and family, stroke and border widths through their token family; border shorthands state a width.
+- `crates/web/static/base.css`: the R43 marker rule on `.marker` for `aria-pressed="true"`, `aria-current` (not `"false"`) and `aria-selected="true"`: a `var(--line-marker)` line in `var(--color-ink)` at the inline start, no component class.

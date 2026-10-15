@@ -1,0 +1,5 @@
+{% macro run_line(view) %}
+<p class="run-line">
+  {% for part in view.parts %}{% if !loop.first %}&#32;<span class="run-line__sep" aria-hidden="true">·</span>&#32;{% endif %}<span class="run-line__part">{{ part }}</span>{% endfor %}
+</p>
+{% endmacro %}

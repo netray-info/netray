@@ -101,3 +101,55 @@ Known limits after the fix, inside the threat model: a token attribute filled by
 skipped: the phase adds a library function and a test, no CLI, route or UI action.
 
 The phase's implement record says "58 planted rows"; the table holds 78 (20 + 34 + 24). Records are not edited, so the count is corrected here.
+
+## Phase 3 — Components
+
+### Criteria
+
+| ID | Criterion | Status | Test file |
+|---|---|---|---|
+| C1 | R7: each R44 component exists once as a macro in `templates/components/<name>.html` and once as `static/<name>.css`, typed against its own view struct in `netray-web`; `static/base.css` holds the marker rule (R43) | green | `crates/web/tests/component_files.rs` |
+| C2 | a fixed view per component renders markup carrying the component's root class and the view's values | green | `crates/web/tests/components.rs` |
+| C3 | with the ten components in place the gate passes | green | `crates/web/tests/component_gate.rs` |
+
+### Runs
+
+| Group | Coder runs | Green by | Tokens | Seconds |
+|---|---|---|---|---|
+| G1 (ten components, base.css marker) | 2 | sonnet | 88709 | 340 |
+| G1 fix, reading | 1 | sonnet | 62494 | 129 |
+
+Run 1 failed to compile: askama 0.16.1 needs `{% endcall %}` after `{% call %}`.
+
+### Review
+
+Reader over 6117980 and the working tree: 13 BLOCKER, 1 AMENDMENT, 1 DEFERRED, 3 NIT. The reader rendered the components in headless Chromium in both themes.
+
+| Class | Where | Finding | Outcome |
+|---|---|---|---|
+| BLOCKER | `spectrum.css` | a fix line was a solid 5 px bar with no ring, not hollow with a ring (§5.4, `line.fix`) | fixed: an outline open at the bottom plus a ring |
+| BLOCKER | `spectrum.css` | the dark glow was invisible: `drop-shadow` in user units of a stretched `viewBox` | fixed: no stretched viewBox, percent coordinates, glow in CSS px |
+| BLOCKER | `spectrum.css` | regions were abutting filled rects, so no boundary showed | fixed: a hairline at each boundary |
+| BLOCKER | `spectrum.css` | region labels were drawn inside the plate | fixed: axis row below the plate |
+| BLOCKER | `spectrum.css` | line labels were drawn inside the plate, in ink | fixed: label row above, in the tone's text colour |
+| BLOCKER | `trace.css` | a pass cell was a full block, not the §5.6 hairline | fixed |
+| BLOCKER | `check_row.html` | tone carried by colour alone; same bar width for every tone | fixed: visible tone word, bar width from the tone's line token |
+| BLOCKER | `check_row.css` | the "Fix:" label used the `fix` status colour | fixed: ink |
+| BLOCKER | `evidence_block.css` | tree indentation stopped at depth 3 | fixed: one rule driven by a depth custom property |
+| BLOCKER | `evidence_block.html` | `<pre>` dropped a leading newline of the `text` shape | fixed: a newline after the start tag |
+| BLOCKER | `progress_ray.html` | the segment state lived only in `data-state` | fixed: a state word in the text |
+| BLOCKER | `run_line.html` | parts were joined in the accessible text | fixed: whitespace outside the hidden separator |
+| BLOCKER | `evidence_block.html` | feed codes had no separator | fixed: "Feeds lines:" and `, ` |
+| AMENDMENT (phase 3, repaired) | `spec.md:74` | R7 and the Phase 3 scenarios do not state the SDD's drawing rules (§5.4 widths, hollow fix with ring, boundaries, labels; §5.6 pass hairline), so C1–C3 cannot catch the drawing defects above | code repaired in this phase; no test holds the drawing rules |
+| DEFERRED | `query_input.html` | the GET form submits `<action>?<name>=…`, which no §5.1 route answers; the route or redirect comes with the pages | Phase 4 of the SDD |
+| NIT | `grade.css` | grade bar uses `--line-fix` (5 px), the design draws 4 px | listed |
+| NIT | `base.css` | the marker is an inline-start border, not a line crossing an axis | listed |
+| NIT | `run_line.css` | run line 13 px without caps tracking | listed |
+
+No second reading: each blocker was checked in the render below.
+
+### Behavioural verification
+
+No entry point (a library). A throwaway example (deleted) rendered `grade`, `spectrum` (warn, pass, fail, fix, untested lines; three regions), `trace` and `check_row` with `tokens::CSS` and the component stylesheets, and `chrome-headless-shell --screenshot` captured both themes. The fix line shows hollow with its ring, the fail, warn and pass glows show in dark only, the boundaries are hairlines, labels sit above the plate and region names below it, pass trace cells are hairlines, and the check row shows `FAIL` in the fail text colour with "Fix:" in ink.
+
+`adlc verify`: `verified: contract passed: 154 tests collected`.

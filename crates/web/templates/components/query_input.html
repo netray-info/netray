@@ -1,0 +1,7 @@
+{% macro query_input(view) %}
+<form class="query-input" action="{{ view.action }}" method="get">
+  <label class="query-input__label" for="query-input-{{ view.name }}">{{ view.label }}</label>
+  <input class="query-input__field" id="query-input-{{ view.name }}" type="text" name="{{ view.name }}" placeholder="{{ view.placeholder }}"{% if let Some(value) = view.value %} value="{{ value }}"{% endif %} />
+  <button class="query-input__submit" type="submit">{{ view.submit }}</button>
+</form>
+{% endmacro %}

@@ -1,0 +1,7 @@
+{% macro progress_ray(view) %}
+<ol class="progress-ray" aria-label="{{ view.label }}">
+  {% for segment in view.segments %}
+  <li class="progress-ray__segment" data-state="{{ segment.state.as_str() }}"><span class="progress-ray__label">{{ segment.label }}</span> <span class="progress-ray__state">{{ segment.state.as_str() }}</span></li>
+  {% endfor %}
+</ol>
+{% endmacro %}

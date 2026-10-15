@@ -6,3 +6,13 @@ body {
   font-family: var(--font-sans);
   font-size: var(--font-size-body);
 }
+
+/* The marker (R43): a line at the inline start of the active element. */
+.marker {
+  border-inline-start: var(--line-marker) solid transparent;
+}
+.marker[aria-pressed="true"],
+.marker[aria-current]:not([aria-current="false"]),
+.marker[aria-selected="true"] {
+  border-inline-start-color: var(--color-ink);
+}

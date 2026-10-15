@@ -1,0 +1,16 @@
+{% macro diff_block(view) %}
+<section class="diff-block">
+  <h3 class="diff-block__title">{{ view.title }}</h3>
+  <p class="diff-block__summary">{{ view.summary }}</p>
+  <ul class="diff-block__entries">
+    {% for entry in view.entries %}
+    <li class="diff-block__entry" data-tone="{{ entry.tone.as_str() }}">
+      <span class="diff-block__kind">{{ entry.kind }}</span>
+      <span class="diff-block__text">{{ entry.text }}</span>
+      <span class="diff-block__protocol">{{ entry.protocol }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if let Some(note) = view.note %}<p class="diff-block__note">{{ note }}</p>{% endif %}
+</section>
+{% endmacro %}

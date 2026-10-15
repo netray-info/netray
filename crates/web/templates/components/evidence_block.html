@@ -1,0 +1,38 @@
+{% macro evidence_block(view) %}
+<section class="evidence-block" id="{{ view.id }}" data-shape="{{ view.shape.as_str() }}">
+  <h3 class="evidence-block__title">{{ view.title }}</h3>
+  {% match view.shape %}
+  {% when EvidenceShape::Records(rows) %}
+  <table class="evidence-block__table">
+    {% for row in rows %}
+    <tr><td>{{ row.owner }}</td><td>{{ row.rtype }}</td><td>{{ row.ttl }}</td><td>{{ row.data }}</td></tr>
+    {% endfor %}
+  </table>
+  {% when EvidenceShape::Table with { columns, rows } %}
+  <table class="evidence-block__table">
+    <thead><tr>{% for column in columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+    {% for row in rows %}
+    <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+    {% endfor %}
+  </table>
+  {% when EvidenceShape::Chain(items) %}
+  <ol class="evidence-block__chain">
+    {% for item in items %}
+    <li class="evidence-block__link"><dl class="evidence-block__fields">{% for field in item %}<dt>{{ field.key }}</dt><dd>{{ field.value }}</dd>{% endfor %}</dl></li>
+    {% endfor %}
+  </ol>
+  {% when EvidenceShape::Tree(items) %}
+  <ul class="evidence-block__tree">
+    {% for item in items %}
+    <li class="evidence-block__tree-item" data-depth="{{ item.depth }}" style="--evidence-block-depth: {{ item.depth }}">{{ item.text }}</li>
+    {% endfor %}
+  </ul>
+  {% when EvidenceShape::Fields(fields) %}
+  <dl class="evidence-block__fields">{% for field in fields %}<dt>{{ field.key }}</dt><dd>{{ field.value }}</dd>{% endfor %}</dl>
+  {% when EvidenceShape::Text(text) %}
+  <pre class="evidence-block__text">
+{{ text }}</pre>
+  {% endmatch %}
+  {% if !view.feeds.is_empty() %}<p class="evidence-block__feeds">Feeds lines: {% for code in view.feeds %}{% if !loop.first %}, {% endif %}<span class="evidence-block__feed">{{ code }}</span>{% endfor %}</p>{% endif %}
+</section>
+{% endmacro %}

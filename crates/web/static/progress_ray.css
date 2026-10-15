@@ -1,0 +1,30 @@
+.progress-ray {
+  display: flex;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.progress-ray__segment {
+  flex: 1;
+  padding-block-start: var(--space-1);
+  border-block-start: var(--line-marker) solid var(--color-line);
+  color: var(--color-muted);
+  font-size: var(--font-size-caption);
+  letter-spacing: var(--font-tracking-caps);
+  text-transform: uppercase;
+}
+.progress-ray__state {
+  display: block;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.progress-ray__segment[data-state="done"] {
+  border-block-start-color: var(--color-ink);
+  color: var(--color-ink);
+}
+.progress-ray__segment[data-state="incomplete"] {
+  border-block-start-style: dashed;
+  border-block-start-color: var(--status-warn-mark);
+  color: var(--status-warn-text);
+}
