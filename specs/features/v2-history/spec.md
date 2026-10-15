@@ -1,6 +1,6 @@
 # Spec: v2-history
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-15
 
 ## Goal
