@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" width="12" height="12">
+<title>netray</title>
+<style>
+rect { fill: #0f1216 }
+.tile { fill-opacity: 0.12 }
+@media (prefers-color-scheme: dark) {
+rect { fill: #e7e9ec }
+}
+</style>
+<rect id="tile" class="tile" x="0" y="0" width="12" height="12" rx="2"/>
+<rect id="axis" class="mark" x="0" y="7.92" width="12" height="1"/>
+<rect class="tick mark" x="0.36" y="7.92" width="1" height="1.92"/>
+<rect class="tick mark" x="2.64" y="7.92" width="1" height="1.92"/>
+<rect class="tick mark" x="9.6" y="7.92" width="1" height="1.92"/>
+<rect id="marker" class="mark" x="5" y="0.72" width="2" height="10.56"/>
+</svg>

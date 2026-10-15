@@ -30,3 +30,21 @@
 - `pub mod gate;` in `crates/web/src/lib.rs`.
 
 **G2.** `crates/web/static/base.css`: a `body` rule with tokens only (`--color-bg`, `--color-ink`, `--font-sans`, `--font-size-body`); the R43 marker rule comes in Phase 3.
+
+## Phase 4 — Identity
+
+### Groups
+
+- G1: C4, C6 — `crates/web/templates/partials/tagline.html`
+- G2: C1, C2, C3, C5 — `crates/web/static/logo.svg`, `static/favicon.svg`, `static/badge-mark.svg` (C3/C5 read all three, so one group)
+
+### Plan
+
+**G1.** `templates/partials/tagline.html`: exactly `Every check of a domain, in one spectrum.` and a newline; no markup. Plain text, so the gate's real-tree scan passes.
+
+**G2.** Shared: colours only in one `<style>`, through element or class selectors (no `#id` selector); `#0f1216` (`color.light.ink`) only outside, `#e7e9ec` (`color.dark.ink`) only inside `@media (prefers-color-scheme: dark)`; no `url(`, `gradient`, colour function or other `#`; geometry as `<rect>` with plain numbers.
+
+- `static/logo.svg`, em = 100, `viewBox="0 0 351 160"`, `<title>netray</title>`. Style: `text { font-family: <FONT_SANS>; font-size: 100px; letter-spacing: -0.03em }`, `text, rect { fill: #0f1216 }`, dark `fill: #e7e9ec`. `<text x="0" y="93" font-weight="400" textLength="160" lengthAdjust="spacingAndGlyphs">net</text>`, `<text x="176" y="93" font-weight="700" textLength="175" lengthAdjust="spacingAndGlyphs">ray</text>` (`textLength` pins each word to its scale in any system font). `<g id="scale-net">`: axis `x=0 y=118 w=160 h=3.5`, 6 ticks `w=3 y=121.5` at x 0/31.4/62.8/94.2/125.6/157, heights 24/10/10/10/10/24. `<g id="scale-ray">`: axis `x=160 y=118 w=191 h=3.5`, 5 ticks at x 176/219/262/305/348, heights 10/10/10/10/24. Marker `<rect id="marker" x="164.5" y="0" width="7.5" height="160"/>`, last.
+- `static/favicon.svg`, throughIcon at S = 32, `viewBox="0 0 32 32" width="32" height="32"`: tile `0 0 32 32 rx=2`; axis `x=0 y=21.12 w=32 h=2.24`; ticks `class="tick mark"` y 21.12, w 1.92, h 5.12 at x 0.96/7.04/25.6; marker `x=13.76 y=1.92 w=4.48 h=28.16`.
+- `static/badge-mark.svg`, S = 12 (inline in 12 px badge text): tile `0 0 12 12 rx=2`; axis `x=0 y=7.92 w=12 h=1`; ticks y 7.92, w 1, h 1.92 at x 0.36/2.64/9.6; marker `x=5 y=0.72 w=2 h=10.56`.
+- Tile colour: the canvas fills the tile with ink and knocks the marks out in the background colour. With only the two ink values, each under its own scheme (the test's reading of R8), a knock-out cannot be drawn without `url(`/mask, so the tile is the same ink at `fill-opacity: 0.12` and the marks are full ink: monochrome, one ink per scheme.
