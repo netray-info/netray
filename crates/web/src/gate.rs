@@ -66,27 +66,39 @@ const SVG_COLOUR_ATTRS: [&str; 6] = [
 /// SVG presentation attributes whose value must be made of tokens.
 const SVG_TOKEN_ATTRS: [&str; 5] = ["stroke-width", "font-size", "font-family", "rx", "ry"];
 
-/// Properties whose value holds a colour; a border, outline, column rule or text decoration
-/// property and every custom property is one too.
-const COLOUR_PROPERTIES: [&str; 18] = [
-    "color",
-    "background",
-    "background-color",
-    "background-image",
-    "fill",
-    "stroke",
-    "stop-color",
-    "flood-color",
-    "lighting-color",
-    "caret-color",
-    "accent-color",
-    "scrollbar-color",
-    "box-shadow",
-    "text-shadow",
-    "filter",
-    "text-emphasis-color",
-    "text-fill-color",
-    "text-stroke-color",
+/// Properties whose value is made of identifiers or strings, where a word that is also a CSS
+/// colour name (`mark`, `highlight`, `red`) is no colour. Every other property, and every custom
+/// property, may hold a colour.
+const IDENTIFIER_PROPERTIES: [&str; 29] = [
+    "grid-area",
+    "grid-row",
+    "grid-row-start",
+    "grid-row-end",
+    "grid-column",
+    "grid-column-start",
+    "grid-column-end",
+    "grid-template-areas",
+    "animation-name",
+    "view-transition-name",
+    "transition-property",
+    "will-change",
+    "counter-reset",
+    "counter-increment",
+    "counter-set",
+    "content",
+    "quotes",
+    "font-family",
+    "font-feature-settings",
+    "list-style-type",
+    "container-name",
+    "anchor-name",
+    "position-anchor",
+    "scroll-timeline-name",
+    "view-timeline-name",
+    "timeline-scope",
+    "page",
+    "text-transform",
+    "container",
 ];
 
 /// The CSS named colours and system colours, lower case (`transparent` and `currentcolor` are no
@@ -257,6 +269,21 @@ fn blank(text: &str, open: &str, close: &str, fill: char) -> String {
     out
 }
 
+/// The `(start, end)` offsets of each `open … close` span of `text`; an unclosed span runs to the
+/// end.
+fn spans(text: &str, open: &str, close: &str) -> Vec<(usize, usize)> {
+    let (mut out, mut at) = (Vec::new(), 0);
+    while let Some(i) = text[at..].find(open).map(|n| at + n) {
+        let after = i + open.len();
+        let end = text[after..]
+            .find(close)
+            .map_or(text.len(), |n| after + n + close.len());
+        out.push((i, end));
+        at = end;
+    }
+    out
+}
+
 /// Lexes CSS or island source: the text with its comments blanked (`/* */`, and `//` when
 /// `line_comments`), and the string literals (`'…'`, `"…"`, and `` `…` `` across lines) as
 /// `(offset of the content, content)`.
@@ -422,7 +449,9 @@ fn parse_attrs(text: &str, from: usize, to: usize) -> Vec<Attr<'_>> {
 
 fn scan_template(rel: &Path, raw: &str, tokens: &Tokens, out: &mut Vec<Finding>) {
     let mut text = blank(raw, "<!--", "-->", ' ');
+    let mut askama = Vec::new();
     for (open, close) in [("{#", "#}"), ("{{", "}}"), ("{%", "%}")] {
+        askama.extend(spans(&text, open, close));
         text = blank(&text, open, close, ' ');
     }
     for tag in tags(&text) {
@@ -480,7 +509,9 @@ fn scan_template(rel: &Path, raw: &str, tokens: &Tokens, out: &mut Vec<Finding>)
             }
         }
         if tag.name == "script" {
-            let has_src = tag.values("src").any(|(_, v)| !v.trim().is_empty());
+            let has_src = tag.values("src").any(|(at, v)| {
+                !v.trim().is_empty() || askama.iter().any(|&(s, e)| s < at + v.len() && at < e)
+            });
             let speculation = tag
                 .values("type")
                 .any(|(_, v)| v.trim().eq_ignore_ascii_case("speculationrules"));
@@ -582,16 +613,10 @@ fn unprefixed(prop: &str) -> &str {
         .unwrap_or(prop)
 }
 
-/// Whether a named or system colour can stand as a value of `prop`.
+/// Whether a named or system colour can stand as a value of `prop`: in every property but the
+/// identifier-valued ones.
 fn colour_bearing(prop: &str) -> bool {
-    if prop.starts_with("--") {
-        return true;
-    }
-    let prop = unprefixed(prop);
-    COLOUR_PROPERTIES.contains(&prop)
-        || ["border", "outline", "column-rule", "text-decoration"]
-            .iter()
-            .any(|p| prop.starts_with(p))
+    prop.starts_with("--") || !IDENTIFIER_PROPERTIES.contains(&unprefixed(prop))
 }
 
 /// The offset of the `)` that closes a parenthesis opened just before `from`, outside quotes.

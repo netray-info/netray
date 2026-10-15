@@ -2,7 +2,7 @@
 <div class="spectrum">
   <div class="spectrum__labels">
     {% for line in view.lines %}
-    {% if let Some(label) = line.label %}<span class="spectrum__line-label" data-tone="{{ line.tone.as_str() }}" style="left: {{ line.x }}%">{{ label }}</span>{% endif %}
+    {% if let Some(label) = line.label %}{% if line.tone.as_str() == "warn" || line.tone.as_str() == "fail" || line.tone.as_str() == "fix" %}<span class="spectrum__line-label" data-tone="{{ line.tone.as_str() }}" style="left: {{ line.x }}%">{{ label }}</span>{% endif %}{% endif %}
     {% endfor %}
   </div>
   <svg class="spectrum__plate" role="img" aria-label="{{ view.label }}">
