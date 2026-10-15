@@ -67,9 +67,13 @@ const SVG_COLOUR_ATTRS: [&str; 6] = [
 const SVG_TOKEN_ATTRS: [&str; 5] = ["stroke-width", "font-size", "font-family", "rx", "ry"];
 
 /// Properties whose value is made of identifiers or strings, where a word that is also a CSS
-/// colour name (`mark`, `highlight`, `red`) is no colour. Every other property, and every custom
-/// property, may hold a colour.
-const IDENTIFIER_PROPERTIES: [&str; 29] = [
+/// colour name (`mark`, `highlight`, `red`) is no colour, and the shorthands (`transition`,
+/// `animation`, `appearance`) that mix such identifiers with times and never hold a colour. Every
+/// other property, and every custom property, may hold a colour.
+const IDENTIFIER_PROPERTIES: [&str; 32] = [
+    "transition",
+    "animation",
+    "appearance",
     "grid-area",
     "grid-row",
     "grid-row-start",
@@ -510,7 +514,13 @@ fn scan_template(rel: &Path, raw: &str, tokens: &Tokens, out: &mut Vec<Finding>)
         }
         if tag.name == "script" {
             let has_src = tag.values("src").any(|(at, v)| {
-                !v.trim().is_empty() || askama.iter().any(|&(s, e)| s < at + v.len() && at < e)
+                !v.trim().is_empty()
+                    || askama.iter().any(|&(s, e)| {
+                        (s < at + v.len() && at < e)
+                            || (e <= at
+                                && text[e..at].trim().is_empty()
+                                && text[..s].trim_end().ends_with('='))
+                    })
             });
             let speculation = tag
                 .values("type")
