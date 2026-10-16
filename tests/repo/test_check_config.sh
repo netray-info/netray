@@ -236,6 +236,18 @@ startup_rc=$?
 [ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with an unparsable GeoIP file did not refuse (rc $startup_rc)"
 grep -qF 'geoip_city_db' <<<"$startup_out" || fail "lens: unparsable GeoIP refusal does not name geoip_city_db ($startup_out)"
 
+# specs/features/v2-history C2/C16: an unopenable history store passes --check-config (it is
+# not opened there) and refuses startup, naming "history store". Snapshots are off so a
+# startup that got further would write nothing into the cwd.
+histbad="$tmp/lens.histbad.toml"
+{ cat "$lens_nodata"; printf '\n[history]\ndb_path = "/nonexistent-dir/history.db"\n\n[snapshots]\nenabled = false\n'; } >"$histbad"
+run_check lens "$histbad"
+[ "$rc" -eq 0 ] || fail "lens: --check-config with an unopenable history db_path exited $rc, expected 0 ($out)"
+startup_out=$(perl -e 'alarm 20; exec @ARGV' "$bin" lens "$histbad" 2>&1 </dev/null)
+startup_rc=$?
+[ "$startup_rc" -ne 0 ] && [ "$startup_rc" -ne 142 ] || fail "lens: startup with an unopenable history store did not refuse (rc $startup_rc)"
+grep -qF 'history store' <<<"$startup_out" || fail "lens: history store refusal does not name the history store ($startup_out)"
+
 # V2 Phase 3: an unconfigured section is off, and --check-config says so (exit stays 0).
 run_check lens "$lens_nodata"
 [ "$rc" -eq 0 ] || fail "lens: config without [modules.ip] exited $rc, expected 0 ($out)"
