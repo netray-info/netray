@@ -17,7 +17,7 @@ use lens::state::{AppState, BadgeCheckFn};
 const SHORT_CACHE: &str = "public, max-age=300, s-maxage=300";
 const LONG_CACHE: &str = "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400";
 
-fn make_state() -> AppState {
+fn make_state(cache: bool) -> AppState {
     use lens::config::{
         BackendsConfig, Config, EcosystemConfig, RateLimitConfig, ScoringConfig, ServerConfig,
         SiteConfig,
@@ -50,7 +50,7 @@ fn make_state() -> AppState {
         },
         ecosystem: EcosystemConfig::default(),
         cache: CacheConfig {
-            enabled: false,
+            enabled: cache,
             ttl_seconds: 7200,
         },
         telemetry: Default::default(),
@@ -95,7 +95,12 @@ fn mock_check_fn(grade: &'static str, complete: bool) -> BadgeCheckFn {
 
 /// Fetch the badge for example.com with a mocked result; returns (svg, cache-control).
 async fn badge(grade: &'static str, complete: bool) -> (String, String) {
-    let mut state = make_state();
+    badge_with(grade, complete, false).await
+}
+
+/// As [`badge`], with the result cache on or off.
+async fn badge_with(grade: &'static str, complete: bool, cache: bool) -> (String, String) {
+    let mut state = make_state(cache);
     state.badge_check_fn = Some(mock_check_fn(grade, complete));
     let (routes, _) = badge_router().split_for_parts();
     let app = Router::new().merge(routes.with_state(state));
@@ -130,6 +135,13 @@ async fn incomplete_result_with_grade_f_renders_unscored_badge() {
         !svg.contains(">F</text>"),
         "badge must not show F, got: {svg}"
     );
+    assert_eq!(cc, SHORT_CACHE);
+}
+
+#[tokio::test]
+async fn incomplete_result_with_grade_f_renders_unscored_badge_with_the_cache_on() {
+    let (svg, cc) = badge_with("F", false, true).await;
+    assert!(svg.contains(">?</text>"), "badge must show ?, got: {svg}");
     assert_eq!(cc, SHORT_CACHE);
 }
 

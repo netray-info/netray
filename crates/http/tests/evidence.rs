@@ -173,6 +173,13 @@ fn volatile_paths_name_registered_keys() {
         "x-cache",
         "x-cache-hits",
         "cf-cache-status",
+        "report-to",
+        "via",
+        "x-fastly-request-id",
+        "x-vercel-id",
+        "x-vercel-cache",
+        "x-github-request-id",
+        "x-amz-cf-pop",
     ] {
         want.insert(format!("http.headers/value@{h}"));
     }
