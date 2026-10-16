@@ -142,7 +142,17 @@ fn volatile_paths_name_registered_keys() {
         .expect("module builds");
     let volatile: &[EvidencePath] = module.volatile();
     let got: BTreeSet<&str> = volatile.iter().map(|p| p.0).collect();
-    let mut want: BTreeSet<String> = BTreeSet::from(["http.server/response_ms".to_string()]);
+    // response_ms per run; address, org and network_type follow the resolver's answer order
+    // (specs/features/v2-history R17).
+    let mut want: BTreeSet<String> = [
+        "http.server/response_ms",
+        "http.server/address",
+        "http.server/org",
+        "http.server/network_type",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
     for h in [
         "date",
         "age",
@@ -157,6 +167,12 @@ fn volatile_paths_name_registered_keys() {
         "x-trace-id",
         "traceparent",
         "x-amzn-requestid",
+        "expires",
+        "x-timer",
+        "x-served-by",
+        "x-cache",
+        "x-cache-hits",
+        "cf-cache-status",
     ] {
         want.insert(format!("http.headers/value@{h}"));
     }
