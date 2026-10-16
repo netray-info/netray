@@ -3038,8 +3038,10 @@ dependencies = [
 name = "netray-store"
 version = "0.26.0"
 dependencies = [
+ "nanoid",
  "netray-model",
  "serde_json",
+ "sqlx",
  "tempfile",
  "tokio",
 ]

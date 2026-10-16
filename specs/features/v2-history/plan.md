@@ -31,3 +31,19 @@ G1: C1–C4 (one new module).
 2. `crates/engine/src/lib.rs`: `pub mod history;`.
 
 Group command: `cargo test -p netray-engine --test history`
+
+## Phase 3 — netray-store
+
+## Groups
+
+G1: C1–C16 (one crate; record, latest and sweep share the pool, the write lock and the latest-entry query).
+
+## Plan
+
+### G1
+1. Root `Cargo.toml`: `sqlx = "0.8"` and `nanoid = "0.4"` into `[workspace.dependencies]`; `crates/lens/Cargo.toml` takes both with `workspace = true` and its feature list (second user, CLAUDE.md).
+2. `crates/store/Cargo.toml`: `sqlx` (runtime-tokio, sqlite, migrate), `nanoid`, `serde_json`, `tokio` (sync), `netray-model`.
+3. `crates/store/migrations/0001_create_entries.sql`: table `entries` and index per the contract, portable SQL only.
+4. `crates/store/src/lib.rs`: `HistoryStore` (pool as `crates/lens/src/snapshot/store.rs`, WAL, foreign keys on; a `tokio::sync::Mutex<()>` serialising record and sweep), `StoreError`, `Recorded`, `Entry`, `RETENTION_SECS`; id via nanoid 8 over `[0-9A-Za-z]` with collision retry; `record` reads the latest entry, compares `netray_model::run::fingerprint`, updates or inserts in one transaction; `latest` orders by `created_at DESC` and, among ties, takes the entry no other entry of the domain names as predecessor; `sweep(now)` deletes in one transaction per R11.
+
+Group command: `cargo test -p netray-store`

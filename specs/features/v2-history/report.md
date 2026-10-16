@@ -82,3 +82,50 @@ The Phase 1 DEFERRED (`rescored_prev` `None` across profile versions) is closed:
 ### Behavioural verification
 
 skipped: library function without an entry point; lens calls it in Phase 4.
+
+## Phase 3 — netray-store
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8 schema of §4.1 via portable sqlx migrations; 8-char nanoid id with collision retry | green | crates/store/tests/schema.rs |
+| C2 | R9 record in one transaction: identical → last_seen only; else new entry with predecessor, run JSON, fingerprint, diff; returns outcome; writes serialised | green | crates/store/tests/record.rs |
+| C3 | R10 incomplete never stored, whatever grade; diff returned; nothing written | green | crates/store/tests/record.rs |
+| C4 | R11 sweep: whole domain past 90 days; else entries past 90 days except latest and its predecessor; survivor keeps diff, predecessor NULL | green | crates/store/tests/sweep.rs |
+| C5 | S: fresh DB migrated → schema exists; migrations contain no SQLite-only type or function | green | crates/store/tests/schema.rs |
+| C6 | S: first record → one entry, predecessor NULL, no diff, outcome first | green | crates/store/tests/record.rs |
+| C7 | S: identical later → count unchanged, last_seen moved | green | crates/store/tests/record.rs |
+| C8 | S: one status changed → second entry, predecessor = first, stored diff | green | crates/store/tests/record.rs |
+| C9 | S: two different runs concurrently → both succeed, chained | green | crates/store/tests/record.rs |
+| C10 | S: two identical runs concurrently → both succeed, one entry | green | crates/store/tests/record.rs |
+| C11 | S: incomplete grade F → nothing written, last_seen unchanged, diff returned | green | crates/store/tests/record.rs |
+| C12 | S: incomplete identical in fingerprint → last_seen unchanged | green | crates/store/tests/record.rs |
+| C13 | S: domain latest 91 days → domain gone | green | crates/store/tests/sweep.rs |
+| C14 | S: e1→e2→e3, e1/e2 91 days, e3 1 day → e1 deleted, e2/e3 remain | green | crates/store/tests/sweep.rs |
+| C15 | S: e1→e2→e3→e4, e2 91 days → e2 deleted, e3 keeps diff, predecessor NULL | green | crates/store/tests/sweep.rs |
+| C16 | S: 89 days → remains | green | crates/store/tests/sweep.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 + 1 (reader fixes) | sonnet | 105342 | 197 |
+
+### Reader
+
+First reader run lost to an expired OAuth token (API 401); rerun.
+
+COUNTS blocker=0 amendment=1 deferred=2 nit=2
+
+| class | finding | outcome |
+|---|---|---|
+| AMENDMENT | `latest` followed the caller's `created_at`; a backwards `now` forked the chain and moved `last_seen_at` back | repaired in phase: latest = chain head, times never move backwards (tests `a_clock_running_backwards_never_forks_the_chain`, `latest_is_the_chain_head_at_equal_created_at`); SDD §4.1 amended |
+| DEFERRED | no index on `predecessor_id`; the head lookup scans the table | fixed in phase: index in `0001` (not shipped) |
+| DEFERRED | sweep parsed every head's full `Run`; one bad row stalls retention | fixed in phase: sweep reads id, `last_seen_at`, `predecessor_id` only |
+| NIT | `entries()` order among three or more equal `created_at` | listed |
+| NIT | no test for the equal-`created_at` tie-break | test added (passes: already in place) |
+
+### Behavioural verification
+
+skipped: library crate without an entry point; lens opens it in Phase 4.
