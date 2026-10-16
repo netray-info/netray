@@ -252,16 +252,19 @@ async fn volatile_ttl_paths_are_registered() {
     ]
     .iter()
     .map(|t| format!("dns.{t}/ttl"))
+    // An RRSIG's data carries expiration, inception and signature: re-signing is no change
+    // (specs/features/v2-history R17).
+    .chain(["dns.rrsig/data".to_string()])
     .collect();
     let got: BTreeSet<String> = volatile.iter().map(|p| p.0.to_string()).collect();
     assert_eq!(
         got, want,
-        "volatile lists dns.<type>/ttl for every records block"
+        "volatile lists dns.<type>/ttl for every records block, and dns.rrsig/data"
     );
 
     for path in volatile {
         let (block, key, row) = EvidencePath::parse(path.0).expect(path.0);
-        assert_eq!(key, "ttl", "{}", path.0);
+        assert!(key == "ttl" || path.0 == "dns.rrsig/data", "{}", path.0);
         assert!(row.is_none(), "{}", path.0);
         let name = format!("{}.{}", block.module(), block.name());
         assert!(
@@ -273,8 +276,8 @@ async fn volatile_ttl_paths_are_registered() {
             REGISTER
                 .keys
                 .iter()
-                .any(|(b, k, _)| *b == name && *k == "ttl"),
-            "{}: key ttl not registered for {name}",
+                .any(|(b, k, _)| *b == name && *k == key),
+            "{}: key {key} not registered for {name}",
             path.0
         );
     }
