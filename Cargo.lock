@@ -2395,6 +2395,7 @@ dependencies = [
  "netray-http",
  "netray-ip",
  "netray-model",
+ "netray-store",
  "netray-tls",
  "regex",
  "reqwest",

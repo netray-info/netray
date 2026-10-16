@@ -70,7 +70,10 @@ macro_rules! records_blocks {
             )+],
         };
 
-        const VOLATILE: &[EvidencePath] = &[$(EvidencePath(concat!("dns.", $t, "/ttl"))),+];
+        const VOLATILE: &[EvidencePath] = &[
+            $(EvidencePath(concat!("dns.", $t, "/ttl")),)+
+            EvidencePath("dns.rrsig/data"),
+        ];
     };
 }
 

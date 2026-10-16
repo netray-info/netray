@@ -10,6 +10,7 @@ edition = "2024"
 netray-common = { path = "crates/common" }
 netray-model = { path = "crates/model" }
 netray-engine = { path = "crates/engine" }
+netray-store = { path = "crates/store" }
 
 # Web framework
 axum = "0.8"

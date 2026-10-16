@@ -111,6 +111,22 @@ const VOLATILE: &[EvidencePath] = &[
     EvidencePath("http.headers/value@x-trace-id"),
     EvidencePath("http.headers/value@traceparent"),
     EvidencePath("http.headers/value@x-amzn-requestid"),
+    EvidencePath("http.headers/value@expires"),
+    EvidencePath("http.headers/value@x-timer"),
+    EvidencePath("http.headers/value@x-served-by"),
+    EvidencePath("http.headers/value@x-cache"),
+    EvidencePath("http.headers/value@x-cache-hits"),
+    EvidencePath("http.headers/value@cf-cache-status"),
+    EvidencePath("http.headers/value@report-to"),
+    EvidencePath("http.headers/value@via"),
+    EvidencePath("http.headers/value@x-fastly-request-id"),
+    EvidencePath("http.headers/value@x-vercel-id"),
+    EvidencePath("http.headers/value@x-vercel-cache"),
+    EvidencePath("http.headers/value@x-github-request-id"),
+    EvidencePath("http.headers/value@x-amz-cf-pop"),
+    EvidencePath("http.server/address"),
+    EvidencePath("http.server/org"),
+    EvidencePath("http.server/network_type"),
 ];
 
 /// The HTTP inspection as an engine module. The target address comes from `Facts` (`a`, then

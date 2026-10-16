@@ -164,13 +164,12 @@ pub(crate) async fn run_check_with_evidence(
 
     let score = crate::score::score(&state.scoring_profile, &sections);
 
-    (
-        CheckOutput {
-            domain,
-            sections,
-            score,
-            duration_ms: start.elapsed().as_millis() as u64,
-        },
-        facts_evidence,
-    )
+    let output = CheckOutput {
+        domain,
+        sections,
+        score,
+        duration_ms: start.elapsed().as_millis() as u64,
+    };
+    crate::history::record(state, &input, &output, &facts_evidence).await;
+    (output, facts_evidence)
 }

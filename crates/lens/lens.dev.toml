@@ -105,6 +105,9 @@ lens_base_url  = "https://lens.netray.info"
 [snapshots]
 db_path = "data/snapshots.db"
 
+[history]
+db_path = "data/history.db"
+
 [cache]
 enabled = true
 

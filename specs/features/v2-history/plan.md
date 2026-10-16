@@ -47,3 +47,23 @@ G1: C1–C16 (one crate; record, latest and sweep share the pool, the write lock
 4. `crates/store/src/lib.rs`: `HistoryStore` (pool as `crates/lens/src/snapshot/store.rs`, WAL, foreign keys on; a `tokio::sync::Mutex<()>` serialising record and sweep), `StoreError`, `Recorded`, `Entry`, `RETENTION_SECS`; id via nanoid 8 over `[0-9A-Za-z]` with collision retry; `record` reads the latest entry, compares `netray_model::run::fingerprint`, updates or inserts in one transaction; `latest` orders by `created_at DESC` and, among ties, takes the entry no other entry of the domain names as predecessor; `sweep(now)` deletes in one transaction per R11.
 
 Group command: `cargo test -p netray-store`
+
+## Phase 4 — lens records every run
+
+## Groups
+
+G1: C7, C20, C21 (crates/http/src/module.rs, crates/dns/src/module.rs).
+G2: C1–C5, C8–C18 (crates/lens: Cargo.toml, config.rs, state.rs, history.rs new, check.rs, lib.rs, metrics.rs, routes.rs; lens.example.toml, lens.dev.toml).
+G3: C19 (gate rows in justfile and tests/repo/*.sh; protected files, edited with ADLC-Test-Change).
+C6: SDD amendments, prose.
+
+## Plan
+
+### G1
+Append the R17 paths to http VOLATILE (module.rs ~98) and the dns `records_blocks!` VOLATILE (module.rs ~73, plus `dns.rrsig/data`). Command: `cargo test -p netray-http --test history_volatile && cargo test -p netray-dns --test history_volatile`.
+
+### G2
+Per contract scratchpad/v2-history-lens-api.md: `HistoryConfig` beside `SnapshotsConfig`; `AppState.history_store`; `history.rs` with `volatile`, `build_run`, `record`; call at the end of `run_check_with_evidence`; startup open/migrate/exit 1 and hourly sweep in lib.rs beside the snapshot store; counter in `init_zero_series`; badge reads `score.complete`. Command: `cargo test -p lens --test history_record --test history_badge --test history_config`.
+
+### G3
+`LENS_HISTORY__DB_PATH=$tmp/history.db` beside every `LENS_SNAPSHOTS__DB_PATH` row; admission script sets it in the environment of `start_bg`. Command: `bash tests/repo/test_history_db_path.sh`.

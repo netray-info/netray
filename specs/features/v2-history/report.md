@@ -129,3 +129,67 @@ COUNTS blocker=0 amendment=1 deferred=2 nit=2
 ### Behavioural verification
 
 skipped: library crate without an entry point; lens opens it in Phase 4.
+
+## Phase 4 — lens records every run
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R2 Run built from lens's scored result; every catalogue check per section (N/A → not_applicable, incomplete → unmeasured) | green | crates/lens/tests/history_record.rs |
+| C2 | R12 `[history] enabled, db_path`; startup opens/migrates or exits 1 naming the store; `--check-config` does not open it; hourly sweep; gate scripts set `LENS_HISTORY__DB_PATH` | green | tests/repo/test_check_config.sh, tests/repo/test_history_db_path.sh |
+| C3 | R13 every run without options recorded/diffed once, any route; dkim_selectors runs skipped; wire, goldens, cache, OG, snapshots unchanged | green | crates/lens/tests/history_record.rs |
+| C4 | R14 badge renders `complete == false` as unscored with short Cache-Control | green | crates/lens/tests/history_badge.rs |
+| C5 | R15 failed record: error log, `lens_history_record_errors_total` +1, response unaffected; counter registered at startup | green | crates/lens/tests/history_record.rs |
+| C6 | R16 SDD amendments | test-unwritable | specs/sdd/v2.md (§3.1, §3.7, §4.1, §4.3, §4.4, §10 Phase 2) |
+| C7 | R17 http and dns volatile lists | green | crates/http/tests/history_volatile.rs, crates/dns/tests/history_volatile.rs |
+| C8 | S: /api/check complete run → one entry; response equals golden | green | crates/lens/tests/history_record.rs |
+| C9 | S: badge cache miss complete run → entry recorded | green | crates/lens/tests/history_record.rs |
+| C10 | S: dkim_selectors run → no entry | green | crates/lens/tests/history_record.rs |
+| C11 | S: incomplete run → no entry | green | crates/lens/tests/history_record.rs |
+| C12 | S: IP NoDnsResults → not stored, IP checks unmeasured | green | crates/lens/tests/history_record.rs |
+| C13 | S: incomplete hard-fail F → badge unscored, short Cache-Control | green | crates/lens/tests/history_badge.rs |
+| C14 | S: complete F → badge F, long Cache-Control | already_implemented | crates/lens/tests/history_badge.rs |
+| C15 | S: `enabled = false` → no history.db | green | crates/lens/tests/history_config.rs |
+| C16 | S: db_path in nonexistent dir → startup exits non-zero naming the store; `--check-config` exits 0 | green | tests/repo/test_check_config.sh |
+| C17 | S: failing store → response unchanged, counter 1 | green | crates/lens/tests/history_record.rs |
+| C18 | S: unknown key under `[history]` → rejected | green | crates/lens/tests/history_config.rs |
+| C19 | S: gate leaves no `history.db*` in the tree | green | tests/repo/test_history_db_path.sh |
+| C20 | S: http runs differing in Expires, cf-cache-status, A order → equal fingerprints | green | crates/http/tests/history_volatile.rs |
+| C21 | S: dns runs differing in RRSIG data → equal fingerprints | green | crates/dns/tests/history_volatile.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 volatile lists | 1 | sonnet | 36024 | 48 |
+| G2 lens | 1 (stopped: Config literals in protected tests; fixed by the implementer under `ADLC-Test-Change`) | opus | 100366 | 255 |
+| G3 gate rows | implementer | — | — | — |
+
+Follow-ups the implementer made beyond the coders: `history: HistoryConfig::default()` in nine test `Config` literals and in `config.rs`'s test literal; C1/C8 relaxed (a complete run may hold not-applicable sections); the dns and http registered-volatile tests extended for R17.
+
+### Reader
+
+COUNTS blocker=0 amendment=2 deferred=1 nit=1
+
+| class | finding | outcome |
+|---|---|---|
+| AMENDMENT | CDN headers changing per response (`report-to`, `x-fastly-request-id`, `via`, `x-vercel-id`) are not volatile; every rerun behind such a CDN stores an entry | repaired in phase: seven headers added (R17 extended), SDD §3.7 |
+| AMENDMENT | rotating address sets: `email.mx_addresses` (and its per-address FCrDNS/DNSBL rows) is keyed by MX addresses that load-balanced providers rotate per query (verified live on a Microsoft 365 domain); the path grammar cannot drop rows whose key rotates | **open: operator decision** (handoff) |
+| DEFERRED | recording runs on the request path after the 20 s deadline, behind the store's write mutex and sqlx's 5 s busy timeout; a locked store delays responses | for `v2-admission`, which moves runs off the request path (§4.4) |
+| NIT | the incomplete-F badge was tested with the cache off only | test added for the cache-on path |
+
+### Behavioural verification
+
+```
+$ netray lens <lens.dev.toml with temp db paths>
+== health: 200
+== metrics: lens_history_record_errors_total 0
+== files: history.db history.db-shm history.db-wal snapshots.db ...
+$ netray lens <same, [history] db_path = "/nonexistent-dir/history.db">
+exit 1 — ERROR lens: failed to open history store ... db_path=/nonexistent-dir/history.db
+$ netray lens --check-config <same>
+config ok: ... (exit 0)
+```
+
+A live check against a real domain was not run: a worktree build has no outbound network (memory `reference_new_binary_no_network`).
