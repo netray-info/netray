@@ -13,7 +13,7 @@ TMP=$(mktemp -d)
 trap '_netray_cleanup; rm -rf "$TMP"' EXIT
 
 p=$(free_port); m=$(free_port)
-sed -E "s|^bind = .*|bind = \"127.0.0.1:$p\"|; s|^metrics_bind = .*|metrics_bind = \"127.0.0.1:$m\"|; s|^url = .*|url = \"http://127.0.0.1:1\"|; s|^db_path = .*|db_path = \"$TMP/snapshots.db\"|" \
+sed -E "s|^bind = .*|bind = \"127.0.0.1:$p\"|; s|^metrics_bind = .*|metrics_bind = \"127.0.0.1:$m\"|; s|^url = .*|url = \"http://127.0.0.1:1\"|; s|^db_path = \"data/snapshots.db\"|db_path = \"$TMP/snapshots.db\"|; s|^db_path = \"data/history.db\"|db_path = \"$TMP/history.db\"|" \
     crates/lens/lens.dev.toml > "$TMP/lens.toml"
 start_bg "$TMP/lens.log" "$NETRAY" lens "$TMP/lens.toml"
 wait_http "http://127.0.0.1:$p/health" 30 || fail "netray lens did not come up on $p"

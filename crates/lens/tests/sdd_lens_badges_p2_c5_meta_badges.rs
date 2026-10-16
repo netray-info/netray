@@ -59,6 +59,7 @@ fn make_state(badges_enabled: bool) -> AppState {
         },
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
+        history: lens::config::HistoryConfig::default(),
     };
     AppState::new(config).unwrap()
 }

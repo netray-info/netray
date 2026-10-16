@@ -65,6 +65,7 @@ fn make_state() -> AppState {
         badges: BadgesConfig::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
+        history: lens::config::HistoryConfig::default(),
     };
     AppState::new(config).unwrap()
 }

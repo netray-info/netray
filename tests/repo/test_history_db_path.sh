@@ -13,9 +13,11 @@ self=tests/repo/test_history_db_path.sh
 while IFS= read -r f; do
     [ "$f" = "$self" ] && continue
     case "$f" in tests/repo/*.sh|justfile) ;; *) continue ;; esac
+    # An env row names LENS_HISTORY__DB_PATH; a config rewrite (sed over db_path) also rewrites
+    # the history db_path.
     while IFS=: read -r n line; do
-        grep -q 'LENS_HISTORY__DB_PATH' <<<"$line" \
-            || fail "$f:$n sets the lens snapshots db but not LENS_HISTORY__DB_PATH"
+        grep -qE 'LENS_HISTORY__DB_PATH|history\.db' <<<"$line" \
+            || fail "$f:$n sets the lens snapshots db but not the history db"
     done < <(grep -nE 'LENS_SNAPSHOTS__DB_PATH|\^db_path = ' "$f")
 done < <(git ls-files tests/repo justfile)
 

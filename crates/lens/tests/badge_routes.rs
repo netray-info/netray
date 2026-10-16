@@ -62,6 +62,7 @@ fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
         badges,
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
+        history: lens::config::HistoryConfig::default(),
     };
     // The DNS module fails: what the unreachable backends were before, so a real run ends in an
     // error grade.

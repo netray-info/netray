@@ -105,6 +105,7 @@ fn state(s: Setup) -> AppState {
         modules: Default::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),
+        history: lens::config::HistoryConfig::default(),
     };
     let module = |b: Behaviour, never: &str, golden: fn(&str) -> Box<dyn Module>| match b {
         Behaviour::Golden(f) => golden(f),

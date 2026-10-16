@@ -197,8 +197,15 @@ async fn history_c1_c8_complete_run_is_recorded_whole_and_response_unchanged() {
     let run = &entries[0].run;
     assert!(run.complete);
     assert!(!run.sections.is_empty(), "the run has sections");
+    assert!(
+        run.sections
+            .iter()
+            .any(|s| s.outcome == SectionKind::Measured),
+        "the run measured a section"
+    );
+    // A complete run may hold not-applicable sections (the stub IP section has no public
+    // address); every section still lists every catalogue check of its protocol.
     for section in &run.sections {
-        assert_eq!(section.outcome, SectionKind::Measured, "{:?}", section);
         let have: Vec<CheckId> = run
             .checks
             .iter()
