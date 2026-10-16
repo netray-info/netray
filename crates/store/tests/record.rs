@@ -187,3 +187,41 @@ async fn incomplete_run_with_equal_fingerprint_does_not_move_last_seen_at() {
     let latest = store.latest(DOMAIN).await.unwrap().unwrap();
     assert_eq!(latest.last_seen_at, 1000);
 }
+
+#[tokio::test]
+async fn latest_is_the_chain_head_at_equal_created_at() {
+    let (store, _dir) = fresh().await;
+    store
+        .record(DOMAIN, &complete(Status::Pass), &[], 1000, d)
+        .await
+        .unwrap();
+    let rec = store
+        .record(DOMAIN, &complete(Status::Fail), &[], 1000, d)
+        .await
+        .unwrap();
+    let Recorded::Changed { id, .. } = rec else {
+        panic!("expected Changed, got {rec:?}");
+    };
+    assert_eq!(store.latest(DOMAIN).await.unwrap().unwrap().id, id);
+}
+
+#[tokio::test]
+async fn a_clock_running_backwards_never_forks_the_chain() {
+    let (store, _dir) = fresh().await;
+    let a = complete(Status::Pass);
+    let b = complete(Status::Fail);
+    store.record(DOMAIN, &a, &[], 2000, d).await.unwrap();
+    let rec = store.record(DOMAIN, &b, &[], 1999, d).await.unwrap();
+    let Recorded::Changed { id: second, .. } = rec else {
+        panic!("expected Changed, got {rec:?}");
+    };
+    assert_eq!(store.latest(DOMAIN).await.unwrap().unwrap().id, second);
+    // the same run again is identical to the head, not a change against the first entry
+    let rec = store.record(DOMAIN, &b, &[], 2001, d).await.unwrap();
+    assert_eq!(rec, Recorded::Identical { id: second.clone() });
+    // last_seen_at only moves forward
+    store.record(DOMAIN, &b, &[], 1500, d).await.unwrap();
+    let head = store.latest(DOMAIN).await.unwrap().unwrap();
+    assert_eq!(head.last_seen_at, 2001);
+    assert_eq!(store.entries(DOMAIN).await.unwrap().len(), 2);
+}
