@@ -22,7 +22,7 @@ pub fn init_zero_series() {
     for cache in ["hit", "miss", "throttled", "failed"] {
         metrics::counter!("lens_badge_requests_total", "cache" => cache).increment(0);
     }
-    for scope in ["per_ip", "global", "badge", "og"] {
+    for scope in ["per_ip", "global", "badge", "og", "api_v1"] {
         metrics::counter!("lens_rate_limit_hits_total", "scope" => scope).increment(0);
     }
     for reason in ["throttle", "budget", "limit", "slots"] {

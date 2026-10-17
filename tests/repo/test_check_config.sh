@@ -95,6 +95,8 @@ startup_rejects=(
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^metrics_bind = .*|metrics_bind = \"nope\"|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[badges]\\nttl_seconds = 0\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s/^domain_run_slots = .*/domain_run_slots = 0/"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api]\\nper_ip_burst = 0\\n\\n[site]|"
 )
 n=0
 for row in "${startup_rejects[@]}"; do

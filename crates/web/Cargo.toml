@@ -6,14 +6,20 @@ license = "MIT"
 description = "Templates, components and design tokens for the netray.info V2 suite"
 
 [dependencies]
-netray-common = { workspace = true }
+netray-common = { workspace = true, features = ["schema"] }
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
 netray-store = { workspace = true }
 askama = { workspace = true }
 axum = { workspace = true }
 tracing = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+utoipa = { workspace = true }
+utoipa-axum = { workspace = true }
+utoipa-scalar = { workspace = true, features = ["axum"] }
+governor = { workspace = true }
+futures = { workspace = true }
 
 [build-dependencies]
 serde_json = { workspace = true }

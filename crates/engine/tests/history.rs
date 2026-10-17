@@ -10,6 +10,8 @@ fn rc(id: &str, status: Status) -> RunCheck {
     RunCheck {
         id: CheckId::parse(id).unwrap(),
         status,
+        findings: vec![],
+        evidence: vec![],
     }
 }
 

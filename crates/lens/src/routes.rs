@@ -1733,6 +1733,7 @@ pub mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             admission: crate::config::AdmissionConfig::default(),
+            api: Default::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
             history: crate::config::HistoryConfig::default(),

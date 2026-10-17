@@ -98,6 +98,17 @@ global_burst = 20
 client_budget_per_hour = 30
 domain_run_slots = 8
 
+[api]
+# API v1 at /api/v1 (read endpoints, OpenAPI document, docs page)
+enabled = true
+per_ip_per_minute = 60
+per_ip_burst = 10
+# [api.dns]
+# [api.tls]
+# [api.http]
+# [api.email]
+# [api.ip]
+
 [scoring]
 # profile_path = "my-profile.toml"   # override the built-in profile v3 (crates/engine/profiles/v3.toml)
 

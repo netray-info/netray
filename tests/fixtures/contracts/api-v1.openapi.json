@@ -1,0 +1,545 @@
+{
+  "components": {
+    "schemas": {
+      "AdmissionMeta": {
+        "properties": {
+          "client_budget_per_hour": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "domain_run_slots": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "client_budget_per_hour",
+          "domain_run_slots"
+        ],
+        "type": "object"
+      },
+      "ApiLimits": {
+        "properties": {
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst"
+        ],
+        "type": "object"
+      },
+      "CatalogueResponse": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CheckSpec"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checks"
+        ],
+        "type": "object"
+      },
+      "CheckId": {
+        "examples": [
+          "tls.chain_trusted"
+        ],
+        "type": "string"
+      },
+      "CheckSpec": {
+        "description": "One catalogue entry.",
+        "properties": {
+          "finding": {
+            "type": "string"
+          },
+          "fix_hint": {
+            "type": "string"
+          },
+          "fix_owner": {
+            "$ref": "#/components/schemas/FixOwner"
+          },
+          "guide": {
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CheckId"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "short": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "protocol",
+          "title",
+          "finding",
+          "impact",
+          "fix_hint",
+          "fix_owner",
+          "severity",
+          "source",
+          "guide",
+          "short"
+        ],
+        "type": "object"
+      },
+      "ErrorInfo": {
+        "description": "Error detail contained in an error response.",
+        "properties": {
+          "code": {
+            "description": "Machine-readable error code (e.g. `INVALID_DOMAIN`).",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable error message.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "JSON body returned for all error responses.\n\nWire format: `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "FixOwner": {
+        "description": "Who can fix a failed check.",
+        "enum": [
+          "dns_provider",
+          "registrar",
+          "certificate_provider",
+          "web_server",
+          "mail_provider",
+          "hosting"
+        ],
+        "type": "string"
+      },
+      "Grade": {
+        "description": "The overall grade of a scan.",
+        "enum": [
+          "A+",
+          "A",
+          "B",
+          "C",
+          "D",
+          "F",
+          "incomplete"
+        ],
+        "type": "string"
+      },
+      "Limits": {
+        "properties": {
+          "admission": {
+            "$ref": "#/components/schemas/AdmissionMeta"
+          },
+          "api": {
+            "$ref": "#/components/schemas/ApiLimits"
+          },
+          "rate_limit": {
+            "$ref": "#/components/schemas/RateLimitMeta"
+          }
+        },
+        "required": [
+          "api",
+          "admission",
+          "rate_limit"
+        ],
+        "type": "object"
+      },
+      "Meta": {
+        "properties": {
+          "api": {
+            "type": "string"
+          },
+          "current_profile": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "evidence_schema_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "profiles": {
+            "items": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "api",
+          "current_profile",
+          "profiles",
+          "evidence_schema_version",
+          "limits"
+        ],
+        "type": "object"
+      },
+      "Profile": {
+        "description": "A parsed scoring profile.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sections": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SectionWeights"
+            },
+            "propertyNames": {
+              "description": "The protocol a check belongs to.",
+              "enum": [
+                "dns",
+                "tls",
+                "http",
+                "email",
+                "ip"
+              ],
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "thresholds": {
+            "description": "Grade thresholds, highest first.",
+            "items": {
+              "$ref": "#/components/schemas/Threshold"
+            },
+            "type": "array"
+          },
+          "version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "sections",
+          "thresholds"
+        ],
+        "type": "object"
+      },
+      "Protocol": {
+        "description": "The protocol a check belongs to.",
+        "enum": [
+          "dns",
+          "tls",
+          "http",
+          "email",
+          "ip"
+        ],
+        "type": "string"
+      },
+      "RateLimitMeta": {
+        "properties": {
+          "global_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "global_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "global_per_minute",
+          "global_burst"
+        ],
+        "type": "object"
+      },
+      "SectionWeights": {
+        "description": "One section's weight, its weighted checks and the checks whose failure forces `F`.",
+        "properties": {
+          "checks": {
+            "additionalProperties": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "propertyNames": {
+              "examples": [
+                "tls.chain_trusted"
+              ],
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "hard_fail": {
+            "items": {
+              "$ref": "#/components/schemas/CheckId"
+            },
+            "type": "array"
+          },
+          "weight": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "weight",
+          "checks",
+          "hard_fail"
+        ],
+        "type": "object"
+      },
+      "Severity": {
+        "description": "How serious a failed check is.",
+        "enum": [
+          "critical",
+          "high",
+          "medium",
+          "low"
+        ],
+        "type": "string"
+      },
+      "Threshold": {
+        "description": "One grade threshold as served: the lowest score that earns `grade`.",
+        "properties": {
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "min": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "grade",
+          "min"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "license": {
+      "identifier": "MIT",
+      "name": "MIT"
+    },
+    "title": "netray API",
+    "version": "0.26.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/catalogue": {
+      "get": {
+        "operationId": "catalogue_handler",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueResponse"
+                }
+              }
+            },
+            "description": "The catalogue"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "summary": "Every check of the catalogue, in file order.",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/v1/meta": {
+      "get": {
+        "operationId": "meta_handler",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            },
+            "description": "Deployment metadata"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "summary": "Version, profiles and the limits this deployment runs with.",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/v1/profiles/{n}": {
+      "get": {
+        "operationId": "profile_handler",
+        "parameters": [
+          {
+            "description": "Profile version, an integer",
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "The profile"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not an integer"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unknown profile version"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "summary": "One scoring profile.",
+        "tags": [
+          "reference"
+        ]
+      }
+    }
+  }
+}

@@ -298,7 +298,7 @@ async fn main() -> anyhow::Result<()> {
             if let Some(ip) = ip {
                 reload_ip_on_sighup(ip);
             }
-            lens::run_with(path, registry).await
+            lens::run_with(path, registry, netray_web::api::ApiParts::default()).await
         }
         Command::Dns { config, .. } => netray_dns::run(config).await,
         Command::Tls { config, .. } => netray_tls::run(config).await,

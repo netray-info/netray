@@ -77,6 +77,7 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
             ..BadgesConfig::default()
         },
         admission: lens::config::AdmissionConfig::default(),
+        api: Default::default(),
         og_cards: OgCardsConfig {
             enabled: og_enabled,
         },
@@ -134,10 +135,14 @@ async fn seed_head(state: &mut AppState, grade: Grade) -> tempfile::TempDir {
             RunCheck {
                 id: CheckId::parse("dns.dnssec_valid").unwrap(),
                 status: Status::Pass,
+                findings: vec![],
+                evidence: vec![],
             },
             RunCheck {
                 id: CheckId::parse("tls.caa_compliant").unwrap(),
                 status: Status::Pass,
+                findings: vec![],
+                evidence: vec![],
             },
         ],
         blocks: vec![],

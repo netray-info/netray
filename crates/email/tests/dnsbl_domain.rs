@@ -251,6 +251,8 @@ fn run_of(checks: &[CheckResult], blocks: Vec<Block>) -> Run {
             .map(|c| RunCheck {
                 id: CheckId::parse(&c.id.to_string()).unwrap(),
                 status: c.status,
+                findings: vec![],
+                evidence: vec![],
             })
             .collect(),
         blocks,

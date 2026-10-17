@@ -5,8 +5,8 @@ use std::error::Error;
 use std::fmt;
 use std::sync::OnceLock;
 
-use serde::Deserialize;
 use serde::de::IntoDeserializer;
+use serde::{Deserialize, Serialize};
 
 use netray_model::{CheckId, FixOwner, Protocol, Severity};
 
@@ -14,7 +14,7 @@ use netray_model::{CheckId, FixOwner, Protocol, Severity};
 const SHORT_MAX: usize = 8;
 
 /// One catalogue entry.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, utoipa::ToSchema)]
 pub struct CheckSpec {
     pub id: CheckId,
     pub protocol: Protocol,

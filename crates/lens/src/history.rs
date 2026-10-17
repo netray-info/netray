@@ -42,6 +42,8 @@ fn catalogue_checks(protocol: Protocol, status: Status) -> impl Iterator<Item = 
         .map(move |e| RunCheck {
             id: e.id.clone(),
             status,
+            findings: vec![],
+            evidence: vec![],
         })
 }
 
@@ -64,6 +66,8 @@ pub fn build_run(state: &AppState, output: &CheckOutput, facts: &[Block]) -> Run
                     Some(RunCheck {
                         id: CheckId::parse(&format!("{name}.{}", c.name)).ok()?,
                         status: c.verdict.clone().into(),
+                        findings: c.messages.clone(),
+                        evidence: c.evidence.clone(),
                     })
                 }));
                 blocks.extend(result.evidence.iter().cloned());

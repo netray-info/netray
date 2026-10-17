@@ -73,6 +73,8 @@ pub struct AppState {
     pub slots: Arc<tokio::sync::Semaphore>,
     /// `None` when `client_budget_per_hour` is 0: no client may start a budgeted run.
     pub client_budget: Option<Arc<ClientBudgetLimiter>>,
+    /// Module-side parts of API v1, handed in by `crates/netray`.
+    pub api_parts: netray_web::api::ApiParts,
 }
 
 impl AppState {
@@ -191,6 +193,7 @@ impl AppState {
             throttle: Arc::new(crate::admission::Throttle::default()),
             slots,
             client_budget,
+            api_parts: netray_web::api::ApiParts::default(),
         })
     }
 }
@@ -259,6 +262,7 @@ mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             admission: crate::config::AdmissionConfig::default(),
+            api: Default::default(),
             og_cards: crate::config::OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
             history: crate::config::HistoryConfig::default(),

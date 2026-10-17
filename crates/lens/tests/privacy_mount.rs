@@ -64,6 +64,7 @@ fn base_config() -> Config {
         snapshots: SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),
         admission: lens::config::AdmissionConfig::default(),
+        api: Default::default(),
     }
 }
 

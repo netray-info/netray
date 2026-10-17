@@ -112,10 +112,14 @@ fn run(hosts: [&str; 2], addrs: [&str; 2], fcrdns: Status) -> Run {
             RunCheck {
                 id: CheckId::parse("email.mx").unwrap(),
                 status: Status::Pass,
+                findings: vec![],
+                evidence: vec![],
             },
             RunCheck {
                 id: CheckId::parse("email.fcrdns").unwrap(),
                 status: fcrdns,
+                findings: vec![],
+                evidence: vec![],
             },
         ],
         blocks,

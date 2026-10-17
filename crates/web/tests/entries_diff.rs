@@ -239,6 +239,8 @@ fn run(status: Status, grade: Grade) -> Run {
         checks: vec![RunCheck {
             id: id("tls.not_expired"),
             status,
+            findings: vec![],
+            evidence: vec![],
         }],
         blocks: vec![],
     }
