@@ -214,3 +214,34 @@ async fn rendered_guides_keep_the_content_of_their_v1_pages() {
 
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
+
+/// Reader, phase 4: samples rewritten to API v1 read the stored run's shape (SDD §7.1, `Run`:
+/// top-level `grade`, `complete`, `sections`, `checks` with `id` and `status`), not V1's
+/// `summary` event or per-protocol `checks` arrays.
+#[tokio::test]
+async fn api_v1_samples_read_the_run_shape() {
+    for slug in ["domain-security-audit", "scoring"] {
+        let page = render(slug).await;
+        for v1 in [
+            ".summary.",
+            "summary.grade",
+            ".email.checks",
+            "select(.name ==",
+        ] {
+            assert!(
+                !page.contains(v1),
+                "{slug}: V1 response shape `{v1}` in an API v1 sample"
+            );
+        }
+    }
+    let audit = render("domain-security-audit").await;
+    assert!(
+        audit.contains("jq -e &#39;.grade | test(") || audit.contains("jq -e '.grade | test("),
+        "domain-security-audit: the CI gate reads `.grade`"
+    );
+    let scoring = render("scoring").await;
+    assert!(
+        scoring.contains("email.dkim"),
+        "scoring: the DKIM sample selects the `email.dkim` check id"
+    );
+}

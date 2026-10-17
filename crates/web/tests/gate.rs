@@ -985,6 +985,30 @@ const CASES: &[Case] = &[
         expect: None,
     },
     Case {
+        name: "askama span after the speculationrules type word is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"speculationrules{{ x }}\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "askama span after the ld+json type word is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/ld+json{{ x }}\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "block span after the ld+json type word is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/ld+json{% if c %}{% endif %}\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
         name: "quoted values holding askama and an apostrophe pass",
         files: &[(
             "templates/x.html",
