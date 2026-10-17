@@ -70,7 +70,8 @@ fn input<'a>(raw: &RawRun, profile: &'a netray_engine::profile::Profile) -> RunI
     }
 }
 
-/// The spec's definition of measured: Pass/Warn/Fail, weighted in the profile, section Measured.
+/// The spec's definition of measured: Pass/Warn/Fail, weighted in the profile, section Measured
+/// (a section with a weighted unmeasured check is unscored, so Unmeasured; requirement 12).
 fn measured(run: &RunInput, id: &CheckId, protocol: Protocol) -> Option<Status> {
     let s = *run.statuses.get(id)?;
     let weighted = run
@@ -78,11 +79,20 @@ fn measured(run: &RunInput, id: &CheckId, protocol: Protocol) -> Option<Status> 
         .sections
         .get(&protocol)
         .is_some_and(|sec| sec.checks.contains_key(id));
-    let state = run
+    let unscored = run.profile.sections.get(&protocol).is_some_and(|sec| {
+        sec.checks
+            .keys()
+            .any(|c| run.statuses.get(c) == Some(&Status::Unmeasured))
+    });
+    let state = match run
         .sections
         .get(&protocol)
         .copied()
-        .unwrap_or(SectionState::Measured);
+        .unwrap_or(SectionState::Measured)
+    {
+        SectionState::Measured if unscored => SectionState::Unmeasured,
+        other => other,
+    };
     (matches!(s, Status::Pass | Status::Warn | Status::Fail)
         && weighted
         && state == SectionState::Measured)

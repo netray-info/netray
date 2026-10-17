@@ -448,3 +448,43 @@ fn c16_check_unweighted_in_older_profile() {
     assert_eq!(l.runs[0].tones[i], LineTone::Pass);
     assert!(!l.runs[0].tones.contains(&LineTone::Fixed));
 }
+
+/// Requirement 12: a section the grade leaves unscored (a weighted check unmeasured) mutes every
+/// line in it and reports `Unmeasured`, so its answered lines draw no inflated height.
+#[test]
+fn r12_unmeasured_check_unscores_its_section() {
+    // HTTPS probe unanswered: the response checks unmeasured, the port-80 redirect passes
+    let unanswered: Vec<(String, Option<Status>)> = catalogue()
+        .entries()
+        .iter()
+        .filter(|e| e.protocol == Protocol::Http && e.id.to_string() != "http.https_redirect")
+        .map(|e| (e.id.to_string(), Some(Status::Unmeasured)))
+        .collect();
+    let over: Vec<(&str, Option<Status>)> =
+        unanswered.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+    let cur = run(&over);
+    let l = lay(&cur, &[]);
+    let r = &l.runs[0];
+    assert_eq!(r.sections[&Protocol::Http], SectionState::Unmeasured);
+    let redirect = at(&l, "http.https_redirect");
+    assert_eq!(r.tones[redirect], LineTone::Muted);
+    let smallest = smallest_measured(&l, 0);
+    for (i, line) in l.lines.iter().enumerate() {
+        if line.protocol == Protocol::Http {
+            assert_eq!(r.tones[i], LineTone::Muted, "{}", line.id);
+            assert!(near(r.heights[i], smallest, 1e-9), "{}", line.id);
+        }
+    }
+    // the other sections stay scored: ip.reputation keeps full height
+    assert!(near(r.heights[at(&l, "ip.reputation")], 1.0, 1e-9));
+    assert_eq!(r.sections[&Protocol::Dns], SectionState::Measured);
+
+    // one unmeasured email check (a refused DNSBL zone) unscores email the same way
+    let cur = run(&[("email.dnsbl", Some(Status::Unmeasured))]);
+    let l = lay(&cur, &[]);
+    assert_eq!(
+        l.runs[0].sections[&Protocol::Email],
+        SectionState::Unmeasured
+    );
+    assert_eq!(l.runs[0].tones[at(&l, "email.dmarc")], LineTone::Muted);
+}
