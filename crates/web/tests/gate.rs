@@ -788,26 +788,95 @@ const CASES: &[Case] = &[
         expect: Some((SCRIPT_RULE, "templates/x.html")),
     },
     Case {
-        name: "style colour quoted after a block span is refused",
+        name: "style quoted after a block span is refused",
         files: &[(
             "templates/x.html",
             "<div style={% if warn %}\"color: #f00\"{% endif %}>x</div>\n",
         )],
-        expect: Some((TOKEN_RULE, "templates/x.html")),
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
     },
     Case {
-        name: "component class quoted after a block span is refused",
+        name: "class quoted after a block span is refused",
         files: &[(
             "templates/x.html",
             "<div class={% if x %}\"spectrum\"{% endif %}>x</div>\n",
         )],
-        expect: Some((OWNERSHIP_RULE, "templates/x.html")),
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
     },
     Case {
-        name: "words in a value quoted after a block span are no handler",
+        name: "value quoted after a block span is refused",
         files: &[(
             "templates/x.html",
             "<span title={% if live %}\"Go online now\"{% else %}\"Offline\"{% endif %}>x</span>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quote in an else branch after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<a title={% if x %}\"a\"{% else %}\"b > c\"{% endif %} onclick=\"go()\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "javascript url in an else branch is refused",
+        files: &[(
+            "templates/x.html",
+            "<a href={% if x %}\"/a\"{% else %}\"javascript:go()\"{% endif %}>x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "unquoted text after a comment span is refused",
+        files: &[("templates/x.html", "<a href={# t #}javascript:go()>x</a>\n")],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "unquoted text after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<div class={% if x %}spectrum{% endif %}>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "block span glued to an unquoted value is refused",
+        files: &[(
+            "templates/x.html",
+            "<div class=a{% if x %}spectrum{% endif %}>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quote glued to an include span is refused",
+        files: &[(
+            "templates/x.html",
+            "<button class={% include \"c.txt\" %}\" onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "block span wrapping a whole attribute passes",
+        files: &[(
+            "templates/x.html",
+            "<a {% if x %}class=\"a\"{% endif %} href=\"/\">x</a>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "block span inside a quoted value passes",
+        files: &[(
+            "templates/x.html",
+            "<a title=\"{% if x %}a > b{% else %}c{% endif %}\" href=\"/\">x</a>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "unquoted askama value before the tag end passes",
+        files: &[(
+            "templates/x.html",
+            "<a href={{ u }}>x</a>\n<img src={{ s }}/>\n",
         )],
         expect: None,
     },
