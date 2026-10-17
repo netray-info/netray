@@ -881,6 +881,64 @@ const CASES: &[Case] = &[
         expect: None,
     },
     Case {
+        name: "block span after a value span inside an unquoted value is refused",
+        files: &[(
+            "templates/x.html",
+            "<div style=width:{{ w }}{% if x %};color:#f00{% endif %}>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "value span inside an unquoted value is refused",
+        files: &[(
+            "templates/x.html",
+            "<div style=width:{{ w }}px;color:red>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "slash glued to a value span before more text is refused",
+        files: &[(
+            "templates/x.html",
+            "<div style={{ s }}/;color:red>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "empty-rendering value span cannot hide an inline script",
+        files: &[(
+            "templates/x.html",
+            "<script data-x={{ x }} src=/app.js>alert(1)</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "empty-rendering value span cannot hide a style colour",
+        files: &[("templates/x.html", "<div style={{ s }} color:red>x</div>\n")],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "empty-rendering value span cannot hide a component class",
+        files: &[("templates/x.html", "<div class={{ c }} grade>x</div>\n")],
+        expect: Some((OWNERSHIP_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "javascript url in a later branch of a quoted value is refused",
+        files: &[(
+            "templates/x.html",
+            "<a href=\"{% if c %}/x{% else %}javascript:go(){% endif %}\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "speculationrules type behind a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"{% if c %}speculationrules{% endif %}\">alert(1)</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
         name: "quoted values holding askama and an apostrophe pass",
         files: &[(
             "templates/x.html",
