@@ -98,7 +98,8 @@ fn ids(html: &str) -> BTreeSet<String> {
     out
 }
 
-/// (action, name, placeholder) of every form whose opening tag has `class`.
+/// (action, name, placeholder) of every form whose opening tag has `class`; name and
+/// placeholder are empty for a form without an input (V1 vpn-leak's "Check my IP" button).
 fn forms(html: &str, class: &str) -> Vec<(String, String, String)> {
     let mut out = vec![];
     let mut rest = html;
@@ -108,14 +109,17 @@ fn forms(html: &str, class: &str) -> Vec<(String, String, String)> {
         let body = &seg[..end];
         let open = &body[..body.find('>').unwrap_or(body.len())];
         if attr(open, "class") == Some(class) {
-            let input = tags(body, "input")
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| panic!("form without input: {open}"));
+            let input = tags(body, "input").into_iter().next();
             out.push((
                 attr(open, "action").unwrap_or_default().to_string(),
-                attr(input, "name").unwrap_or_default().to_string(),
-                attr(input, "placeholder").unwrap_or_default().to_string(),
+                input
+                    .and_then(|i| attr(i, "name"))
+                    .unwrap_or_default()
+                    .to_string(),
+                input
+                    .and_then(|i| attr(i, "placeholder"))
+                    .unwrap_or_default()
+                    .to_string(),
             ));
         }
         rest = &seg[5..];
@@ -149,7 +153,13 @@ async fn rendered_guides_keep_the_content_of_their_v1_pages() {
             } else {
                 (action, name)
             };
-            if !rendered.contains(&(action.clone(), name.clone(), placeholder.clone())) {
+            let found = if name.is_empty() {
+                // An input-less V1 form needs a query input with the same action.
+                rendered.iter().any(|(a, _, _)| *a == action)
+            } else {
+                rendered.contains(&(action.clone(), name.clone(), placeholder.clone()))
+            };
+            if !found {
                 failures.push(format!(
                     "{slug}: no query-input form action={action} name={name} placeholder={placeholder}"
                 ));
