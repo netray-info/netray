@@ -225,3 +225,26 @@ async fn a_clock_running_backwards_never_forks_the_chain() {
     assert_eq!(head.last_seen_at, 2001);
     assert_eq!(store.entries(DOMAIN).await.unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn entries_are_newest_first_at_equal_created_at() {
+    let (store, _dir) = fresh().await;
+    for status in [Status::Pass, Status::Fail, Status::Warn] {
+        store
+            .record(DOMAIN, &complete(status), &[], 1000, d)
+            .await
+            .unwrap();
+    }
+    let entries = store.entries(DOMAIN).await.unwrap();
+    assert_eq!(entries.len(), 3);
+    // each entry's predecessor is the next one in the list
+    assert_eq!(
+        entries[0].predecessor_id.as_deref(),
+        Some(entries[1].id.as_str())
+    );
+    assert_eq!(
+        entries[1].predecessor_id.as_deref(),
+        Some(entries[2].id.as_str())
+    );
+    assert_eq!(entries[2].predecessor_id, None);
+}

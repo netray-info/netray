@@ -307,3 +307,21 @@ async fn an_unanswered_domain_zone_is_not_a_change() {
     assert_eq!(fingerprint(&a, &volatile), fingerprint(&b, &volatile));
     assert!(diff(&a, &b, &volatile, None).evidence.is_empty());
 }
+
+// A domain zone that answers with a policy code (Spamhaus rate limit) is a refused lookup: the
+// projection writes no answer for an unanswered row, so the run fingerprints like a clean one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_policy_answer_from_the_domain_zone_is_not_a_change() {
+    let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
+    let module = EmailModule::new(cfg).await.expect("module builds");
+    let volatile: Vec<&'static str> = module.volatile().iter().map(|p| p.0).collect();
+
+    let (c1, b1) = run(dnsbl_dns(false), &ZONES, &[]).await;
+    let policy =
+        dnsbl_dns(false).with_a("example.com.dbl.spamhaus.org", vec![v4("127.255.255.254")]);
+    let (c2, b2) = run(policy, &ZONES, &[]).await;
+    assert_eq!(check(&c1, "dnsbl").status, check(&c2, "dnsbl").status);
+    let (a, b) = (run_of(&c1, b1), run_of(&c2, b2));
+    assert_eq!(fingerprint(&a, &volatile), fingerprint(&b, &volatile));
+    assert!(diff(&a, &b, &volatile, None).evidence.is_empty());
+}
