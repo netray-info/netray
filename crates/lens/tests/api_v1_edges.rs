@@ -82,7 +82,8 @@ async fn send(app: &Router, mut req: Request<Body>) -> (StatusCode, Option<Strin
 }
 
 fn is_json(ct: &Option<String>) -> bool {
-    ct.as_deref().is_some_and(|c| c.starts_with("application/json"))
+    ct.as_deref()
+        .is_some_and(|c| c.starts_with("application/json"))
 }
 
 #[tokio::test]
@@ -130,14 +131,20 @@ async fn scoring_profile_path_sets_the_profile_v1_reports() {
     config.scoring.profile_path = Some(file.path().to_string_lossy().into_owned());
     let app = app(config);
 
-    let (s, _, body) = send(&app, Request::get("/api/v1/meta").body(Body::empty()).unwrap()).await;
+    let (s, _, body) = send(
+        &app,
+        Request::get("/api/v1/meta").body(Body::empty()).unwrap(),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK, "{body}");
     let v: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(v["current_profile"], 4);
 
     let (s, _, body) = send(
         &app,
-        Request::get("/api/v1/profiles/4").body(Body::empty()).unwrap(),
+        Request::get("/api/v1/profiles/4")
+            .body(Body::empty())
+            .unwrap(),
     )
     .await;
     assert_eq!(s, StatusCode::OK, "{body}");

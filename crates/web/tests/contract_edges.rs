@@ -111,7 +111,9 @@ fn untyped_schemas_flags_annotation_only_but_not_ref_or_oneof() {
     }}});
     let flagged = untyped_schemas(&doc);
     assert!(
-        flagged.iter().any(|p| p.contains("Holder") && p.contains("note")),
+        flagged
+            .iter()
+            .any(|p| p.contains("Holder") && p.contains("note")),
         "{flagged:?}"
     );
     assert!(!flagged.iter().any(|p| p.contains("by_ref")), "{flagged:?}");

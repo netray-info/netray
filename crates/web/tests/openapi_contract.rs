@@ -64,7 +64,10 @@ fn contract() {
 
     if update_requested() {
         if let Err(errs) = update_file(&path, &committed, &generated) {
-            panic!("incompatible change, fixture left untouched:\n  {}", errs.join("\n  "));
+            panic!(
+                "incompatible change, fixture left untouched:\n  {}",
+                errs.join("\n  ")
+            );
         }
         return;
     }
@@ -186,7 +189,10 @@ fn breaking_changes_are_refused() {
             d["paths"].as_object_mut().unwrap().remove("/api/v1/y");
         }),
         ("method removed", |d| {
-            d["paths"]["/api/v1/y"].as_object_mut().unwrap().remove("post");
+            d["paths"]["/api/v1/y"]
+                .as_object_mut()
+                .unwrap()
+                .remove("post");
         }),
         ("response status removed", |d| {
             d["paths"]["/api/v1/x"]["get"]["responses"]
@@ -198,13 +204,17 @@ fn breaking_changes_are_refused() {
             d["components"]["schemas"]["Res"]["properties"]["b"]["enum"] = json!(["one"]);
         }),
         ("component removed", |d| {
-            d["components"]["schemas"].as_object_mut().unwrap().remove("Extra");
+            d["components"]["schemas"]
+                .as_object_mut()
+                .unwrap()
+                .remove("Extra");
         }),
         ("format changed", |d| {
             d["components"]["schemas"]["Res"]["properties"]["a"]["format"] = json!("int64");
         }),
         ("items changed", |d| {
-            d["components"]["schemas"]["Res"]["properties"]["c"]["items"] = json!({"type": "integer"});
+            d["components"]["schemas"]["Res"]["properties"]["c"]["items"] =
+                json!({"type": "integer"});
         }),
         ("$ref target changed", |d| {
             d["components"]["schemas"]["Res"]["properties"]["d"]["$ref"] =
@@ -220,6 +230,9 @@ fn breaking_changes_are_refused() {
         mutate(&mut generated);
         let errs = compat_errors(&committed, &generated);
         assert!(!errs.is_empty(), "{name}: expected a compatibility error");
-        assert!(golden_update(&committed, &generated).is_err(), "{name}: update must be refused");
+        assert!(
+            golden_update(&committed, &generated).is_err(),
+            "{name}: update must be refused"
+        );
     }
 }

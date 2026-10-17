@@ -45,7 +45,13 @@ const fn case(
     status: u16,
     warmup: usize,
 ) -> Case {
-    Case { doc_path, method, uri, status, warmup }
+    Case {
+        doc_path,
+        method,
+        uri,
+        status,
+        warmup,
+    }
 }
 
 fn cases() -> Vec<Case> {
@@ -71,7 +77,10 @@ fn fixture() -> Value {
 }
 
 fn app() -> axum::Router {
-    let config = ApiConfig { per_ip_burst: 1, ..Default::default() };
+    let config = ApiConfig {
+        per_ip_burst: 1,
+        ..Default::default()
+    };
     router(ApiState::new(config, Arc::new(StubRuns)))
 }
 
@@ -105,12 +114,21 @@ async fn responses_match_the_committed_document() {
             .unwrap_or_default();
         let content = &documented["content"];
         if content.get("text/plain").is_some() {
-            assert!(content_type.starts_with("text/plain"), "{label}: content type {content_type}");
+            assert!(
+                content_type.starts_with("text/plain"),
+                "{label}: content type {content_type}"
+            );
             continue;
         }
         let schema = &content["application/json"]["schema"];
-        assert!(schema.is_object(), "{label}: no application/json schema documented");
-        assert!(content_type.starts_with("application/json"), "{label}: content type {content_type}");
+        assert!(
+            schema.is_object(),
+            "{label}: no application/json schema documented"
+        );
+        assert!(
+            content_type.starts_with("application/json"),
+            "{label}: content type {content_type}"
+        );
 
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         let body: Value = serde_json::from_slice(&bytes)
@@ -118,15 +136,25 @@ async fn responses_match_the_committed_document() {
 
         // $refs are "#/components/schemas/X": graft the fixture's components onto the schema root.
         let mut root = schema.clone();
-        root.as_object_mut().unwrap().insert("components".into(), doc["components"].clone());
+        root.as_object_mut()
+            .unwrap()
+            .insert("components".into(), doc["components"].clone());
         let validator = jsonschema::validator_for(&root)
             .unwrap_or_else(|e| panic!("{label}: schema does not compile: {e}"));
-        let errors: Vec<String> = validator.iter_errors(&body).map(|e| e.to_string()).collect();
-        assert!(errors.is_empty(), "{label}: body violates schema: {errors:?}\nbody: {body}");
+        let errors: Vec<String> = validator
+            .iter_errors(&body)
+            .map(|e| e.to_string())
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "{label}: body violates schema: {errors:?}\nbody: {body}"
+        );
     }
 }
 
-const METHODS: [&str; 8] = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
+const METHODS: [&str; 8] = [
+    "get", "put", "post", "delete", "options", "head", "patch", "trace",
+];
 
 /// One message per path+method of `doc` lacking a 2xx case or a non-2xx case in `cases`.
 fn uncovered(doc: &Value, cases: &[Case]) -> Vec<String> {
@@ -136,7 +164,11 @@ fn uncovered(doc: &Value, cases: &[Case]) -> Vec<String> {
     };
     for (path, item) in paths {
         for method in METHODS.iter().filter(|m| item.get(**m).is_some()) {
-            let mine = || cases.iter().filter(|c| c.doc_path == path && c.method == *method);
+            let mine = || {
+                cases
+                    .iter()
+                    .filter(|c| c.doc_path == path && c.method == *method)
+            };
             if !mine().any(|c| (200..300).contains(&c.status)) {
                 out.push(format!("{path} {method}: no 2xx case"));
             }

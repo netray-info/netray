@@ -41,7 +41,9 @@ async fn stub_is_usable_as_dyn_domain_runs_and_router_builds() {
     assert_eq!(runs.validate("EXAMPLE.com"), Ok("example.com".to_string()));
     assert_eq!(runs.validate("").unwrap_err().code, "DOMAIN_INVALID");
     let client: IpAddr = [192, 0, 2, 1].into();
-    let started = runs.start("example.com", client, RunTrigger::Api, false).await;
+    let started = runs
+        .start("example.com", client, RunTrigger::Api, false)
+        .await;
     assert!(matches!(started, RunStart::NotStarted));
 
     let state = ApiState::new(ApiConfig::default(), runs);

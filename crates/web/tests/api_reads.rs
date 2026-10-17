@@ -55,12 +55,24 @@ async fn get(path: &str) -> (StatusCode, Value) {
         .unwrap();
     let status = resp.status();
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
-    (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
 }
 
 const KEYS: [&str; 11] = [
-    "id", "protocol", "title", "finding", "impact", "fix_hint", "fix_owner", "severity", "source",
-    "guide", "short",
+    "id",
+    "protocol",
+    "title",
+    "finding",
+    "impact",
+    "fix_hint",
+    "fix_owner",
+    "severity",
+    "source",
+    "guide",
+    "short",
 ];
 
 #[tokio::test]
@@ -92,8 +104,7 @@ async fn catalogue_lists_every_check_in_file_order_with_eleven_fields() {
 
 #[tokio::test]
 async fn profile_3_answers_the_file_values_and_thresholds_highest_first() {
-    let file: toml::Table =
-        toml::from_str(include_str!("../../engine/profiles/v3.toml")).unwrap();
+    let file: toml::Table = toml::from_str(include_str!("../../engine/profiles/v3.toml")).unwrap();
     let (status, body) = get("/profiles/3").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["name"], "v3");
@@ -104,7 +115,11 @@ async fn profile_3_answers_the_file_values_and_thresholds_highest_first() {
     assert_eq!(got_sections.len(), want_sections.len());
     for (proto, want) in want_sections {
         let got = &got_sections[proto];
-        assert_eq!(got["weight"].as_i64(), want["weight"].as_integer(), "{proto} weight");
+        assert_eq!(
+            got["weight"].as_i64(),
+            want["weight"].as_integer(),
+            "{proto} weight"
+        );
         let want_checks = want["checks"].as_table().unwrap();
         let got_checks = got["checks"].as_object().unwrap();
         assert_eq!(got_checks.len(), want_checks.len(), "{proto} checks");

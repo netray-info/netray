@@ -8,9 +8,7 @@ use axum::http::{Request, StatusCode};
 use futures::future::BoxFuture;
 use http_body_util::BodyExt;
 use netray_engine::profile::{Profile, Profiles};
-use netray_web::api::{
-    ApiConfig, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger,
-};
+use netray_web::api::{ApiConfig, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger};
 use serde_json::Value;
 use tower::ServiceExt;
 
@@ -52,7 +50,8 @@ async fn send(app: Router, req: Request<Body>) -> (StatusCode, Option<String>, V
 
 fn assert_json_error(ct: &Option<String>, body: &Value, code: &str, label: &str) {
     assert!(
-        ct.as_deref().is_some_and(|c| c.starts_with("application/json")),
+        ct.as_deref()
+            .is_some_and(|c| c.starts_with("application/json")),
         "{label}: content-type {ct:?}"
     );
     assert_eq!(body["error"]["code"], code, "{label}: {body}");
@@ -72,7 +71,12 @@ async fn wrong_method_answers_405_with_the_json_error_shape() {
             .unwrap();
         let (s, ct, body) = send(app(), req).await;
         assert_eq!(s, StatusCode::METHOD_NOT_ALLOWED, "{method} {path}");
-        assert_json_error(&ct, &body, "METHOD_NOT_ALLOWED", &format!("{method} {path}"));
+        assert_json_error(
+            &ct,
+            &body,
+            "METHOD_NOT_ALLOWED",
+            &format!("{method} {path}"),
+        );
     }
 }
 
@@ -101,7 +105,11 @@ async fn with_profile_sets_the_graded_profile_in_meta_and_profiles() {
     let state = ApiState::new(ApiConfig::default(), Arc::new(StubRuns)).with_profile(profile_v4());
     let app = netray_web::api::router(state);
 
-    let (s, _, meta) = send(app.clone(), Request::get("/meta").body(Body::empty()).unwrap()).await;
+    let (s, _, meta) = send(
+        app.clone(),
+        Request::get("/meta").body(Body::empty()).unwrap(),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(meta["current_profile"], 4);
     let versions: Vec<u64> = meta["profiles"]
@@ -110,9 +118,16 @@ async fn with_profile_sets_the_graded_profile_in_meta_and_profiles() {
         .iter()
         .map(|v| v.as_u64().unwrap())
         .collect();
-    assert!(versions.contains(&3) && versions.contains(&4), "{versions:?}");
+    assert!(
+        versions.contains(&3) && versions.contains(&4),
+        "{versions:?}"
+    );
 
-    let (s, _, p) = send(app, Request::get("/profiles/4").body(Body::empty()).unwrap()).await;
+    let (s, _, p) = send(
+        app,
+        Request::get("/profiles/4").body(Body::empty()).unwrap(),
+    )
+    .await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(p["version"], 4);
 }
@@ -120,5 +135,8 @@ async fn with_profile_sets_the_graded_profile_in_meta_and_profiles() {
 #[tokio::test]
 async fn without_with_profile_current_profile_is_the_embedded_current() {
     let (_, _, meta) = send(app(), Request::get("/meta").body(Body::empty()).unwrap()).await;
-    assert_eq!(meta["current_profile"], u64::from(Profiles::current().version));
+    assert_eq!(
+        meta["current_profile"],
+        u64::from(Profiles::current().version)
+    );
 }

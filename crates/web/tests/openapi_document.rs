@@ -2,7 +2,7 @@
 //! untyped-schema check that guards it.
 use netray_web::api::contract::untyped_schemas;
 use netray_web::api::openapi;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 const ERROR_REF: &str = "#/components/schemas/ErrorResponse";
 
@@ -81,7 +81,9 @@ fn untyped_schemas_names_empty_nested_schema() {
     }}}});
     let found = untyped_schemas(&doc);
     assert!(
-        found.iter().any(|p| p.contains("Outer") && p.contains("inner")),
+        found
+            .iter()
+            .any(|p| p.contains("Outer") && p.contains("inner")),
         "expected a pointer naming Outer and inner, got {found:?}"
     );
 }

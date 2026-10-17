@@ -1,7 +1,9 @@
 //! v2-api R3 / C3: the model and engine types derive `ToSchema`; `CheckSpec` and `Profile` serialise.
 use netray_engine::catalogue::CheckSpec;
 use netray_engine::profile::{Profile, Profiles, SectionWeights};
-use netray_model::diff::{BlockChange, BlockChangeKind, ChangeClass, CheckChange, Diff, GradeChange};
+use netray_model::diff::{
+    BlockChange, BlockChangeKind, ChangeClass, CheckChange, Diff, GradeChange,
+};
 use netray_model::evidence::{Block, BlockId, Node, Record, Shape, Value};
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{CheckId, FixOwner, Grade, Protocol, Severity, Status};
@@ -59,8 +61,17 @@ fn check_spec_serialises_exactly_its_eleven_fields() {
     assert_eq!(
         keys,
         [
-            "fix_hint", "fix_owner", "finding", "guide", "id", "impact", "protocol", "severity",
-            "short", "source", "title"
+            "fix_hint",
+            "fix_owner",
+            "finding",
+            "guide",
+            "id",
+            "impact",
+            "protocol",
+            "severity",
+            "short",
+            "source",
+            "title"
         ]
         .iter()
         .copied()
@@ -81,8 +92,14 @@ fn current_profile_serialises_name_version_sections_thresholds() {
     let thresholds = v["thresholds"].as_array().unwrap();
     assert_eq!(thresholds[0]["grade"], json!("A+"));
     assert!(thresholds[0]["min"].is_u64());
-    let mins: Vec<u64> = thresholds.iter().map(|t| t["min"].as_u64().unwrap()).collect();
-    assert!(mins.windows(2).all(|w| w[0] >= w[1]), "highest first: {mins:?}");
+    let mins: Vec<u64> = thresholds
+        .iter()
+        .map(|t| t["min"].as_u64().unwrap())
+        .collect();
+    assert!(
+        mins.windows(2).all(|w| w[0] >= w[1]),
+        "highest first: {mins:?}"
+    );
     let dns = &v["sections"]["dns"];
     assert!(dns["weight"].is_u64());
     assert!(dns["checks"].is_object());
