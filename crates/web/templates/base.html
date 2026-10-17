@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ frame.title }}</title>
+<meta name="description" content="{{ frame.description }}">
+<link rel="canonical" href="https://netray.info{{ frame.canonical }}">
+<meta property="og:title" content="{{ frame.title }}">
+<meta property="og:description" content="{{ frame.description }}">
+<meta property="og:image" content="{{ frame.og_image }}">
+{% block styles %}<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">{% endblock %}
+</head>
+<body>
+{% block header %}<header class="page-header">
+<a href="/"><img src="/static/logo.svg" alt="netray"></a>
+<nav class="page-nav">
+<a href="/guide/">Guides</a>
+<a href="/compare">Compare</a>
+<a href="/status">Status</a>
+<a href="https://ip.netray.info">IP</a>
+<a href="https://dns.netray.info">DNS</a>
+<a href="https://tls.netray.info">TLS</a>
+<a href="https://http.netray.info">HTTP</a>
+</nav>
+<button type="button" class="theme-toggle" data-island="theme" aria-label="Switch theme">Theme</button>
+</header>{% endblock %}
+<main>{% block main %}{% endblock %}</main>
+<footer class="page-footer">
+<p>{% include "partials/tagline.html" %}</p>
+<nav>
+<a href="/privacy">Privacy</a>
+<a href="/status">Status</a>
+</nav>
+</footer>
+{% block scripts %}<script type="module" src="/static/islands.js"></script>
+<script type="speculationrules">{{ frame.rules|safe }}</script>{% endblock %}
+</body>
+</html>

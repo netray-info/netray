@@ -50,3 +50,36 @@ G1: C4, C9 · G2: C1, C10 · G3: C2, C3, C5, C6, C7, C8, C11–C17. Order G1 →
 #### G3 — `npm test -w crates/web/islands && bash tests/repo/test_islands_typecheck.sh && cargo test -p netray-web --test gate real_tree_passes_the_gate`
 1. `crates/web/islands/src/main.ts`: `register` (Map), `mount` (root if it matches plus `querySelectorAll("[data-island]")`, a `WeakSet` of mounted elements, unknown names skipped); registers `stream` passing `mount` in (no import cycle); ends with `mount(document)`.
 2. `crates/web/islands/src/stream.ts`: `stream(form, mount)` per requirement 28 — URL from `data-stream-url` else the `action` attribute; URL-encoded `FormData` string entries plus `trigger` (submitter named `trigger`, else `data-stream-autostart`); POST with `Accept: text/event-stream`, `credentials: "same-origin"`, an `AbortController` aborting the previous run; submit intercepted; autostart waits out `document.prerendering` via `prerenderingchange`; SSE parse over a streaming `TextDecoder` (CRLF/LF/CR lines, multi-line `data:`, `:` comments); `fragment` → `<template>`, scripts removed, `replaceWith`, `mount` over inserted elements, bubbling `netray:stream-fragment` on the inserted element; `end` → `done`, bubbling `netray:stream-end` on the form; `running`/`error` states, `[data-stream-error]` unhidden on error; superseded runs ignored and their readers cancelled on abort. No style writes, no colour strings.
+
+## Phase 3 — Router, frame, CSP
+
+### Groups
+
+G1: C10, C22 · G2: C6, C18 · G3: C1–C5, C7–C9, C11, C12, C14–C17, C19–C21, C23, C24, C26 · G4: C13, C25. G1, G2, G3 independent; G4 after G3.
+
+### Plan
+
+#### G1 — `npm test -w crates/web/islands && npm run build -w crates/web/islands`
+1. `crates/web/islands/src/theme.ts`: `theme(el)`; reads `localStorage.theme` in try/catch, applies it in `requestAnimationFrame`; click cycles auto → light → dark, sets/removes `data-theme` on `<html>`, stores/removes the key in try/catch; attributes only.
+2. `crates/web/islands/src/main.ts`: `register("theme", theme)`.
+
+#### G2 — `cargo test -p netray-web --test view_transition --test gate`
+1. `crates/web/static/base.css`: `@media (prefers-reduced-motion: no-preference) { @view-transition { navigation: auto; } }`.
+
+#### G3 — build islands, stage, `cargo test -p netray-web --test pages_router --test pages_frame --test pages_static --test pages_csp --test pages_errors --test pages_codenames --test stream_wire --test gate --test tagline --test components && cargo check -p netray-email && bash tests/repo/test_web_crate.sh && bash tests/repo/test_no_codenames.sh`
+1. Root `Cargo.toml`: `base64 = "0.22"` in `[workspace.dependencies]`; `crates/email/Cargo.toml` uses it with `workspace = true`.
+2. `crates/web/Cargo.toml`: axum, sha2, base64, percent-encoding, serde (derive); dev: tokio (macros, rt), tower (util), http-body-util, futures.
+3. `crates/web/src/lib.rs`: `pub mod pages; pub mod stream;` (doc without the word `Router`).
+4. `crates/web/src/stream.rs`: `fragment(id, html)` (serde struct, key order id, html), `end()` = `Event::default().event("end")`.
+5. `crates/web/src/pages/mod.rs`: `SPECULATION_RULES`, `router()` = one `/static/{*path}` route, `robots()`, `Frame`, `page()` render helper (render error → `server_error()`), re-exports.
+6. `crates/web/src/pages/headers.rs`: CSP with the generated hash and the status origin, `secure(response)` adds CSP plus the seven `site.rs` headers on every response.
+7. `crates/web/src/pages/assets.rs`: `APP_CSS` concatenated at compile time (tokens, base, components in R44 order, pages.css); embedded islands bundle, logo, favicon, og table; anything else → 404 page; `public, max-age=3600`.
+8. `crates/web/src/pages/errors.rs`: `not_found`, `server_error`, `query_redirect` (R15 normalisation, percent-encoded `Location`, 400 with refilled input and the line).
+9. Templates `base.html`, `pages/not_found.html`, `pages/server_error.html`; `static/pages.css` (tokens only, no R44 root selectors); `static/og/landing.png` copied from `site/og/` for the default `og:image`.
+
+#### G4 — `cargo test -p netray-common --lib security_headers && cargo test -p lens --lib spa && cargo test -p lens --test pages_mount && cargo build -p netray`
+1. `crates/common/src/security_headers.rs`: `keep_inner_csp` (default false) leaves an inner CSP in place; unit row.
+2. `crates/lens/Cargo.toml`: `netray-web` path dependency.
+3. `crates/lens/src/spa.rs`: `Shell` state and `render_shell(site)`; `handler` takes `State<Shell>`; `state.rs` uses `render_shell`.
+4. `crates/lens/src/lib.rs`: `frontend_router_with(shell)` = robots + `pages::router()` + SPA fallback under `security_headers_mw` (with `keep_inner_csp: true`); `pub fn frontend_router()` with the default site config; `run_with` merges it in place of its robots route and fallback.
+5. `Dockerfile`: copy `crates/web/islands/dist` from the frontend stage (lens now embeds the bundle).

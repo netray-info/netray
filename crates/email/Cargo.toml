@@ -55,7 +55,7 @@ ipnet = "2"
 
 # DKIM key parsing
 x509-parser = "0.17"
-base64 = "0.22"
+base64 = { workspace = true }
 
 # Percent-decoding for path params
 percent-encoding = { workspace = true }

@@ -128,6 +128,7 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
     let openapi = api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
 
     let client_runs = std::sync::Arc::clone(&state.client_runs);
+    let shell = spa::Shell(state.rendered_html.clone());
 
     // 5. Build the main app with all middleware.
     let app = Router::new()
@@ -148,9 +149,8 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
         } else {
             Router::new()
         })
-        .route("/robots.txt", get(robots_txt))
-        .fallback(spa::handler)
         .with_state(state)
+        .merge(frontend_router_with(shell))
         .route(
             "/api-docs/openapi.json",
             get({
@@ -247,6 +247,22 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
     netray_common::telemetry::shutdown();
 }
 
+fn frontend_router_with(shell: spa::Shell) -> Router {
+    Router::new()
+        .route("/robots.txt", get(robots_txt))
+        .fallback(spa::handler)
+        .with_state(shell)
+        .merge(netray_web::pages::router())
+        .layer(axum::middleware::from_fn(security_headers_mw))
+}
+
+/// The SPA shell, `/robots.txt` and the shared pages with their security headers.
+pub fn frontend_router() -> Router {
+    frontend_router_with(spa::Shell(
+        spa::render_shell(&config::SiteConfig::default()),
+    ))
+}
+
 async fn robots_txt() -> impl axum::response::IntoResponse {
     (
         [(
@@ -282,6 +298,7 @@ async fn security_headers_mw(
     let layer_fn = security_headers_layer(SecurityHeadersConfig {
         extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
         relaxed_csp_path_prefix: "/docs".to_string(),
+        keep_inner: true,
         ..Default::default()
     });
     layer_fn(request, next).await

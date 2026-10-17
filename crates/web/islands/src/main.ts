@@ -1,4 +1,5 @@
 import { stream } from "./stream";
+import { theme } from "./theme";
 
 type Island = (el: HTMLElement) => void;
 
@@ -23,5 +24,6 @@ export function mount(root: ParentNode): void {
 }
 
 register("stream", (el) => stream(el as HTMLFormElement, mount));
+register("theme", theme);
 
 mount(document);
