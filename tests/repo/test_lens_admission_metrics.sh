@@ -23,6 +23,7 @@ for series in \
     'lens_check_requests_total{result="fresh"} 0' \
     'lens_check_requests_total{result="cache_hit"} 0' \
     'lens_check_requests_total{result="rate_limited"} 0' \
+    'lens_check_requests_total{result="joined"} 0' \
     'lens_badge_requests_total{cache="hit"} 0' \
     'lens_badge_requests_total{cache="miss"} 0' \
     'lens_badge_requests_total{cache="throttled"} 0' \

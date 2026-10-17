@@ -257,14 +257,15 @@ async fn admission_c10_in_flight_gauge_is_1_during_run_and_0_after_return() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn admission_c10_in_flight_gauge_is_0_after_handler_future_is_dropped() {
+async fn admission_c10_in_flight_gauge_stays_up_after_handler_future_is_dropped() {
+    // v2-admission requirement 5: the run task holds the gauge, so a dropped requester leaves the
+    // run in flight until it ends.
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
     let entered = Arc::new(Notify::new());
-    // Never released: the DNS module does not answer before the timeout fires.
     let release = Arc::new(Notify::new());
-    let app = app(10, Some((entered.clone(), release)));
+    let app = app(10, Some((entered.clone(), release.clone())));
 
     let outcome =
         tokio::time::timeout(Duration::from_millis(500), post_check(&app, "example.com")).await;
@@ -276,9 +277,20 @@ async fn admission_c10_in_flight_gauge_is_0_after_handler_future_is_dropped() {
         .expect("the run reached the DNS module");
     assert_eq!(
         in_flight(&snap),
-        Some(0.0),
-        "a dropped run is no longer in flight"
+        Some(1.0),
+        "a run whose requester has gone is still in flight"
     );
+
+    release.notify_one();
+    let mut ended = false;
+    for _ in 0..250 {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        if in_flight(&snap) == Some(0.0) {
+            ended = true;
+            break;
+        }
+    }
+    assert!(ended, "the run ended and left the gauge at 0");
 }
 
 #[tokio::test(flavor = "current_thread")]
