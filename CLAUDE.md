@@ -94,6 +94,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
 - **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
 - **askama 0.16 closes every `{% call %}` with `{% endcall %}`**; without it the component macro does not compile.
+- **A `base.html` block default compiles against every child**: put frame-struct fields only inside blocks a struct-less child overrides (v2-entries' pages override `meta`).
+- **Stub a third-party API with a body captured from the live endpoint**, never the shape the code reads (status island: the event feed answers `results`, not `data`).
 - **A purity guard is an allowlist.** `tests/repo/test_spectrum_module.sh` admits named imports, std paths and macros; a blocklist of I/O names let print macros and `std::process` through.
 - **The spectrum follows the grade.** `spectrum::layout` mutes a section with a weighted unmeasured check and sums M over the profile, as `scoring.rs` does; change both together.
 - **No `Router` word in `crates/web/src` outside `entries/`, `pages/`, `api/`**, comments included: `tests/repo/test_web_crate.sh` greps the text.

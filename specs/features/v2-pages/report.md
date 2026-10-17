@@ -325,3 +325,8 @@ COUNTS blocker=2 amendment=10 deferred=1 nit=1 — every finding repaired in the
 ### Behavioural verification
 
 skipped: the phase changes documents only; the repo checks above read them.
+
+### Checks to build
+
+- Every route of `pages::router()` runs `assert_frame` (header, footer, stylesheet, bundle and speculation rules exactly once) — `crates/web/tests/pages_frame.rs` (review MAJOR, requirement 9).
+- Each guide's rendered `<h1>` equals V1's `<main>` heading with codenames replaced — `crates/web/tests/guide_content.rs` (review MAJOR, requirement 17).

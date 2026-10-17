@@ -1,7 +1,8 @@
 # Spec: v2-pages
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-17
+Finished: 2026-10-18
 
 ## Goal
 
@@ -250,6 +251,7 @@ GIVEN `specs/sdd/v2.md` WHEN read THEN V5.1 holds the `site/` deletion and V4.8 
 - `stream::end()` carries data `{}` over requirement 29's empty data: axum writes no `data:` line for an empty value, and a WHATWG-conforming parser (EventSource, `eventsource-stream` in a consumer's Rust test) drops an event with empty data, so `end` would never arrive there (implementer under the operator's autonomy mandate, 2026-10-17).
 - The compare page claims partial coverage where the listed checks judge only part of a row (SOA record: `dns.ttl` partial, only the SOA minimum TTL is judged; Table 1 DNS checks partial, since `dns.dnssec` is partial; NS records partial, since the NS checks read the child's NS set and never query the parent; Protocol versions: `checks = []`, since the TLS inspector negotiates TLS 1.2 or 1.3 only and no check sees a deprecated version) and lists the catalogue checks V1 predates (OCSP stapling, DANE / TLSA, blocklists) as partial, over keeping V1's ✓ and ✗ verbatim: the netray column is generated from the catalogue (P36, requirement 24) and must not claim more than the checks judge; requirement 23 amended (implementer under the operator's autonomy mandate, 2026-10-17).
 - The phase 5 review closes after three reader passes with the last finding (NS records claimed full) repaired as a one-word data change (`depth = "partial"`, test added) without a fourth pass, over halting with `blocker`: each pass narrowed what the generated column claims, the repair only lowers a claim, and the remaining items are DEFERRED in the report (implementer under the operator's autonomy mandate, 2026-10-17).
+- The finish entries (one solutions note, two CLAUDE.md bullets, two checks to build) are written without the operator's per-destination confirmation, over halting finish for it: the run is unattended under the operator's autonomy mandate, every entry is a reversible repository edit, and the midday review sees them in the finish commit (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 
