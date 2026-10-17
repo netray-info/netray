@@ -264,3 +264,16 @@ async fn netray_web_frame_body() -> String {
         .unwrap();
     String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap()
 }
+
+/// The logo SVG has only a viewBox, so an `<img>` of it has no intrinsic width and collapses
+/// in the flex header unless the stylesheet sizes it (screenshot review, phase 4).
+#[test]
+fn header_logo_is_sized_by_the_stylesheet() {
+    let css = include_str!("../static/pages.css");
+    let at = css
+        .find(".page-header img")
+        .expect("pages.css styles the header logo");
+    let body = &css[at..at + css[at..].find('}').unwrap()];
+    assert!(body.contains("height:"), "the header logo has a height: {body}");
+    assert!(body.contains("width: auto"), "the header logo keeps its aspect ratio: {body}");
+}
