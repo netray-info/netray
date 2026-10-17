@@ -304,10 +304,13 @@ fn c7_band_height_follows_the_largest_row_count() {
     let one = lay(&run(&failing(Protocol::Dns, 1)), &[]);
     assert_eq!(band_height(&render(&one, 0)), calc_rows(3));
 
-    let mixed = lay(
-        &run(&failing(Protocol::Dns, 3)),
-        &[run(&failing(Protocol::Dns, 5))],
-    );
+    // The current run fails dns 1-3 and has dns 4-5 not applicable, so the older run's fails on
+    // dns 4-5 are not fixed in it (a fixed line would carry a label and a row of its own).
+    let mut current = failing(Protocol::Dns, 5);
+    for entry in &mut current[3..] {
+        entry.1 = Some(Status::NotApplicable);
+    }
+    let mixed = lay(&run(&current), &[run(&failing(Protocol::Dns, 5))]);
     assert_eq!(mixed.runs[0].rows, 3);
     assert_eq!(mixed.runs[1].rows, 5);
     assert_eq!(band_height(&render(&mixed, 0)), calc_rows(5));
