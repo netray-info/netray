@@ -125,20 +125,30 @@ pub struct ProgressRayView {
     pub segments: Vec<RaySegment>,
 }
 
-/// A spectrum line; `x` and `height` are percent of the plate.
+/// A spectrum line in one run; `x` and `height` are percent of the plate.
 #[derive(Debug, Clone)]
 pub struct SpectrumLine {
     pub code: String,
-    pub x: f32,
-    pub height: f32,
+    pub x: f64,
+    pub height: f64,
     pub tone: Tone,
-    pub label: Option<String>,
 }
 
 impl SpectrumLine {
-    /// The line's top edge, in percent of the plate measured from its top.
-    fn top(&self) -> f32 {
+    fn top(&self) -> f64 {
         100.0 - self.height
+    }
+
+    fn x_pct(&self) -> String {
+        format!("{:.4}", self.x)
+    }
+
+    fn top_pct(&self) -> String {
+        format!("{:.4}", self.top())
+    }
+
+    fn height_pct(&self) -> String {
+        format!("{:.4}", self.height)
     }
 
     fn is_fix(&self) -> bool {
@@ -146,20 +156,171 @@ impl SpectrumLine {
     }
 }
 
-/// A labelled band of the spectrum plate, in percent of its width.
+/// One run's lines inside one protocol band.
+#[derive(Debug, Clone)]
+pub struct SpectrumBandRun {
+    pub run: usize,
+    pub shown: bool,
+    pub unmeasured: bool,
+    pub lines: Vec<SpectrumLine>,
+}
+
+/// One protocol band: `protocol` is the lower-case protocol name; `boundary` is the band start
+/// in percent, `None` for the first band.
+#[derive(Debug, Clone)]
+pub struct SpectrumBand {
+    pub protocol: String,
+    pub boundary: Option<f64>,
+    pub runs: Vec<SpectrumBandRun>,
+}
+
+impl SpectrumBand {
+    fn boundary_pct(&self) -> Option<String> {
+        self.boundary.map(|b| format!("{b:.4}"))
+    }
+}
+
+/// One label: `x` the leader in percent of the plate, `width` the box width in px.
+#[derive(Debug, Clone)]
+pub struct SpectrumLabel {
+    pub code: String,
+    pub text: String,
+    pub tone: Tone,
+    pub row: usize,
+    pub x: f64,
+    pub width: f64,
+}
+
+impl SpectrumLabel {
+    fn x_pct(&self) -> String {
+        format!("{:.4}", self.x)
+    }
+
+    fn width_px(&self) -> String {
+        format!("{:.2}", self.width)
+    }
+}
+
+/// One run's placed labels.
+#[derive(Debug, Clone)]
+pub struct SpectrumLabelSet {
+    pub run: usize,
+    pub shown: bool,
+    pub labels: Vec<SpectrumLabel>,
+}
+
+/// A labelled band of the spectrum axis, in percent of its width.
 #[derive(Debug, Clone)]
 pub struct SpectrumRegion {
     pub label: String,
-    pub x: f32,
-    pub width: f32,
+    pub x: f64,
+    pub width: f64,
 }
 
-/// The spectrum plate.
+impl SpectrumRegion {
+    fn x_pct(&self) -> String {
+        format!("{:.4}", self.x)
+    }
+}
+
+/// The spectrum plate; `rows` is the label band's row count, `line_count` sizes the scroll box.
 #[derive(Debug, Clone)]
 pub struct SpectrumView {
     pub label: String,
-    pub lines: Vec<SpectrumLine>,
+    pub line_count: usize,
+    pub rows: usize,
+    pub bands: Vec<SpectrumBand>,
+    pub label_sets: Vec<SpectrumLabelSet>,
     pub regions: Vec<SpectrumRegion>,
+}
+
+fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
+    use crate::spectrum::LineTone;
+    match tone {
+        LineTone::Pass => Tone::Pass,
+        LineTone::Warn => Tone::Warn,
+        LineTone::Fail => Tone::Fail,
+        LineTone::Fixed => Tone::Fix,
+        LineTone::Muted => Tone::Untested,
+    }
+}
+
+impl SpectrumView {
+    /// The view of a layout: percent positions from px, one band per protocol group, one run
+    /// group and one label set per run, `shown` marking the run on display.
+    pub fn from_layout(layout: &crate::spectrum::Layout, label: &str, shown: usize) -> Self {
+        use crate::spectrum::SectionState;
+        let plate = layout.plate_width;
+        let bands = layout
+            .groups
+            .iter()
+            .enumerate()
+            .map(|(gi, g)| {
+                let protocol = layout.lines[g.first].protocol;
+                let runs = layout
+                    .runs
+                    .iter()
+                    .enumerate()
+                    .map(|(k, run)| SpectrumBandRun {
+                        run: k,
+                        shown: k == shown,
+                        unmeasured: run.sections.get(&protocol) == Some(&SectionState::Unmeasured),
+                        lines: (g.first..g.first + g.len)
+                            .map(|i| SpectrumLine {
+                                code: layout.lines[i].id.to_string(),
+                                x: layout.lines[i].x / plate * 100.0,
+                                height: run.heights[i] * 100.0,
+                                tone: line_tone(run.tones[i]),
+                            })
+                            .collect(),
+                    })
+                    .collect();
+                SpectrumBand {
+                    protocol: protocol.as_str().to_string(),
+                    boundary: (gi > 0).then(|| g.start / plate * 100.0),
+                    runs,
+                }
+            })
+            .collect();
+        let label_sets = layout
+            .runs
+            .iter()
+            .enumerate()
+            .map(|(k, run)| SpectrumLabelSet {
+                run: k,
+                shown: k == shown,
+                labels: run
+                    .labels
+                    .iter()
+                    .map(|l| SpectrumLabel {
+                        code: layout.lines[l.line].id.to_string(),
+                        text: l.text.clone(),
+                        tone: line_tone(run.tones[l.line]),
+                        row: l.row,
+                        x: l.leader / plate * 100.0,
+                        width: l.width,
+                    })
+                    .collect(),
+            })
+            .collect();
+        let regions = layout
+            .groups
+            .iter()
+            .map(|g| SpectrumRegion {
+                label: layout.lines[g.first].protocol.as_str().to_string(),
+                x: g.start / plate * 100.0,
+                width: g.width / plate * 100.0,
+            })
+            .collect();
+        SpectrumView {
+            label: label.to_string(),
+            line_count: layout.lines.len(),
+            rows: layout.runs.iter().map(|r| r.rows).max().unwrap_or(0),
+            bands,
+            label_sets,
+            regions,
+        }
+    }
 }
 
 /// One run of the trace; `current` marks the run on display.
