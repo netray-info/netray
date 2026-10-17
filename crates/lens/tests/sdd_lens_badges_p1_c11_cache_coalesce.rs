@@ -70,6 +70,7 @@ fn make_state_with_cache(ttl_seconds: u64) -> AppState {
             ttl_seconds,
             ..BadgesConfig::default()
         },
+        admission: lens::config::AdmissionConfig::default(),
         og_cards: lens::config::OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),

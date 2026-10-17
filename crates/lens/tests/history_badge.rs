@@ -63,6 +63,7 @@ fn make_state(cache: bool) -> AppState {
         scoring: ScoringConfig::default(),
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
+        admission: lens::config::AdmissionConfig::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),

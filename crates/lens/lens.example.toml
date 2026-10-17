@@ -93,6 +93,11 @@ per_ip_burst = 3
 global_per_minute = 100
 global_burst = 20
 
+[admission]
+# fresh domain runs per client per hour; concurrent domain runs
+client_budget_per_hour = 30
+domain_run_slots = 8
+
 [scoring]
 # profile_path = "my-profile.toml"   # override the built-in profile v3 (crates/engine/profiles/v3.toml)
 

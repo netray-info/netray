@@ -69,6 +69,7 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
             ttl_seconds: 7200,
             ..BadgesConfig::default()
         },
+        admission: lens::config::AdmissionConfig::default(),
         og_cards: OgCardsConfig {
             enabled: og_enabled,
         },

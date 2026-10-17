@@ -241,7 +241,7 @@ served as a cache hit" onto the history, and it takes the history record off the
       the `dkim_selectors` rule; a budget of 0.
     - §4.4 "Prerender": the token rule and the answers of requirement 18.
     - S33: "`netray.toml` values" becomes "lens config values until the cutover, then
-      `netray.toml`".
+      `netray.toml`". Written in Phase 1, which introduces `[admission]`.
     - Phase 2 table: V2.6 reads "with S33's numbers" in place of "numbers from the baseline (the
       §4.4 TODO resolved)", and the table marks V2.6 as built by `v2-admission`.
     - §9.2: `netray_runs_total`'s `trigger` reads (visit, recheck, api, badge, og), the values of
@@ -365,7 +365,7 @@ GIVEN `HistoryStore::head` on a domain with three chained entries THEN it return
 `crates/lens/src/admission.rs`: the throttle on tokio's clock with each run's outcome, the
 per-client limiter, the slot semaphore in `AppState`, `check_limits`, `Refusal` and
 `Admit::Refused`, the order of requirement 15, the refusal answers per route, and the rejection
-counter. SDD §4.4 admission paragraph, S33, the Phase 2 table and §9.2's trigger values. Requirement 20 closes in
+counter. SDD §4.4 admission paragraph, the Phase 2 table and §9.2's trigger values. Requirement 20 closes in
 Phase 5 with the prefetch argument.
 
 ### Test Scenarios
@@ -404,8 +404,8 @@ GIVEN the badge per-domain recompute limiter exhausted and a run of the domain i
 `crates/common`: `prefetch::is_prefetch`. `crates/lens`: the `prefetch` argument of `admit` and `Admit::NotStarted`, so the
 rule runs after the cache hit and join steps in every caller. The `PREFETCH_REFUSED` error
 variant. SDD §4.4 prerender line. Requirement 19 closes with this
-phase: its other items are written by the phases that build them (Phase 3: the cache
-paragraph; Phase 4: admission, S33, the Phase 2 table, §9.2's triggers). This phase adds the
+phase: its other items are written by the phases that build them (Phase 1: S33; Phase 3: the cache
+paragraph; Phase 4: admission, the Phase 2 table, §9.2's triggers). This phase adds the
 prerender item and checks that all of them are present.
 
 ### Test Scenarios
@@ -528,6 +528,9 @@ GIVEN the amended SDD WHEN read THEN §4.4 names the `[admission]` keys, the ord
   no-store` over 429 or 204: it is no rate refusal, an empty 204 would be cached as a result, and
   `no-store` keeps the browser from serving the refusal on navigation (implementer under the
   operator's autonomy mandate, 2026-10-17).
+- S33 amended in Phase 1, with the `[admission]` keys, over in Phase 4 as the phases first read: the
+  repo rule amends the SDD in the commit whose code changes what it says, and Phase 1 makes the
+  four numbers lens config values (implementer under the operator's autonomy mandate, 2026-10-17).
 
 ## Open decisions
 

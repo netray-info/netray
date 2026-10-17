@@ -1688,6 +1688,7 @@ pub mod tests {
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
+            admission: crate::config::AdmissionConfig::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
             history: crate::config::HistoryConfig::default(),
