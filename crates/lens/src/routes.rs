@@ -1604,49 +1604,71 @@ pub async fn snapshot_handler(
     State(state): State<AppState>,
     shortid: Result<Path<String>, PathRejection>,
 ) -> Response {
-    use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
-    use serde_json::json;
-
     let Ok(Path(shortid)) = shortid else {
         return not_found_html().into_response();
     };
     if !crate::snapshot::validate_shortid(&shortid) {
         return not_found_html().into_response();
     }
-    let store = match &state.snapshot_store {
-        None => return not_found_html().into_response(),
-        Some(s) => s,
-    };
-    match store.get(&shortid).await {
+    snapshot_answer(&state, &shortid)
+        .await
+        .unwrap_or_else(|| not_found_html().into_response())
+}
+
+/// The V1 answer for a snapshot ID: `None` when there is no store or no live snapshot, otherwise
+/// the page or the 500 for a failed lookup.
+pub(crate) async fn snapshot_answer(state: &AppState, shortid: &str) -> Option<Response> {
+    use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+    use serde_json::json;
+
+    let store = state.snapshot_store.as_ref()?;
+    match store.get(shortid).await {
         Err(e) => {
             tracing::warn!(shortid, error = %e, "snapshot lookup failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": {"code": "INTERNAL", "message": "snapshot unavailable"}})),
+            Some(
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": {"code": "INTERNAL", "message": "snapshot unavailable"}})),
+                )
+                    .into_response(),
             )
-                .into_response()
         }
-        Ok(None) => not_found_html().into_response(),
+        Ok(None) => None,
         Ok(Some(snap)) => {
             let html = crate::snapshot::render_snapshot_html(&snap, &state.config.site);
-            (
-                StatusCode::OK,
-                [
-                    (CONTENT_TYPE, "text/html; charset=utf-8"),
-                    (CACHE_CONTROL, "public, max-age=86400, immutable"),
-                ],
-                html,
+            Some(
+                (
+                    StatusCode::OK,
+                    [
+                        (CONTENT_TYPE, "text/html; charset=utf-8"),
+                        (CACHE_CONTROL, "public, max-age=86400, immutable"),
+                    ],
+                    html,
+                )
+                    .into_response(),
             )
-                .into_response()
         }
     }
+}
+
+/// The V1 lookup `netray_web::entries` falls back to for an ID the history store does not hold.
+pub(crate) fn v1_lookup(state: AppState) -> netray_web::entries::V1Lookup {
+    std::sync::Arc::new(move |shortid: String| {
+        let state = state.clone();
+        Box::pin(async move {
+            if !crate::snapshot::validate_shortid(&shortid) {
+                return None;
+            }
+            snapshot_answer(&state, &shortid).await
+        })
+    })
 }
 
 fn not_found_html() -> impl IntoResponse {
     (
         StatusCode::NOT_FOUND,
         [(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")],
-        r#"<!DOCTYPE html><html><head><title>Not found</title></head><body><h1>Snapshot not found</h1><p>This snapshot has expired or the ID is unknown.</p></body></html>"#,
+        netray_web::entries::NOT_FOUND_HTML,
     )
 }
 

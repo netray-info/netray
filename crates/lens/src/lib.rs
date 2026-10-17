@@ -120,86 +120,11 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
         tracing::info!("og cards enabled");
     }
 
-    // 4. Build routers and collect OpenAPI spec fragments.
-    let (health_router, health_openapi) = routes::health_router().split_for_parts();
-    let (api_router, api_openapi) = routes::api_router().split_for_parts();
-    let (badge_routes, badge_openapi) = routes::badge_router().split_for_parts();
-    let og_routes = routes::og_router();
-    let snapshot_routes = routes::snapshot_router();
-    let openapi = api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
-
     let client_runs = std::sync::Arc::clone(&state.client_runs);
     let runs = std::sync::Arc::clone(&state.runs);
 
-    // 5. Build the main app with all middleware.
-    let app = Router::new()
-        .merge(health_router.with_state(state.clone()))
-        .merge(api_router.with_state(state.clone()))
-        .merge(if config.badges.enabled {
-            badge_routes.with_state(state.clone())
-        } else {
-            Router::new()
-        })
-        .merge(if config.og_cards.enabled {
-            og_routes.with_state(state.clone())
-        } else {
-            Router::new()
-        })
-        .merge(if config.snapshots.enabled {
-            snapshot_routes.with_state(state.clone())
-        } else {
-            Router::new()
-        })
-        .route("/robots.txt", get(robots_txt))
-        .fallback(spa::handler)
-        .with_state(state)
-        .route(
-            "/api-docs/openapi.json",
-            get({
-                let spec = openapi.clone();
-                move || async move { axum::Json(spec) }
-            }),
-        )
-        .merge(Scalar::with_url("/docs", openapi))
-        .layer(axum::middleware::from_fn(|req, next| {
-            netray_common::middleware::http_metrics("lens", req, next)
-        }))
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(|request: &axum::http::Request<axum::body::Body>| {
-                    let request_id = request
-                        .headers()
-                        .get("x-request-id")
-                        .and_then(|v| v.to_str().ok())
-                        .unwrap_or("");
-                    tracing::info_span!(
-                        "http_request",
-                        method = %request.method(),
-                        uri = %request.uri(),
-                        request_id = %request_id,
-                        client_ip = tracing::field::Empty,
-                    )
-                })
-                .on_response(
-                    |response: &axum::http::Response<_>,
-                     latency: std::time::Duration,
-                     span: &tracing::Span| {
-                        tracing::info!(
-                            parent: span,
-                            status = response.status().as_u16(),
-                            ms = latency.as_millis(),
-                            "",
-                        );
-                    },
-                ),
-        )
-        .layer(CompressionLayer::new())
-        .layer(RequestBodyLimitLayer::new(8 * 1024))
-        .layer(cors_layer())
-        .layer(axum::middleware::from_fn(security_headers_mw))
-        .layer(axum::middleware::from_fn(
-            netray_common::middleware::request_id,
-        ));
+    // 4. Build the app with all routes and middleware.
+    let app = app(state);
 
     // 6. Graceful shutdown channel.
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -258,6 +183,98 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
 
     // Flush pending OTel spans on shutdown.
     netray_common::telemetry::shutdown();
+}
+
+/// The whole HTTP app: every router, the SPA fallback, the OpenAPI routes and the layer stack.
+pub fn app(state: state::AppState) -> Router {
+    let config = state.config.clone();
+
+    // 4. Build routers and collect OpenAPI spec fragments.
+    let (health_router, health_openapi) = routes::health_router().split_for_parts();
+    let (api_router, api_openapi) = routes::api_router().split_for_parts();
+    let (badge_routes, badge_openapi) = routes::badge_router().split_for_parts();
+    let og_routes = routes::og_router();
+    let openapi = api_doc::build_openapi(health_openapi, api_openapi, badge_openapi);
+
+    let entry_routes = match &state.history_store {
+        Some(history) if config.history.enabled => {
+            netray_web::entries::router(netray_web::entries::EntriesDeps {
+                history: history.clone(),
+                v1: (config.snapshots.enabled && state.snapshot_store.is_some())
+                    .then(|| routes::v1_lookup(state.clone())),
+                card: og::handler::entry_card_renderer(&state),
+            })
+        }
+        _ if config.snapshots.enabled => routes::snapshot_router().with_state(state.clone()),
+        _ => Router::new(),
+    };
+
+    // 5. Build the main app with all middleware.
+    Router::new()
+        .merge(health_router.with_state(state.clone()))
+        .merge(api_router.with_state(state.clone()))
+        .merge(if config.badges.enabled {
+            badge_routes.with_state(state.clone())
+        } else {
+            Router::new()
+        })
+        .merge(if config.og_cards.enabled {
+            og_routes.with_state(state.clone())
+        } else {
+            Router::new()
+        })
+        .route("/robots.txt", get(robots_txt))
+        .fallback(spa::handler)
+        .with_state(state)
+        .merge(entry_routes)
+        .merge(netray_web::entries::privacy_router())
+        .route(
+            "/api-docs/openapi.json",
+            get({
+                let spec = openapi.clone();
+                move || async move { axum::Json(spec) }
+            }),
+        )
+        .merge(Scalar::with_url("/docs", openapi))
+        .layer(axum::middleware::from_fn(|req, next| {
+            netray_common::middleware::http_metrics("lens", req, next)
+        }))
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &axum::http::Request<axum::body::Body>| {
+                    let request_id = request
+                        .headers()
+                        .get("x-request-id")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("");
+                    tracing::info_span!(
+                        "http_request",
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        request_id = %request_id,
+                        client_ip = tracing::field::Empty,
+                    )
+                })
+                .on_response(
+                    |response: &axum::http::Response<_>,
+                     latency: std::time::Duration,
+                     span: &tracing::Span| {
+                        tracing::info!(
+                            parent: span,
+                            status = response.status().as_u16(),
+                            ms = latency.as_millis(),
+                            "",
+                        );
+                    },
+                ),
+        )
+        .layer(CompressionLayer::new())
+        .layer(RequestBodyLimitLayer::new(8 * 1024))
+        .layer(cors_layer())
+        .layer(axum::middleware::from_fn(security_headers_mw))
+        .layer(axum::middleware::from_fn(
+            netray_common::middleware::request_id,
+        ))
 }
 
 async fn robots_txt() -> impl axum::response::IntoResponse {

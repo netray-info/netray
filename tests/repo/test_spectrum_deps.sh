@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # specs/features/v2-spectrum, phase 2 (R10 deps part, R14): netray-web depends normally on
-# netray-model and netray-engine and on no lens, store or history package (read from
-# `cargo metadata`, never the TOML text); `pub fn layout` in crates/web/src/spectrum.rs names no
+# netray-model and netray-engine and on no lens or history package (read from
+# `cargo metadata`, never the TOML text; v2-entries admits netray-store, SDD 3.1); `pub fn layout` in crates/web/src/spectrum.rs names no
 # entry, run, history, store or lens type; SDD 3.9, 5.4, 8.1 and the V4.4 row carry the amended
 # wording; the tokens.json linePitchMin description carries the 54-check arithmetic. A self-test
 # runs the same checks on scratch input it must refuse.
@@ -20,8 +20,8 @@ normal = {d["name"] for d in web[0]["dependencies"] if d.get("kind") in (None, "
 for need in ("netray-model", "netray-engine"):
     if need not in normal: print("netray-web has no normal dependency on " + need)
 for n in sorted(normal):
-    if n in ("lens", "netray-lens", "netray-store") or re.search("store|history", n):
-        print("netray-web depends on " + n + " (lens, store and history stay out of the web crate)")
+    if n in ("lens", "netray-lens") or re.search("history", n):
+        print("netray-web depends on " + n + " (lens and history stay out of the web crate)")
 '
 }
 
@@ -102,7 +102,8 @@ okdeps='[{"name":"netray-model","kind":null},{"name":"netray-engine","kind":null
 [ -z "$(meta "$okdeps" | dep_problems)" ] || fail "self-test: good deps reported '$(meta "$okdeps" | dep_problems)'"
 expect "$(meta '[{"name":"netray-model","kind":null}]' | dep_problems)" "no normal dependency on netray-engine" "missing engine"
 expect "$(meta '[{"name":"netray-model","kind":null},{"name":"netray-engine","kind":"dev"}]' | dep_problems)" "no normal dependency on netray-engine" "dev-only engine"
-expect "$(meta '[{"name":"netray-model","kind":null},{"name":"netray-engine","kind":null},{"name":"netray-store","kind":null}]' | dep_problems)" "depends on netray-store" "store"
+storedeps='[{"name":"netray-model","kind":null},{"name":"netray-engine","kind":null},{"name":"netray-store","kind":null}]'
+[ -z "$(meta "$storedeps" | dep_problems)" ] || fail "self-test: netray-store reported '$(meta "$storedeps" | dep_problems)'"
 expect "$(meta '[{"name":"netray-model","kind":null},{"name":"netray-engine","kind":null},{"name":"run-history","kind":null}]' | dep_problems)" "depends on run-history" "history"
 expect "$(meta '[{"name":"netray-model","kind":null},{"name":"netray-engine","kind":null},{"name":"lens","kind":null}]' | dep_problems)" "depends on lens" "lens"
 expect "$(printf '{"packages":[]}' | dep_problems)" "netray-web not found" "no package"

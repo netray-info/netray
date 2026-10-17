@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% endblock %}</title>
+{% block meta %}{% endblock %}
+{% block styles %}{% endblock %}
+</head>
+<body>
+{% block header %}{% endblock %}
+<main>{% block main %}{% endblock %}</main>
+<footer>
+<p>{% include "partials/tagline.html" %}</p>
+<a href="/privacy">Privacy</a>
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>
