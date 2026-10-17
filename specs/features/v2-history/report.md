@@ -243,7 +243,7 @@ skipped: the phase changes library functions (path parsing, fingerprint, diff, t
 | C4 | domain newly listed, check stays fail: fingerprints differ, diff reports `email.dnsbl_domain` | green | crates/email/tests/dnsbl_domain.rs |
 | C5 | lens goldens unchanged on regeneration | already_implemented | crates/lens/tests/lens_golden.rs |
 | C6 | R19 SDD §3.7 split and named per-address costs | green | specs/sdd/v2.md |
-| C7 | reader amendment: `email.dnsbl_domain` rows differing only in `answered` fingerprint equal, no evidence change | green | crates/email/tests/dnsbl_domain.rs |
+| C7 | superseded by the branch review's second pass: a domain-zone policy answer keeps its code and is recorded | green | crates/email/tests/dnsbl_domain.rs |
 
 ### Runs
 
