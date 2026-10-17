@@ -199,13 +199,24 @@ async fn dnsbl_has_a_row_per_query_with_its_answer() {
     ];
     let (checks, evidence) = run(dns, &zones, &[]).await;
     assert_rule(&checks, &evidence);
-    assert_refs(&checks, "dnsbl", Status::Fail, &["email.dnsbl", "email.mx"]);
+    assert_refs(
+        &checks,
+        "dnsbl",
+        Status::Fail,
+        &["email.dnsbl", "email.dnsbl_domain", "email.mx"],
+    );
 
-    let rows = rows(block(&evidence, "email.dnsbl"));
+    let address_rows = rows(block(&evidence, "email.dnsbl"));
     assert_eq!(
-        rows.len(),
-        7,
-        "three address zones for two MX IPs and one domain zone: {rows:?}"
+        address_rows.len(),
+        6,
+        "three address zones for two MX IPs: {address_rows:?}"
+    );
+    let domain_rows = rows(block(&evidence, "email.dnsbl_domain"));
+    assert_eq!(
+        domain_rows.len(),
+        1,
+        "the domain zone row only: {domain_rows:?}"
     );
     let want = [
         (
@@ -224,16 +235,21 @@ async fn dnsbl_has_a_row_per_query_with_its_answer() {
             "127.255.255.254",
         ),
         ("198.51.100.10@bl3.example.com", "198.51.100.10", true, ""),
-        ("example.com@dbl.spamhaus.org", "example.com", true, ""),
     ];
     for (query, target, answered, answer) in want {
-        let row = rows
+        let row = address_rows
             .get(query)
-            .unwrap_or_else(|| panic!("no row {query}: {rows:?}"));
+            .unwrap_or_else(|| panic!("no row {query}: {address_rows:?}"));
         assert_eq!(row["target"], text(target), "{query}");
         assert_eq!(row["answered"], Ev::Bool(answered), "{query}");
         assert_eq!(row["answer"], text(answer), "{query}");
     }
+    let row = domain_rows
+        .get("example.com@dbl.spamhaus.org")
+        .unwrap_or_else(|| panic!("no domain row: {domain_rows:?}"));
+    assert_eq!(row["target"], text("example.com"));
+    assert_eq!(row["answered"], Ev::Bool(true));
+    assert_eq!(row["answer"], text(""));
 }
 
 // 2. Two MX hosts on one address give one row per key; 7. the SPF prefixes repeat under the

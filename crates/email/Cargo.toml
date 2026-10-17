@@ -121,6 +121,11 @@ name = "evidence_reading"
 path = "tests/evidence_reading.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "dnsbl_domain"
+path = "tests/dnsbl_domain.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
 toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }
