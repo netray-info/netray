@@ -1,0 +1,465 @@
+last_reviewed = "2026-05-09"
+intro = "netray is a unified domain health checker — one URL, five axes, one grade. This page helps you decide which tool fits your needs: netray for breadth, or a specialist for depth. The depth gaps are admitted, not papered over."
+methodology = "Feature claims about each tool were verified against vendor documentation and hands-on checks using example.com as the test domain. Where documentation was ambiguous, the tool was queried directly and results were observed. This page is reviewed quarterly; the date above reflects the most recent verification pass."
+legend = [
+  { symbol = "✓", text = "full coverage" },
+  { symbol = "~", text = "partial or lower depth" },
+  { symbol = "✗", text = "not done" },
+  { symbol = "—", text = "out of scope for that tool" },
+]
+
+[honesty]
+title = "Where netray trades depth for breadth"
+lede = "netray covers five axes in one query. Specialists go deeper on each axis. Here are the three gaps that matter most."
+paragraphs = [
+  { lead = "SSL Labs", text = "covers StartTLS on SMTP ports 25, 465, and 587, runs full cipher-suite enumeration with downgrade tests (POODLE, BEAST, RC4), and checks a broader set of handshake variants that the TLS inspector does not yet test. For a mail server's TLS posture, SSL Labs gives a more authoritative grade." },
+  { lead = "hardenize", text = "includes additional email-edge checks such as BIMI VMC chain validation and variant MTA-STS report parsing that netray's email checks do not yet replicate. Its certificate-monitoring subscription tracks expiry across all your domains, not just on-demand checks." },
+  { lead = "mxtoolbox", text = "carries 20+ years of mail-flow heuristics — blacklist reputation across 100+ lists, live SMTP banner testing, and delivery-path tracing — that netray's email checks do not yet replicate." },
+]
+
+[[tables]]
+title = "Table 1 — Unified domain checkers"
+intro = "Tools in this group each aim to give you a broad domain health picture from a single query."
+
+[[tables.groups]]
+axis = ""
+label_header = "Feature"
+competitors = [
+  { name = "hardenize", short = "hardenize" },
+  { name = "internet.nl", short = "internet.nl" },
+  { name = "observatory.mozilla.org", short = "observatory.mozilla.org" },
+]
+
+[[tables.groups.rows]]
+label = "DNS checks"
+checks = ["email.mx", "email.spf", "email.dkim", "email.dmarc", "dns.dnssec", "dns.ns"]
+depth = "partial"
+cells = [
+  { symbol = "✓", note = "MX, NS, DNSSEC, CAA; strong on DNS security hygiene." },
+  { symbol = "~", note = "DNSSEC validation, IPv6 on name servers; email-DNS records." },
+  { symbol = "✗", note = "Does not perform DNS record analysis." },
+]
+
+[[tables.groups.rows]]
+label = "TLS checks"
+checks = ["tls.not_expired", "tls.chain_complete", "tls.tls_version", "tls.aead_cipher", "http.hsts"]
+depth = "partial"
+cells = [
+  { symbol = "✓", note = "Deep TLS analysis; cipher enumeration, protocol downgrades, certificate monitoring." },
+  { symbol = "~", note = "HTTPS availability, TLS version support, HSTS; moderate depth." },
+  { symbol = "~", note = "Checks HTTPS redirect and HSTS header; no TLS handshake analysis." },
+]
+
+[[tables.groups.rows]]
+label = "HTTP header checks"
+checks = ["http.csp", "http.hsts", "http.x_frame_options", "http.x_content_type_options", "http.referrer_policy", "http.permissions_policy"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Security headers included; graded alongside TLS and certificate results." },
+  { symbol = "~", note = "HTTPS and HSTS checked; does not grade the full security-header set." },
+  { symbol = "✓", note = "Primary focus — detailed security-header grading A+ through F." },
+]
+
+[[tables.groups.rows]]
+label = "Email checks"
+checks = ["email.spf", "email.dkim", "email.dmarc", "email.mta_sts", "email.bimi"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "SPF, DKIM, DMARC, MTA-STS, BIMI VMC chain validation, STARTTLS on mail ports." },
+  { symbol = "~", note = "SPF, DKIM, DMARC, STARTTLS, DANE — focused on modern standard compliance." },
+  { symbol = "✗", note = "Does not check email configuration." },
+]
+
+[[tables.groups.rows]]
+label = "IP enrichment"
+product = "yes"
+note = "ASN lookup, geolocation, reverse DNS, abuse contact."
+cells = [
+  { symbol = "~", note = "Shows hosting provider and geolocation alongside security results." },
+  { symbol = "✗", note = "No IP-level enrichment beyond IPv6 connectivity checks." },
+  { symbol = "✗", note = "Does not provide IP enrichment." },
+]
+
+[[tables.groups.rows]]
+label = "API access"
+product = "yes"
+note = "REST API, SSE streaming, open source. No key required."
+cells = [
+  { symbol = "~", note = "API available on paid plans; free tier is UI-only." },
+  { symbol = "~", note = "Batch API available; requires registration for bulk queries." },
+  { symbol = "✓", note = "Public HTTP API; no auth required." },
+]
+
+[[tables.groups.rows]]
+label = "No login required"
+product = "yes"
+note = "Fully open — no account, no rate-limit wall for normal use."
+cells = [
+  { symbol = "✓", note = "Free tier is no-login; advanced reports and API require an account." },
+  { symbol = "✓", note = "Single checks need no login; batch API requires registration." },
+  { symbol = "✓", note = "No login required for any feature." },
+]
+[[tables]]
+title = "Table 2 — Per-axis specialists"
+intro = "When you need deep analysis on a single axis, these tools go further than any unified checker."
+
+[[tables.groups]]
+axis = "DNS"
+label_header = "Check"
+competitors = [
+  { name = "dig", short = "dig" },
+  { name = "dnsviz.net", short = "dnsviz.net" },
+  { name = "intodns.com", short = "intodns.com" },
+  { name = "mxtoolbox (DNS)", short = "mxtoolbox" },
+]
+
+[[tables.groups.rows]]
+label = "MX records"
+checks = ["email.mx"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Raw MX query — full control, no interpretation." },
+  { symbol = "~", note = "MX visible in zone graph; no semantic analysis." },
+  { symbol = "✓", note = "Lists MX records and checks basic configuration." },
+  { symbol = "✓", note = "Dedicated MX lookup with latency and reverse-DNS check." },
+]
+
+[[tables.groups.rows]]
+label = "SPF record"
+checks = ["email.spf"]
+depth = "full"
+cells = [
+  { symbol = "~", note = "Raw TXT lookup only; no SPF semantic analysis." },
+  { symbol = "✗", note = "No SPF-specific analysis; zone data visible as raw TXT." },
+  { symbol = "✗", note = "No SPF semantic checking." },
+  { symbol = "✓", note = "Dedicated SPF record lookup and policy parse." },
+]
+
+[[tables.groups.rows]]
+label = "DMARC record"
+checks = ["email.dmarc"]
+depth = "full"
+cells = [
+  { symbol = "~", note = "Can query _dmarc TXT record; no parsing." },
+  { symbol = "✗", note = "No DMARC semantic analysis." },
+  { symbol = "✗", note = "No DMARC checking." },
+  { symbol = "✓", note = "Dedicated DMARC lookup with policy interpretation." },
+]
+
+[[tables.groups.rows]]
+label = "DKIM lookup"
+checks = ["email.dkim"]
+depth = "full"
+cells = [
+  { symbol = "~", note = "Can query any selector directly if known; requires manual selector input." },
+  { symbol = "✗", note = "No DKIM-specific analysis." },
+  { symbol = "✗", note = "No DKIM checking." },
+  { symbol = "✓", note = "DKIM record lookup given a selector name." },
+]
+
+[[tables.groups.rows]]
+label = "DNSSEC validation"
+checks = ["dns.dnssec"]
+depth = "partial"
+cells = [
+  { symbol = "~", note = "+dnssec flag shows RRSIG records; requires expert interpretation." },
+  { symbol = "✓", note = "Gold standard — visual chain-of-trust graph, delegation analysis, failure diagnosis." },
+  { symbol = "✗", note = "No DNSSEC validation." },
+  { symbol = "~", note = "Basic DNSSEC check; no chain-of-trust visualisation." },
+]
+
+[[tables.groups.rows]]
+label = "NS records"
+checks = ["dns.ns", "dns.ns_lame", "dns.ns_delegation"]
+depth = "partial"
+cells = [
+  { symbol = "✓", note = "Full NS query with any server override." },
+  { symbol = "✓", note = "NS delegation path is central to its graph." },
+  { symbol = "✓", note = "Checks NS records, lame delegation, and consistency." },
+  { symbol = "✓", note = "NS lookup available." },
+]
+
+[[tables.groups.rows]]
+label = "SOA record"
+checks = ["dns.ttl"]
+depth = "partial"
+cells = [
+  { symbol = "✓", note = "Full SOA query." },
+  { symbol = "✓", note = "SOA visible as part of zone graph." },
+  { symbol = "✓", note = "Checks SOA and flags configuration issues." },
+  { symbol = "✓", note = "SOA lookup available." },
+]
+
+[[tables.groups.rows]]
+label = "DNS propagation"
+checks = []
+cells = [
+  { symbol = "~", note = "Single resolver per invocation; scripts can parallelize." },
+  { symbol = "✗", note = "Queries multiple authoritative servers; not a propagation checker per se." },
+  { symbol = "✗", note = "No global propagation check." },
+  { symbol = "✓", note = "DNS propagation checker queries resolvers in multiple regions." },
+]
+
+[[tables.groups]]
+axis = "TLS"
+label_header = "Check"
+competitors = [
+  { name = "ssllabs.com", short = "ssllabs" },
+  { name = "badssl.com", short = "badssl.com" },
+]
+
+[[tables.groups.rows]]
+label = "Certificate validity"
+checks = ["tls.not_expired", "tls.hostname_match", "tls.san_quality"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Full certificate details with trust-chain validation across major stores." },
+  { symbol = "—", note = "Reference pages for expired/self-signed certs — not a scanner." },
+]
+
+[[tables.groups.rows]]
+label = "Certificate chain"
+checks = ["tls.chain_complete", "tls.chain_trusted"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Full chain analysis; checks cross-signs and extra certs." },
+  { symbol = "—", note = "Has reference pages for incomplete-chain scenarios; not a scanner." },
+]
+
+[[tables.groups.rows]]
+label = "Protocol versions (deprecated detection)"
+checks = []
+cells = [
+  { symbol = "✓", note = "Tests all versions including SSLv2/v3; grades down for deprecated protocols." },
+  { symbol = "—", note = "Reference endpoints for TLS 1.0 and 1.1 — useful for browser testing." },
+]
+
+[[tables.groups.rows]]
+label = "Cipher suites"
+checks = ["tls.aead_cipher", "tls.forward_secrecy"]
+depth = "partial"
+cells = [
+  { symbol = "✓", note = "Full enumeration with per-cipher grade, forward secrecy flags, and downgrade attack tests (POODLE, BEAST, RC4)." },
+  { symbol = "—", note = "Reference pages for RC4 and other weak cipher configurations; not a scanner." },
+]
+
+[[tables.groups.rows]]
+label = "HSTS"
+checks = ["http.hsts"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "HSTS included in full TLS grade; preload list status shown." },
+  { symbol = "—", note = "Has a no-hsts reference page; not an active scanner." },
+]
+
+[[tables.groups.rows]]
+label = "OCSP stapling"
+checks = ["tls.ocsp_stapled"]
+depth = "partial"
+cells = [
+  { symbol = "✓", note = "Full OCSP stapling and must-staple extension check." },
+  { symbol = "—", note = "Out of scope — badssl is a reference tool, not a scanner." },
+]
+
+[[tables.groups.rows]]
+label = "StartTLS (mail ports)"
+checks = []
+cells = [
+  { symbol = "✓", note = "Tests StartTLS on ports 25, 465, and 587 as part of its mail-server profile." },
+  { symbol = "—", note = "Web-only reference; no mail-port testing." },
+]
+
+[[tables.groups]]
+axis = "HTTP"
+label_header = "Check"
+competitors = [
+  { name = "securityheaders.com", short = "securityheaders.com" },
+]
+
+[[tables.groups.rows]]
+label = "Content-Security-Policy"
+checks = ["http.csp"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Parses and grades CSP; flags unsafe-* keywords and missing directives with detailed explanation." },
+]
+
+[[tables.groups.rows]]
+label = "Strict-Transport-Security"
+checks = ["http.hsts"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Same checks plus preload status and explanatory grading." },
+]
+
+[[tables.groups.rows]]
+label = "X-Frame-Options"
+checks = ["http.x_frame_options"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Same checks with notes on CSP frame-ancestors superseding X-Frame-Options." },
+]
+
+[[tables.groups.rows]]
+label = "X-Content-Type-Options"
+checks = ["http.x_content_type_options"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Checks for nosniff; notes browser MIME sniffing mitigations." },
+]
+
+[[tables.groups.rows]]
+label = "Referrer-Policy"
+checks = ["http.referrer_policy"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Grades referrer policy strictness and explains cross-origin implications." },
+]
+
+[[tables.groups.rows]]
+label = "Permissions-Policy"
+checks = ["http.permissions_policy"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Checks presence; notes it as an emerging standard in grades." },
+]
+
+[[tables.groups.rows]]
+label = "Server header disclosure"
+checks = ["http.info_leakage"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "Flags server and X-Powered-By disclosure as informational findings." },
+]
+
+[[tables.groups]]
+axis = "Email"
+label_header = "Check"
+competitors = [
+  { name = "mxtoolbox (mail)", short = "mxtoolbox" },
+  { name = "dmarcian", short = "dmarcian" },
+  { name = "postmark mail-tester", short = "postmark mail-tester" },
+]
+
+[[tables.groups.rows]]
+label = "SPF record & policy"
+checks = ["email.spf"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "SPF record lookup with policy interpretation and include-chain expansion." },
+  { symbol = "✓", note = "SPF analyser as part of its DMARC-focused suite; checks include limits." },
+  { symbol = "✓", note = "SPF verified against a test message you send; requires sending an email to a test address." },
+]
+
+[[tables.groups.rows]]
+label = "DKIM record lookup"
+checks = ["email.dkim"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "DKIM lookup given a selector name." },
+  { symbol = "✓", note = "DKIM record lookup as part of domain analysis." },
+  { symbol = "✓", note = "Validates DKIM signature in a test message you send." },
+]
+
+[[tables.groups.rows]]
+label = "DMARC record & policy"
+checks = ["email.dmarc"]
+depth = "full"
+cells = [
+  { symbol = "✓", note = "DMARC record lookup with policy explanation." },
+  { symbol = "✓", note = "Primary focus — deep DMARC record analysis, policy evaluation, alignment guidance." },
+  { symbol = "✓", note = "Checks DMARC alignment in the test message." },
+]
+
+[[tables.groups.rows]]
+label = "MTA-STS"
+checks = ["email.mta_sts"]
+depth = "full"
+cells = [
+  { symbol = "✗", note = "Does not check MTA-STS." },
+  { symbol = "✗", note = "No MTA-STS checking." },
+  { symbol = "—", note = "Out of scope for mail-tester." },
+]
+
+[[tables.groups.rows]]
+label = "BIMI record"
+checks = ["email.bimi"]
+depth = "full"
+cells = [
+  { symbol = "✗", note = "No BIMI checking." },
+  { symbol = "✗", note = "No BIMI checking in the standard tool." },
+  { symbol = "—", note = "Out of scope." },
+]
+
+[[tables.groups.rows]]
+label = "DANE / TLSA"
+checks = ["email.dane"]
+depth = "partial"
+cells = [
+  { symbol = "✗", note = "No DANE/TLSA checking." },
+  { symbol = "✗", note = "No DANE/TLSA checking." },
+  { symbol = "—", note = "Out of scope." },
+]
+
+[[tables.groups.rows]]
+label = "Blacklist check"
+checks = ["email.dnsbl"]
+depth = "partial"
+cells = [
+  { symbol = "✓", note = "Checks 100+ blacklists; a flagship feature with 20+ years of list curation." },
+  { symbol = "✗", note = "No blacklist checking." },
+  { symbol = "✓", note = "Checks blacklist reputation as part of deliverability scoring." },
+]
+
+[[tables.groups]]
+axis = "IP"
+label_header = "Check"
+competitors = [
+  { name = "ifconfig.me", short = "ifconfig.me" },
+  { name = "ipapi.co", short = "ipapi.co" },
+]
+
+[[tables.groups.rows]]
+label = "IP address detection"
+product = "yes"
+note = "Detects caller IP; also resolves IPs for a queried domain."
+cells = [
+  { symbol = "✓", note = "Returns the caller's public IP; simple, minimal interface." },
+  { symbol = "✓", note = "Returns IP data for any given IP; API-first." },
+]
+
+[[tables.groups.rows]]
+label = "ASN lookup"
+product = "yes"
+note = "ASN number and organisation name via RDAP."
+cells = [
+  { symbol = "✗", note = "No ASN information." },
+  { symbol = "✓", note = "ASN and organisation name included in geolocation response." },
+]
+
+[[tables.groups.rows]]
+label = "Geolocation"
+product = "yes"
+note = "Country, region, city via GeoIP database."
+cells = [
+  { symbol = "✗", note = "No geolocation." },
+  { symbol = "✓", note = "Country, city, latitude/longitude, timezone — primary product." },
+]
+
+[[tables.groups.rows]]
+label = "Reverse DNS"
+product = "yes"
+note = "PTR record lookup for the queried IP."
+cells = [
+  { symbol = "✓", note = "Shows hostname (reverse DNS) for the caller's IP." },
+  { symbol = "✗", note = "No reverse DNS lookup." },
+]
+
+[[tables.groups.rows]]
+label = "Abuse contact"
+product = "yes"
+note = "Abuse contact email and RDAP data from the RIR record."
+cells = [
+  { symbol = "✗", note = "No abuse contact information." },
+  { symbol = "✗", note = "No abuse contact information." },
+]

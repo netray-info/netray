@@ -244,3 +244,51 @@ fn color_scheme_follows_the_theme() {
         "[data-theme=\"dark\"] color-scheme"
     );
 }
+
+/// V2 spec v2-pages R1/C4: a page forced light under a dark OS must show the light values, so a
+/// `[data-theme="light"]` rule follows the dark media block and repeats every `:root` value.
+#[test]
+fn light_attr_rule_follows_dark_media_and_holds_every_light_value() {
+    let all = blocks(CSS);
+    let dark_media_at = all
+        .iter()
+        .position(|b| {
+            b.selector.starts_with("@media") && b.selector.contains("prefers-color-scheme:dark")
+        })
+        .expect("dark media block");
+    let light_at: Vec<usize> = all
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| b.selector == "[data-theme=\"light\"]")
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(
+        light_at.len(),
+        1,
+        "one [data-theme=\"light\"] rule in tokens.css"
+    );
+    assert!(
+        light_at[0] > dark_media_at,
+        "light rule must come after the dark media block"
+    );
+
+    let light = decls(&all[light_at[0]].body);
+    assert_eq!(
+        color_scheme(|s| s == "[data-theme=\"light\"]"),
+        ["light"],
+        "[data-theme=\"light\"] color-scheme"
+    );
+    for (name, value) in [("--color-bg", "#f7f8fa"), ("--status-glow-fail", "none")] {
+        assert_eq!(get(&light, name), Some(value), "{name} in light rule");
+    }
+    for name in ["--status-glow-warn", "--status-glow-pass"] {
+        assert_eq!(get(&light, name), Some("none"), "{name} in light rule");
+    }
+    for (name, value) in root() {
+        assert_eq!(
+            get(&light, &name),
+            Some(value.as_str()),
+            "{name} from :root in light rule"
+        );
+    }
+}

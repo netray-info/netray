@@ -16,3 +16,8 @@ body {
 .marker[aria-selected="true"] {
   border-inline-start-color: var(--color-ink);
 }
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}

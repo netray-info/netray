@@ -1,16 +1,29 @@
+use std::sync::Arc;
+
 use axum::extract::State;
 use axum::http::{StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use rust_embed::RustEmbed;
 
 use crate::config::SiteConfig;
-use crate::state::AppState;
 
 /// Embedded Vite build output (`frontend/dist`). Populated by `just adlc-setup` or `just build`
 /// or the Docker build; empty in test builds (only `.gitkeep` is checked in).
 #[derive(RustEmbed)]
 #[folder = "frontend/dist"]
 pub struct Assets;
+
+/// The rendered HTML shell, the state of the SPA handler.
+#[derive(Clone)]
+pub struct Shell(pub Option<Arc<String>>);
+
+/// Render the embedded `index.html` for `site`; `None` when the embed is empty.
+pub fn render_shell(site: &SiteConfig) -> Option<Arc<String>> {
+    Assets::get("index.html").map(|f| {
+        let template = std::str::from_utf8(&f.data).unwrap_or("").to_string();
+        Arc::new(render_apex_html(&template, site))
+    })
+}
 
 /// Substitute the four `[site]` placeholders into the embedded HTML shell.
 ///
@@ -77,9 +90,9 @@ fn html_escape(s: &str) -> String {
 /// - Asset paths (`/favicon.svg`, hashed `/assets/*` from Vite, etc.) →
 ///   serve embedded bytes with year-long immutable cache.
 /// - `/`, `/index.html`, unknown paths (SPA client-side routes) →
-///   serve the templated HTML shell from `state.rendered_html`, `no-cache`.
+///   serve the templated HTML shell from `shell`, `no-cache`.
 /// - Empty embed (test build, no Vite output) → `500 frontend not found`.
-pub async fn handler(State(state): State<AppState>, uri: Uri) -> Response {
+pub async fn handler(State(shell): State<Shell>, uri: Uri) -> Response {
     let path = uri.path().trim_start_matches('/');
 
     if !path.is_empty()
@@ -100,11 +113,11 @@ pub async fn handler(State(state): State<AppState>, uri: Uri) -> Response {
             .into_response();
     }
 
-    serve_index(&state)
+    serve_index(&shell)
 }
 
-fn serve_index(state: &AppState) -> Response {
-    if let Some(html) = state.rendered_html.as_deref() {
+fn serve_index(shell: &Shell) -> Response {
+    if let Some(html) = shell.0.as_deref() {
         return (
             [
                 (header::CONTENT_TYPE, "text/html; charset=utf-8".to_string()),

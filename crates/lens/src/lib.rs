@@ -185,9 +185,26 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
     netray_common::telemetry::shutdown();
 }
 
+fn frontend_router_with(shell: spa::Shell) -> Router {
+    Router::new()
+        .route("/robots.txt", get(robots_txt))
+        .fallback(spa::handler)
+        .with_state(shell)
+        .merge(netray_web::pages::router())
+        .layer(axum::middleware::from_fn(security_headers_mw))
+}
+
+/// The SPA shell, `/robots.txt` and the shared pages with their security headers.
+pub fn frontend_router() -> Router {
+    frontend_router_with(spa::Shell(
+        spa::render_shell(&config::SiteConfig::default()),
+    ))
+}
+
 /// The whole HTTP app: every router, the SPA fallback, the OpenAPI routes and the layer stack.
 pub fn app(state: state::AppState) -> Router {
     let config = state.config.clone();
+    let shell = spa::Shell(state.rendered_html.clone());
 
     // 4. Build routers and collect OpenAPI spec fragments.
     let (health_router, health_openapi) = routes::health_router().split_for_parts();
@@ -223,9 +240,8 @@ pub fn app(state: state::AppState) -> Router {
         } else {
             Router::new()
         })
-        .route("/robots.txt", get(robots_txt))
-        .fallback(spa::handler)
         .with_state(state)
+        .merge(frontend_router_with(shell))
         .merge(entry_routes)
         .merge(netray_web::entries::privacy_router())
         .route(
@@ -312,6 +328,7 @@ async fn security_headers_mw(
     let layer_fn = security_headers_layer(SecurityHeadersConfig {
         extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
         relaxed_csp_path_prefix: "/docs".to_string(),
+        keep_inner: true,
         ..Default::default()
     });
     layer_fn(request, next).await

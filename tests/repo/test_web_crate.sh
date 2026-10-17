@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# specs/features/v2-design-system, requirement 1 (with 3): crates/web is the package netray-web,
-# edition 2024, depending on netray-common by path and on askama 0.16; the netray binary does not
-# depend on it. The crate's shape includes its token source (tokens.json) and a build.rs.
-# specs/features/v2-entries, requirement 9: a `Router` appears only under crates/web/src/entries/,
-# pages/ and api/ (the allow-list v2-pages and v2-api share), axum is allowed as a dependency, and
-# lens depends on netray-web. The Router scan is a function over a root dir, self-tested on scratch
-# input. Cargo is asked via `cargo metadata --no-deps --offline`.
+# specs/features/v2-design-system, requirement 1 (with 3), amended by v2-pages requirement 8 and
+# v2-entries requirement 9: crates/web is the package netray-web, edition 2024, a library; a
+# `Router` appears only under crates/web/src/entries/, pages/ and api/; it depends on
+# netray-common and netray-engine by path, askama 0.16, axum, and sha2/base64 via
+# [workspace.dependencies]; lens depends on netray-web. The crate's shape includes its token
+# source (tokens.json) and a build.rs. The Router scan is a function over a root dir, self-tested
+# on scratch input. Cargo is asked via `cargo metadata --no-deps --offline`.
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
@@ -67,13 +67,10 @@ else:
     if not c or not c.get("path"): errs.append("netray-web does not depend on netray-common by path")
     a = deps.get("askama")
     if not a or not (a["req"].lstrip("^=~ ").startswith("0.16")): errs.append("askama req is %r, want 0.16" % (a and a["req"]))
-bins = [p for p in meta["packages"] if p["name"] == "netray"]
-if not bins:
-    errs.append("package netray not found")
-else:
-    nd = sorted(d["name"] for d in bins[0]["dependencies"])
-    print("netray deps=%s" % nd)
-    if "netray-web" in nd: errs.append("netray depends on netray-web")
+    for need in ("axum", "sha2", "base64"):
+        if need not in deps: errs.append("netray-web does not depend on " + need)
+    e = deps.get("netray-engine")
+    if not e or not e.get("path"): errs.append("netray-web does not depend on netray-engine by path")
 lens = [p for p in meta["packages"] if p["name"] == "lens"]
 if not lens:
     errs.append("package lens not found")
@@ -83,6 +80,30 @@ for e in errs: print("ERR " + e)
 ')
     printf '%s\n' "$out" | grep -v '^ERR '
     while IFS= read -r e; do fail "${e#ERR }"; done < <(printf '%s\n' "$out" | grep '^ERR ')
+fi
+
+# base64 and sha2 resolve through [workspace.dependencies].
+wsout=$(python3 -I -c '
+import tomllib
+root = tomllib.load(open("Cargo.toml", "rb"))
+web = tomllib.load(open("crates/web/Cargo.toml", "rb"))
+wsd = root.get("workspace", {}).get("dependencies", {})
+d = web.get("dependencies", {})
+for n in ("base64", "sha2"):
+    if n not in wsd: print("ERR %s is not in the root [workspace.dependencies]" % n)
+    v = d.get(n)
+    if not (isinstance(v, dict) and v.get("workspace") is True):
+        print("ERR crates/web/Cargo.toml does not declare %s with workspace = true" % n)
+')
+while IFS= read -r e; do [ -n "$e" ] && fail "${e#ERR }"; done <<< "$wsout"
+
+# Self-test: the Router scan reports a Router planted outside the allowed directories.
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp" "$scratch"' EXIT
+cp -R crates/web/src "$tmp/src"
+printf '%s\n' 'pub fn r() -> axum::Router { todo!() }' >> "$tmp/src/components.rs"
+if ! router_offenders "$tmp/src" | grep -qx 'components.rs'; then
+    fail "self-test: the Router scan missed a Router planted in components.rs"
 fi
 
 [ "$fails" -eq 0 ] || exit 1
