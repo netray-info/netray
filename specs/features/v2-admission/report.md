@@ -277,3 +277,8 @@ plain 200
 $ curl -H 'Sec-Purpose: prefetch' /badge/example.org.svg
 badge 200 public, max-age=300, s-maxage=300
 ```
+
+### Checks to build
+
+- A `report.md` criteria row whose cell count differs from its header (a `|` inside a code span) silently keeps the phase open: `adlc` `closedPhases` should honour code spans, or `adlc audit` should flag the row (adlc repo, `internal/next/spec.go`).
+- Follow-up from the review: the head read and `admit` are not atomic (review.md, `crates/lens/src/routes.rs:779`); a test would hold the store commit between a request's head read and its `admit`.

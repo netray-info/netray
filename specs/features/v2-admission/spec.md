@@ -1,7 +1,8 @@
 # Spec: v2-admission
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-17
+Finished: 2026-10-17
 
 ## Goal
 
@@ -554,6 +555,16 @@ GIVEN the amended SDD WHEN read THEN §4.4 names the `[admission]` keys, the ord
   first read: governor spends the token on every check, so a throttle or slot refusal would burn
   the domain's one token and block its badge and OG runs for `badges.ttl_seconds`; the join still
   precedes it (implementer under the operator's autonomy mandate, 2026-10-17).
+
+- Finish entries (six project `CLAUDE.md` bullets, one check to build, no solutions note, no
+  removals) written without the operator's confirmation, over halting at finish: each records a
+  cost this block paid, none changes behaviour, and all are revertible prose (implementer under
+  the operator's autonomy mandate, 2026-10-17).
+- The review's MAJOR (the head read and `admit` are not atomic: a request whose head read precedes
+  a run's record commit and whose `admit` follows its deregistration meets the throttle) is left
+  as a follow-up, over a fix after the review: it needs a second review range, the window is one
+  store commit wide, and the answer is a retryable 429 or the stale head (implementer under the
+  operator's autonomy mandate, 2026-10-17).
 
 ## Open decisions
 
