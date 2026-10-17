@@ -2412,6 +2412,7 @@ dependencies = [
  "netray-model",
  "netray-store",
  "netray-tls",
+ "netray-web",
  "regex",
  "reqwest",
  "resvg",
@@ -3111,11 +3112,20 @@ name = "netray-web"
 version = "0.26.0"
 dependencies = [
  "askama",
+ "axum",
+ "base64 0.22.1",
+ "futures",
+ "http-body-util",
  "netray-common",
  "netray-engine",
  "netray-model",
+ "percent-encoding",
  "proptest",
+ "serde",
  "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tower",
 ]
 
 [[package]]
