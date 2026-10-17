@@ -62,8 +62,16 @@ fn address_blocks(a1: &str, a2: &str) -> Vec<Block> {
             "address",
             &["address", "ptr", "confirmed"],
             vec![
-                vec![Ev::Addr(a1.parse().unwrap()), text("mx1.example.com"), Ev::Bool(true)],
-                vec![Ev::Addr(a2.parse().unwrap()), text("mx2.example.com"), Ev::Bool(true)],
+                vec![
+                    Ev::Addr(a1.parse().unwrap()),
+                    text("mx1.example.com"),
+                    Ev::Bool(true),
+                ],
+                vec![
+                    Ev::Addr(a2.parse().unwrap()),
+                    text("mx2.example.com"),
+                    Ev::Bool(true),
+                ],
             ],
         ),
         table(
@@ -141,8 +149,16 @@ async fn rotating_addresses_change_neither_fingerprint_nor_evidence_diff() {
 #[tokio::test]
 async fn different_mx_hosts_change_the_fingerprint() {
     let p = paths().await;
-    let a = run(["mx1.example.com", "mx2.example.com"], ["192.0.2.10", "192.0.2.20"], Status::Pass);
-    let b = run(["mx3.example.com", "mx4.example.com"], ["192.0.2.10", "192.0.2.20"], Status::Pass);
+    let a = run(
+        ["mx1.example.com", "mx2.example.com"],
+        ["192.0.2.10", "192.0.2.20"],
+        Status::Pass,
+    );
+    let b = run(
+        ["mx3.example.com", "mx4.example.com"],
+        ["192.0.2.10", "192.0.2.20"],
+        Status::Pass,
+    );
     assert_ne!(fingerprint(&a, &p), fingerprint(&b, &p));
 }
 
