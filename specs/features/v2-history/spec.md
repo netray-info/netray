@@ -171,7 +171,7 @@ GIVEN DNSBL answers only for MX addresses WHEN projected THEN there is no `email
 GIVEN a `dnsbl` check with both blocks present WHEN judged THEN its references include `email.dnsbl` and `email.dnsbl_domain`.
 GIVEN two runs with an MX address already listed on an address zone, where the domain becomes listed on a domain zone and the `email.dnsbl` check status stays fail WHEN fingerprinted with the email module's volatile list THEN the fingerprints differ and the diff reports a change in `email.dnsbl_domain`.
 GIVEN the lens goldens WHEN regenerated THEN they are unchanged (no fixture carries a domain-zone row).
-GIVEN two runs whose `email.dnsbl_domain` rows differ only in `answered` WHEN fingerprinted with the email module's volatile list THEN the fingerprints are equal and the diff reports no evidence change.
+GIVEN a clean domain-zone row and a run where the domain zone times out or answers with a policy code WHEN fingerprinted with the email module's volatile list THEN the fingerprints differ and the row keeps the codes as returned.
 
 ## Decision log
 
