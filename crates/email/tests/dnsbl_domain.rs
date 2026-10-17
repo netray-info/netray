@@ -281,3 +281,29 @@ async fn a_new_domain_listing_changes_fingerprint_and_diff() {
         d.evidence
     );
 }
+
+// A domain zone that times out or answers with a policy code while the check verdict holds is a
+// failed lookup, not a domain change: `answered` is volatile in `email.dnsbl_domain`.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unanswered_domain_zone_is_not_a_change() {
+    let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
+    let module = EmailModule::new(cfg).await.expect("module builds");
+    let volatile: Vec<&'static str> = module.volatile().iter().map(|p| p.0).collect();
+
+    let (c, blocks) = run(dnsbl_dns(false), &ZONES, &[]).await;
+    let mut unanswered = blocks.clone();
+    let domain = unanswered
+        .iter_mut()
+        .find(|b| b.id.to_string() == "email.dnsbl_domain")
+        .expect("email.dnsbl_domain present");
+    let Shape::Table { columns, rows, .. } = &mut domain.shape else {
+        panic!("email.dnsbl_domain is a table");
+    };
+    let answered = columns.iter().position(|c| c == "answered").unwrap();
+    for row in rows.iter_mut() {
+        row[answered] = Ev::Bool(false);
+    }
+    let (a, b) = (run_of(&c, blocks), run_of(&c, unanswered));
+    assert_eq!(fingerprint(&a, &volatile), fingerprint(&b, &volatile));
+    assert!(diff(&a, &b, &volatile, None).evidence.is_empty());
+}
