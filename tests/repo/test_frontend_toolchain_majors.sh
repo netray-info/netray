@@ -6,7 +6,7 @@ cd "$(dirname "$0")/../.." || exit 1
 node -e '
 const fs = require("fs");
 const dirs = ["ip","dns","tls","http","email","lens"].map(c => `crates/${c}/frontend`)
-  .concat(["packages/common-frontend"]);
+  .concat(["packages/common-frontend", "crates/web/islands"]);
 let bad = false;
 for (const tool of ["vite", "typescript"]) {
   const majors = {};

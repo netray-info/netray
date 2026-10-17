@@ -1,6 +1,6 @@
 //! The design-system gate (SDD §8.5): scans the view layer's templates, stylesheets and islands
 //! for colour, radius, font and line-width literals outside the tokens, for a second
-//! implementation of an R44 component, and for inline scripts.
+//! implementation of an R44 component, for inline scripts, and for style writes in an island.
 //!
 //! Every file is reduced to the text a rule may look at before it is scanned: comments are
 //! blanked (same length, so offsets and line numbers stay true), and a template is cut into its
@@ -177,7 +177,7 @@ impl Tokens {
 }
 
 /// Scans `templates/**/*.html`, `static/**/*.css` and `islands/**/*.ts` under `root`; a missing
-/// directory is empty and SVGs are never scanned.
+/// directory is empty, `node_modules` is skipped, and SVGs are never scanned.
 pub fn check(root: &Path) -> Report {
     let tokens = Tokens::load(tokens::CSS);
     let mut report = Report {
@@ -205,6 +205,9 @@ fn walk(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
     };
     for path in entries.flatten().map(|e| e.path()) {
         if path.is_dir() {
+            if path.file_name().is_some_and(|n| n == "node_modules") {
+                continue;
+            }
             walk(&path, ext, out);
         } else if path.extension().is_some_and(|e| e == ext) {
             out.push(path);
@@ -1011,9 +1014,12 @@ fn token_findings(prop: &str, value: &str, at: usize, tokens: &Tokens, out: &mut
 // Islands
 // ---------------------------------------------------------------------------------------------
 
-/// Rule 1 for an island: its string literals are scanned for colours, its comments never.
+/// Rule 1 for an island: its string literals are scanned for colours and its code for style
+/// writes; its comments never.
 fn scan_island(text: &str, out: &mut Vec<Finding>) {
-    for (at, string) in lex(text, true).1 {
+    let (code, strings) = lex(text, true);
+    out.extend(style_writes(&code));
+    for (at, string) in strings {
         for lit in island_colours(string) {
             out.push((
                 TOKEN_RULE,
@@ -1022,6 +1028,40 @@ fn scan_island(text: &str, out: &mut Vec<Finding>) {
             ));
         }
     }
+}
+
+/// The style writes in comment-blanked island code: a `.style` member, `cssText`,
+/// `setProperty(`, `insertRule(` and `setAttribute("style", …)`.
+fn style_writes(code: &str) -> Vec<Finding> {
+    let ident = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '$';
+    let mut out = Vec::new();
+    for (at, _) in code.match_indices(".style") {
+        if !code[at + 6..].chars().next().is_some_and(ident) {
+            out.push((TOKEN_RULE, at, "style member in an island".to_string()));
+        }
+    }
+    for (at, _) in code.match_indices("cssText") {
+        let before = code[..at].chars().next_back().is_some_and(ident);
+        if !before && !code[at + 7..].chars().next().is_some_and(ident) {
+            out.push((TOKEN_RULE, at, "`cssText` in an island".to_string()));
+        }
+    }
+    for call in ["setProperty(", "insertRule("] {
+        for (at, _) in code.match_indices(call) {
+            out.push((TOKEN_RULE, at, format!("`{call}` in an island")));
+        }
+    }
+    for (at, _) in code.match_indices("setAttribute(") {
+        let arg = code[at + 13..].trim_start();
+        if arg.starts_with("\"style\"") || arg.starts_with("'style'") {
+            out.push((
+                TOKEN_RULE,
+                at,
+                "`setAttribute` of style in an island".to_string(),
+            ));
+        }
+    }
+    out
 }
 
 /// The colours a string literal holds. The string itself is a colour when it is exactly a hex

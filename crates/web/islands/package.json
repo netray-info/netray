@@ -1,0 +1,16 @@
+{
+  "name": "@netray-info/islands",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --minify --format=esm --outfile=dist/islands.js",
+    "test": "tsc --noEmit && vitest run"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "happy-dom": "^20.14.5",
+    "typescript": "^6.0.0",
+    "vitest": "^4.1.11"
+  }
+}

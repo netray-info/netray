@@ -34,8 +34,9 @@ check-frontend-dist:
     for d in crates/*/frontend/dist; do
         [ -d "$d" ] || { echo "$d is missing" >&2; missing=1; }
     done
+    [ -f crates/web/islands/dist/islands.js ] || { echo "crates/web/islands/dist/islands.js is missing" >&2; missing=1; }
     if [ "$missing" -ne 0 ]; then
-        echo "the crates embed frontend/dist (RustEmbed) and do not compile without it; run 'just adlc-setup'" >&2
+        echo "the crates embed frontend/dist and the islands bundle (RustEmbed) and do not compile without it; run 'just adlc-setup'" >&2
         exit 1
     fi
 
