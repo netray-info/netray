@@ -25,6 +25,17 @@ problems() {
             'OnceLock' 'LazyLock' 'lazy_static'; do
             ! grep -qF -- "$pat" "$spec" || echo "spectrum.rs is not pure: it contains $pat"
         done
+        # Grouped imports and paths through a short name (`use std::{env, fs};`, `fs::read`), and
+        # global state (`static`, atomics), across line breaks.
+        local flat
+        flat=$(tr '\n' ' ' < "$spec")
+        ! grep -Eq 'std::[{][^}]*(^|[^A-Za-z0-9_])(fs|io|net|env)([^A-Za-z0-9_]|$)' <<< "$flat" ||
+            echo "spectrum.rs is not pure: it imports std I/O through a group"
+        ! grep -Eq '(^|[^A-Za-z0-9_])(fs|io|net|env)::' <<< "$flat" ||
+            echo "spectrum.rs is not pure: it calls fs, io, net or env"
+        ! grep -Eq "(^|[^'A-Za-z0-9_])static[[:space:]]" <<< "$flat" ||
+            echo "spectrum.rs is not pure: it holds a static"
+        ! grep -q 'Atomic' <<< "$flat" || echo "spectrum.rs is not pure: it holds an atomic"
     fi
     local f
     while IFS= read -r f; do
@@ -85,6 +96,17 @@ for pat in askama std::fs std::io std::net std::env 'static mut' 'thread_local!'
     expect impure "not pure: it contains $pat"
     rm -rf "$tmp/impure"
 done
+
+good "$tmp/grouped"; printf '%s\n' 'use std::{' '    env,' '    fs,' '};' >> "$tmp/grouped/crates/web/src/spectrum.rs"
+expect grouped "imports std I/O through a group"
+good "$tmp/short"; echo 'fn f() { let _ = fs::read("x"); }' >> "$tmp/short/crates/web/src/spectrum.rs"
+expect short "calls fs, io, net or env"
+good "$tmp/static"; echo 'static N: usize = 0;' >> "$tmp/static/crates/web/src/spectrum.rs"
+expect static "holds a static"
+good "$tmp/atomic"; echo 'const A: AtomicUsize = AtomicUsize::new(0);' >> "$tmp/atomic/crates/web/src/spectrum.rs"
+expect atomic "holds an atomic"
+good "$tmp/lifetime"; echo "pub const S: &'static str = \"8px\";" >> "$tmp/lifetime/crates/web/src/spectrum.rs"
+[ -z "$(problems "$tmp/lifetime")" ] || fail "self-test: a 'static lifetime was reported: $(problems "$tmp/lifetime")"
 
 good "$tmp/dup"; echo 'fn label_width() {}' > "$tmp/dup/crates/dns/src/lib.rs"
 expect dup "crates/dns/src/lib.rs defines fn label_width"

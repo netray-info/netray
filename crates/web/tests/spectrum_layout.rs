@@ -1,6 +1,8 @@
 //! Property test of the spectrum layout (V2 spec v2-spectrum, requirement 8, criteria C7, C8,
 //! C21): requirements 2-7 over random line lists and widths.
-use netray_web::spectrum::{LineInput, LineTone, Placement, label_width, line_pitch_min, place};
+use netray_web::spectrum::{
+    LineInput, LineTone, Placement, label_width, line_pitch_min, place, scaled_start,
+};
 use proptest::prelude::*;
 use std::path::PathBuf;
 
@@ -65,12 +67,17 @@ fn assert_inside(p: &Placement, r: f64, plate: f64) {
     }
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig {
+/// 256 cases with failure persistence off, so a failing run writes no regression file (C21).
+fn config() -> ProptestConfig {
+    ProptestConfig {
         cases: 256,
         failure_persistence: None,
         ..ProptestConfig::default()
-    })]
+    }
+}
+
+proptest! {
+    #![proptest_config(config())]
 
     #[test]
     fn layout_claims_hold(input in lines(), w in 100u32..=2400, extra in 0u32..=300) {
@@ -136,12 +143,38 @@ proptest! {
         prop_assert!(r >= 1.0 - TOL);
         assert_no_row_overlap(&p, r);
         assert_inside(&p, r, p2.plate_width);
+
+        // (g) requirement 7: clamped at the wider plate, every label stays on its leader
+        let p_w = p.plate_width;
+        let q_w = p2.plate_width;
+        for l in &p.labels {
+            prop_assert!((scaled_start(l, p_w, p_w) - l.start).abs() < TOL, "{l:?} unclamped");
+        }
+        for (i, a) in p.labels.iter().enumerate() {
+            let sa = scaled_start(a, p_w, q_w);
+            prop_assert!(sa >= -TOL);
+            if a.width <= q_w {
+                prop_assert!(sa + a.width <= q_w + TOL, "{a:?} ends right of {q_w}");
+                let lx = a.leader * r;
+                prop_assert!(sa <= lx + TOL && lx <= sa + a.width + TOL, "{a:?} left its leader");
+            }
+            for b in &p.labels[i + 1..] {
+                if a.row == b.row {
+                    let sb = scaled_start(b, p_w, q_w);
+                    prop_assert!(!overlap(sa, a.width, sb, b.width), "{a:?} vs {b:?} clamped");
+                }
+            }
+        }
     }
 }
 
-/// C21: the gate writes no file into the checkout.
+/// C21: the gate writes no file into the checkout. A passing run writes none under any config,
+/// so the config itself is asserted, and no regression file of either proptest layout exists.
 #[test]
 fn no_proptest_regressions_dir() {
+    let c = config();
+    assert!(c.failure_persistence.is_none(), "failure persistence is on");
+    assert_eq!(c.cases, 256);
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for sub in ["", "tests", "src"] {
         assert!(
@@ -150,4 +183,14 @@ fn no_proptest_regressions_dir() {
             dir.join(sub).display()
         );
     }
+    let regressions: Vec<_> = std::fs::read_dir(dir.join("tests"))
+        .expect("crates/web/tests is readable")
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .ends_with(".proptest-regressions")
+        })
+        .collect();
+    assert!(regressions.is_empty(), "regression files: {regressions:?}");
 }
