@@ -230,3 +230,36 @@ G3's first run failed only because GROUP_CMD lacked `--features testing` (the `e
 ### Behavioural verification
 
 skipped: the phase changes library functions (path parsing, fingerprint, diff, the email module's volatile list) with no entry point of its own; lens's recording path is covered by Phase 4's tests, which stay green.
+
+## Phase 6 — Domain-zone DNSBL rows stay compared
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | address row in `email.dnsbl` only, domain row in `email.dnsbl_domain` only, keyed `<domain>@<zone>` | green | crates/email/tests/dnsbl_domain.rs |
+| C2 | answers only for MX addresses: no `email.dnsbl_domain` block | already_implemented | crates/email/tests/dnsbl_domain.rs |
+| C3 | `dnsbl` check references `email.dnsbl` and `email.dnsbl_domain` | green | crates/email/tests/dnsbl_domain.rs |
+| C4 | domain newly listed, check stays fail: fingerprints differ, diff reports `email.dnsbl_domain` | green | crates/email/tests/dnsbl_domain.rs |
+| C5 | lens goldens unchanged on regeneration | already_implemented | crates/lens/tests/lens_golden.rs |
+| C6 | R19 SDD §3.7 split and named per-address costs | green | specs/sdd/v2.md |
+| C7 | reader amendment: `email.dnsbl_domain` rows differing only in `answered` fingerprint equal, no evidence change | green | crates/email/tests/dnsbl_domain.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 (C1–C4, C6) | 1 | sonnet | 37546 | 48 |
+| C7 (reader amendment) | — | orchestrator, one line | — | — |
+
+### Reader
+
+- AMENDMENT (applied, mandate) | crates/email/src/module.rs:612 | `answered` compared in `email.dnsbl_domain`: a timed-out or rate-limited domain zone stored an entry | `email.dnsbl_domain/answered` volatile; a timeout while listed still reads as cleared (logged)
+- AMENDMENT (applied, mandate) | specs/sdd/v2.md:315 | the list of facts the whole-block paths hide was incomplete (a second address listed while the check already fails; FCrDNS confirmation of a second address while it warns) | SDD and R19 name every per-address change at an unchanged check status
+- AMENDMENT (accepted, mandate) | crates/email/src/module.rs:620 | `email.dnsbl` on the lens wire loses the domain-zone row while `evidence_schema` stays 1 | 0.30.0 is the next and breaking release and removes the lens API; R13 excepts this block
+- DEFERRED | crates/email/src/checks/dnsbl.rs:63 | no MX address → the domain zone is never queried, so no `email.dnsbl_domain`
+- NIT | crates/email/src/module.rs:623 | an empty `email.dnsbl` is emitted when only the domain zone was queried (IPv6-only MX with IPv4-only zones)
+
+### Behavioural verification
+
+skipped: library projection and volatile list without an entry point of their own; the lens goldens regenerate unchanged (C5).

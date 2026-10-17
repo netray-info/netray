@@ -87,3 +87,15 @@ G1: C2 · G2: C4, C7 · G3: C1, C3 (after G2: the fingerprint must drop whole bl
 ### G3
 1. crates/email/src/module.rs — `EmailModule::volatile` returns `email.mx_addresses/*`, `email.fcrdns/*`, `email.dnsbl/*` (the list was empty; the SDD's email TTLs and timings were never declared).
 2. specs/sdd/v2.md §3.7 — grammar gains `<block>/*`; email row lists the three whole blocks; `email.mx` and `dns.a`/`dns.aaaa` stay compared.
+
+## Phase 6 — Domain-zone DNSBL rows stay compared
+
+## Groups
+
+G1: C1, C2, C3, C4 (one production file). C5 checked by regenerating the lens goldens; C6 is SDD prose.
+
+## Plan
+
+### G1
+1. crates/email/src/module.rs — the evidence projection (the `m.dnsbl` branch, ~line 593) splits answers by whether `target` parses as an `IpAddr`: address rows stay in `email.dnsbl`, the rest go to a new table `email.dnsbl_domain` (same columns, key `query`), pushed only when non-empty; register the block (`ShapeKind::Table`) and its five keys beside `email.dnsbl`'s; `references` adds `email.dnsbl_domain` for `dnsbl` (absent blocks are dropped by the caller).
+2. specs/sdd/v2.md §3.7 — the email evidence row describes the split; the email volatile row names the per-address facts the whole-block paths hide (MX address change of the same hosts, PTR change still forward-confirmed, a further zone listing an already-listed address) and that `email.dnsbl_domain` stays compared.
