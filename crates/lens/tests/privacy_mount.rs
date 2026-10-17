@@ -63,6 +63,7 @@ fn base_config() -> Config {
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),
+        admission: lens::config::AdmissionConfig::default(),
     }
 }
 
