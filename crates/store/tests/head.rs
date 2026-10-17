@@ -54,8 +54,7 @@ async fn head_is_the_chain_head_and_follows_identical_records() {
     let c = run(Status::Fail, Grade::D, 4);
     store.record(DOMAIN, &a, &[], 1000, d).await.unwrap();
     store.record(DOMAIN, &b, &[], 2000, d).await.unwrap();
-    let Recorded::Changed { id, .. } = store.record(DOMAIN, &c, &[], 3000, d).await.unwrap()
-    else {
+    let Recorded::Changed { id, .. } = store.record(DOMAIN, &c, &[], 3000, d).await.unwrap() else {
         panic!("expected Changed");
     };
 

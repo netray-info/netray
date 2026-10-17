@@ -6,6 +6,8 @@
 
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 mod common;
 
@@ -19,6 +21,7 @@ use lens::metrics::{ClientRunCounter, HISTOGRAM_BUCKETS, init_zero_series};
 use lens::routes::api_router;
 use lens::state::AppState;
 use netray_common::server::metrics_recorder;
+use netray_store::HistoryStore;
 use tower::ServiceExt;
 
 const NAME: &str = "lens_client_hourly_runs";
@@ -122,7 +125,7 @@ fn client_runs_c6_help_text_names_restart_and_partial_hour() {
 
 // Router-driven criterion, modelled on admission_metrics.rs.
 
-fn app(per_ip: u32) -> (Router, AppState) {
+fn app(per_ip: u32, store: Option<Arc<HistoryStore>>) -> (Router, AppState) {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
@@ -130,9 +133,10 @@ fn app(per_ip: u32) -> (Router, AppState) {
     config.rate_limit.per_ip_per_minute = per_ip;
     config.rate_limit.per_ip_burst = per_ip;
 
-    let state =
+    let mut state =
         AppState::with_registry(config, registry(Some("spectra-inspect.json"), "beacon.sse"))
             .unwrap();
+    state.history_store = store;
     let (api, _) = api_router().split_for_parts();
     let router = Router::new()
         .merge(api.with_state(state.clone()))
@@ -159,9 +163,27 @@ async fn client_runs_c4_only_the_fresh_run_counts() {
     let handle = recorder.handle();
     let _guard = metrics::set_default_local_recorder(&recorder);
     // Burst of 2: the fresh run and the cached repeat pass, the third request is limited.
-    let (app, state) = app(2);
+    // Follows v2-admission Phase 3: the repeat is a hit once the run is recorded and held.
+    let dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&dir.path().join("history.db"))
+        .await
+        .unwrap();
+    store.migrate().await.unwrap();
+    let store = Arc::new(store);
+    let (app, state) = app(2, Some(store.clone()));
 
     assert_eq!(post_check(&app, "example.com").await, StatusCode::OK);
+    let mut held = false;
+    for _ in 0..250 {
+        if let Some(head) = store.head("example.com").await.unwrap()
+            && state.cache.as_ref().unwrap().get(&head.id).await.is_some()
+        {
+            held = true;
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(held, "the run was not recorded and held within 5 s");
     assert_eq!(post_check(&app, "example.com").await, StatusCode::OK); // cache hit
     assert_eq!(
         post_check(&app, "example.com").await,

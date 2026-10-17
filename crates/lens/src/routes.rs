@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use std::net::IpAddr;
-use std::sync::Arc;
-use std::time::SystemTime;
 
 use axum::Json;
 use axum::extract::rejection::PathRejection;
@@ -18,10 +16,10 @@ use utoipa_axum::router::OpenApiRouter;
 use netray_engine::profile::Profile;
 use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION};
 
-use crate::admission::{Admit, Published, Trigger, admit, start_unregistered, until_done};
+use crate::admission::{Admit, Trigger, admit, start_unregistered, until_done};
 use crate::badge::render::svg_for_grade;
 use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
-use crate::cache::{CachedResult, cache_key, is_fresh};
+use crate::cache::{CachedResult, cache_key};
 use crate::check::{CheckInput, CheckOutput, SectionError};
 use crate::input::validate_domain;
 use crate::modules::{BackendExtra, BackendResult};
@@ -509,18 +507,28 @@ fn throttled_badge_response(
     build_svg_response(svg, "public, max-age=300, s-maxage=300", &etag)
 }
 
-/// Stores a published run's result in the moka cache; an incomplete one is refused there.
-pub(crate) async fn cache_published(state: &AppState, key: String, published: &Published) {
-    if let Some(cache) = &state.cache {
-        let entry = Arc::new(CachedResult {
-            sections: published.output.sections.clone(),
-            score: published.output.score.clone(),
-            duration_ms: published.output.duration_ms,
-            cached_at: SystemTime::now(),
-            snapshot_id: published.snapshot_id.clone(),
-        });
-        crate::cache::store_result(cache, key, entry).await;
+/// The badge for `grade`; `long` asks for the long `Cache-Control`, which an unscored grade
+/// never gets.
+fn badge_response(
+    badge_req: &crate::badge::BadgeRequest,
+    req_headers: &axum::http::HeaderMap,
+    grade: &str,
+    long: bool,
+) -> Response {
+    let render_start = std::time::Instant::now();
+    let svg = svg_for_grade(&badge_req.label, grade, badge_req.style);
+    metrics::histogram!("lens_badge_render_duration_seconds")
+        .record(render_start.elapsed().as_secs_f64());
+    let etag = compute_etag(&badge_req.domain, grade, &badge_req.label, badge_req.style);
+    if badge_is_not_modified(req_headers, &etag) {
+        return axum::http::StatusCode::NOT_MODIFIED.into_response();
     }
+    let cache_ctrl = if long && !is_unscored_grade(grade) {
+        "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+    } else {
+        "public, max-age=300, s-maxage=300"
+    };
+    build_svg_response(svg, cache_ctrl, &etag)
 }
 
 #[utoipa::path(
@@ -547,7 +555,6 @@ pub async fn badge_handler(
 ) -> Response {
     use netray_common::rate_limit::check_keyed_cost;
     use std::num::NonZeroU32;
-    use std::time::Instant;
 
     let domain = match domain.strip_suffix(".svg") {
         Some(d) => d.to_owned(),
@@ -560,35 +567,32 @@ pub async fn badge_handler(
     };
 
     let key = cache_key(&badge_req.domain);
-    let ttl = state.config.badges.ttl_seconds;
+    let head = crate::cache::head(&state, &badge_req.domain).await;
 
-    // Cache hit — serve immediately, bypass all rate limiters.
-    if let Some(cache) = &state.cache
-        && let Some(cached) = cache.get(&key).await
-        && is_fresh(&cached, ttl)
+    // The head is inside the cache window — serve it, bypass all rate limiters.
+    if let Some(lookup) = &head
+        && lookup.fresh
     {
         metrics::counter!("lens_badge_requests_total", "cache" => "hit").increment(1);
-        let grade = badge_grade(&cached.score);
-        let render_start = Instant::now();
-        let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
-        metrics::histogram!("lens_badge_render_duration_seconds")
-            .record(render_start.elapsed().as_secs_f64());
-        let etag = compute_etag(&badge_req.domain, &grade, &badge_req.label, badge_req.style);
-        if badge_is_not_modified(&req_headers, &etag) {
-            return axum::http::StatusCode::NOT_MODIFIED.into_response();
-        }
-        let cache_ctrl = if is_unscored_grade(&grade) {
-            "public, max-age=300, s-maxage=300"
-        } else {
-            "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
-        };
-        return build_svg_response(svg, cache_ctrl, &etag);
+        return badge_response(
+            &badge_req,
+            &req_headers,
+            grade_label(lookup.head.grade),
+            true,
+        );
     }
+    let stale = head.as_ref().map(|l| grade_label(l.head.grade));
 
-    // Per-domain recompute limiter — throttled requests get a ? badge.
+    // Per-domain recompute limiter — throttled requests get the head's grade, else a ? badge.
     let cost = NonZeroU32::new(1).unwrap();
     if check_keyed_cost(&state.badge_recompute_limiter, &key, cost, "badge", "lens").is_err() {
-        return throttled_badge_response(&badge_req, &req_headers);
+        return match stale {
+            Some(grade) => {
+                metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
+                badge_response(&badge_req, &req_headers, grade, false)
+            }
+            None => throttled_badge_response(&badge_req, &req_headers),
+        };
     }
 
     // Start or join the domain's run.
@@ -603,34 +607,24 @@ pub async fn badge_handler(
         Admit::Refused(_) | Admit::NotStarted => None,
     };
     let Some(published) = published else {
-        return throttled_badge_response(&badge_req, &req_headers);
+        return match stale {
+            Some(grade) => badge_response(&badge_req, &req_headers, grade, false),
+            None => throttled_badge_response(&badge_req, &req_headers),
+        };
     };
-    cache_published(&state, key.clone(), &published).await;
-    let grade = badge_grade(&published.output.score);
 
-    let is_error = is_unscored_grade(&grade);
-    let render_start = Instant::now();
-    let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
-    metrics::histogram!("lens_badge_render_duration_seconds")
-        .record(render_start.elapsed().as_secs_f64());
-
-    if is_error {
-        metrics::counter!("lens_badge_requests_total", "cache" => "failed").increment(1);
-    } else {
+    if published.output.score.complete {
         metrics::counter!("lens_badge_requests_total", "cache" => "miss").increment(1);
+        let grade = badge_grade(&published.output.score);
+        return badge_response(&badge_req, &req_headers, &grade, true);
     }
-
-    let etag = compute_etag(&badge_req.domain, &grade, &badge_req.label, badge_req.style);
-    if badge_is_not_modified(&req_headers, &etag) {
-        return axum::http::StatusCode::NOT_MODIFIED.into_response();
-    }
-
-    let cache_ctrl = if is_error {
-        "public, max-age=300, s-maxage=300"
-    } else {
-        "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
-    };
-    build_svg_response(svg, cache_ctrl, &etag)
+    metrics::counter!("lens_badge_requests_total", "cache" => "failed").increment(1);
+    badge_response(
+        &badge_req,
+        &req_headers,
+        stale.unwrap_or("incomplete"),
+        false,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -764,12 +758,13 @@ async fn run_check_handler(
         return e.into_response();
     }
 
-    // 3. Cache lookup (only when no per-request options like dkim_selectors).
-    let key = cache_key(&domain);
+    // 3. Cache lookup (only when no per-request options like dkim_selectors): the head is
+    // inside the window and its V1 rendering is held.
     if dkim_selectors.is_none()
         && let Some(cache) = &state.cache
-        && let Some(cached) = cache.get(&key).await
-        && is_fresh(&cached, state.config.cache.ttl_seconds)
+        && let Some(lookup) = crate::cache::head(&state, &domain).await
+        && lookup.fresh
+        && let Some(cached) = cache.get(&lookup.head.id).await
     {
         crate::metrics::count_request("cache_hit");
         return if sync {
@@ -822,10 +817,7 @@ async fn run_check_handler(
             .into_response();
     };
 
-    // 5. Store in cache (with the snapshot_id the run created).
-    cache_published(&state, key, &published).await;
-
-    // 6. Return SSE stream or sync JSON.
+    // 5. Return SSE stream or sync JSON.
     let domain_out = published.output.domain.clone();
     if sync {
         build_sync_response(

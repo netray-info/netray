@@ -149,8 +149,8 @@ domain_run_slots = 8
 # Enable the /badge/:domain.svg endpoint.
 enabled = true
 
-# How long a cached grade is considered fresh for badge requests.
-# Recomputes are throttled to at most one per domain per this window.
+# Badge and OG recomputes are throttled to at most one per domain per this period.
+# Freshness is the history's cache window, [cache] ttl_seconds.
 # Default: 3600 (1 hour)
 ttl_seconds = 3600
 
@@ -164,9 +164,8 @@ max_label_len = 32
 [og_cards]
 # Enable the /og/:domain.png endpoint (1200×630 social preview cards).
 enabled = true
-# Note: OG card freshness uses OG_TTL_SECONDS (3600 s, compile-time constant).
-# Ensure cache.ttl_seconds is >= 3600 s; otherwise cache entries expire before
-# the OG freshness window and every request triggers a recompute.
+# A card is served from the domain's history entry while it is within the cache
+# window, [cache] ttl_seconds.
 
 [telemetry]
 # Log output format.

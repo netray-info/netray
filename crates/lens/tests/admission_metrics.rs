@@ -26,6 +26,7 @@ use lens::config::Config;
 use lens::routes::api_router;
 use lens::state::AppState;
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
+use netray_store::HistoryStore;
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
@@ -35,6 +36,40 @@ const DURATION: &str = "lens_run_duration_seconds";
 
 /// Production config, cache enabled; per-IP limit as given (burst equals limit).
 fn app(per_ip: u32, dns_gate: Option<(Arc<Notify>, Arc<Notify>)>) -> Router {
+    build(per_ip, dns_gate, None).0
+}
+
+/// Like `app` with a temp-file history store: a repeat request is a hit only once the run
+/// task has recorded the run and holds its rendering (v2-admission Phase 3).
+async fn app_with_history(per_ip: u32) -> (Router, AppState, tempfile::TempDir) {
+    let dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&dir.path().join("history.db"))
+        .await
+        .unwrap();
+    store.migrate().await.unwrap();
+    let (router, state) = build(per_ip, None, Some(Arc::new(store)));
+    (router, state, dir)
+}
+
+/// Poll (bounded, 5 s) until the domain has a head entry and its V1 rendering is held.
+async fn wait_for_head_and_rendering(state: &AppState, domain: &str) {
+    let store = state.history_store.as_ref().expect("history store wired");
+    for _ in 0..250 {
+        if let Some(head) = store.head(domain).await.unwrap()
+            && state.cache.as_ref().unwrap().get(&head.id).await.is_some()
+        {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("the run was not recorded and held within 5 s");
+}
+
+fn build(
+    per_ip: u32,
+    dns_gate: Option<(Arc<Notify>, Arc<Notify>)>,
+    store: Option<Arc<HistoryStore>>,
+) -> (Router, AppState) {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
     let mut config = Config::load(path.to_str()).expect("production config loads");
@@ -55,11 +90,13 @@ fn app(per_ip: u32, dns_gate: Option<(Arc<Notify>, Arc<Notify>)>) -> Router {
         ip_golden("ifconfig-json.json"),
         tls_golden("tlsight-inspect.json"),
     );
-    let state = AppState::with_registry(config, registry).unwrap();
+    let mut state = AppState::with_registry(config, registry).unwrap();
+    state.history_store = store;
     let (api, _) = api_router().split_for_parts();
-    Router::new()
-        .merge(api.with_state(state))
-        .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 40000))))
+    let router = Router::new()
+        .merge(api.with_state(state.clone()))
+        .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 40000))));
+    (router, state)
 }
 
 async fn post_check(app: &Router, domain: &str) -> StatusCode {
@@ -185,12 +222,15 @@ async fn admission_c6_fresh_run_counts_fresh_only() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c7_repeat_within_ttl_counts_cache_hit() {
+    // Follows v2-admission Phase 3: the history decides the hit, so the repeat waits for
+    // the recorded head and its held rendering.
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
-    let app = app(10, None);
+    let (app, state, _dir) = app_with_history(10).await;
 
     post_check(&app, "example.com").await;
+    wait_for_head_and_rendering(&state, "example.com").await;
     post_check(&app, "example.com").await;
 
     assert_eq!(requests(&snap, "fresh"), 1);
@@ -295,12 +335,14 @@ async fn admission_c10_in_flight_gauge_stays_up_after_handler_future_is_dropped(
 
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c11_one_fresh_run_observes_one_duration() {
+    // Follows v2-admission Phase 3: the repeat is a hit only after the head is recorded.
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());
     let _guard = metrics::set_default_local_recorder(&recorder);
-    let app = app(10, None);
+    let (app, state, _dir) = app_with_history(10).await;
 
     post_check(&app, "example.com").await;
+    wait_for_head_and_rendering(&state, "example.com").await;
     post_check(&app, "example.com").await; // cache hit: no run, no observation
 
     assert_eq!(duration_observations(&snap), 1);

@@ -540,6 +540,11 @@ GIVEN the amended SDD WHEN read THEN §4.4 names the `[admission]` keys, the ord
   runtime drop them: the record now follows the response, and R3 promises a run whose requester
   has gone still records (implementer under the operator's autonomy mandate, 2026-10-17).
 
+- OG scores an entry whose profile version is neither the configured nor an embedded profile under
+  the configured profile, over treating it as no hit: a custom `scoring.profile_path` version would
+  otherwise never serve OG from the history, and the grade shown is still the entry's (implementer
+  under the operator's autonomy mandate, 2026-10-17).
+
 ## Open decisions
 
 None.

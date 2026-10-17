@@ -95,3 +95,63 @@ lens_check_requests_total{result="joined"} 1
 lens_check_requests_total{result="fresh"} 1
 lens_runs_in_flight 0
 ```
+
+## Phase 3 — The history is the cache
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6: a hit is a head entry last seen less than `cache.ttl_seconds` ago, for `/api/check` without options, badge and OG; `[cache] enabled = false` or no store → no hit; `badges.ttl_seconds` only the limiter period; `OG_TTL_SECONDS` goes | green | crates/lens/tests/history_cache.rs, crates/lens/tests/history_cache_badge_og.rs |
+| C2 | R7: `HistoryStore::head(domain)` returns id, `last_seen_at`, grade, profile version without a payload column | green | crates/store/tests/head.rs |
+| C3 | R8: a V1 hit is answered from moka holding only the V1 rendering of the run that last recorded the head, keyed by entry id, TTL the window; `Identical` replaces it; only the head's id is read; `X-Cache: HIT`, `cached: true`, held snapshot id; `NotStored`/failed record hold nothing; `store_result`/`get_or_compute` go; badge/OG never read moka | green | crates/lens/tests/history_cache.rs |
+| C4 | R9: an incomplete run is never a hit on any route; the head it did not replace stays the candidate; a complete recorded run is a hit within the window | green | crates/lens/tests/history_cache.rs, crates/lens/tests/history_cache_badge_og.rs |
+| C5 | R10: badge renders a hit from the entry's grade, long Cache-Control only when fresh; after its run: complete → grade long; incomplete with head → head short; incomplete without → unscored short | green | crates/lens/tests/history_cache_badge_og.rs |
+| C6 | R11: OG renders a hit from the entry (grade, `last_seen_at`, percentage scored under the entry's profile); new `netray_engine::history` function returns the `Score`, `rescore` its grade; after an incomplete run the head or the unscored card; Cache-Control as R10 | green | crates/engine/tests/score_run.rs, crates/lens/tests/history_cache_badge_og.rs |
+| C7 | GIVEN a head last seen 10 s ago with its V1 rendering held WHEN `/api/check` THEN answered without a run, `X-Cache: HIT`, `cached: true`, held snapshot id | green | crates/lens/tests/history_cache.rs |
+| C8 | GIVEN a head last seen 301 s ago (window 300) WHEN `/api/check` THEN a run starts | green | crates/lens/tests/history_cache.rs |
+| C9 | GIVEN a fresh head but no held rendering (restart) WHEN `/api/check` THEN a run starts | already_implemented | crates/lens/tests/history_cache.rs |
+| C10 | GIVEN a rendering held under the previous entry id and a newer head WHEN `/api/check` THEN a run starts, the previous rendering not served | green | crates/lens/tests/history_cache.rs |
+| C11 | GIVEN `[cache] enabled = false` and a fresh head WHEN `/api/check` THEN a run starts | already_implemented | crates/lens/tests/history_cache.rs |
+| C12 | GIVEN no store WHEN `/api/check` twice 61 s apart (tokio clock) THEN both start runs | green | crates/lens/tests/history_cache.rs |
+| C13 | GIVEN a complete run that recorded `Identical` WHEN `/api/check` within the window THEN a hit with the newest run's rendering | green | crates/lens/tests/history_cache.rs |
+| C14 | GIVEN a fresh head and a following incomplete run WHEN the next `/api/check` THEN not the incomplete run; the head's hit while fresh | green | crates/lens/tests/history_cache.rs |
+| C15 | GIVEN an incomplete run and no entry WHEN any route asks within the window THEN none answers from that run | green | crates/lens/tests/history_cache.rs, crates/lens/tests/history_cache_badge_og.rs |
+| C16 | GIVEN failing store writes WHEN a complete run finishes THEN the next request is no hit | green | crates/lens/tests/history_cache.rs |
+| C17 | GIVEN a head graded B seen 10 s ago WHEN badge THEN B, long, no run | green | crates/lens/tests/history_cache_badge_og.rs |
+| C18 | GIVEN a head graded B seen 2 h ago and the limiter exhausted WHEN badge THEN B, short | green | crates/lens/tests/history_cache_badge_og.rs |
+| C19 | GIVEN a head graded B and a fresh run ending incomplete with a hard fail WHEN badge THEN B, short | green | crates/lens/tests/history_cache_badge_og.rs |
+| C20 | GIVEN no entry and a fresh run ending incomplete WHEN badge THEN unscored, short | green | crates/lens/tests/history_cache_badge_og.rs |
+| C21 | GIVEN no entry and a fresh complete run graded F WHEN badge THEN F, long | green | crates/lens/tests/history_cache_badge_og.rs |
+| C22 | GIVEN a head seen 10 s ago WHEN OG THEN the entry's grade, its percentage under its profile, `last_seen_at`; no run | green | crates/lens/tests/history_cache_badge_og.rs |
+| C23 | GIVEN a stored run WHEN scored under its own profile THEN the grade equals the entry's grade and `rescore` returns it | green | crates/engine/tests/score_run.rs |
+| C24 | GIVEN `head` on a domain with three chained entries THEN the chain head's id, `last_seen_at`, grade, profile version; unknown domain → none | green | crates/store/tests/head.rs |
+
+C9 and C11 held before the phase (a fresh state holds nothing; a disabled cache read nothing).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1+G2 | 1 | sonnet | 29223 | 37 |
+| G3 | 1 | sonnet | 62357 | 114 |
+
+Existing tests whose meaning the spec changes were amended by a test-writer under `ADLC-Test-Change` (sdd_lens_badges_p1_c11 warm cache, admission_metrics c7/c11, incomplete_results c4/c7/c8 and the cached test, history_badge, state.rs holder TTL, og_routes hit and 304, badge_routes cache headers, client_hourly_runs c4): each seeds or waits for a head entry instead of a domain-keyed moka value.
+
+### Review
+
+- AMENDMENT | crates/lens/lens.example.toml:168 | the example still described `OG_TTL_SECONDS` and `badges.ttl_seconds` as freshness windows and advised a 3600 s cache window | affected_phase: 3 | repaired_in_phase: yes — comments now name `[cache] ttl_seconds` as the one window.
+- DEFERRED | crates/lens/src/routes.rs:611 | a badge without a run result that renders the head counts no series | Phase 4 (requirement 12: `cache="throttled"`).
+
+### Behavioural verification
+
+```
+$ netray lens <lens.dev.toml, no backend network: every run incomplete>
+check 200 MISS
+check 200 MISS            # an incomplete run is never a hit (R9)
+badge 200 public, max-age=300, s-maxage=300
+$ sqlite3 history.db "select count(*) from entries"
+0
+lens_badge_requests_total{cache="failed"} 1
+lens_check_requests_total{result="fresh"} 2
+```

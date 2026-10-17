@@ -39,6 +39,8 @@ pub struct AppState {
     /// trusted proxy, from the forwarding headers.
     pub ip_extractor: Arc<IpExtractor>,
     pub badge_recompute_limiter: Arc<BadgeRecomputeLimiter>,
+    /// The V1 holder of the history head's V1 rendering, keyed by entry id; its TTL is the
+    /// cache window. Goes with the V1 wire.
     pub cache: Option<Arc<Cache<String, Arc<CachedResult>>>>,
     pub scoring_profile: Arc<Profile>,
     /// The modules and the resolve stage a check runs through.
@@ -263,12 +265,16 @@ mod tests {
     }
 
     #[test]
-    fn cache_built_when_enabled() {
+    fn v1_holder_built_with_the_window_as_ttl() {
+        // Follows v2-admission Phase 3: moka only holds the V1 rendering, for the window.
         let mut config = test_config();
         config.cache.enabled = true;
         config.cache.ttl_seconds = 60;
         let state = AppState::new(config).unwrap();
-        assert!(state.cache.is_some(), "cache should be built when enabled");
+        assert_eq!(
+            state.cache.as_ref().unwrap().policy().time_to_live(),
+            Some(std::time::Duration::from_secs(60))
+        );
     }
 
     #[test]

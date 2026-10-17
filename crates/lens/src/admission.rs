@@ -306,6 +306,7 @@ async fn run_task(
     tx.send_modify(|s| s.done = Some(Arc::clone(&published)));
 
     let recorded = crate::history::record(&state, &domain, dkim, &published.run).await;
+    crate::cache::hold(&state, recorded.as_ref(), &published).await;
     tx.send_modify(|s| s.recorded = Some(recorded));
 }
 

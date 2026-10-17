@@ -322,41 +322,50 @@ async fn error_grade_badge_has_short_cache_control() {
 
 #[tokio::test]
 async fn known_grade_badge_has_correct_cache_headers() {
-    // Backends are unreachable in tests, so we pre-populate the cache with a
-    // known grade to exercise the success code path.
-    use lens::cache::{CachedResult, cache_key};
-    use lens::score::OverallScore;
-    use std::collections::HashMap;
+    // Backends are unreachable in tests, so we seed a fresh head graded A in a history
+    // store to exercise the success code path (follows v2-admission Phase 3).
+    use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
+    use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
+    use netray_model::{CheckId, Grade, Protocol, Status};
+    use netray_store::HistoryStore;
     use std::sync::Arc;
-    use std::time::SystemTime;
 
-    let state = make_badge_state(lens::config::BadgesConfig::default(), true);
+    let mut state = make_badge_state(lens::config::BadgesConfig::default(), true);
 
     let domain = "example.com";
-    let key = cache_key(domain);
-    state
-        .cache
-        .as_ref()
-        .expect("cache must be present when enabled")
-        .insert(
-            key,
-            Arc::new(CachedResult {
-                sections: HashMap::new(),
-                score: OverallScore {
-                    sections: HashMap::new(),
-                    overall_percentage: 91.0,
-                    grade: "A".to_string(),
-                    hard_fail_triggered: false,
-                    hard_fail_checks: vec![],
-                    not_applicable: HashMap::new(),
-                    complete: true,
-                },
-                duration_ms: 1,
-                cached_at: SystemTime::now(),
-                snapshot_id: None,
-            }),
-        )
-        .await;
+    let dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&dir.path().join("history.db"))
+        .await
+        .unwrap();
+    store.migrate().await.unwrap();
+    let run = Run {
+        profile_version: state.scoring_profile.version,
+        engine_version: "0.26.0".into(),
+        evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        grade: Grade::A,
+        complete: true,
+        sections: vec![RunSection {
+            protocol: Protocol::Dns,
+            outcome: SectionKind::Measured,
+            reason: None,
+        }],
+        checks: vec![RunCheck {
+            id: CheckId::parse("dns.dnssec_valid").unwrap(),
+            status: Status::Pass,
+        }],
+        blocks: vec![],
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    store
+        .record(domain, &run, &[], now - 10, |p, c| {
+            netray_model::diff::diff(p, c, &[], None)
+        })
+        .await
+        .unwrap();
+    state.history_store = Some(Arc::new(store));
 
     let app = badge_app(state);
     let req = Request::builder()
