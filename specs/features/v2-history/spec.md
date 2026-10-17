@@ -1,7 +1,8 @@
 # Spec: v2-history
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-15
+Finished: 2026-10-17
 
 ## Goal
 
@@ -199,6 +200,8 @@ GIVEN a clean domain-zone row and a run where the domain zone times out or answe
 - Branch review findings, implementer under the operator's autonomy mandate (2026-10-17): an unanswered domain-zone row carries an empty `answer` over making `answer` volatile too, so a listing still stores an entry while a policy code (rate limit, refusal) does not; `entries` breaks `created_at` ties by insertion order (writes are serialised) over leaving the order unspecified. Minors left: http's seven extra volatile headers are listed in SDD §3.7 but not in R17; `record` clamps `now` to the head's times (SDD §4.1 states it, R9 does not).
 
 - Branch review second pass, implementer under the operator's autonomy mandate (2026-10-17): `email.dnsbl_domain` compared whole with codes as returned, every transition recorded, over hiding unanswered rows (`answered` volatile, a blank `answer`): no stateless projection keeps listed → rate-limited from reading as a delisting, and a blank answer is a placeholder (CLAUDE.md). Cost: domain-zone rate-limit flaps store entries; measured after V2. Supersedes the phase 6 reader amendment on `answered`.
+
+- Finish distillation written without an operator round, implementer under the operator's autonomy mandate (2026-10-17): one solutions note, two CLAUDE.md bullets (the tlsight-only `--features testing` bullet widened to every module crate), one check to build; no rules or metrics entries.
 
 ## Open decisions
 

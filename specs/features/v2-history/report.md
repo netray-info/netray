@@ -263,3 +263,7 @@ skipped: the phase changes library functions (path parsing, fingerprint, diff, t
 ### Behavioural verification
 
 skipped: library projection and volatile list without an entry point of their own; the lens goldens regenerate unchanged (C5).
+
+### Checks to build
+
+- A model or module test asserting an empty diff over runs built with `sections: vec![]` cannot fail (no section is measured in both, Phase 5 NIT): a `tests/repo` check flagging `diff(...).is_empty()` assertions in files whose runs carry no sections.
