@@ -57,6 +57,15 @@ pub fn router(deps: EntriesDeps) -> axum::Router {
         .with_state(deps)
 }
 
+/// Serves `/privacy` (SDD §4.7); lens mounts it next to [`router`] until V5.1.
+pub fn privacy_router() -> axum::Router {
+    axum::Router::new().route("/privacy", get(privacy_page))
+}
+
+async fn privacy_page() -> Response {
+    page(StatusCode::OK, render::privacy())
+}
+
 async fn unmatched() -> Response {
     (
         StatusCode::NOT_FOUND,

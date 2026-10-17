@@ -5,7 +5,7 @@ Created: 2026-10-17
 
 ## Goal
 
-With `[history] enabled`, `GET /r/<id>` for the ID of a stored history entry answers `200` with a server-rendered page on the Phase 4a components (grade, run line, the entry's warn and fail checks, its stored diff), and `GET /r/<id>/og.png` answers that entry's own OG card, computed from the stored entry only, in the V1 card layout. A well-formed ID that is neither an entry nor a live V1 snapshot answers `410` with a page that offers the idle input and names no domain. A live V1 snapshot ID still renders its V1 page, and with `[history] enabled = false` every `/r/` answer is what it is today. `GET /privacy` answers §4.7's text, and the private `privacy-policy.md` replaces its "aggregates only" line for the history. No `/r/` request starts a run. Routes, templates and the entry → page mapping live in `netray-web` (SDD §3.1, operator X1); lens mounts `netray-web`'s routers ahead of its SPA fallback until v2-cutover. This is SDD Phase 2 criteria V2.7 and V2.8 (§4.6, §4.7; R15, R16). The full result page (V4.5, V4.13), the evidence views (V4.7) and the OG card drawn from the spectrum layout (V4.4, v2-result-page) replace this rendering in Phase 4.
+With `[history] enabled`, `GET /r/<id>` for the ID of a stored history entry answers `200` with a server-rendered page on the Phase 4a components (grade, run line, the entry's warn and fail checks, its stored diff), and `GET /r/<id>/og.png` answers that entry's own OG card, computed from the stored entry only, in the V1 card layout. A well-formed ID that is neither an entry nor a live V1 snapshot answers `410` with a page that offers the idle input and names no domain. A live V1 snapshot ID still renders its V1 page, and with `[history] enabled = false` every `/r/` answer is what it is today. `GET /privacy` answers §4.7's text, and the replacement for the private `privacy-policy.md`'s "aggregates only" line is drafted for the operator to commit. No `/r/` request starts a run. Routes, templates and the entry → page mapping live in `netray-web` (SDD §3.1, operator X1); lens mounts `netray-web`'s routers ahead of its SPA fallback until v2-cutover. This is SDD Phase 2 criteria V2.7 and V2.8 (§4.6, §4.7; R15, R16). The full result page (V4.5, V4.13), the evidence views (V4.7) and the OG card drawn from the spectrum layout (V4.4, v2-result-page) replace this rendering in Phase 4.
 
 ## Non-goals
 
@@ -65,7 +65,7 @@ screenshots at the midday UI review on 2026-10-18 (Decision log).
 18. `specs/sdd/v2.md` §4.6 says, in the commit that builds requirement 15: the entry's OG card shows grade, domain and recording time in the V1 layout and no score, until v2-result-page switches it to `spectrum::layout` (V4.4).
 19. `specs/sdd/v2.md` §4.7 says the page is served by `netray-web` at `/privacy` (lens mounts it until V5.1), and the Phase 2 table marks V2.7 and V2.8 as built by `v2-entries`.
 20. Lane merge with `v2-pages`, applied by whichever of the two lands second, in its rebase (the rule of v2-pages requirement 32, stated once for both): one `templates/base.html` with the `styles`, `header`, `main` and `scripts` blocks, the union of both features' optional head elements, and v2-pages' defaults for the three blocks (the `/static/app.css` link, the header with navigation, the bundle and speculation rules); this feature's entry, gone and privacy pages keep overriding `styles` with their inline `<style>` and `header` and `scripts` with nothing (requirement 1), so they render complete whether or not lens mounts the pages router; one `templates/pages/privacy.html` and exactly one `/privacy` route in `netray-web`, in `entries::privacy_router`; the `test_web_crate.sh` allow-list names `entries/`, `pages/` and `api/`.
-21. A separate commit in netray-ops, made by the overnight run and pushed by the operator, changes `specs/netray/sdd/privacy-policy.md`: the line "What's stored long-term (nothing per request; aggregates only)." gains the history exception with §4.7's statements and a pointer to `/privacy`. The monorepo gate does not check it; finish checks it by `git -C <netray-ops> log` and a grep for "90 days" in that file.
+21. `specs/netray/sdd/privacy-policy.md` in netray-ops changes the line "What's stored long-term (nothing per request; aggregates only)." to carry the history exception with §4.7's statements and a pointer to `/privacy`. This feature drafts the replacement text in `report.md` (Phase 4); the operator commits and pushes it in netray-ops (Decision log). The monorepo gate does not check it.
 
 ## Phases
 
@@ -140,7 +140,7 @@ GIVEN a counting `badge_check_fn` stub WHEN the entry card is requested THEN the
 **Depends on:** Phase 3 (the Phase 2 table may only mark V2.7 built once it is)
 **Requirements:** 16, 19, 21
 
-`crates/web`: `entries::privacy_router`. `crates/lens`: its mount before the SPA fallback. SDD §4.7 and the Phase 2 table. netray-ops: the `privacy-policy.md` commit.
+`crates/web`: `entries::privacy_router`. `crates/lens`: its mount before the SPA fallback. SDD §4.7 and the Phase 2 table. The `privacy-policy.md` replacement line drafted in `report.md` for the operator.
 
 ### Test Scenarios
 
@@ -149,7 +149,7 @@ GIVEN the same app WHEN `GET /` and `GET /some-client-route` THEN both answer th
 GIVEN a counting `badge_check_fn` stub WHEN `GET /privacy` THEN the stub was never called.
 GIVEN `netray-web`'s routers WHEN every router module is merged into one app THEN it builds without a duplicate-route panic and `/privacy` is routed once.
 GIVEN `specs/sdd/v2.md` WHEN read THEN §4.7 names `/privacy` on `netray-web`, mounted by lens until V5.1, and the Phase 2 table marks V2.7 and V2.8 as built by `v2-entries`.
-GIVEN netray-ops after finish WHEN `specs/netray/sdd/privacy-policy.md` is read THEN it carries the history exception with "90 days" and `/privacy`, committed and unpushed.
+GIVEN `report.md` after Phase 4 WHEN its drafted `privacy-policy.md` line is read THEN it carries the history exception with "90 days" and `/privacy`, ready for the operator to commit in netray-ops.
 
 ## Decision log
 
@@ -162,7 +162,7 @@ GIVEN netray-ops after finish WHEN `specs/netray/sdd/privacy-policy.md` is read 
 - V1 snapshot lookup and the V1 card renderer handed in from lens as functions over moving `snapshot/` and `og/` into `netray-web`: both go at the cutover (V5.6) and with v2-result-page's spectrum card, and `netray-web` cannot depend on lens (implementer, 2026-10-17).
 - Entry OG card in the V1 layout over the spectrum layout: v2-result-page owns the switch to `spectrum::layout` (operator, 2026-10-17, X4).
 - §4.7's text only on `/privacy` over the whole policy now: the whole policy needs facts outside the monorepo (log retention on the host, GDPR Art. 13 controller details) and is a separate feature after this program (operator, 2026-10-17).
-- The overnight run commits the netray-ops `privacy-policy.md` change over leaving it to the operator: the history makes the "aggregates only" line false the moment it is enabled; the operator reviews and pushes (operator, 2026-10-17).
+- The overnight run commits the netray-ops `privacy-policy.md` change over leaving it to the operator: the history makes the "aggregates only" line false the moment it is enabled; the operator reviews and pushes (operator, 2026-10-17). Superseded by the operator's mandate for the overnight run (same day), which forbids touching netray-ops: see the requirement-21 entry below.
 - Served by lens over `site/` and `netray site`: production sends the apex's unlisted paths to lens already (netray-ops compose template :44, private), so `/r/` and `/privacy` need no routing change, and `site/` ends with V5.1.
 - Inline stylesheets in this feature's frame over a `/static/` route of its own: `v2-pages` builds the `/static/` serving; lens's CSP allows inline styles (default, not interviewed).
 - Lane split with `v2-pages`: each creates only what its pages need, and the second to land merges (requirement 20) over one lane waiting for the other: both start the same night. `/privacy` is owned by `entries::privacy_router`, and `pages::router()` serves no `/privacy`, because lens merges both routers ahead of its SPA fallback (X1; v2-pages requirement 33 merges `pages::router()` unconditionally) and axum panics on a path routed twice (implementer, 2026-10-17).
@@ -221,6 +221,12 @@ GIVEN netray-ops after finish WHEN `specs/netray/sdd/privacy-policy.md` is read 
   outside the footer, over refusing it anywhere: the footer is the shared frame's and no block,
   v2-pages' footer wraps its links in a `<nav>`, and the lane merge would otherwise fail whichever
   feature lands second (Phase 1 review, implementer under the operator's autonomy mandate, 2026-10-17).
+
+- The netray-ops `privacy-policy.md` change of requirement 21 left to the operator, drafted in
+  `report.md` (Phase 4), over committing it in netray-ops from this run: the operator's mandate for
+  the overnight run (2026-10-17) forbids touching netray-ops except its memory directory, and a
+  commit there is outside this repository's gate; the operator applies the drafted line and pushes
+  (implementer under the operator's autonomy mandate, 2026-10-17).
 
 ## Open decisions
 

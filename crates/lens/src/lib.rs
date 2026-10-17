@@ -227,6 +227,7 @@ pub fn app(state: state::AppState) -> Router {
         .fallback(spa::handler)
         .with_state(state)
         .merge(entry_routes)
+        .merge(netray_web::entries::privacy_router())
         .route(
             "/api-docs/openapi.json",
             get({

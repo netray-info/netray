@@ -161,3 +161,54 @@ last_seen_at after the requests: 1778262240 (unchanged)
 | 1 | NIT | `If-None-Match` compared as one exact string (weak validators, lists, `*` get 200), as lens's `/og/` does | listed |
 | 1 | NIT | the 304 carries `etag` but not `cache-control` | listed |
 | 1 | NIT | lens's real render-failure mapping is held by construction (`render_error_from`), not by a test | listed |
+
+## Phase 4 — `/privacy`, the SDD and the private policy
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R16: `GET /privacy` 200 privacy page, `text/html; charset=utf-8`, `public, max-age=3600`, whatever the store configuration; `/` and other SPA paths still reach the SPA | green | crates/web/tests/entries_privacy_route.rs, crates/lens/tests/privacy_mount.rs |
+| C2 | R19: SDD §4.7 names `/privacy` on `netray-web`, mounted by lens until V5.1; the Phase 2 table marks V2.7 and V2.8 built by `v2-entries` | green | tests/repo/test_entries_sdd.sh |
+| C3 | R21 (amended): the `privacy-policy.md` replacement line drafted below for the operator | green | report.md, "Drafted privacy-policy.md line" |
+| C4 | Scenario: history and snapshots disabled → `/privacy` 200, both headers, R5's statements | green | crates/lens/tests/privacy_mount.rs |
+| C5 | Scenario: same app → `/` and `/some-client-route` answer the SPA shell as today | already_implemented | crates/lens/tests/privacy_mount.rs |
+| C6 | Scenario: counting `badge_check_fn` never called by `/privacy` | green | crates/lens/tests/privacy_mount.rs |
+| C7 | Scenario: every netray-web router module merged into one app builds without a duplicate-route panic; `/privacy` routed once | green | crates/web/tests/entries_privacy_route.rs |
+| C8 | Scenario: SDD §4.7 and the Phase 2 table as C2 | green | tests/repo/test_entries_sdd.sh |
+| C9 | Scenario (amended): the drafted line carries "90 days" and `/privacy` | green | report.md, "Drafted privacy-policy.md line" |
+
+C5 is a regression guard and passed at RED (SPA paths reached the SPA before this phase).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1–G3 | 1 (one coder for three small groups) | sonnet | 29308 | 32 |
+
+### Drafted privacy-policy.md line
+
+For netray-ops `specs/netray/sdd/privacy-policy.md`, replacing the line "What's stored long-term (nothing per request; aggregates only).":
+
+> - What's stored long-term: nothing per request and no data about the visitor, except the check history. The history stores the checked domain, the check results and their evidence; an entry is kept for 90 days after it was last seen, the latest entry keeps its predecessor, and a domain nobody checks for 90 days is deleted with all its entries. Rate limiters and the throttle are held in memory only, keyed by address or domain; nothing of them is written to disk. The public statement is the page at `/privacy`.
+
+The operator commits and pushes it (Decision log); this run does not touch netray-ops.
+
+### Behavioural verification
+
+`netray lens` from this worktree's build:
+
+```
+GET /privacy → 200, text/html; charset=utf-8, public, max-age=3600
+  "The history stores the domain, the check results and their evidence. It stores nothing about the visitor. An entry is kept for 90 days after it was last seen; … Rate limiters and the throttle are held in memory only, keyed by address or domain; nothing of them is written to disk."
+GET /        → 200, cache-control: no-cache (the SPA shell, as before)
+```
+
+### Review
+
+| pass | class | finding | outcome |
+|---|---|---|---|
+| 1 | AMENDMENT | the operator-attributed Decision-log entry on the netray-ops commit stood beside the newer entry reversing it | marked superseded by the operator's mandate; repaired in phase |
+| 1 | AMENDMENT | the Goal and the Phase 4 body still named the netray-ops commit | both now name the drafted line; repaired in phase |
+| 1 | DEFERRED | V2.8's `privacy-policy.md` half is the operator's and nothing checks it | V2.8 row says it is open until the operator commits the drafted line; listed in the handoff |
+| 1 | DEFERRED | v2-pages' protected `crates/lens/tests/pages_mount.rs:57` expects `/privacy` on its `frontend_router()` to be the SPA shell | for the second lander's rebase (requirement 20): `/privacy` belongs to `entries::privacy_router`; that row needs `ADLC-Test-Change` in v2-pages if it lands second, or this feature adjusts the mount if it rebases onto v2-pages |

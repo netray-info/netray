@@ -65,3 +65,24 @@ G1: C2 · G2: C5, C6, C7, C8 · G3: C1, C3, C4, C9, C10 (G2 before G3: lens's te
 
 1. `crates/lens/src/og/render.rs` — private `card_svg(.., score_pct: Option<f64>, ..)`; `svg_for_grade` byte-identical through it; `svg_for_entry` with no score text.
 2. `crates/lens/src/og/handler.rs` — `entry_card_renderer`: `svg_for_entry(.., DEFAULT_LABEL, ..)` → `svg_to_png`, errors through `render_error_from`, boxed.
+
+## Phase 4 — `/privacy`, the SDD and the private policy
+
+## Groups
+
+G1: C7 (and C1's web half) · G2: C1, C4, C5, C6 · G3: C2, C8 · G4: C3, C9 (the operator's, per the Decision log; drafted in `report.md`).
+
+## Plan
+
+### G1
+
+1. `crates/web/src/entries/routes.rs` — `privacy_router()` (no state) with `GET /privacy` → `page(OK, render::privacy())`; `router` gains no `/privacy`.
+2. `crates/web/src/entries/mod.rs` — re-export `privacy_router`.
+
+### G2
+
+1. `crates/lens/src/lib.rs` — `app` merges `privacy_router()` unconditionally after the `/r/` router, before the layers.
+
+### G3
+
+1. `specs/sdd/v2.md` — §4.7: "The page is served by `netray-web` at `/privacy`; lens mounts it until V5.1."; V2.7 and V2.8 rows: "Built by `v2-entries`."
