@@ -1,7 +1,17 @@
 .spectrum {
   position: relative;
+  overflow-x: auto;
 }
-.spectrum__labels,
+.spectrum [data-run]:not([data-shown]) {
+  display: none;
+}
+.spectrum__label-band {
+  position: relative;
+}
+.spectrum__labels {
+  position: absolute;
+  inset: 0;
+}
 .spectrum__axis {
   position: relative;
   height: var(--space-5);
@@ -53,7 +63,7 @@
 .spectrum__region-label,
 .spectrum__line-label {
   position: absolute;
-  font-size: var(--font-size-caption);
+  font-size: var(--font-size-label);
   white-space: nowrap;
 }
 .spectrum__region-label {
@@ -64,11 +74,19 @@
   text-transform: uppercase;
 }
 .spectrum__line-label {
-  inset-block-end: 0;
   padding-inline-start: var(--space-1);
+  background: var(--color-bg);
   color: var(--color-muted);
   font-family: var(--font-mono);
 }
+.spectrum__leader {
+  position: absolute;
+  bottom: 0;
+  width: var(--line-hair);
+}
+.spectrum__leader[data-tone="warn"] { background: var(--status-warn-mark); }
+.spectrum__leader[data-tone="fail"] { background: var(--status-fail-mark); }
+.spectrum__leader[data-tone="fix"] { background: var(--status-fix-mark); }
 .spectrum__line-label[data-tone="warn"] { color: var(--status-warn-text); }
 .spectrum__line-label[data-tone="fail"] { color: var(--status-fail-text); }
 .spectrum__line-label[data-tone="fix"] { color: var(--status-fix-text); }
