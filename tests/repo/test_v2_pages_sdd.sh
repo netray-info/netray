@@ -42,6 +42,48 @@ sdd_problems() {
         tr '\n' ' ' <<< "$sec" | grep -qE 'the only (inline executable|executable inline) script' ||
             echo "SDD 8.5 lacks 'the only inline executable script'"
     fi
+    # Phase 6 (R34): V4.8's site/ clause lives in V5.1; 8.4 and 8.7 state the islands and the name check
+    row=$(grep -E '^\| V4\.8 ' "$sdd" 2>/dev/null)
+    if [ -z "$row" ]; then
+        echo "SDD has no V4.8 row"
+    else
+        grep -qF '`site/` is gone' <<< "$row" && echo "SDD V4.8 still says \`site/\` is gone"
+    fi
+    row=$(grep -E '^\| V5\.1 ' "$sdd" 2>/dev/null)
+    if [ -z "$row" ]; then
+        echo "SDD has no V5.1 row"
+    else
+        grep -qF 'site/' <<< "$row" || echo "SDD V5.1 does not name site/"
+        grep -qF 'netray site' <<< "$row" || echo "SDD V5.1 does not name netray site"
+    fi
+    sec=$(awk '/^### 8\.4/ { on = 1; next } /^### 8\.5/ { on = 0 } on' "$sdd" 2>/dev/null | tr '\n' ' ')
+    if [ -z "$sec" ]; then
+        echo "SDD has no section 8.4"
+    else
+        local t
+        for t in '`theme`' '`status`' '`stream`' 'fragment' 'end' 'join' 'data-stream-url' 'data-stream-autostart' 'data-stream-state'; do
+            grep -qF -- "$t" <<< "$sec" || echo "SDD 8.4 lacks $t"
+        done
+        grep -qE '\{id, html\}|"id".*"html"' <<< "$sec" || echo "SDD 8.4 lacks the {id, html} fragment shape"
+        grep -qE 'whatever the|any status' <<< "$sec" || echo "SDD 8.4 lacks 'whatever the' status wording"
+    fi
+    sec=$(awk '/^### 8\.7/ { on = 1; next } on && /^### / { on = 0 } on' "$sdd" 2>/dev/null | tr '\n' ' ')
+    if [ -z "$sec" ]; then
+        echo "SDD has no section 8.7"
+    else
+        for t in templates 'static files' islands 'rendered pages' serializ 'Phase 3'; do
+            grep -qF -- "$t" <<< "$sec" || echo "SDD 8.7 lacks '$t'"
+        done
+    fi
+    sec=$(awk '/^### Phase 4/ { on = 1; next } on && /^### / { on = 0 } on' "$sdd" 2>/dev/null)
+    for t in V4.8 V4.9 V4.10 V4.11 V4.12; do
+        row=$(grep -E "^\| ${t//./\\.} " <<< "$sec")
+        if [ -z "$row" ]; then
+            echo "SDD Phase 4 table has no $t row"
+        else
+            grep -qF 'v2-pages' <<< "$row" || echo "SDD Phase 4 $t does not mention v2-pages"
+        fi
+    done
 }
 
 fails=0
@@ -57,9 +99,15 @@ good_sdd() {
         '`/.well-known/`, and the root files `robots.txt`. After them, a domain.' \
         '### 5.2 A visit' \
         '| S25 | No Datastar. The CSP stays without inline scripts: the only inline executable script is the rules. |' \
+        '### 8.4 Islands' 'The `theme`, `status` and `stream` islands. stream: `fragment` {id, html}, `end`, applied whatever the status; joiners replayed by the server (`join`); data-stream-url, data-stream-autostart, data-stream-state.' \
         '### 8.5 The gate' '3. an inline script other than the speculation rules appears; the only inline executable script is the rules.' \
         '### 8.6 Rules' \
-        '| V4.9 | CSP; the only executable inline script is the speculation rules; `application/ld+json` data blocks are allowed and are not executable; x. | S8 |' > "$1"
+        '### 8.7 Identity' 'The name check covers templates, static files, islands and rendered pages, and API serializers with Phase 3.' \
+        '### 8.8 Next' \
+        '### Phase 4 - UI' \
+        '| V4.8 | Pages; built by v2-pages. | R41 |' '| V4.9 | CSP; the only executable inline script is the speculation rules; `application/ld+json` data blocks are allowed and are not executable; v2-pages. | S8 |' '| V4.10 | x v2-pages | P35 |' '| V4.11 | x v2-pages | R45 |' '| V4.12 | x v2-pages | R36 |' \
+        '### Phase 5' '| V5.1 | Delete `site/`; `netray site` goes. | R40 |' \
+        '### Phase 6' > "$1"
 }
 good_sdd "$tmp/ok.md"
 [ -z "$(sdd_problems "$tmp/ok.md")" ] || fail "self-test: good SDD reported '$(sdd_problems "$tmp/ok.md")'"
@@ -70,9 +118,17 @@ bad s_v49 's/the only executable inline script/the only inline script/' 'V4.9 st
 bad s_ld 's/ data blocks are allowed and are not executable//' 'V4.9 lacks'
 bad s_s25 '/^| S25/s/inline executable/inline/' 'S25 lacks'
 bad s_85 '/^3\./s/inline executable/inline/' '8.5 lacks'
+bad s_v48 '/^| V4\.8 /s|built by|`site/` is gone, built by|' 'V4.8 still says'
+bad s_v51 '/^| V5\.1 /s/netray site/x/' 'V5.1 does not name netray site'
+bad s_84 's/data-stream-state//' '8.4 lacks data-stream-state'
+bad s_84w 's/whatever the/under the/' "8.4 lacks 'whatever the'"
+bad s_87 's/rendered pages/pages/' "8.7 lacks 'rendered pages'"
+bad s_p4 '/^| V4\.12 /s/v2-pages/x/' 'V4.12 does not mention v2-pages'
 
 out=$(sdd_problems specs/sdd/v2.md)
 while IFS= read -r line; do [ -n "$line" ] && fail "$line"; done <<< "$out"
 
-[ "$fails" -eq 0 ] && echo "ok: SDD 5.1, S25, 8.5 and V4.9 carry the Phase 4 wording"
+bash tests/repo/test_sdd_in_repo.sh || fail "tests/repo/test_sdd_in_repo.sh failed"
+
+[ "$fails" -eq 0 ] && echo "ok: SDD 5.1, S25, 8.5, V4.9, V4.8, V5.1, 8.4, 8.7 and the Phase 4 table carry the wording"
 exit "$fails"
