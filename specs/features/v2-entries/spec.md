@@ -1,7 +1,8 @@
 # Spec: v2-entries
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-17
+Finished: 2026-10-17
 
 ## Goal
 
@@ -226,6 +227,10 @@ GIVEN `report.md` after Phase 4 WHEN its drafted `privacy-policy.md` line is rea
   `report.md` (Phase 4), over committing it in netray-ops from this run: the operator's mandate for
   the overnight run (2026-10-17) forbids touching netray-ops except its memory directory, and a
   commit there is outside this repository's gate; the operator applies the drafted line and pushes
+  (implementer under the operator's autonomy mandate, 2026-10-17).
+- Finish writes its distilled entries (two `CLAUDE.md` bullets, one amended bullet, one solutions
+  note, one check to build) without the operator's confirmation over halting for it: each entry is
+  prose in this repository, reviewable and revertible in the finish commit, and the run must not halt
   (implementer under the operator's autonomy mandate, 2026-10-17).
 
 ## Open decisions

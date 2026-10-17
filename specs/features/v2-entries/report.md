@@ -212,3 +212,7 @@ GET /        → 200, cache-control: no-cache (the SPA shell, as before)
 | 1 | AMENDMENT | the Goal and the Phase 4 body still named the netray-ops commit | both now name the drafted line; repaired in phase |
 | 1 | DEFERRED | V2.8's `privacy-policy.md` half is the operator's and nothing checks it | V2.8 row says it is open until the operator commits the drafted line; listed in the handoff |
 | 1 | DEFERRED | v2-pages' protected `crates/lens/tests/pages_mount.rs:57` expects `/privacy` on its `frontend_router()` to be the SPA shell | for the second lander's rebase (requirement 20): `/privacy` belongs to `entries::privacy_router`; that row needs `ADLC-Test-Change` in v2-pages if it lands second, or this feature adjusts the mount if it rebases onto v2-pages |
+
+### Checks to build
+
+- `crates/web/tests/*.rs`: refuse `contains("<component class>")` on the ten R44 class roots unless the literal starts with `class="` (`tests/repo/`; see `specs/solutions/2026-10-17-page-test-matched-the-inlined-stylesheet.md`).
