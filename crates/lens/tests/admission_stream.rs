@@ -186,7 +186,10 @@ async fn c16_a_joiner_receives_finished_sections_first() {
 async fn c17_one_section_per_configured_section_then_done_then_recorded() {
     let state = state_with(false, None);
     let expected = state.backends.len();
-    assert_eq!(expected, 5, "the production config configures five sections");
+    assert_eq!(
+        expected, 5,
+        "the production config configures five sections"
+    );
     let mut stream = admitted(admit(&state, DOMAIN, client(), Trigger::Visit, false));
     let events = read_all(&mut stream).await;
 
@@ -206,8 +209,13 @@ async fn c18_done_does_not_wait_for_the_history_write() {
     state.history_store = Some(store.clone());
 
     let options = sqlx::sqlite::SqliteConnectOptions::new().filename(db.path());
-    let mut hold = sqlx::SqliteConnection::connect_with(&options).await.unwrap();
-    sqlx::query("BEGIN IMMEDIATE").execute(&mut hold).await.unwrap();
+    let mut hold = sqlx::SqliteConnection::connect_with(&options)
+        .await
+        .unwrap();
+    sqlx::query("BEGIN IMMEDIATE")
+        .execute(&mut hold)
+        .await
+        .unwrap();
 
     let mut stream = admitted(admit(&state, DOMAIN, client(), Trigger::Visit, false));
     loop {
@@ -261,7 +269,10 @@ async fn c19_recorded_carries_what_the_store_returned() {
     state.history_store = Some(store_on(&db).await);
     let options = sqlx::sqlite::SqliteConnectOptions::new().filename(db.path());
     let pool = sqlx::SqlitePool::connect_with(options).await.unwrap();
-    sqlx::query("DROP TABLE entries").execute(&pool).await.unwrap();
+    sqlx::query("DROP TABLE entries")
+        .execute(&pool)
+        .await
+        .unwrap();
     let mut s = admitted(admit(&state, DOMAIN, client(), Trigger::Visit, false));
     assert!(recorded_of(read_all(&mut s).await).is_none());
 }
