@@ -1,29 +1,44 @@
 {% macro spectrum(view) %}
 <div class="spectrum">
-  <div class="spectrum__labels">
-    {% for line in view.lines %}
-    {% if let Some(label) = line.label %}{% if line.tone.as_str() == "warn" || line.tone.as_str() == "fail" || line.tone.as_str() == "fix" %}<span class="spectrum__line-label" data-tone="{{ line.tone.as_str() }}" style="left: {{ line.x }}%">{{ label }}</span>{% endif %}{% endif %}
-    {% endfor %}
-  </div>
-  <svg class="spectrum__plate" role="img" aria-label="{{ view.label }}">
-    {% for region in view.regions %}
-    {% if !loop.first %}<line class="spectrum__boundary" x1="{{ region.x }}%" x2="{{ region.x }}%" y1="0" y2="100%" />{% endif %}
-    {% endfor %}
-    {% for line in view.lines %}
-    {% if line.is_fix() %}
-    <g class="spectrum__line" data-tone="{{ line.tone.as_str() }}" data-code="{{ line.code }}">
-      <rect class="spectrum__outline" x="{{ line.x }}%" y="{{ line.top() }}%" style="height: calc({{ line.height }}% + var(--line-fix))" />
-      <circle class="spectrum__ring" cx="{{ line.x }}%" cy="{{ line.top() }}%" />
-    </g>
-    {% else %}
-    <line class="spectrum__line" data-tone="{{ line.tone.as_str() }}" data-code="{{ line.code }}" x1="{{ line.x }}%" x2="{{ line.x }}%" y1="100%" y2="{{ line.top() }}%" />
-    {% endif %}
-    {% endfor %}
-  </svg>
-  <div class="spectrum__axis">
-    {% for region in view.regions %}
-    <span class="spectrum__region-label" style="left: {{ region.x }}%">{{ region.label }}</span>
-    {% endfor %}
+  <div class="spectrum__box" style="min-width: calc({{ view.line_count }} * var(--spectrum-line-pitch-min))">
+    <div class="spectrum__label-band" style="height: calc(var(--spectrum-label-leader) + {{ view.rows }} * var(--spectrum-label-row))">
+      {% for set in view.label_sets %}
+      <div class="spectrum__labels" data-run="{{ set.run }}"{% if set.shown %} data-shown{% endif %}>
+        {% for label in set.labels %}
+        <span class="spectrum__leader" data-tone="{{ label.tone.as_str() }}" style="left: {{ label.x_pct() }}%; height: calc(var(--spectrum-label-leader) + {{ label.row }} * var(--spectrum-label-row))"></span>
+        {% endfor %}
+        {% for label in set.labels %}
+        <span class="spectrum__line-label" data-tone="{{ label.tone.as_str() }}" data-code="{{ label.code }}" style="left: clamp(0px, {{ label.x_pct() }}%, calc(100% - {{ label.width_px() }}px)); bottom: calc(var(--spectrum-label-leader) + {{ label.row }} * var(--spectrum-label-row))">{{ label.text }}</span>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    <svg class="spectrum__plate" role="img" aria-label="{{ view.label }}">
+      {% for band in view.bands %}
+      <g id="band-{{ band.protocol }}" data-protocol="{{ band.protocol }}">
+        {% if let Some(b) = band.boundary_pct() %}<line class="spectrum__boundary" x1="{{ b }}%" x2="{{ b }}%" y1="0" y2="100%" />{% endif %}
+        {% for run in band.runs %}
+        <g class="spectrum__run" data-run="{{ run.run }}"{% if run.shown %} data-shown{% endif %}{% if run.unmeasured %} data-unmeasured{% endif %}>
+          {% for line in run.lines %}
+          {% if line.is_fix() %}
+          <g class="spectrum__line" data-tone="{{ line.tone.as_str() }}" data-code="{{ line.code }}">
+            <rect class="spectrum__outline" x="{{ line.x_pct() }}%" y="{{ line.top_pct() }}%" style="height: calc({{ line.height_pct() }}% + var(--line-fix))" />
+            <circle class="spectrum__ring" cx="{{ line.x_pct() }}%" cy="{{ line.top_pct() }}%" />
+          </g>
+          {% else %}
+          <line class="spectrum__line" data-tone="{{ line.tone.as_str() }}" data-code="{{ line.code }}" x1="{{ line.x_pct() }}%" x2="{{ line.x_pct() }}%" y1="100%" y2="{{ line.top_pct() }}%" />
+          {% endif %}
+          {% endfor %}
+        </g>
+        {% endfor %}
+      </g>
+      {% endfor %}
+    </svg>
+    <div class="spectrum__axis">
+      {% for region in view.regions %}
+      <span class="spectrum__region-label" style="left: {{ region.x_pct() }}%">{{ region.label }}</span>
+      {% endfor %}
+    </div>
   </div>
 </div>
 {% endmacro %}
