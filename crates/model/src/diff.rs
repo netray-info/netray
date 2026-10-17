@@ -140,11 +140,17 @@ fn measured(run: &Run) -> BTreeSet<Protocol> {
         .collect()
 }
 
-/// The blocks of `run` whose section is measured in both runs, by id.
-fn blocks_of<'a>(run: &'a Run, both: &BTreeSet<&str>) -> BTreeMap<&'a BlockId, &'a Block> {
+/// The blocks of `run` whose section is measured in both runs and that no volatile `<block>/*`
+/// covers, by id.
+fn blocks_of<'a>(
+    run: &'a Run,
+    both: &BTreeSet<&str>,
+    volatile: &[&str],
+) -> BTreeMap<&'a BlockId, &'a Block> {
     run.blocks
         .iter()
         .filter(|b| both.contains(b.id.module()))
+        .filter(|b| !canonical::block_volatile(&b.id, volatile))
         .map(|b| (&b.id, b))
         .collect()
 }
@@ -155,7 +161,10 @@ fn evidence_changes(prev: &Run, cur: &Run, volatile: &[&str]) -> Vec<BlockChange
         .intersection(&measured(cur))
         .map(|p| p.as_str())
         .collect();
-    let (from, to) = (blocks_of(prev, &both), blocks_of(cur, &both));
+    let (from, to) = (
+        blocks_of(prev, &both, volatile),
+        blocks_of(cur, &both, volatile),
+    );
     let ids: BTreeSet<&BlockId> = from.keys().chain(to.keys()).copied().collect();
     ids.into_iter()
         .filter_map(|id| {

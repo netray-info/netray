@@ -29,13 +29,14 @@ use netray_model::{CheckId, CheckResult, Protocol};
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
 /// A path into a module's evidence: `<block name>/<key>`, e.g. `tls.handshake/handshake_ms`, or
-/// `<block name>/<column>@<row key>` for one table row, e.g. `http.headers/value@date`.
+/// `<block name>/<column>@<row key>` for one table row, e.g. `http.headers/value@date`, or
+/// `<block name>/*`, which names the whole block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EvidencePath(pub &'static str);
 
 impl EvidencePath {
     /// Splits `path` into block id, key and optional row key: at the first `/`, then at the
-    /// first `@` after it.
+    /// first `@` after it. The key `*` names the whole block and takes no row key.
     pub fn parse(path: &str) -> Result<(BlockId, &str, Option<&str>), EvidencePathError> {
         let err = |why: &str| EvidencePathError(format!("evidence path {path:?} {why}"));
         let (block, rest) = path.split_once('/').ok_or_else(|| err("has no '/'"))?;
@@ -46,6 +47,9 @@ impl EvidencePath {
         };
         if key.is_empty() || row.is_some_and(str::is_empty) {
             return Err(err("has an empty key or row"));
+        }
+        if key == "*" && row.is_some() {
+            return Err(err("has a '*' key with a row"));
         }
         Ok((block, key, row))
     }

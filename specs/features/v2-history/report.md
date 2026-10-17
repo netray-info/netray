@@ -193,3 +193,40 @@ config ok: ... (exit 0)
 ```
 
 A live check against a real domain was not run: a worktree build has no outbound network (memory `reference_new_binary_no_network`).
+
+## Phase 5 — Rotating address sets are volatile
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R18 email declares exactly `email.mx_addresses/*`, `email.fcrdns/*`, `email.dnsbl/*` beside its existing paths; `email.mx` and dns.a/aaaa not volatile; SDD §3.7 grammar and email row | green | crates/email/tests/history_volatile.rs |
+| C2 | `EvidencePath::parse("email.fcrdns/*")` yields block and key `*`; `email.fcrdns/*@x` refused | green | crates/engine/tests/evidence_path.rs |
+| C3 | runs differing only in addresses of mx_addresses/fcrdns/dnsbl, same mx hosts and statuses: equal fingerprint, no evidence change | green | crates/email/tests/history_volatile.rs |
+| C4 | `email.mx_addresses` present in one run only, `/*` volatile: no block added or removed | green | crates/model/tests/volatile_block.rs |
+| C5 | runs whose `email.mx` hosts differ: fingerprints differ | already_implemented | crates/email/tests/history_volatile.rs |
+| C6 | runs whose FCrDNS check status differs: status transition reported | already_implemented | crates/email/tests/history_volatile.rs |
+| C7 | `email.fcrdns/*` alone does not suppress an `email.dnsbl` change | green | crates/model/tests/volatile_block.rs |
+| C8 | dns runs whose `dns.a` records differ: fingerprints differ with dns's volatile list | already_implemented | crates/dns/tests/history_volatile.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 (C2) | 1 | sonnet | 23090 | 14 |
+| G2 (C4, C7) | 1 | sonnet | 30246 | 30 |
+| G3 (C1, C3) | 2 | sonnet | 26938 | 35 |
+
+G3's first run failed only because GROUP_CMD lacked `--features testing` (the `evidence` target requires it). A rustfmt-only fix of the committed email test followed in 25284ce.
+
+### Reader
+
+- AMENDMENT | crates/email/src/module.rs:192 | `email.dnsbl/*` also hides the domain-zone rows (`<domain>@dbl.spamhaus.org`, `crates/email/src/checks/dnsbl.rs:82`), which never rotate; SDD §3.7's email row says all three blocks are keyed by rotating addresses, contradicting "covers the domain zones too", and V2.2's "a stable-evidence change stores a new entry" no longer holds for them | the domain newly listed on dbl while an MX IP is already listed on zen: `email.dnsbl` stays fail, fingerprint equal, nothing stored | affected_phase: 5 | repaired_in_phase: no
+- AMENDMENT | crates/email/src/module.rs:191 | whole-block volatility also hides per-address facts of domains whose addresses do not rotate; the decision log names only "an MX address change of the same hosts" as the cost | a static MX whose PTR changes, still forward-confirmed (fcrdns pass→pass), or a second DNSBL zone listing an already-listed IP (dnsbl fail→fail): no entry | affected_phase: 5 | repaired_in_phase: no
+- DEFERRED | crates/store/src/lib.rs:175 | the store compares the stored fingerprint, the diff re-canonicalises with the current volatile list: a release that adds a volatile path makes one entry per domain with an empty diff, while SDD §4.2 says that diff shows evidence changes; no history is deployed yet
+- NIT | crates/email/tests/history_volatile.rs:146 | the diff half of C3 cannot fail (runs have `sections: vec![]`, so no section is measured in both); the fingerprint half and `crates/model/tests/volatile_block.rs` carry it
+- DEFERRED (orchestrator) | specs/sdd/v2.md §3.7 email row | lists TTLs and timings as volatile, but the email module never declared them; unchanged by this phase
+
+### Behavioural verification
+
+skipped: the phase changes library functions (path parsing, fingerprint, diff, the email module's volatile list) with no entry point of its own; lens's recording path is covered by Phase 4's tests, which stay green.

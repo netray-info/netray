@@ -49,10 +49,15 @@ pub struct RunCheck {
 ///
 /// `volatile` lists evidence paths left out: `<block name>/<key>`, or
 /// `<block name>/<column>@<row key>` for one table cell. The block name has no qualifier.
+/// `<block name>/*` leaves out the whole block, its presence included.
 pub fn fingerprint(run: &Run, volatile: &[&str]) -> String {
     let mut checks: Vec<&RunCheck> = run.checks.iter().collect();
     checks.sort_by(|a, b| a.id.cmp(&b.id));
-    let mut blocks: Vec<&Block> = run.blocks.iter().collect();
+    let mut blocks: Vec<&Block> = run
+        .blocks
+        .iter()
+        .filter(|b| !canonical::block_volatile(&b.id, volatile))
+        .collect();
     blocks.sort_by(|a, b| a.id.cmp(&b.id));
     let canonical = json!([
         run.profile_version,

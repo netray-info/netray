@@ -185,7 +185,12 @@ impl Module for EmailModule {
     }
 
     fn volatile(&self) -> &'static [EvidencePath] {
-        &[]
+        // Rows keyed by addresses that rotate per query (spec R18).
+        &[
+            EvidencePath("email.mx_addresses/*"),
+            EvidencePath("email.fcrdns/*"),
+            EvidencePath("email.dnsbl/*"),
+        ]
     }
 
     fn run<'a>(&'a self, ctx: &'a RunContext, _facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {

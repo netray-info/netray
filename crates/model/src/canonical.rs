@@ -1,5 +1,6 @@
 //! The canonical form of an evidence block, shared by the run fingerprint and the evidence diff:
-//! volatile keys dropped, unordered collections sorted, CSP nonces replaced by one token.
+//! volatile keys dropped, unordered collections sorted, CSP nonces replaced by one token. A
+//! volatile `<block>/*` covers the whole block: [`block_volatile`].
 
 use serde_json::{Value as Json, json};
 
@@ -24,13 +25,20 @@ fn volatile_for<'a>(id: &BlockId, paths: &[&'a str]) -> Vec<Volatile<'a>> {
                 Some((key, row)) => (key, Some(row)),
                 None => (rest, None),
             };
-            if key.is_empty() || row.is_some_and(str::is_empty) {
+            if key.is_empty() || row.is_some_and(str::is_empty) || (key == "*" && row.is_some()) {
                 return None;
             }
             (block.split_once('.') == Some((id.module(), id.name())))
                 .then_some(Volatile { key, row })
         })
         .collect()
+}
+
+/// Whether a `<block>/*` path covers the whole of `id`'s block, presence included.
+pub(crate) fn block_volatile(id: &BlockId, paths: &[&str]) -> bool {
+    volatile_for(id, paths)
+        .iter()
+        .any(|p| p.row.is_none() && p.key == "*")
 }
 
 /// Whether a key is dropped wholesale: a path without a row key names it.

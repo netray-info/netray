@@ -67,3 +67,23 @@ Per contract scratchpad/v2-history-lens-api.md: `HistoryConfig` beside `Snapshot
 
 ### G3
 `LENS_HISTORY__DB_PATH=$tmp/history.db` beside every `LENS_SNAPSHOTS__DB_PATH` row; admission script sets it in the environment of `start_bg`. Command: `bash tests/repo/test_history_db_path.sh`.
+
+## Phase 5 — Rotating address sets are volatile
+
+## Groups
+
+G1: C2 · G2: C4, C7 · G3: C1, C3 (after G2: the fingerprint must drop whole blocks). C5, C6, C8 already_implemented.
+
+## Plan
+
+### G1
+1. crates/engine/src/lib.rs — `EvidencePath::parse` refuses a `*` key with a row key; doc comments name `<block name>/*`.
+
+### G2
+1. crates/model/src/canonical.rs — `volatile_for` refuses `*` with a row; new `pub(crate) fn block_volatile(id, paths) -> bool` (a `*` key without row, block matched without qualifier).
+2. crates/model/src/run.rs — `fingerprint` leaves out every block `block_volatile` covers; doc names `<block name>/*`.
+3. crates/model/src/diff.rs — `blocks_of`/`evidence_changes` exclude covered blocks before the id union, so they are never added, removed or changed.
+
+### G3
+1. crates/email/src/module.rs — `EmailModule::volatile` returns `email.mx_addresses/*`, `email.fcrdns/*`, `email.dnsbl/*` (the list was empty; the SDD's email TTLs and timings were never declared).
+2. specs/sdd/v2.md §3.7 — grammar gains `<block>/*`; email row lists the three whole blocks; `email.mx` and `dns.a`/`dns.aaaa` stay compared.
