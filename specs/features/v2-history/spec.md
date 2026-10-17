@@ -53,6 +53,7 @@ Every complete lens run with default options, whatever route started it, is reco
 16. `specs/sdd/v2.md` is amended: §4.3 names the not-measured class, the precedence of requirement 4 and the release-added/removed classes; §3.1 says the profile-effect grade is computed by `netray-engine` and passed to the model's diff, keeping `netray-store` on `netray-model` only; §3.7 adds repeated fields keys to the canonical sets; §4.1 says the store serialises its writes until §4.4's one-run-per-domain exists; §4.4's moka citation names `Cache::builder` in `crates/lens/src/state.rs` instead of a line; the Phase 2 table marks V2.1–V2.5 as built by `v2-history`.
 17. The modules' volatile lists cover values that change between identical responses: http adds the header rows `expires`, `x-timer`, `x-served-by`, `x-cache`, `x-cache-hits`, `cf-cache-status` and the `http.server` keys `address`, `org`, `network_type` (the first A record in resolver order, `crates/http/src/input.rs:70`); dns adds `dns.rrsig/data` (expiration, inception and signature in one text value, `crates/dns/src/module.rs:467`). SDD §3.7's volatile table lists them.
 18. A volatile path `<block>/*` covers a whole block: the block is kept in the run and stored, but neither its content nor its presence enters the fingerprint or the evidence diff, whatever its address qualifier. `EvidencePath::parse` accepts `*` as a key and refuses it with a row key. The email module declares `email.mx_addresses/*`, `email.fcrdns/*` and `email.dnsbl/*` volatile, because their rows are keyed by addresses that rotate per query (an M365 MX host answered three four-address sets in five queries); `email.mx` and every check status, FCrDNS and DNSBL included, stay compared. `dns.a` and `dns.aaaa` stay compared. SDD §3.7 states the grammar and lists the three blocks in its email row.
+19. The domain-zone rows of the DNSBL answers (targets that are not an address, e.g. `<domain>@dbl.spamhaus.org`) move out of `email.dnsbl` into a new table block `email.dnsbl_domain` with the same columns and key, present only when a domain zone was queried; `email.dnsbl` keeps the address-target rows. The check `email.dnsbl` references `email.dnsbl_domain` beside `email.dnsbl`. `email.dnsbl_domain` is not volatile, so a domain listing that appears or clears stores a new entry even when the check status stays the same. SDD §3.7 describes the split, and its email volatile row names the per-address facts the three whole-block paths hide: an MX address change of the same hosts, a PTR change that stays forward-confirmed, and a further zone listing an already-listed address.
 
 ## Phases
 
@@ -156,6 +157,21 @@ GIVEN two runs whose FCrDNS check status differs WHEN diffed with the email modu
 GIVEN `email.fcrdns/*` volatile WHEN an `email.dnsbl` block changes THEN that change is still reported unless `email.dnsbl/*` is listed too.
 GIVEN two dns runs whose `dns.a` records differ WHEN fingerprinted with the dns module's volatile list THEN the fingerprints differ.
 
+## Phase 6 — Domain-zone DNSBL rows stay compared
+
+**Depends on:** Phase 5
+**Requirements:** 19
+
+`crates/email`: the evidence projection splits the DNSBL answers by target, registers `email.dnsbl_domain` and its keys, and adds it to the references of the `dnsbl` check. SDD §3.7 and the decision log.
+
+### Test Scenarios
+
+GIVEN DNSBL answers for an MX address on an address zone and for the domain on a domain zone WHEN the email module projects its evidence THEN `email.dnsbl` holds only the address row and `email.dnsbl_domain` holds only the domain row, keyed `<domain>@<zone>`.
+GIVEN DNSBL answers only for MX addresses WHEN projected THEN there is no `email.dnsbl_domain` block.
+GIVEN a `dnsbl` check with both blocks present WHEN judged THEN its references include `email.dnsbl` and `email.dnsbl_domain`.
+GIVEN two runs with an MX address already listed on an address zone, where the domain becomes listed on a domain zone and the `email.dnsbl` check status stays fail WHEN fingerprinted with the email module's volatile list THEN the fingerprints differ and the diff reports a change in `email.dnsbl_domain`.
+GIVEN the lens goldens WHEN regenerated THEN they are unchanged (no fixture carries a domain-zone row).
+
 ## Decision log
 
 - lens records into the history now, moka/OG unchanged until `v2-admission` over a library-only store or replacing moka here: real entries accumulate from the 0.27.0 deploy while §4.4 stays in one feature (operator, 2026-10-15).
@@ -174,6 +190,8 @@ GIVEN two dns runs whose `dns.a` records differ WHEN fingerprinted with the dns 
 - Phase 1 reader findings, implementer under the operator's autonomy mandate (2026-10-15): a volatile row path covers the whole row, presence included (SDD §3.7 "a path addresses a whole row"), over comparing the row's presence; table and fields items carry their sign (`~`, `-`, `+`) over a flat key list, because a stored diff outlives its predecessor (R11); a nonce source ends at its closing quote only before whitespace or `;`, over swallowing up to any later quote; the volatile lists gain cache, expiry and resolver-order values and RRSIG data (R17) over storing an entry per CDN hit or re-signature.
 
 - Whole-block volatile paths for the email blocks keyed by rotating addresses (`email.mx_addresses`, `email.fcrdns`, `email.dnsbl`) over leaving them compared or also making `dns.a`/`dns.aaaa` volatile: an M365 domain would otherwise store an entry per run, while a hosting move must still show as a DNS record change; cost: an MX address change of the same hosts no longer shows as an evidence change (operator, 2026-10-17, Phase 4 amendment-forward).
+
+- Domain-zone DNSBL rows split into a compared `email.dnsbl_domain` over hiding them with `email.dnsbl/*` or row-level volatility by target kind: their key never rotates, so V2.2 holds for them, at the cost of one more evidence block on the lens wire; the per-address facts the three whole-block paths still hide are named in SDD §3.7 (operator, 2026-10-17, Phase 5 amendment-forward).
 
 ## Open decisions
 
