@@ -106,4 +106,4 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 | [`specs/rules/frontend-rules.md`](specs/rules/frontend-rules.md) | changing anything under `crates/*/frontend` or `packages/common-frontend` |
 | [`specs/rules/logging-rules.md`](specs/rules/logging-rules.md) | changing tracing init, log filters or `[telemetry]` config |
 | [`specs/rules/workflow-rules.md`](specs/rules/workflow-rules.md) | creating or modifying a `.github/workflows/*.yml` file |
-| [`specs/rules/comparison-page-rules.md`](specs/rules/comparison-page-rules.md) | adding or removing a tool, adding checks to one, or the quarterly review of `site/compare/index.html` |
+| [`specs/rules/comparison-page-rules.md`](specs/rules/comparison-page-rules.md) | adding or removing a tool, adding checks to one, or the quarterly review of `crates/web/compare.toml` and `templates/pages/compare.html` |
