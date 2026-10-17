@@ -282,36 +282,11 @@ async fn a_new_domain_listing_changes_fingerprint_and_diff() {
     );
 }
 
-// A domain zone that times out or answers with a policy code while the check verdict holds is a
-// failed lookup, not a domain change: `answered` is volatile in `email.dnsbl_domain`.
+// A domain zone that answers with a policy code (rate limit, refused resolver) is a failed lookup:
+// its row keeps the code as returned, and the transition is recorded like any status transition
+// into "not measured" (spec R19, branch review second pass).
 #[tokio::test(flavor = "multi_thread")]
-async fn an_unanswered_domain_zone_is_not_a_change() {
-    let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
-    let module = EmailModule::new(cfg).await.expect("module builds");
-    let volatile: Vec<&'static str> = module.volatile().iter().map(|p| p.0).collect();
-
-    let (c, blocks) = run(dnsbl_dns(false), &ZONES, &[]).await;
-    let mut unanswered = blocks.clone();
-    let domain = unanswered
-        .iter_mut()
-        .find(|b| b.id.to_string() == "email.dnsbl_domain")
-        .expect("email.dnsbl_domain present");
-    let Shape::Table { columns, rows, .. } = &mut domain.shape else {
-        panic!("email.dnsbl_domain is a table");
-    };
-    let answered = columns.iter().position(|c| c == "answered").unwrap();
-    for row in rows.iter_mut() {
-        row[answered] = Ev::Bool(false);
-    }
-    let (a, b) = (run_of(&c, blocks), run_of(&c, unanswered));
-    assert_eq!(fingerprint(&a, &volatile), fingerprint(&b, &volatile));
-    assert!(diff(&a, &b, &volatile, None).evidence.is_empty());
-}
-
-// A domain zone that answers with a policy code (Spamhaus rate limit) is a refused lookup: the
-// projection writes no answer for an unanswered row, so the run fingerprints like a clean one.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_policy_answer_from_the_domain_zone_is_not_a_change() {
+async fn a_policy_answer_from_the_domain_zone_keeps_its_code_and_is_recorded() {
     let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
     let module = EmailModule::new(cfg).await.expect("module builds");
     let volatile: Vec<&'static str> = module.volatile().iter().map(|p| p.0).collect();
@@ -320,8 +295,10 @@ async fn a_policy_answer_from_the_domain_zone_is_not_a_change() {
     let policy =
         dnsbl_dns(false).with_a("example.com.dbl.spamhaus.org", vec![v4("127.255.255.254")]);
     let (c2, b2) = run(policy, &ZONES, &[]).await;
-    assert_eq!(check(&c1, "dnsbl").status, check(&c2, "dnsbl").status);
+    let rows = rows(block(&b2, "email.dnsbl_domain"));
+    let row = &rows["example.com@dbl.spamhaus.org"];
+    assert_eq!(row["answered"], Ev::Bool(false), "{row:?}");
+    assert_eq!(row["answer"], text("127.255.255.254"), "{row:?}");
     let (a, b) = (run_of(&c1, b1), run_of(&c2, b2));
-    assert_eq!(fingerprint(&a, &volatile), fingerprint(&b, &volatile));
-    assert!(diff(&a, &b, &volatile, None).evidence.is_empty());
+    assert_ne!(fingerprint(&a, &volatile), fingerprint(&b, &volatile));
 }
