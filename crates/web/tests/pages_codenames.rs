@@ -32,6 +32,8 @@ const ROUTES: &[&str] = &[
     "/guide/",
     "/guide",
     "/sitemap.xml",
+    "/compare",
+    "/status",
 ];
 
 fn app() -> Router {
