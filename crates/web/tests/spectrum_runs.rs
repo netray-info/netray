@@ -488,3 +488,30 @@ fn r12_unmeasured_check_unscores_its_section() {
     );
     assert_eq!(l.runs[0].tones[at(&l, "email.dmarc")], LineTone::Muted);
 }
+
+/// Requirement 12: M sums the section's measured checks in the run as the grade does, including
+/// a check the run's profile weights that the current catalogue no longer holds.
+#[test]
+fn r12_section_total_counts_checks_outside_the_catalogue() {
+    let mut legacy = Profiles::current().clone();
+    legacy
+        .sections
+        .get_mut(&Protocol::Dns)
+        .unwrap()
+        .checks
+        .insert(id("dns.legacy"), 5);
+    let mut st = statuses(&[]);
+    st.insert(id("dns.legacy"), Status::Pass);
+    let old = run_with(st, &[], &legacy);
+    let cur = run(&[]);
+    let l = lay(&cur, &[old]);
+    // M_dns = 35 + 5 = 40: dns.dnssec e = 5/40 × 20 = 2.5 against ip.reputation's 10
+    assert!(near(l.runs[1].heights[at(&l, "dns.dnssec")], 0.25, 1e-9));
+    assert!(near(l.runs[1].heights[at(&l, "ip.reputation")], 1.0, 1e-9));
+    // the current run, without the legacy check, keeps 5/35 × 20 / 10
+    assert!(near(
+        l.runs[0].heights[at(&l, "dns.dnssec")],
+        5.0 / 35.0 * 2.0,
+        1e-9
+    ));
+}
