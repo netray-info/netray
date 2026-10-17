@@ -63,3 +63,31 @@ async fn a_record_data_change_changes_the_fingerprint() {
     let b = run("192.0.2.2", "sig");
     assert_ne!(fingerprint(&a, &p), fingerprint(&b, &p));
 }
+
+fn run_with(id: &str, rtype: &str, data: &str) -> Run {
+    Run {
+        profile_version: 1,
+        engine_version: "0.0.0".into(),
+        evidence_schema_version: 1,
+        grade: Grade::A,
+        complete: true,
+        sections: vec![],
+        checks: vec![],
+        blocks: vec![records(id, rtype, data)],
+    }
+}
+
+// Requirement 18: dns.a and dns.aaaa stay compared; the volatile list must not cover them.
+#[tokio::test]
+async fn address_record_changes_change_the_fingerprint() {
+    let p = paths().await;
+    let rows = [
+        ("dns.a", "A", "192.0.2.1", "192.0.2.2"),
+        ("dns.aaaa", "AAAA", "2001:db8::1", "2001:db8::2"),
+    ];
+    for (id, rtype, first, second) in rows {
+        let a = run_with(id, rtype, first);
+        let b = run_with(id, rtype, second);
+        assert_ne!(fingerprint(&a, &p), fingerprint(&b, &p), "{id}");
+    }
+}

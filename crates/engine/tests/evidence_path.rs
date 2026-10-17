@@ -39,3 +39,19 @@ fn parse_refuses_paths_without_block_or_key() {
         assert!(EvidencePath::parse(bad).is_err(), "{bad:?} must be refused");
     }
 }
+
+#[test]
+fn parse_wildcard_key_yields_no_row() {
+    let (b, k, r) = EvidencePath::parse("email.fcrdns/*").expect("wildcard key must parse");
+    assert_eq!(b, BlockId::parse("email.fcrdns").unwrap());
+    assert_eq!(k, "*");
+    assert_eq!(r, None);
+}
+
+#[test]
+fn parse_refuses_wildcard_key_with_row() {
+    assert!(
+        EvidencePath::parse("email.fcrdns/*@x").is_err(),
+        "a `*` key with a row key must be refused"
+    );
+}
