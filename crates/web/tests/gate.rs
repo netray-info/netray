@@ -162,6 +162,39 @@ const CASES: &[Case] = &[
         )],
         expect: None,
     },
+    // v2-pages requirement 21: application/ld+json is a data block, nothing else is exempt.
+    Case {
+        name: "ld+json data block passes",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/ld+json\">{\"a\":1}</script>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "text/plain script is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"text/plain\">x</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "application/json script is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/json\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "ld+json block with a handler is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/ld+json\" onload=\"x()\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
     // Amended requirement 6: comments, custom properties, SVG attributes, logical sides, case.
     Case {
         name: "comment line before a declaration does not hide its colour",

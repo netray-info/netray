@@ -29,6 +29,9 @@ const ROUTES: &[&str] = &[
     "/static/islands.js",
     "/static/logo.svg",
     "/static/favicon.svg",
+    "/guide/",
+    "/guide",
+    "/sitemap.xml",
 ];
 
 fn app() -> Router {
@@ -93,4 +96,11 @@ async fn no_route_names_a_codename() {
         scan(route, response).await;
     }
     scan("server_error()", pages::server_error()).await;
+    for guide in pages::guides::GUIDES {
+        let route = format!("/guide/{}", guide.slug);
+        let request = Request::get(&route).body(Body::empty()).expect("request");
+        let response = app().oneshot(request).await.expect("response");
+        assert_eq!(response.status(), StatusCode::OK, "{route}");
+        scan(&route, response).await;
+    }
 }
