@@ -673,6 +673,48 @@ const CASES: &[Case] = &[
         files: &[("templates/x.html", "<script src=>alert(1)</script>\n")],
         expect: Some((SCRIPT_RULE, "templates/x.html")),
     },
+    // v2-pages C3/C6/C7/C8: an unquoted askama expression is one opaque value; the next
+    // attribute is parsed on its own.
+    Case {
+        name: "handler after unquoted askama class value",
+        files: &[(
+            "templates/x.html",
+            "<button class={{ c }} onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "handler after unquoted askama script src",
+        files: &[(
+            "templates/x.html",
+            "<script src={{ asset }} onload=\"init()\"></script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "handler after unquoted askama comment value",
+        files: &[(
+            "templates/x.html",
+            "<button class={# c #} onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "handler after unquoted askama statement value",
+        files: &[(
+            "templates/x.html",
+            "<button class={% include \"c.txt\" %} onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "unquoted askama script src with defer passes",
+        files: &[(
+            "templates/x.html",
+            "<script src={{ asset }} defer></script>\n",
+        )],
+        expect: None,
+    },
 ];
 
 #[test]
@@ -747,4 +789,36 @@ fn real_tree_passes_the_gate() {
             ))
             .collect::<Vec<_>>()
     );
+}
+
+/// v2-pages C6/C7: the violation names the handler attribute that followed the askama value.
+#[test]
+fn handler_after_unquoted_askama_value_is_named() {
+    for (html, attr) in [
+        (
+            "<button class={{ c }} onclick=\"go()\">x</button>\n",
+            "onclick",
+        ),
+        (
+            "<script src={{ asset }} onload=\"init()\"></script>\n",
+            "onload",
+        ),
+    ] {
+        let root = temp_root();
+        plant(&root, &[("templates/x.html", html)]);
+        let report = check(&root);
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            report
+                .violations
+                .iter()
+                .any(|v| v.rule == SCRIPT_RULE && v.message.contains(attr)),
+            "{html}: expected a rule 3 message naming `{attr}`, got {:?}",
+            report
+                .violations
+                .iter()
+                .map(|v| &v.message)
+                .collect::<Vec<_>>()
+        );
+    }
 }
