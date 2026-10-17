@@ -120,6 +120,31 @@ describe("status island", () => {
     );
   });
 
+  it("renders an incident of unknown shape as its raw data", async () => {
+    stubFetch([{ name: "svc", statusClass: "success" }], [{ id: 1, type: "down", monitorName: "dns-probe" }]);
+    build();
+    mount(document.body);
+    await vi.waitFor(() =>
+      expect(q("[data-status-incidents]").textContent).toContain("dns-probe"),
+    );
+  });
+
+  it("treats an event feed without results as a failure, not as no incidents", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        status: 200,
+        json: async () =>
+          url === MONITORS ? { data: [{ name: "svc", statusClass: "success" }] } : { status: false, message: "rate limited" },
+      })),
+    );
+    build();
+    mount(document.body);
+    await vi.waitFor(() => expect(q("[data-status-error]").hidden).toBe(false));
+    expect(q("[data-status-incidents]").textContent).not.toContain("No incidents to report.");
+  });
+
   it("shows the error line when fetch rejects", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("offline"))));
     build();

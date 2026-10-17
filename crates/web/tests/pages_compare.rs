@@ -332,12 +332,28 @@ fn compare_rows_cover_every_v1_row_and_every_v1_unsupported_row_has_no_checks() 
 #[test]
 fn generated_cells_claim_no_more_than_the_checks_judge() {
     let rows = pages::compare::rows();
+    // The TLS inspector negotiates TLS 1.2 or 1.3 only and probes no other version, so no
+    // check sees a deprecated protocol: not done.
+    let protocols = rows
+        .iter()
+        .find(|r| r.label == "Protocol versions (deprecated detection)")
+        .expect("protocol versions row");
+    assert_eq!(
+        protocols.netray().symbol,
+        "\u{2717}",
+        "protocol versions: not done"
+    );
+    assert_eq!(
+        protocols.checks,
+        Some(vec![]),
+        "protocol versions: no check"
+    );
     for label in [
         "SOA record",
-        "Protocol versions (deprecated detection)",
         "OCSP stapling",
         "DANE / TLSA",
         "Blacklist check",
+        "DNS checks",
     ] {
         let row = rows
             .iter()
@@ -345,4 +361,17 @@ fn generated_cells_claim_no_more_than_the_checks_judge() {
             .unwrap_or_else(|| panic!("row {label}"));
         assert_eq!(row.netray().symbol, "~", "{label}: partial coverage");
     }
+}
+
+/// Reader, phase 5 (pass 2): a row no check covers is the only `product` row; a row a check
+/// partly covers lists the check, so removing it forces the compare edit.
+#[test]
+fn soa_row_lists_its_check() {
+    let rows = pages::compare::rows();
+    let soa = rows
+        .iter()
+        .find(|r| r.label == "SOA record")
+        .expect("SOA row");
+    assert_eq!(soa.checks, Some(vec!["dns.ttl".to_string()]));
+    assert_eq!(soa.product, None);
 }
