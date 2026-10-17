@@ -3112,6 +3112,8 @@ version = "0.26.0"
 dependencies = [
  "askama",
  "netray-common",
+ "netray-engine",
+ "netray-model",
  "proptest",
  "serde_json",
 ]
