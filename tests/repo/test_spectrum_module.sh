@@ -20,22 +20,42 @@ problems() {
     else
         grep -Eq '^pub mod spectrum;' "$r/crates/web/src/lib.rs" 2>/dev/null ||
             echo "crates/web/src/lib.rs does not declare pub mod spectrum;"
-        local pat
-        for pat in 'askama' 'std::fs' 'std::io' 'std::net' 'std::env' 'static mut' 'thread_local!' \
-            'OnceLock' 'LazyLock' 'lazy_static'; do
-            ! grep -qF -- "$pat" "$spec" || echo "spectrum.rs is not pure: it contains $pat"
-        done
-        # Grouped imports and paths through a short name (`use std::{env, fs};`, `fs::read`), and
-        # global state (`static`, atomics), across line breaks.
-        local flat
-        flat=$(tr '\n' ' ' < "$spec")
-        ! grep -Eq 'std::[{][^}]*(^|[^A-Za-z0-9_])(fs|io|net|env)([^A-Za-z0-9_]|$)' <<< "$flat" ||
-            echo "spectrum.rs is not pure: it imports std I/O through a group"
-        ! grep -Eq '(^|[^A-Za-z0-9_])(fs|io|net|env)::' <<< "$flat" ||
-            echo "spectrum.rs is not pure: it calls fs, io, net or env"
+        # Purity by allowlist, over the code with comments stripped and lines joined: `use` only
+        # from crate, super, netray_model, netray_engine and std::collections; no other std, core
+        # or alloc path and no grouped std import; only the macros below; no static, atomic,
+        # unsafe, extern or include. A blocklist of I/O names misses print macros and std::process.
+        local flat u m
+        flat=$(sed 's://.*$::' "$spec" | tr '\n' ' ')
+        ! grep -q 'askama' <<< "$flat" || echo "spectrum.rs is not pure: it contains askama"
+        while IFS= read -r u; do
+            [ -n "$u" ] || continue
+            case "$u" in
+            'use crate::'* | 'use super::'* | 'use netray_model::'* | 'use netray_engine::'* | 'use std::collections::'*) ;;
+            *) echo "spectrum.rs is not pure: it imports outside the allowlist: $u" ;;
+            esac
+        done < <(grep -oE '(^|[^A-Za-z0-9_])use[[:space:]]+[^;]+' <<< "$flat" |
+            sed -E 's/^[^u]*use[[:space:]]+(::)?//; s/[[:space:]]//g; s/^/use /')
+        while IFS= read -r u; do
+            [ -n "$u" ] || continue
+            case "$u" in
+            std::collections::*) ;;
+            *) echo "spectrum.rs is not pure: it names $u" ;;
+            esac
+        done < <(grep -oE '(^|[^A-Za-z0-9_])(::)?(std|core|alloc)::([A-Za-z_][A-Za-z0-9_]*|[{])(::)?' <<< "$flat" |
+            sed -E 's/^[^a-z]*(::)?//')
+        while IFS= read -r m; do
+            [ -n "$m" ] || continue
+            case "$m" in
+            panic | matches | vec | format | assert | assert_eq | assert_ne | debug_assert | unreachable) ;;
+            *) echo "spectrum.rs is not pure: it calls the macro $m!" ;;
+            esac
+        done < <(grep -oE '[A-Za-z_][A-Za-z0-9_]*![[:space:]]*[([{]' <<< "$flat" | sed -E 's/!.*$//')
         ! grep -Eq "(^|[^'A-Za-z0-9_])static[[:space:]]" <<< "$flat" ||
             echo "spectrum.rs is not pure: it holds a static"
-        ! grep -q 'Atomic' <<< "$flat" || echo "spectrum.rs is not pure: it holds an atomic"
+        local kw
+        for kw in Atomic unsafe extern include; do
+            ! grep -Eq "(^|[^A-Za-z0-9_])$kw" <<< "$flat" || echo "spectrum.rs is not pure: it contains $kw"
+        done
     fi
     local f
     while IFS= read -r f; do
@@ -91,20 +111,36 @@ expect nospec "spectrum.rs is missing"
 good "$tmp/nodecl"; echo 'pub mod gate;' > "$tmp/nodecl/crates/web/src/lib.rs"
 expect nodecl "does not declare pub mod spectrum"
 
-for pat in askama std::fs std::io std::net std::env 'static mut' 'thread_local!' OnceLock LazyLock lazy_static; do
-    good "$tmp/impure"; echo "use $pat;" >> "$tmp/impure/crates/web/src/spectrum.rs"
-    expect impure "not pure: it contains $pat"
-    rm -rf "$tmp/impure"
-done
+impure() { # impure <name> <line> <want>: spectrum.rs plus <line> must report <want>
+    good "$tmp/$1"; printf '%s\n' "$2" >> "$tmp/$1/crates/web/src/spectrum.rs"
+    expect "$1" "$3"
+}
+impure askama 'use askama::Template;' 'imports outside the allowlist: use askama::'
+impure fs 'use std::fs;' 'names std::fs'
+impure fullpath 'fn f() { let _ = ::std::fs::read("x"); }' 'names std::fs'
+impure process 'fn f() { std::process::exit(1) }' 'names std::process'
+impure time 'fn f() { let _ = std::time::SystemTime::now(); }' 'names std::time'
+impure corepath 'use core::cell::Cell;' 'outside the allowlist'
+impure firstgroup 'use std::{env as e, fmt};' 'names std::{'
+impure dbg 'fn f(x: f64) -> f64 { dbg!(x) }' 'macro dbg!'
+impure println 'fn f() { println!("x") }' 'macro println!'
+impure eprintln 'fn f() { eprintln! ("x") }' 'macro eprintln!'
+impure tl 'thread_local! { }' 'macro thread_local!'
+impure lazy 'lazy_static! { }' 'macro lazy_static!'
+impure unsafe 'fn f() { unsafe { } }' 'contains unsafe'
+impure include 'const S: &str = include_str!("x");' 'macro include_str!'
+impure otherdep 'use once_cell::sync::Lazy;' 'outside the allowlist'
+good "$tmp/allowed"; printf '%s\n' 'use std::collections::BTreeMap;' 'use netray_model::Status;' \
+    'use netray_engine::Catalogue;' '// std::fs and println!("x") in a comment' \
+    'fn f() { let _ = matches!(1, 1); let _ = vec![1]; panic!("x") }' >> "$tmp/allowed/crates/web/src/spectrum.rs"
+[ -z "$(problems "$tmp/allowed")" ] || fail "self-test: the allowlist refused: $(problems "$tmp/allowed")"
 
 good "$tmp/grouped"; printf '%s\n' 'use std::{' '    env,' '    fs,' '};' >> "$tmp/grouped/crates/web/src/spectrum.rs"
-expect grouped "imports std I/O through a group"
-good "$tmp/short"; echo 'fn f() { let _ = fs::read("x"); }' >> "$tmp/short/crates/web/src/spectrum.rs"
-expect short "calls fs, io, net or env"
+expect grouped "names std::{"
 good "$tmp/static"; echo 'static N: usize = 0;' >> "$tmp/static/crates/web/src/spectrum.rs"
 expect static "holds a static"
 good "$tmp/atomic"; echo 'const A: AtomicUsize = AtomicUsize::new(0);' >> "$tmp/atomic/crates/web/src/spectrum.rs"
-expect atomic "holds an atomic"
+expect atomic "contains Atomic"
 good "$tmp/lifetime"; echo "pub const S: &'static str = \"8px\";" >> "$tmp/lifetime/crates/web/src/spectrum.rs"
 [ -z "$(problems "$tmp/lifetime")" ] || fail "self-test: a 'static lifetime was reported: $(problems "$tmp/lifetime")"
 

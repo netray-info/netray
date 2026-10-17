@@ -1,6 +1,6 @@
 //! Table scenarios of the spectrum layout core (V2 spec v2-spectrum, Phase 1, requirements 2-7).
 use netray_web::spectrum::{
-    LayoutError, LineInput, LineTone, Placement, label_width, line_pitch_min, place,
+    LayoutError, LineInput, LineTone, Placement, label_width, line_pitch_min, place, scaled_start,
 };
 use netray_web::tokens::values;
 
@@ -293,4 +293,23 @@ fn c20_dense_placement_scales_to_wider_plate() {
     let wide = place_ok(&ls, 1056);
     assert_eq!(wide.plate_width, 1056.0);
     assert_scaled_valid(&narrow, &wide);
+}
+
+/// Requirement 7's `scaled_start`: an over-wide box stays at 0 at a wider plate it still exceeds,
+/// and an edge-shifted box returns to its leader once the plate leaves room.
+#[test]
+fn c7_scaled_start_clamps_over_wide_and_shifted_boxes() {
+    // c17's input: 4 lines at 32 px, 8 chars (63.52 px) on line 3, leader 28
+    let p = place_ok(&lines(4, &[(3, "abcdefgh", LineTone::Fail)]), 32);
+    let l = &p.labels[0];
+    assert_eq!(scaled_start(l, 32.0, 32.0), 0.0);
+    assert_eq!(scaled_start(l, 32.0, 40.0), 0.0);
+    // 54 lines at 432 px, last line (x 428) with 6 chars (48.64 px): shifted to 383.36
+    let p = place_ok(&lines(54, &[(53, "FCrDNS", LineTone::Warn)]), 432);
+    let l = &p.labels[0];
+    assert!(near(scaled_start(l, 432.0, 432.0), 383.36, EPS));
+    // at 1056 px the leader is at 1046.22; the box ends at the edge and spans its leader
+    let s = scaled_start(l, 432.0, 1056.0);
+    assert!(near(s, 1056.0 - 48.64, EPS));
+    assert!(s <= 428.0 * 1056.0 / 432.0 && 428.0 * 1056.0 / 432.0 <= s + l.width);
 }
