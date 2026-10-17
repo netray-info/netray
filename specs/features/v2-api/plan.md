@@ -34,3 +34,19 @@ G1: C3, C4, C33, C34, C35 · G2: C2, C5, C6, C10, C11, C12, C13, C17, C18, C19, 
 
 ### G4 — SDD prose
 - specs/sdd/v2.md §3.1 (apex API v1 in `crates/web/src/api/`, mounted by lens ahead of its SPA fallback until `v2-cutover` mounts it in `netray serve`), §10 Phase 3 row `0.30.0`. Committed with G3.
+
+## Phase 2 — Domain and entry reads
+
+## Groups
+
+G1: C1-C16 (all five routes share `crates/web/src/api/mod.rs` `read_routes`, the new `V1Error` variants and the views).
+
+## Plan
+
+### G1
+- crates/web/src/api/error.rs: `DomainInvalid` 400, `Gone` 410, `Internal` 500, `Unavailable` 503.
+- crates/web/src/entries/{routes,mod}.rs: `well_formed` `pub(crate)`, re-exported, one ID rule with `/r/<id>`.
+- crates/web/src/api/reads.rs (new): `EntryView`, `DiffView`, `HistoryResponse`, `HistoryItem` (Serialize + ToSchema), built from `netray_store::Entry` by destructuring with `..`; helpers `history` (503 first), `domain` (`DomainRuns::validate` → 400), `entry` (malformed 404, store error warn + 500, absent 410 naming no domain); handlers `domain_entry`, `domain_changes`, `domain_history`, `entry_read`, `entry_changes`, path params via `Result<Path<String>, PathRejection>`.
+- crates/web/src/api/mod.rs: the five routes in `read_routes()` behind the per-IP limiter.
+- tests/fixtures/contracts/api-v1.openapi.json regenerated (compatible growth).
+- No lens or SDD change (§7.1 already lists the endpoints).

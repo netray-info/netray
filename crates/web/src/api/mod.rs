@@ -6,6 +6,7 @@ pub mod contract;
 mod docs;
 mod error;
 mod limit;
+mod reads;
 mod runs;
 mod state;
 
@@ -44,6 +45,11 @@ fn read_routes() -> OpenApiRouter<ApiState> {
         .routes(routes!(catalogue_handler))
         .routes(routes!(profile_handler))
         .routes(routes!(meta_handler))
+        .routes(routes!(reads::domain_entry))
+        .routes(routes!(reads::domain_changes))
+        .routes(routes!(reads::domain_history))
+        .routes(routes!(reads::entry_read))
+        .routes(routes!(reads::entry_changes))
 }
 
 /// The generated v1 document; path keys carry the `/api/v1` mount.

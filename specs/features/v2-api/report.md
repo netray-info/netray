@@ -75,3 +75,52 @@ Pass 1 (reader over the phase diff): 6 BLOCKER, 7 AMENDMENT, 1 DEFERRED, 2 NIT. 
 Pass 2: 1 BLOCKER (with `[api] enabled = false` the 413 rewrite still answered JSON under `/api/v1`), fixed test-first; 2 AMENDMENT (413 documented on every v1 operation; contract errors name the component) repaired and logged; 3 NIT listed.
 Deferred: `ApiParts` empty and the `[api.<inspector>]` tables keyless until Phases 4-7; `/meta` limits gain the IP and inspector values then.
 NITs: `untyped_schemas` does not walk `propertyNames` or response `headers`; the no-verdict grep is line-based (a rustfmt-wrapped grouped import escapes it); `Retry-After` rounds governor's wait down (inherited helper).
+
+## Phase 2 — Domain and entry reads
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: `GET /domains/{domain}` normalised by `DomainRuns::validate`, latest entry fields, run as stored, 404/400/503 | green | crates/web/tests/api_domains.rs, crates/lens/tests/api_v1_domains.rs, crates/web/tests/api_read_errors.rs |
+| C2 | R11: `GET /domains/{domain}/diff` `{entry_id, predecessor_id, diff}`, first entry nulls, 404 | green | crates/web/tests/api_domains.rs |
+| C3 | R12: `GET /domains/{domain}/history` every entry newest first, five fields, 404 | green | crates/web/tests/api_domains.rs |
+| C4 | R13: `/entries/{id}` and `/entries/{id}/diff`: 200 / 410 / 404 / 500 by v2-entries' rule | green | crates/web/tests/api_entries.rs, crates/web/tests/api_read_errors.rs |
+| C5 | S: `GET /api/v1/domains/Example.COM.` 200 with the entry, run equals stored Run incl. findings/evidence | green | crates/web/tests/api_domains.rs, crates/lens/tests/api_v1_domains.rs |
+| C6 | S: no entry for example.org 404 NOT_FOUND; `*.example.com` 400 DOMAIN_INVALID | green | crates/web/tests/api_domains.rs, crates/lens/tests/api_v1_domains.rs |
+| C7 | S: e1 → e2: diff endpoint entry_id e2, predecessor e1, diff equals stored | green | crates/web/tests/api_domains.rs |
+| C8 | S: only a first entry: diff and predecessor_id null | green | crates/web/tests/api_domains.rs |
+| C9 | S: e1 → e2 → e3 history three items newest first, exactly five keys | green | crates/web/tests/api_domains.rs |
+| C10 | S: existing entry ID: `/entries/{id}` and `/entries/{id}/diff` 200 in the domain shapes | green | crates/web/tests/api_entries.rs |
+| C11 | S: swept entry 410 GONE naming no domain; never-issued 410; `abc`/`AAAA-AAA` 404 | green | crates/web/tests/api_entries.rs |
+| C12 | S: live V1 snapshot ID that is no entry 410 GONE | green | crates/web/tests/api_entries.rs |
+| C13 | S: unreadable store after open: `/entries/AAAAAAAA` 500 INTERNAL_ERROR, not 410 | green | crates/web/tests/api_entries.rs |
+| C14 | S: `[history] enabled = false`: domains and entries 503 UNAVAILABLE | green | crates/web/tests/api_domains.rs, crates/web/tests/api_entries.rs, crates/lens/tests/api_v1_domains.rs |
+| C15 | S: predecessor swept: `/entries/{id}/diff` stored diff with predecessor_id null | green | crates/web/tests/api_entries.rs |
+| C16 | R15 (last sentence) + R6: served run/diff equal the store's as JSON; new paths validated against the document with coverage | green | crates/web/tests/openapi_responses.rs, crates/web/tests/api_domains.rs, crates/web/tests/api_entries.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 domain and entry reads | 2 | opus (inherited) | 47921 | 151 |
+| review fix (pass 1): documented 500, extractor-refused id 404 | 1 | orchestrator | - | - |
+
+### Review
+
+Pass 1: 2 BLOCKER (domain reads answered an undocumented 500 on a failed store read; entries answered an undocumented 400 for an id the extractor refused), fixed test-first (crates/web/tests/api_read_errors.rs); 2 AMENDMENT (the same two gaps in the spec) repaired and logged; 1 DEFERRED (`/history` parses every full entry to answer five fields: a store query of its own when it matters); 1 NIT (nullable `predecessor_id`/`diff` absent from `required`).
+Pass 2: 0 BLOCKER, 0 AMENDMENT; 1 NIT (criteria rows still open, fixed with this commit).
+
+### Behavioural verification
+
+`netray lens` from the branch on the example config with a fresh history store (no entries; a real check needs network a worktree build does not have):
+
+```
+/api/v1/domains/Example.COM.        -> 404 {"error":{"code":"NOT_FOUND","message":"no entry for example.com"}}
+/api/v1/domains/%2A.example.com     -> 400 {"error":{"code":"DOMAIN_INVALID","message":"invalid domain: wildcard domains are not accepted"}}
+/api/v1/domains/example.com/history -> 404 NOT_FOUND
+/api/v1/entries/AAAAAAAA            -> 410 {"error":{"code":"GONE","message":"no entry with this id"}}
+/api/v1/entries/abc                 -> 404 NOT_FOUND
+/api/v1/entries/AAAAAAAA/diff       -> 410 GONE
+```
+Seeded-store answers (200 shapes, stored run and diff as JSON) are asserted by crates/web/tests/api_domains.rs, api_entries.rs and crates/lens/tests/api_v1_domains.rs.

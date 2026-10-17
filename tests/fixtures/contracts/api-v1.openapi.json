@@ -39,6 +39,87 @@
         ],
         "type": "object"
       },
+      "Block": {
+        "description": "One block of evidence.",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/BlockId"
+          },
+          "shape": {
+            "$ref": "#/components/schemas/Shape"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "shape"
+        ],
+        "type": "object"
+      },
+      "BlockChange": {
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/BlockId"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BlockChangeKind"
+          }
+        },
+        "required": [
+          "block",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "BlockChangeKind": {
+        "oneOf": [
+          {
+            "enum": [
+              "added"
+            ],
+            "type": "string"
+          },
+          {
+            "enum": [
+              "removed"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "`items` by shape: fields and table, `~ key` per changed key or row, `- key` per removed\nand `+ key` per added one; records, a signed descriptor per added or removed record;\nchain, the changed positions as strings; tree, the changed node paths; text, none.",
+            "properties": {
+              "changed": {
+                "description": "`items` by shape: fields and table, `~ key` per changed key or row, `- key` per removed\nand `+ key` per added one; records, a signed descriptor per added or removed record;\nchain, the changed positions as strings; tree, the changed node paths; text, none.",
+                "properties": {
+                  "items": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "items"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "changed"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "BlockId": {
+        "examples": [
+          "tls.chain@192.0.2.1:443"
+        ],
+        "type": "string"
+      },
       "CatalogueResponse": {
         "properties": {
           "checks": {
@@ -50,6 +131,60 @@
         },
         "required": [
           "checks"
+        ],
+        "type": "object"
+      },
+      "ChangeClass": {
+        "enum": [
+          "fixed",
+          "improved",
+          "new",
+          "worse",
+          "now_applicable",
+          "no_longer_applicable",
+          "into_not_tested",
+          "out_of_not_tested",
+          "into_not_measured",
+          "out_of_not_measured",
+          "added",
+          "removed",
+          "added_by_release",
+          "removed_by_release"
+        ],
+        "type": "string"
+      },
+      "CheckChange": {
+        "properties": {
+          "class": {
+            "$ref": "#/components/schemas/ChangeClass"
+          },
+          "from": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Status"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CheckId"
+          },
+          "to": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Status"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "class"
         ],
         "type": "object"
       },
@@ -111,6 +246,112 @@
         ],
         "type": "object"
       },
+      "Diff": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CheckChange"
+            },
+            "type": "array"
+          },
+          "engine_changed": {
+            "description": "Whether the two runs' engine versions differ.",
+            "type": "boolean"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BlockChange"
+            },
+            "type": "array"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/GradeChange"
+          }
+        },
+        "required": [
+          "checks",
+          "evidence",
+          "grade",
+          "engine_changed"
+        ],
+        "type": "object"
+      },
+      "DiffView": {
+        "properties": {
+          "diff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Diff"
+              }
+            ]
+          },
+          "entry_id": {
+            "type": "string"
+          },
+          "predecessor_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "entry_id"
+        ],
+        "type": "object"
+      },
+      "EntryView": {
+        "properties": {
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "engine_version": {
+            "type": "string"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "predecessor_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "profile_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "run": {
+            "$ref": "#/components/schemas/Run"
+          }
+        },
+        "required": [
+          "id",
+          "domain",
+          "created_at",
+          "last_seen_at",
+          "profile_version",
+          "grade",
+          "engine_version",
+          "run"
+        ],
+        "type": "object"
+      },
       "ErrorInfo": {
         "description": "Error detail contained in an error response.",
         "properties": {
@@ -141,6 +382,133 @@
         ],
         "type": "object"
       },
+      "FieldPair": {
+        "items": false,
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "description": "The schema of a [`Value`]: the tagged union as it serialises. An address is its text form.",
+            "oneOf": [
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "text"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "int"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "format": "int64",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "bool"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "time"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "duration"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "format": "int64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "addr"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ],
+        "type": "array"
+      },
       "FixOwner": {
         "description": "Who can fix a failed check.",
         "enum": [
@@ -165,6 +533,77 @@
           "incomplete"
         ],
         "type": "string"
+      },
+      "GradeChange": {
+        "description": "The grade of both runs. `rescored` is the predecessor re-scored under the current profile,\nset only when the profile versions differ.",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "rescored": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Grade"
+              }
+            ]
+          },
+          "to": {
+            "$ref": "#/components/schemas/Grade"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "HistoryItem": {
+        "properties": {
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "profile_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "last_seen_at",
+          "grade",
+          "profile_version"
+        ],
+        "type": "object"
+      },
+      "HistoryResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "type": "object"
       },
       "Limits": {
         "properties": {
@@ -222,6 +661,28 @@
           "profiles",
           "evidence_schema_version",
           "limits"
+        ],
+        "type": "object"
+      },
+      "Node": {
+        "description": "A node of a `tree` block.",
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/Node"
+            },
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldPair"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields",
+          "children"
         ],
         "type": "object"
       },
@@ -311,6 +772,142 @@
         ],
         "type": "object"
       },
+      "Record": {
+        "description": "A DNS resource record.",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Value"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Value"
+          },
+          "ttl": {
+            "$ref": "#/components/schemas/Value"
+          },
+          "type": {
+            "$ref": "#/components/schemas/Value"
+          }
+        },
+        "required": [
+          "owner",
+          "type",
+          "ttl",
+          "data"
+        ],
+        "type": "object"
+      },
+      "Run": {
+        "description": "One scan as stored for history.",
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/RunCheck"
+            },
+            "type": "array"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "engine_version": {
+            "type": "string"
+          },
+          "evidence_schema_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "profile_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/RunSection"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "profile_version",
+          "engine_version",
+          "evidence_schema_version",
+          "grade",
+          "complete",
+          "sections",
+          "checks",
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "RunCheck": {
+        "description": "A check's id, status, findings and evidence references. Findings and evidence are outside\nthe fingerprint and the diff.",
+        "properties": {
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BlockId"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CheckId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "RunSection": {
+        "description": "How one protocol's section ended.",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/SectionKind"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "protocol",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "SectionKind": {
+        "enum": [
+          "measured",
+          "not_applicable",
+          "incomplete",
+          "timed_out"
+        ],
+        "type": "string"
+      },
       "SectionWeights": {
         "description": "One section's weight, its weighted checks and the checks whose failure forces `F`.",
         "properties": {
@@ -357,6 +954,168 @@
         ],
         "type": "string"
       },
+      "Shape": {
+        "description": "The schema of a [`Shape`], the adjacently tagged union as it serialises.",
+        "oneOf": [
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/Record"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "records"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "properties": {
+                  "columns": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/Value"
+                      },
+                      "type": "array"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "key",
+                  "columns",
+                  "rows"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "enum": [
+                  "table"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "items": {
+                    "$ref": "#/components/schemas/FieldPair"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "chain"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/Node"
+              },
+              "kind": {
+                "enum": [
+                  "tree"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/FieldPair"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "fields"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "text"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Status": {
+        "description": "The outcome of one check.",
+        "enum": [
+          "pass",
+          "warn",
+          "fail",
+          "not_applicable",
+          "not_tested",
+          "unmeasured"
+        ],
+        "type": "string"
+      },
       "Threshold": {
         "description": "One grade threshold as served: the lowest score that earns `grade`.",
         "properties": {
@@ -374,6 +1133,122 @@
           "min"
         ],
         "type": "object"
+      },
+      "Value": {
+        "description": "The schema of a [`Value`]: the tagged union as it serialises. An address is its text form.",
+        "oneOf": [
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "text"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "int"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "bool"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "time"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "duration"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "addr"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          }
+        ]
       }
     }
   },
@@ -425,6 +1300,466 @@
         "summary": "Every check of the catalogue, in file order.",
         "tags": [
           "reference"
+        ]
+      }
+    },
+    "/api/v1/domains/{domain}": {
+      "get": {
+        "operationId": "domain_entry",
+        "parameters": [
+          {
+            "description": "The domain, any form the suite accepts",
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
+                }
+              }
+            },
+            "description": "The latest entry"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a domain"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry for this domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "A domain's latest entry.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/domains/{domain}/diff": {
+      "get": {
+        "operationId": "domain_changes",
+        "parameters": [
+          {
+            "description": "The domain, any form the suite accepts",
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiffView"
+                }
+              }
+            },
+            "description": "The changes of the latest entry"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a domain"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry for this domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "What changed in a domain's latest entry against its predecessor.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/domains/{domain}/history": {
+      "get": {
+        "operationId": "domain_history",
+        "parameters": [
+          {
+            "description": "The domain, any form the suite accepts",
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            },
+            "description": "The entries, newest first"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a domain"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry for this domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "A domain's entries, newest first.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/entries/{id}": {
+      "get": {
+        "operationId": "entry_read",
+        "parameters": [
+          {
+            "description": "The entry id, eight letters or digits",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
+                }
+              }
+            },
+            "description": "The entry"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not an entry id"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry with this id"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "One entry by id.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/entries/{id}/diff": {
+      "get": {
+        "operationId": "entry_changes",
+        "parameters": [
+          {
+            "description": "The entry id, eight letters or digits",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiffView"
+                }
+              }
+            },
+            "description": "The changes of the entry"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not an entry id"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry with this id"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "What changed in one entry against its predecessor.",
+        "tags": [
+          "history"
         ]
       }
     },
