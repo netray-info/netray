@@ -239,3 +239,61 @@ Screenshot review (phase 4, local lens): the header logo collapsed to zero width
 /guide/dnssec/  -> 404 text/html
 /sitemap.xml    -> 200 application/xml; 41 <loc> entries
 ```
+
+## Phase 5 — Compare and status
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R23 `compare.toml` holds both tables, Table 2's axes, every row label, competitor columns with symbols and notes, legend, the honesty section, "Last reviewed"; rows give `checks`+`depth` or `product`+`note`; V1 ✗ rows have `checks = []` | green | crates/web/tests/pages_compare.rs, compare_column.rs |
+| C2 | R24 generated netray column (✓/~/✗, note from catalogue titles in order; product rows); unknown ID fails a test naming row and ID; header "netray", section "Where netray trades depth for breadth"; competitor cells keep V1 content | green | crates/web/tests/compare_column.rs, pages_compare.rs |
+| C3 | R25 `/compare` renders both tables on the frame with `<details>` rows and no island; `/status` server skeleton: heading, intro without a monitor count, `<noscript>` link to the public status page, `data-island="status"` containers | green | crates/web/tests/pages_compare.rs, pages_status.rs |
+| C4 | R26 `status` island: the two V1 endpoints, `credentials: "omit"`, every 60 s, cards and incidents from `<template>` clones via `textContent`/attributes, `data-state` operational/degraded/down/paused, banner count of the list's length, error line on failure | green | crates/web/islands/test/status.test.ts |
+| C5 | R30 `comparison-page-rules.md` applies to `compare.toml` and `templates/pages/compare.html`, the generated column and sitemap, keeps symbols, two tables, cadence, "Last reviewed", names netray | green | tests/repo/test_comparison_rules.sh |
+| C6 | S: `/compare` carries every V1 row label, the netray column header and the competitor cells of `site/compare/index.html` | green | crates/web/tests/pages_compare.rs |
+| C7 | S: row `checks = ["dns.dnssec", "dns.caa"]`, full → ✓ with "DNSSEC signed" and "CAA records"; `checks = []` → ✗ | green | crates/web/tests/compare_column.rs |
+| C8 | S: a planted row naming `dns.nonexistent` fails naming row and ID | green | crates/web/tests/compare_column.rs |
+| C9 | S: `/status` without JavaScript: the `<noscript>` line links the public status page; no monitor count printed | green | crates/web/tests/pages_status.rs |
+| C10 | S: stubbed list of 3 with one `danger` → banner 1 of 3 affected, that card `data-state="down"`; rejecting fetch → error line | green | crates/web/islands/test/status.test.ts |
+| C11 | S: `GET /privacy` is not matched by `router()` | already_implemented | crates/web/tests/pages_status.rs |
+
+C11 held before the change: `router()` never had a `/privacy` route. The V1 event-feed shape is undocumented (V1 printed raw JSON); the island fills `title` and `date` and leaves the rest to the content pass.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 29967 | 30 |
+| G2 | 2 | opus | 104755 | 319 |
+| reader fixes | 1 + 1 + data edit | sonnet | 62397 | 75 |
+| G3 | 1 | sonnet | 33029 | 29 |
+
+### Reader
+
+Pass 1: COUNTS blocker=4 amendment=1 deferred=4 nit=0 · Pass 2: COUNTS blocker=2 amendment=2 deferred=1 nit=2 · Pass 3 (fix only): COUNTS blocker=1 amendment=0 deferred=4 nit=1
+
+| class | finding | outcome |
+|---|---|---|
+| BLOCKER (1) | SOA row ✓ on `dns.ttl` (judges only the SOA minimum) | `dns.ttl` partial |
+| BLOCKER (1, 2) | Protocol versions ✓ on `tls.tls_version`; the TLS inspector negotiates 1.2/1.3 only | `checks = []` (✗) |
+| BLOCKER (1) | status island read the event feed's `.data`; live shape is `{status, results, meta}` | reads `results`; a feed without `results` is a failure; tests use the live shape |
+| BLOCKER (1) | rules doc said the sitemap is generated from the routes | doc names `pages::sitemap()` and its fixed page list |
+| AMENDMENT (1) | V1 ✗ rows forced to `checks = []` although OCSP, DANE and blocklist checks exist | requirement 23 amended; those rows list their check, partial |
+| BLOCKER (2) | Table 1 DNS checks ✓ while listing the partial `dns.dnssec` | partial |
+| AMENDMENT (2) | SOA as a `product` row escaped the catalogue guard | lists `dns.ttl` |
+| AMENDMENT (2) | incidents read never-observed `title`/`date` | an entry without a string `title` renders as raw JSON |
+| BLOCKER (3) | NS records ✓: the NS checks read the child's NS set, never the parent's | partial (data edit), test added; review closed (Decision log) |
+| DEFERRED | paused monitors count as affected (V1 rule); `Promise.all` drops a good monitor list when the feed fails; feed `status:false` with `results` not checked; empty monitor list shows the all-clear; the live monitor list names `lens.netray.info` (UptimeRobot configuration, renamed at v2-cutover); the honesty paragraph on blocklists | not built; content and configuration follow-ups |
+
+### Behavioural verification
+
+`netray lens lens.dev.toml` from this worktree on 127.0.0.1:18731, Playwright (Chromium 1243) at 390 and 1440 px, light and dark:
+
+```
+/compare      -> 200, six tables, 41 rows, generated netray column
+/status       -> 200, island fetched the live UptimeRobot list: 7 cards, "All systems operational", "No incidents to report."
+/static/nope  -> 404 page
+```
+
+Screenshots: `target/screenshots/v2-pages/` (not committed).

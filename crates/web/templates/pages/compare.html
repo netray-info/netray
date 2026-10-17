@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Compare</h1>
+<p class="compare-lede">{{ doc.intro }}</p>
+{% for tv in tables %}<section class="compare-section">
+<h2>{{ tv.table.title }}</h2>
+<p>{{ tv.table.intro }}</p>
+<ul class="compare-legend" aria-label="Legend">
+{% for item in doc.legend %}<li>{{ item.symbol }} {{ item.text }}</li>
+{% endfor %}</ul>
+{% for gv in tv.groups %}{% if !gv.group.axis.is_empty() %}<h3>{{ gv.group.axis }}</h3>
+{% endif %}<div class="compare-wrap">
+<table class="compare-table">
+<thead>
+<tr>
+<th scope="col">{{ gv.group.label_header }}</th>
+<th scope="col">netray</th>
+{% for c in gv.group.competitors %}<th scope="col">{{ c.name }}</th>
+{% endfor %}</tr>
+</thead>
+<tbody>
+{% for rv in gv.rows %}<tr>
+<th scope="row"><details><summary>{{ rv.row.label }}</summary><div class="row-detail">{% if !rv.netray.note.is_empty() %}<strong>netray:</strong> {{ rv.netray.note }}<br>{% endif %}{% for (short, cell) in rv.notes %}<strong>{{ short }}:</strong> {{ cell.note }}<br>{% endfor %}</div></details></th>
+<td><span class="compare-sym" data-sym="{{ rv.netray.kind() }}" title="{{ rv.netray.meaning() }}">{{ rv.netray.symbol }}</span></td>
+{% for cell in rv.row.cells %}<td><span class="compare-sym" data-sym="{{ cell.kind() }}" title="{{ cell.meaning() }}">{{ cell.symbol }}</span></td>
+{% endfor %}</tr>
+{% endfor %}</tbody>
+</table>
+</div>
+{% endfor %}</section>
+{% endfor %}<section class="compare-honesty">
+<h2>{{ doc.honesty.title }}</h2>
+<p>{{ doc.honesty.lede }}</p>
+{% for p in doc.honesty.paragraphs %}<p><strong>{{ p.lead }}</strong> {{ p.text }}</p>
+{% endfor %}</section>
+<p class="compare-cta">Skeptical? Check your own domain at <a href="/">netray.info</a>.</p>
+<section class="compare-method">
+<h2>How we compiled this</h2>
+<p>Last reviewed: {{ doc.last_reviewed }}</p>
+<p>{{ doc.methodology }}</p>
+</section>
+{% endblock %}

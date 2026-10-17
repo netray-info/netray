@@ -1,3 +1,4 @@
+import { status } from "./status";
 import { stream } from "./stream";
 import { theme } from "./theme";
 
@@ -24,6 +25,7 @@ export function mount(root: ParentNode): void {
 }
 
 register("stream", (el) => stream(el as HTMLFormElement, mount));
+register("status", status);
 register("theme", theme);
 
 mount(document);

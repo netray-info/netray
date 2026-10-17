@@ -111,3 +111,28 @@ Conventions for the port (codename table, link and action mapping, template shap
 #### G4 — TLS and IP: certificate-chain, hsts, certificate-transparency, letsencrypt-vs-commercial, multi-ip-tls, tls-protocol, encrypted-client-hello, certificate-management, ip-enrichment, asn, vpn-leak
 #### G5 — HTTP and DNS: security-headers, csp, cors, cookie-security, http-redirects, record-types, dns-propagation, caa-records, lame-delegation
 Each replaces its stubs with the port; GROUP_CMD: codename and banned-string greps over its files, `test_no_codenames.sh`, `pages_codenames`, `gate`, and `guide_content` showing no failure line for its slugs.
+
+## Phase 5 — Compare and status
+
+### Groups
+
+G1: C4, C10 · G2: C1, C2, C3, C6–C9 · G3: C5 (prose) · G4: C11 (already in place). G1 ∥ G2 ∥ G3.
+
+### Plan
+
+#### G1 — `npx tsc --noEmit && npx vitest run` in the islands package, `npm run build`, gate and island repo checks
+1. `crates/web/islands/src/status.ts`: fetches the two V1 UptimeRobot endpoints with `credentials: "omit"` on mount and every 60 s; clones the server templates, fills `[data-field]` by `textContent`; `success/warning/danger/paused` → `operational/degraded/down/paused` on `data-state`; banner "N of M"; error line unhidden on failure.
+2. `src/main.ts`: `register("status", status)`.
+
+#### G2 — compare and status pages
+1. `crates/web/Cargo.toml`: `toml` (workspace).
+2. `crates/web/compare.toml`: extracted from V1 (both tables, five axes, 41 rows, competitor cells verbatim, legend, honesty section, last reviewed); each row's basis from the catalogue (`checks` + `depth`, `checks = []` for V1 ✗, `product` + `note` where no check covers the row).
+3. `pages/compare.rs`: `Row`, `Cell`, `Row::netray()`, `rows()`, `unknown_ids()`, the page handler.
+4. `templates/pages/compare.html`: six tables, `<details>` rows, generated netray column, honesty section, last reviewed.
+5. `templates/pages/status.html` and `pages/status.rs`: the skeleton with `<noscript>` link, `data-island="status"` and the two templates.
+6. `pages/mod.rs`: `/compare`, `/status`.
+7. `pages.css`: compare and status rules, `data-state` mapped to the pass, warn, fail and muted tokens.
+
+#### G3 — `bash tests/repo/test_comparison_rules.sh`
+1. `specs/rules/comparison-page-rules.md` rewritten for `compare.toml` and the template (`docs(rules)` commit).
+2. `CLAUDE.md` Rules row (`docs` commit).
