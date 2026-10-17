@@ -302,3 +302,26 @@ async fn a_policy_answer_from_the_domain_zone_keeps_its_code_and_is_recorded() {
     let (a, b) = (run_of(&c1, b1), run_of(&c2, b2));
     assert_ne!(fingerprint(&a, &volatile), fingerprint(&b, &volatile));
 }
+
+// A domain-zone lookup that fails (timeout, SERVFAIL) is a recorded transition, like a policy code.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_domain_zone_lookup_is_recorded() {
+    let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
+    let module = EmailModule::new(cfg).await.expect("module builds");
+    let volatile: Vec<&'static str> = module.volatile().iter().map(|p| p.0).collect();
+
+    let (c1, b1) = run(dnsbl_dns(false), &ZONES, &[]).await;
+    let (c2, b2) = run(
+        dnsbl_dns(false).fail_a("example.com.dbl.spamhaus.org"),
+        &ZONES,
+        &[],
+    )
+    .await;
+    let rows = rows(block(&b2, "email.dnsbl_domain"));
+    assert_eq!(
+        rows["example.com@dbl.spamhaus.org"]["answered"],
+        Ev::Bool(false)
+    );
+    let (a, b) = (run_of(&c1, b1), run_of(&c2, b2));
+    assert_ne!(fingerprint(&a, &volatile), fingerprint(&b, &volatile));
+}
