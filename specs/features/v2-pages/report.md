@@ -178,3 +178,64 @@ Pass 1: COUNTS blocker=3 amendment=2 deferred=1 nit=0 · Pass 2: COUNTS blocker=
 | DEFERRED (pass 2) | the exported `query_redirect`/`robots` composed outside `router()` get no layer for axum's own 405 | v2-cutover's apex router applies the layer when it composes them |
 | NIT (pass 2) | the island's wire tests still feed `end` with empty data | kept: they pin the island's leniency |
 | NIT (pass 2) | report and plan wording named `keep_inner_csp` and data-less `end` | report row corrected; the plan records what was planned |
+
+## Phase 4 — Guides
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R17 `guides.rs` is the one source of slug, title, description, category, og:image, related; 32 guide templates on `base.html` with V1 `<main>` content and ids; codenames replaced; 31 `tool-entry` forms → `query_input`; link and action mapping; suite links dropped; `lens.html` → `scoring` | green | crates/web/tests/pages_guides.rs, guide_content.rs |
+| C2 | R18 `/guide/<slug>` 200, `/guide/<slug>/` and unknown 404, `/guide/` index in V1 categories and order with absolute links, `/guide` → 301 `/guide/` | green | crates/web/tests/pages_guides.rs |
+| C3 | R19 a test fails naming the check when a catalogue `guide` path names no listed guide | green | crates/web/tests/guide_links.rs |
+| C4 | R20 V1 `og:image` kept; six PNGs copied to `static/og/`, `lens.png` guides use `landing.png` | green | crates/web/tests/guide_og.rs |
+| C5 | R21 JSON-LD from serde structs, `<`, `>`, `&` escaped, in `application/ld+json`; gate rule 3 accepts it beside `speculationrules`; SDD V4.9, S25, §8.5 wording; §5.1 `guide` and `privacy` | green | crates/web/tests/guide_jsonld.rs, gate.rs, tests/repo/test_v2_pages_sdd.sh |
+| C6 | R22 `/sitemap.xml` generated (guide index, guides, compare, status, privacy, apex, four inspector roots, no `lastmod`); robots handler | green | crates/web/tests/pages_sitemap.rs |
+| C7 | S: every slug → 200 on the frame with title, description, canonical `https://netray.info/guide/<slug>`, `og:image` under `/static/og/` | green | crates/web/tests/pages_guides.rs |
+| C8 | S: `/guide/dnssec/`, `/guide/nope` → 404; `/guide` → 301 `/guide/` | green | crates/web/tests/pages_guides.rs |
+| C9 | S: every catalogue `guide` path names a listed guide; a planted `/guide/missing` fails naming the check | green | crates/web/tests/guide_links.rs |
+| C10 | S: `dnssec` keeps its V1 element ids; its form is a `query_input` with action `https://dns.netray.info/` and name `q` | green | crates/web/tests/guide_content.rs |
+| C11 | S: JSON-LD body parses as JSON and holds no raw `<`; planted `<script type="text/plain">x</script>` fails rule 3 | green | crates/web/tests/guide_jsonld.rs, gate.rs |
+| C12 | S: `/sitemap.xml` lists the entries and parses as XML | green | crates/web/tests/pages_sitemap.rs |
+
+Passed before the change: the gate rows refusing `text/plain`, `application/json` and a handler on an ld+json script (any non-speculation script was refused already); the robots half of C6 (Phase 3).
+
+Content follow-up for the pass before v2-cutover (out of scope here): `dkim_selectors` is not an SDD §7.1 parameter, and `?d=` drops it in the 301; the scoring guide's prose names `summary.not_applicable`; the inspector-host API samples answer 410 after the cutover (SDD §7.3). The API v1 curl samples read the stored run's shape (reader fix).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 28369 | 34 |
+| G2 | 1 | opus | 127593 | 496 |
+| G3 | 1 | sonnet | 41465 | 75 |
+| G4 | 1 | sonnet | 38358 | 53 |
+| G5 | 1 | sonnet | 34120 | 42 |
+
+### Reader
+
+Pass 1: COUNTS blocker=2 amendment=1 deferred=3 nit=0 · Pass 2: COUNTS blocker=0 amendment=0 deferred=2 nit=2
+
+| class | finding | outcome |
+|---|---|---|
+| BLOCKER | API v1 curl samples kept V1 jq filters (`.summary.grade`, `.email.checks[]`) that fail on the stored run | filters read `Run` (`{grade, complete, sections}`, `.grade`, `.checks[] \| select(.id \| startswith("email.dkim"))`); test added; pass 2 ran jq over a serialised `Run` |
+| BLOCKER | rule 3 measured the askama overlap on a trimmed `type`, so `speculationrules{{ x }}` passed | overlap measured on the untrimmed value; three rows added |
+| AMENDMENT | requirement 17 said `netray.info` serves the V1 lens paths; the apex sends `/api*` to `netray site` | requirement 17 amended to the Decision log's API v1 rewrite |
+| DEFERRED | duplicate `type` exemption now also covers ld+json; askama in attribute position around `type` | gaps HEAD shared for `speculationrules`; Phase 1 DEFERRED list |
+| DEFERRED | `dkim_selectors` dropped by `?d=`'s 301 after the cutover; inspector samples 410 after the cutover; `summary.not_applicable` prose | content pass before v2-cutover |
+| NIT | "If any section shows a low grade" | reworded |
+| NIT | report paragraph called the filters V1's | corrected |
+
+Screenshot review (phase 4, local lens): the header logo collapsed to zero width (an SVG with only a viewBox in a flex row); sized in `pages.css`, test added.
+
+### Behavioural verification
+
+`netray lens lens.dev.toml` from this worktree on 127.0.0.1:18731:
+
+```
+/guide/dnssec   -> 200 text/html; form action https://dns.netray.info/
+/guide/         -> 200 text/html
+/guide          -> 301 location: /guide/
+/guide/dnssec/  -> 404 text/html
+/sitemap.xml    -> 200 application/xml; 41 <loc> entries
+```

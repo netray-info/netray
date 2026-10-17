@@ -83,3 +83,31 @@ G1: C10, C22 · G2: C6, C18 · G3: C1–C5, C7–C9, C11, C12, C14–C17, C19–
 3. `crates/lens/src/spa.rs`: `Shell` state and `render_shell(site)`; `handler` takes `State<Shell>`; `state.rs` uses `render_shell`.
 4. `crates/lens/src/lib.rs`: `frontend_router_with(shell)` = robots + `pages::router()` + SPA fallback under `security_headers_mw` (with `keep_inner_csp: true`); `pub fn frontend_router()` with the default site config; `run_with` merges it in place of its robots route and fallback.
 5. `Dockerfile`: copy `crates/web/islands/dist` from the frontend stage (lens now embeds the bundle).
+
+## Phase 4 — Guides
+
+### Groups
+
+G1: C5 (gate rule 3, SDD wording), C11 · G2: C1 (list, layout, index, three pattern guides, stubs), C2–C10, C12 · G3: C1 (Email batch) · G4: C1 (TLS and IP batch) · G5: C1 (HTTP and DNS batch). G1, then G2, then G3 ∥ G4 ∥ G5.
+
+### Plan
+
+Conventions for the port (codename table, link and action mapping, template shape): see the Phase 4 conventions the coders followed, summarised here — prose codenames replaced per R17; `lens.netray.info` form/link/samples → `/` with `d`, `/`, and `POST https://netray.info/api/v1/domains/example.com/runs`; `/api/lens` → `/api/v1/openapi.json` "netray API reference"; each guide template extends `pages/guide.html` and fills `article`; tool entries become `guide-tool` sections with a `query_input` call; no V1 class or `style=` survives.
+
+#### G1 — `cargo test -p netray-web --test gate --test component_gate && bash tests/repo/test_v2_pages_sdd.sh`
+1. `crates/web/src/gate.rs` `scan_template`: rule 3 accepts a script without `src` whose quoted, askama-free `type` is `speculationrules` or `application/ld+json`.
+2. `specs/sdd/v2.md`: §5.1 segments `guide` and `privacy`; V4.9, S25 and §8.5 wording.
+
+#### G2 — guide routes, list, layout, index, sitemap, og, JSON-LD, three pattern guides
+1. `static/og/{dns,email,http,ip,tls}.png` copied; `assets.rs` `OG` table of six.
+2. `base.html`: an empty `head` block for the JSON-LD.
+3. `pages.css`: guide classes (`guide-lede`, `guide-tool`, `guide-tool__hint`, `guide-related`, `guide-index`) and prose rules, tokens only.
+4. `pages/jsonld.rs`: `Article`, `BreadcrumbList` serde structs; `script_json` escapes `<`, `>`, `&`.
+5. `pages/guides.rs`: `Guide`, `GUIDES` (32, V1 index order), `find`, breadcrumb set, `tool(...)` builder, one askama template struct per slug via a macro, `show`, `index`, `index_redirect` (301).
+6. `pages/mod.rs`: routes `/guide`, `/guide/`, `/guide/{slug}`, `/guide/{slug}/` (404 page), `/sitemap.xml`.
+7. Templates `pages/guide.html` (layout: JSON-LD in `head`, h1 from the list, `article` block, related section), `pages/guide_index.html`, `pages/guides/{dnssec,domain-security-audit,scoring}.html`, stubs for the other 29.
+
+#### G3 — Email: email-auth, email-deliverability, mta-sts, dkim, bimi, tls-rpt, dnsbl, dane-tlsa, domain-investigation
+#### G4 — TLS and IP: certificate-chain, hsts, certificate-transparency, letsencrypt-vs-commercial, multi-ip-tls, tls-protocol, encrypted-client-hello, certificate-management, ip-enrichment, asn, vpn-leak
+#### G5 — HTTP and DNS: security-headers, csp, cors, cookie-security, http-redirects, record-types, dns-propagation, caa-records, lame-delegation
+Each replaces its stubs with the port; GROUP_CMD: codename and banned-string greps over its files, `test_no_codenames.sh`, `pages_codenames`, `gate`, and `guide_content` showing no failure line for its slugs.
