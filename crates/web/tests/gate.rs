@@ -959,6 +959,91 @@ const CASES: &[Case] = &[
         )],
         expect: None,
     },
+    // v2-pages C4/C9: rule 1 also refuses an island that writes a style; comments and
+    // look-alike identifiers pass.
+    Case {
+        name: "island: style member assignment",
+        files: &[("islands/src/x.ts", "el.style.color = x;\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: style member string assignment",
+        files: &[("islands/src/x.ts", "el.style = \"display: none\";\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: style member bracket access",
+        files: &[("islands/src/x.ts", "el.style[\"color\"] = x;\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: cssText write",
+        files: &[("islands/src/x.ts", "el.cssText = x;\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: setProperty call",
+        files: &[("islands/src/x.ts", "el.setProperty(\"--a\", x);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: insertRule call",
+        files: &[("islands/src/x.ts", "sheet.insertRule(x, 0);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: setAttribute style double quotes",
+        files: &[("islands/src/x.ts", "el.setAttribute(\"style\", x);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: setAttribute style single quotes",
+        files: &[("islands/src/x.ts", "el.setAttribute('style', x);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: setAttribute style with spaces",
+        files: &[("islands/src/x.ts", "el.setAttribute( \"style\", x);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: style in a line comment passes",
+        files: &[("islands/src/x.ts", "// el.style.color = x\nconst a = 1;\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: style in a block comment passes",
+        files: &[("islands/src/x.ts", "/* el.style */\nconst a = 1;\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: dataset write passes",
+        files: &[("islands/src/x.ts", "el.dataset.state = \"warn\";\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: classList add passes",
+        files: &[("islands/src/x.ts", "el.classList.add(\"x\");\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: setAttribute data-state passes",
+        files: &[(
+            "islands/src/x.ts",
+            "el.setAttribute(\"data-state\", \"warn\");\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "island: identifier containing style passes",
+        files: &[("islands/src/x.ts", "const styleName = 1;\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: styles member passes",
+        files: &[("islands/src/x.ts", "const s = el.styles;\n")],
+        expect: None,
+    },
 ];
 
 #[test]
