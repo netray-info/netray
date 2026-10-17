@@ -1,19 +1,22 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::Json;
 use axum::extract::rejection::PathRejection;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
-use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
+use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, ETAG, IF_NONE_MATCH};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use netray_store::HistoryStore;
 use serde_json::json;
 
-use super::{render, view::entry_view};
+use super::{
+    render,
+    view::{entry_view, grade_letter},
+};
 
 /// The body of every 404 under `/r/`, byte-identical to the V1 snapshot routes' body.
 pub const NOT_FOUND_HTML: &str = r#"<!DOCTYPE html><html><head><title>Not found</title></head><body><h1>Snapshot not found</h1><p>This snapshot has expired or the ID is unknown.</p></body></html>"#;
@@ -47,7 +50,7 @@ pub struct EntriesDeps {
 pub fn router(deps: EntriesDeps) -> axum::Router {
     axum::Router::<EntriesDeps>::new()
         .route("/r/{id}", get(entry_page))
-        .route("/r/{id}/og.png", get(unmatched))
+        .route("/r/{id}/og.png", get(entry_card))
         .route("/r/", get(unmatched))
         .route("/r/{id}/", get(unmatched))
         .route("/r/{id}/{*rest}", get(unmatched))
@@ -105,5 +108,57 @@ async fn entry_page(
             }
             page(StatusCode::GONE, render::gone())
         }
+    }
+}
+
+async fn entry_card(
+    State(deps): State<EntriesDeps>,
+    id: Result<Path<String>, PathRejection>,
+    headers: HeaderMap,
+) -> Response {
+    let Ok(Path(id)) = id else {
+        return unmatched().await;
+    };
+    if !well_formed(&id) {
+        return unmatched().await;
+    }
+    let entry = match deps.history.get(&id).await {
+        Err(e) => {
+            tracing::warn!(id = %id, error = %e, "history lookup failed");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": {"code": "INTERNAL", "message": "entry unavailable"}})),
+            )
+                .into_response();
+        }
+        Ok(None) => return StatusCode::GONE.into_response(),
+        Ok(Some(entry)) => entry,
+    };
+    let letter = grade_letter(entry.grade);
+    let etag = format!("\"{id}-{letter}\"");
+    if headers
+        .get(IF_NONE_MATCH)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v == etag)
+    {
+        return (StatusCode::NOT_MODIFIED, [(ETAG, etag)]).into_response();
+    }
+    let card = EntryCard {
+        domain: entry.domain,
+        grade: letter.to_string(),
+        created_at: UNIX_EPOCH + Duration::from_secs(entry.created_at.max(0) as u64),
+    };
+    match (deps.card)(&card) {
+        Ok(png) => (
+            StatusCode::OK,
+            [
+                (CONTENT_TYPE.as_str(), "image/png"),
+                (CACHE_CONTROL.as_str(), CACHE),
+                (ETAG.as_str(), etag.as_str()),
+            ],
+            png,
+        )
+            .into_response(),
+        Err(resp) => *resp,
     }
 }

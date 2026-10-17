@@ -113,3 +113,51 @@ HTTP/1.1 200 OK, the SPA shell (Phase 4 mounts the privacy page)
 ```
 
 The security headers (`x-content-type-options: nosniff`) show the router runs inside lens's middleware. An entry's `200` needs a recorded run (no network here); `entries_router.rs` and `entries_mount.rs` cover it.
+
+## Phase 3 — The entry's own OG card
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R15: `/r/{id}/og.png` for an entry: 200 `image/png` 1200×630, V1 layout via lens's renderer from `EntriesDeps` (grade letter, domain, `created_at`, default label, no score); `etag` over ID and grade, 304 on `If-None-Match`, `public, max-age=3600`; non-entry well-formed 410 empty; malformed 404; render failure as `/og/<domain>.png`'s | green | crates/web/tests/entries_og.rs, crates/lens/tests/entries_og_card.rs |
+| C2 | R18: SDD §4.6 says the entry card shows grade, domain and recording time in the V1 layout and no score until v2-result-page switches it to `spectrum::layout` (V4.4) | green | tests/repo/test_entries_sdd.sh |
+| C3 | Scenario: grade-A entry through lens's app → 200, `image/png`, 1200×630 PNG, `etag`, `public, max-age=3600` | green | crates/lens/tests/entries_og_card.rs |
+| C4 | Scenario: the entry's SVG holds A, the domain and the formatted `created_at`, and no `%` | green | crates/lens/tests/entries_og_card.rs |
+| C5 | Scenario: `If-None-Match` equal to the etag → 304 | green | crates/web/tests/entries_og.rs, crates/lens/tests/entries_og_card.rs |
+| C6 | Scenario: swept, never-issued or live V1 snapshot ID → 410 empty body | green | crates/web/tests/entries_og.rs, crates/lens/tests/entries_og_card.rs |
+| C7 | Scenario: `/r/x/og.png` → 404; `/r/<entry id>/other` → 404 `NOT_FOUND_HTML` | green | crates/web/tests/entries_og.rs |
+| C8 | Scenario: a failing renderer stub → the answer equals `/og/<domain>.png`'s on a render failure | green | crates/web/tests/entries_og.rs |
+| C9 | Scenario: no history store → `/r/<snapshot id>/og.png` 404 with today's page | already_implemented | crates/lens/tests/entries_og_card.rs |
+| C10 | Scenario: counting `badge_check_fn` never called by the entry card | green | crates/lens/tests/entries_og_card.rs |
+
+C9 held before this phase (history off mounts no entries router); `c7_malformed_id_and_other_subpaths_answer_404` in `entries_og.rs` passed at RED for the same reason (it guards the catch-all).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1–G3 | 1 (one coder for the three groups, which meet only at the end) | sonnet | 37148 | 51 |
+
+### Behavioural verification
+
+`netray lens` from this worktree's build, history and snapshots on; one entry `Bv7Kq2Lm` of `example.com` (grade B, checks `tls.not_expired` fail, `dns.dnssec_valid` warn, `tls.caa_compliant` pass) inserted into `history.db`:
+
+```
+GET /r/Bv7Kq2Lm            → 200, text/html; charset=utf-8, public, max-age=3600
+  <title>example.com · B</title> … og:image /r/Bv7Kq2Lm/og.png … <h1>example.com</h1>
+  grade B tone pass, run line "recorded May 8, 2026 · 17:44 UTC · profile v3 · engine 0.26.0",
+  check rows fail (Certificate valid) then warn, no pass row
+GET /r/Bv7Kq2Lm/og.png     → 200, image/png, public, max-age=3600, etag "Bv7Kq2Lm-B"; PNG 1200 x 630
+  with If-None-Match "Bv7Kq2Lm-B" → 304
+GET /r/AAAAAAAA/og.png     → 410, content-length 0
+last_seen_at after the requests: 1778262240 (unchanged)
+```
+
+### Review
+
+| pass | class | finding | outcome |
+|---|---|---|---|
+| 1 | NIT | `If-None-Match` compared as one exact string (weak validators, lists, `*` get 200), as lens's `/og/` does | listed |
+| 1 | NIT | the 304 carries `etag` but not `cache-control` | listed |
+| 1 | NIT | lens's real render-failure mapping is held by construction (`render_error_from`), not by a test | listed |

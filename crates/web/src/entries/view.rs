@@ -83,7 +83,7 @@ fn is_leap(y: u64) -> bool {
     (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400)
 }
 
-fn grade_letter(grade: Grade) -> &'static str {
+pub(crate) fn grade_letter(grade: Grade) -> &'static str {
     match grade {
         Grade::APlus => "A+",
         Grade::A => "A",

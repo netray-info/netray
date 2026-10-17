@@ -54,6 +54,20 @@ pub fn svg_for_grade(
     score_pct: f64,
     checked_at: SystemTime,
 ) -> String {
+    card_svg(domain, grade, label, Some(score_pct), checked_at)
+}
+
+pub fn svg_for_entry(domain: &str, grade: &str, label: &str, recorded_at: SystemTime) -> String {
+    card_svg(domain, grade, label, None, recorded_at)
+}
+
+fn card_svg(
+    domain: &str,
+    grade: &str,
+    label: &str,
+    score_pct: Option<f64>,
+    checked_at: SystemTime,
+) -> String {
     let grade_letter = match grade {
         "A+" | "A" | "B" | "C" | "D" | "F" => grade,
         _ => "?",
@@ -67,10 +81,9 @@ pub fn svg_for_grade(
     let domain_display = xml_escape(&truncate_domain(domain));
     let grade_display = xml_escape(grade_letter);
 
-    let score_display = if grade_letter == "?" {
-        String::new()
-    } else {
-        format!("{score_pct:.1}%")
+    let score_display = match score_pct {
+        Some(pct) if grade_letter != "?" => format!("{pct:.1}%"),
+        _ => String::new(),
     };
 
     let timestamp_display = format_utc_timestamp(checked_at);

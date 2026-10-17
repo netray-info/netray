@@ -12,7 +12,7 @@ use crate::admission::{Admit, Trigger, admit, until_done};
 use crate::error::AppError;
 use crate::input::validate_domain;
 use crate::og::layout::{DEFAULT_LABEL, MAX_LABEL_LEN};
-use crate::og::render::{RenderError, svg_for_grade, svg_to_png};
+use crate::og::render::{RenderError, svg_for_entry, svg_for_grade, svg_to_png};
 use crate::score::grade_label;
 use crate::state::AppState;
 
@@ -50,12 +50,12 @@ fn render_error_from(e: RenderError) -> Response {
     AppError::RenderFailed(e.to_string()).into_response()
 }
 
-/// Phase 2 stub: nothing reaches the entry card yet. Phase 3 renders the card.
-pub(crate) fn entry_card_renderer(_state: &AppState) -> netray_web::entries::CardRenderer {
-    std::sync::Arc::new(|_card: &netray_web::entries::EntryCard| {
-        Err(Box::new(render_error_from(RenderError::EncodeFailed(
-            "entry cards are not rendered yet".to_string(),
-        ))))
+/// Renders an entry's card in the V1 layout, without a score.
+pub(crate) fn entry_card_renderer(state: &AppState) -> netray_web::entries::CardRenderer {
+    let font_db = state.font_db.clone();
+    std::sync::Arc::new(move |card: &netray_web::entries::EntryCard| {
+        let svg = svg_for_entry(&card.domain, &card.grade, DEFAULT_LABEL, card.created_at);
+        svg_to_png(&svg, font_db.clone()).map_err(|e| Box::new(render_error_from(e)))
     })
 }
 

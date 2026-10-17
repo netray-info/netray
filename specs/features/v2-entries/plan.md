@@ -43,3 +43,25 @@ G1: C3, C4, C5, C8, C10, C11, C12, C14, C16, C17 · G2: C1, C6, C7, C13, C15, C1
 1. `crates/lens/src/routes.rs` — `not_found_html` body from `NOT_FOUND_HTML`; `snapshot_answer(state, id) -> Option<Response>` extracted from `snapshot_handler`; `v1_lookup(state) -> V1Lookup`.
 2. `crates/lens/src/og/handler.rs` — `entry_card_renderer(state) -> CardRenderer`, a render-failure stub until Phase 3.
 3. `crates/lens/src/lib.rs` — `pub fn app(state) -> Router` from `run_with` steps 4–5; the `/r/` router (entries, else snapshot, else none) merged after `.with_state(state)`, before the layers; `run_with` calls `app`.
+
+## Phase 3 — The entry's own OG card
+
+## Groups
+
+G1: C2 · G2: C5, C6, C7, C8 · G3: C1, C3, C4, C9, C10 (G2 before G3: lens's tests go through the web route; C9 holds already, history off mounts no entries router).
+
+## Plan
+
+### G1
+
+1. `specs/sdd/v2.md` §4.6 — requirement 18's sentence: grade, domain and recording time in the V1 layout, no score, until v2-result-page switches it to `spectrum::layout` (V4.4).
+
+### G2
+
+1. `crates/web/src/entries/view.rs` — `grade_letter` becomes `pub(crate)`.
+2. `crates/web/src/entries/routes.rs` — `entry_card` on `/r/{id}/og.png`: malformed 404 `NOT_FOUND_HTML`; store error warn + 500; entry → etag `"<id>-<letter>"`, 304 on `If-None-Match`, else `deps.card` → 200 `image/png`, `public, max-age=3600`, or the renderer's error response; else 410 empty, V1 never called.
+
+### G3
+
+1. `crates/lens/src/og/render.rs` — private `card_svg(.., score_pct: Option<f64>, ..)`; `svg_for_grade` byte-identical through it; `svg_for_entry` with no score text.
+2. `crates/lens/src/og/handler.rs` — `entry_card_renderer`: `svg_for_entry(.., DEFAULT_LABEL, ..)` → `svg_to_png`, errors through `render_error_from`, boxed.
