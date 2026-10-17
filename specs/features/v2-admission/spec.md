@@ -211,8 +211,8 @@ served as a cache hit" onto the history, and it takes the history record off the
 15. Admission order for `/api/check` without options: validate, `check_limits` (unchanged
     position, so hits keep spending them), cache hit, then `admit`: join, prefetch rule
     (requirement 18), throttle, slot, budget, start. Badge and OG: validate, cache hit, then
-    `admit`: join, prefetch rule, the badge recompute limiter (unchanged, applied by `admit` for
-    the triggers `badge` and `og` only), throttle, slot, start. A refused request spends no budget
+    `admit`: join, prefetch rule, throttle, slot, the badge recompute limiter (unchanged, applied
+    by `admit` for the triggers `badge` and `og` only), start. A refused request spends no budget
     token, holds no permit and does not start a throttle minute.
 16. A run with `dkim_selectors` is never a cache hit and never joins (requirement 2). It needs the
     per-IP and global limits, the throttle, a slot and a budget token, and it starts the domain's
@@ -544,6 +544,16 @@ GIVEN the amended SDD WHEN read THEN §4.4 names the `[admission]` keys, the ord
   the configured profile, over treating it as no hit: a custom `scoring.profile_path` version would
   otherwise never serve OG from the history, and the grade shown is still the entry's (implementer
   under the operator's autonomy mandate, 2026-10-17).
+
+- A badge or OG refusal by the recompute limiter is `Refused{throttle}` with the limiter's retry
+  time and no `last_run_ago_s`, over a sixth refusal reason: requirement 20 fixes five reasons,
+  the limiter is a per-domain throttle for image routes, and their answer (head or `?`) is the
+  same (implementer under the operator's autonomy mandate, 2026-10-17).
+
+- The badge recompute limiter is taken after the throttle and the slot, over before them as R15
+  first read: governor spends the token on every check, so a throttle or slot refusal would burn
+  the domain's one token and block its badge and OG runs for `badges.ttl_seconds`; the join still
+  precedes it (implementer under the operator's autonomy mandate, 2026-10-17).
 
 ## Open decisions
 

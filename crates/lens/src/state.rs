@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -20,6 +21,9 @@ use crate::config::Config;
 use crate::modules::ModuleSection;
 use crate::security::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
 use crate::spa::{Assets, render_apex_html};
+
+/// Per-client GCRA budget of fresh runs, keyed by client address.
+pub type ClientBudgetLimiter = KeyedLimiter<IpAddr>;
 
 /// Per-domain GCRA rate limiter for badge recomputes.
 pub type BadgeRecomputeLimiter = KeyedLimiter<String>;
@@ -63,6 +67,12 @@ pub struct AppState {
     pub client_runs: Arc<crate::metrics::ClientRunCounter>,
     /// The runs in flight, one per domain.
     pub runs: Arc<crate::admission::Runs>,
+    /// When each domain's last run started.
+    pub throttle: Arc<crate::admission::Throttle>,
+    /// One permit per domain run in flight.
+    pub slots: Arc<tokio::sync::Semaphore>,
+    /// `None` when `client_budget_per_hour` is 0: no client may start a budgeted run.
+    pub client_budget: Option<Arc<ClientBudgetLimiter>>,
 }
 
 impl AppState {
@@ -87,6 +97,12 @@ impl AppState {
             .expect("badge ttl_seconds must be non-zero")
             .allow_burst(NonZeroU32::new(1).unwrap());
         let badge_recompute_limiter = Arc::new(RateLimiter::keyed(badge_quota));
+
+        let slots = Arc::new(tokio::sync::Semaphore::new(
+            config.admission.domain_run_slots as usize,
+        ));
+        let client_budget = NonZeroU32::new(config.admission.client_budget_per_hour)
+            .map(|n| Arc::new(RateLimiter::keyed(Quota::per_hour(n).allow_burst(n))));
 
         let cache = if config.cache.enabled {
             let ttl = Duration::from_secs(config.cache.ttl_seconds);
@@ -172,6 +188,9 @@ impl AppState {
             history_store: None,
             client_runs: Arc::new(crate::metrics::ClientRunCounter::new()),
             runs: Arc::new(crate::admission::Runs::default()),
+            throttle: Arc::new(crate::admission::Throttle::default()),
+            slots,
+            client_budget,
         })
     }
 }

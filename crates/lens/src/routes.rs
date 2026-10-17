@@ -16,10 +16,10 @@ use utoipa_axum::router::OpenApiRouter;
 use netray_engine::profile::Profile;
 use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION};
 
-use crate::admission::{Admit, Trigger, admit, start_unregistered, until_done};
+use crate::admission::{Admit, Refusal, Trigger, admit, admit_dkim, check_limits, until_done};
 use crate::badge::render::svg_for_grade;
 use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
-use crate::cache::{CachedResult, cache_key};
+use crate::cache::CachedResult;
 use crate::check::{CheckInput, CheckOutput, SectionError};
 use crate::input::validate_domain;
 use crate::modules::{BackendExtra, BackendResult};
@@ -27,7 +27,6 @@ use crate::score::{
     CheckResult, CheckVerdict, OverallScore, fix_owner_label, grade_for, grade_label, guide_url,
     section_weights, spec_by_name,
 };
-use crate::security::check_rate_limit;
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
@@ -553,9 +552,6 @@ pub async fn badge_handler(
     Query(query): Query<BadgeQuery>,
     req_headers: axum::http::HeaderMap,
 ) -> Response {
-    use netray_common::rate_limit::check_keyed_cost;
-    use std::num::NonZeroU32;
-
     let domain = match domain.strip_suffix(".svg") {
         Some(d) => d.to_owned(),
         None => return axum::http::StatusCode::NOT_FOUND.into_response(),
@@ -566,7 +562,6 @@ pub async fn badge_handler(
         Err(e) => return e.into_response(),
     };
 
-    let key = cache_key(&badge_req.domain);
     let head = crate::cache::head(&state, &badge_req.domain).await;
 
     // The head is inside the cache window — serve it, bypass all rate limiters.
@@ -583,18 +578,6 @@ pub async fn badge_handler(
     }
     let stale = head.as_ref().map(|l| grade_label(l.head.grade));
 
-    // Per-domain recompute limiter — throttled requests get the head's grade, else a ? badge.
-    let cost = NonZeroU32::new(1).unwrap();
-    if check_keyed_cost(&state.badge_recompute_limiter, &key, cost, "badge", "lens").is_err() {
-        return match stale {
-            Some(grade) => {
-                metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
-                badge_response(&badge_req, &req_headers, grade, false)
-            }
-            None => throttled_badge_response(&badge_req, &req_headers),
-        };
-    }
-
     // Start or join the domain's run.
     let published = match admit(
         &state,
@@ -604,7 +587,17 @@ pub async fn badge_handler(
         false,
     ) {
         Admit::Admitted(mut stream) => until_done(&mut stream).await,
-        Admit::Refused(_) | Admit::NotStarted => None,
+        Admit::Refused(_) => {
+            return match stale {
+                Some(grade) => {
+                    metrics::counter!("lens_badge_requests_total", "cache" => "throttled")
+                        .increment(1);
+                    badge_response(&badge_req, &req_headers, grade, false)
+                }
+                None => throttled_badge_response(&badge_req, &req_headers),
+            };
+        }
+        Admit::NotStarted => None,
     };
     let Some(published) = published else {
         return match stale {
@@ -735,6 +728,14 @@ fn is_sync_mode(headers: &axum::http::HeaderMap, stream_param: Option<bool>) -> 
     false
 }
 
+fn refusal_response(r: &Refusal) -> Response {
+    crate::metrics::count_request("rate_limited");
+    crate::error::AppError::RateLimited {
+        retry_after_secs: r.retry_after_s,
+    }
+    .into_response()
+}
+
 async fn run_check_handler(
     state: AppState,
     client_ip: IpAddr,
@@ -753,9 +754,8 @@ async fn run_check_handler(
     };
 
     // 2. Rate limit.
-    if let Err(e) = check_rate_limit(&state.per_ip_limiter, &state.global_limiter, client_ip) {
-        crate::metrics::count_request("rate_limited");
-        return e.into_response();
+    if let Err(r) = check_limits(&state, client_ip) {
+        return refusal_response(&r);
     }
 
     // 3. Cache lookup (only when no per-request options like dkim_selectors): the head is
@@ -776,9 +776,7 @@ async fn run_check_handler(
 
     // 4. Start or join the domain's run.
     let mut stream = if let Some(selectors) = dkim_selectors {
-        crate::metrics::count_request("fresh");
-        state.client_runs.record(client_ip);
-        start_unregistered(
+        match admit_dkim(
             &state,
             CheckInput {
                 domain: domain.clone(),
@@ -786,8 +784,14 @@ async fn run_check_handler(
                 client_ip: Some(client_ip),
                 request_id,
             },
-            Trigger::Visit,
-        )
+        ) {
+            Ok(stream) => {
+                crate::metrics::count_request("fresh");
+                state.client_runs.record(client_ip);
+                stream
+            }
+            Err(r) => return refusal_response(&r),
+        }
     } else {
         match admit(&state, &domain, client_ip, Trigger::Visit, false) {
             Admit::Admitted(stream) => {
@@ -799,12 +803,7 @@ async fn run_check_handler(
                 }
                 stream
             }
-            Admit::Refused(r) => {
-                return crate::error::AppError::RateLimited {
-                    retry_after_secs: r.retry_after_s,
-                }
-                .into_response();
-            }
+            Admit::Refused(r) => return refusal_response(&r),
             // TODO(Phase 5): prefetch answer
             Admit::NotStarted => {
                 return crate::error::AppError::Internal("no run started".to_string())
@@ -1894,6 +1893,11 @@ pub mod tests {
         // Drain body so cache can be written.
         let _ = to_bytes(resp1.into_body(), usize::MAX).await.unwrap();
 
+        // v2-admission R12/R16: a second run of the same domain starts only after the throttle.
+        tokio::time::pause();
+        tokio::time::advance(crate::admission::THROTTLE).await;
+        tokio::time::resume();
+
         // Second request — should be a HIT (same domain).
         let resp2 = app.oneshot(make_req()).await.unwrap();
         let cache_header2 = resp2
@@ -2388,9 +2392,9 @@ pub mod tests {
             .with_state(state)
     }
 
-    fn req_from(peer: &str, xff: Option<&str>) -> Request<Body> {
+    fn req_from(peer: &str, xff: Option<&str>, domain: &str) -> Request<Body> {
         let mut req = Request::builder()
-            .uri("/api/check/example.com")
+            .uri(format!("/api/check/{domain}"))
             .header("accept", "application/json");
         if let Some(xff) = xff {
             req = req.header("x-forwarded-for", xff);
@@ -2408,22 +2412,35 @@ pub mod tests {
 
         let a1 = app
             .clone()
-            .oneshot(req_from("172.31.0.5:40000", Some("203.0.113.1")))
+            .oneshot(req_from(
+                "172.31.0.5:40000",
+                Some("203.0.113.1"),
+                "example.com",
+            ))
             .await
             .unwrap();
         assert_ne!(a1.status(), StatusCode::TOO_MANY_REQUESTS);
 
-        // A different client behind the same proxy has its own bucket.
+        // A different client behind the same proxy has its own bucket. It checks another domain:
+        // example.com is throttled after a1's run (v2-admission R12/R16).
         let b1 = app
             .clone()
-            .oneshot(req_from("172.31.0.5:40001", Some("203.0.113.2")))
+            .oneshot(req_from(
+                "172.31.0.5:40001",
+                Some("203.0.113.2"),
+                "example.net",
+            ))
             .await
             .unwrap();
         assert_ne!(b1.status(), StatusCode::TOO_MANY_REQUESTS);
 
         // The first client's bucket is exhausted.
         let a2 = app
-            .oneshot(req_from("172.31.0.5:40002", Some("203.0.113.1")))
+            .oneshot(req_from(
+                "172.31.0.5:40002",
+                Some("203.0.113.1"),
+                "example.com",
+            ))
             .await
             .unwrap();
         assert_eq!(a2.status(), StatusCode::TOO_MANY_REQUESTS);
@@ -2435,14 +2452,14 @@ pub mod tests {
 
         // No Cloudflare in front: a client rotating CF-Connecting-IP must not
         // get a fresh bucket per request.
-        let mut first = req_from("172.31.0.5:40000", Some("203.0.113.1"));
+        let mut first = req_from("172.31.0.5:40000", Some("203.0.113.1"), "example.com");
         first
             .headers_mut()
             .insert("cf-connecting-ip", "198.51.100.1".parse().unwrap());
         let r1 = app.clone().oneshot(first).await.unwrap();
         assert_ne!(r1.status(), StatusCode::TOO_MANY_REQUESTS);
 
-        let mut second = req_from("172.31.0.5:40001", Some("203.0.113.1"));
+        let mut second = req_from("172.31.0.5:40001", Some("203.0.113.1"), "example.com");
         second
             .headers_mut()
             .insert("cf-connecting-ip", "198.51.100.2".parse().unwrap());
@@ -2456,21 +2473,26 @@ pub mod tests {
 
         let p1 = app
             .clone()
-            .oneshot(req_from("198.51.100.1:40000", None))
+            .oneshot(req_from("198.51.100.1:40000", None, "example.com"))
             .await
             .unwrap();
         assert_ne!(p1.status(), StatusCode::TOO_MANY_REQUESTS);
 
+        // Another domain: example.com is throttled after p1's run (v2-admission R12/R16).
         let p2 = app
             .clone()
-            .oneshot(req_from("198.51.100.2:40000", None))
+            .oneshot(req_from("198.51.100.2:40000", None, "example.net"))
             .await
             .unwrap();
         assert_ne!(p2.status(), StatusCode::TOO_MANY_REQUESTS);
 
         // A spoofed XFF from an untrusted peer does not escape the peer's bucket.
         let p1_spoofed = app
-            .oneshot(req_from("198.51.100.1:40001", Some("203.0.113.9")))
+            .oneshot(req_from(
+                "198.51.100.1:40001",
+                Some("203.0.113.9"),
+                "example.com",
+            ))
             .await
             .unwrap();
         assert_eq!(p1_spoofed.status(), StatusCode::TOO_MANY_REQUESTS);
@@ -2500,6 +2522,11 @@ pub mod tests {
             .get("x-cache")
             .map(|v| v.to_str().unwrap().to_string());
         let _ = to_bytes(resp1.into_body(), usize::MAX).await.unwrap();
+
+        // v2-admission R12/R16: a second run of the same domain starts only after the throttle.
+        tokio::time::pause();
+        tokio::time::advance(crate::admission::THROTTLE).await;
+        tokio::time::resume();
 
         // Second request — should be a HIT; response is still JSON.
         let resp2 = app.oneshot(make_req()).await.unwrap();

@@ -9,7 +9,6 @@ use netray_store::Head;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::admission::{Admit, Trigger, admit, until_done};
-use crate::cache::cache_key;
 use crate::error::AppError;
 use crate::input::validate_domain;
 use crate::og::layout::{DEFAULT_LABEL, MAX_LABEL_LEN};
@@ -57,9 +56,6 @@ pub async fn og_handler(
     Query(params): Query<OgQueryParams>,
     req_headers: axum::http::HeaderMap,
 ) -> Response {
-    use netray_common::rate_limit::check_keyed_cost;
-    use std::num::NonZeroU32;
-
     // Strip .png suffix; return 404 for anything else.
     let domain_raw = match domain_png.strip_suffix(".png") {
         Some(d) => d,
@@ -88,7 +84,6 @@ pub async fn og_handler(
     }
     let label = label_raw;
 
-    let key = cache_key(&domain);
     let head = crate::cache::head(&state, &domain).await;
     let head_card = match &head {
         Some(lookup) => head_card(&state, &lookup.head).await,
@@ -103,14 +98,6 @@ pub async fn og_handler(
         return og_response(&state, &req_headers, &domain, &label, card, true);
     }
 
-    // Per-domain recompute limiter.
-    let cost = NonZeroU32::new(1).unwrap();
-    if check_keyed_cost(&state.badge_recompute_limiter, &key, cost, "og", "lens").is_err() {
-        let unscored = Card::new("?", 0.0, SystemTime::now());
-        let card = head_card.as_ref().unwrap_or(&unscored);
-        return og_response(&state, &req_headers, &domain, &label, card, false);
-    }
-
     // Start or join the domain's run.
     let published = match admit(
         &state,
@@ -120,7 +107,13 @@ pub async fn og_handler(
         false,
     ) {
         Admit::Admitted(mut stream) => until_done(&mut stream).await,
-        Admit::Refused(_) | Admit::NotStarted => None,
+        Admit::Refused(_) => {
+            metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
+            let unscored = Card::new("?", 0.0, SystemTime::now());
+            let card = head_card.as_ref().unwrap_or(&unscored);
+            return og_response(&state, &req_headers, &domain, &label, card, false);
+        }
+        Admit::NotStarted => None,
     };
     let Some(published) = published else {
         return AppError::Internal("check run ended without a result".to_string()).into_response();

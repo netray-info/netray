@@ -155,3 +155,73 @@ $ sqlite3 history.db "select count(*) from entries"
 lens_badge_requests_total{cache="failed"} 1
 lens_check_requests_total{result="fresh"} 2
 ```
+
+## Phase 4 — Throttle, budget, slots
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R12: at most one run per domain starts per 60 s from run start, any trigger/option, tokio clock, in memory, pruned; refusal carries `retry_after_s`, `last_run_ago_s`, `last_incomplete`; `/api/check` 429 with `Retry-After`; badge/OG render the head short or `?`, counted `throttled` | green | crates/lens/tests/admission_throttle.rs |
+| C2 | R13: a fresh visit/recheck/api run spends one token of a per-client GCRA (quota per hour, burst = quota); 0 builds none and refuses `budget` with 3600; hits and joins spend none; `/api/check` 429; badge/og never spend | green | crates/lens/tests/admission_budget.rs |
+| C3 | R14: every fresh run holds one `domain_run_slots` permit for its whole run, taken without waiting; joins take none; none free → `slots`, `retry_after_s` 1; `/api/check` 429 `Retry-After: 1`; badge/OG as R12 | green | crates/lens/tests/admission_slots.rs |
+| C4 | R15: order for `/api/check`: validate, `check_limits`, hit, `admit` (join, prefetch, throttle, slot, budget, start); badge/OG: validate, hit, `admit` (join, prefetch, recompute limiter, throttle, slot, start); a refusal spends nothing and starts no minute | green | crates/lens/tests/admission_slots.rs |
+| C5 | R16: a `dkim_selectors` run is never a hit nor joins; needs limits, throttle, slot, budget; starts and is bound by the domain's throttle minute | green | crates/lens/tests/admission_throttle.rs |
+| C6 | R17: `lens_admission_rejections_total{reason}` counts every refusal (throttle, budget, limit, slots), all registered at zero and checked by `test_lens_admission_metrics.sh`; a refused `/api/check` also counts `rate_limited` | green | crates/lens/tests/admission_slots.rs, tests/repo/test_lens_admission_metrics.sh |
+| C7 | R20: `check_limits` and `admit` public in `admission.rs`; `Trigger`, `Refusal` as specified; `admit` never reads the window; `/api/check` passes `visit` | green | crates/lens/tests/admission_slots.rs |
+| C8 | GIVEN a run that ended incomplete 10 s ago (paused clock) WHEN `/api/check` THEN 429 `Retry-After: 50`, `reason="throttle"` 1 | green | crates/lens/tests/admission_throttle.rs |
+| C9 | GIVEN the same WHEN the clock reaches 60 s after the run started THEN `/api/check` starts a run | green | crates/lens/tests/admission_throttle.rs |
+| C10 | GIVEN the same at 59 s THEN still 429 | green | crates/lens/tests/admission_throttle.rs |
+| C11 | GIVEN a run started by the badge 10 s ago WHEN `/api/check` THEN throttled | green | crates/lens/tests/admission_throttle.rs |
+| C12 | GIVEN a throttled domain with a head graded C WHEN badge THEN C short, `cache="throttled"`; without a head THEN `?` | green | crates/lens/tests/admission_throttle.rs |
+| C13 | GIVEN a throttled domain WHEN `/api/check` for another domain THEN a run starts | green | crates/lens/tests/admission_throttle.rs |
+| C14 | GIVEN budget 2 WHEN one client starts runs of three domains THEN the third 429 with `Retry-After`, `reason="budget"` 1 | green | crates/lens/tests/admission_budget.rs |
+| C15 | GIVEN budget 1 and a fresh head for example.com WHEN the client asks example.com twice then example.net THEN both example.com hits, example.net runs | already_implemented | crates/lens/tests/admission_budget.rs |
+| C16 | GIVEN budget 1 and a gated run of example.com by client X WHEN Y asks example.com then example.net THEN Y joins, then Y's example.net runs | already_implemented | crates/lens/tests/admission_budget.rs |
+| C17 | GIVEN budget 1 WHEN two clients each start one run THEN both run | already_implemented | crates/lens/tests/admission_budget.rs |
+| C18 | GIVEN budget 1 WHEN badges of three domains from one address THEN all three run | already_implemented | crates/lens/tests/admission_budget.rs |
+| C19 | GIVEN slots 1 and a gated run of example.com WHEN `/api/check` example.net THEN 429 `Retry-After: 1`, `reason="slots"` 1; badge for example.net shows `?` | green | crates/lens/tests/admission_slots.rs |
+| C20 | GIVEN slots 1 and a gated run of example.com WHEN example.com is asked THEN it joins | green | crates/lens/tests/admission_slots.rs |
+| C21 | GIVEN slots 1 and a refused example.net WHEN the gate opens and example.net is asked again THEN it runs, not throttled, budget unchanged | green | crates/lens/tests/admission_slots.rs |
+| C22 | GIVEN per-IP 1/1 and a fresh head WHEN one client asks twice THEN the second 429, `reason="limit"` 1 | green | crates/lens/tests/admission_slots.rs |
+| C23 | GIVEN a dkim run of example.com 10 s ago WHEN dkim `/api/check` THEN 429; WHEN without options THEN throttled too | green | crates/lens/tests/admission_throttle.rs |
+| C24 | GIVEN lens started WHEN `/metrics` before any request THEN the four rejection series and `joined` render 0 | green | crates/lens/tests/admission_slots.rs, tests/repo/test_lens_admission_metrics.sh |
+| C25 | GIVEN a run ended incomplete 10 s after starting, 40 s ago WHEN `admit(recheck)` THEN `Refused{throttle, 10, Some(50), true}` | green | crates/lens/tests/admission_throttle.rs |
+| C26 | GIVEN the same ended complete THEN `last_incomplete: false`; GIVEN a dkim run in flight THEN a run without options is refused `throttle` with `last_incomplete: false` | green | crates/lens/tests/admission_throttle.rs |
+| C27 | GIVEN a head seen 10 s ago and no throttle record WHEN `admit(recheck)` THEN a run starts; `visit` too | already_implemented | crates/lens/tests/admission_throttle.rs |
+| C28 | GIVEN budget 0 WHEN `admit(visit|recheck)` THEN `Refused{budget, 3600, None, false}`; `/api/check` with no entry THEN 429 `Retry-After: 3600` | green | crates/lens/tests/admission_budget.rs |
+| C29 | GIVEN budget 0 WHEN badge of a domain without entry THEN a run starts; `/api/check` with a fresh head and held rendering THEN a hit | already_implemented | crates/lens/tests/admission_budget.rs |
+| C30 | GIVEN per-IP 1/1 WHEN `check_limits` twice THEN `Refused{ip_limit}` with `retry_after_s`; global exhausted THEN `global_limit`; both count `reason="limit"` | green | crates/lens/tests/admission_slots.rs |
+| C31 | GIVEN slots 1 and a gated run WHEN `admit` for another domain THEN `Refused{slots, 1, None, false}` | green | crates/lens/tests/admission_slots.rs |
+| C32 | GIVEN the badge recompute limiter exhausted and a run in flight WHEN badge THEN it joins | green | crates/lens/tests/admission_slots.rs |
+
+C15–C18, C27 and C29 held before the phase (nothing spent a budget, `admit` never read the window); they guard the reordered `admit`.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1+G2 | 3 | sonnet (one test defect left, see below) | 79704 | 203 |
+| G2 (review repair) | 1 | sonnet | 28642 | 42 |
+
+`admission_throttle_c12` failed on timing in the test: the badge arrived while the incomplete run's task was still recording, so it joined the run instead of meeting the throttle. The test now waits on `state.runs.drain()` after the first response (`ADLC-Test-Change`). Existing tests that meet the throttle (a second run of one domain within the minute) or the moved limiter were amended: a `pass_throttle()` helper advances tokio's clock by `THROTTLE`, other requests use another domain, the dkim join test now expects 429, and `check_rate_limit`'s unit tests read the `RateLimitRejection`.
+
+### Review
+
+- AMENDMENT | crates/lens/src/admission.rs:318 | the badge recompute token was spent before the throttle and slot checks, so their refusals burned it for `badges.ttl_seconds` | affected_phase: 4 | repaired_in_phase: yes — the limiter is taken in `gate` after throttle and slot; R15 and SDD §4.4 amended (Decision log, mandate).
+- NIT | crates/lens/src/admission.rs:281 | the budget `retry_after_s` rounds the GCRA wait down (the per-IP and global limiters do the same).
+- NIT | specs/sdd/v2.md:607 | the SDD names the prefetch rule that Phase 5 builds.
+
+### Behavioural verification
+
+```
+$ netray lens <lens.dev.toml>; /api/check example.com, example.com, example.net
+example.com 200
+example.com 429 retry-after=44
+example.net 200
+lens_check_requests_total{result="rate_limited"} 1
+lens_admission_rejections_total{reason="throttle"} 1
+lens_admission_rejections_total{reason="budget"} 0
+lens_admission_rejections_total{reason="limit"} 0
+lens_admission_rejections_total{reason="slots"} 0
+```

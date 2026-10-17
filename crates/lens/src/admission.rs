@@ -5,15 +5,17 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
+use governor::clock::{Clock, DefaultClock};
 use netray_engine::SectionEvent;
 use netray_model::evidence::Block;
 use netray_model::run::Run;
 use netray_store::Recorded;
-use tokio::sync::{Notify, watch};
+use tokio::sync::{Notify, OwnedSemaphorePermit, watch};
 use tracing::Instrument;
 
 use crate::cache::cache_key;
@@ -183,8 +185,137 @@ impl RunStream {
     }
 }
 
+/// One run per domain may start in this window, counted from the run's start.
+pub const THROTTLE: Duration = Duration::from_secs(60);
+
+struct Record {
+    started: tokio::time::Instant,
+    complete: Option<bool>,
+}
+
+/// When each domain's last run started, and whether it ended complete.
+#[derive(Default)]
+pub struct Throttle(Mutex<HashMap<String, Record>>);
+
+impl Throttle {
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Record>> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn finish(&self, key: &str, started: tokio::time::Instant, complete: bool) {
+        if let Some(record) = self.lock().get_mut(key)
+            && record.started == started
+        {
+            record.complete = Some(complete);
+        }
+    }
+}
+
+/// What a started run holds: its throttle record and one slot.
+struct Ticket {
+    key: String,
+    started: tokio::time::Instant,
+    _permit: OwnedSemaphorePermit,
+}
+
+fn refused(
+    reason: Reason,
+    retry_after_s: u64,
+    last_run_ago_s: Option<u64>,
+    last_incomplete: bool,
+) -> Refusal {
+    let label = match reason {
+        Reason::Throttle => "throttle",
+        Reason::Budget => "budget",
+        Reason::IpLimit | Reason::GlobalLimit => "limit",
+        Reason::Slots => "slots",
+    };
+    metrics::counter!("lens_admission_rejections_total", "reason" => label).increment(1);
+    Refusal {
+        reason,
+        retry_after_s,
+        last_run_ago_s,
+        last_incomplete,
+    }
+}
+
+/// The per-IP and global limiters.
+pub fn check_limits(state: &AppState, client: IpAddr) -> Result<(), Refusal> {
+    crate::security::check_rate_limit(&state.per_ip_limiter, &state.global_limiter, client).map_err(
+        |r| {
+            let reason = if r.scope == "global" {
+                Reason::GlobalLimit
+            } else {
+                Reason::IpLimit
+            };
+            refused(reason, r.retry_after_secs, None, false)
+        },
+    )
+}
+
+/// Throttle, then slot, then the client's budget (when `budgeted`) or the domain's badge
+/// recompute limiter (when `recompute` names a scope); a refusal spends nothing.
+fn gate(
+    state: &AppState,
+    key: String,
+    client: IpAddr,
+    budgeted: bool,
+    recompute: Option<&'static str>,
+) -> Result<Ticket, Refusal> {
+    let mut throttle = state.throttle.lock();
+    let now = tokio::time::Instant::now();
+    throttle.retain(|_, r| now.saturating_duration_since(r.started) < THROTTLE);
+    if let Some(record) = throttle.get(&key) {
+        let elapsed = now.saturating_duration_since(record.started);
+        let left = THROTTLE.saturating_sub(elapsed);
+        let retry = (left.as_secs() + u64::from(left.subsec_nanos() > 0)).max(1);
+        return Err(refused(
+            Reason::Throttle,
+            retry,
+            Some(elapsed.as_secs()),
+            record.complete == Some(false),
+        ));
+    }
+    let Ok(permit) = state.slots.clone().try_acquire_owned() else {
+        return Err(refused(Reason::Slots, 1, None, false));
+    };
+    if budgeted {
+        let Some(limiter) = &state.client_budget else {
+            return Err(refused(Reason::Budget, 3600, None, false));
+        };
+        if let Err(not_until) = limiter.check_key(&client) {
+            let wait = not_until.wait_time_from(DefaultClock::default().now());
+            return Err(refused(Reason::Budget, wait.as_secs().max(1), None, false));
+        }
+    }
+    if let Some(scope) = recompute
+        && let Err(r) = netray_common::rate_limit::check_keyed_cost(
+            &state.badge_recompute_limiter,
+            &key,
+            NonZeroU32::new(1).unwrap(),
+            scope,
+            "lens",
+        )
+    {
+        return Err(refused(Reason::Throttle, r.retry_after_secs, None, false));
+    }
+    throttle.insert(
+        key.clone(),
+        Record {
+            started: now,
+            complete: None,
+        },
+    );
+    Ok(Ticket {
+        key,
+        started: now,
+        _permit: permit,
+    })
+}
+
 /// Starts or joins the domain's run. `domain` is validated; `prefetch` is not used yet.
-/// Must be called inside a tokio runtime.
+/// Order: join, (prefetch, Phase 5), throttle, slot, then the budget (visit, recheck, api) or
+/// the recompute limiter (badge, og), then start. Must be called inside a tokio runtime.
 pub fn admit(
     state: &AppState,
     domain: &str,
@@ -197,6 +328,16 @@ pub fn admit(
     if let Some(rx) = runs.get(&key) {
         return Admit::Admitted(RunStream::new(rx.clone(), true));
     }
+    // Phase 5: prefetch rule
+    let recompute = match trigger {
+        Trigger::Badge => Some("badge"),
+        Trigger::Og => Some("og"),
+        _ => None,
+    };
+    let ticket = match gate(state, key.clone(), client, trigger.counted(), recompute) {
+        Ok(ticket) => ticket,
+        Err(r) => return Admit::Refused(r),
+    };
     let (tx, rx) = watch::channel(RunState::default());
     runs.insert(key.clone(), rx.clone());
     drop(runs);
@@ -208,25 +349,26 @@ pub fn admit(
     };
     let live = state.runs.track();
     tokio::spawn(
-        run_task(state.clone(), input, trigger, Some(key), tx, live)
+        run_task(state.clone(), input, trigger, Some(key), tx, live, ticket)
             .instrument(tracing::Span::current()),
     );
     Admit::Admitted(RunStream::new(rx, false))
 }
 
-/// A run no other caller can join and that is never joined: the DKIM-selector path.
-pub(crate) fn start_unregistered(
-    state: &AppState,
-    input: CheckInput,
-    trigger: Trigger,
-) -> RunStream {
+/// A run no other caller can join and that is never joined: the DKIM-selector path. It is
+/// bound by the throttle, the slots and the budget like any fresh run.
+pub(crate) fn admit_dkim(state: &AppState, input: CheckInput) -> Result<RunStream, Refusal> {
+    let client = input
+        .client_ip
+        .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
+    let ticket = gate(state, cache_key(&input.domain), client, true, None)?;
     let (tx, rx) = watch::channel(RunState::default());
     let live = state.runs.track();
     tokio::spawn(
-        run_task(state.clone(), input, trigger, None, tx, live)
+        run_task(state.clone(), input, Trigger::Visit, None, tx, live, ticket)
             .instrument(tracing::Span::current()),
     );
-    RunStream::new(rx, false)
+    Ok(RunStream::new(rx, false))
 }
 
 /// Reads `stream` to its `Done`.
@@ -266,6 +408,7 @@ async fn run_task(
     key: Option<String>,
     tx: watch::Sender<RunState>,
     _live: LiveRun,
+    ticket: Ticket,
 ) {
     let _deregister = key.map(|key| Deregister {
         runs: Arc::clone(&state.runs),
@@ -289,6 +432,9 @@ async fn run_task(
         observe_run(started.elapsed());
     }
     drop(guard);
+    state
+        .throttle
+        .finish(&ticket.key, ticket.started, output.score.complete);
 
     let snapshot_id = if output.score.complete {
         crate::routes::create_snapshot(&state, &output.domain, &output).await
@@ -308,6 +454,7 @@ async fn run_task(
     let recorded = crate::history::record(&state, &domain, dkim, &published.run).await;
     crate::cache::hold(&state, recorded.as_ref(), &published).await;
     tx.send_modify(|s| s.recorded = Some(recorded));
+    drop(ticket);
 }
 
 #[cfg(test)]

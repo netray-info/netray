@@ -61,3 +61,25 @@ G1: C2, C24 · G2: C23 · G3: C1, C3–C22 (G3 needs G1's `head` and G2's `score
 Existing tests whose meaning changes (sdd_lens_badges_p1_c11 :146, admission_metrics c7/c11, incomplete_results :197/:219/:324/:344, history_badge :142, state.rs `cache_built_when_enabled`, og_routes :189/:242, badge_routes :324, client_hourly_runs c4) are amended by the orchestrator with `ADLC-Test-Change`.
 
 Group commands: G1 `cargo test -p netray-store --test head`; G2 `cargo test -p netray-engine --test score_run --test history`; G3 `cargo test -p lens --test history_cache --test history_cache_badge_og`.
+
+## Phase 4 — Throttle, budget, slots
+
+## Groups
+
+G1: C24 · G2: C1–C23, C25–C32 (G2 needs G1's zero series; the already-implemented C15–C18, C27, C29 sit in G2 because the reordered `admit` could break them).
+
+## Plan
+
+### G1
+1. `metrics.rs`: `lens_admission_rejections_total{reason}` zero series for throttle, budget, limit, slots.
+
+### G2
+1. `security/rate_limit.rs`: `check_rate_limit` returns the `RateLimitRejection` (scope, retry).
+2. `state.rs`: `throttle: Arc<admission::Throttle>`, `slots: Arc<Semaphore>` (`domain_run_slots`), `client_budget: Option<Arc<ClientBudgetLimiter>>` (quota per hour, burst = quota; none for 0).
+3. `admission.rs`: `THROTTLE`; `Throttle` records (tokio `Instant` start, completion outcome), pruned under the lock; `refused(..)` counts the reason once; `check_limits`; `gate` (throttle, slot `try_acquire_owned`, budget, then the record — a refusal leaves nothing behind) returning a `Ticket`; `admit`: join, (Phase 5 prefetch), the recompute limiter for badge/og, `gate`, start; `admit_dkim` replaces `start_unregistered`; `run_task` holds the ticket, marks the record's outcome before `Done`, releases the permit at its end.
+4. `routes.rs`: `check_limits` in place of `check_rate_limit`; `refusal_response` (429 + `rate_limited`); dkim through `admit_dkim`; badge limiter block goes, `Refused` renders the head short or `?`, counted `throttled`.
+5. `og/handler.rs`: limiter block goes; `Refused` renders the head card short or `?`, counted `throttled`.
+
+Existing tests that now meet the throttle or the moved limiter are amended by the orchestrator (`ADLC-Test-Change`), with a `pass_throttle()` helper in `tests/common/mod.rs`.
+
+Group commands: G1 `cargo test -p lens --test admission_slots c24`; G2 `cargo test -p lens --test admission_throttle --test admission_budget --test admission_slots`.

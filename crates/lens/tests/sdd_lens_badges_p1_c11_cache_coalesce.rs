@@ -269,9 +269,8 @@ async fn concurrent_requests_coalesce_to_single_check() {
         );
     }
 
-    // The rate limiter allows 1 token per TTL period per domain. The first request
-    // consumes the token and triggers run_check; the rest are throttled (returning a
-    // ? badge). Either way, run_check fires once.
+    // The first request starts the run; the others join the run in flight (v2-admission
+    // R12/R16) and render its result. run_check fires once.
     assert_eq!(
         counter.load(Ordering::SeqCst),
         1,

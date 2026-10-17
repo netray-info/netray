@@ -294,7 +294,13 @@ impl Acc {
 async fn admission_throttle_c1_one_run_per_domain_per_minute_with_the_refusal_fields() {
     let (_app, state) = default_app();
 
-    let first = admitted(admit(&state, "example.com", client(), Trigger::Visit, false));
+    let first = admitted(admit(
+        &state,
+        "example.com",
+        client(),
+        Trigger::Visit,
+        false,
+    ));
     // The run has ended and left the map, so nothing can be joined; only the minute holds.
     finish(first).await;
     tokio::time::advance(Duration::from_secs(10)).await;
@@ -338,7 +344,10 @@ async fn admission_throttle_c5_dkim_request_does_not_join_a_run_in_flight() {
     let (plain, dkim) = tokio::join!(plain, observe);
 
     assert_eq!(plain.0, StatusCode::OK);
-    assert_eq!(dkim, (StatusCode::TOO_MANY_REQUESTS, Some("60".to_string())));
+    assert_eq!(
+        dkim,
+        (StatusCode::TOO_MANY_REQUESTS, Some("60".to_string()))
+    );
     assert_eq!(rejections(&snap, "throttle"), 1);
 }
 
@@ -433,6 +442,9 @@ async fn throttled_badge(head_grade: Option<Grade>) -> (String, String, u64) {
 
     // The incomplete run starts the minute and leaves no head of its own.
     assert_eq!(check(&app, "example.com", None).await.0, StatusCode::OK);
+    // The run task records after the response: wait until it has ended, so the badge meets the
+    // throttle and not the run in flight (which it would join).
+    state.runs.drain().await;
     if let Some(grade) = head_grade {
         seed_head(&store, &state, "example.com", grade, 400).await;
     }
@@ -505,7 +517,13 @@ async fn admission_throttle_c25_a_run_that_ended_incomplete_40s_ago_is_reported(
     tokio::time::advance(Duration::from_secs(40)).await;
 
     assert_eq!(
-        refusal(admit(&state, "example.com", client(), Trigger::Recheck, false)),
+        refusal(admit(
+            &state,
+            "example.com",
+            client(),
+            Trigger::Recheck,
+            false
+        )),
         throttle(10, Some(50), true)
     );
 }
@@ -524,7 +542,13 @@ async fn admission_throttle_c26_complete_run_and_dkim_in_flight_are_not_incomple
     .await;
     tokio::time::advance(Duration::from_secs(10)).await;
     assert_eq!(
-        refusal(admit(&state, "example.com", client(), Trigger::Recheck, false)),
+        refusal(admit(
+            &state,
+            "example.com",
+            client(),
+            Trigger::Recheck,
+            false
+        )),
         throttle(50, Some(10), false)
     );
 
@@ -558,9 +582,21 @@ async fn admission_throttle_c27_the_throttle_never_reads_the_cache_window() {
     seed_head(&store, &state, "example.net", Grade::B, 10).await;
 
     // Heads seen 10 s ago, no throttle record: a run starts, whatever the trigger.
-    let recheck = admitted(admit(&state, "example.com", client(), Trigger::Recheck, false));
+    let recheck = admitted(admit(
+        &state,
+        "example.com",
+        client(),
+        Trigger::Recheck,
+        false,
+    ));
     assert!(!recheck.joined());
-    let visit = admitted(admit(&state, "example.net", client(), Trigger::Visit, false));
+    let visit = admitted(admit(
+        &state,
+        "example.net",
+        client(),
+        Trigger::Visit,
+        false,
+    ));
     assert!(!visit.joined());
 
     finish(recheck).await;

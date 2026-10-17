@@ -138,7 +138,9 @@ async fn check(app: &Router, domain: &str) -> (StatusCode, Option<String>) {
         .method("POST")
         .uri("/api/check")
         .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(format!(r#"{{"domain":"{domain}","stream":false}}"#)))
+        .body(Body::from(format!(
+            r#"{{"domain":"{domain}","stream":false}}"#
+        )))
         .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     let status = resp.status();
@@ -563,10 +565,7 @@ fn admission_slots_c24_rejection_series_render_at_zero() {
         r#"lens_admission_rejections_total{reason="slots"} 0"#,
         r#"lens_check_requests_total{result="joined"} 0"#,
     ] {
-        assert!(
-            out.lines().any(|l| l == line),
-            "missing {line} in:\n{out}"
-        );
+        assert!(out.lines().any(|l| l == line), "missing {line} in:\n{out}");
     }
 }
 
@@ -695,6 +694,9 @@ async fn admission_slots_c32_a_badge_joins_despite_the_recompute_limiter() {
     let (svg, grade, ()) = tokio::join!(badge, driver, opener);
 
     assert!(!svg.contains(">?</text>"), "badge must not show ?: {svg}");
-    assert!(svg.contains(&format!(">{grade}<")), "badge must show {grade}: {svg}");
+    assert!(
+        svg.contains(&format!(">{grade}<")),
+        "badge must show {grade}: {svg}"
+    );
     assert_eq!(h.runs.load(Ordering::SeqCst), 1, "one run executes");
 }

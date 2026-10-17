@@ -262,6 +262,8 @@ async fn incomplete_c4_email_http500_is_incomplete_unsnapshotted_and_uncached() 
     );
     assert_eq!(first.cache, "MISS");
 
+    // v2-admission R12/R16: the next run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let second = post_check(&h.app).await;
     assert_eq!(second.cache, "MISS", "an incomplete result is never cached");
     // Follows v2-admission Phase 3: nothing was recorded, so nothing could be a hit.
@@ -396,6 +398,8 @@ async fn incomplete_c7_badge_first_shows_question_mark_and_leaves_check_uncached
     let svg = String::from_utf8(body).unwrap();
     assert!(svg.contains(">?<"), "badge must show ?, got: {svg}");
 
+    // v2-admission R12/R16: the next run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let c = post_check(&h.app).await;
     assert_eq!(c.cache, "MISS", "the badge recompute must not cache");
     assert_incomplete(&c);
@@ -417,6 +421,8 @@ async fn incomplete_c8_og_first_shows_unknown_card_and_leaves_check_uncached() {
     let cc = headers["cache-control"].to_str().unwrap();
     assert!(cc.contains(SHORT_CACHE), "short Cache-Control, got: {cc}");
 
+    // v2-admission R12/R16: the next run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let c = post_check(&h.app).await;
     assert_eq!(c.cache, "MISS", "the OG recompute must not cache");
     assert_incomplete(&c);

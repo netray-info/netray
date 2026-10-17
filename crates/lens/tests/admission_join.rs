@@ -301,11 +301,12 @@ async fn admission_join_c9_dkim_selectors_never_join_and_are_never_joined() {
         open_gate_after_arrivals(&h.entered, &h.release)
     );
     assert_eq!(s1, StatusCode::OK);
-    assert_eq!(s2, StatusCode::OK);
+    // v2-admission R16: the throttle answers the second request 429; a join would answer 200.
+    assert_eq!(s2, StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(
         h.runs.load(Ordering::SeqCst),
-        2,
-        "a request with dkim_selectors starts its own run"
+        1,
+        "a request with dkim_selectors never joins the run in flight"
     );
 
     // A request without options during a run with options.
@@ -321,11 +322,12 @@ async fn admission_join_c9_dkim_selectors_never_join_and_are_never_joined() {
         open_gate_after_arrivals(&h.entered, &h.release)
     );
     assert_eq!(s1, StatusCode::OK);
-    assert_eq!(s2, StatusCode::OK);
+    // v2-admission R16: the throttle answers the second request 429; a join would answer 200.
+    assert_eq!(s2, StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(
         h.runs.load(Ordering::SeqCst),
-        2,
-        "a run with dkim_selectors is not joined"
+        1,
+        "a run with dkim_selectors is never joined"
     );
 }
 
@@ -338,6 +340,8 @@ async fn admission_join_c4_c15_sequential_requests_are_both_fresh() {
     // The gate stays open: a permit per run.
     h.release.notify_one();
     let (s1, _) = check(&h.app, "example.com", Some("sel1")).await;
+    // v2-admission R12/R16: the second run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     h.release.notify_one();
     let (s2, _) = check(&h.app, "example.com", Some("sel2")).await;
 

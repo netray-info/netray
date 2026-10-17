@@ -271,12 +271,14 @@ async fn history_cache_c3_moka_is_not_keyed_by_domain() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn history_cache_c8_head_older_than_the_window_starts_a_run() {
     let h = harness(Opts::default()).await;
     first_run(&h).await;
     age(&h.db_path, 301).await;
 
+    // v2-admission R12/R16: a second run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let a = check(&h.app).await;
     assert_eq!(a.x_cache, "MISS");
     assert_eq!(h.runs.load(Ordering::SeqCst), 2, "a run starts");
@@ -298,7 +300,7 @@ async fn history_cache_c9_fresh_head_without_held_rendering_starts_a_run() {
     assert_eq!(h.runs.load(Ordering::SeqCst), 1, "a run starts");
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn history_cache_c10_rendering_under_a_previous_entry_is_not_served() {
     let h = harness(Opts::default()).await;
     let first = first_run(&h).await;
@@ -320,13 +322,15 @@ async fn history_cache_c10_rendering_under_a_previous_entry_is_not_served() {
         .unwrap();
     assert!(matches!(recorded, Recorded::Changed { .. }));
 
+    // v2-admission R12/R16: a second run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let a = check(&h.app).await;
     assert_eq!(a.x_cache, "MISS", "the previous rendering is not served");
     assert_eq!(h.runs.load(Ordering::SeqCst), 2, "a run starts");
     assert_ne!(a.snapshot_id.as_deref(), Some(first.as_str()));
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn history_cache_c11_cache_disabled_starts_a_run_on_a_fresh_head() {
     let h = harness(Opts {
         cache: false,
@@ -335,6 +339,8 @@ async fn history_cache_c11_cache_disabled_starts_a_run_on_a_fresh_head() {
     .await;
     first_run(&h).await;
 
+    // v2-admission R12/R16: a second run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let a = check(&h.app).await;
     assert_eq!(a.x_cache, "MISS");
     assert_eq!(h.runs.load(Ordering::SeqCst), 2, "a run starts");
@@ -358,7 +364,7 @@ async fn history_cache_c12_no_store_two_requests_start_two_runs() {
     assert_eq!(h.runs.load(Ordering::SeqCst), 2, "both start runs");
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn history_cache_c13_identical_run_refreshes_the_held_rendering() {
     let h = harness(Opts::default()).await;
     let store = h.store.as_ref().unwrap();
@@ -366,6 +372,8 @@ async fn history_cache_c13_identical_run_refreshes_the_held_rendering() {
     age(&h.db_path, 400).await;
 
     // Stale head: the second run records Identical and moves last_seen_at to now.
+    // v2-admission R12/R16: a second run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let second = check(&h.app).await;
     assert_eq!(second.x_cache, "MISS");
     assert_eq!(h.runs.load(Ordering::SeqCst), 2);
@@ -394,13 +402,15 @@ async fn history_cache_c13_identical_run_refreshes_the_held_rendering() {
 /// Request 2 is a MISS, not run 1's rendering. The head is then made fresh again (moved forward
 /// 400 s): request 3 is the head's hit with run 1's snapshot id and starts no run, though the
 /// module would still answer incomplete.
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn history_cache_c4_c14_an_incomplete_run_never_replaces_the_head() {
     let h = harness(Opts::default()).await;
     let first = first_run(&h).await;
     age(&h.db_path, 400).await;
     h.incomplete.store(true, Ordering::SeqCst);
 
+    // v2-admission R12/R16: a second run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let second = check(&h.app).await;
     assert_eq!(second.x_cache, "MISS", "a stale head starts a run");
     assert_eq!(h.runs.load(Ordering::SeqCst), 2);
@@ -422,7 +432,7 @@ async fn history_cache_c4_c14_an_incomplete_run_never_replaces_the_head() {
     assert_eq!(third.snapshot_id.as_deref(), Some(first.as_str()));
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn history_cache_c15_incomplete_run_without_entry_is_not_a_hit() {
     let h = harness(Opts {
         incomplete: true,
@@ -433,13 +443,15 @@ async fn history_cache_c15_incomplete_run_without_entry_is_not_a_hit() {
     let a = check(&h.app).await;
     assert_eq!(a.x_cache, "MISS");
     tokio::time::sleep(Duration::from_millis(300)).await;
+    // v2-admission R12/R16: a second run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let b = check(&h.app).await;
     assert_eq!(b.x_cache, "MISS");
     assert!(!b.cached);
     assert_eq!(h.runs.load(Ordering::SeqCst), 2, "the second request runs");
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn history_cache_c16_failed_store_writes_leave_no_hit() {
     let h = harness(Opts::default()).await;
     let mut conn =
@@ -458,6 +470,8 @@ async fn history_cache_c16_failed_store_writes_leave_no_hit() {
         "the request works without a store"
     );
     tokio::time::sleep(Duration::from_millis(400)).await;
+    // v2-admission R12/R16: a second run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let b = check(&h.app).await;
     assert_eq!(b.status, StatusCode::OK);
     assert_eq!(b.x_cache, "MISS", "nothing recorded, so no hit");

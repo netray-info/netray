@@ -141,7 +141,9 @@ async fn check(app: &Router, domain: &str) -> Answer {
         .method("POST")
         .uri("/api/check")
         .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(format!(r#"{{"domain":"{domain}","stream":false}}"#)))
+        .body(Body::from(format!(
+            r#"{{"domain":"{domain}","stream":false}}"#
+        )))
         .unwrap();
     let resp = app.clone().oneshot(req).await.unwrap();
     let status = resp.status();
@@ -233,8 +235,15 @@ async fn admission_budget_c2_r13_fresh_runs_spend_a_token_each_per_client() {
     assert_eq!(check(&x, "example.com").await.status, StatusCode::OK);
     let second = check(&x, "example.net").await;
     assert_eq!(second.status, StatusCode::TOO_MANY_REQUESTS);
-    assert!(second.retry_after.is_some(), "a refusal names when to ask again");
-    assert_eq!(h.runs.load(Ordering::SeqCst), 1, "the refused request starts no run");
+    assert!(
+        second.retry_after.is_some(),
+        "a refusal names when to ask again"
+    );
+    assert_eq!(
+        h.runs.load(Ordering::SeqCst),
+        1,
+        "the refused request starts no run"
+    );
 
     // Another client has its own bucket.
     let y = api(&h.state, Y);
