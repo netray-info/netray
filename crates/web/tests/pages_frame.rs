@@ -274,6 +274,12 @@ fn header_logo_is_sized_by_the_stylesheet() {
         .find(".page-header img")
         .expect("pages.css styles the header logo");
     let body = &css[at..at + css[at..].find('}').unwrap()];
-    assert!(body.contains("height:"), "the header logo has a height: {body}");
-    assert!(body.contains("width: auto"), "the header logo keeps its aspect ratio: {body}");
+    assert!(
+        body.contains("height:"),
+        "the header logo has a height: {body}"
+    );
+    assert!(
+        body.contains("width: auto"),
+        "the header logo keeps its aspect ratio: {body}"
+    );
 }

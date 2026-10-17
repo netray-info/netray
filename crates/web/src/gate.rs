@@ -1,6 +1,6 @@
 //! The design-system gate (SDD §8.5): scans the view layer's templates, stylesheets and islands
 //! for colour, radius, font and line-width literals outside the tokens, for a second
-//! implementation of an R44 component, for inline scripts, and for style writes in an island.
+//! implementation of an R44 component, for inline scripts (the speculation rules and `application/ld+json` data blocks pass), and for style writes in an island.
 //!
 //! Every file is reduced to the text a rule may look at before it is scanned: comments are
 //! blanked (same length, so offsets and line numbers stay true), and a template is cut into its
@@ -16,7 +16,7 @@ use crate::tokens;
 pub const TOKEN_RULE: u8 = 1;
 /// Rule 2: an R44 component's class outside its own macro file or stylesheet.
 pub const OWNERSHIP_RULE: u8 = 2;
-/// Rule 3: an inline script other than the speculation rules.
+/// Rule 3: an inline script other than the speculation rules or an `application/ld+json` data block.
 pub const SCRIPT_RULE: u8 = 3;
 
 /// The R44 components; a component's CSS class is its name with `_` turned into `-`.
@@ -616,7 +616,9 @@ fn scan_template(rel: &Path, raw: &str, tokens: &Tokens, out: &mut Vec<Finding>)
                     })
             });
             let speculation = tag.values("type").any(|(at, v)| {
-                v.trim().eq_ignore_ascii_case("speculationrules")
+                let word = v.trim();
+                (word.eq_ignore_ascii_case("speculationrules")
+                    || word.eq_ignore_ascii_case("application/ld+json"))
                     && !askama.iter().any(|&(s, e, _)| s < at + v.len() && at < e)
             });
             if !has_src && !speculation {

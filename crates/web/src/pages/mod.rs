@@ -3,7 +3,9 @@
 
 mod assets;
 mod errors;
+pub mod guides;
 mod headers;
+mod jsonld;
 
 use askama::Template;
 use axum::Router;
@@ -19,9 +21,14 @@ pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matc
 
 const ROBOTS: &str = "User-agent: *\nAllow: /\nSitemap: https://netray.info/sitemap.xml\n";
 
-/// The static files under `/static`.
+/// The guides, the sitemap and the static files under `/static`.
 pub fn router() -> Router {
     Router::new()
+        .route("/guide", get(guides::index_redirect))
+        .route("/guide/", get(guides::index))
+        .route("/guide/{slug}", get(guides::show))
+        .route("/guide/{slug}/", get(errors::not_found))
+        .route("/sitemap.xml", get(sitemap))
         .route("/static/", get(errors::not_found))
         .route("/static/{*path}", get(assets::serve))
         .layer(axum::middleware::map_response(
@@ -41,6 +48,46 @@ pub async fn robots() -> Response {
         )
             .into_response(),
     )
+}
+
+/// `/sitemap.xml`: the pages this crate serves plus the entry pages and the inspector roots.
+async fn sitemap() -> Response {
+    let mut locs = vec![
+        "https://netray.info/".to_string(),
+        "https://netray.info/guide/".to_string(),
+    ];
+    locs.extend(
+        guides::GUIDES
+            .iter()
+            .map(|g| format!("https://netray.info/guide/{}", g.slug)),
+    );
+    locs.extend(
+        [
+            "https://netray.info/compare",
+            "https://netray.info/status",
+            "https://netray.info/privacy",
+            "https://ip.netray.info/",
+            "https://dns.netray.info/",
+            "https://tls.netray.info/",
+            "https://http.netray.info/",
+        ]
+        .map(str::to_string),
+    );
+    let mut xml = String::from(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n",
+    );
+    for loc in locs {
+        xml.push_str(&format!("<url><loc>{loc}</loc></url>\n"));
+    }
+    xml.push_str("</urlset>\n");
+    (
+        [
+            (CONTENT_TYPE, "application/xml; charset=utf-8"),
+            (CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        xml,
+    )
+        .into_response()
 }
 
 /// What the frame's head and share tags carry.

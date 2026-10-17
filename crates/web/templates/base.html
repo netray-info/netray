@@ -9,6 +9,7 @@
 <meta property="og:title" content="{{ frame.title }}">
 <meta property="og:description" content="{{ frame.description }}">
 <meta property="og:image" content="{{ frame.og_image }}">
+{% block head %}{% endblock %}
 {% block styles %}<link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">{% endblock %}
 </head>

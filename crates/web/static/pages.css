@@ -10,6 +10,8 @@
 }
 .page-header img {
   display: block;
+  height: 2.5rem;
+  width: auto;
 }
 .page-nav {
   display: flex;
@@ -69,4 +71,71 @@ main a {
 .page-footer nav {
   display: flex;
   gap: var(--space-4);
+}
+.guide-lede {
+  font-size: var(--font-size-h2);
+}
+.guide-tool {
+  margin: var(--space-6) 0;
+  padding: var(--space-4);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+.guide-tool + .guide-tool {
+  margin-top: var(--space-4);
+}
+.guide-tool__hint {
+  font-size: var(--font-size-small);
+}
+.guide-related {
+  margin-top: var(--space-8);
+  padding-top: var(--space-4);
+  border-top: var(--line-hair) solid var(--color-line);
+}
+.guide-index section {
+  margin-bottom: var(--space-6);
+}
+main h2 {
+  font-size: var(--font-size-h2);
+  margin-top: var(--space-6);
+}
+main h3 {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-strong);
+  margin-top: var(--space-5);
+}
+main ul,
+main ol {
+  padding-left: var(--space-5);
+  color: var(--color-muted);
+}
+main pre {
+  overflow-x: auto;
+  padding: var(--space-3);
+  border: var(--line-hair) solid var(--color-line);
+  border-radius: var(--radius-max);
+  background: var(--color-surface);
+}
+main code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+}
+main table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-small);
+}
+main th,
+main td {
+  padding: var(--space-2);
+  border-bottom: var(--line-hair) solid var(--color-line);
+  text-align: left;
+  vertical-align: top;
+}
+main th {
+  color: var(--color-ink);
+}
+main td {
+  color: var(--color-muted);
 }

@@ -28,7 +28,14 @@ const ISLANDS_JS: &[u8] = include_bytes!("../../islands/dist/islands.js");
 const LOGO: &[u8] = include_bytes!("../../static/logo.svg");
 const FAVICON: &[u8] = include_bytes!("../../static/favicon.svg");
 
-const OG: [(&str, &[u8]); 1] = [("landing", include_bytes!("../../static/og/landing.png"))];
+const OG: [(&str, &[u8]); 6] = [
+    ("dns", include_bytes!("../../static/og/dns.png")),
+    ("email", include_bytes!("../../static/og/email.png")),
+    ("http", include_bytes!("../../static/og/http.png")),
+    ("ip", include_bytes!("../../static/og/ip.png")),
+    ("landing", include_bytes!("../../static/og/landing.png")),
+    ("tls", include_bytes!("../../static/og/tls.png")),
+];
 
 fn file(content_type: &'static str, body: &'static [u8]) -> Response {
     secure(
