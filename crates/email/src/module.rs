@@ -603,7 +603,9 @@ pub fn evidence_blocks(m: &Measured, grade: Grade) -> Vec<Block> {
         let (addr_answers, domain_answers): (Vec<_>, Vec<_>) = answers
             .iter()
             .partition(|a| a.target.parse::<std::net::IpAddr>().is_ok());
-        let rows_of = |answers: Vec<&DnsblAnswer>| -> Vec<Vec<EvValue>> {
+        // `domain`: an unanswered domain-zone row carries no answer, so a refused or rate-limited
+        // zone reads like a clean one to the history (spec R19).
+        let rows_of = |answers: Vec<&DnsblAnswer>, domain: bool| -> Vec<Vec<EvValue>> {
             answers
                 .into_iter()
                 .map(|a| {
@@ -612,7 +614,11 @@ pub fn evidence_blocks(m: &Measured, grade: Grade) -> Vec<Block> {
                         EvValue::Text(a.zone.clone()),
                         EvValue::Text(a.target.clone()),
                         EvValue::Bool(a.answered),
-                        EvValue::Text(codes(&a.answer)),
+                        EvValue::Text(if domain && !a.answered {
+                            String::new()
+                        } else {
+                            codes(&a.answer)
+                        }),
                     ]
                 })
                 .collect()
@@ -622,14 +628,14 @@ pub fn evidence_blocks(m: &Measured, grade: Grade) -> Vec<Block> {
             "email.dnsbl",
             "DNSBL",
             &columns,
-            rows_of(addr_answers),
+            rows_of(addr_answers, false),
         ));
         if !domain_answers.is_empty() {
             blocks.push(table(
                 "email.dnsbl_domain",
                 "DNSBL (domain)",
                 &columns,
-                rows_of(domain_answers),
+                rows_of(domain_answers, true),
             ));
         }
     }

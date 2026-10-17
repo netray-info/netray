@@ -27,10 +27,11 @@ const ENTRY_COLUMNS: &str = "e.id, e.domain, e.created_at, e.last_seen_at, e.pre
      e.profile_version, e.grade, e.fingerprint, e.run, e.diff, e.engine_version";
 
 /// The chain head first (the entry no other entry names as its predecessor), then by
-/// `created_at`, newest first. `created_at` never decreases along a chain, so this is newest first.
+/// `created_at`, newest first, then by insertion order, newest first. `created_at` never decreases
+/// along a chain and writes are serialised, so this is newest first even within one second.
 const NEWEST_FIRST: &str = "ORDER BY \
      CASE WHEN EXISTS (SELECT 1 FROM entries n WHERE n.predecessor_id = e.id) THEN 1 ELSE 0 END ASC, \
-     e.created_at DESC";
+     e.created_at DESC, e.rowid DESC";
 
 /// Why a store operation failed.
 #[derive(Debug)]
