@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% import "components/query_input.html" as query_input %}
+
+{% block title %}Entry expired{% endblock %}
+
+{% block styles %}<style>{{ styles|safe }}</style>{% endblock %}
+
+{% block header %}{% endblock %}
+
+{% block main %}
+<h1>This entry has expired</h1>
+<p>This entry has expired and is no longer stored.</p>
+{% call query_input::query_input(query) %}{% endcall %}
+{% endblock %}
+
+{% block scripts %}{% endblock %}

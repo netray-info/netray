@@ -45,55 +45,7 @@ pub fn truncate_domain(domain: &str) -> String {
     }
 }
 
-/// Format a UTC timestamp as "May 8, 2026 · 17:44 UTC".
-pub fn format_utc_timestamp(t: SystemTime) -> String {
-    use std::time::UNIX_EPOCH;
-    const MONTHS: [&str; 12] = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ];
-    let secs = t.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-    let hour = (secs % 86400) / 3600;
-    let minute = (secs % 3600) / 60;
-    let (year, month, day) = epoch_days_to_ymd(secs / 86400);
-    format!(
-        "{} {}, {} \u{00b7} {:02}:{:02} UTC",
-        MONTHS[(month - 1) as usize],
-        day,
-        year,
-        hour,
-        minute
-    )
-}
-
-fn epoch_days_to_ymd(mut days: u64) -> (u64, u8, u8) {
-    let mut year = 1970u64;
-    loop {
-        let days_in_year = if is_leap(year) { 366 } else { 365 };
-        if days < days_in_year {
-            break;
-        }
-        days -= days_in_year;
-        year += 1;
-    }
-    let month_days: [u8; 12] = if is_leap(year) {
-        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-    let mut month = 0u8;
-    for (i, &dim) in month_days.iter().enumerate() {
-        if days < dim as u64 {
-            month = i as u8 + 1;
-            break;
-        }
-        days -= dim as u64;
-    }
-    (year, month, days as u8 + 1)
-}
-
-fn is_leap(y: u64) -> bool {
-    (y.is_multiple_of(4) && !y.is_multiple_of(100)) || y.is_multiple_of(400)
-}
+pub use netray_web::entries::view::format_utc_timestamp;
 
 pub fn svg_for_grade(
     domain: &str,

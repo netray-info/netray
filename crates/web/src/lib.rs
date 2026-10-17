@@ -3,6 +3,7 @@
 
 pub mod components;
 pub mod contrast;
+pub mod entries;
 pub mod gate;
 pub mod spectrum;
 pub mod tokens;

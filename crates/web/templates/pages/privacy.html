@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy{% endblock %}
+
+{% block styles %}<style>{{ styles|safe }}</style>{% endblock %}
+
+{% block header %}{% endblock %}
+
+{% block main %}
+<h1>Privacy</h1>
+<p>The history stores the domain, the check results and their evidence. It stores nothing about the visitor.</p>
+<p>An entry is kept for 90 days after it was last seen; the latest entry keeps its predecessor; a domain nobody checks for 90 days is deleted with all its entries.</p>
+<p>Rate limiters and the throttle are held in memory only, keyed by address or domain; nothing of them is written to disk.</p>
+{% endblock %}
+
+{% block scripts %}{% endblock %}

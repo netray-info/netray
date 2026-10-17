@@ -172,9 +172,13 @@ fn diff_view_evidence_items_follow_the_checks() {
                 items: vec!["~ a".into(), "+ b".into(), "- c".into()],
             },
         },
+        BlockChange {
+            block: BlockId::parse("email.mta_sts_policy").unwrap(),
+            kind: BlockChangeKind::Changed { items: vec![] },
+        },
     ];
     let v = diff_view(&d);
-    assert_eq!(v.entries.len(), 4);
+    assert_eq!(v.entries.len(), 5);
     let got: Vec<(&str, &str, Tone)> = v.entries[1..]
         .iter()
         .map(|e| (e.kind.as_str(), e.text.as_str(), e.tone))
@@ -185,6 +189,7 @@ fn diff_view_evidence_items_follow_the_checks() {
             ("evidence", "tls.chain added", Tone::Untested),
             ("evidence", "dns.records@443 removed", Tone::Untested),
             ("evidence", "http.headers: 3 changed", Tone::Untested),
+            ("evidence", "email.mta_sts_policy changed", Tone::Untested),
         ]
     );
 }
@@ -257,7 +262,9 @@ fn entry_with(diff: Option<Diff>, predecessor_id: Option<String>) -> Entry {
 }
 
 fn diff_block(html: &str) -> &str {
-    let start = html.find("diff-block").expect("diff block present");
+    let start = html
+        .find(r#"class="diff-block""#)
+        .expect("diff block present");
     &html[start..]
 }
 
@@ -314,7 +321,7 @@ fn rescored_and_engine_change_render_only_when_set() {
 #[test]
 fn diff_block_is_present_exactly_when_the_entry_has_a_diff() {
     let first = render::entry(&entry_view(&entry_with(None, None))).unwrap();
-    assert!(!first.contains("diff-block"));
+    assert!(!first.contains(r#"class="diff-block""#));
     assert!(entry_view(&entry_with(None, None)).diff.is_none());
 
     let swept = entry_with(
@@ -322,7 +329,7 @@ fn diff_block_is_present_exactly_when_the_entry_has_a_diff() {
         None,
     );
     let html = render::entry(&entry_view(&swept)).unwrap();
-    assert!(html.contains("diff-block"));
+    assert!(html.contains(r#"class="diff-block""#));
     assert!(html.contains("Grade unchanged (B)"));
     assert!(html.contains("Changes since the previous entry"));
 }

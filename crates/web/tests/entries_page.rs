@@ -106,7 +106,7 @@ fn entry_page_holds_its_parts_in_order() {
             COUNTS,
         ],
     );
-    assert!(!html.contains("grade__score"), "no score");
+    assert!(!html.contains(r#"class="grade__score""#), "no score");
     assert_eq!(html.matches(r#"<article class="check-row""#).count(), 2);
     assert!(html.contains("<title>a.example.com · B</title>"));
     assert!(html.contains(r#"property="og:title" content="a.example.com · B""#));

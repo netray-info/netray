@@ -148,18 +148,35 @@ fn pages_are_self_contained_documents_with_a_privacy_footer() {
         assert!(style.contains(".check-row"), "{page}: the .check-row rule");
         assert!(!html.contains("<script"), "{page}: no script");
         assert!(!html.contains("/static/"), "{page}: no /static/ link");
-        assert!(!html.contains("<nav"), "{page}: no nav");
         let f0 = html
             .find("<footer")
             .unwrap_or_else(|| panic!("{page}: no footer"));
         let f1 = html
             .find("</footer>")
             .unwrap_or_else(|| panic!("{page}: no </footer>"));
+        assert!(
+            !html[..f0].contains("<nav") && !html[f1..].contains("<nav"),
+            "{page}: no navigation outside the frame's footer"
+        );
         let footer = &html[f0..f1];
         assert!(
             footer.contains("href=\"/privacy\""),
             "{page}: footer links /privacy"
         );
         assert!(footer.contains(TAGLINE), "{page}: footer holds the tagline");
+    }
+}
+
+#[test]
+fn pages_override_header_and_scripts_with_nothing() {
+    for page in ["entry", "gone", "privacy"] {
+        let src = crate_file(&format!("templates/pages/{page}.html"));
+        for block in ["header", "scripts"] {
+            let empty = format!("{{% block {block} %}}{{% endblock %}}");
+            assert!(
+                src.contains(&empty),
+                "{page}.html does not override {block} with nothing"
+            );
+        }
     }
 }

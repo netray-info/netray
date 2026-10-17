@@ -2412,6 +2412,7 @@ dependencies = [
  "netray-model",
  "netray-store",
  "netray-tls",
+ "netray-web",
  "regex",
  "reqwest",
  "resvg",
