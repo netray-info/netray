@@ -1,7 +1,8 @@
 # Spec: v2-spectrum
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-17
+Finished: 2026-10-17
 
 ## Goal
 

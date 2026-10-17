@@ -149,3 +149,7 @@ Pass 1: no blockers.
 ### Behavioural verification
 
 The reviewer rendered the component with the generated tokens.css and spectrum.css in headless Chromium: 108 lines with 54 visible (only the shown run), labels at 8, 22, 36 and 50 px with leaders ending at their label, band height 8 + rows × 14 px, edge clamp equal to `scaled_start` at 432 and 1056 px. No route serves the component yet (spec non-goals).
+
+### Checks to build
+
+- Every `proptest!` block takes its config from a function a plain test asserts `failure_persistence.is_none()` on (`tests/repo`, see `specs/solutions/2026-10-17-persistence-test-could-not-fail.md`). The fifth note of class `check-passes-without-observing`: a rule is due.
