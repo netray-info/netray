@@ -64,6 +64,7 @@ fn base_config() -> Config {
         badges: BadgesConfig::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),
+        history: lens::config::HistoryConfig::default(),
     }
 }
 

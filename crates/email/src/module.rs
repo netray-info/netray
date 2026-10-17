@@ -18,7 +18,7 @@ use crate::dns::{DnsResolver, FetchResolver};
 use crate::error::MailError;
 use crate::input;
 use crate::quality::types::{
-    Category, CheckResult as CategoryResult, Grade, Measured, SseEvent, Verdict,
+    Category, CheckResult as CategoryResult, DnsblAnswer, Grade, Measured, SseEvent, Verdict,
 };
 use crate::state::OutboundFetch;
 
@@ -55,6 +55,7 @@ pub const REGISTER: Register = Register {
         ("email.dkim", ShapeKind::Table),
         ("email.dane", ShapeKind::Table),
         ("email.dnsbl", ShapeKind::Table),
+        ("email.dnsbl_domain", ShapeKind::Table),
         ("email.fcrdns", ShapeKind::Table),
         ("email.summary", ShapeKind::Fields),
     ],
@@ -107,6 +108,11 @@ pub const REGISTER: Register = Register {
         ("email.dnsbl", "target", ValueType::Text),
         ("email.dnsbl", "answered", ValueType::Bool),
         ("email.dnsbl", "answer", ValueType::Text),
+        ("email.dnsbl_domain", "query", ValueType::Text),
+        ("email.dnsbl_domain", "zone", ValueType::Text),
+        ("email.dnsbl_domain", "target", ValueType::Text),
+        ("email.dnsbl_domain", "answered", ValueType::Bool),
+        ("email.dnsbl_domain", "answer", ValueType::Text),
         ("email.fcrdns", "address", ValueType::Addr),
         ("email.fcrdns", "ptr", ValueType::Text),
         ("email.fcrdns", "confirmed", ValueType::Bool),
@@ -185,7 +191,12 @@ impl Module for EmailModule {
     }
 
     fn volatile(&self) -> &'static [EvidencePath] {
-        &[]
+        // Rows keyed by addresses that rotate per query (spec R18).
+        &[
+            EvidencePath("email.mx_addresses/*"),
+            EvidencePath("email.fcrdns/*"),
+            EvidencePath("email.dnsbl/*"),
+        ]
     }
 
     fn run<'a>(&'a self, ctx: &'a RunContext, _facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
@@ -400,6 +411,7 @@ fn references(name: &str, summary: &BeaconSummary) -> Vec<BlockId> {
     match name {
         "mx" => refs.push("email.mx_addresses".into()),
         "mta_sts" => refs.push("email.mta_sts_policy".into()),
+        "dnsbl" => refs.push("email.dnsbl_domain".into()),
         _ => {}
     }
     if name != "mx" && MX_DEPENDENT.contains(&name) {
@@ -586,24 +598,38 @@ pub fn evidence_blocks(m: &Measured, grade: Grade) -> Vec<Block> {
         blocks.push(dane_block(records));
     }
     if let Some(answers) = &m.dnsbl {
-        let rows = answers
+        let (addr_answers, domain_answers): (Vec<_>, Vec<_>) = answers
             .iter()
-            .map(|a| {
-                vec![
-                    EvValue::Text(format!("{}@{}", a.target, a.zone)),
-                    EvValue::Text(a.zone.clone()),
-                    EvValue::Text(a.target.clone()),
-                    EvValue::Bool(a.answered),
-                    EvValue::Text(codes(&a.answer)),
-                ]
-            })
-            .collect();
+            .partition(|a| a.target.parse::<std::net::IpAddr>().is_ok());
+        let rows_of = |answers: Vec<&DnsblAnswer>| -> Vec<Vec<EvValue>> {
+            answers
+                .into_iter()
+                .map(|a| {
+                    vec![
+                        EvValue::Text(format!("{}@{}", a.target, a.zone)),
+                        EvValue::Text(a.zone.clone()),
+                        EvValue::Text(a.target.clone()),
+                        EvValue::Bool(a.answered),
+                        EvValue::Text(codes(&a.answer)),
+                    ]
+                })
+                .collect()
+        };
+        let columns = ["query", "zone", "target", "answered", "answer"];
         blocks.push(table(
             "email.dnsbl",
             "DNSBL",
-            &["query", "zone", "target", "answered", "answer"],
-            rows,
+            &columns,
+            rows_of(addr_answers),
         ));
+        if !domain_answers.is_empty() {
+            blocks.push(table(
+                "email.dnsbl_domain",
+                "DNSBL (domain)",
+                &columns,
+                rows_of(domain_answers),
+            ));
+        }
     }
     if let Some(answers) = &m.fcrdns {
         let rows = answers

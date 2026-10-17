@@ -72,6 +72,7 @@ fn make_state_with_cache(ttl_seconds: u64) -> AppState {
         },
         og_cards: lens::config::OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
+        history: lens::config::HistoryConfig::default(),
     };
     AppState::new(config).unwrap()
 }

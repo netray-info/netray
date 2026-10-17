@@ -55,6 +55,8 @@ pub struct AppState {
     pub badge_check_fn: Option<BadgeCheckFn>,
     /// Snapshot storage. `None` when snapshots are disabled.
     pub snapshot_store: Option<Arc<crate::snapshot::SnapshotStore>>,
+    /// History storage. `None` when history is disabled.
+    pub history_store: Option<Arc<netray_store::HistoryStore>>,
     /// Fresh runs per client for the current hour; flushed hourly into a histogram.
     pub client_runs: Arc<crate::metrics::ClientRunCounter>,
 }
@@ -163,6 +165,7 @@ impl AppState {
             font_db,
             badge_check_fn: None,
             snapshot_store: None,
+            history_store: None,
             client_runs: Arc::new(crate::metrics::ClientRunCounter::new()),
         })
     }
@@ -233,6 +236,7 @@ mod tests {
             badges: BadgesConfig::default(),
             og_cards: crate::config::OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
+            history: crate::config::HistoryConfig::default(),
             modules: Default::default(),
         }
     }

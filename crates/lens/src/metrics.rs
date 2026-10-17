@@ -26,6 +26,7 @@ pub fn init_zero_series() {
         metrics::counter!("lens_rate_limit_hits_total", "scope" => scope).increment(0);
     }
     metrics::gauge!("lens_runs_in_flight").set(0.0);
+    metrics::counter!("lens_history_record_errors_total").increment(0);
     metrics::describe_histogram!(
         "lens_client_hourly_runs",
         "Fresh check runs per client in one flushed hour, one observation per active client; a restart loses the partial hour"

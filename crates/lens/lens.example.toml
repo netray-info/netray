@@ -190,3 +190,12 @@ enabled = true
 # Path to the SQLite database file for snapshots.
 # The file is created automatically if it does not exist.
 db_path = "snapshots.db"
+
+[history]
+# Record every complete check run per domain in SQLite, with its diff against the previous run.
+# Entries unseen for 90 days are swept hourly.
+enabled = true
+
+# Path to the SQLite database file for the history.
+# The file is created automatically if it does not exist; its directory must exist.
+db_path = "history.db"

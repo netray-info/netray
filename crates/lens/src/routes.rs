@@ -546,7 +546,7 @@ pub async fn badge_handler(
         && is_fresh(&cached, ttl)
     {
         metrics::counter!("lens_badge_requests_total", "cache" => "hit").increment(1);
-        let grade = cached.score.grade.clone();
+        let grade = badge_grade(&cached.score);
         let render_start = Instant::now();
         let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
         metrics::histogram!("lens_badge_render_duration_seconds")
@@ -593,10 +593,10 @@ pub async fn badge_handler(
             }
         })
         .await;
-        entry.score.grade.clone()
+        badge_grade(&entry.score)
     } else {
         let output = invoke_badge_check(&state, &badge_req.domain).await;
-        output.score.grade
+        badge_grade(&output.score)
     };
 
     let is_error = is_unscored_grade(&grade);
@@ -853,6 +853,15 @@ fn verdict_str(verdict: &CheckVerdict) -> &'static str {
 /// True for the grades that render as `?` and get the short `Cache-Control`.
 pub fn is_unscored_grade(grade: &str) -> bool {
     grade == "error" || grade == "incomplete"
+}
+
+/// The grade a badge shows: `"incomplete"` for an incomplete result, whatever its grade.
+fn badge_grade(score: &OverallScore) -> String {
+    if score.complete {
+        score.grade.clone()
+    } else {
+        "incomplete".to_string()
+    }
 }
 
 /// True when a weighted check of an answering section could not be measured.
@@ -1681,6 +1690,7 @@ pub mod tests {
             badges: BadgesConfig::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
+            history: crate::config::HistoryConfig::default(),
             modules: Default::default(),
         }
     }

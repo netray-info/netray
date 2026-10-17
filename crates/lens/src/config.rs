@@ -29,6 +29,8 @@ pub struct Config {
     pub og_cards: OgCardsConfig,
     #[serde(default)]
     pub snapshots: SnapshotsConfig,
+    #[serde(default)]
+    pub history: HistoryConfig,
     /// Per-module tables (`[modules.http]`), read by the binary that builds the modules.
     #[serde(default)]
     pub modules: BTreeMap<String, toml::Table>,
@@ -429,6 +431,28 @@ impl Default for SnapshotsConfig {
     }
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HistoryConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default = "default_history_db_path")]
+    pub db_path: std::path::PathBuf,
+}
+
+fn default_history_db_path() -> std::path::PathBuf {
+    std::path::PathBuf::from("history.db")
+}
+
+impl Default for HistoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            db_path: default_history_db_path(),
+        }
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -578,6 +602,7 @@ mod tests {
             badges: BadgesConfig::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: SnapshotsConfig::default(),
+            history: HistoryConfig::default(),
             modules: Default::default(),
             telemetry: Default::default(),
         }

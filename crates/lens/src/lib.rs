@@ -4,6 +4,7 @@ pub mod cache;
 pub mod check;
 pub mod config;
 pub mod error;
+pub mod history;
 pub mod input;
 pub mod metrics;
 pub mod modules;
@@ -85,6 +86,25 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
                 std::process::exit(1);
             }
         }
+    }
+
+    if config.history.enabled {
+        let db_path = &config.history.db_path;
+        let store = match netray_store::HistoryStore::open(db_path).await {
+            Ok(store) => store,
+            Err(e) => {
+                tracing::error!(error = %e, db_path = %db_path.display(), "failed to open history store");
+                std::process::exit(1);
+            }
+        };
+        if let Err(e) = store.migrate().await {
+            tracing::error!(error = %e, db_path = %db_path.display(), "history store migration failed");
+            std::process::exit(1);
+        }
+        let store = std::sync::Arc::new(store);
+        state.history_store = Some(std::sync::Arc::clone(&store));
+        tokio::spawn(history::run_sweep_loop(store));
+        tracing::info!(db_path = %db_path.display(), "history enabled");
     }
 
     if config.badges.enabled {

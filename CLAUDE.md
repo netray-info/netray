@@ -65,7 +65,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Never derive a verdict from a finding's detail text.** Carry it in a structured marker (e.g. SPF `spf_incomplete` with `ipv4`/`ipv6`/`both`/`any`).
 - **An evidence block holds the fact that decided its check.** Omit unknowns; never publish a placeholder (`0`, `""`, a guessed TTL). `check_evidence_rule` and each module's `validate` test enforce it.
 - **Carry new internal data on V1 response structs as `#[serde(skip)]` fields** so the V1 wire and its goldens stay byte-identical; test struct literals then need the field.
-- **tlsight's `module` test needs `--features testing`**: `cargo test -p netray-tls --features testing --test module`.
+- **Module crates' `required-features = ["testing"]` tests need `--features testing`**: `cargo test -p netray-email --features testing --test evidence`; without it they are skipped or refused.
+- **A new volatile path changes every stored fingerprint**: the next run of each domain stores an entry with an empty diff (`crates/store/src/lib.rs` compares the stored fingerprint).
 - **beacon goldens are literal scenarios**: a new one must carry every sub-check the checks emit for its records (FCrDNS one per IP, `single_mx`, `no_ipv6`, DMARC `no_ruf`).
 - **A new check id needs its texts in the catalogue**: `crates/engine/catalogue/checks.toml` (lens reads titles, fix hints, owners and guide links from it) and `CHECK_LABELS`/`CHECK_DESCRIPTIONS` in the frontend `checkMeta.ts`, which `tests/repo/test_checkmeta_catalogue.sh` holds to the catalogue's names and titles. A catalogue text (`finding`, `fix_hint`, `fix_owner`) describes every warn and fail branch of the check's code: read the check before writing it.
 - **Narrowing a check moves its hard fail.** When a check stops failing on a condition, confirm the condition still reaches a hard fail or weight in the profile (`tls.hostname_match` left `chain_trusted`).

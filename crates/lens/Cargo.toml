@@ -8,6 +8,7 @@ description = "Unified domain health check — netray.info"
 [dependencies]
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
+netray-store = { workspace = true }
 # Web framework
 axum = { workspace = true, features = ["json"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
@@ -62,8 +63,8 @@ uuid = { workspace = true, features = ["v7"] }
 toml = { workspace = true }
 
 # Snapshot storage
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate", "chrono"] }
-nanoid = "0.4"
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite", "migrate", "chrono"] }
+nanoid = { workspace = true }
 regex = { workspace = true }
 chrono = { workspace = true, features = ["serde", "clock", "std", "oldtime"] }
 

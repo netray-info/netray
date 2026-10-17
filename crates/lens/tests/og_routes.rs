@@ -73,6 +73,7 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
             enabled: og_enabled,
         },
         snapshots: lens::config::SnapshotsConfig::default(),
+        history: lens::config::HistoryConfig::default(),
     };
     AppState::new(config).unwrap()
 }

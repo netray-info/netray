@@ -2395,6 +2395,7 @@ dependencies = [
  "netray-http",
  "netray-ip",
  "netray-model",
+ "netray-store",
  "netray-tls",
  "regex",
  "reqwest",
@@ -3031,6 +3032,19 @@ version = "0.26.0"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "netray-store"
+version = "0.26.0"
+dependencies = [
+ "nanoid",
+ "netray-model",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
