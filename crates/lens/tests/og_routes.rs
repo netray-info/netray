@@ -3,18 +3,25 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 
-use lens::cache::{CachedResult, cache_key};
+use lens::cache::cache_key;
 use lens::check::CheckOutput;
 use lens::config::{BadgesConfig, CacheConfig, OgCardsConfig};
 use lens::routes::og_router;
 use lens::score::OverallScore;
 use lens::state::{AppState, BadgeCheckFn};
+use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
+use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
+use netray_model::{CheckId, Grade, Protocol, Status};
+use netray_store::HistoryStore;
+
+const LONG_CACHE: &str = "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,6 +76,7 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
             ttl_seconds: 7200,
             ..BadgesConfig::default()
         },
+        admission: lens::config::AdmissionConfig::default(),
         og_cards: OgCardsConfig {
             enabled: og_enabled,
         },
@@ -101,6 +109,51 @@ fn mock_check_fn(counter: Arc<AtomicUsize>, grade: &'static str) -> BadgeCheckFn
             });
         fut
     })
+}
+
+/// Seed a fresh (10 s old) complete head graded `grade` for example.com into a temp history
+/// store wired into `state` (v2-admission Phase 3). Keep the returned dir alive.
+async fn seed_head(state: &mut AppState, grade: Grade) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&dir.path().join("history.db"))
+        .await
+        .unwrap();
+    store.migrate().await.unwrap();
+    let run = Run {
+        profile_version: state.scoring_profile.version,
+        engine_version: "0.26.0".into(),
+        evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        grade,
+        complete: true,
+        sections: vec![RunSection {
+            protocol: Protocol::Dns,
+            outcome: SectionKind::Measured,
+            reason: None,
+        }],
+        checks: vec![
+            RunCheck {
+                id: CheckId::parse("dns.dnssec_valid").unwrap(),
+                status: Status::Pass,
+            },
+            RunCheck {
+                id: CheckId::parse("tls.caa_compliant").unwrap(),
+                status: Status::Pass,
+            },
+        ],
+        blocks: vec![],
+    };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    store
+        .record("example.com", &run, &[], now - 10, |p, c| {
+            netray_model::diff::diff(p, c, &[], None)
+        })
+        .await
+        .unwrap();
+    state.history_store = Some(Arc::new(store));
+    dir
 }
 
 fn og_app(state: AppState) -> Router {
@@ -186,36 +239,10 @@ async fn cold_cache_returns_200_valid_png_with_headers() {
 
 #[tokio::test]
 async fn cache_hit_skips_run_check() {
-    use std::time::SystemTime;
-
+    // Follows v2-admission Phase 3: the hit is a fresh history head, not moka.
     let counter = Arc::new(AtomicUsize::new(0));
     let mut state = make_state(true, true);
-
-    // Pre-populate the cache.
-    let domain = "example.com";
-    let key = cache_key(domain);
-    if let Some(ref cache) = state.cache {
-        cache
-            .insert(
-                key,
-                Arc::new(CachedResult {
-                    sections: HashMap::new(),
-                    score: OverallScore {
-                        sections: HashMap::new(),
-                        overall_percentage: 90.0,
-                        grade: "A".to_string(),
-                        hard_fail_triggered: false,
-                        hard_fail_checks: vec![],
-                        not_applicable: HashMap::new(),
-                        complete: true,
-                    },
-                    duration_ms: 1,
-                    cached_at: SystemTime::now(),
-                    snapshot_id: None,
-                }),
-            )
-            .await;
-    }
+    let _dir = seed_head(&mut state, Grade::A).await;
 
     state.badge_check_fn = Some(mock_check_fn(counter.clone(), "A"));
     let app = og_app(state);
@@ -226,6 +253,13 @@ async fn cache_hit_skips_run_check() {
     let resp = app.oneshot(req).await.unwrap();
 
     assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(
+        resp.headers()
+            .get("cache-control")
+            .and_then(|v| v.to_str().ok()),
+        Some(LONG_CACHE),
+        "a fresh head is served with the long Cache-Control"
+    );
     assert_eq!(
         counter.load(Ordering::SeqCst),
         0,
@@ -239,8 +273,10 @@ async fn cache_hit_skips_run_check() {
 
 #[tokio::test]
 async fn etag_conditional_get_returns_304() {
+    // Follows v2-admission Phase 3: both requests are hits on a seeded fresh head.
     let counter = Arc::new(AtomicUsize::new(0));
     let mut state = make_state(true, true);
+    let _dir = seed_head(&mut state, Grade::A).await;
     state.badge_check_fn = Some(mock_check_fn(counter.clone(), "A"));
 
     let app = og_app(state.clone());
@@ -284,6 +320,11 @@ async fn etag_conditional_get_returns_304() {
     );
     let body = to_bytes(resp2.into_body(), 1024).await.unwrap();
     assert!(body.is_empty(), "304 response must have empty body");
+    assert_eq!(
+        counter.load(Ordering::SeqCst),
+        0,
+        "both requests are hits: no run"
+    );
 }
 
 // ---------------------------------------------------------------------------

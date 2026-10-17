@@ -41,6 +41,9 @@ pub enum AppError {
 
     #[error("render failed: {0}")]
     RenderFailed(String),
+
+    #[error("prefetch refused: no stored result and no run in flight")]
+    PrefetchRefused,
 }
 
 impl ApiError for AppError {
@@ -55,6 +58,7 @@ impl ApiError for AppError {
             Self::Timeout => StatusCode::GATEWAY_TIMEOUT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::RenderFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::PrefetchRefused => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
@@ -69,6 +73,7 @@ impl ApiError for AppError {
             Self::Timeout => "TIMEOUT",
             Self::Internal(_) => "INTERNAL_ERROR",
             Self::RenderFailed(_) => "RENDER_FAILED",
+            Self::PrefetchRefused => "PREFETCH_REFUSED",
         }
     }
 
@@ -110,9 +115,19 @@ impl IntoResponse for AppError {
             Self::RenderFailed(_) => {
                 tracing::error!(error = %self, "render failed");
             }
+            Self::PrefetchRefused => {
+                tracing::debug!(error = %self, "prefetch refused");
+            }
         }
 
-        netray_common::error::build_error_response(&self)
+        let mut response = netray_common::error::build_error_response(&self);
+        if matches!(self, Self::PrefetchRefused) {
+            response.headers_mut().insert(
+                axum::http::header::CACHE_CONTROL,
+                axum::http::HeaderValue::from_static("no-store"),
+            );
+        }
+        response
     }
 }
 

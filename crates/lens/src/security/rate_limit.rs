@@ -12,10 +12,11 @@ use governor::clock::DefaultClock;
 use governor::state::InMemoryState;
 use governor::state::NotKeyed;
 use governor::{Quota, RateLimiter};
-use netray_common::rate_limit::{KeyedLimiter, check_direct_cost, check_keyed_cost};
+use netray_common::rate_limit::{
+    KeyedLimiter, RateLimitRejection, check_direct_cost, check_keyed_cost,
+};
 
 use crate::config::RateLimitConfig;
-use crate::error::AppError;
 
 /// Per-IP GCRA rate limiter keyed by `IpAddr`.
 pub struct PerIpRateLimiter {
@@ -53,26 +54,16 @@ impl GlobalRateLimiter {
 
 /// Check both per-IP and global rate limiters for the given client IP.
 ///
-/// Returns `Ok(())` if both allow the request, or `Err(AppError::RateLimited)`
-/// if either limiter rejects it. Per-IP is checked first.
+/// Returns `Ok(())` if both allow the request, or the rejection of the first limiter that
+/// refuses it (scope `per_ip` or `global`). Per-IP is checked first.
 pub fn check_rate_limit(
     per_ip: &PerIpRateLimiter,
     global: &GlobalRateLimiter,
     ip: IpAddr,
-) -> Result<(), AppError> {
+) -> Result<(), RateLimitRejection> {
     let cost = NonZeroU32::new(1).unwrap();
-
-    check_keyed_cost(&per_ip.inner, &ip, cost, "per_ip", "lens").map_err(|r| {
-        AppError::RateLimited {
-            retry_after_secs: r.retry_after_secs,
-        }
-    })?;
-
-    check_direct_cost(&global.inner, cost, "lens").map_err(|r| AppError::RateLimited {
-        retry_after_secs: r.retry_after_secs,
-    })?;
-
-    Ok(())
+    check_keyed_cost(&per_ip.inner, &ip, cost, "per_ip", "lens")?;
+    check_direct_cost(&global.inner, cost, "lens")
 }
 
 #[cfg(test)]
@@ -111,7 +102,8 @@ mod tests {
         assert!(check_rate_limit(&per_ip, &global, ip).is_ok());
         // 4th request must be rejected.
         let err = check_rate_limit(&per_ip, &global, ip).unwrap_err();
-        assert!(matches!(err, AppError::RateLimited { .. }));
+        // v2-admission R12/R16: the rejection carries its scope.
+        assert_eq!(err.scope, "per_ip");
     }
 
     #[test]
@@ -140,11 +132,7 @@ mod tests {
             let _ = check_rate_limit(&per_ip, &global, ip);
         }
         let err = check_rate_limit(&per_ip, &global, ip).unwrap_err();
-        match err {
-            AppError::RateLimited { retry_after_secs } => {
-                assert!(retry_after_secs >= 1, "retry_after_secs must be >= 1");
-            }
-            other => panic!("expected RateLimited, got: {other:?}"),
-        }
+        // v2-admission R12/R16: a RateLimitRejection, not an AppError.
+        assert!(err.retry_after_secs >= 1, "retry_after_secs must be >= 1");
     }
 }

@@ -1,23 +1,21 @@
 use std::collections::HashMap;
-use std::future::Future;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::sync::Arc;
 
-use moka::future::Cache;
-use moka::ops::compute::{CompResult, Op};
+use netray_store::Recorded;
 
+use crate::admission::Published;
 use crate::check::SectionError;
 use crate::modules::BackendResult;
 use crate::score::OverallScore;
+use crate::state::AppState;
 
-/// Cached check result stored in the moka cache.
+/// The V1 rendering of a history entry, held in the moka cache by entry id.
 pub struct CachedResult {
     pub sections: HashMap<String, Result<BackendResult, SectionError>>,
     pub score: OverallScore,
     pub duration_ms: u64,
-    pub cached_at: SystemTime,
-    /// Snapshot id created at first compute. Reused on cache hits so the
-    /// snapshot URL stays available for the lifetime of the cache entry.
+    /// Snapshot id the run created. Reused on cache hits so the snapshot URL stays
+    /// available for the lifetime of the cache entry.
     pub snapshot_id: Option<String>,
 }
 
@@ -26,69 +24,46 @@ pub fn cache_key(domain: &str) -> String {
     domain.trim().to_lowercase()
 }
 
-/// Returns true if the cached result is still within the TTL window.
-pub fn is_fresh(cached: &CachedResult, ttl_seconds: u64) -> bool {
-    match cached.cached_at.elapsed() {
-        Ok(age) => age < Duration::from_secs(ttl_seconds),
-        Err(_) => false,
-    }
+/// The domain's history head and whether it is still inside the cache window.
+pub(crate) struct HeadLookup {
+    pub head: netray_store::Head,
+    pub fresh: bool,
 }
 
-/// The one cache writer for `/api/check`: refuses an incomplete result.
-/// Returns whether the entry was stored.
-pub async fn store_result(
-    cache: &Cache<String, Arc<CachedResult>>,
-    key: String,
-    entry: Arc<CachedResult>,
-) -> bool {
-    if !entry.score.complete {
-        return false;
-    }
-    cache.insert(key, entry).await;
-    true
+/// The domain's head entry; `None` without a history store, for an unknown domain, or when
+/// the lookup failed. `fresh` is never true with `[cache] enabled = false`.
+pub(crate) async fn head(state: &AppState, domain: &str) -> Option<HeadLookup> {
+    let store = state.history_store.as_ref()?;
+    let head = match store.head(&cache_key(domain)).await {
+        Ok(head) => head?,
+        Err(e) => {
+            tracing::warn!(error = %e, domain = %domain, "history head lookup failed");
+            return None;
+        }
+    };
+    let age = crate::history::now_unix() - head.last_seen_at;
+    let fresh = state.config.cache.enabled
+        && age < i64::try_from(state.config.cache.ttl_seconds).unwrap_or(i64::MAX);
+    Some(HeadLookup { head, fresh })
 }
 
-/// Coalesced recompute for badge and OG: concurrent callers for one key share a fresh
-/// entry. A fresh entry is returned as is; otherwise `init` runs and its result is stored
-/// only when complete. An incomplete result is returned to the caller without caching.
-pub async fn get_or_compute<F>(
-    cache: &Cache<String, Arc<CachedResult>>,
-    key: String,
-    ttl_seconds: u64,
-    init: F,
-) -> Arc<CachedResult>
-where
-    F: Future<Output = CachedResult>,
-{
-    let computed: Arc<Mutex<Option<Arc<CachedResult>>>> = Arc::new(Mutex::new(None));
-    let slot = Arc::clone(&computed);
-    let result = cache
-        .entry(key)
-        .and_compute_with(move |existing| async move {
-            if let Some(e) = existing
-                && is_fresh(e.value(), ttl_seconds)
-            {
-                return Op::Nop;
-            }
-            let value = Arc::new(init.await);
-            if let Ok(mut guard) = slot.lock() {
-                *guard = Some(Arc::clone(&value));
-            }
-            if value.score.complete {
-                Op::Put(value)
-            } else {
-                Op::Nop
-            }
-        })
-        .await;
-    let fresh = computed.lock().ok().and_then(|mut g| g.take());
-    match (fresh, result) {
-        (Some(v), _) => v,
-        (None, CompResult::Unchanged(e)) => e.into_value(),
-        (None, CompResult::Inserted(e) | CompResult::ReplacedWith(e)) => e.into_value(),
-        (None, CompResult::Removed(e)) => e.into_value(),
-        (None, CompResult::StillNone(_)) => unreachable!("init runs when no fresh entry exists"),
-    }
+/// Holds the V1 rendering of the run the history just recorded, keyed by its entry id.
+pub(crate) async fn hold(state: &AppState, recorded: Option<&Recorded>, published: &Published) {
+    let (Some(cache), Some(recorded)) = (&state.cache, recorded) else {
+        return;
+    };
+    let (Recorded::First { id } | Recorded::Identical { id } | Recorded::Changed { id, .. }) =
+        recorded
+    else {
+        return;
+    };
+    let entry = Arc::new(CachedResult {
+        sections: published.output.sections.clone(),
+        score: published.output.score.clone(),
+        duration_ms: published.output.duration_ms,
+        snapshot_id: published.snapshot_id.clone(),
+    });
+    cache.insert(id.clone(), entry).await;
 }
 
 #[cfg(test)]

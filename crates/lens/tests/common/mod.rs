@@ -362,3 +362,11 @@ pub fn registry(http: Option<&str>, email: &str) -> Registry {
         tls_golden("tlsight-inspect.json"),
     )
 }
+
+/// Moves tokio's clock past the per-domain admission throttle (v2-admission R12/R16). Needs a
+/// current_thread runtime: `pause` panics on a multi-thread one.
+pub async fn pass_throttle() {
+    tokio::time::pause();
+    tokio::time::advance(lens::admission::THROTTLE).await;
+    tokio::time::resume();
+}

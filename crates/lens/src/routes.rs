@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use std::net::IpAddr;
-use std::sync::Arc;
-use std::time::SystemTime;
 
 use axum::Json;
 use axum::extract::rejection::PathRejection;
@@ -18,29 +16,18 @@ use utoipa_axum::router::OpenApiRouter;
 use netray_engine::profile::Profile;
 use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION};
 
+use crate::admission::{Admit, Refusal, Trigger, admit, admit_dkim, check_limits, until_done};
 use crate::badge::render::svg_for_grade;
 use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
-use crate::cache::{CachedResult, cache_key, is_fresh};
-use crate::check::{
-    CheckInput, CheckOutput, HARD_DEADLINE, SectionError, run_check, run_check_with_evidence,
-};
+use crate::cache::CachedResult;
+use crate::check::{CheckInput, CheckOutput, SectionError};
 use crate::input::validate_domain;
 use crate::modules::{BackendExtra, BackendResult};
 use crate::score::{
     CheckResult, CheckVerdict, OverallScore, fix_owner_label, grade_for, grade_label, guide_url,
     section_weights, spec_by_name,
 };
-use crate::security::check_rate_limit;
 use crate::state::AppState;
-
-/// Calls `state.badge_check_fn` when set (tests), otherwise the real `run_check`.
-async fn invoke_badge_check(state: &AppState, domain: &str) -> CheckOutput {
-    if let Some(ref f) = state.badge_check_fn {
-        f(domain.to_owned()).await
-    } else {
-        run_check(state, domain).await
-    }
-}
 
 // ---------------------------------------------------------------------------
 // SSE event payload types
@@ -501,6 +488,48 @@ fn build_svg_response(svg: String, cache_control: &str, etag: &str) -> Response 
 // Badge handler
 // ---------------------------------------------------------------------------
 
+/// The `?` badge a throttled request gets.
+fn throttled_badge_response(
+    badge_req: &crate::badge::BadgeRequest,
+    req_headers: &axum::http::HeaderMap,
+) -> Response {
+    use std::time::Instant;
+    metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
+    let render_start = Instant::now();
+    let svg = svg_for_grade(&badge_req.label, "error", badge_req.style);
+    metrics::histogram!("lens_badge_render_duration_seconds")
+        .record(render_start.elapsed().as_secs_f64());
+    let etag = compute_etag(&badge_req.domain, "?", &badge_req.label, badge_req.style);
+    if badge_is_not_modified(req_headers, &etag) {
+        return axum::http::StatusCode::NOT_MODIFIED.into_response();
+    }
+    build_svg_response(svg, "public, max-age=300, s-maxage=300", &etag)
+}
+
+/// The badge for `grade`; `long` asks for the long `Cache-Control`, which an unscored grade
+/// never gets.
+fn badge_response(
+    badge_req: &crate::badge::BadgeRequest,
+    req_headers: &axum::http::HeaderMap,
+    grade: &str,
+    long: bool,
+) -> Response {
+    let render_start = std::time::Instant::now();
+    let svg = svg_for_grade(&badge_req.label, grade, badge_req.style);
+    metrics::histogram!("lens_badge_render_duration_seconds")
+        .record(render_start.elapsed().as_secs_f64());
+    let etag = compute_etag(&badge_req.domain, grade, &badge_req.label, badge_req.style);
+    if badge_is_not_modified(req_headers, &etag) {
+        return axum::http::StatusCode::NOT_MODIFIED.into_response();
+    }
+    let cache_ctrl = if long && !is_unscored_grade(grade) {
+        "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+    } else {
+        "public, max-age=300, s-maxage=300"
+    };
+    build_svg_response(svg, cache_ctrl, &etag)
+}
+
 #[utoipa::path(
     get,
     path = "/badge/{domain}",
@@ -523,10 +552,6 @@ pub async fn badge_handler(
     Query(query): Query<BadgeQuery>,
     req_headers: axum::http::HeaderMap,
 ) -> Response {
-    use netray_common::rate_limit::check_keyed_cost;
-    use std::num::NonZeroU32;
-    use std::time::{Instant, SystemTime};
-
     let domain = match domain.strip_suffix(".svg") {
         Some(d) => d.to_owned(),
         None => return axum::http::StatusCode::NOT_FOUND.into_response(),
@@ -537,91 +562,61 @@ pub async fn badge_handler(
         Err(e) => return e.into_response(),
     };
 
-    let key = cache_key(&badge_req.domain);
-    let ttl = state.config.badges.ttl_seconds;
+    let head = crate::cache::head(&state, &badge_req.domain).await;
 
-    // Cache hit — serve immediately, bypass all rate limiters.
-    if let Some(cache) = &state.cache
-        && let Some(cached) = cache.get(&key).await
-        && is_fresh(&cached, ttl)
+    // The head is inside the cache window — serve it, bypass all rate limiters.
+    if let Some(lookup) = &head
+        && lookup.fresh
     {
         metrics::counter!("lens_badge_requests_total", "cache" => "hit").increment(1);
-        let grade = badge_grade(&cached.score);
-        let render_start = Instant::now();
-        let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
-        metrics::histogram!("lens_badge_render_duration_seconds")
-            .record(render_start.elapsed().as_secs_f64());
-        let etag = compute_etag(&badge_req.domain, &grade, &badge_req.label, badge_req.style);
-        if badge_is_not_modified(&req_headers, &etag) {
-            return axum::http::StatusCode::NOT_MODIFIED.into_response();
+        return badge_response(
+            &badge_req,
+            &req_headers,
+            grade_label(lookup.head.grade),
+            true,
+        );
+    }
+    let stale = head.as_ref().map(|l| grade_label(l.head.grade));
+
+    // Start or join the domain's run.
+    let published = match admit(
+        &state,
+        &badge_req.domain,
+        IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+        Trigger::Badge,
+        netray_common::prefetch::is_prefetch(&req_headers),
+    ) {
+        Admit::Admitted(mut stream) => until_done(&mut stream).await,
+        Admit::Refused(_) | Admit::NotStarted => {
+            return match stale {
+                Some(grade) => {
+                    metrics::counter!("lens_badge_requests_total", "cache" => "throttled")
+                        .increment(1);
+                    badge_response(&badge_req, &req_headers, grade, false)
+                }
+                None => throttled_badge_response(&badge_req, &req_headers),
+            };
         }
-        let cache_ctrl = if is_unscored_grade(&grade) {
-            "public, max-age=300, s-maxage=300"
-        } else {
-            "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+    };
+    let Some(published) = published else {
+        return match stale {
+            Some(grade) => badge_response(&badge_req, &req_headers, grade, false),
+            None => throttled_badge_response(&badge_req, &req_headers),
         };
-        return build_svg_response(svg, cache_ctrl, &etag);
-    }
-
-    // Per-domain recompute limiter — throttled requests get a ? badge.
-    let cost = NonZeroU32::new(1).unwrap();
-    if check_keyed_cost(&state.badge_recompute_limiter, &key, cost, "badge", "lens").is_err() {
-        metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
-        let render_start = Instant::now();
-        let svg = svg_for_grade(&badge_req.label, "error", badge_req.style);
-        metrics::histogram!("lens_badge_render_duration_seconds")
-            .record(render_start.elapsed().as_secs_f64());
-        let etag = compute_etag(&badge_req.domain, "?", &badge_req.label, badge_req.style);
-        if badge_is_not_modified(&req_headers, &etag) {
-            return axum::http::StatusCode::NOT_MODIFIED.into_response();
-        }
-        return build_svg_response(svg, "public, max-age=300, s-maxage=300", &etag);
-    }
-
-    // Coalesced recompute via moka entry API.
-    let grade = if let Some(cache) = &state.cache {
-        let state_for_init = state.clone();
-        let domain_for_init = badge_req.domain.clone();
-        let entry = crate::cache::get_or_compute(cache, key.clone(), ttl, async move {
-            let output = invoke_badge_check(&state_for_init, &domain_for_init).await;
-            CachedResult {
-                sections: output.sections,
-                score: output.score,
-                duration_ms: output.duration_ms,
-                cached_at: SystemTime::now(),
-                snapshot_id: None,
-            }
-        })
-        .await;
-        badge_grade(&entry.score)
-    } else {
-        let output = invoke_badge_check(&state, &badge_req.domain).await;
-        badge_grade(&output.score)
     };
 
-    let is_error = is_unscored_grade(&grade);
-    let render_start = Instant::now();
-    let svg = svg_for_grade(&badge_req.label, &grade, badge_req.style);
-    metrics::histogram!("lens_badge_render_duration_seconds")
-        .record(render_start.elapsed().as_secs_f64());
-
-    if is_error {
-        metrics::counter!("lens_badge_requests_total", "cache" => "failed").increment(1);
-    } else {
+    if published.output.score.complete {
         metrics::counter!("lens_badge_requests_total", "cache" => "miss").increment(1);
+        let grade = badge_grade(&published.output.score);
+        return badge_response(&badge_req, &req_headers, &grade, true);
     }
-
-    let etag = compute_etag(&badge_req.domain, &grade, &badge_req.label, badge_req.style);
-    if badge_is_not_modified(&req_headers, &etag) {
-        return axum::http::StatusCode::NOT_MODIFIED.into_response();
-    }
-
-    let cache_ctrl = if is_error {
-        "public, max-age=300, s-maxage=300"
-    } else {
-        "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
-    };
-    build_svg_response(svg, cache_ctrl, &etag)
+    metrics::counter!("lens_badge_requests_total", "cache" => "failed").increment(1);
+    badge_response(
+        &badge_req,
+        &req_headers,
+        stale.unwrap_or("incomplete"),
+        false,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -640,6 +635,7 @@ pub async fn badge_handler(
         (status = 200, description = "Domain health check result (SSE stream or JSON object)", body = SyncCheckResponse),
         (status = 400, description = "Invalid or blocked domain"),
         (status = 429, description = "Rate limit exceeded"),
+        (status = 503, description = "Prefetch refused: no stored result and no run in flight", body = netray_common::error::ErrorResponse),
     )
 )]
 pub async fn check_get_handler(
@@ -658,7 +654,17 @@ pub async fn check_get_handler(
         }
     };
     let request_id = request_id_from(&headers);
-    run_check_handler(state, client_ip, domain, sync, dkim_selectors, request_id).await
+    let prefetch = netray_common::prefetch::is_prefetch(&headers);
+    run_check_handler(
+        state,
+        client_ip,
+        domain,
+        sync,
+        dkim_selectors,
+        request_id,
+        prefetch,
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -670,6 +676,7 @@ pub async fn check_get_handler(
         (status = 200, description = "Domain health check result (SSE stream or JSON object)", body = SyncCheckResponse),
         (status = 400, description = "Invalid or blocked domain"),
         (status = 429, description = "Rate limit exceeded"),
+        (status = 503, description = "Prefetch refused: no stored result and no run in flight", body = netray_common::error::ErrorResponse),
     )
 )]
 pub async fn check_post_handler(
@@ -687,6 +694,7 @@ pub async fn check_post_handler(
         }
     };
     let request_id = request_id_from(&headers);
+    let prefetch = netray_common::prefetch::is_prefetch(&headers);
     run_check_handler(
         state,
         client_ip,
@@ -694,6 +702,7 @@ pub async fn check_post_handler(
         sync,
         dkim_selectors,
         request_id,
+        prefetch,
     )
     .await
 }
@@ -732,6 +741,14 @@ fn is_sync_mode(headers: &axum::http::HeaderMap, stream_param: Option<bool>) -> 
     false
 }
 
+fn refusal_response(r: &Refusal) -> Response {
+    crate::metrics::count_request("rate_limited");
+    crate::error::AppError::RateLimited {
+        retry_after_secs: r.retry_after_s,
+    }
+    .into_response()
+}
+
 async fn run_check_handler(
     state: AppState,
     client_ip: IpAddr,
@@ -739,6 +756,7 @@ async fn run_check_handler(
     sync: bool,
     dkim_selectors: Option<Vec<String>>,
     request_id: Option<String>,
+    prefetch: bool,
 ) -> Response {
     // Record client_ip into the TraceLayer span.
     tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
@@ -750,17 +768,17 @@ async fn run_check_handler(
     };
 
     // 2. Rate limit.
-    if let Err(e) = check_rate_limit(&state.per_ip_limiter, &state.global_limiter, client_ip) {
-        crate::metrics::count_request("rate_limited");
-        return e.into_response();
+    if let Err(r) = check_limits(&state, client_ip) {
+        return refusal_response(&r);
     }
 
-    // 3. Cache lookup (only when no per-request options like dkim_selectors).
-    let key = cache_key(&domain);
+    // 3. Cache lookup (only when no per-request options like dkim_selectors): the head is
+    // inside the window and its V1 rendering is held.
     if dkim_selectors.is_none()
         && let Some(cache) = &state.cache
-        && let Some(cached) = cache.get(&key).await
-        && is_fresh(&cached, state.config.cache.ttl_seconds)
+        && let Some(lookup) = crate::cache::head(&state, &domain).await
+        && lookup.fresh
+        && let Some(cached) = cache.get(&lookup.head.id).await
     {
         crate::metrics::count_request("cache_hit");
         return if sync {
@@ -770,66 +788,66 @@ async fn run_check_handler(
         };
     }
 
-    // 4. Run check.
-    crate::metrics::count_request("fresh");
-    state.client_runs.record(client_ip);
-    let run_guard = crate::metrics::RunGuard::new();
-    let run_started = std::time::Instant::now();
-    let (output, facts_evidence) = run_check_with_evidence(
-        &state,
-        CheckInput {
-            domain: domain.clone(),
-            dkim_selectors,
-            client_ip: Some(client_ip),
-            request_id,
-        },
-        HARD_DEADLINE,
-    )
-    .await;
-    crate::metrics::observe_run(run_started.elapsed());
-    drop(run_guard);
-    let duration_ms = output.duration_ms;
-    let domain_out = output.domain.clone();
-
-    // 5. Create snapshot before caching so the cache entry carries the
-    //    snapshot_id and subsequent cache hits expose the same URL.
-    //    An incomplete result gets neither a snapshot nor a cache entry.
-    let snapshot_id = if output.score.complete {
-        create_snapshot(&state, &domain_out, &output).await
+    // 4. Start or join the domain's run.
+    let mut stream = if let Some(selectors) = dkim_selectors {
+        if prefetch {
+            return crate::error::AppError::PrefetchRefused.into_response();
+        }
+        match admit_dkim(
+            &state,
+            CheckInput {
+                domain: domain.clone(),
+                dkim_selectors: Some(selectors),
+                client_ip: Some(client_ip),
+                request_id,
+            },
+        ) {
+            Ok(stream) => {
+                crate::metrics::count_request("fresh");
+                state.client_runs.record(client_ip);
+                stream
+            }
+            Err(r) => return refusal_response(&r),
+        }
     } else {
-        None
+        match admit(&state, &domain, client_ip, Trigger::Visit, prefetch) {
+            Admit::Admitted(stream) => {
+                if stream.joined() {
+                    crate::metrics::count_request("joined");
+                } else {
+                    crate::metrics::count_request("fresh");
+                    state.client_runs.record(client_ip);
+                }
+                stream
+            }
+            Admit::Refused(r) => return refusal_response(&r),
+            Admit::NotStarted => return crate::error::AppError::PrefetchRefused.into_response(),
+        }
+    };
+    let Some(published) = until_done(&mut stream).await else {
+        return crate::error::AppError::Internal("check run ended without a result".to_string())
+            .into_response();
     };
 
-    // 6. Store in cache (with snapshot_id).
-    if let Some(cache) = &state.cache {
-        let entry = Arc::new(CachedResult {
-            sections: output.sections.clone(),
-            score: output.score.clone(),
-            duration_ms,
-            cached_at: SystemTime::now(),
-            snapshot_id: snapshot_id.clone(),
-        });
-        crate::cache::store_result(cache, key, entry).await;
-    }
-
-    // 7. Return SSE stream or sync JSON.
+    // 5. Return SSE stream or sync JSON.
+    let domain_out = published.output.domain.clone();
     if sync {
         build_sync_response(
             domain_out,
-            output,
+            &published.output,
             false,
             &state.scoring_profile,
-            snapshot_id,
-            &facts_evidence,
+            published.snapshot_id.clone(),
+            &published.facts,
         )
     } else {
         let events = build_sse_events(
             domain_out,
-            output,
+            &published.output,
             false,
             &state.scoring_profile,
-            snapshot_id,
-            &facts_evidence,
+            published.snapshot_id.clone(),
+            &published.facts,
         );
         make_sse_stream(events, "MISS")
     }
@@ -1335,7 +1353,7 @@ fn done_event(domain: &str, duration_ms: u64, cached: bool, snapshot_id: Option<
 
 fn build_sse_events(
     domain: String,
-    output: CheckOutput,
+    output: &CheckOutput,
     cached: bool,
     profile: &Profile,
     snapshot_id: Option<String>,
@@ -1385,7 +1403,7 @@ fn build_sse_events_from_cached(
     };
     build_sse_events(
         domain.to_string(),
-        dummy_output,
+        &dummy_output,
         true,
         profile,
         cached.snapshot_id.clone(),
@@ -1422,7 +1440,7 @@ fn sse_response_from_cached(
 
 fn build_sync_response(
     domain: String,
-    output: CheckOutput,
+    output: &CheckOutput,
     cached: bool,
     profile: &Profile,
     snapshot_id: Option<String>,
@@ -1480,7 +1498,7 @@ fn sync_response_from_cached(
     };
     build_sync_response(
         domain,
-        dummy_output,
+        &dummy_output,
         is_cached,
         profile,
         cached.snapshot_id.clone(),
@@ -1543,7 +1561,11 @@ fn snapshot_section_results(
 
 /// Create a snapshot for a completed check. Returns the shortid on success.
 /// Logs and returns `None` on any failure — snapshot errors never surface to the user.
-async fn create_snapshot(state: &AppState, domain: &str, output: &CheckOutput) -> Option<String> {
+pub(crate) async fn create_snapshot(
+    state: &AppState,
+    domain: &str,
+    output: &CheckOutput,
+) -> Option<String> {
     let store = state.snapshot_store.as_ref()?;
     let sections = snapshot_section_results(output, &state.scoring_profile);
     let snap = crate::snapshot::Snapshot::from_check_output(
@@ -1688,6 +1710,7 @@ pub mod tests {
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
+            admission: crate::config::AdmissionConfig::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
             history: crate::config::HistoryConfig::default(),
@@ -1716,7 +1739,7 @@ pub mod tests {
         Path(domain): Path<String>,
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        run_check_handler(state, client_ip, domain, false, None, None).await
+        run_check_handler(state, client_ip, domain, false, None, None, false).await
     }
 
     /// Simplified POST handler for tests — uses loopback as client IP, no sync mode.
@@ -1725,7 +1748,7 @@ pub mod tests {
         Json(body): Json<CheckPostBody>,
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        run_check_handler(state, client_ip, body.domain, false, None, None).await
+        run_check_handler(state, client_ip, body.domain, false, None, None, false).await
     }
 
     /// GET handler for sync-mode tests — computes sync flag from headers and query.
@@ -1737,7 +1760,7 @@ pub mod tests {
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
         let sync = is_sync_mode(&headers, query.stream);
-        run_check_handler(state, client_ip, domain, sync, None, None).await
+        run_check_handler(state, client_ip, domain, sync, None, None, false).await
     }
 
     /// POST handler for sync-mode tests — computes sync flag from headers and body.
@@ -1748,7 +1771,7 @@ pub mod tests {
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
         let sync = is_sync_mode(&headers, body.stream);
-        run_check_handler(state, client_ip, body.domain, sync, None, None).await
+        run_check_handler(state, client_ip, body.domain, sync, None, None, false).await
     }
 
     /// Build a Router that computes sync mode from headers/query, for sync-mode tests.
@@ -1882,6 +1905,11 @@ pub mod tests {
             .map(|v| v.to_str().unwrap().to_string());
         // Drain body so cache can be written.
         let _ = to_bytes(resp1.into_body(), usize::MAX).await.unwrap();
+
+        // v2-admission R12/R16: a second run of the same domain starts only after the throttle.
+        tokio::time::pause();
+        tokio::time::advance(crate::admission::THROTTLE).await;
+        tokio::time::resume();
 
         // Second request — should be a HIT (same domain).
         let resp2 = app.oneshot(make_req()).await.unwrap();
@@ -2377,9 +2405,9 @@ pub mod tests {
             .with_state(state)
     }
 
-    fn req_from(peer: &str, xff: Option<&str>) -> Request<Body> {
+    fn req_from(peer: &str, xff: Option<&str>, domain: &str) -> Request<Body> {
         let mut req = Request::builder()
-            .uri("/api/check/example.com")
+            .uri(format!("/api/check/{domain}"))
             .header("accept", "application/json");
         if let Some(xff) = xff {
             req = req.header("x-forwarded-for", xff);
@@ -2397,22 +2425,35 @@ pub mod tests {
 
         let a1 = app
             .clone()
-            .oneshot(req_from("172.31.0.5:40000", Some("203.0.113.1")))
+            .oneshot(req_from(
+                "172.31.0.5:40000",
+                Some("203.0.113.1"),
+                "example.com",
+            ))
             .await
             .unwrap();
         assert_ne!(a1.status(), StatusCode::TOO_MANY_REQUESTS);
 
-        // A different client behind the same proxy has its own bucket.
+        // A different client behind the same proxy has its own bucket. It checks another domain:
+        // example.com is throttled after a1's run (v2-admission R12/R16).
         let b1 = app
             .clone()
-            .oneshot(req_from("172.31.0.5:40001", Some("203.0.113.2")))
+            .oneshot(req_from(
+                "172.31.0.5:40001",
+                Some("203.0.113.2"),
+                "example.net",
+            ))
             .await
             .unwrap();
         assert_ne!(b1.status(), StatusCode::TOO_MANY_REQUESTS);
 
         // The first client's bucket is exhausted.
         let a2 = app
-            .oneshot(req_from("172.31.0.5:40002", Some("203.0.113.1")))
+            .oneshot(req_from(
+                "172.31.0.5:40002",
+                Some("203.0.113.1"),
+                "example.com",
+            ))
             .await
             .unwrap();
         assert_eq!(a2.status(), StatusCode::TOO_MANY_REQUESTS);
@@ -2424,14 +2465,14 @@ pub mod tests {
 
         // No Cloudflare in front: a client rotating CF-Connecting-IP must not
         // get a fresh bucket per request.
-        let mut first = req_from("172.31.0.5:40000", Some("203.0.113.1"));
+        let mut first = req_from("172.31.0.5:40000", Some("203.0.113.1"), "example.com");
         first
             .headers_mut()
             .insert("cf-connecting-ip", "198.51.100.1".parse().unwrap());
         let r1 = app.clone().oneshot(first).await.unwrap();
         assert_ne!(r1.status(), StatusCode::TOO_MANY_REQUESTS);
 
-        let mut second = req_from("172.31.0.5:40001", Some("203.0.113.1"));
+        let mut second = req_from("172.31.0.5:40001", Some("203.0.113.1"), "example.com");
         second
             .headers_mut()
             .insert("cf-connecting-ip", "198.51.100.2".parse().unwrap());
@@ -2445,21 +2486,26 @@ pub mod tests {
 
         let p1 = app
             .clone()
-            .oneshot(req_from("198.51.100.1:40000", None))
+            .oneshot(req_from("198.51.100.1:40000", None, "example.com"))
             .await
             .unwrap();
         assert_ne!(p1.status(), StatusCode::TOO_MANY_REQUESTS);
 
+        // Another domain: example.com is throttled after p1's run (v2-admission R12/R16).
         let p2 = app
             .clone()
-            .oneshot(req_from("198.51.100.2:40000", None))
+            .oneshot(req_from("198.51.100.2:40000", None, "example.net"))
             .await
             .unwrap();
         assert_ne!(p2.status(), StatusCode::TOO_MANY_REQUESTS);
 
         // A spoofed XFF from an untrusted peer does not escape the peer's bucket.
         let p1_spoofed = app
-            .oneshot(req_from("198.51.100.1:40001", Some("203.0.113.9")))
+            .oneshot(req_from(
+                "198.51.100.1:40001",
+                Some("203.0.113.9"),
+                "example.com",
+            ))
             .await
             .unwrap();
         assert_eq!(p1_spoofed.status(), StatusCode::TOO_MANY_REQUESTS);
@@ -2489,6 +2535,11 @@ pub mod tests {
             .get("x-cache")
             .map(|v| v.to_str().unwrap().to_string());
         let _ = to_bytes(resp1.into_body(), usize::MAX).await.unwrap();
+
+        // v2-admission R12/R16: a second run of the same domain starts only after the throttle.
+        tokio::time::pause();
+        tokio::time::advance(crate::admission::THROTTLE).await;
+        tokio::time::resume();
 
         // Second request — should be a HIT; response is still JSON.
         let resp2 = app.oneshot(make_req()).await.unwrap();

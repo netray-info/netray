@@ -20,6 +20,8 @@ pub struct Config {
     #[serde(default = "default_rate_limit")]
     pub rate_limit: RateLimitConfig,
     #[serde(default)]
+    pub admission: AdmissionConfig,
+    #[serde(default)]
     pub scoring: ScoringConfig,
     #[serde(default)]
     pub site: SiteConfig,
@@ -453,6 +455,35 @@ impl Default for HistoryConfig {
     }
 }
 
+/// Admission control for fresh domain runs.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdmissionConfig {
+    /// Fresh runs one client may start per hour; 0 admits none.
+    #[serde(default = "default_client_budget_per_hour")]
+    pub client_budget_per_hour: u32,
+    /// Domain runs that may be in flight at once.
+    #[serde(default = "default_domain_run_slots")]
+    pub domain_run_slots: u32,
+}
+
+fn default_client_budget_per_hour() -> u32 {
+    30
+}
+
+fn default_domain_run_slots() -> u32 {
+    8
+}
+
+impl Default for AdmissionConfig {
+    fn default() -> Self {
+        Self {
+            client_budget_per_hour: default_client_budget_per_hour(),
+            domain_run_slots: default_domain_run_slots(),
+        }
+    }
+}
+
 fn default_true() -> bool {
     true
 }
@@ -503,6 +534,10 @@ impl Config {
         )?;
         reject_zero("rate_limit.global_burst", self.rate_limit.global_burst)?;
         reject_zero("badges.ttl_seconds", self.badges.ttl_seconds)?;
+        reject_zero(
+            "admission.domain_run_slots",
+            self.admission.domain_run_slots,
+        )?;
         netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
 
         let b = &self.backends;
@@ -597,6 +632,7 @@ mod tests {
             ecosystem: EcosystemConfig::default(),
             cache: default_cache(),
             rate_limit: default_rate_limit(),
+            admission: AdmissionConfig::default(),
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),

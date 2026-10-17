@@ -124,7 +124,8 @@ async fn dkim_selectors_on_a_lens_request_reach_the_email_module() {
         "the module saw the request's selectors"
     );
 
-    check(&app, r#"{"domain":"example.com","stream":false}"#).await;
+    // Another domain: example.com is throttled after the first run (v2-admission R12/R16).
+    check(&app, r#"{"domain":"example.net","stream":false}"#).await;
     assert_eq!(
         seen.lock().unwrap().last(),
         Some(&None),

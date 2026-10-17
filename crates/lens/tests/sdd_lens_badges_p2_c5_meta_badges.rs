@@ -57,6 +57,7 @@ fn make_state(badges_enabled: bool) -> AppState {
             enabled: badges_enabled,
             ..BadgesConfig::default()
         },
+        admission: lens::config::AdmissionConfig::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),

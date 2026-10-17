@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
 use axum::body::{Body, to_bytes};
@@ -13,6 +14,7 @@ use lens::config::{BadgesConfig, CacheConfig, OgCardsConfig};
 use lens::routes::badge_router;
 use lens::score::OverallScore;
 use lens::state::{AppState, BadgeCheckFn};
+use netray_store::HistoryStore;
 
 const SHORT_CACHE: &str = "public, max-age=300, s-maxage=300";
 const LONG_CACHE: &str = "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400";
@@ -63,6 +65,7 @@ fn make_state(cache: bool) -> AppState {
         scoring: ScoringConfig::default(),
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
+        admission: lens::config::AdmissionConfig::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),
@@ -95,12 +98,17 @@ fn mock_check_fn(grade: &'static str, complete: bool) -> BadgeCheckFn {
 
 /// Fetch the badge for example.com with a mocked result; returns (svg, cache-control).
 async fn badge(grade: &'static str, complete: bool) -> (String, String) {
-    badge_with(grade, complete, false).await
+    badge_with(grade, complete, None).await
 }
 
-/// As [`badge`], with the result cache on or off.
-async fn badge_with(grade: &'static str, complete: bool, cache: bool) -> (String, String) {
-    let mut state = make_state(cache);
+/// As [`badge`], optionally with a history store (and the cache on).
+async fn badge_with(
+    grade: &'static str,
+    complete: bool,
+    store: Option<Arc<HistoryStore>>,
+) -> (String, String) {
+    let mut state = make_state(store.is_some());
+    state.history_store = store;
     state.badge_check_fn = Some(mock_check_fn(grade, complete));
     let (routes, _) = badge_router().split_for_parts();
     let app = Router::new().merge(routes.with_state(state));
@@ -139,10 +147,20 @@ async fn incomplete_result_with_grade_f_renders_unscored_badge() {
 }
 
 #[tokio::test]
-async fn incomplete_result_with_grade_f_renders_unscored_badge_with_the_cache_on() {
-    let (svg, cc) = badge_with("F", false, true).await;
+async fn incomplete_result_with_grade_f_renders_unscored_badge_with_a_history_store_and_no_entry() {
+    // Follows v2-admission Phase 3: the cache-on case is a history store with no entry.
+    let dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&dir.path().join("history.db"))
+        .await
+        .unwrap();
+    store.migrate().await.unwrap();
+    let store = Arc::new(store);
+    let (svg, cc) = badge_with("F", false, Some(store.clone())).await;
     assert!(svg.contains(">?</text>"), "badge must show ?, got: {svg}");
     assert_eq!(cc, SHORT_CACHE);
+    // The incomplete run is never recorded, so no head appears.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(store.head("example.com").await.unwrap(), None);
 }
 
 #[tokio::test]

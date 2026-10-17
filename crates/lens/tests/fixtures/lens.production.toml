@@ -43,6 +43,10 @@ per_ip_burst = 3
 global_per_minute = 100
 global_burst = 20
 
+[admission]
+client_budget_per_hour = 30
+domain_run_slots = 8
+
 [scoring]
 # Uses embedded default profile
 
