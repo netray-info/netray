@@ -297,3 +297,31 @@ Pass 1: COUNTS blocker=4 amendment=1 deferred=4 nit=0 · Pass 2: COUNTS blocker=
 ```
 
 Screenshots: `target/screenshots/v2-pages/` (not committed).
+
+## Phase 6 — Rules and SDD
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R31 `frontend-rules.md` rewritten for V2 (templates and components, tokens, islands and limits, marker rule, streaming and the `stream` contract, accessibility, testing); each enforced rule stated once with its test path; no codename outside the codename check's word list; Solid apps frozen, old rules cited by commit; `CLAUDE.md` Rules row points at `crates/web/templates`, `static`, `islands`; Conventions line: `site/` frozen until v2-cutover | green | tests/repo/test_frontend_rules.sh |
+| C2 | R34 SDD: V4.8's `site/` clause moves to V5.1; §8.4 lists `theme` and `status` and states the `stream` wire and `data-stream-*` attributes; §8.7 name-check scope; Phase 4 table marks V4.8–V4.12 built by `v2-pages` | green | tests/repo/test_v2_pages_sdd.sh |
+| C3 | S: the codename word list grepped over `frontend-rules.md` finds none outside the rule's own wording; no section on SolidJS patterns or `common-frontend` | green | tests/repo/test_frontend_rules.sh |
+| C4 | S: every test path `frontend-rules.md` cites exists | green | tests/repo/test_frontend_rules.sh |
+| C5 | S: V5.1 holds the `site/` deletion, V4.8 does not; §8.4 lists `theme`, `status` and the `stream` wire; `tests/repo/test_sdd_in_repo.sh` passes | green | tests/repo/test_v2_pages_sdd.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 3 | sonnet | 31006 | 44 |
+| G2 | 1 | opus | 66553 | 142 |
+| reader fixes | 2 | sonnet | ~40000 | ~120 |
+
+### Reader
+
+COUNTS blocker=2 amendment=10 deferred=1 nit=1 — every finding repaired in the documents (statements made true against the code: `netray:stream-fragment` targets, the form requirement, the `trigger` rule, what `pages_frame.rs` and `component_files.rs` check, the frame exception for v2-entries' pages, the `checkMeta.ts` exception to the Solid freeze, what "data attributes only" allows, V4.8 and V4.11 scope, where content changes go). DEFERRED: the per-crate CLAUDE.md files still point Solid-app edits at `frontend-rules.md` (the V1 rules are at commit `45898422`; they go with the apps in V5.1).
+
+### Behavioural verification
+
+skipped: the phase changes documents only; the repo checks above read them.

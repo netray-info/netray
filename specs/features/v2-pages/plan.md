@@ -136,3 +136,18 @@ G1: C4, C10 · G2: C1, C2, C3, C6–C9 · G3: C5 (prose) · G4: C11 (already in 
 #### G3 — `bash tests/repo/test_comparison_rules.sh`
 1. `specs/rules/comparison-page-rules.md` rewritten for `compare.toml` and the template (`docs(rules)` commit).
 2. `CLAUDE.md` Rules row (`docs` commit).
+
+## Phase 6 — Rules and SDD
+
+### Groups
+
+G1: C2, C5 · G2: C1, C3, C4. No shared file.
+
+### Plan
+
+#### G1 — `bash tests/repo/test_v2_pages_sdd.sh && bash tests/repo/test_spectrum_component_sdd.sh && bash tests/repo/test_spectrum_deps.sh`
+1. `specs/sdd/v2.md`: V4.8 drops "`site/` is gone", V4.8–V4.12 marked built by `v2-pages`; V5.1 deletes `site/` with `netray site`; §8.4 lists `theme` and `status` and states the `stream` wire (`fragment` `{id, html}`, `end` with `{}`, applied whatever the status, joiners replayed by the server) and the `data-stream-*` attributes; §8.7's name check covers templates, static files, islands and rendered pages, API serializers with Phase 3.
+
+#### G2 — `bash tests/repo/test_frontend_rules.sh && bash tests/repo/test_sdd_in_repo.sh && bash tests/repo/test_comparison_rules.sh && bash tests/repo/test_no_self_host.sh`
+1. `specs/rules/frontend-rules.md` rewritten for V2 (templates and components, tokens, islands, marker, streaming, accessibility, testing), each enforced rule once with its test path; the Solid apps frozen until V5.1, old rules cited by commit `45898422`; no codename outside the codename check's word list.
+2. `CLAUDE.md`: the frontend Rules row names `crates/web/templates`, `static`, `islands`; a Conventions line: `site/` frozen until v2-cutover, content changes go to the templates.
