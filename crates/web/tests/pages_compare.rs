@@ -354,6 +354,7 @@ fn generated_cells_claim_no_more_than_the_checks_judge() {
         "DANE / TLSA",
         "Blacklist check",
         "DNS checks",
+        "NS records",
     ] {
         let row = rows
             .iter()
