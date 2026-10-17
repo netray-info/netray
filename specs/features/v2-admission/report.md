@@ -189,7 +189,7 @@ lens_check_requests_total{result="fresh"} 2
 | C25 | GIVEN a run ended incomplete 10 s after starting, 40 s ago WHEN `admit(recheck)` THEN `Refused{throttle, 10, Some(50), true}` | green | crates/lens/tests/admission_throttle.rs |
 | C26 | GIVEN the same ended complete THEN `last_incomplete: false`; GIVEN a dkim run in flight THEN a run without options is refused `throttle` with `last_incomplete: false` | green | crates/lens/tests/admission_throttle.rs |
 | C27 | GIVEN a head seen 10 s ago and no throttle record WHEN `admit(recheck)` THEN a run starts; `visit` too | already_implemented | crates/lens/tests/admission_throttle.rs |
-| C28 | GIVEN budget 0 WHEN `admit(visit|recheck)` THEN `Refused{budget, 3600, None, false}`; `/api/check` with no entry THEN 429 `Retry-After: 3600` | green | crates/lens/tests/admission_budget.rs |
+| C28 | GIVEN budget 0 WHEN `admit(visit)` or `admit(recheck)` THEN `Refused{budget, 3600, None, false}`; `/api/check` with no entry THEN 429 `Retry-After: 3600` | green | crates/lens/tests/admission_budget.rs |
 | C29 | GIVEN budget 0 WHEN badge of a domain without entry THEN a run starts; `/api/check` with a fresh head and held rendering THEN a hit | already_implemented | crates/lens/tests/admission_budget.rs |
 | C30 | GIVEN per-IP 1/1 WHEN `check_limits` twice THEN `Refused{ip_limit}` with `retry_after_s`; global exhausted THEN `global_limit`; both count `reason="limit"` | green | crates/lens/tests/admission_slots.rs |
 | C31 | GIVEN slots 1 and a gated run WHEN `admit` for another domain THEN `Refused{slots, 1, None, false}` | green | crates/lens/tests/admission_slots.rs |
@@ -201,7 +201,7 @@ C15–C18, C27 and C29 held before the phase (nothing spent a budget, `admit` ne
 
 | group | coder runs | green by | tokens | seconds |
 |---|---|---|---|---|
-| G1+G2 | 3 | sonnet (one test defect left, see below) | 79704 | 203 |
+| G1+G2 | 3 | sonnet | 79704 | 203 |
 | G2 (review repair) | 1 | sonnet | 28642 | 42 |
 
 `admission_throttle_c12` failed on timing in the test: the badge arrived while the incomplete run's task was still recording, so it joined the run instead of meeting the throttle. The test now waits on `state.runs.drain()` after the first response (`ADLC-Test-Change`). Existing tests that meet the throttle (a second run of one domain within the minute) or the moved limiter were amended: a `pass_throttle()` helper advances tokio's clock by `THROTTLE`, other requests use another domain, the dkim join test now expects 429, and `check_rate_limit`'s unit tests read the `RateLimitRejection`.
