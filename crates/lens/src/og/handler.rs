@@ -1,16 +1,19 @@
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use netray_engine::history::score_run;
+use netray_engine::profile::Profiles;
+use netray_store::Head;
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::cache::{CachedResult, cache_key, is_fresh};
-use crate::check::run_check;
+use crate::admission::{Admit, Trigger, admit, until_done};
 use crate::error::AppError;
 use crate::input::validate_domain;
-use crate::og::layout::{DEFAULT_LABEL, MAX_LABEL_LEN, OG_TTL_SECONDS};
+use crate::og::layout::{DEFAULT_LABEL, MAX_LABEL_LEN};
 use crate::og::render::{RenderError, svg_for_grade, svg_to_png};
+use crate::score::grade_label;
 use crate::state::AppState;
 
 #[derive(Debug, serde::Deserialize)]
@@ -47,23 +50,12 @@ fn render_error_from(e: RenderError) -> Response {
     AppError::RenderFailed(e.to_string()).into_response()
 }
 
-async fn invoke_check(state: &AppState, domain: &str) -> crate::check::CheckOutput {
-    if let Some(ref f) = state.badge_check_fn {
-        f(domain.to_owned()).await
-    } else {
-        run_check(state, domain).await
-    }
-}
-
 pub async fn og_handler(
     State(state): State<AppState>,
     Path(domain_png): Path<String>,
     Query(params): Query<OgQueryParams>,
     req_headers: axum::http::HeaderMap,
 ) -> Response {
-    use netray_common::rate_limit::check_keyed_cost;
-    use std::num::NonZeroU32;
-
     // Strip .png suffix; return 404 for anything else.
     let domain_raw = match domain_png.strip_suffix(".png") {
         Some(d) => d,
@@ -92,95 +84,113 @@ pub async fn og_handler(
     }
     let label = label_raw;
 
-    let key = cache_key(&domain);
-
-    // Cache hit — serve immediately.
-    if let Some(cache) = &state.cache
-        && let Some(cached) = cache.get(&key).await
-        && is_fresh(&cached, OG_TTL_SECONDS)
-    {
-        let grade = cached.score.grade.clone();
-        let score_pct = cached.score.overall_percentage;
-        let checked_at = cached.cached_at;
-        let etag = compute_etag(&domain, &grade, &label, score_pct);
-        if is_not_modified(&req_headers, &etag) {
-            return StatusCode::NOT_MODIFIED.into_response();
-        }
-        let svg = svg_for_grade(&domain, &grade, &label, score_pct, checked_at);
-        let png = match svg_to_png(&svg, state.font_db.clone()) {
-            Ok(b) => b,
-            Err(e) => return render_error_from(e),
-        };
-        let is_error = crate::routes::is_unscored_grade(&grade);
-        let cache_ctrl = if is_error {
-            "public, max-age=300, s-maxage=300"
-        } else {
-            "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
-        };
-        return build_png_response(png, cache_ctrl, &etag);
-    }
-
-    // Per-domain recompute limiter.
-    let cost = NonZeroU32::new(1).unwrap();
-    if check_keyed_cost(&state.badge_recompute_limiter, &key, cost, "og", "lens").is_err() {
-        let etag = compute_etag(&domain, "?", &label, 0.0);
-        if is_not_modified(&req_headers, &etag) {
-            return StatusCode::NOT_MODIFIED.into_response();
-        }
-        let svg = svg_for_grade(&domain, "?", &label, 0.0, SystemTime::now());
-        let png = match svg_to_png(&svg, state.font_db.clone()) {
-            Ok(b) => b,
-            Err(e) => return render_error_from(e),
-        };
-        return build_png_response(png, "public, max-age=300, s-maxage=300", &etag);
-    }
-
-    // Coalesced recompute.
-    let (grade, score_pct, checked_at) = if let Some(cache) = &state.cache {
-        let state_for_init = state.clone();
-        let domain_for_init = domain.clone();
-        let entry = crate::cache::get_or_compute(cache, key.clone(), OG_TTL_SECONDS, async move {
-            let output = invoke_check(&state_for_init, &domain_for_init).await;
-            CachedResult {
-                sections: output.sections,
-                score: output.score,
-                duration_ms: output.duration_ms,
-                cached_at: SystemTime::now(),
-                snapshot_id: None,
-            }
-        })
-        .await;
-        let val = entry;
-        (
-            val.score.grade.clone(),
-            val.score.overall_percentage,
-            val.cached_at,
-        )
-    } else {
-        let output = invoke_check(&state, &domain).await;
-        (
-            output.score.grade,
-            output.score.overall_percentage,
-            SystemTime::now(),
-        )
+    let head = crate::cache::head(&state, &domain).await;
+    let head_card = match &head {
+        Some(lookup) => head_card(&state, &lookup.head).await,
+        None => None,
     };
 
-    let is_error = crate::routes::is_unscored_grade(&grade);
-    let etag = compute_etag(&domain, &grade, &label, score_pct);
-    if is_not_modified(&req_headers, &etag) {
-        return StatusCode::NOT_MODIFIED.into_response();
+    // The head is inside the cache window — serve it immediately.
+    if let Some(lookup) = &head
+        && lookup.fresh
+        && let Some(card) = &head_card
+    {
+        return og_response(&state, &req_headers, &domain, &label, card, true);
     }
 
-    let svg = svg_for_grade(&domain, &grade, &label, score_pct, checked_at);
+    // Start or join the domain's run.
+    let published = match admit(
+        &state,
+        &domain,
+        std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+        Trigger::Og,
+        netray_common::prefetch::is_prefetch(&req_headers),
+    ) {
+        Admit::Admitted(mut stream) => until_done(&mut stream).await,
+        Admit::Refused(_) | Admit::NotStarted => {
+            metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
+            let unscored = Card::new("?", 0.0, SystemTime::now());
+            let card = head_card.as_ref().unwrap_or(&unscored);
+            return og_response(&state, &req_headers, &domain, &label, card, false);
+        }
+    };
+    let Some(published) = published else {
+        return AppError::Internal("check run ended without a result".to_string()).into_response();
+    };
+    let score = &published.output.score;
+    let run_card = Card::new(&score.grade, score.overall_percentage, SystemTime::now());
+    if score.complete {
+        return og_response(&state, &req_headers, &domain, &label, &run_card, true);
+    }
+    let card = head_card.as_ref().unwrap_or(&run_card);
+    og_response(&state, &req_headers, &domain, &label, card, false)
+}
+
+/// What a card shows.
+struct Card {
+    grade: String,
+    score_pct: f64,
+    checked_at: SystemTime,
+}
+
+impl Card {
+    fn new(grade: &str, score_pct: f64, checked_at: SystemTime) -> Self {
+        Self {
+            grade: grade.to_string(),
+            score_pct,
+            checked_at,
+        }
+    }
+}
+
+/// The card of the head entry: its grade, the percentage of its stored run under the profile
+/// it was scored with, and when it was last seen. `None` when the entry is gone.
+async fn head_card(state: &AppState, head: &Head) -> Option<Card> {
+    let store = state.history_store.as_ref()?;
+    let entry = match store.get(&head.id).await {
+        Ok(entry) => entry?,
+        Err(e) => {
+            tracing::warn!(error = %e, id = %head.id, "history entry lookup failed");
+            return None;
+        }
+    };
+    let configured = &*state.scoring_profile;
+    let profile = if entry.profile_version == configured.version {
+        configured
+    } else {
+        // An unknown version falls back to the configured profile.
+        Profiles::get(entry.profile_version).unwrap_or(configured)
+    };
+    let seen = u64::try_from(head.last_seen_at).unwrap_or(0);
+    Some(Card::new(
+        grade_label(head.grade),
+        score_run(&entry.run, profile).overall_percentage,
+        UNIX_EPOCH + Duration::from_secs(seen),
+    ))
+}
+
+/// The card PNG; `long` asks for the long `Cache-Control`, which an unscored grade never gets.
+fn og_response(
+    state: &AppState,
+    req_headers: &axum::http::HeaderMap,
+    domain: &str,
+    label: &str,
+    card: &Card,
+    long: bool,
+) -> Response {
+    let etag = compute_etag(domain, &card.grade, label, card.score_pct);
+    if is_not_modified(req_headers, &etag) {
+        return StatusCode::NOT_MODIFIED.into_response();
+    }
+    let svg = svg_for_grade(domain, &card.grade, label, card.score_pct, card.checked_at);
     let png = match svg_to_png(&svg, state.font_db.clone()) {
         Ok(b) => b,
         Err(e) => return render_error_from(e),
     };
-
-    let cache_ctrl = if is_error {
-        "public, max-age=300, s-maxage=300"
-    } else {
+    let cache_ctrl = if long && !crate::routes::is_unscored_grade(&card.grade) {
         "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+    } else {
+        "public, max-age=300, s-maxage=300"
     };
     build_png_response(png, cache_ctrl, &etag)
 }

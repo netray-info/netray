@@ -187,7 +187,13 @@ curl -s -X POST -H 'Content-Type: application/json' \
 
 #### Caching
 
-Results are cached for 5 minutes. Cache hits return `X-Cache: HIT` and complete in milliseconds.
+A domain whose latest history entry was seen in the last 5 minutes (`[cache] ttl_seconds`) is
+answered from it: `X-Cache: HIT`, in milliseconds. Concurrent requests for one domain join the
+run in flight. At most one run per domain starts per minute; a fresh run also needs a free run
+slot (`[admission] domain_run_slots`, 8) and the client's hourly budget
+(`[admission] client_budget_per_hour`, 30). A refused run answers `429` with `Retry-After`. A
+request carrying `Sec-Purpose: prefetch` or `prerender` never starts a run: without a stored
+result or a run to join it answers `503 PREFETCH_REFUSED`.
 
 ### Other endpoints
 
@@ -400,6 +406,10 @@ per_ip_per_minute = 10
 per_ip_burst = 3
 global_per_minute = 100
 global_burst = 20
+
+[admission]
+client_budget_per_hour = 30          # 0 refuses every budgeted run
+domain_run_slots = 8
 
 [scoring]
 # profile_path = "my-profile.toml"   # override the built-in profile v3

@@ -9,6 +9,8 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 
 mod common;
 
@@ -24,6 +26,7 @@ use lens::config::Config;
 use lens::routes::{api_router, badge_router, og_router};
 use lens::snapshot::SnapshotStore;
 use lens::state::AppState;
+use netray_store::HistoryStore;
 use serde_json::{Value, json};
 use tempfile::NamedTempFile;
 use tower::ServiceExt;
@@ -68,7 +71,42 @@ impl Backends {
 
 struct Harness {
     app: Router,
+    state: AppState,
+    store: Arc<HistoryStore>,
     _db: NamedTempFile,
+    _history_dir: tempfile::TempDir,
+}
+
+impl Harness {
+    /// Poll (bounded, 5 s) until example.com has a head entry and its V1 rendering is held;
+    /// a repeat is a hit only after that (v2-admission Phase 3).
+    async fn wait_for_head_and_rendering(&self) {
+        for _ in 0..250 {
+            if let Some(head) = self.store.head("example.com").await.unwrap()
+                && self
+                    .state
+                    .cache
+                    .as_ref()
+                    .unwrap()
+                    .get(&head.id)
+                    .await
+                    .is_some()
+            {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        panic!("the run was not recorded and held within 5 s");
+    }
+
+    /// After a settle, an incomplete run left no history entry.
+    async fn assert_history_stays_empty(&self) {
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(
+            self.store.entries("example.com").await.unwrap().is_empty(),
+            "an incomplete run is never recorded"
+        );
+    }
 }
 
 /// Production config, cache enabled, snapshot store on a temp sqlite file.
@@ -106,6 +144,14 @@ async fn harness(b: Backends) -> Harness {
     );
     let mut state = AppState::with_registry(config, registry).unwrap();
     state.snapshot_store = Some(std::sync::Arc::new(store));
+    let history_dir = tempfile::tempdir().unwrap();
+    let history = Arc::new(
+        HistoryStore::open(&history_dir.path().join("history.db"))
+            .await
+            .unwrap(),
+    );
+    history.migrate().await.unwrap();
+    state.history_store = Some(history.clone());
     assert!(state.badge_check_fn.is_none(), "use the real check");
 
     let (api, _) = api_router().split_for_parts();
@@ -113,9 +159,15 @@ async fn harness(b: Backends) -> Harness {
     let app = Router::new()
         .merge(api.with_state(state.clone()))
         .merge(badge.with_state(state.clone()))
-        .merge(og_router().with_state(state))
+        .merge(og_router().with_state(state.clone()))
         .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 40000))));
-    Harness { app, _db: db }
+    Harness {
+        app,
+        state,
+        store: history,
+        _db: db,
+        _history_dir: history_dir,
+    }
 }
 
 fn parse_sse(body: &str) -> Vec<(String, Value)> {
@@ -210,8 +262,12 @@ async fn incomplete_c4_email_http500_is_incomplete_unsnapshotted_and_uncached() 
     );
     assert_eq!(first.cache, "MISS");
 
+    // v2-admission R12/R16: the next run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let second = post_check(&h.app).await;
     assert_eq!(second.cache, "MISS", "an incomplete result is never cached");
+    // Follows v2-admission Phase 3: nothing was recorded, so nothing could be a hit.
+    h.assert_history_stays_empty().await;
 }
 
 /// Control for C4: a complete result is snapshotted and cached as before.
@@ -228,8 +284,15 @@ async fn complete_result_is_snapshotted_and_cached() {
     );
     assert_eq!(first.cache, "MISS");
 
+    // Follows v2-admission Phase 3: the hit exists once the run is recorded and held.
+    h.wait_for_head_and_rendering().await;
     let second = post_check(&h.app).await;
     assert_eq!(second.cache, "HIT", "a complete result is cached");
+    assert_eq!(
+        second.event("done")["snapshot_id"],
+        first.event("done")["snapshot_id"],
+        "the hit serves the held snapshot id"
+    );
 
     // Sync mode (JSON) serves the same cached result.
     let req = Request::builder()
@@ -335,9 +398,13 @@ async fn incomplete_c7_badge_first_shows_question_mark_and_leaves_check_uncached
     let svg = String::from_utf8(body).unwrap();
     assert!(svg.contains(">?<"), "badge must show ?, got: {svg}");
 
+    // v2-admission R12/R16: the next run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let c = post_check(&h.app).await;
     assert_eq!(c.cache, "MISS", "the badge recompute must not cache");
     assert_incomplete(&c);
+    // Follows v2-admission Phase 3: no history entry exists for the incomplete run.
+    h.assert_history_stays_empty().await;
 }
 
 #[tokio::test]
@@ -354,7 +421,11 @@ async fn incomplete_c8_og_first_shows_unknown_card_and_leaves_check_uncached() {
     let cc = headers["cache-control"].to_str().unwrap();
     assert!(cc.contains(SHORT_CACHE), "short Cache-Control, got: {cc}");
 
+    // v2-admission R12/R16: the next run of the domain starts only after the throttle.
+    common::pass_throttle().await;
     let c = post_check(&h.app).await;
     assert_eq!(c.cache, "MISS", "the OG recompute must not cache");
     assert_incomplete(&c);
+    // Follows v2-admission Phase 3: no history entry exists for the incomplete run.
+    h.assert_history_stays_empty().await;
 }

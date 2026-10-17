@@ -5,19 +5,22 @@ use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 
-use lens::cache::{CachedResult, cache_key};
 use lens::check::CheckOutput;
 use lens::config::{BadgesConfig, CacheConfig};
 use lens::routes::badge_router;
 use lens::score::OverallScore;
 use lens::state::{AppState, BadgeCheckFn};
+use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
+use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
+use netray_model::{CheckId, Grade, Protocol, Status};
+use netray_store::HistoryStore;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,6 +73,7 @@ fn make_state_with_cache(ttl_seconds: u64) -> AppState {
             ttl_seconds,
             ..BadgesConfig::default()
         },
+        admission: lens::config::AdmissionConfig::default(),
         og_cards: lens::config::OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),
@@ -144,30 +148,46 @@ async fn cold_cache_triggers_single_check() {
 
 #[tokio::test]
 async fn warm_cache_skips_run_check() {
+    // Follows v2-admission Phase 3: the warm state is a fresh history head, not moka.
     let counter = Arc::new(AtomicUsize::new(0));
     let mut state = make_state_with_cache(300);
     // Mock would return "A" — but it must never be called.
     state.badge_check_fn = Some(mock_check_fn(counter.clone(), "A"));
 
-    // Seed the cache with a fresh "B" entry.
-    if let Some(cache) = &state.cache {
-        let cached = Arc::new(CachedResult {
-            sections: HashMap::new(),
-            score: OverallScore {
-                sections: HashMap::new(),
-                overall_percentage: 80.0,
-                grade: "B".to_string(),
-                hard_fail_triggered: false,
-                hard_fail_checks: vec![],
-                not_applicable: HashMap::new(),
-                complete: true,
-            },
-            duration_ms: 1,
-            cached_at: SystemTime::now(),
-            snapshot_id: None,
-        });
-        cache.insert(cache_key("example.com"), cached).await;
-    }
+    // Seed the history with a fresh complete run graded B (10 s old).
+    let dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&dir.path().join("history.db"))
+        .await
+        .unwrap();
+    store.migrate().await.unwrap();
+    let run = Run {
+        profile_version: state.scoring_profile.version,
+        engine_version: "0.26.0".into(),
+        evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        grade: Grade::B,
+        complete: true,
+        sections: vec![RunSection {
+            protocol: Protocol::Dns,
+            outcome: SectionKind::Measured,
+            reason: None,
+        }],
+        checks: vec![RunCheck {
+            id: CheckId::parse("dns.dnssec_valid").unwrap(),
+            status: Status::Pass,
+        }],
+        blocks: vec![],
+    };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    store
+        .record("example.com", &run, &[], now - 10, |p, c| {
+            netray_model::diff::diff(p, c, &[], None)
+        })
+        .await
+        .unwrap();
+    state.history_store = Some(Arc::new(store));
 
     let app = badge_app(state);
     let req = Request::builder()
@@ -181,7 +201,7 @@ async fn warm_cache_skips_run_check() {
     let body = std::str::from_utf8(&bytes).unwrap();
     assert!(
         body.contains(">B<"),
-        "warm cache response must serve cached grade B, not mock grade A"
+        "a fresh head must serve its grade B, not mock grade A"
     );
     assert_eq!(
         counter.load(Ordering::SeqCst),
@@ -249,9 +269,8 @@ async fn concurrent_requests_coalesce_to_single_check() {
         );
     }
 
-    // The rate limiter allows 1 token per TTL period per domain. The first request
-    // consumes the token and triggers run_check; subsequent requests are throttled
-    // (returning a ? badge) or served from cache. Either way, run_check fires once.
+    // The first request starts the run; the others join the run in flight (v2-admission
+    // R12/R16) and render its result. run_check fires once.
     assert_eq!(
         counter.load(Ordering::SeqCst),
         1,

@@ -116,6 +116,15 @@ pub struct Entry {
     pub engine_version: String,
 }
 
+/// The head of a domain's chain, without its payload columns.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Head {
+    pub id: String,
+    pub last_seen_at: i64,
+    pub grade: Grade,
+    pub profile_version: u32,
+}
+
 /// The history database. Every time value is Unix seconds, passed in by the caller.
 pub struct HistoryStore {
     pool: SqlitePool,
@@ -211,6 +220,12 @@ impl HistoryStore {
         latest_in(&mut conn, domain).await
     }
 
+    /// The head of the domain's chain without its payload columns, if any.
+    pub async fn head(&self, domain: &str) -> Result<Option<Head>, StoreError> {
+        let mut conn = self.pool.acquire().await?;
+        Ok(head_in(&mut conn, domain).await?.map(|(head, _)| head))
+    }
+
     /// One entry by id.
     pub async fn get(&self, id: &str) -> Result<Option<Entry>, StoreError> {
         let sql = format!("SELECT {ENTRY_COLUMNS} FROM entries e WHERE e.id = ?");
@@ -243,10 +258,10 @@ impl HistoryStore {
 
         let mut deleted = 0;
         for domain in domains {
-            let Some((latest_id, last_seen_at, predecessor_id)) = head_in(&mut tx, &domain).await?
-            else {
+            let Some((head, predecessor_id)) = head_in(&mut tx, &domain).await? else {
                 continue;
             };
+            let (latest_id, last_seen_at) = (head.id, head.last_seen_at);
             let result = if last_seen_at < cutoff {
                 sqlx::query("DELETE FROM entries WHERE domain = ?")
                     .bind(&domain)
@@ -281,25 +296,31 @@ async fn latest_in(conn: &mut SqliteConnection, domain: &str) -> Result<Option<E
     row.as_ref().map(entry_from_row).transpose()
 }
 
-/// The head's id, `last_seen_at` and `predecessor_id` only: no payload column is read.
+/// The head's id, `last_seen_at`, `predecessor_id`, grade and profile version: no payload column
+/// is read.
 async fn head_in(
     conn: &mut SqliteConnection,
     domain: &str,
-) -> Result<Option<(String, i64, Option<String>)>, StoreError> {
+) -> Result<Option<(Head, Option<String>)>, StoreError> {
     let sql = format!(
-        "SELECT e.id, e.last_seen_at, e.predecessor_id FROM entries e WHERE e.domain = ? \
-         {NEWEST_FIRST} LIMIT 1"
+        "SELECT e.id, e.last_seen_at, e.predecessor_id, e.grade, e.profile_version \
+         FROM entries e WHERE e.domain = ? {NEWEST_FIRST} LIMIT 1"
     );
     let row = sqlx::query(&sql)
         .bind(domain)
         .fetch_optional(&mut *conn)
         .await?;
     row.map(|r| {
-        Ok((
-            r.try_get("id")?,
-            r.try_get("last_seen_at")?,
-            r.try_get("predecessor_id")?,
-        ))
+        let grade: String = r.try_get("grade")?;
+        let profile_version: i64 = r.try_get("profile_version")?;
+        let head = Head {
+            id: r.try_get("id")?,
+            last_seen_at: r.try_get("last_seen_at")?,
+            grade: serde_json::from_value(serde_json::Value::String(grade))?,
+            profile_version: u32::try_from(profile_version)
+                .map_err(|_| StoreError(Kind::Corrupt("profile_version out of range".into())))?,
+        };
+        Ok((head, r.try_get("predecessor_id")?))
     })
     .transpose()
 }

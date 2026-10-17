@@ -47,6 +47,12 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.
 - The `ifconfig-rs-data` image also carries tracked files (`asn_patterns.toml`): never copy it over `crates/ip/data/`.
 - `adlc feature start` branches from `origin/main`: with unpushed commits on local `main`, fast-forward the new feature branch to `main` before writing the spec.
+- lens records a run after its response: a test reading `history.db` or the record-error counter after a response polls with a bound or awaits `state.runs.drain()`.
+- lens starts one run per domain per 60 s on tokio's clock: a second run of one domain in a test needs `common::pass_throttle()` (current_thread) or another domain.
+- A paused tokio clock times out sqlx pool acquires: never combine `start_paused` or `pause()` with a `HistoryStore`.
+- governor's `check` spends a token whatever follows: take a keyed limiter after every refusal that must cost nothing.
+- Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
+- Never put `|` in a `report.md` criteria cell, even in backticks: `adlc next` splits cells on it and keeps the phase open.
 
 The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
 

@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -20,6 +21,9 @@ use crate::config::Config;
 use crate::modules::ModuleSection;
 use crate::security::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
 
+/// Per-client GCRA budget of fresh runs, keyed by client address.
+pub type ClientBudgetLimiter = KeyedLimiter<IpAddr>;
+
 /// Per-domain GCRA rate limiter for badge recomputes.
 pub type BadgeRecomputeLimiter = KeyedLimiter<String>;
 
@@ -38,6 +42,8 @@ pub struct AppState {
     /// trusted proxy, from the forwarding headers.
     pub ip_extractor: Arc<IpExtractor>,
     pub badge_recompute_limiter: Arc<BadgeRecomputeLimiter>,
+    /// The V1 holder of the history head's V1 rendering, keyed by entry id; its TTL is the
+    /// cache window. Goes with the V1 wire.
     pub cache: Option<Arc<Cache<String, Arc<CachedResult>>>>,
     pub scoring_profile: Arc<Profile>,
     /// The modules and the resolve stage a check runs through.
@@ -58,6 +64,14 @@ pub struct AppState {
     pub history_store: Option<Arc<netray_store::HistoryStore>>,
     /// Fresh runs per client for the current hour; flushed hourly into a histogram.
     pub client_runs: Arc<crate::metrics::ClientRunCounter>,
+    /// The runs in flight, one per domain.
+    pub runs: Arc<crate::admission::Runs>,
+    /// When each domain's last run started.
+    pub throttle: Arc<crate::admission::Throttle>,
+    /// One permit per domain run in flight.
+    pub slots: Arc<tokio::sync::Semaphore>,
+    /// `None` when `client_budget_per_hour` is 0: no client may start a budgeted run.
+    pub client_budget: Option<Arc<ClientBudgetLimiter>>,
 }
 
 impl AppState {
@@ -82,6 +96,12 @@ impl AppState {
             .expect("badge ttl_seconds must be non-zero")
             .allow_burst(NonZeroU32::new(1).unwrap());
         let badge_recompute_limiter = Arc::new(RateLimiter::keyed(badge_quota));
+
+        let slots = Arc::new(tokio::sync::Semaphore::new(
+            config.admission.domain_run_slots as usize,
+        ));
+        let client_budget = NonZeroU32::new(config.admission.client_budget_per_hour)
+            .map(|n| Arc::new(RateLimiter::keyed(Quota::per_hour(n).allow_burst(n))));
 
         let cache = if config.cache.enabled {
             let ttl = Duration::from_secs(config.cache.ttl_seconds);
@@ -163,6 +183,10 @@ impl AppState {
             snapshot_store: None,
             history_store: None,
             client_runs: Arc::new(crate::metrics::ClientRunCounter::new()),
+            runs: Arc::new(crate::admission::Runs::default()),
+            throttle: Arc::new(crate::admission::Throttle::default()),
+            slots,
+            client_budget,
         })
     }
 }
@@ -230,6 +254,7 @@ mod tests {
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
+            admission: crate::config::AdmissionConfig::default(),
             og_cards: crate::config::OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
             history: crate::config::HistoryConfig::default(),
@@ -255,12 +280,16 @@ mod tests {
     }
 
     #[test]
-    fn cache_built_when_enabled() {
+    fn v1_holder_built_with_the_window_as_ttl() {
+        // Follows v2-admission Phase 3: moka only holds the V1 rendering, for the window.
         let mut config = test_config();
         config.cache.enabled = true;
         config.cache.ttl_seconds = 60;
         let state = AppState::new(config).unwrap();
-        assert!(state.cache.is_some(), "cache should be built when enabled");
+        assert_eq!(
+            state.cache.as_ref().unwrap().policy().time_to_live(),
+            Some(std::time::Duration::from_secs(60))
+        );
     }
 
     #[test]

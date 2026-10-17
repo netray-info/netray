@@ -103,6 +103,7 @@ fn state(s: Setup) -> AppState {
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
         modules: Default::default(),
+        admission: lens::config::AdmissionConfig::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),

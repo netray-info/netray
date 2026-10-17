@@ -33,6 +33,7 @@ pub mod ip_filter;
 pub mod metrics;
 #[cfg(feature = "middleware")]
 pub mod middleware;
+pub mod prefetch;
 pub mod rate_limit;
 pub mod security_headers;
 #[cfg(feature = "server")]

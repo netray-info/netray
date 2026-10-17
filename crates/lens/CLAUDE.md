@@ -43,7 +43,8 @@ lens/
       tls.rs              # Call tlsight, parse quality checks
       ip.rs               # Call ifconfig-rs /json?ip= per IP, map network.type to verdict
     score.rs              # Section results scored by netray_engine::score; catalogue texts by check name
-    cache.rs              # moka TTL cache keyed by domain
+    admission.rs          # one run per domain: join, throttle, slots, budget, prefetch; the run task
+    cache.rs              # hit decision from the history head; moka holds only the V1 rendering by entry id
     security/
       mod.rs
       rate_limit.rs       # GCRA per-IP + global

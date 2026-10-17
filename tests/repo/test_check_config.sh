@@ -94,6 +94,7 @@ startup_rejects=(
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^bind = .*|bind = \"nope\"|"
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^metrics_bind = .*|metrics_bind = \"nope\"|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[badges]\\nttl_seconds = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s/^domain_run_slots = .*/domain_run_slots = 0/"
 )
 n=0
 for row in "${startup_rejects[@]}"; do
@@ -108,6 +109,19 @@ for row in "${startup_rejects[@]}"; do
     run_check "$sub" "$tmp/$sub.reject$n.toml"
     [ "$rc" -eq 1 ] || fail "$sub: startup-rejected value ($expr) exited $rc, expected 1"
 done
+
+# specs/features/v2-admission C6: the lens fixture carries `[admission]` with both keys, and
+# `client_budget_per_hour = 0` is valid (it means "no per-client budget"), unlike
+# `domain_run_slots = 0` (a startup_rejects row above).
+sed -n '/^\[admission\]/,/^\[/p' "$lens_fixture" | grep -q '^client_budget_per_hour = 30$' || fail "lens: [admission] does not carry client_budget_per_hour = 30"
+sed -n '/^\[admission\]/,/^\[/p' "$lens_fixture" | grep -q '^domain_run_slots = 8$' || fail "lens: [admission] does not carry domain_run_slots = 8"
+perl -pe 's/^client_budget_per_hour = .*/client_budget_per_hour = 0/' "$lens_nodata" >"$tmp/lens.budget0.toml"
+if cmp -s "$lens_nodata" "$tmp/lens.budget0.toml"; then
+    fail "lens: client_budget_per_hour substitution did not change the data-free copy"
+else
+    run_check lens "$tmp/lens.budget0.toml"
+    [ "$rc" -eq 0 ] || fail "lens: client_budget_per_hour = 0 exited $rc, expected 0 ($out)"
+fi
 
 # Telemetry init panics on an OTLP endpoint that is not a valid URI; the check must name
 # the key, so a row cannot pass by tripping over an unknown field instead.

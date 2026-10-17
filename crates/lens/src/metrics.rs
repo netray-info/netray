@@ -16,7 +16,7 @@ pub const HISTOGRAM_BUCKETS: &[(&str, &[f64])] = &[
 
 /// Creates the admission series at zero so they render before the first request.
 pub fn init_zero_series() {
-    for result in ["rate_limited", "cache_hit", "fresh"] {
+    for result in ["rate_limited", "cache_hit", "fresh", "joined"] {
         metrics::counter!("lens_check_requests_total", "result" => result).increment(0);
     }
     for cache in ["hit", "miss", "throttled", "failed"] {
@@ -24,6 +24,9 @@ pub fn init_zero_series() {
     }
     for scope in ["per_ip", "global", "badge", "og"] {
         metrics::counter!("lens_rate_limit_hits_total", "scope" => scope).increment(0);
+    }
+    for reason in ["throttle", "budget", "limit", "slots"] {
+        metrics::counter!("lens_admission_rejections_total", "reason" => reason).increment(0);
     }
     metrics::gauge!("lens_runs_in_flight").set(0.0);
     metrics::counter!("lens_history_record_errors_total").increment(0);

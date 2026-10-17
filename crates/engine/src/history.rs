@@ -8,9 +8,14 @@ use crate::profile::Profile;
 use crate::scoring::score;
 use crate::{SectionEvent, SectionOutcome};
 
-/// The grade of `run` under `profile`. The sections and check statuses are rebuilt as the
-/// engine produced them, without findings or evidence, which scoring does not read.
+/// The grade of `run` under `profile`.
 pub fn rescore(run: &Run, profile: &Profile) -> Grade {
+    score_run(run, profile).grade
+}
+
+/// The score of `run` under `profile`. The sections and check statuses are rebuilt as the
+/// engine produced them, without findings or evidence, which scoring does not read.
+pub fn score_run(run: &Run, profile: &Profile) -> crate::scoring::Score {
     let events: Vec<SectionEvent> = run
         .sections
         .iter()
@@ -44,7 +49,7 @@ pub fn rescore(run: &Run, profile: &Profile) -> Grade {
             }
         })
         .collect();
-    score(profile, &events).grade
+    score(profile, &events)
 }
 
 /// Compares `cur` with its predecessor `prev`. When the profile versions differ, `prev` is

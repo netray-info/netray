@@ -1,3 +1,4 @@
+pub mod admission;
 pub mod api_doc;
 pub mod badge;
 pub mod cache;
@@ -129,6 +130,7 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
 
     let client_runs = std::sync::Arc::clone(&state.client_runs);
     let shell = spa::Shell(state.rendered_html.clone());
+    let runs = std::sync::Arc::clone(&state.runs);
 
     // 5. Build the main app with all middleware.
     let app = Router::new()
@@ -242,6 +244,17 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
     .with_graceful_shutdown(wait_for_shutdown(shutdown_rx))
     .await
     .expect("server error");
+
+    let drain_bound = crate::check::HARD_DEADLINE + std::time::Duration::from_secs(10);
+    if tokio::time::timeout(drain_bound, runs.drain())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            bound_s = drain_bound.as_secs(),
+            "shutdown: runs still in flight at the drain bound"
+        );
+    }
 
     // Flush pending OTel spans on shutdown.
     netray_common::telemetry::shutdown();
