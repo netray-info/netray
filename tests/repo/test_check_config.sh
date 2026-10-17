@@ -123,6 +123,22 @@ else
     [ "$rc" -eq 0 ] || fail "lens: client_budget_per_hour = 0 exited $rc, expected 0 ($out)"
 fi
 
+# specs/features/v2-api C32: an unknown key under `[api]` or `[api.ip]` fails the check and the
+# output names the key.
+api_rejects=(
+    "api bogus|[api]\nbogus = 1"
+    "api.ip bogus|[api.ip]\nbogus = 1"
+)
+n=0
+for row in "${api_rejects[@]}"; do
+    IFS='|' read -r label body <<<"$row"
+    n=$((n + 1))
+    { cat "$lens_nodata"; printf '\n%b\n' "$body"; } >"$tmp/lens.api$n.toml"
+    run_check lens "$tmp/lens.api$n.toml"
+    [ "$rc" -eq 1 ] || fail "lens: [$label] exited $rc, expected 1 ($out)"
+    grep -qF 'bogus' <<<"$out" || fail "lens: [$label] error does not name 'bogus' ($out)"
+done
+
 # Telemetry init panics on an OTLP endpoint that is not a valid URI; the check must name
 # the key, so a row cannot pass by tripping over an unknown field instead.
 bad_otlp='otlp_endpoint = \"http://bad host:4318\"'

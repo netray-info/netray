@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # specs/features/v2-design-system, requirement 1 (with 3): crates/web is the package netray-web,
-# edition 2024, depending on netray-common by path and on askama 0.16; the netray binary does not
-# depend on it. The crate's shape includes its token source (tokens.json) and a build.rs.
+# edition 2024, depending on netray-common by path and on askama 0.16; the netray binary depends on it
+# (v2-api requirement 1: crates/netray builds the parts). The crate's shape includes its token source (tokens.json) and a build.rs.
 # specs/features/v2-entries, requirement 9: a `Router` appears only under crates/web/src/entries/,
 # pages/ and api/ (the allow-list v2-pages and v2-api share), axum is allowed as a dependency, and
 # lens depends on netray-web. The Router scan is a function over a root dir, self-tested on scratch
@@ -42,9 +42,9 @@ if [ -d crates/web/src ]; then
     done < <(router_offenders crates/web/src)
 fi
 
-json=$(cargo metadata --no-deps --offline --format-version 1) || { fail "cargo metadata failed"; json=""; }
-if [ -n "$json" ]; then
-    out=$(printf '%s' "$json" | python3 -I -c '
+# manifest_report: reads `cargo metadata` JSON on stdin; prints facts and `ERR <what>` lines.
+manifest_report() {
+    python3 -I -c '
 import json, os, sys
 meta = json.load(sys.stdin)
 root = meta["workspace_root"]
@@ -73,14 +73,25 @@ if not bins:
 else:
     nd = sorted(d["name"] for d in bins[0]["dependencies"])
     print("netray deps=%s" % nd)
-    if "netray-web" in nd: errs.append("netray depends on netray-web")
+    if "netray-web" not in nd: errs.append("netray does not depend on netray-web")
 lens = [p for p in meta["packages"] if p["name"] == "lens"]
 if not lens:
     errs.append("package lens not found")
 elif not any(d["name"] == "netray-web" and d.get("kind") is None for d in lens[0]["dependencies"]):
     errs.append("lens does not depend on netray-web")
 for e in errs: print("ERR " + e)
-')
+'
+}
+
+# self-test: a synthetic metadata with edition 2021 is refused on the edition.
+synthetic='{"workspace_root":"/w","packages":[{"name":"netray-web","manifest_path":"/w/crates/web/Cargo.toml","edition":"2021","targets":[{"kind":["lib"]}],"dependencies":[]}]}'
+printf '%s' "$synthetic" | manifest_report | grep -q '^ERR netray-web edition is 2021$' \
+    || fail "self-test: edition 2021 was not refused"
+
+json=$(cargo metadata --no-deps --offline --format-version 1) || { fail "cargo metadata failed"; json=""; }
+if [ -n "$json" ]; then
+    out=$(printf '%s' "$json" | manifest_report)
+
     printf '%s\n' "$out" | grep -v '^ERR '
     while IFS= read -r e; do fail "${e#ERR }"; done < <(printf '%s\n' "$out" | grep '^ERR ')
 fi
