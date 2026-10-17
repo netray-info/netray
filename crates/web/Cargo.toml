@@ -11,6 +11,8 @@ netray-model = { workspace = true }
 netray-engine = { workspace = true }
 netray-store = { workspace = true }
 askama = { workspace = true }
+axum = { workspace = true }
+tracing = { workspace = true }
 serde_json = { workspace = true }
 
 [build-dependencies]
@@ -19,4 +21,8 @@ serde_json = { workspace = true }
 [dev-dependencies]
 proptest = "1"
 tempfile = "3"
+tower = { workspace = true, features = ["util"] }
+http-body-util = { workspace = true }
+sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
+tracing-subscriber = "0.3"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

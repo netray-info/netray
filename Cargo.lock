@@ -3112,14 +3112,20 @@ name = "netray-web"
 version = "0.26.0"
 dependencies = [
  "askama",
+ "axum",
+ "http-body-util",
  "netray-common",
  "netray-engine",
  "netray-model",
  "netray-store",
  "proptest",
  "serde_json",
+ "sqlx",
  "tempfile",
  "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
