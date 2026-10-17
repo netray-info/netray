@@ -102,3 +102,50 @@ Pass 2:
 ### Behavioural verification
 
 skipped: Phase 2 adds a library function with no route, CLI or UI entry point (spec non-goals).
+
+## Phase 3 — The component renders a layout
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R15: one conversion builds `SpectrumView` from a layout and the shown run; x and height in percent; labels in rows at `scaled_start`'s CSS form; leaders; opaque label boxes after the leaders; band height from the largest row count; scroll box `min-width: calc(<n> * var(--spectrum-line-pitch-min))`; 4a drawing rules hold | green | crates/web/tests/spectrum_component.rs |
+| C2 | R16: tokens `spectrum.labelLeader` 8px and `spectrum.labelRow` 14px; labels in `--font-size-label` and `--font-mono`; gate passes | green | crates/web/tests/spectrum_styles.rs |
+| C3 | R17: SDD §5.5 point 3 names the row tokens; §8.3 `spectrum` row says it renders a layout with every run's state and one `band-<protocol>` group per protocol | green | tests/repo/test_spectrum_component_sdd.sh |
+| C4 | R18: bands per protocol, per-run groups and label sets, `data-shown` on the shown run only, `data-unmeasured` for an Unmeasured section, SDD §5.5 point 4 markup shape | green | crates/web/tests/spectrum_component.rs, tests/repo/test_spectrum_component_sdd.sh |
+| C5 | 432 px, fail on line 0: `x1` is `0.9259%`; box `min-width: calc(54 * var(--spectrum-line-pitch-min))` | green | crates/web/tests/spectrum_component.rs |
+| C6 | row 2 label: `bottom: calc(var(--spectrum-label-leader) + 2 * var(--spectrum-label-row))`; its leader's height the same calc | green | crates/web/tests/spectrum_component.rs |
+| C7 | band height: 4 rows → 4; 1 used row → 3; runs with 3 and 5 rows → 5 | green | crates/web/tests/spectrum_component.rs |
+| C8 | groups `band-dns` … `band-ip` in order, each ID once, 10, 21, 12, 10, 1 lines per run | green | crates/web/tests/spectrum_component.rs |
+| C9 | three runs: `data-run` 0, 1, 2 per band, three label sets, only the shown run carries `data-shown` | green | crates/web/tests/spectrum_component.rs |
+| C10 | email `Unmeasured`: `band-email`'s run group has `data-unmeasured`, lines muted with height > 0; no other band | green | crates/web/tests/spectrum_component.rs |
+| C11 | TLS and HTTP `NotApplicable`: no `data-unmeasured`; lines muted with height > 0 | green | crates/web/tests/spectrum_component.rs |
+| C12 | two renders with different shown runs differ only in `data-shown` | green | crates/web/tests/spectrum_component.rs |
+| C13 | every leader precedes every label in a label set; `.spectrum__line-label` has `background: var(--color-bg)` | green | crates/web/tests/spectrum_component.rs |
+| C14 | pass and muted lines: no label and no leader | green | crates/web/tests/spectrum_component.rs |
+| C15 | `.spectrum` has `overflow-x: auto`; `.spectrum__line-label` has `font-size: var(--font-size-label)` and `font-family: var(--font-mono)` | green | crates/web/tests/spectrum_styles.rs |
+| C16 | `tokens.css` `:root` holds `--spectrum-label-leader: 8px` and `--spectrum-label-row: 14px` | green | crates/web/tests/spectrum_styles.rs |
+| C17 | the 4a drawing-rule tests pass against the new view with only their literals changed | green | crates/web/tests/drawing_rules.rs, crates/web/tests/components.rs |
+| C18 | the gate passes on the changed template and stylesheet; a planted `bottom: 22px; font-size: 12px` fails on the font size only | green | crates/web/tests/spectrum_styles.rs |
+
+One test was wrong against R11 and corrected under `ADLC-Test-Change` (c7's mixed case expected 3 rows for a current run with two fixed lines). C18's gate plant passed before the phase (the gate never bound `bottom`); kept as a guard. The 4a test helper `line_tag` searches from the plate, since label spans now carry `data-code`.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet (after a test fix) | 47421 | 71 |
+| G2 | 1 | sonnet | 26100 | 21 |
+
+### Review
+
+Pass 1: no blockers.
+- DEFERRED the IP group name spills past the box's right edge and scrolls the box at 432–920 px → `v2-result-page` (group-name placement and the one-line IP group, spec Out of scope).
+- NIT group names moved to `--font-size-label` with the line labels → decision log entry.
+- NIT `spectrum_pass_and_unmeasured_lines_carry_no_short_name_above_the_plate` is vacuous since the view carries labels only for placed lines; the rule stays guarded by c14 and property claim (b).
+- NIT the scroll box assumes the placement at n × linePitchMin (R15 prose; the caller's width).
+- NIT an out-of-range `shown` hides every run.
+
+### Behavioural verification
+
+The reviewer rendered the component with the generated tokens.css and spectrum.css in headless Chromium: 108 lines with 54 visible (only the shown run), labels at 8, 22, 36 and 50 px with leaders ending at their label, band height 8 + rows × 14 px, edge clamp equal to `scaled_start` at 432 and 1056 px. No route serves the component yet (spec non-goals).

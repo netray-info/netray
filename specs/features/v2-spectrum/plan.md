@@ -29,3 +29,20 @@ G1: C1–C4, C6–C17 · G2: C5 (C18 already green). One commit (SDD rides with 
 ### G2
 - `specs/sdd/v2.md`: §5.4 first paragraph gives `spectrum::layout(current, older, catalogue, width)` in `netray_web::spectrum` and says a caller maps stored entries onto statuses with profiles; §3.9:454 paragraph adds the measured-only effective weight and the muted height; §8.1 gains the `src/spectrum.rs` row; the V4.4 row names `v2-spectrum`, `v2-result-page` (OG cards incl. `/r/<id>/og.png`, X4) and `v2-inspectors`.
 - `crates/web/tokens.json`: `spectrum.linePitchMin.$description` says 54 checks at 390 px with 16 px gutters (358 px of content) give 6.6 px.
+
+## Phase 3 — The component renders a layout
+
+## Groups
+
+G1: C1, C2, C4 (component), C5–C18 · G2: C3, C4 (SDD §5.5 point 4).
+
+## Plan
+
+### G1
+- `crates/web/tokens.json`: `spectrum.labelLeader` 8px and `spectrum.labelRow` 14px after `traceRow` (build.rs generates the CSS and Rust names unchanged).
+- `crates/web/src/components.rs`: the contract's view types (f64), `SpectrumView::from_layout(&Layout, &str, usize)` (bands from groups, boundary percent, lines and heights in percent, `unmeasured` from the run's `SectionState`, labels from `spectrum::Label`, regions in lower-case protocol names, rows = largest run row count), private `LineTone → Tone`, formatting helpers `{:.4}` percent and `{:.2}` px.
+- `templates/components/spectrum.html`: scroll box, label band with per-run label sets (leaders first, then labels at `clamp(0px, x%, calc(100% - wpx))`), plate with `band-<protocol>` groups holding the boundary and per-run groups, axis; no px in `bottom`/`height`.
+- `static/spectrum.css`: `overflow-x: auto`, label band and absolute label sets, hidden `[data-run]:not([data-shown])`, labels in `--font-size-label`/`--font-mono` on `--color-bg`, `.spectrum__leader` in the status mark colours. Group names move from `--font-size-caption` to `--font-size-label` with the shared rule.
+
+### G2
+- `specs/sdd/v2.md` §5.5 point 3 names `spectrum.labelLeader` and `spectrum.labelRow` and the band height; point 4 gives the markup (`band-<protocol>`, `data-run`, `data-shown`, `data-unmeasured`); §8.3 splits the `spectrum`, `trace` row, the `spectrum` row saying it renders a `spectrum::layout` with every run's state and one `band-<protocol>` group per protocol.
