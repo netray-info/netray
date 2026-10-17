@@ -939,6 +939,19 @@ const CASES: &[Case] = &[
         expect: Some((SCRIPT_RULE, "templates/x.html")),
     },
     Case {
+        name: "javascript inside an unquoted query is no javascript url",
+        files: &[("templates/x.html", "<a href=/search?q=javascript:x>x</a>\n")],
+        expect: None,
+    },
+    Case {
+        name: "javascript in a title after an unquoted value span is no javascript url",
+        files: &[(
+            "templates/x.html",
+            "<a href={{ u }} title=\"javascript: guide\">x</a>\n",
+        )],
+        expect: None,
+    },
+    Case {
         name: "quoted values holding askama and an apostrophe pass",
         files: &[(
             "templates/x.html",
