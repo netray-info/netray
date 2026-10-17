@@ -163,3 +163,40 @@ fn the_rules_prerender_only_guide_and_report_pages() {
         assert_eq!(pats.iter().filter(|p| glob(p, path)).count(), 1, "{path}");
     }
 }
+
+/// Reader, phase 3: responses axum builds itself (405, an extractor rejection) and the bare
+/// `/static/` path are responses of the router too (requirements 10 and 11).
+#[tokio::test]
+async fn framework_responses_carry_the_headers_and_static_misses_the_404_page() {
+    let csp = csp_for(&hash(RULES));
+    let res = pages::router()
+        .oneshot(
+            Request::post("/static/app.css")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 405);
+    assert_eq!(header(&res, "content-security-policy"), csp, "405");
+    assert_eq!(header(&res, "x-frame-options"), "DENY", "405");
+    assert_eq!(
+        header(&res, "cross-origin-resource-policy"),
+        "same-origin",
+        "405"
+    );
+
+    for path in ["/static/%FF", "/static/"] {
+        let res = pages::router()
+            .oneshot(Request::get(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 404, "{path}");
+        assert_eq!(header(&res, "content-security-policy"), csp, "{path}");
+        let html = body(res).await;
+        assert!(
+            html.contains("<html lang=\"en\">"),
+            "{path}: not the 404 page"
+        );
+    }
+}

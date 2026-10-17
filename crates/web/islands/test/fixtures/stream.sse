@@ -2,4 +2,5 @@ event: fragment
 data: {"id":"band-dns","html":"<g id=\"band-dns\"></g>"}
 
 event: end
+data: {}
 

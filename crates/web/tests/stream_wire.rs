@@ -2,7 +2,7 @@
 //! vitest suite (`crates/web/islands/test/stream-fixture.test.ts`) feeds to the stream island.
 //!
 //! The events go through axum's real `Sse` response body, so the framing is exactly what a
-//! client receives. axum writes nothing for an empty `data("")`, so `end` is `event: end\n\n`.
+//! client receives. `end` carries `data: {}`: a conforming SSE parser drops an event whose data is empty.
 //!
 //! `UPDATE_GOLDEN=1 cargo test -p netray-web --test stream_wire` rewrites stream.sse.
 
@@ -49,5 +49,8 @@ async fn stream_wire_matches_island_fixture() {
     let json: serde_json::Value = serde_json::from_str(data).expect("fragment data is JSON");
     assert_eq!(json["id"], "band-dns");
     assert_eq!(json["html"], "<g id=\"band-dns\"></g>");
-    assert_eq!(events[1].lines().next(), Some("event: end"));
+    assert_eq!(
+        events[1].lines().collect::<Vec<_>>(),
+        ["event: end", "data: {}"]
+    );
 }

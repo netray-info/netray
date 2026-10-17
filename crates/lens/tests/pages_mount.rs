@@ -75,3 +75,13 @@ async fn robots_is_lenss_own_with_lens_csp() {
     assert_eq!(body, "User-agent: *\nAllow: /\n");
     assert_eq!(csp(&headers), LENS_CSP);
 }
+
+/// Reader, phase 3: under lens the pages keep requirement 11's headers, not only the CSP;
+/// lens's own routes keep lens's values.
+#[tokio::test]
+async fn pages_keep_their_security_headers_under_lens() {
+    let (_, headers, _) = get("/static/app.css").await;
+    assert_eq!(headers["cross-origin-resource-policy"], "same-origin");
+    let (_, headers, _) = get("/").await;
+    assert_eq!(headers["cross-origin-resource-policy"], "cross-origin");
+}

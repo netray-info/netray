@@ -228,3 +228,39 @@ async fn not_found_and_server_error_share_prefix_and_footer() {
     // v2-entries: with `crates/web/src/entries` landed, also compare the privacy page's
     // prefix and footer against the 404 page here.
 }
+
+/// Reader, phase 3: the navigation labels are requirement 9's approved ones.
+#[tokio::test]
+async fn navigation_labels_are_the_approved_ones() {
+    let html = netray_web_frame_body().await;
+    for (href, label) in [
+        ("/guide/", "Guides"),
+        ("/compare", "Compare"),
+        ("/status", "Status"),
+        ("https://ip.netray.info", "IP"),
+        ("https://dns.netray.info", "DNS"),
+        ("https://tls.netray.info", "TLS"),
+        ("https://http.netray.info", "HTTP"),
+    ] {
+        let at = html
+            .find(&format!("href=\"{href}"))
+            .unwrap_or_else(|| panic!("no link to {href}"));
+        let tail = &html[at..];
+        let text = &tail[tail.find('>').unwrap() + 1..tail.find("</a>").unwrap()];
+        assert_eq!(text.trim(), label, "label of {href}");
+    }
+}
+
+async fn netray_web_frame_body() -> String {
+    use axum::body::Body;
+    use axum::http::Request;
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+    let res = axum::Router::new()
+        .merge(netray_web::pages::router())
+        .fallback(netray_web::pages::not_found)
+        .oneshot(Request::get("/nope").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    String::from_utf8(res.into_body().collect().await.unwrap().to_bytes().to_vec()).unwrap()
+}
