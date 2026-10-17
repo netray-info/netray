@@ -715,6 +715,54 @@ const CASES: &[Case] = &[
         )],
         expect: None,
     },
+    Case {
+        name: "handler glued to an unquoted askama class value",
+        files: &[(
+            "templates/x.html",
+            "<button class={{ c }}onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "handler glued to an unquoted askama script src",
+        files: &[(
+            "templates/x.html",
+            "<script src={{ a }}onload=\"go()\"></script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "apostrophe after an unquoted askama value opens no quote",
+        files: &[(
+            "templates/x.html",
+            "<a title={{ n }}'s onclick=\"go()\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "double quote after an unquoted askama value opens no quote",
+        files: &[(
+            "templates/x.html",
+            "<button class={{ c }}\" onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "stray quote after an unquoted askama value does not hide later tags",
+        files: &[(
+            "templates/x.html",
+            "<p class={{ c }}\">x</p>\n<button onclick=\"go()\">y</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quoted values holding askama and an apostrophe pass",
+        files: &[(
+            "templates/x.html",
+            "<a title=\"it's {{ n }}\" class='{{ c }}' href=\"/\">x</a>\n",
+        )],
+        expect: None,
+    },
 ];
 
 #[test]
