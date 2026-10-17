@@ -151,7 +151,9 @@ fn parse_table(html: &str) -> Table {
                 .into_iter()
                 .find(|(a, _)| a.contains("row-detail"))
                 .map(|(_, d)| {
-                    d.split("<br>")
+                    // Split on `<strong>`, not `<br>`: V1's TLS "Cipher suites" detail lacks
+                    // one `<br>` between two competitor notes.
+                    d.split("<strong>")
                         .filter(|s| s.contains("</strong>"))
                         .skip(1) // the netray entry
                         .map(|s| text(s.split("</strong>").nth(1).unwrap()))
@@ -183,7 +185,7 @@ fn v1() -> String {
 
 fn v1_tables() -> Vec<Table> {
     let t = tables(&v1());
-    assert_eq!(t.len(), 5, "V1: Table 1 plus four axes");
+    assert_eq!(t.len(), 6, "V1: Table 1 plus five axes");
     t
 }
 
