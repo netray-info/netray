@@ -158,6 +158,13 @@ fn main() {
     block(&mut css, "  ", ":root", None, &dark);
     writeln!(css, "}}").unwrap();
     block(&mut css, "", "[data-theme=\"dark\"]", Some("dark"), &dark);
+    block(
+        &mut css,
+        "",
+        "[data-theme=\"light\"]",
+        Some("light"),
+        &light,
+    );
     writeln!(css, "@media (max-width: {phone_width}) {{").unwrap();
     block(&mut css, "  ", ":root", None, &phone);
     writeln!(css, "}}").unwrap();

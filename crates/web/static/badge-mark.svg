@@ -1,8 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+<svg id="netray-badge-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
 <title>netray</title>
 <style>
-.tile { fill: #0f1216 }
-.mark { fill: #e7e9ec }
+#netray-badge-mark .tile { fill: #0f1216 }
+#netray-badge-mark .mark { fill: #e7e9ec }
 </style>
 <path id="tile" class="tile" fill-rule="evenodd" d="M2 0 H14 A2 2 0 0 1 16 2 V14 A2 2 0 0 1 14 16 H2 A2 2 0 0 1 0 14 V2 A2 2 0 0 1 2 0 Z M7 3.16 H9 V9.76 H13.5 V10.76 H12.3 V11.52 H11.3 V10.76 H9 V12.84 H7 V10.76 H5.92 V11.52 H4.92 V10.76 H3.83 V11.52 H2.83 V10.76 H2.5 V9.76 H7 Z"/>
 <path id="mark" class="mark" d="M7 3.16 H9 V9.76 H13.5 V10.76 H12.3 V11.52 H11.3 V10.76 H9 V12.84 H7 V10.76 H5.92 V11.52 H4.92 V10.76 H3.83 V11.52 H2.83 V10.76 H2.5 V9.76 H7 Z"/>
