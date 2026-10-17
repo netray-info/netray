@@ -9,7 +9,7 @@ cd "$(dirname "$0")/../.." || exit 1
 
 # section_text <v2.md> <from-heading-prefix> <to-heading-prefix>
 section_text() {
-    awk -v from="$2" -v to="$3" 'index($0, from) == 1 { on = 1; next } index($0, to) == 1 { on = 0 } on' "$1" 2>/dev/null
+    awk -v from="$2" -v to="$3" 'index($0, from) == 1 { on = 1; next } (index($0, to) == 1 || /^## /) { on = 0 } on' "$1" 2>/dev/null
 }
 
 # rows: "<section>|<label>|<ERE>" -- section is 4.6 or 4.7; one row per load-bearing token.
@@ -31,6 +31,11 @@ rows() {
 4.6|the OG card switches to spectrum::layout|spectrum::layout
 4.6|the OG card switch is V4.4|V4\.4
 4.6|v2-result-page makes the OG card switch|v2-result-page
+4.7|the page is served at /privacy|/privacy
+4.7|the page is served by netray-web|netray-web
+4.7|lens mounts the page until V5.1|V5\.1
+row:V2.7|the V2.7 row names v2-entries as its builder|v2-entries
+row:V2.8|the V2.8 row names v2-entries as its builder|v2-entries
 ROWS
 }
 
@@ -42,9 +47,11 @@ sdd_problems() {
         case $name in
             4.6) sec=$(section_text "$sdd" '### 4.6' '### 4.7') ;;
             4.7) sec=$(section_text "$sdd" '### 4.7' '### 4.8') ;;
+            row:*) sec=$(grep -F -- "| ${name#row:} |" "$sdd" 2>/dev/null) ;;
             *) echo "test bug: unknown section $name"; continue ;;
         esac
         if [ -z "$sec" ]; then
+            case $name in row:*) echo "SDD has no row ${name#row:}"; continue ;; esac
             case " $seen " in *" $name "*) ;; *) echo "SDD has no section $name"; seen="$seen $name" ;; esac
             continue
         fi
@@ -66,7 +73,10 @@ good_sdd() {
         'Until V4.5 the entry renders the minimal page, served by the router lens mounts until V5.1.' \
         'Until V4.4 the OG card shows grade, domain and recording time in the V1 layout and no score;' \
         'v2-result-page then switches it to `spectrum::layout`.' \
-        '### 4.7 Privacy (R16)' 'text' '### 4.8 Next' > "$1"
+        '### 4.7 Privacy (R16)' \
+        'The page is served by `netray-web` at `/privacy`; lens mounts it until V5.1.' \
+        '### 4.8 Next' \
+        '| V2.7 | entry page | R15 | v2-entries |' '| V2.8 | privacy page | R16 | v2-entries |' > "$1"
 }
 good_sdd "$tmp/ok.md"
 [ -z "$(sdd_problems "$tmp/ok.md")" ] || fail "self-test: good SDD reported '$(sdd_problems "$tmp/ok.md")'"
@@ -90,6 +100,11 @@ bad s_noscore 's/no score/a score/' "OG card shows no score"
 bad s_layout 's/spectrum::layout/another layout/' "switches to spectrum::layout"
 bad s_v44 's/V4\.4/V4.9/' "switch is V4.4"
 bad s_rp 's/v2-result-page/a later phase/' "v2-result-page makes the OG card switch"
+bad s_priv '/^The page/s#/privacy#a path#' "served at /privacy"
+bad s_pweb '/^The page/s/netray-web/the crate/' "served by netray-web"
+bad s_p51 '/^The page/s/V5\.1/V5.9/' "page until V5.1"
+bad s_r27 '/| V2.7 |/s/v2-entries/someone/' "V2.7 row names v2-entries"
+bad s_r28 '/| V2.8 |/s/v2-entries/someone/' "V2.8 row names v2-entries"
 printf '### 4.7 Privacy\n' > "$tmp/nosec.md"
 expect "$(sdd_problems "$tmp/nosec.md")" "SDD has no section 4.6" "no 4.6"
 
