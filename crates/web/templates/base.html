@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ frame.title }}</title>
-<meta name="description" content="{{ frame.description }}">
+<title>{% block title %}{{ frame.title }}{% endblock %}</title>
+{% block meta %}<meta name="description" content="{{ frame.description }}">
 <link rel="canonical" href="https://netray.info{{ frame.canonical }}">
 <meta property="og:title" content="{{ frame.title }}">
 <meta property="og:description" content="{{ frame.description }}">
-<meta property="og:image" content="{{ frame.og_image }}">
+<meta property="og:image" content="{{ frame.og_image }}">{% endblock %}
 {% block head %}{% endblock %}
 {% block styles %}<link rel="stylesheet" href="/static/app.css">
 <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">{% endblock %}

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# specs/features/v2-design-system, requirement 1 (with 3), amended by v2-pages requirement 8:
-# crates/web is the package netray-web, edition 2024, a library; a Router only under entries/,
-# pages/, api/; depends on netray-common and netray-engine by path, askama 0.16, axum, and
-# sha2/base64 via [workspace.dependencies]. The crate's shape includes its token source
-# (tokens.json) and a build.rs. Cargo is asked via `cargo metadata --no-deps --offline`.
+# specs/features/v2-design-system, requirement 1 (with 3), amended by v2-pages requirement 8 and
+# v2-entries requirement 9: crates/web is the package netray-web, edition 2024, a library; a
+# `Router` appears only under crates/web/src/entries/, pages/ and api/; it depends on
+# netray-common and netray-engine by path, askama 0.16, axum, and sha2/base64 via
+# [workspace.dependencies]; lens depends on netray-web. The crate's shape includes its token
+# source (tokens.json) and a build.rs. The Router scan is a function over a root dir, self-tested
+# on scratch input. Cargo is asked via `cargo metadata --no-deps --offline`.
 set -uo pipefail
 cd "$(dirname "$0")/../.." || exit 1
 
@@ -13,22 +15,32 @@ fail() { echo "FAIL: $1"; fails=1; }
 [ -f crates/web/tokens.json ] || fail "crates/web/tokens.json is missing (the crate's token source)"
 [ -f crates/web/build.rs ] || fail "crates/web/build.rs is missing"
 
-# Requirement 8: a Router is allowed under entries/, pages/ and api/ and nowhere else in the crate.
-router_scan() {
-    local dir="$1" f rel
-    [ -d "$dir" ] || return 0
-    while IFS= read -r f; do
-        rel="${f#"$dir"/}"
+# router_offenders <src-root>: files naming a Router outside entries/, pages/ and api/.
+router_offenders() {
+    local root=$1 f rel
+    grep -rlE '\bRouter\b' "$root" 2>/dev/null | while IFS= read -r f; do
+        rel=${f#"$root"/}
         case "$rel" in
             entries/*|pages/*|api/*) ;;
             *) echo "$rel" ;;
         esac
-    done < <(grep -rElw '\bRouter\b' "$dir" 2>/dev/null | sort)
+    done
 }
 
-while IFS= read -r f; do
-    [ -n "$f" ] && fail "crates/web/src/$f names a Router (allowed only under entries/, pages/, api/)"
-done < <(router_scan crates/web/src)
+scratch=$(mktemp -d) || exit 1
+trap 'rm -rf "$scratch"' EXIT
+mkdir -p "$scratch/ok/entries" "$scratch/ok/pages" "$scratch/ok/api" "$scratch/bad/entries"
+for f in entries/router.rs pages/x.rs api/x.rs; do echo 'fn r() -> Router {}' > "$scratch/ok/$f"; done
+echo 'fn r() -> Router {}' > "$scratch/bad/entries/router.rs"
+echo 'fn r() -> Router {}' > "$scratch/bad/components.rs"
+[ -z "$(router_offenders "$scratch/ok")" ] || fail "self-test: a Router under entries/, pages/ or api/ was refused"
+[ "$(router_offenders "$scratch/bad")" = "components.rs" ] || fail "self-test: a Router in components.rs was not the one refusal"
+
+if [ -d crates/web/src ]; then
+    while IFS= read -r f; do
+        fail "crates/web/src/$f names a Router outside entries/, pages/ and api/"
+    done < <(router_offenders crates/web/src)
+fi
 
 json=$(cargo metadata --no-deps --offline --format-version 1) || { fail "cargo metadata failed"; json=""; }
 if [ -n "$json" ]; then
@@ -59,6 +71,11 @@ else:
         if need not in deps: errs.append("netray-web does not depend on " + need)
     e = deps.get("netray-engine")
     if not e or not e.get("path"): errs.append("netray-web does not depend on netray-engine by path")
+lens = [p for p in meta["packages"] if p["name"] == "lens"]
+if not lens:
+    errs.append("package lens not found")
+elif not any(d["name"] == "netray-web" and d.get("kind") is None for d in lens[0]["dependencies"]):
+    errs.append("lens does not depend on netray-web")
 for e in errs: print("ERR " + e)
 ')
     printf '%s\n' "$out" | grep -v '^ERR '
@@ -82,10 +99,10 @@ while IFS= read -r e; do [ -n "$e" ] && fail "${e#ERR }"; done <<< "$wsout"
 
 # Self-test: the Router scan reports a Router planted outside the allowed directories.
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+trap 'rm -rf "$tmp" "$scratch"' EXIT
 cp -R crates/web/src "$tmp/src"
 printf '%s\n' 'pub fn r() -> axum::Router { todo!() }' >> "$tmp/src/components.rs"
-if ! router_scan "$tmp/src" | grep -qx 'components.rs'; then
+if ! router_offenders "$tmp/src" | grep -qx 'components.rs'; then
     fail "self-test: the Router scan missed a Router planted in components.rs"
 fi
 

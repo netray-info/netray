@@ -3119,14 +3119,19 @@ dependencies = [
  "netray-common",
  "netray-engine",
  "netray-model",
+ "netray-store",
  "percent-encoding",
  "proptest",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlx",
+ "tempfile",
  "tokio",
  "toml",
  "tower",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

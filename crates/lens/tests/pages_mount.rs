@@ -54,7 +54,9 @@ async fn pages_route_gets_pages_csp() {
 
 #[tokio::test]
 async fn spa_routes_keep_shell_and_lens_csp() {
-    for path in ["/", "/some-client-route", "/privacy", "/r/abc12345"] {
+    // `/privacy` and `/r/*` are v2-entries' routes in `lens::app` (crates/lens/tests/privacy_mount.rs,
+    // entries_mount.rs); `frontend_router` holds neither, so its SPA fallback answers them.
+    for path in ["/", "/some-client-route"] {
         let (status, headers, body) = get(path).await;
         assert_eq!(status, StatusCode::OK, "{path}");
         assert!(body.contains(SPA_MARKER), "{path}: not the SPA shell");

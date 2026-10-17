@@ -185,8 +185,9 @@ async fn pages_carry_the_frame_once() {
     let server_error = body_of(pages::server_error()).await;
     assert_frame("500 server_error()", &server_error);
 
-    // v2-entries: when `crates/web/src/entries` exists, render its privacy page here per
-    // that module's public API and call `assert_frame("privacy", &html)` on it.
+    // v2-entries' privacy page overrides `header` and `scripts` with nothing (requirement 32),
+    // so it carries the frame's prefix and footer, compared in
+    // `not_found_and_server_error_share_prefix_and_footer`.
 }
 
 fn find_named(dir: &Path, name: &str, out: &mut Vec<PathBuf>) {
@@ -225,8 +226,29 @@ async fn not_found_and_server_error_share_prefix_and_footer() {
         "footer markup"
     );
 
-    // v2-entries: with `crates/web/src/entries` landed, also compare the privacy page's
-    // prefix and footer against the 404 page here.
+    // Requirement 32: v2-entries' privacy page starts with the same frame and holds the same
+    // footer markup.
+    use tower::ServiceExt;
+    let res = netray_web::entries::privacy_router()
+        .oneshot(
+            axum::http::Request::get("/privacy")
+                .body(axum::body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.status(), 200, "privacy page");
+    let privacy = body_of(res).await;
+    assert_eq!(
+        prefix("privacy", &privacy),
+        prefix("404", &not_found),
+        "privacy: frame prefix up to <head>"
+    );
+    assert_eq!(
+        slice("privacy", &privacy, "<footer", "</footer>"),
+        slice("404", &not_found, "<footer", "</footer>"),
+        "privacy: footer markup"
+    );
 }
 
 /// Reader, phase 3: the navigation labels are requirement 9's approved ones.
