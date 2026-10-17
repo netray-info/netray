@@ -52,6 +52,7 @@ Every complete lens run with default options, whatever route started it, is reco
 15. A failed record logs at `error` and increments `lens_history_record_errors_total` (name default, not interviewed); the client's response is unaffected. The metric is registered at startup.
 16. `specs/sdd/v2.md` is amended: §4.3 names the not-measured class, the precedence of requirement 4 and the release-added/removed classes; §3.1 says the profile-effect grade is computed by `netray-engine` and passed to the model's diff, keeping `netray-store` on `netray-model` only; §3.7 adds repeated fields keys to the canonical sets; §4.1 says the store serialises its writes until §4.4's one-run-per-domain exists; §4.4's moka citation names `Cache::builder` in `crates/lens/src/state.rs` instead of a line; the Phase 2 table marks V2.1–V2.5 as built by `v2-history`.
 17. The modules' volatile lists cover values that change between identical responses: http adds the header rows `expires`, `x-timer`, `x-served-by`, `x-cache`, `x-cache-hits`, `cf-cache-status` and the `http.server` keys `address`, `org`, `network_type` (the first A record in resolver order, `crates/http/src/input.rs:70`); dns adds `dns.rrsig/data` (expiration, inception and signature in one text value, `crates/dns/src/module.rs:467`). SDD §3.7's volatile table lists them.
+18. A volatile path `<block>/*` covers a whole block: the block is kept in the run and stored, but neither its content nor its presence enters the fingerprint or the evidence diff, whatever its address qualifier. `EvidencePath::parse` accepts `*` as a key and refuses it with a row key. The email module declares `email.mx_addresses/*`, `email.fcrdns/*` and `email.dnsbl/*` volatile, because their rows are keyed by addresses that rotate per query (an M365 MX host answered three four-address sets in five queries); `email.mx` and every check status, FCrDNS and DNSBL included, stay compared. `dns.a` and `dns.aaaa` stay compared. SDD §3.7 states the grammar and lists the three blocks in its email row.
 
 ## Phases
 
@@ -138,6 +139,23 @@ GIVEN `just adlc-verify` on a clean checkout WHEN it finishes THEN `git status -
 GIVEN two http module runs differing only in `Expires`, `cf-cache-status` and the order of the A records WHEN fingerprinted with http's volatile list THEN the fingerprints are equal.
 GIVEN two dns module runs differing only in an RRSIG's `data` WHEN fingerprinted with dns's volatile list THEN the fingerprints are equal.
 
+## Phase 5 — Rotating address sets are volatile
+
+**Depends on:** Phase 4
+**Requirements:** 18
+
+`crates/engine`: `EvidencePath::parse` accepts `<block>/*`. `crates/model`: the canonical form drops a block covered by `<block>/*` from the fingerprint and the evidence diff. `crates/email`: the three volatile paths. SDD §3.7.
+
+### Test Scenarios
+
+GIVEN `EvidencePath::parse("email.fcrdns/*")` WHEN parsed THEN it yields block `email.fcrdns` and key `*`; `email.fcrdns/*@x` is refused.
+GIVEN two runs whose `email.mx_addresses`, `email.fcrdns` and `email.dnsbl` rows differ only in addresses, with the same `email.mx` hosts and the same check statuses WHEN fingerprinted with the email module's volatile list THEN the fingerprints are equal and the diff reports no evidence change.
+GIVEN two runs where `email.mx_addresses` is present in one and absent in the other WHEN diffed with `email.mx_addresses/*` volatile THEN no block is reported added or removed.
+GIVEN two runs whose `email.mx` hosts differ WHEN fingerprinted with the email module's volatile list THEN the fingerprints differ.
+GIVEN two runs whose FCrDNS check status differs WHEN diffed with the email module's volatile list THEN the status transition is reported.
+GIVEN `email.fcrdns/*` volatile WHEN an `email.dnsbl` block changes THEN that change is still reported unless `email.dnsbl/*` is listed too.
+GIVEN two dns runs whose `dns.a` records differ WHEN fingerprinted with the dns module's volatile list THEN the fingerprints differ.
+
 ## Decision log
 
 - lens records into the history now, moka/OG unchanged until `v2-admission` over a library-only store or replacing moka here: real entries accumulate from the 0.27.0 deploy while §4.4 stays in one feature (operator, 2026-10-15).
@@ -154,6 +172,8 @@ GIVEN two dns module runs differing only in an RRSIG's `data` WHEN fingerprinted
 - The `Run` built from lens's scored result over the raw engine events: what lens reported as incomplete is never stored (independent reading; implementer, 2026-10-15).
 - Writes serialised in the store over relying on §4.4's one run per domain: §4.4 comes with `v2-admission`, and concurrent `/api/check` requests exist today (independent reading; implementer, 2026-10-15).
 - Phase 1 reader findings, implementer under the operator's autonomy mandate (2026-10-15): a volatile row path covers the whole row, presence included (SDD §3.7 "a path addresses a whole row"), over comparing the row's presence; table and fields items carry their sign (`~`, `-`, `+`) over a flat key list, because a stored diff outlives its predecessor (R11); a nonce source ends at its closing quote only before whitespace or `;`, over swallowing up to any later quote; the volatile lists gain cache, expiry and resolver-order values and RRSIG data (R17) over storing an entry per CDN hit or re-signature.
+
+- Whole-block volatile paths for the email blocks keyed by rotating addresses (`email.mx_addresses`, `email.fcrdns`, `email.dnsbl`) over leaving them compared or also making `dns.a`/`dns.aaaa` volatile: an M365 domain would otherwise store an entry per run, while a hosting move must still show as a DNS record change; cost: an MX address change of the same hosts no longer shows as an evidence change (operator, 2026-10-17, Phase 4 amendment-forward).
 
 ## Open decisions
 
