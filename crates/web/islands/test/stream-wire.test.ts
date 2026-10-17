@@ -151,4 +151,58 @@ describe("stream wire", () => {
       expect(form.querySelector("[data-stream-error]")?.hasAttribute("hidden"), name).toBe(false);
     }
   });
+  it("a fragment for an SVG target is parsed in the SVG namespace", async () => {
+    stubFetch(() =>
+      sseResponse([enc.encode(frag("band-dns", '<g id="band-dns"><line x1="0" x2="1"></line></g>') + END)]),
+    );
+    const form = build('<svg><g id="band-dns"></g></svg>');
+    mount(document.body);
+    await vi.waitFor(() => expect(form.getAttribute("data-stream-state")).toBe("done"));
+    const g = document.getElementById("band-dns") as Element;
+    expect(g.namespaceURI).toBe("http://www.w3.org/2000/svg");
+    expect(g.querySelector("line")?.namespaceURI).toBe("http://www.w3.org/2000/svg");
+  });
+
+  it("no fragment after end is applied, whatever the chunking", async () => {
+    stubFetch(() =>
+      sseResponse([enc.encode(frag("a", '<p id="a">1</p>') + END + frag("b", '<p id="b">late</p>'))]),
+    );
+    const form = build('<p id="a"></p><p id="b">old</p>');
+    mount(document.body);
+    await vi.waitFor(() => expect(form.getAttribute("data-stream-state")).toBe("done"));
+    await settle();
+    expect(document.getElementById("a")?.textContent).toBe("1");
+    expect(document.getElementById("b")?.textContent).toBe("old");
+  });
+
+  it("a superseded run applies nothing more, even from the chunk in hand", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) {
+          return sseResponse([enc.encode(frag("a", '<p id="a">A1</p>') + frag("b", '<p id="b">B-stale</p>') + END)]);
+        }
+        return new Response(new ReadableStream<Uint8Array>({ start() {} }), {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        });
+      }),
+    );
+    const form = build('<p id="a"></p><p id="b">old</p>');
+    form.insertAdjacentHTML("beforeend", '<button type="submit" name="trigger" value="recheck">go</button>');
+    document.addEventListener(
+      "netray:stream-fragment",
+      (e) => {
+        if ((e as CustomEvent).detail === "a") form.requestSubmit(form.querySelector("button") as HTMLButtonElement);
+      },
+      { once: true },
+    );
+    mount(document.body);
+    await vi.waitFor(() => expect(calls).toBe(2));
+    await settle();
+    expect(document.getElementById("b")?.textContent).toBe("old");
+    expect(form.getAttribute("data-stream-state")).toBe("running");
+  });
 });
