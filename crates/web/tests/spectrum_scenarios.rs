@@ -122,14 +122,14 @@ fn c4_label_box_edge_shift_and_leader() {
     // 4 lines at 400 px: pitch 100, plate 400
     let ls = lines(
         4,
-        &[(0, "abcd", LineTone::Fail), (3, "abcd", LineTone::Fail)],
+        &[(0, "abcd", LineTone::Fail), (3, "abcdefgh", LineTone::Fail)],
     );
     let p = place_ok(&ls, 400);
     let l0 = &p.labels[0];
     assert!(near(l0.start, 50.0, EPS) && near(l0.width, 33.76, 1e-9) && near(l0.leader, 50.0, EPS));
-    // line 3 at x 350: 350 + 33.76 > 400 -> start 366.24, leader stays at 350
+    // line 3 at x 350, 8 chars = 63.52 px: 350 + 63.52 > 400 -> start 336.48, leader stays at 350
     let l3 = &p.labels[1];
-    assert!(near(l3.start, 366.24, EPS) && near(l3.leader, 350.0, EPS));
+    assert!(near(l3.start, 336.48, EPS) && near(l3.leader, 350.0, EPS));
     // over-wide: 8 chars = 63.52 px in a 32 px plate starts at 0
     let p = place_ok(&lines(4, &[(2, "abcdefgh", LineTone::Fail)]), 32);
     assert_eq!(p.labels[0].start, 0.0);
