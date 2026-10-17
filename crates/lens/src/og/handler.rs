@@ -104,16 +104,15 @@ pub async fn og_handler(
         &domain,
         std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
         Trigger::Og,
-        false,
+        netray_common::prefetch::is_prefetch(&req_headers),
     ) {
         Admit::Admitted(mut stream) => until_done(&mut stream).await,
-        Admit::Refused(_) => {
+        Admit::Refused(_) | Admit::NotStarted => {
             metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
             let unscored = Card::new("?", 0.0, SystemTime::now());
             let card = head_card.as_ref().unwrap_or(&unscored);
             return og_response(&state, &req_headers, &domain, &label, card, false);
         }
-        Admit::NotStarted => None,
     };
     let Some(published) = published else {
         return AppError::Internal("check run ended without a result".to_string()).into_response();

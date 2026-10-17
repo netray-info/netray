@@ -313,22 +313,25 @@ fn gate(
     })
 }
 
-/// Starts or joins the domain's run. `domain` is validated; `prefetch` is not used yet.
-/// Order: join, (prefetch, Phase 5), throttle, slot, then the budget (visit, recheck, api) or
+/// Starts or joins the domain's run. `domain` is validated; a `prefetch` request that finds no run in
+/// flight gets `NotStarted`, with no throttle record and no budget token.
+/// Order: join, prefetch, throttle, slot, then the budget (visit, recheck, api) or
 /// the recompute limiter (badge, og), then start. Must be called inside a tokio runtime.
 pub fn admit(
     state: &AppState,
     domain: &str,
     client: IpAddr,
     trigger: Trigger,
-    _prefetch: bool,
+    prefetch: bool,
 ) -> Admit {
     let key = cache_key(domain);
     let mut runs = state.runs.lock();
     if let Some(rx) = runs.get(&key) {
         return Admit::Admitted(RunStream::new(rx.clone(), true));
     }
-    // Phase 5: prefetch rule
+    if prefetch {
+        return Admit::NotStarted;
+    }
     let recompute = match trigger {
         Trigger::Badge => Some("badge"),
         Trigger::Og => Some("og"),

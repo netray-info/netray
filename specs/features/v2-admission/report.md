@@ -225,3 +225,55 @@ lens_admission_rejections_total{reason="budget"} 0
 lens_admission_rejections_total{reason="limit"} 0
 lens_admission_rejections_total{reason="slots"} 0
 ```
+
+## Phase 5 — Prefetch starts nothing
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R18: a `/api/check`, badge or OG request whose `Sec-Purpose` contains `prefetch` or `prerender` never starts a run; `netray_common::prefetch::is_prefetch` decides (tokens split on `;` or `,`, case-insensitive); `admit` joins or answers `NotStarted`; `/api/check` 503 `PREFETCH_REFUSED`, `no-store`; badge/OG head short or `?`; no budget token, no throttle minute; other values unaffected | green | crates/lens/tests/admission_prefetch.rs, crates/common/tests/prefetch.rs |
+| C2 | R19: every SDD amendment present (§4.4 cache holder, admission, prerender; S33; Phase 2 table V2.6; §9.2 triggers) | green | tests/repo/test_sdd_admission.sh |
+| C3 | R20: the `prefetch` argument of `admit` and `Admit::NotStarted` close the admission interface | green | crates/lens/tests/admission_prefetch.rs |
+| C4 | GIVEN no entry and no run WHEN `/api/check` with `Sec-Purpose: prefetch` THEN 503 `PREFETCH_REFUSED`, `no-store`, no run, and a following request without the header is not throttled | green | crates/lens/tests/admission_prefetch.rs |
+| C5 | GIVEN the same with `prefetch;prerender` THEN the same | green | crates/lens/tests/admission_prefetch.rs |
+| C6 | GIVEN the same with `PREFETCH` THEN the same | green | crates/lens/tests/admission_prefetch.rs |
+| C7 | GIVEN a fresh head with its rendering held WHEN `/api/check` with `prefetch` THEN a hit | already_implemented | crates/lens/tests/admission_prefetch.rs |
+| C8 | GIVEN a gated run in flight WHEN a request with `prerender` THEN it joins | already_implemented | crates/lens/tests/admission_prefetch.rs |
+| C9 | GIVEN a stale head graded A WHEN badge with `prefetch` THEN A short, no run; no entry THEN `?` | green | crates/lens/tests/admission_prefetch.rs |
+| C10 | GIVEN a stale head WHEN OG with `prefetch` THEN it renders the entry, no run | green | crates/lens/tests/admission_prefetch.rs |
+| C11 | GIVEN `Sec-Purpose: none` or no header WHEN `/api/check` with no entry THEN a run starts | already_implemented | crates/lens/tests/admission_prefetch.rs |
+| C12 | GIVEN budget 1 WHEN a prefetch request is refused and then a normal request THEN the normal request runs | green | crates/lens/tests/admission_prefetch.rs |
+| C13 | GIVEN no run WHEN `admit(prefetch: true)` THEN `NotStarted`, no throttle record; a run in flight THEN `Admitted` with its stream; a throttled domain THEN `NotStarted`, never `Refused` | green | crates/lens/tests/admission_prefetch.rs |
+| C14 | GIVEN `prefetch`, `prerender`, `prefetch;prerender`, `PreFetch, x` WHEN `is_prefetch` THEN true; `none`, `prefetching`, empty, no header THEN false | green | crates/common/tests/prefetch.rs |
+| C15 | GIVEN the amended SDD WHEN read THEN §4.4 names the `[admission]` keys, the order, the refusal answers, the V1 holder, the prefetch token rule; §9.2 lists visit, recheck, api, badge, og; the Phase 2 table marks V2.6 built by `v2-admission` | green | tests/repo/test_sdd_admission.sh |
+
+C7, C8 and C11 held before the phase (hits and joins came before `admit`'s start; other values were never read).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1–G3 | 2 | sonnet | 45716 | 141 |
+
+The coder's `run_check_handler` signature change left four `#[cfg(test)]` helpers in `routes.rs` one argument short; they pass `prefetch: false` (`ADLC-Test-Change`). `cargo test -p lens --test admission_prefetch c13` ran 20 times without a failure.
+
+### Review
+
+- AMENDMENT | specs/sdd/v2.md:584 | §4.4 cited `lens.production.toml:43` for the cache window, which sits at `:38` | affected_phase: 3 | repaired_in_phase: yes — citation corrected.
+- DEFERRED | crates/lens/src/routes.rs:824 | if Chromium sends `Sec-Purpose: prefetch;prerender` on the subresource requests of a prerendered page, lens's V1 SPA (`App.tsx:64` starts the check on load) gets the 503 and shows "Stream error" after activation, without a retry. The V1 SPA goes with the cutover; `v2-result-page` owns the prerendered result page. Unverified offline.
+- NIT | crates/lens/src/error.rs:119 | the 503 `PREFETCH_REFUSED` logs at DEBUG; logging-rules C6 asks ERROR for 5xx, which would be noise for a harmless refusal.
+- NIT | crates/lens/src/routes.rs:590 | badge and OG prefetch answers count `cache="throttled"`; a refused `/api/check` prefetch counts no request series.
+
+### Behavioural verification
+
+```
+$ curl -i -H 'Sec-Purpose: prefetch;prerender' /api/check/example.com?stream=false
+HTTP/1.1 503 Service Unavailable
+cache-control: no-store
+{"error":{"code":"PREFETCH_REFUSED","message":"prefetch refused: no stored result and no run in flight"}}
+$ curl /api/check/example.com?stream=false          # no throttle minute was started
+plain 200
+$ curl -H 'Sec-Purpose: prefetch' /badge/example.org.svg
+badge 200 public, max-age=300, s-maxage=300
+```

@@ -83,3 +83,25 @@ G1: C24 · G2: C1–C23, C25–C32 (G2 needs G1's zero series; the already-imple
 Existing tests that now meet the throttle or the moved limiter are amended by the orchestrator (`ADLC-Test-Change`), with a `pass_throttle()` helper in `tests/common/mod.rs`.
 
 Group commands: G1 `cargo test -p lens --test admission_slots c24`; G2 `cargo test -p lens --test admission_throttle --test admission_budget --test admission_slots`.
+
+## Phase 5 — Prefetch starts nothing
+
+## Groups
+
+G1: C14 · G2: C1, C3–C13 · G3: C2, C15 (G2 uses G1's helper; G3 is the SDD alone).
+
+## Plan
+
+### G1
+1. `crates/common/src/prefetch.rs`: `is_prefetch(&HeaderMap)` over every `Sec-Purpose` value, tokens split on `;`/`,`, trimmed, ASCII case-insensitive `prefetch`/`prerender`; `pub mod prefetch` in `lib.rs`.
+
+### G2
+1. `admission.rs`: `admit` answers `NotStarted` for a prefetch after the join, before `gate` (nothing written or spent).
+2. `error.rs`: `AppError::PrefetchRefused` → 503 `PREFETCH_REFUSED` with `Cache-Control: no-store`.
+3. `routes.rs`: check handlers pass `is_prefetch`; the dkim branch answers `PrefetchRefused` for a prefetch; `NotStarted` → `PrefetchRefused`; badge `Refused | NotStarted` → head short or `?`, counted `throttled`; utoipa 503 rows.
+4. `og/handler.rs`: `Refused | NotStarted` → head card short or `?`, counted `throttled`.
+
+### G3
+1. `specs/sdd/v2.md` §4.4 Prerender bullet: the token rule, hits and joins still answer, `NotStarted` answers per route, nothing spent.
+
+Group command: `cargo test -p netray-common --test prefetch && cargo test -p lens --test admission_prefetch && bash tests/repo/test_sdd_admission.sh`

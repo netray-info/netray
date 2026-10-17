@@ -19,7 +19,11 @@ fn sec_purpose_tokens_decide_prefetch() {
         ("prerender", &["prerender"], true),
         ("prefetch;prerender", &["prefetch;prerender"], true),
         ("mixed case with a second token", &["PreFetch, x"], true),
-        ("token in a second header value", &["none", "prerender"], true),
+        (
+            "token in a second header value",
+            &["none", "prerender"],
+            true,
+        ),
         ("none", &["none"], false),
         ("prefix of a token", &["prefetching"], false),
         ("empty value", &[""], false),

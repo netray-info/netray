@@ -584,10 +584,10 @@ pub async fn badge_handler(
         &badge_req.domain,
         IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
         Trigger::Badge,
-        false,
+        netray_common::prefetch::is_prefetch(&req_headers),
     ) {
         Admit::Admitted(mut stream) => until_done(&mut stream).await,
-        Admit::Refused(_) => {
+        Admit::Refused(_) | Admit::NotStarted => {
             return match stale {
                 Some(grade) => {
                     metrics::counter!("lens_badge_requests_total", "cache" => "throttled")
@@ -597,7 +597,6 @@ pub async fn badge_handler(
                 None => throttled_badge_response(&badge_req, &req_headers),
             };
         }
-        Admit::NotStarted => None,
     };
     let Some(published) = published else {
         return match stale {
@@ -636,6 +635,7 @@ pub async fn badge_handler(
         (status = 200, description = "Domain health check result (SSE stream or JSON object)", body = SyncCheckResponse),
         (status = 400, description = "Invalid or blocked domain"),
         (status = 429, description = "Rate limit exceeded"),
+        (status = 503, description = "Prefetch refused: no stored result and no run in flight", body = netray_common::error::ErrorResponse),
     )
 )]
 pub async fn check_get_handler(
@@ -654,7 +654,17 @@ pub async fn check_get_handler(
         }
     };
     let request_id = request_id_from(&headers);
-    run_check_handler(state, client_ip, domain, sync, dkim_selectors, request_id).await
+    let prefetch = netray_common::prefetch::is_prefetch(&headers);
+    run_check_handler(
+        state,
+        client_ip,
+        domain,
+        sync,
+        dkim_selectors,
+        request_id,
+        prefetch,
+    )
+    .await
 }
 
 #[utoipa::path(
@@ -666,6 +676,7 @@ pub async fn check_get_handler(
         (status = 200, description = "Domain health check result (SSE stream or JSON object)", body = SyncCheckResponse),
         (status = 400, description = "Invalid or blocked domain"),
         (status = 429, description = "Rate limit exceeded"),
+        (status = 503, description = "Prefetch refused: no stored result and no run in flight", body = netray_common::error::ErrorResponse),
     )
 )]
 pub async fn check_post_handler(
@@ -683,6 +694,7 @@ pub async fn check_post_handler(
         }
     };
     let request_id = request_id_from(&headers);
+    let prefetch = netray_common::prefetch::is_prefetch(&headers);
     run_check_handler(
         state,
         client_ip,
@@ -690,6 +702,7 @@ pub async fn check_post_handler(
         sync,
         dkim_selectors,
         request_id,
+        prefetch,
     )
     .await
 }
@@ -743,6 +756,7 @@ async fn run_check_handler(
     sync: bool,
     dkim_selectors: Option<Vec<String>>,
     request_id: Option<String>,
+    prefetch: bool,
 ) -> Response {
     // Record client_ip into the TraceLayer span.
     tracing::Span::current().record("client_ip", tracing::field::display(&client_ip));
@@ -776,6 +790,9 @@ async fn run_check_handler(
 
     // 4. Start or join the domain's run.
     let mut stream = if let Some(selectors) = dkim_selectors {
+        if prefetch {
+            return crate::error::AppError::PrefetchRefused.into_response();
+        }
         match admit_dkim(
             &state,
             CheckInput {
@@ -793,7 +810,7 @@ async fn run_check_handler(
             Err(r) => return refusal_response(&r),
         }
     } else {
-        match admit(&state, &domain, client_ip, Trigger::Visit, false) {
+        match admit(&state, &domain, client_ip, Trigger::Visit, prefetch) {
             Admit::Admitted(stream) => {
                 if stream.joined() {
                     crate::metrics::count_request("joined");
@@ -804,11 +821,7 @@ async fn run_check_handler(
                 stream
             }
             Admit::Refused(r) => return refusal_response(&r),
-            // TODO(Phase 5): prefetch answer
-            Admit::NotStarted => {
-                return crate::error::AppError::Internal("no run started".to_string())
-                    .into_response();
-            }
+            Admit::NotStarted => return crate::error::AppError::PrefetchRefused.into_response(),
         }
     };
     let Some(published) = until_done(&mut stream).await else {
@@ -1726,7 +1739,7 @@ pub mod tests {
         Path(domain): Path<String>,
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        run_check_handler(state, client_ip, domain, false, None, None).await
+        run_check_handler(state, client_ip, domain, false, None, None, false).await
     }
 
     /// Simplified POST handler for tests — uses loopback as client IP, no sync mode.
@@ -1735,7 +1748,7 @@ pub mod tests {
         Json(body): Json<CheckPostBody>,
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
-        run_check_handler(state, client_ip, body.domain, false, None, None).await
+        run_check_handler(state, client_ip, body.domain, false, None, None, false).await
     }
 
     /// GET handler for sync-mode tests — computes sync flag from headers and query.
@@ -1747,7 +1760,7 @@ pub mod tests {
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
         let sync = is_sync_mode(&headers, query.stream);
-        run_check_handler(state, client_ip, domain, sync, None, None).await
+        run_check_handler(state, client_ip, domain, sync, None, None, false).await
     }
 
     /// POST handler for sync-mode tests — computes sync flag from headers and body.
@@ -1758,7 +1771,7 @@ pub mod tests {
     ) -> Response {
         let client_ip: IpAddr = "127.0.0.1".parse().unwrap();
         let sync = is_sync_mode(&headers, body.stream);
-        run_check_handler(state, client_ip, body.domain, sync, None, None).await
+        run_check_handler(state, client_ip, body.domain, sync, None, None, false).await
     }
 
     /// Build a Router that computes sync mode from headers/query, for sync-mode tests.

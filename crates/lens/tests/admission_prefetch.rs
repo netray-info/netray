@@ -389,7 +389,10 @@ async fn admission_prefetch_c8_a_prerender_request_joins_the_run_in_flight() {
     assert_eq!(plain.status, StatusCode::OK);
     assert_eq!(joined.status, StatusCode::OK, "the prefetch joined the run");
     assert_eq!(h.runs(), 1, "one run served both");
-    assert_eq!(acc.counter("lens_check_requests_total", "result", "joined"), 1);
+    assert_eq!(
+        acc.counter("lens_check_requests_total", "result", "joined"),
+        1
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -424,12 +427,7 @@ async fn admission_prefetch_c10_a_prefetched_og_card_renders_the_stale_entry_sho
     );
     let expected = lens::og::render::svg_to_png(&svg, h.state.font_db.clone()).unwrap();
 
-    let og = get(
-        &h.app,
-        "/og/example.com.png".to_string(),
-        Some("prefetch"),
-    )
-    .await;
+    let og = get(&h.app, "/og/example.com.png".to_string(), Some("prefetch")).await;
 
     assert_eq!(og.status, StatusCode::OK);
     assert_eq!(og.header("cache-control"), SHORT_CACHE);
