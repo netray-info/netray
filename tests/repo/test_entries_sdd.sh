@@ -25,6 +25,12 @@ rows() {
 4.6|the minimal entry page lasts until V4.5|V4\.5
 4.6|lens mounts netray-web's router until V5.1|V5\.1
 4.6|lens mounts the router|mounts
+4.6|the OG card shows grade, domain and recording time|grade, domain and recording time
+4.6|the OG card is in the V1 layout|V1 layout
+4.6|the OG card shows no score|no score
+4.6|the OG card switches to spectrum::layout|spectrum::layout
+4.6|the OG card switch is V4.4|V4\.4
+4.6|v2-result-page makes the OG card switch|v2-result-page
 ROWS
 }
 
@@ -58,6 +64,8 @@ good_sdd() {
         'Until V5.6 `/r/<id>` looks up the history first, then the V1 snapshots (a lookup lens hands' \
         'to `netray-web`); a well-formed ID in neither answers `410`, a malformed ID `404`.' \
         'Until V4.5 the entry renders the minimal page, served by the router lens mounts until V5.1.' \
+        'Until V4.4 the OG card shows grade, domain and recording time in the V1 layout and no score;' \
+        'v2-result-page then switches it to `spectrum::layout`.' \
         '### 4.7 Privacy (R16)' 'text' '### 4.8 Next' > "$1"
 }
 good_sdd "$tmp/ok.md"
@@ -76,6 +84,12 @@ bad s_mal 's/malformed/odd/' "named as such"
 bad s_v45 's/V4\.5/V4.9/' "until V4.5"
 bad s_v51 's/V5\.1/V5.9/' "until V5.1"
 bad s_mount 's/mounts/serves/' "lens mounts the router"
+bad s_ogfacts 's/grade, domain and recording time/a picture/' "OG card shows grade, domain and recording time"
+bad s_v1lay 's/V1 layout/old layout/' "OG card is in the V1 layout"
+bad s_noscore 's/no score/a score/' "OG card shows no score"
+bad s_layout 's/spectrum::layout/another layout/' "switches to spectrum::layout"
+bad s_v44 's/V4\.4/V4.9/' "switch is V4.4"
+bad s_rp 's/v2-result-page/a later phase/' "v2-result-page makes the OG card switch"
 printf '### 4.7 Privacy\n' > "$tmp/nosec.md"
 expect "$(sdd_problems "$tmp/nosec.md")" "SDD has no section 4.6" "no 4.6"
 
