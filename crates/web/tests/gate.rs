@@ -756,6 +756,62 @@ const CASES: &[Case] = &[
         expect: Some((SCRIPT_RULE, "templates/x.html")),
     },
     Case {
+        name: "quote after a block span opens the value",
+        files: &[(
+            "templates/x.html",
+            "<a title={% if x %}\"a > b\"{% else %}\"c\"{% endif %} onclick=\"go()\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quote after a comment span opens the value",
+        files: &[(
+            "templates/x.html",
+            "<a title={# tip #}'a > b' onclick=\"go()\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quoted value after a block span ending in = hides no later tag",
+        files: &[(
+            "templates/x.html",
+            "<a href={% if q %}\"/search?q=\"{% endif %}>Search</a>\n<button onclick=\"go()\">y</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "javascript url quoted after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<a href={% if x %}\"javascript:go()\"{% endif %}>x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "style colour quoted after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<div style={% if warn %}\"color: #f00\"{% endif %}>x</div>\n",
+        )],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "component class quoted after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<div class={% if x %}\"spectrum\"{% endif %}>x</div>\n",
+        )],
+        expect: Some((OWNERSHIP_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "words in a value quoted after a block span are no handler",
+        files: &[(
+            "templates/x.html",
+            "<span title={% if live %}\"Go online now\"{% else %}\"Offline\"{% endif %}>x</span>\n",
+        )],
+        expect: None,
+    },
+    Case {
         name: "quoted values holding askama and an apostrophe pass",
         files: &[(
             "templates/x.html",
