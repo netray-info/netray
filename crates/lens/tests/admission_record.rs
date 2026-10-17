@@ -30,9 +30,7 @@ use lens::routes::{api_router, badge_router};
 use lens::score::OverallScore;
 use lens::state::{AppState, BadgeCheckFn};
 use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
-use netray_engine::{
-    BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome,
-};
+use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::{CheckId, Protocol};
 use netray_store::{Entry, HistoryStore};
 use sqlx::Connection;
@@ -190,12 +188,19 @@ async fn admission_c2_c10_dropped_requester_does_not_stop_the_run() {
     let _guard = metrics::set_default_local_recorder(&recorder);
     let entered = Arc::new(Notify::new());
     let release = Arc::new(Notify::new());
-    let dns = gated(dns_golden_raw("prism.sse"), entered.clone(), release.clone());
+    let dns = gated(
+        dns_golden_raw("prism.sse"),
+        entered.clone(),
+        release.clone(),
+    );
     let h = harness(Some(dns), true, None).await;
 
     let outcome =
         tokio::time::timeout(Duration::from_millis(500), post_check(&h.app, EXAMPLE)).await;
-    assert!(outcome.is_err(), "the requester's future is dropped mid-run");
+    assert!(
+        outcome.is_err(),
+        "the requester's future is dropped mid-run"
+    );
     tokio::time::timeout(Duration::from_secs(1), entered.notified())
         .await
         .expect("the run reached the DNS module");
@@ -235,7 +240,11 @@ async fn admission_c11_response_does_not_wait_for_the_record() {
     assert!(answered_in_time);
     assert_eq!(status, StatusCode::OK);
     let entries = entries_until(&h.store, 1).await;
-    assert_eq!(entries.len(), 1, "the entry appears once the hold is released");
+    assert_eq!(
+        entries.len(),
+        1,
+        "the entry appears once the hold is released"
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -264,32 +273,43 @@ async fn admission_c12_request_during_pending_record_gets_the_published_result()
         .expect("the second response arrives while the record is pending");
     assert_eq!((s1, s2), (StatusCode::OK, StatusCode::OK));
     assert_eq!(runs.load(Ordering::SeqCst), 1, "no second run executes");
-    let v1: serde_json::Value = serde_json::from_str(&body1).unwrap();
-    let v2: serde_json::Value = serde_json::from_str(&body2).unwrap();
-    assert_eq!(v1, v2, "the second request gets the published result");
+    // Both are SSE bodies (no Accept header, no `stream`): the joiner's events equal the
+    // starter's, snapshot id included.
+    // Data lines are compared as JSON: map keys serialise in hash order.
+    assert!(body1.contains("event: done"), "body: {body1}");
+    let events = |body: &str| -> Vec<serde_json::Value> {
+        body.lines()
+            .filter_map(|l| l.strip_prefix("data: "))
+            .map(|d| serde_json::from_str(d).unwrap())
+            .collect()
+    };
+    assert_eq!(
+        events(&body1),
+        events(&body2),
+        "the second request gets the published result"
+    );
     assert_eq!(entries_until(&h.store, 1).await.len(), 1);
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn admission_c3_c13_badge_check_fn_run_is_recorded() {
     let mock: BadgeCheckFn = Arc::new(|_domain: String| {
-        let fut: Pin<Box<dyn std::future::Future<Output = CheckOutput> + Send>> =
-            Box::pin(async {
-                CheckOutput {
-                    domain: "example.com".to_string(),
+        let fut: Pin<Box<dyn std::future::Future<Output = CheckOutput> + Send>> = Box::pin(async {
+            CheckOutput {
+                domain: "example.com".to_string(),
+                sections: HashMap::new(),
+                score: OverallScore {
                     sections: HashMap::new(),
-                    score: OverallScore {
-                        sections: HashMap::new(),
-                        overall_percentage: 0.0,
-                        grade: "B".to_string(),
-                        hard_fail_triggered: false,
-                        hard_fail_checks: vec![],
-                        not_applicable: HashMap::new(),
-                        complete: true,
-                    },
-                    duration_ms: 1,
-                }
-            });
+                    overall_percentage: 0.0,
+                    grade: "B".to_string(),
+                    hard_fail_triggered: false,
+                    hard_fail_checks: vec![],
+                    not_applicable: HashMap::new(),
+                    complete: true,
+                },
+                duration_ms: 1,
+            }
+        });
         fut
     });
     let h = harness(None, true, Some(mock)).await;
@@ -323,5 +343,8 @@ async fn admission_c14_run_with_dkim_selectors_is_not_recorded() {
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     let entries = h.store.entries("example.com").await.unwrap();
-    assert!(entries.is_empty(), "a run with options never reaches the history");
+    assert!(
+        entries.is_empty(),
+        "a run with options never reaches the history"
+    );
 }

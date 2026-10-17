@@ -82,15 +82,19 @@ pub async fn run_check_with_deadline(
     input: CheckInput,
     hard_deadline: Duration,
 ) -> CheckOutput {
-    run_check_with_evidence(state, input, hard_deadline).await.0
+    run_check_streaming(state, input, hard_deadline, |_| {})
+        .await
+        .0
 }
 
-/// [`run_check_with_deadline`], also returning the facts blocks no section carries when the DNS
-/// section, which publishes them, did not answer. An answering DNS section holds them itself.
-pub(crate) async fn run_check_with_evidence(
+/// [`run_check_with_deadline`], calling `on_event` for each section as it finishes and also
+/// returning the facts blocks no section carries when the DNS section, which publishes them,
+/// did not answer. An answering DNS section holds them itself.
+pub(crate) async fn run_check_streaming(
     state: &AppState,
     input: CheckInput,
     hard_deadline: Duration,
+    mut on_event: impl FnMut(&netray_engine::SectionEvent) + Send,
 ) -> (CheckOutput, Vec<Block>) {
     let start = Instant::now();
     let domain = input.domain.clone();
@@ -115,6 +119,7 @@ pub(crate) async fn run_check_with_evidence(
         netray_engine::run(&state.registry, base, &plan, resolve_budget, tx),
         async {
             while let Some(event) = rx.recv().await {
+                on_event(&event);
                 events.push(event);
             }
         }
@@ -170,6 +175,5 @@ pub(crate) async fn run_check_with_evidence(
         score,
         duration_ms: start.elapsed().as_millis() as u64,
     };
-    crate::history::record(state, &input, &output, &facts_evidence).await;
     (output, facts_evidence)
 }

@@ -16,7 +16,7 @@ pub const HISTOGRAM_BUCKETS: &[(&str, &[f64])] = &[
 
 /// Creates the admission series at zero so they render before the first request.
 pub fn init_zero_series() {
-    for result in ["rate_limited", "cache_hit", "fresh"] {
+    for result in ["rate_limited", "cache_hit", "fresh", "joined"] {
         metrics::counter!("lens_check_requests_total", "result" => result).increment(0);
     }
     for cache in ["hit", "miss", "throttled", "failed"] {

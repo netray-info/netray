@@ -59,6 +59,8 @@ pub struct AppState {
     pub history_store: Option<Arc<netray_store::HistoryStore>>,
     /// Fresh runs per client for the current hour; flushed hourly into a histogram.
     pub client_runs: Arc<crate::metrics::ClientRunCounter>,
+    /// The runs in flight, one per domain.
+    pub runs: Arc<crate::admission::Runs>,
 }
 
 impl AppState {
@@ -167,6 +169,7 @@ impl AppState {
             snapshot_store: None,
             history_store: None,
             client_runs: Arc::new(crate::metrics::ClientRunCounter::new()),
+            runs: Arc::new(crate::admission::Runs::default()),
         })
     }
 }

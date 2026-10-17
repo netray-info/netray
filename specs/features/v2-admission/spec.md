@@ -532,6 +532,14 @@ GIVEN the amended SDD WHEN read THEN §4.4 names the `[admission]` keys, the ord
   repo rule amends the SDD in the commit whose code changes what it says, and Phase 1 makes the
   four numbers lens config values (implementer under the operator's autonomy mandate, 2026-10-17).
 
+- A run task carries the tracing span of the request that started it, over a span of its own:
+  logging-rules C1 asks every log line of a request to carry its correlation fields, and a joiner's
+  request adds no work of its own to log (implementer under the operator's autonomy mandate,
+  2026-10-17).
+- lens drains its run tasks on shutdown, bounded by the hard deadline plus 10 s, over letting the
+  runtime drop them: the record now follows the response, and R3 promises a run whose requester
+  has gone still records (implementer under the operator's autonomy mandate, 2026-10-17).
+
 ## Open decisions
 
 None.

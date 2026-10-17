@@ -5,8 +5,8 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::cache::{CachedResult, cache_key, is_fresh};
-use crate::check::run_check;
+use crate::admission::{Admit, Trigger, admit, until_done};
+use crate::cache::{cache_key, is_fresh};
 use crate::error::AppError;
 use crate::input::validate_domain;
 use crate::og::layout::{DEFAULT_LABEL, MAX_LABEL_LEN, OG_TTL_SECONDS};
@@ -45,14 +45,6 @@ fn build_png_response(png: Vec<u8>, cache_control: &str, etag: &str) -> Response
 fn render_error_from(e: RenderError) -> Response {
     tracing::error!(error = %e, "OG card render failed");
     AppError::RenderFailed(e.to_string()).into_response()
-}
-
-async fn invoke_check(state: &AppState, domain: &str) -> crate::check::CheckOutput {
-    if let Some(ref f) = state.badge_check_fn {
-        f(domain.to_owned()).await
-    } else {
-        run_check(state, domain).await
-    }
 }
 
 pub async fn og_handler(
@@ -135,35 +127,24 @@ pub async fn og_handler(
         return build_png_response(png, "public, max-age=300, s-maxage=300", &etag);
     }
 
-    // Coalesced recompute.
-    let (grade, score_pct, checked_at) = if let Some(cache) = &state.cache {
-        let state_for_init = state.clone();
-        let domain_for_init = domain.clone();
-        let entry = crate::cache::get_or_compute(cache, key.clone(), OG_TTL_SECONDS, async move {
-            let output = invoke_check(&state_for_init, &domain_for_init).await;
-            CachedResult {
-                sections: output.sections,
-                score: output.score,
-                duration_ms: output.duration_ms,
-                cached_at: SystemTime::now(),
-                snapshot_id: None,
-            }
-        })
-        .await;
-        let val = entry;
-        (
-            val.score.grade.clone(),
-            val.score.overall_percentage,
-            val.cached_at,
-        )
-    } else {
-        let output = invoke_check(&state, &domain).await;
-        (
-            output.score.grade,
-            output.score.overall_percentage,
-            SystemTime::now(),
-        )
+    // Start or join the domain's run.
+    let published = match admit(
+        &state,
+        &domain,
+        std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+        Trigger::Og,
+        false,
+    ) {
+        Admit::Admitted(mut stream) => until_done(&mut stream).await,
+        Admit::Refused(_) | Admit::NotStarted => None,
     };
+    let Some(published) = published else {
+        return AppError::Internal("check run ended without a result".to_string()).into_response();
+    };
+    crate::routes::cache_published(&state, key, &published).await;
+    let grade = published.output.score.grade.clone();
+    let score_pct = published.output.score.overall_percentage;
+    let checked_at = SystemTime::now();
 
     let is_error = crate::routes::is_unscored_grade(&grade);
     let etag = compute_etag(&domain, &grade, &label, score_pct);

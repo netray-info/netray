@@ -8,7 +8,7 @@ use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{CheckId, Grade, Protocol, Status};
 use netray_store::HistoryStore;
 
-use crate::check::{CheckInput, CheckOutput, SectionError};
+use crate::check::{CheckOutput, SectionError};
 use crate::state::AppState;
 
 const SWEEP_INTERVAL: Duration = Duration::from_secs(3600);
@@ -98,31 +98,32 @@ pub fn build_run(state: &AppState, output: &CheckOutput, facts: &[Block]) -> Run
     }
 }
 
-/// Records (complete) or diffs (incomplete) the run of `output`; a failure is logged and counted,
-/// never returned. Runs with caller-supplied DKIM selectors are skipped.
+/// Records (complete) or diffs (incomplete) `run`; a failure is logged and counted, never
+/// returned. Runs with caller-supplied DKIM selectors are skipped.
 pub(crate) async fn record(
     state: &AppState,
-    input: &CheckInput,
-    output: &CheckOutput,
-    facts: &[Block],
-) {
-    let Some(store) = &state.history_store else {
-        return;
-    };
-    if input.dkim_selectors.is_some() {
-        return;
+    domain: &str,
+    dkim_selectors: bool,
+    run: &Run,
+) -> Option<netray_store::Recorded> {
+    let store = state.history_store.as_ref()?;
+    if dkim_selectors {
+        return None;
     }
-    let run = build_run(state, output, facts);
     let volatile = volatile(state);
     let profile = &state.scoring_profile;
-    if let Err(e) = store
-        .record(&output.domain, &run, &volatile, now_unix(), |prev, cur| {
+    match store
+        .record(domain, run, &volatile, now_unix(), |prev, cur| {
             netray_engine::history::diff(prev, cur, &volatile, profile)
         })
         .await
     {
-        tracing::error!(error = %e, domain = %output.domain, "history record failed");
-        metrics::counter!("lens_history_record_errors_total").increment(1);
+        Ok(recorded) => Some(recorded),
+        Err(e) => {
+            tracing::error!(error = %e, domain = %domain, "history record failed");
+            metrics::counter!("lens_history_record_errors_total").increment(1);
+            None
+        }
     }
 }
 

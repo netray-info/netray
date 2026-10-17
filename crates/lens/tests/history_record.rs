@@ -168,6 +168,29 @@ fn counter(snap: &metrics_util::debugging::Snapshotter, name: &str) -> u64 {
         .sum()
 }
 
+/// The domain's entries once at least `n` are stored: the run task records after the response
+/// (v2-admission requirement 3), so a read right after it may come too early. Bounded at 5 s.
+async fn entries_eventually(
+    store: &HistoryStore,
+    domain: &str,
+    n: usize,
+) -> Vec<netray_store::Entry> {
+    for _ in 0..250 {
+        let entries = store.entries(domain).await.unwrap();
+        if entries.len() >= n {
+            return entries;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    store.entries(domain).await.unwrap()
+}
+
+/// Gives a run task that records after the response the time to write before an absence is
+/// asserted.
+async fn settle() {
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+}
+
 // ---------------------------------------------------------------------------
 
 /// C1/C8: one entry per complete run, holding every catalogue check of each run section; the
@@ -186,13 +209,7 @@ async fn history_c1_c8_complete_run_is_recorded_whole_and_response_unchanged() {
         "recording must not change the response"
     );
 
-    let entries = with
-        .store
-        .as_ref()
-        .unwrap()
-        .entries("example.com")
-        .await
-        .unwrap();
+    let entries = entries_eventually(with.store.as_ref().unwrap(), "example.com", 1).await;
     assert_eq!(entries.len(), 1, "exactly one entry for the run");
     let run = &entries[0].run;
     assert!(run.complete);
@@ -275,13 +292,7 @@ async fn history_c3_c9_badge_cache_miss_records_an_entry() {
     let h = harness(true, Mail::Golden, false).await;
     let status = get_status(&h.app, "/badge/example.com.svg").await;
     assert_eq!(status, StatusCode::OK);
-    let entries = h
-        .store
-        .as_ref()
-        .unwrap()
-        .entries("example.com")
-        .await
-        .unwrap();
+    let entries = entries_eventually(h.store.as_ref().unwrap(), "example.com", 1).await;
     assert_eq!(entries.len(), 1, "the badge's run is recorded");
 }
 
@@ -291,6 +302,7 @@ async fn history_c10_dkim_selectors_record_nothing() {
     let h = harness(true, Mail::Golden, false).await;
     let (status, _) = sync_check(&h.app, "/api/check/example.com?dkim_selectors=default").await;
     assert_eq!(status, StatusCode::OK);
+    settle().await;
     let entries = h
         .store
         .as_ref()
@@ -308,6 +320,7 @@ async fn history_c11_incomplete_run_records_nothing() {
     let (status, body) = sync_check(&h.app, "/api/check/example.com").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["summary"]["complete"], false, "body: {body}");
+    settle().await;
     let entries = h
         .store
         .as_ref()
@@ -350,7 +363,31 @@ async fn history_c12_no_dns_results_ip_section_is_unmeasured_and_unstored() {
         assert_eq!(check.status, Status::Unmeasured, "{id}");
     }
 
-    // The run above was recorded through the store wired into the state: nothing is stored.
+    // The same run through the run task, which records into the store wired into the state:
+    // the store answers NotStored and nothing is stored (v2-admission requirement 3).
+    let mut stream = match lens::admission::admit(
+        &h.state,
+        "example.com",
+        std::net::IpAddr::from([127, 0, 0, 1]),
+        lens::admission::Trigger::Recheck,
+        false,
+    ) {
+        lens::admission::Admit::Admitted(s) => s,
+        _ => panic!("expected Admitted"),
+    };
+    let mut recorded = None;
+    while let Some(event) = stream.next().await {
+        if let lens::admission::RunEvent::Recorded(r) = event {
+            recorded = Some(r);
+        }
+    }
+    assert!(
+        matches!(
+            recorded,
+            Some(Some(netray_store::Recorded::NotStored { .. }))
+        ),
+        "the incomplete run is not stored"
+    );
     let entries = h
         .store
         .as_ref()
@@ -386,7 +423,17 @@ async fn history_c5_failing_store_keeps_response_and_counts_the_error() {
         body, ref_body,
         "a failing store must not change the response"
     );
-    assert_eq!(counter(&snap, ERRORS), 1);
+    // The run task records after the response: accumulate reads (each snapshot drains the
+    // counter) until the error is counted, bounded at 5 s.
+    let mut errors = 0;
+    for _ in 0..250 {
+        errors += counter(&snap, ERRORS);
+        if errors >= 1 {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    assert_eq!(errors, 1);
 }
 
 /// C17: the error counter renders at zero before any failure.

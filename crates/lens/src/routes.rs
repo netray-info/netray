@@ -18,12 +18,11 @@ use utoipa_axum::router::OpenApiRouter;
 use netray_engine::profile::Profile;
 use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION};
 
+use crate::admission::{Admit, Published, Trigger, admit, start_unregistered, until_done};
 use crate::badge::render::svg_for_grade;
 use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
 use crate::cache::{CachedResult, cache_key, is_fresh};
-use crate::check::{
-    CheckInput, CheckOutput, HARD_DEADLINE, SectionError, run_check, run_check_with_evidence,
-};
+use crate::check::{CheckInput, CheckOutput, SectionError};
 use crate::input::validate_domain;
 use crate::modules::{BackendExtra, BackendResult};
 use crate::score::{
@@ -32,15 +31,6 @@ use crate::score::{
 };
 use crate::security::check_rate_limit;
 use crate::state::AppState;
-
-/// Calls `state.badge_check_fn` when set (tests), otherwise the real `run_check`.
-async fn invoke_badge_check(state: &AppState, domain: &str) -> CheckOutput {
-    if let Some(ref f) = state.badge_check_fn {
-        f(domain.to_owned()).await
-    } else {
-        run_check(state, domain).await
-    }
-}
 
 // ---------------------------------------------------------------------------
 // SSE event payload types
@@ -501,6 +491,38 @@ fn build_svg_response(svg: String, cache_control: &str, etag: &str) -> Response 
 // Badge handler
 // ---------------------------------------------------------------------------
 
+/// The `?` badge a throttled request gets.
+fn throttled_badge_response(
+    badge_req: &crate::badge::BadgeRequest,
+    req_headers: &axum::http::HeaderMap,
+) -> Response {
+    use std::time::Instant;
+    metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
+    let render_start = Instant::now();
+    let svg = svg_for_grade(&badge_req.label, "error", badge_req.style);
+    metrics::histogram!("lens_badge_render_duration_seconds")
+        .record(render_start.elapsed().as_secs_f64());
+    let etag = compute_etag(&badge_req.domain, "?", &badge_req.label, badge_req.style);
+    if badge_is_not_modified(req_headers, &etag) {
+        return axum::http::StatusCode::NOT_MODIFIED.into_response();
+    }
+    build_svg_response(svg, "public, max-age=300, s-maxage=300", &etag)
+}
+
+/// Stores a published run's result in the moka cache; an incomplete one is refused there.
+pub(crate) async fn cache_published(state: &AppState, key: String, published: &Published) {
+    if let Some(cache) = &state.cache {
+        let entry = Arc::new(CachedResult {
+            sections: published.output.sections.clone(),
+            score: published.output.score.clone(),
+            duration_ms: published.output.duration_ms,
+            cached_at: SystemTime::now(),
+            snapshot_id: published.snapshot_id.clone(),
+        });
+        crate::cache::store_result(cache, key, entry).await;
+    }
+}
+
 #[utoipa::path(
     get,
     path = "/badge/{domain}",
@@ -525,7 +547,7 @@ pub async fn badge_handler(
 ) -> Response {
     use netray_common::rate_limit::check_keyed_cost;
     use std::num::NonZeroU32;
-    use std::time::{Instant, SystemTime};
+    use std::time::Instant;
 
     let domain = match domain.strip_suffix(".svg") {
         Some(d) => d.to_owned(),
@@ -566,38 +588,25 @@ pub async fn badge_handler(
     // Per-domain recompute limiter — throttled requests get a ? badge.
     let cost = NonZeroU32::new(1).unwrap();
     if check_keyed_cost(&state.badge_recompute_limiter, &key, cost, "badge", "lens").is_err() {
-        metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
-        let render_start = Instant::now();
-        let svg = svg_for_grade(&badge_req.label, "error", badge_req.style);
-        metrics::histogram!("lens_badge_render_duration_seconds")
-            .record(render_start.elapsed().as_secs_f64());
-        let etag = compute_etag(&badge_req.domain, "?", &badge_req.label, badge_req.style);
-        if badge_is_not_modified(&req_headers, &etag) {
-            return axum::http::StatusCode::NOT_MODIFIED.into_response();
-        }
-        return build_svg_response(svg, "public, max-age=300, s-maxage=300", &etag);
+        return throttled_badge_response(&badge_req, &req_headers);
     }
 
-    // Coalesced recompute via moka entry API.
-    let grade = if let Some(cache) = &state.cache {
-        let state_for_init = state.clone();
-        let domain_for_init = badge_req.domain.clone();
-        let entry = crate::cache::get_or_compute(cache, key.clone(), ttl, async move {
-            let output = invoke_badge_check(&state_for_init, &domain_for_init).await;
-            CachedResult {
-                sections: output.sections,
-                score: output.score,
-                duration_ms: output.duration_ms,
-                cached_at: SystemTime::now(),
-                snapshot_id: None,
-            }
-        })
-        .await;
-        badge_grade(&entry.score)
-    } else {
-        let output = invoke_badge_check(&state, &badge_req.domain).await;
-        badge_grade(&output.score)
+    // Start or join the domain's run.
+    let published = match admit(
+        &state,
+        &badge_req.domain,
+        IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED),
+        Trigger::Badge,
+        false,
+    ) {
+        Admit::Admitted(mut stream) => until_done(&mut stream).await,
+        Admit::Refused(_) | Admit::NotStarted => None,
     };
+    let Some(published) = published else {
+        return throttled_badge_response(&badge_req, &req_headers);
+    };
+    cache_published(&state, key.clone(), &published).await;
+    let grade = badge_grade(&published.output.score);
 
     let is_error = is_unscored_grade(&grade);
     let render_start = Instant::now();
@@ -770,66 +779,71 @@ async fn run_check_handler(
         };
     }
 
-    // 4. Run check.
-    crate::metrics::count_request("fresh");
-    state.client_runs.record(client_ip);
-    let run_guard = crate::metrics::RunGuard::new();
-    let run_started = std::time::Instant::now();
-    let (output, facts_evidence) = run_check_with_evidence(
-        &state,
-        CheckInput {
-            domain: domain.clone(),
-            dkim_selectors,
-            client_ip: Some(client_ip),
-            request_id,
-        },
-        HARD_DEADLINE,
-    )
-    .await;
-    crate::metrics::observe_run(run_started.elapsed());
-    drop(run_guard);
-    let duration_ms = output.duration_ms;
-    let domain_out = output.domain.clone();
-
-    // 5. Create snapshot before caching so the cache entry carries the
-    //    snapshot_id and subsequent cache hits expose the same URL.
-    //    An incomplete result gets neither a snapshot nor a cache entry.
-    let snapshot_id = if output.score.complete {
-        create_snapshot(&state, &domain_out, &output).await
+    // 4. Start or join the domain's run.
+    let mut stream = if let Some(selectors) = dkim_selectors {
+        crate::metrics::count_request("fresh");
+        state.client_runs.record(client_ip);
+        start_unregistered(
+            &state,
+            CheckInput {
+                domain: domain.clone(),
+                dkim_selectors: Some(selectors),
+                client_ip: Some(client_ip),
+                request_id,
+            },
+            Trigger::Visit,
+        )
     } else {
-        None
+        match admit(&state, &domain, client_ip, Trigger::Visit, false) {
+            Admit::Admitted(stream) => {
+                if stream.joined() {
+                    crate::metrics::count_request("joined");
+                } else {
+                    crate::metrics::count_request("fresh");
+                    state.client_runs.record(client_ip);
+                }
+                stream
+            }
+            Admit::Refused(r) => {
+                return crate::error::AppError::RateLimited {
+                    retry_after_secs: r.retry_after_s,
+                }
+                .into_response();
+            }
+            // TODO(Phase 5): prefetch answer
+            Admit::NotStarted => {
+                return crate::error::AppError::Internal("no run started".to_string())
+                    .into_response();
+            }
+        }
+    };
+    let Some(published) = until_done(&mut stream).await else {
+        return crate::error::AppError::Internal("check run ended without a result".to_string())
+            .into_response();
     };
 
-    // 6. Store in cache (with snapshot_id).
-    if let Some(cache) = &state.cache {
-        let entry = Arc::new(CachedResult {
-            sections: output.sections.clone(),
-            score: output.score.clone(),
-            duration_ms,
-            cached_at: SystemTime::now(),
-            snapshot_id: snapshot_id.clone(),
-        });
-        crate::cache::store_result(cache, key, entry).await;
-    }
+    // 5. Store in cache (with the snapshot_id the run created).
+    cache_published(&state, key, &published).await;
 
-    // 7. Return SSE stream or sync JSON.
+    // 6. Return SSE stream or sync JSON.
+    let domain_out = published.output.domain.clone();
     if sync {
         build_sync_response(
             domain_out,
-            output,
+            &published.output,
             false,
             &state.scoring_profile,
-            snapshot_id,
-            &facts_evidence,
+            published.snapshot_id.clone(),
+            &published.facts,
         )
     } else {
         let events = build_sse_events(
             domain_out,
-            output,
+            &published.output,
             false,
             &state.scoring_profile,
-            snapshot_id,
-            &facts_evidence,
+            published.snapshot_id.clone(),
+            &published.facts,
         );
         make_sse_stream(events, "MISS")
     }
@@ -1335,7 +1349,7 @@ fn done_event(domain: &str, duration_ms: u64, cached: bool, snapshot_id: Option<
 
 fn build_sse_events(
     domain: String,
-    output: CheckOutput,
+    output: &CheckOutput,
     cached: bool,
     profile: &Profile,
     snapshot_id: Option<String>,
@@ -1385,7 +1399,7 @@ fn build_sse_events_from_cached(
     };
     build_sse_events(
         domain.to_string(),
-        dummy_output,
+        &dummy_output,
         true,
         profile,
         cached.snapshot_id.clone(),
@@ -1422,7 +1436,7 @@ fn sse_response_from_cached(
 
 fn build_sync_response(
     domain: String,
-    output: CheckOutput,
+    output: &CheckOutput,
     cached: bool,
     profile: &Profile,
     snapshot_id: Option<String>,
@@ -1480,7 +1494,7 @@ fn sync_response_from_cached(
     };
     build_sync_response(
         domain,
-        dummy_output,
+        &dummy_output,
         is_cached,
         profile,
         cached.snapshot_id.clone(),
@@ -1543,7 +1557,11 @@ fn snapshot_section_results(
 
 /// Create a snapshot for a completed check. Returns the shortid on success.
 /// Logs and returns `None` on any failure — snapshot errors never surface to the user.
-async fn create_snapshot(state: &AppState, domain: &str, output: &CheckOutput) -> Option<String> {
+pub(crate) async fn create_snapshot(
+    state: &AppState,
+    domain: &str,
+    output: &CheckOutput,
+) -> Option<String> {
     let store = state.snapshot_store.as_ref()?;
     let sections = snapshot_section_results(output, &state.scoring_profile);
     let snap = crate::snapshot::Snapshot::from_check_output(
