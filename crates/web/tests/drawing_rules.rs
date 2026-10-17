@@ -2,7 +2,8 @@
 //! SDD §5.4 and §5.6): rendered markup plus the component stylesheet must resolve each mark to
 //! the token its state owns.
 use netray_web::components::{
-    SpectrumLine, SpectrumRegion, SpectrumView, Tone, TraceRow, TraceView, spectrum, trace,
+    SpectrumBand, SpectrumBandRun, SpectrumLabel, SpectrumLabelSet, SpectrumLine, SpectrumRegion,
+    SpectrumView, Tone, TraceRow, TraceView, spectrum, trace,
 };
 use netray_web::tokens::CSS as TOKENS;
 use std::fs;
@@ -64,26 +65,76 @@ fn attr<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
     Some(&tag[i..i + tag[i..].find('"')?])
 }
 
-fn line(code: &str, x: f32, tone: Tone, label: Option<&str>) -> SpectrumLine {
+fn line(code: &str, x: f64, tone: Tone) -> SpectrumLine {
     SpectrumLine {
         code: code.into(),
         x,
         height: 50.0,
         tone,
-        label: label.map(Into::into),
     }
+}
+
+fn band(protocol: &str, boundary: Option<f64>, lines: Vec<SpectrumLine>) -> SpectrumBand {
+    SpectrumBand {
+        protocol: protocol.into(),
+        boundary,
+        runs: vec![SpectrumBandRun {
+            run: 0,
+            shown: true,
+            unmeasured: false,
+            lines,
+        }],
+    }
+}
+
+fn label(code: &str, text: &str, tone: Tone, x: f64) -> SpectrumLabel {
+    SpectrumLabel {
+        code: code.into(),
+        text: text.into(),
+        tone,
+        row: 0,
+        x,
+        width: 40.0,
+    }
+}
+
+fn label_set(labels: Vec<SpectrumLabel>) -> Vec<SpectrumLabelSet> {
+    vec![SpectrumLabelSet {
+        run: 0,
+        shown: true,
+        labels,
+    }]
 }
 
 fn fixed_view() -> SpectrumView {
     SpectrumView {
         label: "Findings by position".into(),
-        lines: vec![
-            line("DNS-001", 5.0, Tone::Pass, None),
-            line("DNS-002", 15.0, Tone::Warn, Some("SPF")),
-            line("TLS-001", 55.0, Tone::Fail, Some("CHAIN")),
-            line("TLS-002", 65.0, Tone::Fix, Some("OCSP")),
-            line("TLS-003", 75.0, Tone::Untested, None),
+        line_count: 5,
+        rows: 1,
+        bands: vec![
+            band(
+                "dns",
+                None,
+                vec![
+                    line("DNS-001", 5.0, Tone::Pass),
+                    line("DNS-002", 15.0, Tone::Warn),
+                ],
+            ),
+            band(
+                "tls",
+                Some(50.0),
+                vec![
+                    line("TLS-001", 55.0, Tone::Fail),
+                    line("TLS-002", 65.0, Tone::Fix),
+                    line("TLS-003", 75.0, Tone::Untested),
+                ],
+            ),
         ],
+        label_sets: label_set(vec![
+            label("DNS-002", "SPF", Tone::Warn, 15.0),
+            label("TLS-001", "CHAIN", Tone::Fail, 55.0),
+            label("TLS-002", "OCSP", Tone::Fix, 65.0),
+        ]),
         regions: vec![
             SpectrumRegion {
                 label: "DNS".into(),
@@ -99,10 +150,15 @@ fn fixed_view() -> SpectrumView {
     }
 }
 
-/// The element tag of the line with `data-code`: a `<line>` or the `<g>` that groups a fixed one.
+/// The element tag of the line with `data-code` inside the plate (the labels above it carry the
+/// code too): a `<line>` or the `<g>` that groups a fixed one.
 fn line_tag(html: &str, code: &str) -> String {
+    let plate = html.find("<svg").unwrap();
     let needle = format!("data-code=\"{code}\"");
-    let i = html.find(&needle).unwrap_or_else(|| panic!("no {code}"));
+    let i = html[plate..]
+        .find(&needle)
+        .map(|i| i + plate)
+        .unwrap_or_else(|| panic!("no {code}"));
     let start = html[..i].rfind('<').unwrap();
     let end = html[i..].find('>').unwrap() + i;
     html[start..end].to_string()
@@ -228,7 +284,7 @@ fn spectrum_one_hairline_separates_the_two_groups() {
         1,
         "exactly one boundary between two groups: {boundaries:?}"
     );
-    assert_eq!(attr(between[0], "x1"), Some("50%"));
+    assert_eq!(attr(between[0], "x1"), Some("50.0000%"));
     assert_eq!(attr(between[0], "x1"), attr(between[0], "x2"), "vertical");
     assert_eq!(
         resolve(&css, &[".spectrum__boundary"], "stroke-width").as_deref(),
@@ -278,11 +334,18 @@ fn spectrum_group_names_below_and_short_names_above_the_plate() {
 fn spectrum_pass_and_unmeasured_lines_carry_no_short_name_above_the_plate() {
     let html = spectrum(&SpectrumView {
         label: "Findings by position".into(),
-        lines: vec![
-            line("DNS-001", 5.0, Tone::Pass, Some("MX")),
-            line("DNS-002", 15.0, Tone::Untested, Some("SPF")),
-            line("DNS-003", 25.0, Tone::Warn, Some("DKIM")),
-        ],
+        line_count: 3,
+        rows: 1,
+        bands: vec![band(
+            "dns",
+            None,
+            vec![
+                line("DNS-001", 5.0, Tone::Pass),
+                line("DNS-002", 15.0, Tone::Untested),
+                line("DNS-003", 25.0, Tone::Warn),
+            ],
+        )],
+        label_sets: label_set(vec![label("DNS-003", "DKIM", Tone::Warn, 25.0)]),
         regions: vec![SpectrumRegion {
             label: "DNS".into(),
             x: 0.0,

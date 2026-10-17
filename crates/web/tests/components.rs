@@ -3,9 +3,10 @@
 use netray_web::components::{
     CheckRowView, DiffBlockView, DiffEntry, EvidenceBlockView, EvidenceShape, Field, GradeView,
     GroupingOption, GroupingSwitchView, ProgressRayView, QueryInputView, RaySegment, RecordRow,
-    RunLineView, SegmentState, SpectrumLine, SpectrumRegion, SpectrumView, Tone, TraceRow,
-    TraceView, TreeItem, check_row, diff_block, evidence_block, grade, grouping_switch,
-    progress_ray, query_input, run_line, spectrum, trace,
+    RunLineView, SegmentState, SpectrumBand, SpectrumBandRun, SpectrumLabel, SpectrumLabelSet,
+    SpectrumLine, SpectrumRegion, SpectrumView, Tone, TraceRow, TraceView, TreeItem, check_row,
+    diff_block, evidence_block, grade, grouping_switch, progress_ray, query_input, run_line,
+    spectrum, trace,
 };
 
 /// Every class token found in any `class="..."` attribute of the markup.
@@ -123,22 +124,52 @@ fn progress_ray_renders_label_and_segment_states() {
 fn spectrum_renders_plate_lines_and_regions() {
     let html = spectrum(&SpectrumView {
         label: "Findings by position".into(),
-        lines: vec![
-            SpectrumLine {
-                code: "DNS-017".into(),
-                x: 12.5,
-                height: 40.0,
-                tone: Tone::Fail,
-                label: Some("Dangling CNAME".into()),
+        line_count: 2,
+        rows: 1,
+        bands: vec![
+            SpectrumBand {
+                protocol: "dns".into(),
+                boundary: None,
+                runs: vec![SpectrumBandRun {
+                    run: 0,
+                    shown: true,
+                    unmeasured: false,
+                    lines: vec![SpectrumLine {
+                        code: "DNS-017".into(),
+                        x: 12.5,
+                        height: 40.0,
+                        tone: Tone::Fail,
+                    }],
+                }],
             },
-            SpectrumLine {
-                code: "TLS-003".into(),
-                x: 60.0,
-                height: 20.0,
-                tone: Tone::Pass,
-                label: None,
+            SpectrumBand {
+                protocol: "tls".into(),
+                boundary: Some(50.0),
+                runs: vec![SpectrumBandRun {
+                    run: 0,
+                    shown: true,
+                    unmeasured: false,
+                    lines: vec![SpectrumLine {
+                        code: "TLS-003".into(),
+                        x: 60.0,
+                        height: 20.0,
+                        tone: Tone::Pass,
+                    }],
+                }],
             },
         ],
+        label_sets: vec![SpectrumLabelSet {
+            run: 0,
+            shown: true,
+            labels: vec![SpectrumLabel {
+                code: "DNS-017".into(),
+                text: "Dangling CNAME".into(),
+                tone: Tone::Fail,
+                row: 0,
+                x: 12.5,
+                width: 100.0,
+            }],
+        }],
         regions: vec![SpectrumRegion {
             label: "Transport zone".into(),
             x: 50.0,
