@@ -134,7 +134,7 @@ fn r10_shape_lines_groups_runs_sections() {
 
     assert_eq!(l.runs.len(), 3);
     let caa = at(&l, "dns.caa");
-    assert_eq!(l.runs[0].tones[caa], LineTone::Pass);
+    assert_eq!(l.runs[0].tones[caa], LineTone::Fixed); // pass after fail (R11)
     assert_eq!(l.runs[1].tones[caa], LineTone::Fail);
     assert_eq!(l.runs[2].tones[caa], LineTone::Warn);
     for r in &l.runs {
