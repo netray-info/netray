@@ -50,6 +50,15 @@ fn render_error_from(e: RenderError) -> Response {
     AppError::RenderFailed(e.to_string()).into_response()
 }
 
+/// Phase 2 stub: nothing reaches the entry card yet. Phase 3 renders the card.
+pub(crate) fn entry_card_renderer(_state: &AppState) -> netray_web::entries::CardRenderer {
+    std::sync::Arc::new(|_card: &netray_web::entries::EntryCard| {
+        Err(Box::new(render_error_from(RenderError::EncodeFailed(
+            "entry cards are not rendered yet".to_string(),
+        ))))
+    })
+}
+
 pub async fn og_handler(
     State(state): State<AppState>,
     Path(domain_png): Path<String>,

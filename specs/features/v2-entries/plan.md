@@ -22,3 +22,24 @@ G1: C1–C20. One group: every criterion goes through `crates/web/src/entries/{m
 10. `crates/web/templates/pages/privacy.html` — §4.7's three statements in prose.
 11. `crates/lens/Cargo.toml` — `netray-web = { workspace = true }`.
 12. `crates/lens/src/og/render.rs` — `pub use netray_web::entries::view::format_utc_timestamp;` in place of the function and its helpers.
+
+## Phase 2 — The routers in netray-web, `/r/<id>` mounted in lens
+
+## Groups
+
+G1: C3, C4, C5, C8, C10, C11, C12, C14, C16, C17 · G2: C1, C6, C7, C13, C15, C18, C19, C20 · none: C2, C21 (already in place after the test commit), C9 (v2-pages has not landed; the frame merge falls to its rebase).
+
+## Plan
+
+### G1
+
+1. `crates/web/src/entries/routes.rs` (new) — `NOT_FOUND_HTML`, `V1Lookup`, `EntryCard`, `CardRenderer`, `EntriesDeps`; `router(deps)` routes `/r/{id}` → `entry_page`, `/r/{id}/og.png`, `/r/`, `/r/{id}/`, `/r/{id}/{*rest}` → `unmatched` (a static segment beside a catch-all does not conflict in matchit 0.8; Phase 3 swaps only `og.png`'s handler). `entry_page`: rejection or malformed → 404; store error → warn with the ID, 500 JSON, V1 never called; entry → 200 page, `public, max-age=3600`; else V1 `Some(resp)` → resp; else 410 gone page.
+2. `crates/web/src/entries/mod.rs` — `mod routes;` and its re-exports.
+3. `crates/web/src/lib.rs` — crate doc no longer says no route (and does not name the router type: `test_web_crate.sh` greps it).
+4. `specs/sdd/v2.md` §4.6 — requirement 17's paragraph.
+
+### G2
+
+1. `crates/lens/src/routes.rs` — `not_found_html` body from `NOT_FOUND_HTML`; `snapshot_answer(state, id) -> Option<Response>` extracted from `snapshot_handler`; `v1_lookup(state) -> V1Lookup`.
+2. `crates/lens/src/og/handler.rs` — `entry_card_renderer(state) -> CardRenderer`, a render-failure stub until Phase 3.
+3. `crates/lens/src/lib.rs` — `pub fn app(state) -> Router` from `run_with` steps 4–5; the `/r/` router (entries, else snapshot, else none) merged after `.with_state(state)`, before the layers; `run_with` calls `app`.
