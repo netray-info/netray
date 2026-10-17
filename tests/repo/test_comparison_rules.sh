@@ -16,6 +16,10 @@ for need in 'crates/web/compare.toml' 'templates/pages/compare.html' 'catalogue'
 done
 grep -qiE 'two tables|Table 1.*Table 2' "$f" || fail "$f does not describe the two tables"
 grep -qi 'generated' "$f" || fail "$f does not say anything is generated"
+# The sitemap is the guide list plus a fixed page list in `pages::sitemap`; the doc must not
+# claim it is derived from the routes (phase 5 reader).
+grep -qiE 'generated from the routes' "$f" && fail "$f claims the sitemap is generated from the routes"
+grep -qF 'sitemap()' "$f" || fail "$f does not name the sitemap() page list a new page is added to"
 
 bad=""
 grep -qi 'self-contained html' "$f" && bad="$bad 'self-contained HTML'"

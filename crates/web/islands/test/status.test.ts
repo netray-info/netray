@@ -27,7 +27,10 @@ function build(): HTMLElement {
 function stubFetch(monitors: Mon[], events: unknown[] = []) {
   const f = vi.fn(async (url: string) => {
     const data = url === MONITORS ? monitors : url === EVENTS ? events : null;
-    return { ok: data !== null, status: data !== null ? 200 : 404, json: async () => ({ data }) };
+    // The live endpoints: getMonitorList answers `{data: [...]}`, getEventFeed answers
+    // `{status, results: [...], meta}` (observed 2026-10-17).
+    const body = url === EVENTS ? { status: true, results: data, meta: { count: events.length } } : { data };
+    return { ok: data !== null, status: data !== null ? 200 : 404, json: async () => body };
   });
   vi.stubGlobal("fetch", f);
   return f;
@@ -106,6 +109,15 @@ describe("status island", () => {
       expect(q("[data-status-incidents] [data-field=title]").textContent).toBe("DNS outage"),
     );
     expect(q("[data-status-incidents] [data-field=date]").textContent).toContain("2026-10-01");
+  });
+
+  it("says so when there are no incidents", async () => {
+    stubFetch([{ name: "svc", statusClass: "success" }], []);
+    build();
+    mount(document.body);
+    await vi.waitFor(() =>
+      expect(q("[data-status-incidents]").textContent).toContain("No incidents to report."),
+    );
   });
 
   it("shows the error line when fetch rejects", async () => {

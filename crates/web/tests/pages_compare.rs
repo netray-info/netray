@@ -313,7 +313,10 @@ fn compare_rows_cover_every_v1_row_and_every_v1_unsupported_row_has_no_checks() 
     assert_eq!(rows.len(), old.len(), "row count across both tables");
     for (o, r) in old.iter().zip(rows.iter()) {
         assert_eq!(r.label, o.label, "document order");
-        if o.symbols[0] == "\u{2717}" {
+        // V1 marked these not-done; the catalogue now holds a check for each, so the
+        // generated column claims partial coverage (requirement 23 as amended).
+        let now_checked = ["OCSP stapling", "DANE / TLSA", "Blacklist check"];
+        if o.symbols[0] == "\u{2717}" && !now_checked.contains(&o.label.as_str()) {
             assert_eq!(
                 r.checks,
                 Some(vec![]),
@@ -321,5 +324,25 @@ fn compare_rows_cover_every_v1_row_and_every_v1_unsupported_row_has_no_checks() 
                 o.label
             );
         }
+    }
+}
+
+/// Reader, phase 5: rows whose checks judge only part of what the row names claim partial
+/// coverage, and rows V1 marked not-done that a catalogue check now covers say so.
+#[test]
+fn generated_cells_claim_no_more_than_the_checks_judge() {
+    let rows = pages::compare::rows();
+    for label in [
+        "SOA record",
+        "Protocol versions (deprecated detection)",
+        "OCSP stapling",
+        "DANE / TLSA",
+        "Blacklist check",
+    ] {
+        let row = rows
+            .iter()
+            .find(|r| r.label == label)
+            .unwrap_or_else(|| panic!("row {label}"));
+        assert_eq!(row.netray().symbol, "~", "{label}: partial coverage");
     }
 }
