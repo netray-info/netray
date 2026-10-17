@@ -3114,8 +3114,11 @@ dependencies = [
  "netray-common",
  "netray-engine",
  "netray-model",
+ "netray-store",
  "proptest",
  "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]

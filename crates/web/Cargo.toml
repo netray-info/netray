@@ -9,6 +9,7 @@ description = "Templates, components and design tokens for the netray.info V2 su
 netray-common = { workspace = true }
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
+netray-store = { workspace = true }
 askama = { workspace = true }
 serde_json = { workspace = true }
 
@@ -17,3 +18,5 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 proptest = "1"
+tempfile = "3"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
