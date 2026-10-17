@@ -54,3 +54,51 @@ Pass 2:
 ### Behavioural verification
 
 skipped: Phase 1 adds a library function with no route, CLI or UI entry point (spec non-goals).
+
+## Phase 2 — Layout from catalogue, profiles and runs
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: `layout(current, older, catalogue, width)` over per-run statuses, section states and profile; protocol order; shared x; per-run tones, heights, labels, rows, section states; netray-web depends on model and engine (workspace) | green | crates/web/tests/spectrum_runs.rs, tests/repo/test_spectrum_deps.sh |
+| C2 | R11: tone mapping, muted for N/A, not tested, unmeasured, absent, unweighted; fixed against the next older run; oldest run never fixed | green | crates/web/tests/spectrum_runs.rs |
+| C3 | R12: effective-weight heights normalised to the run's max; muted height = smallest measured; 1.0 with none measured; unweighted check muted, not an error | green | crates/web/tests/spectrum_runs.rs |
+| C4 | R13: real-catalogue property test (claims a–f, 54 lines, heights in (0,1], muted ≤ measured, shared x, fixed lines labelled) | green | crates/web/tests/spectrum_catalogue_props.rs |
+| C5 | R14: SDD §5.4, §3.9, §8.1, V4.4 and the linePitchMin description amended | green | tests/repo/test_spectrum_deps.sh |
+| C6 | real catalogue: line 0 `dns.dnssec`, line 53 `ip.reputation`, boundaries at lines 10, 31, 43, 53 | green | crates/web/tests/spectrum_runs.rs |
+| C7 | labels exactly CAA, Expired, HSTS; HSTS fixed | green | crates/web/tests/spectrum_runs.rs |
+| C8 | warn → not applicable: muted, unlabelled, not fixed | green | crates/web/tests/spectrum_runs.rs |
+| C9 | three runs: oldest has no fixed line; same x per line | green | crates/web/tests/spectrum_runs.rs |
+| C10 | `email.bimi` missing: muted at the smallest measured height (> 0) | green | crates/web/tests/spectrum_runs.rs |
+| C11 | all pass v3: `ip.reputation` 1.0, `tls.tls_reachable` 0.34, `http.csp` 0.087 | green | crates/web/tests/spectrum_runs.rs |
+| C12 | only `tls.tls_reachable` measured in TLS (fail): 1.0, `ip.reputation` 0.286 | green | crates/web/tests/spectrum_runs.rs |
+| C13 | `email.dmarc` N/A: muted at the smallest measured height, below 0.27 | green | crates/web/tests/spectrum_runs.rs |
+| C14 | all email N/A: every email line muted at the smallest measured height | green | crates/web/tests/spectrum_runs.rs |
+| C15 | older run with doubled DNS weight: DNS heights differ, x does not | green | crates/web/tests/spectrum_runs.rs |
+| C16 | older profile without `dns.ttl`: succeeds, muted, unlabelled, current not fixed against it | green | crates/web/tests/spectrum_runs.rs |
+| C17 | real-catalogue property test holds | green | crates/web/tests/spectrum_catalogue_props.rs |
+| C18 | `tests/repo/test_web_crate.sh` passes in its current shape | already_implemented | tests/repo/test_web_crate.sh |
+
+C18 passed before the phase: the guard already holds in its shape (no axum, no `Router`, no `netray` → `netray-web` edge). One test was wrong against R11 and corrected under `ADLC-Test-Change` (r10 expected pass for a pass after a fail).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 3 | sonnet (after a test fix) | 40019 | 76 |
+| G2 | 1 | sonnet | 24377 | 20 |
+| G1 fix (unscored section) | 1 | sonnet | 24196 | 22 |
+| G1 fix (section total) | 1 | sonnet | 29705 | 28 |
+
+### Review
+
+Pass 1:
+- AMENDMENT (affected 2, repaired no) a `Measured` section with a weighted unmeasured check drew its answered lines at an effective weight the grade does not give → R12 amended (such a section is `Unmeasured`, its lines muted), SDD §3.9 amended, decision log entry; test r12_unmeasured_check_unscores_its_section.
+
+Pass 2:
+- BLOCKER M summed only catalogue lines, so a check an older profile weights but the catalogue dropped was missing from the section total → M from the run's profile and statuses; test r12_section_total_counts_checks_outside_the_catalogue; fixed.
+
+### Behavioural verification
+
+skipped: Phase 2 adds a library function with no route, CLI or UI entry point (spec non-goals).
