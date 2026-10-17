@@ -5,6 +5,11 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Method, Request};
 use http_body_util::BodyExt;
+use netray_model::diff::diff;
+use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION, Shape};
+use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
+use netray_model::{CheckId, Grade, Protocol, Status};
+use netray_store::{HistoryStore, Recorded};
 use netray_web::api::{
     ApiConfig, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger, router,
 };
@@ -15,6 +20,12 @@ struct StubRuns;
 
 impl DomainRuns for StubRuns {
     fn validate(&self, domain: &str) -> Result<String, DomainRefusal> {
+        if domain == "bad_domain" {
+            return Err(DomainRefusal {
+                code: "DOMAIN_INVALID",
+                message: "not a domain".into(),
+            });
+        }
         Ok(domain.to_lowercase())
     }
     fn start<'a>(
@@ -30,7 +41,16 @@ impl DomainRuns for StubRuns {
 
 /// One validated request: `doc_path` is the document key (full path template), `uri` the request
 /// path relative to the mount, `warmup` the requests sent first from the same client.
+#[derive(Clone, Copy, PartialEq)]
+enum Store {
+    /// No history store: the domain and entry endpoints answer 503.
+    Absent,
+    /// A temp store seeded with `seed()`; `{e1}`, `{e2}` and `{f1}` in the uri are the entry IDs.
+    Seeded,
+}
+
 struct Case {
+    store: Store,
     doc_path: &'static str,
     method: &'static str,
     uri: &'static str,
@@ -46,11 +66,23 @@ const fn case(
     warmup: usize,
 ) -> Case {
     Case {
+        store: Store::Absent,
         doc_path,
         method,
         uri,
         status,
         warmup,
+    }
+}
+
+const fn seeded(doc_path: &'static str, uri: &'static str, status: u16) -> Case {
+    Case {
+        store: Store::Seeded,
+        doc_path,
+        method: "get",
+        uri,
+        status,
+        warmup: 0,
     }
 }
 
@@ -63,7 +95,115 @@ fn cases() -> Vec<Case> {
         case("/api/v1/profiles/{n}", "get", "/profiles/x", 400, 0),
         case("/api/v1/meta", "get", "/meta", 200, 0),
         case("/api/v1/meta", "get", "/meta", 429, 1),
+        seeded("/api/v1/domains/{domain}", "/domains/example.com", 200),
+        seeded("/api/v1/domains/{domain}", "/domains/none.example.com", 404),
+        seeded("/api/v1/domains/{domain}", "/domains/bad_domain", 400),
+        case(
+            "/api/v1/domains/{domain}",
+            "get",
+            "/domains/example.com",
+            503,
+            0,
+        ),
+        seeded(
+            "/api/v1/domains/{domain}/diff",
+            "/domains/example.com/diff",
+            200,
+        ),
+        seeded(
+            "/api/v1/domains/{domain}/diff",
+            "/domains/first.example.com/diff",
+            200,
+        ),
+        seeded(
+            "/api/v1/domains/{domain}/diff",
+            "/domains/none.example.com/diff",
+            404,
+        ),
+        seeded(
+            "/api/v1/domains/{domain}/history",
+            "/domains/example.com/history",
+            200,
+        ),
+        seeded(
+            "/api/v1/domains/{domain}/history",
+            "/domains/none.example.com/history",
+            404,
+        ),
+        seeded("/api/v1/entries/{id}", "/entries/{e2}", 200),
+        seeded("/api/v1/entries/{id}", "/entries/AAAAAAAA", 410),
+        seeded("/api/v1/entries/{id}", "/entries/bad", 404),
+        case("/api/v1/entries/{id}", "get", "/entries/AAAAAAAA", 503, 0),
+        seeded("/api/v1/entries/{id}/diff", "/entries/{e2}/diff", 200),
+        seeded("/api/v1/entries/{id}/diff", "/entries/AAAAAAAA/diff", 410),
     ]
+}
+
+fn run(status: Status, findings: Vec<String>) -> Run {
+    let block = BlockId::parse("dns.caa").unwrap();
+    Run {
+        profile_version: 3,
+        engine_version: "0.26.0".into(),
+        evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        grade: Grade::A,
+        complete: true,
+        sections: vec![RunSection {
+            protocol: Protocol::Dns,
+            outcome: SectionKind::Measured,
+            reason: None,
+        }],
+        checks: vec![RunCheck {
+            id: CheckId::parse("dns.dnssec_valid").unwrap(),
+            status,
+            findings,
+            evidence: vec![block.clone()],
+        }],
+        blocks: vec![Block {
+            id: block,
+            title: "CAA".into(),
+            shape: Shape::Text("0 issue \"example.org\"".into()),
+        }],
+    }
+}
+
+async fn record(store: &HistoryStore, domain: &str, run: &Run, now: i64) -> String {
+    match store
+        .record(domain, run, &[], now, |p, c| diff(p, c, &[], None))
+        .await
+        .unwrap()
+    {
+        Recorded::First { id } | Recorded::Changed { id, .. } => id,
+        other => panic!("expected a new entry, got {other:?}"),
+    }
+}
+
+/// example.com holds e1 (pass) then e2 (warn, with a finding and evidence); first.example.com
+/// holds the single entry f1. Returns the store and the uri placeholders' values.
+async fn seed() -> (
+    Arc<HistoryStore>,
+    tempfile::TempDir,
+    [(&'static str, String); 3],
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let store = HistoryStore::open(&dir.path().join("history.db"))
+        .await
+        .unwrap();
+    store.migrate().await.unwrap();
+    let t = 1_800_000_000;
+    let e1 = record(&store, "example.com", &run(Status::Pass, vec![]), t).await;
+    let e2 = record(
+        &store,
+        "example.com",
+        &run(Status::Warn, vec!["CAA does not name the issuer".into()]),
+        t + 100,
+    )
+    .await;
+    let f1 = record(&store, "first.example.com", &run(Status::Pass, vec![]), t).await;
+    (
+        Arc::new(store),
+        dir,
+        [("{e1}", e1), ("{e2}", e2), ("{f1}", f1)],
+    )
 }
 
 fn fixture() -> Value {
@@ -76,12 +216,12 @@ fn fixture() -> Value {
     serde_json::from_str(&text).expect("committed document is JSON")
 }
 
-fn app() -> axum::Router {
+fn app(store: Option<Arc<HistoryStore>>) -> axum::Router {
     let config = ApiConfig {
         per_ip_burst: 1,
         ..Default::default()
     };
-    router(ApiState::new(config, Arc::new(StubRuns)))
+    router(ApiState::new(config, Arc::new(StubRuns)).with_store(store))
 }
 
 fn request(method: &str, uri: &str) -> Request<Body> {
@@ -97,11 +237,21 @@ async fn responses_match_the_committed_document() {
     let doc = fixture();
     for c in cases() {
         let label = format!("{} {} -> {}", c.method, c.doc_path, c.status);
-        let app = app();
+        let mut uri = c.uri.to_string();
+        let (app, _dir) = match c.store {
+            Store::Absent => (app(None), None),
+            Store::Seeded => {
+                let (store, dir, ids) = seed().await;
+                for (placeholder, id) in &ids {
+                    uri = uri.replace(placeholder, id);
+                }
+                (app(Some(store)), Some(dir))
+            }
+        };
         for _ in 0..c.warmup {
-            app.clone().oneshot(request(c.method, c.uri)).await.unwrap();
+            app.clone().oneshot(request(c.method, &uri)).await.unwrap();
         }
-        let resp = app.oneshot(request(c.method, c.uri)).await.unwrap();
+        let resp = app.oneshot(request(c.method, &uri)).await.unwrap();
         assert_eq!(resp.status().as_u16(), c.status, "{label}: status");
 
         let documented = &doc["paths"][c.doc_path][c.method]["responses"][c.status.to_string()];
