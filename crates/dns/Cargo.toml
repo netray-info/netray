@@ -112,3 +112,8 @@ tokio-rustls = "0.26"
 name = "job_blocks"
 path = "tests/job_blocks.rs"
 required-features = ["testing"]
+
+[[test]]
+name = "job_blocks_review"
+path = "tests/job_blocks_review.rs"
+required-features = ["testing"]
