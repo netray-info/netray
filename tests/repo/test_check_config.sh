@@ -101,6 +101,7 @@ startup_rejects=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_per_minute = 0\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_per_minute = 601\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 1\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 101\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_per_minute = 0\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_per_minute = 601\\n\\n[site]|"

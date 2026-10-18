@@ -4,10 +4,12 @@ use std::fmt;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use netray_common::error::{ApiError, build_error_response};
+use netray_ip::IpRefusal;
 
 #[derive(Debug)]
 pub enum V1Error {
     InvalidInput(String),
+    BatchTooMany(String),
     DomainInvalid(String),
     NotFound(String),
     Gone(String),
@@ -26,6 +28,7 @@ impl fmt::Display for V1Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidInput(msg)
+            | Self::BatchTooMany(msg)
             | Self::DomainInvalid(msg)
             | Self::NotFound(msg)
             | Self::Gone(msg)
@@ -45,7 +48,9 @@ impl fmt::Display for V1Error {
 impl ApiError for V1Error {
     fn status_code(&self) -> StatusCode {
         match self {
-            Self::InvalidInput(_) | Self::DomainInvalid(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidInput(_) | Self::BatchTooMany(_) | Self::DomainInvalid(_) => {
+                StatusCode::BAD_REQUEST
+            }
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Gone(_) => StatusCode::GONE,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -63,6 +68,7 @@ impl ApiError for V1Error {
     fn error_code(&self) -> &'static str {
         match self {
             Self::InvalidInput(_) => "INVALID_INPUT",
+            Self::BatchTooMany(_) => "BATCH_TOO_MANY",
             Self::DomainInvalid(_) => "DOMAIN_INVALID",
             Self::NotFound(_) => "NOT_FOUND",
             Self::Gone(_) => "GONE",
@@ -85,6 +91,15 @@ impl ApiError for V1Error {
             | Self::BudgetExhausted { retry_after_secs }
             | Self::Busy { retry_after_secs } => Some(*retry_after_secs),
             _ => None,
+        }
+    }
+}
+
+impl From<IpRefusal> for V1Error {
+    fn from(refusal: IpRefusal) -> Self {
+        match refusal {
+            IpRefusal::InvalidInput(msg) => Self::InvalidInput(msg),
+            IpRefusal::Unavailable(msg) => Self::Unavailable(msg),
         }
     }
 }

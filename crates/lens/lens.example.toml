@@ -108,6 +108,15 @@ per_ip_burst = 10
 # [api.http]
 # [api.email]
 # [api.ip]
+# internal_mode = false               # true: private and loopback addresses are looked up
+# filtered_headers = []               # regex patterns of request headers hidden from ?field=headers
+# per_ip_per_minute = 60              # per caller, 1..=600
+# per_ip_burst = 10                   # 2..=100
+# per_target_per_minute = 120         # per looked-up address, 1..=600
+# per_target_burst = 20               # 1..=100
+# batch_max_size = 100                # addresses per POST /ip/batch, 1..=100
+# batch_addresses_per_minute = 60     # batch addresses per caller, 1..=600
+# batch_addresses_burst = 100         # at least batch_max_size, at most 100
 
 [scoring]
 # profile_path = "my-profile.toml"   # override the built-in profile v3 (crates/engine/profiles/v3.toml)

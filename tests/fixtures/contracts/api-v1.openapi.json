@@ -1,6 +1,23 @@
 {
   "components": {
     "schemas": {
+      "AddressField": {
+        "description": "The fields of `?field=` that describe an address.",
+        "enum": [
+          "ip",
+          "asn",
+          "country",
+          "city",
+          "region",
+          "timezone",
+          "latitude",
+          "longitude",
+          "isp",
+          "location",
+          "network"
+        ],
+        "type": "string"
+      },
       "AdmissionMeta": {
         "properties": {
           "client_budget_per_hour": {
@@ -36,6 +53,120 @@
         "required": [
           "per_ip_per_minute",
           "per_ip_burst"
+        ],
+        "type": "object"
+      },
+      "AsnLookupResponse": {
+        "properties": {
+          "asn": {
+            "description": "ASN number.",
+            "example": 15169,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "category": {
+            "description": "ASN category from ipverse/as-metadata.",
+            "example": "hosting",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_anycast": {
+            "description": "Whether this ASN is known to be anycast.",
+            "example": false,
+            "type": "boolean"
+          },
+          "network_role": {
+            "description": "Network role from ipverse/as-metadata.",
+            "example": "tier1_transit",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "description": "Organization name from MaxMind ASN database.",
+            "example": "Google LLC",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "asn",
+          "is_anycast"
+        ],
+        "type": "object"
+      },
+      "BatchItem": {
+        "description": "The lookup of one address, or why it was not answered.",
+        "oneOf": [
+          {
+            "properties": {
+              "address": {
+                "description": "The address as requested.",
+                "type": "string"
+              },
+              "result": {
+                "$ref": "#/components/schemas/Ifconfig"
+              }
+            },
+            "required": [
+              "address",
+              "result"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "address": {
+                "description": "The address as requested.",
+                "type": "string"
+              },
+              "error": {
+                "$ref": "#/components/schemas/ErrorInfo"
+              }
+            },
+            "required": [
+              "address",
+              "error"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "BatchRequest": {
+        "additionalProperties": false,
+        "description": "The addresses of a batch lookup.",
+        "properties": {
+          "addresses": {
+            "description": "At most `batch_max_size` addresses, answered in this order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "addresses"
+        ],
+        "type": "object"
+      },
+      "BatchResponse": {
+        "description": "One answer per requested address, in request order.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
         ],
         "type": "object"
       },
@@ -117,6 +248,64 @@
       "BlockId": {
         "examples": [
           "tls.chain@192.0.2.1:443"
+        ],
+        "type": "string"
+      },
+      "Browser": {
+        "properties": {
+          "family": {
+            "example": "Chrome",
+            "type": "string"
+          },
+          "major": {
+            "example": "120",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "minor": {
+            "example": "0",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "patch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "example": "120.0",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "version"
+        ],
+        "type": "object"
+      },
+      "CallerField": {
+        "description": "The fields of `?field=` on the caller's own address: the address fields and what the request carries.",
+        "enum": [
+          "ip",
+          "asn",
+          "country",
+          "city",
+          "region",
+          "timezone",
+          "latitude",
+          "longitude",
+          "isp",
+          "location",
+          "network",
+          "tcp",
+          "user_agent",
+          "host",
+          "headers"
         ],
         "type": "string"
       },
@@ -246,6 +435,56 @@
         ],
         "type": "object"
       },
+      "CloudInfo": {
+        "properties": {
+          "provider": {
+            "example": "aws",
+            "type": "string"
+          },
+          "region": {
+            "example": "us-east-1",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "example": "EC2",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "Device": {
+        "properties": {
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "family": {
+            "example": "Other",
+            "type": "string"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "family"
+        ],
+        "type": "object"
+      },
       "Diff": {
         "properties": {
           "checks": {
@@ -273,6 +512,53 @@
           "evidence",
           "grade",
           "engine_changed"
+        ],
+        "type": "object"
+      },
+      "DiffRequest": {
+        "properties": {
+          "a": {
+            "description": "First IP address to compare.",
+            "example": "8.8.8.8",
+            "type": "string"
+          },
+          "b": {
+            "description": "Second IP address to compare.",
+            "example": "1.1.1.1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ],
+        "type": "object"
+      },
+      "DiffResponse": {
+        "description": "The two answers of a diff, one entry per top-level field of `Ifconfig`.",
+        "properties": {
+          "ip": {
+            "$ref": "#/components/schemas/IpDiff"
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationDiff"
+          },
+          "network": {
+            "$ref": "#/components/schemas/NetworkDiff"
+          },
+          "tcp": {
+            "$ref": "#/components/schemas/TcpDiff"
+          },
+          "user_agent": {
+            "$ref": "#/components/schemas/UserAgentDiff"
+          }
+        },
+        "required": [
+          "ip",
+          "location",
+          "network",
+          "tcp",
+          "user_agent"
         ],
         "type": "object"
       },
@@ -605,6 +891,137 @@
         ],
         "type": "object"
       },
+      "Ifconfig": {
+        "properties": {
+          "ip": {
+            "$ref": "#/components/schemas/Ip"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "network": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "tcp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Tcp"
+              }
+            ]
+          },
+          "user_agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserAgent"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ip",
+          "location",
+          "network"
+        ],
+        "type": "object"
+      },
+      "Ip": {
+        "properties": {
+          "addr": {
+            "example": "203.0.113.42",
+            "type": "string"
+          },
+          "hostname": {
+            "example": "dns.example.com",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "example": "4",
+            "type": "string"
+          }
+        },
+        "required": [
+          "addr",
+          "version"
+        ],
+        "type": "object"
+      },
+      "IpDiff": {
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/Ip"
+          },
+          "b": {
+            "$ref": "#/components/schemas/Ip"
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "equal"
+        ],
+        "type": "object"
+      },
+      "IpMeta": {
+        "properties": {
+          "batch_addresses_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "batch_addresses_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "batch_max_size": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "per_target_per_minute",
+          "per_target_burst",
+          "batch_max_size",
+          "batch_addresses_per_minute",
+          "batch_addresses_burst"
+        ],
+        "type": "object"
+      },
       "Limits": {
         "properties": {
           "admission": {
@@ -613,6 +1030,9 @@
           "api": {
             "$ref": "#/components/schemas/ApiLimits"
           },
+          "ip": {
+            "$ref": "#/components/schemas/IpMeta"
+          },
           "rate_limit": {
             "$ref": "#/components/schemas/RateLimitMeta"
           }
@@ -620,7 +1040,158 @@
         "required": [
           "api",
           "admission",
-          "rate_limit"
+          "rate_limit",
+          "ip"
+        ],
+        "type": "object"
+      },
+      "Location": {
+        "properties": {
+          "accuracy_radius_km": {
+            "example": 100,
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "city": {
+            "example": "Berlin",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city_localized": {
+            "description": "Localized city name when `?lang=` is specified and a locale other than `en` was found.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "continent": {
+            "example": "Europe",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "continent_code": {
+            "example": "EU",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country": {
+            "example": "Germany",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country_iso": {
+            "example": "DE",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country_localized": {
+            "description": "Localized country name when `?lang=` is specified and a locale other than `en` was found.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_eu": {
+            "example": true,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "latitude": {
+            "example": 52.52,
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "longitude": {
+            "example": 13.405,
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "postal_code": {
+            "example": "10115",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "example": "Berlin",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region_code": {
+            "example": "BE",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "registered_country": {
+            "description": "Country where the IP block is registered (differs from `country` for VPN exit nodes).",
+            "example": "United States",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "registered_country_iso": {
+            "example": "US",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "example": "Europe/Berlin",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "LocationDiff": {
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "b": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "equal"
         ],
         "type": "object"
       },
@@ -664,6 +1235,194 @@
         ],
         "type": "object"
       },
+      "Network": {
+        "properties": {
+          "asn": {
+            "example": 64496,
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "asn_category": {
+            "description": "ASN category from ipverse/as-metadata (hosting/isp/business/education_research/government_admin).",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "asn_registered": {
+            "description": "ASN registration date from ipverse/as-metadata (YYYY-MM-DD). Null for internal IPs or unknown ASNs.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NetworkBot",
+                "description": "Bot identity when the IP is a known crawler range."
+              }
+            ]
+          },
+          "cloud": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CloudInfo",
+                "description": "Cloud provider identity when the IP is a cloud CIDR match."
+              }
+            ]
+          },
+          "iana_label": {
+            "description": "IANA special-purpose address registry label, if applicable.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "infra_type": {
+            "description": "Infrastructure dimension, orthogonal to type. One of: internal, cloud, datacenter, government, education, business, residential.",
+            "example": "residential",
+            "type": "string"
+          },
+          "is_anycast": {
+            "description": "True when the IP belongs to a known anycast network (Cloudflare, Akamai, Fastly, Google DNS).",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_bot": {
+            "example": false,
+            "type": "boolean"
+          },
+          "is_c2": {
+            "description": "True when the IP is an active Feodo botnet C2 node.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_cins": {
+            "description": "True when the IP appears in the CINS Army bad-actor list.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_datacenter": {
+            "example": false,
+            "type": "boolean"
+          },
+          "is_internal": {
+            "description": "True when the IP belongs to a private or reserved range (RFC 1918, loopback, link-local, IPv6 ULA).",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_spamhaus": {
+            "description": "True when the IP falls in a Spamhaus DROP/EDROP hijacked netblock.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_tor": {
+            "example": false,
+            "type": "boolean"
+          },
+          "is_vpn": {
+            "example": false,
+            "type": "boolean"
+          },
+          "network_role": {
+            "description": "Network role from ipverse/as-metadata (e.g. \"stub\", \"tier1_transit\").",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "example": "Example Telecom AG",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prefix": {
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "description": "Primary signal: highest-priority classification. One of: internal, c2, bot, cloud, vpn, tor, spamhaus, datacenter, residential.",
+            "example": "residential",
+            "type": "string"
+          },
+          "vpn": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VpnInfo",
+                "description": "VPN identity when the IP is a VPN match."
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "infra_type",
+          "is_internal",
+          "is_datacenter",
+          "is_vpn",
+          "is_tor",
+          "is_bot",
+          "is_c2",
+          "is_spamhaus",
+          "is_anycast",
+          "is_cins"
+        ],
+        "type": "object"
+      },
+      "NetworkBot": {
+        "properties": {
+          "provider": {
+            "example": "googlebot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "NetworkDiff": {
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "b": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "equal"
+        ],
+        "type": "object"
+      },
       "Node": {
         "description": "A node of a `tree` block.",
         "properties": {
@@ -683,6 +1442,49 @@
         "required": [
           "fields",
           "children"
+        ],
+        "type": "object"
+      },
+      "OS": {
+        "properties": {
+          "family": {
+            "example": "Mac OS X",
+            "type": "string"
+          },
+          "major": {
+            "example": "14",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "minor": {
+            "example": "0",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "patch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "patch_minor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "example": "14.0",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "version"
         ],
         "type": "object"
       },
@@ -740,6 +1542,73 @@
           "ip"
         ],
         "type": "string"
+      },
+      "RangeResponse": {
+        "properties": {
+          "asn": {
+            "description": "ASN that originates this prefix (from MaxMind lookup on the network address).",
+            "example": 15169,
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cidr": {
+            "description": "The CIDR prefix as provided.",
+            "example": "8.8.8.0/24",
+            "type": "string"
+          },
+          "is_c2": {
+            "description": "True if the network address is a Feodo C2 node.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_cloud": {
+            "description": "True if the network address is a cloud CIDR.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_datacenter": {
+            "description": "True if the network address is a datacenter.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_spamhaus": {
+            "description": "True if the network address matches Spamhaus DROP.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_vpn": {
+            "description": "True if the network address matches VPN ranges.",
+            "example": false,
+            "type": "boolean"
+          },
+          "network_type": {
+            "description": "Network type classification of the network address.",
+            "example": "cloud",
+            "type": "string"
+          },
+          "org": {
+            "description": "Organization name for the ASN.",
+            "example": "Google LLC",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "cidr",
+          "network_type",
+          "is_cloud",
+          "is_vpn",
+          "is_datacenter",
+          "is_spamhaus",
+          "is_c2"
+        ],
+        "type": "object"
       },
       "RateLimitMeta": {
         "properties": {
@@ -1194,6 +2063,51 @@
         ],
         "type": "string"
       },
+      "Tcp": {
+        "properties": {
+          "port": {
+            "example": 54321,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "port"
+        ],
+        "type": "object"
+      },
+      "TcpDiff": {
+        "properties": {
+          "a": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Tcp"
+              }
+            ]
+          },
+          "b": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Tcp"
+              }
+            ]
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "equal"
+        ],
+        "type": "object"
+      },
       "Threshold": {
         "description": "One grade threshold as served: the lowest score that earns `grade`.",
         "properties": {
@@ -1209,6 +2123,63 @@
         "required": [
           "grade",
           "min"
+        ],
+        "type": "object"
+      },
+      "UserAgent": {
+        "properties": {
+          "browser": {
+            "$ref": "#/components/schemas/Browser"
+          },
+          "device": {
+            "$ref": "#/components/schemas/Device"
+          },
+          "os": {
+            "$ref": "#/components/schemas/OS"
+          },
+          "raw": {
+            "example": "curl/8.7.1",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "device",
+          "os",
+          "browser"
+        ],
+        "type": "object"
+      },
+      "UserAgentDiff": {
+        "properties": {
+          "a": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserAgent"
+              }
+            ]
+          },
+          "b": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserAgent"
+              }
+            ]
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "equal"
         ],
         "type": "object"
       },
@@ -1327,6 +2298,19 @@
             "type": "object"
           }
         ]
+      },
+      "VpnInfo": {
+        "properties": {
+          "provider": {
+            "description": "Provider name when identified via ASN heuristic; None when only CIDR matched.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
       }
     }
   },
@@ -1340,6 +2324,78 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/asn/{n}": {
+      "get": {
+        "operationId": "asn",
+        "parameters": [
+          {
+            "description": "The AS number, digits only",
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsnLookupResponse"
+                }
+              }
+            },
+            "description": "The AS's classification"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a number"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "What is known about an autonomous system.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
     "/api/v1/catalogue": {
       "get": {
         "operationId": "catalogue_handler",
@@ -1915,6 +2971,383 @@
         "summary": "What changed in one entry against its predecessor.",
         "tags": [
           "history"
+        ]
+      }
+    },
+    "/api/v1/ip": {
+      "get": {
+        "operationId": "caller",
+        "parameters": [
+          {
+            "description": "Answer this one field as text/plain, with a trailing newline",
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CallerField"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ifconfig"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The caller's lookup; with `?field`, that one value as text/plain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unknown field"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "The caller's address, or one field of it.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/ip/batch": {
+      "post": {
+        "operationId": "batch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResponse"
+                }
+              }
+            },
+            "description": "One item per address, in order"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, no addresses, or `BATCH_TOO_MANY`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "Up to `batch_max_size` addresses in one request.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/ip/diff": {
+      "post": {
+        "operationId": "compare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiffResponse"
+                }
+              }
+            },
+            "description": "Both lookups, part by part, with whether the parts are equal"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, malformed or non-global address"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "Two addresses side by side.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/ip/range/{cidr}": {
+      "get": {
+        "operationId": "range",
+        "parameters": [
+          {
+            "description": "A CIDR prefix; the slash may be sent as `%2F`",
+            "in": "path",
+            "name": "cidr",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RangeResponse"
+                }
+              }
+            },
+            "description": "The prefix's classification"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed or private, loopback or link-local prefix"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "What is known about a CIDR prefix.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/ip/{address}": {
+      "get": {
+        "operationId": "address",
+        "parameters": [
+          {
+            "description": "An IPv4 or IPv6 address",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Answer this one field as text/plain, with a trailing newline",
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AddressField"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ifconfig"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The address's lookup; with `?field`, that one value as text/plain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed or non-global address, caller-only or unknown field"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "One global address, or one field of it.",
+        "tags": [
+          "ip"
         ]
       }
     },

@@ -254,6 +254,14 @@ fn cases() -> Vec<Case> {
         post_run("/domains/throttled.example.com/runs", 429, None),
         post_run("/domains/pre.example.com/runs", 503, None),
         ip("/api/v1/ip", "get", "/ip", 200, None),
+        ip("/api/v1/ip", "get", "/ip?field=ip", 200, None),
+        ip(
+            "/api/v1/ip/{address}",
+            "get",
+            "/ip/198.51.100.1?field=country",
+            200,
+            None,
+        ),
         ip_off("/api/v1/ip", "get", "/ip", None),
         ip("/api/v1/ip/{address}", "get", "/ip/192.0.2.1", 200, None),
         ip("/api/v1/ip/{address}", "get", "/ip/not-an-ip", 400, None),
@@ -498,22 +506,23 @@ async fn responses_match_the_committed_document() {
             }
             continue;
         }
-        if content.get("text/plain").is_some() {
-            assert!(
-                content_type.starts_with("text/plain"),
-                "{label}: content type {content_type}"
-            );
+        // The response's own media type must be one of the document's types for this status.
+        let media = content_type
+            .split(';')
+            .next()
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        assert!(
+            content.get(media.as_str()).is_some(),
+            "{label}: response media type {media:?} not documented (documented: {:?})",
+            content.as_object().map(|o| o.keys().collect::<Vec<_>>())
+        );
+        if media == "text/plain" {
             continue;
         }
-        let schema = &content["application/json"]["schema"];
-        assert!(
-            schema.is_object(),
-            "{label}: no application/json schema documented"
-        );
-        assert!(
-            content_type.starts_with("application/json"),
-            "{label}: content type {content_type}"
-        );
+        let schema = &content[media.as_str()]["schema"];
+        assert!(schema.is_object(), "{label}: no {media} schema documented");
 
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         let body: Value = serde_json::from_slice(&bytes)

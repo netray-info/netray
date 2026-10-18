@@ -197,3 +197,75 @@ retry-after: 44
 $ curl -s http://127.0.0.1:18485/api/v1/openapi.json  # post /api/v1/domains/{domain}/runs responses
 ['200', '400', '413', '429', '503']
 ```
+
+## Phase 4 — ip. functions under v1 and the curl root
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R19: `GET /ip` (caller via `lookup_caller`) and `GET /ip/{address}` (via `lookup`); non-global address 400 unless `internal_mode`; no `[modules.ip]` → 503 | green | crates/web/tests/api_ip_lookup.rs, crates/web/tests/openapi_responses.rs |
+| C2 | R20: `?field=` fifteen names as `text/plain` with newline via `to_plain`; caller-dependent names only on `/ip`; errors name the caller form or list valid names; enums in the document | green | crates/web/tests/api_ip_fields.rs |
+| C3 | R21: `POST /ip/batch` typed items in order, `BATCH_TOO_MANY` over `batch_max_size`, per-IP 1 token + batch-address N tokens, `validate()` burst ≥ max size, 429 with Retry-After; ifconfig's `/batch` unchanged | green | crates/web/tests/api_ip_batch.rs |
+| C4 | R22: `GET /ip/range/{cidr}` with `/` or `%2F`, `RangeResponse`; special or malformed prefix 400 | green | crates/web/tests/api_ip_range.rs |
+| C5 | R23: `POST /ip/diff` `{a, b}` typed `DiffResponse`, charges 2 tokens | green | crates/web/tests/api_ip_range.rs |
+| C6 | R24: `GET /asn/{n}` `AsnLookupResponse`; non-number 400 | green | crates/web/tests/api_ip_range.rs |
+| C7 | R25: `[api.ip]` limits and hard caps as `validate()` rules with `startup_rejects` rows; lookup logic in netray-ip functions both routes call; `ip.` answers unchanged | green | tests/repo/test_check_config.sh, crates/web/tests/api_ip_batch.rs, crates/ip/tests/offline_routes.rs |
+| C8 | R26: gate test on the `netray ip` router: curl `GET /` → 200 `text/plain` `<caller>\n`; browser → not `text/plain`; joins `test-rust-offline` | already_implemented | crates/ip/tests/offline_routes.rs |
+| C9 | R36: `IpLookup` seam in `ApiState`, `IpModule` implements it; `testing::StubIpLookup` answers from the golden; v1 IP tests need no GeoIP data | green | crates/web/tests/api_ip_lookup.rs |
+| C10 | S: caller 192.0.2.10 behind trusted proxy: `GET /api/v1/ip` its `Ifconfig`, validates against the document | green | crates/web/tests/api_ip_lookup.rs |
+| C11 | S: `/ip/198.51.100.1?field=country`: 200 text/plain stub country + newline | green | crates/web/tests/api_ip_fields.rs |
+| C12 | S: eleven address fields on `/ip` and `/ip/198.51.100.1` equal `to_plain` over the stub | green | crates/web/tests/api_ip_fields.rs |
+| C13 | S: caller fields `user_agent`, `tcp`, `host`, `headers` on `/ip` rendered from the request | green | crates/web/tests/api_ip_fields.rs |
+| C14 | S: caller field on `/ip/{address}` 400 naming `/api/v1/ip?field=…`; `?field=nope` 400 listing names | green | crates/web/tests/api_ip_fields.rs |
+| C15 | S: `/ip/10.0.0.1` 400 by default, 200 with `internal_mode = true` | green | crates/web/tests/api_ip_lookup.rs |
+| C16 | S: batch of 100: 200, 100 items in order, 1 per-IP + 100 batch tokens; 101 → `BATCH_TOO_MANY`; one malformed → its `error` | green | crates/web/tests/api_ip_batch.rs |
+| C17 | S: 10 batch tokens left, batch of 11 → 429 `RATE_LIMITED` Retry-After; 11 one-address batches → eleventh refused by per-IP | green | crates/web/tests/api_ip_batch.rs |
+| C18 | S: `batch_addresses_burst = 50`, `batch_max_size = 100`: lens exits 1 naming the key; `startup_rejects` row | green | tests/repo/test_check_config.sh, crates/web/tests/api_ip_batch.rs |
+| C19 | S: ifconfig's `/batch` with 11 addresses: 429 `Retry-After: 1` as today | already_implemented | crates/ip/tests/offline_routes.rs |
+| C20 | S: `/ip/range/192.0.2.0/24` and `%2F` same `RangeResponse`; `10.0.0.0/8` 400 | green | crates/web/tests/api_ip_range.rs |
+| C21 | S: `/ip/range` without prefix 400 `INVALID_INPUT` | green | crates/web/tests/api_ip_range.rs |
+| C22 | S: `POST /ip/diff` two addresses: typed `DiffResponse` with today's fields | green | crates/web/tests/api_ip_range.rs |
+| C23 | S: `/asn/64496` `AsnLookupResponse`; `/asn/abc` 400 | green | crates/web/tests/api_ip_range.rs |
+| C24 | S: lens without `[modules.ip]`: `/api/v1/ip` 503 `UNAVAILABLE` naming the IP module | green | crates/web/tests/api_ip_lookup.rs |
+| C25 | S: `batch_max_size = 101` exits 1 naming the key, `startup_rejects` row; 100 starts | green | tests/repo/test_check_config.sh, crates/web/tests/api_ip_batch.rs |
+| C26 | S: `netray ip` router `GET /` curl → 200 text/plain `127.0.0.1\n`; browser → not text/plain | already_implemented | crates/ip/tests/offline_routes.rs |
+| C27 | S: today's `ip.` `/json`, `/batch`, `/range?cidr=` answers unchanged | already_implemented | crates/ip/tests/offline_routes.rs |
+| C28 | S: `StubIpLookup` called directly returns the same `Ifconfig` as `GET /api/v1/ip/198.51.100.1` | green | crates/web/tests/api_ip_lookup.rs |
+
+C8, C19, C26 and C27 pass before any code: the curl root and ifconfig's own routes exist; their tests protect them through the move (C8's gate entry is the new `--test offline_routes` in `test-rust-offline`).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 (C8, C19, C26, C27) | 1 | sonnet | 120030 | 384 |
+| G2 (C7, C18, C25) | 1 | sonnet | 37371 | 165 |
+| G3 (C1–C6, C9–C17, C20–C24, C28) | 2 | sonnet | 113482 | 329 |
+| review fixes | 1 | opus | 46355 | 192 |
+
+### Review
+
+First pass: 2 BLOCKER, 1 AMENDMENT, 2 NIT.
+- BLOCKER `IpModule::lookup_caller` dropped the User-Agent (no parser): `UserAgent::unparsed` keeps the raw string; test in `crates/ip/tests/module.rs`.
+- BLOCKER `?field=` answers `text/plain` but the document listed only JSON: 200 lists both; `openapi_responses.rs` now checks the response's own media type.
+- AMENDMENT `per_ip_burst = 1` refused every diff: `validate()` requires 2 (Decision log), `startup_rejects` row.
+- NIT bare `/ip/range` answers 400 without the module: kept, Decision log.
+- NIT new rate-limit scopes were not zero-initialised: added to lens's list.
+
+Second pass: 0 BLOCKER, 1 AMENDMENT, 1 DEFERRED.
+- AMENDMENT v1's IP limiters were never pruned: pruned once a minute (Decision log).
+- DEFERRED `?field=user_agent` text without a parser: Decision log, before v2-cutover.
+
+### Behavioural verification
+
+`./target/debug/netray lens <dev config on 127.0.0.1:18485>` from the worktree build. `[modules.ip]` needs GeoIP databases, which this machine does not have (`modules.ip: geoip_city_db and geoip_asn_db are required when [modules.ip] is set`), so only the paths without the module ran; the module paths are covered by the gate tests over `StubIpLookup`.
+
+```
+$ curl -s -A curl/8.5.0 http://127.0.0.1:18485/api/v1/ip?field=ip
+{"error":{"code":"UNAVAILABLE","message":"the IP module is off: [modules.ip] is not configured"}} [503 application/json]
+$ curl -s http://127.0.0.1:18485/api/v1/ip/range
+{"error":{"code":"INVALID_INPUT","message":"missing CIDR prefix: use /api/v1/ip/range/{cidr}"}} [400 application/json]
+$ curl -s -X POST -d '{"addresses":["8.8.8.8","nope"]}' http://127.0.0.1:18485/api/v1/ip/batch
+{"error":{"code":"UNAVAILABLE","message":"the IP module is off: [modules.ip] is not configured"}} [503]
+```

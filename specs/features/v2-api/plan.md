@@ -78,3 +78,39 @@ Tests: `cargo test -p lens --test admission_head_race` plus the `admission_*` an
 1. `crates/lens/src/api_v1.rs`: `check_limits` → `Refused(IpLimit|GlobalLimit)`; `admit` (the counting one) with the trigger mapped; events mapped `Section`/`Done(run)`/`Recorded`; a fresh run counts `count_request("fresh")` and `client_runs.record`, a join `count_request("joined")`, as `/api/check` does.
 
 Tests: `cargo test -p lens --test api_v1_runs --test api_v1_runs_join --test api_v1_runs_limits`.
+
+## Phase 4 — ip. functions under v1 and the curl root
+
+### Groups
+
+G1: C8, C19, C26, C27 (the netray-ip seam, guarded by the `offline_routes` pins; the netray-ip half of C7 and C9) · G2: C7, C18, C25 (`[api.ip]` keys and `validate()`, manifests) · G3: C1–C6, C9–C17, C20–C24, C28 (v1 IP routes, `ApiState` seam, wiring in `crates/netray`). G3 needs G1 and G2.
+
+### Plan
+
+#### G1 — netray-ip seam
+1. `crates/ip/src/lookup.rs` (new): `IpLookup` (object-safe, `BoxFuture`), `IpRefusal`, pub `enrich`, `check_address`, `parse_address`, `parse_diff_pair`, `parse_range`, `range_lookup`, `asn_lookup`, `diff`, `lookup_batch`; moved `RangeResponse`, `AsnLookupResponse`, `DiffRequest` (schema attributes verbatim) and new `DiffResponse` (`IpDiff`, `LocationDiff`, `NetworkDiff`, `TcpDiff`, `UserAgentDiff`, keys sorted). Lifted from `get_ifconfig`, `is_global_ip`, `is_special_prefix`, `range_handler`, `asn_lookup_by_number`, `diff_handler`'s diff block, `batch_dispatch`'s semaphore and timeout loop.
+2. `crates/ip/src/lib.rs`: `pub mod lookup; pub use lookup::{IpLookup, IpRefusal};`.
+3. `crates/ip/src/extractors.rs`: `pub fn header_filters(&[String]) -> RegexSet` (lifted from `AppState::new`); `state.rs` calls it.
+4. `crates/ip/src/routes.rs`: `dispatch`, `ip_version_dispatch`, `batch_dispatch`, `diff_handler`, `asn_param_handler`, `range_handler` call the lookup functions and map refusals onto today's codes (`INVALID_IP`, `INVALID_CIDR`, `TIMEOUT`); answers byte-identical; `/diff` keeps the caller UA.
+5. `crates/ip/src/handlers.rs`: `make_ifconfig`/`make_ifconfig_lang` removed once unused.
+6. `crates/ip/src/module.rs`: `impl IpLookup for IpModule` (`lookup`: `enrich(ip, None, skip_dns)`; `lookup_caller`: `enrich(remote, ua, dns)`; `range`; `asn`); `Module::run` maps `Err(r)` to its text.
+7. `crates/ip/src/testing.rs`: `StubIpLookup` (`new`, `Default`) per the interface sheet.
+
+Tests: `cargo test -p netray-ip --lib` and `cargo test -p netray-ip --features testing --test module --test module_data --test module_v3 --test contract_status --test evidence --test offline_routes`.
+
+#### G2 — `[api.ip]` keys
+1. Root `Cargo.toml`: `netray-ip` in `[workspace.dependencies]`; `crates/web/Cargo.toml` `netray-ip` and `regex` as dependencies, the dev-dependency `{ workspace = true, features = ["testing"] }`; `crates/netray/Cargo.toml` `netray-ip = { workspace = true }`.
+2. `crates/web/src/api/config.rs`: `ApiIpConfig`'s nine keys with a hand-written `Default`; `ApiIpConfig::validate` in the sheet's order and texts (caps from `netray_ip::config::HARD_CAP_*`); `ApiConfig::validate` calls it.
+3. `crates/lens/lens.example.toml`: a commented `[api.ip]` block with the keys and defaults.
+
+Tests: `bash tests/repo/test_check_config.sh`, `bash tests/repo/test_config_strict.sh`, `cargo test -p lens --lib config`.
+
+#### G3 — v1 IP routes
+1. `crates/web/src/api/error.rs`: `V1Error::BatchTooMany`; `From<IpRefusal>`.
+2. `crates/web/src/api/state.rs`: `ApiParts { ip: Option<Arc<dyn IpLookup>> }`; `IpLimiters { per_ip, per_target, batch_addresses }` built in `ApiState::new`; accessors `ip_limiters`, `ip_lookup`; the header filter set.
+3. `crates/web/src/api/ip.rs` (new): six handlers in the sheet's order (503, per-IP charge, validation, per-target or batch limiter, lookup), `AddressField`/`CallerField`, the field → `to_plain` mapping, batch types, `ip_routes()` and `ip_doc_routes()`, `range_missing`.
+4. `crates/web/src/api/mod.rs`: `mod ip`; document merges `ip_doc_routes()`; router merges `ip_routes()` outside the `[api]` limiter, `/ip/range/{*cidr}` and `/ip/range` by hand; `/meta` `limits.ip`.
+5. `crates/netray/src/main.rs`: the lens arm passes `ApiParts { ip: <the IpModule> }` to `lens::run_with`.
+6. `tests/fixtures/contracts/api-v1.openapi.json`: regenerated.
+
+Tests: `cargo test -p netray-web --test api_ip_lookup --test api_ip_fields --test api_ip_batch --test api_ip_range --test openapi_responses --test openapi_contract --test openapi_document`, then `just adlc-verify`.

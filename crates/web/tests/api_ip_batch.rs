@@ -198,3 +198,10 @@ fn batch_keys_validate_with_their_names() {
     assert!(over_cap.starts_with("api.ip.batch_max_size"), "{over_cap}");
     assert_eq!(api_config("batch_max_size = 100").validate(), Ok(()));
 }
+
+#[test]
+fn per_ip_burst_below_the_diff_cost_is_refused() {
+    let one = api_config("per_ip_burst = 1").validate().unwrap_err();
+    assert!(one.starts_with("api.ip.per_ip_burst"), "{one}");
+    assert_eq!(api_config("per_ip_burst = 2").validate(), Ok(()));
+}

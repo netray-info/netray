@@ -5,6 +5,7 @@ mod config;
 pub mod contract;
 mod docs;
 mod error;
+mod ip;
 mod limit;
 mod reads;
 mod runs;
@@ -29,16 +30,23 @@ pub use config::{
     ApiConfig, ApiDnsConfig, ApiEmailConfig, ApiHttpConfig, ApiIpConfig, ApiTlsConfig,
 };
 pub use error::V1Error;
+use ip::{AddressField, CallerField};
 pub use runs::{
     DomainRefusal, DomainRuns, RefusalReason, RunEvent, RunEvents, RunRefusal, RunStart, RunTrigger,
 };
 use runs::{RunAnswer, RunSectionEvent};
-pub use state::{AdmissionLimits, ApiParts, ApiState};
+pub use state::{AdmissionLimits, ApiParts, ApiState, IpLimiters};
 
 const MOUNT: &str = "/api/v1";
 
 #[derive(OpenApi)]
-#[openapi(components(schemas(ErrorResponse, RunAnswer, RunSectionEvent)))]
+#[openapi(components(schemas(
+    ErrorResponse,
+    RunAnswer,
+    RunSectionEvent,
+    AddressField,
+    CallerField
+)))]
 struct ApiDoc;
 
 fn read_routes() -> OpenApiRouter<ApiState> {
@@ -59,7 +67,10 @@ fn run_routes() -> OpenApiRouter<ApiState> {
 
 /// The generated v1 document; path keys carry the `/api/v1` mount.
 pub fn openapi() -> utoipa::openapi::OpenApi {
-    let (_, routed) = read_routes().merge(run_routes()).split_for_parts();
+    let (_, routed) = read_routes()
+        .merge(run_routes())
+        .merge(ip::ip_doc_routes())
+        .split_for_parts();
     let mut doc = ApiDoc::openapi().nest(MOUNT, routed);
     doc.info.title = "netray API".into();
     doc.info.version = env!("CARGO_PKG_VERSION").into();
@@ -77,6 +88,7 @@ pub fn router(state: ApiState) -> Router {
     limited
         .route_layer(middleware::from_fn_with_state(state.clone(), limit::per_ip))
         .merge(unlimited)
+        .merge(ip::ip_routes())
         .route("/openapi.json", get(|| async { Json(openapi()) }))
         .route("/docs", get(docs::page))
         .route("/", any(not_found))
@@ -161,12 +173,24 @@ struct Limits {
     api: ApiLimits,
     admission: AdmissionMeta,
     rate_limit: RateLimitMeta,
+    ip: IpMeta,
 }
 
 #[derive(Serialize, ToSchema)]
 struct ApiLimits {
     per_ip_per_minute: u32,
     per_ip_burst: u32,
+}
+
+#[derive(Serialize, ToSchema)]
+struct IpMeta {
+    per_ip_per_minute: u32,
+    per_ip_burst: u32,
+    per_target_per_minute: u32,
+    per_target_burst: u32,
+    batch_max_size: u32,
+    batch_addresses_per_minute: u32,
+    batch_addresses_burst: u32,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -217,6 +241,15 @@ async fn meta_handler(State(state): State<ApiState>) -> Json<Meta> {
                 per_ip_burst: admission.rate_limit_per_ip_burst,
                 global_per_minute: admission.rate_limit_global_per_minute,
                 global_burst: admission.rate_limit_global_burst,
+            },
+            ip: IpMeta {
+                per_ip_per_minute: config.ip.per_ip_per_minute,
+                per_ip_burst: config.ip.per_ip_burst,
+                per_target_per_minute: config.ip.per_target_per_minute,
+                per_target_burst: config.ip.per_target_burst,
+                batch_max_size: config.ip.batch_max_size,
+                batch_addresses_per_minute: config.ip.batch_addresses_per_minute,
+                batch_addresses_burst: config.ip.batch_addresses_burst,
             },
         },
     })
