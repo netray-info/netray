@@ -112,18 +112,54 @@ pub(crate) async fn record(
     }
     let volatile = volatile(state);
     let profile = &state.scoring_profile;
+    let previous = store.head(domain).await.ok().flatten();
     match store
         .record(domain, run, &volatile, now_unix(), |prev, cur| {
             netray_engine::history::diff(prev, cur, &volatile, profile)
         })
         .await
     {
-        Ok(recorded) => Some(recorded),
+        Ok(recorded) => {
+            observe_recorded(previous.as_ref(), &recorded);
+            Some(recorded)
+        }
         Err(e) => {
             tracing::error!(error = %e, domain = %domain, "history record failed");
-            metrics::counter!("lens_history_record_errors_total").increment(1);
+            metrics::counter!("netray_history_record_errors_total").increment(1);
             None
         }
+    }
+}
+
+/// Counts what a recorded run says: that it had a predecessor, how long ago that ran, and the
+/// checks the run fixed. An incomplete run stores nothing and counts nothing here.
+fn observe_recorded(previous: Option<&netray_store::Head>, recorded: &netray_store::Recorded) {
+    use netray_model::diff::ChangeClass;
+    use netray_store::Recorded;
+    if matches!(recorded, Recorded::NotStored { .. }) {
+        return;
+    }
+    if let Some(previous) = previous {
+        metrics::counter!("netray_runs_with_predecessor_total").increment(1);
+        let interval = now_unix().saturating_sub(previous.last_seen_at).max(0);
+        metrics::histogram!("netray_run_interval_seconds").record(interval as f64);
+    }
+    if let Recorded::Changed { diff, .. } = recorded {
+        for change in diff.checks.iter().filter(|c| c.class == ChangeClass::Fixed) {
+            metrics::counter!("netray_fixes_observed_total", "section" => change.id.protocol().as_str())
+                .increment(1);
+        }
+    }
+}
+
+/// Sets `netray_history_entries` and `netray_history_domains` from the store.
+pub(crate) async fn set_gauges(store: &HistoryStore) {
+    match store.totals().await {
+        Ok((entries, domains)) => {
+            metrics::gauge!("netray_history_entries").set(entries as f64);
+            metrics::gauge!("netray_history_domains").set(domains as f64);
+        }
+        Err(e) => tracing::warn!("history totals error: {e}"),
     }
 }
 
@@ -142,5 +178,6 @@ pub(crate) async fn run_sweep_loop(store: Arc<HistoryStore>) {
             Ok(n) => tracing::info!("history sweep deleted {n} entries"),
             Err(e) => tracing::warn!("history sweep error: {e}"),
         }
+        set_gauges(&store).await;
     }
 }

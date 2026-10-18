@@ -564,7 +564,7 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
                             push_cached(&mut batch_events, "batch", &batch);
                         }
                         if tx.send(CheckEvent::Batch(batch)).await.is_err() {
-                            metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
+                            metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "error").increment(1);
                             return;
                         }
                         match kind {
@@ -584,7 +584,7 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
                         message: "stream deadline exceeded".to_owned(),
                     })
                     .await;
-                metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error").increment(1);
+                metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "error").increment(1);
                 return;
             }
         }
@@ -674,14 +674,14 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
             results,
         };
         if tx.send(CheckEvent::Lint(lint_event)).await.is_err() {
-            metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
+            metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "error")
                 .increment(1);
             return;
         }
     }
     for event in unanswered_events(&lame, &delegation) {
         if tx.send(event).await.is_err() {
-            metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "error")
+            metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "error")
                 .increment(1);
             return;
         }
@@ -709,24 +709,25 @@ pub async fn run_check(run: CheckRun, tx: mpsc::Sender<CheckEvent>) {
     };
     let _ = tx.send(CheckEvent::Done(done)).await;
 
-    metrics::counter!("prism_queries_total", "endpoint" => "check", "status" => "ok").increment(1);
-    metrics::histogram!("prism_check_duration_seconds").record(elapsed.as_secs_f64());
+    metrics::counter!("netray_dns_queries_total", "operation" => "check", "status" => "ok")
+        .increment(1);
+    metrics::histogram!("netray_dns_check_duration_seconds").record(elapsed.as_secs_f64());
 }
 
-/// Counts a running check in `prism_active_checks` until dropped, so a check cancelled mid-way
+/// Counts a running check in `netray_dns_active_checks` until dropped, so a check cancelled mid-way
 /// (stream deadline, closed client) does not leak its increment.
 struct ActiveCheck;
 
 impl ActiveCheck {
     fn new() -> Self {
-        metrics::gauge!("prism_active_checks").increment(1.0);
+        metrics::gauge!("netray_dns_active_checks").increment(1.0);
         Self
     }
 }
 
 impl Drop for ActiveCheck {
     fn drop(&mut self) {
-        metrics::gauge!("prism_active_checks").decrement(1.0);
+        metrics::gauge!("netray_dns_active_checks").decrement(1.0);
     }
 }
 
@@ -1870,9 +1871,9 @@ mod tests {
         let _local = metrics::set_default_local_recorder(&recorder);
 
         let guard = ActiveCheck::new();
-        assert!(handle.render().contains("prism_active_checks 1"));
+        assert!(handle.render().contains("netray_dns_active_checks 1"));
         drop(guard);
-        assert!(handle.render().contains("prism_active_checks 0"));
+        assert!(handle.render().contains("netray_dns_active_checks 0"));
     }
 
     /// Build a `Lookups` containing TXT records via JSON deserialization.

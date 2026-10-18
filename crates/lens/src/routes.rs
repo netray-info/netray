@@ -494,10 +494,10 @@ fn throttled_badge_response(
     req_headers: &axum::http::HeaderMap,
 ) -> Response {
     use std::time::Instant;
-    metrics::counter!("lens_badge_requests_total", "cache" => "throttled").increment(1);
+    metrics::counter!("netray_badge_requests_total", "cache" => "throttled").increment(1);
     let render_start = Instant::now();
     let svg = svg_for_grade(&badge_req.label, "error", badge_req.style);
-    metrics::histogram!("lens_badge_render_duration_seconds")
+    metrics::histogram!("netray_badge_render_duration_seconds")
         .record(render_start.elapsed().as_secs_f64());
     let etag = compute_etag(&badge_req.domain, "?", &badge_req.label, badge_req.style);
     if badge_is_not_modified(req_headers, &etag) {
@@ -516,7 +516,7 @@ fn badge_response(
 ) -> Response {
     let render_start = std::time::Instant::now();
     let svg = svg_for_grade(&badge_req.label, grade, badge_req.style);
-    metrics::histogram!("lens_badge_render_duration_seconds")
+    metrics::histogram!("netray_badge_render_duration_seconds")
         .record(render_start.elapsed().as_secs_f64());
     let etag = compute_etag(&badge_req.domain, grade, &badge_req.label, badge_req.style);
     if badge_is_not_modified(req_headers, &etag) {
@@ -568,7 +568,7 @@ pub async fn badge_handler(
     if let Some(lookup) = &head
         && lookup.fresh
     {
-        metrics::counter!("lens_badge_requests_total", "cache" => "hit").increment(1);
+        metrics::counter!("netray_badge_requests_total", "cache" => "hit").increment(1);
         return badge_response(
             &badge_req,
             &req_headers,
@@ -590,7 +590,7 @@ pub async fn badge_handler(
         Admit::Refused(_) | Admit::NotStarted => {
             return match stale {
                 Some(grade) => {
-                    metrics::counter!("lens_badge_requests_total", "cache" => "throttled")
+                    metrics::counter!("netray_badge_requests_total", "cache" => "throttled")
                         .increment(1);
                     badge_response(&badge_req, &req_headers, grade, false)
                 }
@@ -606,11 +606,11 @@ pub async fn badge_handler(
     };
 
     if published.output.score.complete {
-        metrics::counter!("lens_badge_requests_total", "cache" => "miss").increment(1);
+        metrics::counter!("netray_badge_requests_total", "cache" => "miss").increment(1);
         let grade = badge_grade(&published.output.score);
         return badge_response(&badge_req, &req_headers, &grade, true);
     }
-    metrics::counter!("lens_badge_requests_total", "cache" => "failed").increment(1);
+    metrics::counter!("netray_badge_requests_total", "cache" => "failed").increment(1);
     badge_response(
         &badge_req,
         &req_headers,
@@ -742,7 +742,6 @@ fn is_sync_mode(headers: &axum::http::HeaderMap, stream_param: Option<bool>) -> 
 }
 
 fn refusal_response(r: &Refusal) -> Response {
-    crate::metrics::count_request("rate_limited");
     crate::error::AppError::RateLimited {
         retry_after_secs: r.retry_after_s,
     }
@@ -769,6 +768,7 @@ async fn run_check_handler(
 
     // 2. Rate limit.
     if let Err(r) = check_limits(&state, client_ip) {
+        metrics::counter!("netray_admission_rejections_total", "reason" => "limit").increment(1);
         return refusal_response(&r);
     }
 
@@ -780,7 +780,6 @@ async fn run_check_handler(
         && lookup.fresh
         && let Some(cached) = cache.get(&lookup.head.id).await
     {
-        crate::metrics::count_request("cache_hit");
         return if sync {
             sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
         } else {
@@ -803,19 +802,15 @@ async fn run_check_handler(
             },
         ) {
             Ok(stream) => {
-                crate::metrics::count_request("fresh");
                 state.client_runs.record(client_ip);
                 stream
             }
             Err(r) => return refusal_response(&r),
         }
     } else {
-        match admit(&state, &domain, client_ip, Trigger::Visit, prefetch) {
+        match admit(&state, &domain, client_ip, Trigger::Api, prefetch) {
             Admit::Admitted(stream) => {
-                if stream.joined() {
-                    crate::metrics::count_request("joined");
-                } else {
-                    crate::metrics::count_request("fresh");
+                if !stream.joined() {
                     state.client_runs.record(client_ip);
                 }
                 stream

@@ -62,8 +62,8 @@ pub fn check_rate_limit(
     ip: IpAddr,
 ) -> Result<(), RateLimitRejection> {
     let cost = NonZeroU32::new(1).unwrap();
-    check_keyed_cost(&per_ip.inner, &ip, cost, "per_ip", "lens")?;
-    check_direct_cost(&global.inner, cost, "lens")
+    check_keyed_cost(&per_ip.inner, &ip, cost, "per_ip", "netray")?;
+    check_direct_cost(&global.inner, cost, "netray")
 }
 
 #[cfg(test)]

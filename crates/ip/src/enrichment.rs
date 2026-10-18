@@ -47,7 +47,7 @@ pub struct DataFileDates {
     pub cins: Option<String>,
 }
 
-/// Record `data_file_age_seconds{source=<label>}` from the file's mtime.
+/// Record `netray_ip_data_file_age_seconds{source=<label>}` from the file's mtime.
 /// Silently skips if mtime cannot be read (file may be synthetic or on a
 /// filesystem that doesn't support mtime).
 fn emit_file_age(path: &str, source_label: &'static str) {
@@ -57,7 +57,7 @@ fn emit_file_age(path: &str, source_label: &'static str) {
         .and_then(|mtime| SystemTime::now().duration_since(mtime).ok())
         .map(|d| d.as_secs_f64());
     if let Some(age) = age_secs {
-        metrics::gauge!("data_file_age_seconds", "source" => source_label).set(age);
+        metrics::gauge!("netray_ip_data_file_age_seconds", "source" => source_label).set(age);
     }
 }
 
@@ -439,34 +439,34 @@ impl EnrichmentContext {
         };
 
         // Report which enrichment sources are loaded (updates on reload too).
-        metrics::gauge!("enrichment_sources_loaded", "source" => "geoip_city")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "geoip_city")
             .set(f64::from(ctx.geoip_city_db.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "geoip_asn")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "geoip_asn")
             .set(f64::from(ctx.geoip_asn_db.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "user_agent")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "user_agent")
             .set(f64::from(ctx.user_agent_parser.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "tor_exit_nodes")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "tor_exit_nodes")
             .set(f64::from(ctx.tor_exit_nodes.is_loaded() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "cloud_provider")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "cloud_provider")
             .set(f64::from(ctx.cloud_provider_db.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "vpn_ranges")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "vpn_ranges")
             .set(f64::from(ctx.vpn_ranges.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "datacenter_ranges")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "datacenter_ranges")
             .set(f64::from(ctx.datacenter_ranges.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "bot_ranges")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "bot_ranges")
             .set(f64::from(ctx.bot_db.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "feodo_botnet")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "feodo_botnet")
             .set(f64::from(ctx.feodo_botnet_ips.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "cins_army")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "cins_army")
             .set(f64::from(ctx.cins_army_ips.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "spamhaus_drop")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "spamhaus_drop")
             .set(f64::from(ctx.spamhaus_drop.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "asn_patterns")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "asn_patterns")
             .set(f64::from(config.asn_patterns.is_some() as u8));
-        metrics::gauge!("enrichment_sources_loaded", "source" => "asn_info")
+        metrics::gauge!("netray_ip_enrichment_sources_loaded", "source" => "asn_info")
             .set(f64::from(ctx.asn_info.is_some() as u8));
 
-        // Emit data_file_age_seconds for each successfully loaded optional file.
+        // Emit netray_ip_data_file_age_seconds for each successfully loaded optional file.
         if ctx.feodo_botnet_ips.is_some()
             && let Some(path) = config.feodo_botnet_ips.as_deref()
         {

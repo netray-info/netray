@@ -9,7 +9,7 @@ pub fn register_metrics() {
         "Inspection end-to-end duration in milliseconds"
     );
     metrics::describe_counter!(
-        "spectra_probe_failures_total",
+        "netray_http_probe_failures_total",
         "Number of probe failures by probe type"
     );
     metrics::describe_counter!(

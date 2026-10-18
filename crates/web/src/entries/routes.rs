@@ -134,7 +134,10 @@ async fn entry_page(
             )
                 .into_response()
         }
-        Ok(Some(entry)) => page(StatusCode::OK, render::entry(&entry_view(&entry))),
+        Ok(Some(entry)) => {
+            metrics::counter!("netray_entry_views_total").increment(1);
+            page(StatusCode::OK, render::entry(&entry_view(&entry)))
+        }
         Ok(None) => {
             if let Some(v1) = &deps.v1
                 && let Some(resp) = v1(id).await

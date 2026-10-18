@@ -13,6 +13,7 @@ netray-store = { workspace = true }
 askama = { workspace = true }
 axum = { workspace = true }
 tracing = { workspace = true }
+metrics = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 base64 = { workspace = true }

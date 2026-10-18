@@ -244,6 +244,15 @@ impl HistoryStore {
         rows.iter().map(entry_from_row).collect()
     }
 
+    /// The number of entries and of distinct domains held.
+    pub async fn totals(&self) -> Result<(u64, u64), StoreError> {
+        let (entries, domains): (i64, i64) =
+            sqlx::query_as("SELECT COUNT(*), COUNT(DISTINCT domain) FROM entries")
+                .fetch_one(&self.pool)
+                .await?;
+        Ok((entries as u64, domains as u64))
+    }
+
     /// The retention sweep at `now`; returns the number of deleted entries. A domain whose latest
     /// entry was last seen before `now - RETENTION_SECS` goes entirely; of the other domains,
     /// entries last seen before it go too, except the latest and its predecessor.

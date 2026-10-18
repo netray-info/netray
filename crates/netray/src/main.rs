@@ -363,6 +363,7 @@ async fn main() -> anyhow::Result<()> {
                 };
             let cfg = netray_cfg.to_lens();
             lens::init_telemetry(&cfg);
+            let metrics = lens::install_metrics();
             let (registry, ip) = lens_registry(&cfg, true)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
@@ -379,7 +380,7 @@ async fn main() -> anyhow::Result<()> {
                 http: None,
                 ip: None,
             });
-            lens::serve(&cfg, lens::layers(app), prepared.background).await
+            lens::serve(&cfg, lens::layers(app), prepared.background, metrics).await
         }
         Command::Lens { config, .. } => {
             let path = config.or_else(|| std::env::var("LENS_CONFIG").ok());

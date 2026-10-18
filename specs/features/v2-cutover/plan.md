@@ -38,3 +38,23 @@ G1: C1–C9, C12–C16 (`crates/web/src/host/`, `pages/errors.rs`) · G2: C10 (`
 - **G1** `pages/errors.rs`: `domain_path(raw)` shared; `query_redirect_absolute(apex, &Uri) -> Option<Response>` (absolute 301, 400 page for a bad value); `query_redirect` keeps its relative form (pinned by `pages_errors.rs`). `host/legacy.rs` (new): `moved` (301 absolute, GET/HEAD; other methods 405 `Allow: GET, HEAD`), `gone` (410, `ErrorResponse` code `gone`), `lens_host` (13a), `subdomain_common` (13f, 13h), `email_host` (13g, then f/h, then c/d on `/`, else e), `ip_successor` (14, `/ip/cidr` before `/ip/{fmt}`), `apex_legacy` (m, i, o, l, n in that order). `host/mod.rs` `dispatch`: apex `?d=` and `apex_legacy` before the reserved list (`/api/` leaves it), `lens.`/`email.` to their tables, inspector hosts `subdomain_common` (ip: `ip_successor` first) before the inspector. SDD §7.2 (`ip.` `/docs` 301) and §7.3 rows h, i, j, l–o.
 - **G2** `entries/routes.rs`: `/r/{id}/{*rest}` → `entry_rest`: 410 `render::gone()` for a well-formed ID, `rest` one of `dns|tls|http|email|ip` and no stored entry; else `unmatched`.
 - **G3** `domain-security-audit.html`: the dns, tls, email (and ip) samples become `/api/v1/…` (`POST /api/v1/dns/query`, `/api/v1/tls/inspect`, `/api/v1/email/inspect`, `GET /api/v1/ip/{address}`). `scoring.html`: only the `?d=…&dkim_selectors=…` sample changes (to `https://netray.info/example.com`); the rest of the `dkim_selectors` section is Phase 8's prose pass (inventory).
+
+## Phase 4 — Metrics
+
+### Groups
+
+G1: C1–C7, C9–C12 (one group: every criterion changes `crates/lens/src/metrics.rs`, most also `admission.rs`, `history.rs`, `routes.rs`, `lib.rs`). C8 deferred.
+
+### Plan
+
+1. `crates/common/src/server.rs`: `install_metrics(buckets, after_install) -> handle` and `serve_metrics_handle(addr, shutdown, handle)`; `serve_metrics_with` composes them (V1 services unchanged). Under `serve` the recorder is installed before `lens_registry` and `prepare`, so startup gauges land.
+2. `crates/store/src/lib.rs`: `HistoryStore::totals() -> (entries, domains)`.
+3. `crates/lens/src/metrics.rs`: buckets renamed and added (`netray_run_duration_seconds`, `netray_client_hourly_runs`, `netray_time_to_first_section_seconds`, `netray_time_to_result_seconds`, `netray_run_interval_seconds`); `init_zero_series` describes and zero-registers all of §9.2 (runs 2×5, section outcomes 5×4, fixes 5, badge cache 4, rejection reasons 4, entry views, one api endpoint template, histograms, history gauges described) and the renamed operational series; `count_request` and `lens_check_requests_total` go.
+4. `security/rate_limit.rs`, `admission.rs` (recompute) prefixes `lens` → `netray`.
+5. `admission.rs`: `refused()` counts `netray_admission_rejections_total`; `check_limits` stops counting (the route counts `limit`); `Trigger::label()`; `run_task` counts `netray_runs_total{outcome,trigger}`, observes time to first section and to result, counts `netray_section_outcomes_total{section,outcome}`; `admit_dkim` and `/api/check` use `Trigger::Api`.
+6. `history.rs`: `record` reads the previous head: predecessor counter, `netray_run_interval_seconds`, `netray_fixes_observed_total{section}` from `ChangeClass::Fixed`; error counter renamed; `set_gauges(store)` from `totals()`, called by `prepare` and after each sweep.
+7. `routes.rs`, `og/handler.rs`: badge series → `netray_badge_requests_total`, `netray_badge_render_duration_seconds`; `run_check_handler` counts `reason="limit"`.
+8. `lib.rs`: `http_metrics("netray")`; `install_metrics()`; `serve` takes the handle; `run_config` installs before `prepare`. `crates/netray/src/main.rs`: Serve arm installs before `lens_registry`.
+9. `crates/web`: `metrics` dependency; `netray_entry_views_total` on an entry page view.
+10. Module run path series → `netray_<module>_<suffix>` (dns `run_check`, circuit breaker, tls `inspect`, http `inspect`, email checks and resolver, ip enrichment and backend); dns `endpoint` label → `operation`, email `target` → `fetch`.
+11. `specs/sdd/v2.md` §9.2 badge row cites the new series. CHANGELOG stays with Phase 8 (inventory).

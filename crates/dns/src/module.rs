@@ -155,12 +155,12 @@ impl DnsModule {
         let servers = effective_server_specs(parsed, &self.config);
         let cost = NonZeroU32::new(cost).expect("non-zero cost");
         for key in target_keys_from_servers(&servers) {
-            check_keyed_cost(&self.per_target, &key, cost, "per_target", "prism").map_err(|r| {
-                ApiError::RateLimited {
+            check_keyed_cost(&self.per_target, &key, cost, "per_target", "netray_dns").map_err(
+                |r| ApiError::RateLimited {
                     retry_after_secs: r.retry_after_secs,
                     scope: r.scope,
-                }
-            })?;
+                },
+            )?;
         }
         Ok(())
     }

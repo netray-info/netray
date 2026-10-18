@@ -343,26 +343,26 @@ fn breaker_state_str(state: BreakerState) -> &'static str {
 
 /// Emit Prometheus metrics for a circuit breaker state transition.
 ///
-/// - `prism_circuit_breaker_state`: gauge (0=Closed, 1=Open, 2=HalfOpen)
-/// - `prism_circuit_breaker_trips_total`: counter incremented on transitions to Open
-/// - `prism_circuit_breaker_transitions_total`: counter with `from` and `to` labels
+/// - `netray_dns_circuit_breaker_state`: gauge (0=Closed, 1=Open, 2=HalfOpen)
+/// - `netray_dns_circuit_breaker_trips_total`: counter incremented on transitions to Open
+/// - `netray_dns_circuit_breaker_transitions_total`: counter with `from` and `to` labels
 fn emit_breaker_metrics(provider: &str, from: BreakerState, to: BreakerState) {
     let state_value = match to {
         BreakerState::Closed => 0.0,
         BreakerState::Open => 1.0,
         BreakerState::HalfOpen => 2.0,
     };
-    metrics::gauge!("prism_circuit_breaker_state", "provider" => provider.to_owned())
+    metrics::gauge!("netray_dns_circuit_breaker_state", "provider" => provider.to_owned())
         .set(state_value);
     metrics::counter!(
-        "prism_circuit_breaker_transitions_total",
+        "netray_dns_circuit_breaker_transitions_total",
         "provider" => provider.to_owned(),
         "from" => breaker_state_str(from),
         "to" => breaker_state_str(to),
     )
     .increment(1);
     if to == BreakerState::Open {
-        metrics::counter!("prism_circuit_breaker_trips_total", "provider" => provider.to_owned())
+        metrics::counter!("netray_dns_circuit_breaker_trips_total", "provider" => provider.to_owned())
             .increment(1);
     }
 }

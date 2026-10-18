@@ -175,7 +175,7 @@ impl TlsModule {
             &hostname.to_lowercase(),
             NonZeroU32::new(cost.max(1)).expect("max(1) is non-zero"),
             "per_target",
-            "tlsight",
+            "netray_tls",
         )
         .map_err(|r| AppError::RateLimited {
             retry_after_secs: r.retry_after_secs,

@@ -14,7 +14,7 @@ use mhost::resolver::{
 use super::{AddressLookup, LookupError};
 
 /// Map an mhost resolver error to the coarse taxonomy used by the
-/// `beacon_dns_queries_total` metric (see SDD Decision Log §12).
+/// `netray_email_dns_queries_total` metric (see SDD Decision Log §12).
 fn classify_dns_error(e: &ResolverError) -> &'static str {
     match e {
         ResolverError::Timeout => "timeout",
@@ -29,7 +29,7 @@ fn record_dns_outcome(rtype: &'static str, result: Result<(), &ResolverError>) {
         Err(e) => classify_dns_error(e),
     };
     metrics::counter!(
-        "beacon_dns_queries_total",
+        "netray_email_dns_queries_total",
         "record_type" => rtype,
         "outcome" => outcome,
     )

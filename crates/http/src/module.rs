@@ -166,7 +166,7 @@ impl HttpModule {
             &hostname,
             NonZeroU32::MIN,
             "per_target",
-            "spectra",
+            "netray_http",
         )
         .map_err(|r| AppError::RateLimited {
             retry_after_secs: r.retry_after_secs,

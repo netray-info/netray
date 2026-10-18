@@ -68,6 +68,8 @@ Merged: v2-history, v2-admission, v2-entries, v2-spectrum, v2-pages. Open: v2-ap
 | guide samples naming V1 subdomain APIs (e.g. `guides/domain-security-audit.html:83` `dns.netray.info/api/query`, the `email.netray.info/inspect/…` sample) | `crates/web/templates/pages/guides/` | rewritten to `/api/v1/…` in Phase 3 with a repo check (orchestrator, 2026-10-18) |
 | `scoring.html:222` `?d=example.com&dkim_selectors=…` sample | `crates/web/templates/pages/guides/scoring.html` | sample without `dkim_selectors`, Phase 3 (Decision log) |
 | `scoring.html` "Testing DKIM selectors" section and `domain-security-audit.html:79`'s `jq '{grade, complete, sections}'` over the runs answer: prose that V2 makes false (no selector parameter; the run answer is `{recorded, entry_id, run, diff}`) | `crates/web/templates/pages/guides/` | Phase 8 prose pass, against the merged v2-api |
+| CHANGELOG: every ended series and its successor (`lens_check_requests_total{result}` → `netray_runs_total{trigger}`, `cache_hit`/`rate_limited`/`joined` without successor; every `lens_`, module and ip rename) | `CHANGELOG.md` | Phase 8 (requirement 17's last sentence, requirement 24) |
+| UA parser for the in-process ip module: v2-api's `?field=user_agent` (and the caller form's user-agent data) renders `Other, , Other, ` because `IpModule` has no UA parser; V1 ifconfig parsed it from its `user_agent_regexes` data file. Move the parser from the ifconfig service code into the ip module, add `user_agent_regexes` as a `[modules.ip]` key (the legacy row for top-level `user_agent_regexes` then names `[modules.ip].user_agent_regexes`), and test that `?field=user_agent` equals V1's answer (orchestrator, 2026-10-18) | `crates/ip/src/` (V1 ifconfig code → module) | Phase 6, before Phase 7 deletes the ifconfig service; needs v2-api merged |
 | wiring test: `lens_registry` hands `netray_ip::enrichment_client` to the four modules (review AMENDMENT, Phase 2) | `crates/netray/src/main.rs` | Phase 6, with the registry's move into the composition root |
 | host-router answers bypass the layers' `http_metrics` (no `path` label for probes and host 404s) | `crates/web/src/host/` | Phase 4 metrics / Phase 6 middleware move |
 
@@ -222,3 +224,56 @@ netray.info          /tools                   301 https://netray.info/
 - NIT: `POST /?d=…` falls through to the apex router instead of 405.
 - NIT: `ip./all/cidr` answers 404, not 410.
 - NIT: `email./?domain=..` redirects to `https://<apex>/./email`.
+
+## Phase 4 — Metrics
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R16: every §9.2 metric registered at startup with its HELP line and §9.2's label names; the exposition shows each name before the first request | green | crates/netray/tests/serve_metrics.rs |
+| C2 | R17: every name `serve` exports starts with `netray_`; no `lens_`, `prism_`, `tlsight_`, `spectra_`, `beacon_`, `ifconfig_` name; surviving operational series renamed `netray_<suffix>`; `lens_admission_rejections_total` → `netray_admission_rejections_total`, `lens_runs_in_flight` → `netray_runs_in_flight`, `lens_history_record_errors_total` → `netray_history_record_errors_total`; `lens_check_requests_total`, `lens_badge_requests_total` end; `test_lens_admission_metrics.sh` rewritten | green | crates/netray/tests/serve_metrics.rs; lens metric tests renamed; tests/repo/test_lens_admission_metrics.sh |
+| C3 | R18: a registry test drives one stub run of `example.com` (192.0.2.1) through page, run, badge, OG, `/api/v1` and one inspector job; no label name in {domain, host, address, ip, client, target, url, query, name, id}; no label value `example.com`, `192.0.2.1` or an entry ID; every `endpoint` value a route template | green | crates/lens/tests/netray_metrics.rs (page, run, badge, OG; `/api/v1` and inspector halves deferred) |
+| C4 | R19: `netray_runs_total{outcome,trigger}` (visit, recheck, api, badge, og), `netray_runs_with_predecessor_total`, `netray_run_interval_seconds` on record, `netray_fixes_observed_total{section}`, `netray_admission_rejections_total{reason}` (throttle, budget, limit, slots), `netray_history_entries`/`netray_history_domains` at startup and after every sweep — each held by a test | green | crates/lens/tests/netray_metrics.rs |
+| C5 | GIVEN `serve` started WHEN `/metrics` is read before any request THEN every §9.2 name has a HELP line | green | crates/netray/tests/serve_metrics.rs |
+| C6 | GIVEN the exposition WHEN every name is listed THEN each starts with `netray_`, none with a V1 prefix | green | crates/netray/tests/serve_metrics.rs |
+| C7 | GIVEN one stub run of `example.com` at 192.0.2.1 through page, run, badge, OG, API and an inspector job WHEN read THEN no forbidden label name and no label value `example.com`, `192.0.2.1` or the entry ID | green | crates/lens/tests/netray_metrics.rs |
+| C8 | GIVEN `GET /api/v1/domains/example.com` WHEN read THEN `netray_api_requests_total{endpoint="/api/v1/domains/{domain}"}` | test-unwritable (deferred until v2-api merges: no `/api/v1` on main; the name is registered at startup now) | |
+| C9 | GIVEN a recheck recording a run with a predecessor and one fixed transition in tls WHEN read THEN `netray_runs_total{trigger="recheck",outcome="complete"}`, `netray_runs_with_predecessor_total`, `netray_fixes_observed_total{section="tls"}` each +1 | green | crates/lens/tests/netray_metrics.rs |
+| C10 | GIVEN a badge request that starts a run WHEN read THEN `netray_runs_total{trigger="badge"}` +1; same for an OG card with `trigger="og"` | green | crates/lens/tests/netray_metrics.rs |
+| C11 | GIVEN a throttled run WHEN read THEN `netray_admission_rejections_total{reason="throttle"}` +1 | green | crates/lens/tests/netray_metrics.rs |
+| C12 | GIVEN a sweep deleting one domain WHEN read THEN `netray_history_domains` −1 | green | crates/lens/tests/netray_metrics.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet | 140254 | 825 |
+| review fix (section outcomes, OG refusal) | 1 | sonnet | n/a | n/a |
+
+### Behavioural verification
+
+`netray serve` started; the metrics listener read before any request but the `/health` poll:
+
+```
+$ curl -s 127.0.0.1:18124/metrics | grep -c '^# HELP'
+18
+$ … | grep '^# TYPE' | awk '{print $3}' | grep -v '^netray_'
+(none)
+# TYPE netray_api_requests_total counter
+# TYPE netray_runs_total counter
+# TYPE netray_history_domains gauge
+# TYPE netray_run_interval_seconds histogram
+netray_history_entries 0
+```
+
+### Review
+
+- AMENDMENT (repaired in phase): `netray_section_outcomes_total` counted every answering section `measured`, also one the scorer makes incomplete; it now follows the scorer (`incomplete` for a weighted unmeasured check, `not_tested` when every check is not tested).
+- AMENDMENT (repaired in phase): a protocol without a registered module counted `not_tested` on every run; it counts nothing.
+- AMENDMENT (repaired in phase): a refused OG card counted `netray_badge_requests_total{cache="throttled"}` (carried from `v2-admission`); it counts only the rejection.
+- DEFERRED: lens maps `NotTested` to `Skip` → `NotApplicable` before the run is built (`modules.rs:393`, `score.rs:38`), so `count_run` counts `not_tested` for a measured section whose checks are all not tested or not applicable; a section of only genuine not-applicable checks is labelled `not_tested` too. Exact once the verdict mapping leaves lens (Phase 6).
+- DEFERRED: under `netray lens` the ip module's load gauges are set before the recorder is installed and stay absent until a SIGHUP; `netray serve` installs first. `netray lens` goes in Phase 7.
+- NIT: the predecessor head is read outside the store's write lock (a sweep racing a record can count a predecessor for a `First` record); deriving it from `Recorded::Identical | Changed` would avoid it.
+- NIT: the history gauges move only at startup and after the hourly sweep (R19's wording), not on record.
+- NIT: `netray_run_interval_seconds`' top finite bucket is 30 days under a 90-day retention.

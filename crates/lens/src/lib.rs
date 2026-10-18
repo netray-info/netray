@@ -68,8 +68,19 @@ pub struct Prepared {
 /// Serves lens's application on a loaded configuration. Like [`run_with`], it installs no
 /// subscriber.
 pub async fn run_config(config: config::Config, registry: netray_engine::Registry) {
+    let handle = install_metrics();
     let Prepared { routes, background } = prepare(&config, registry).await;
-    serve(&config, layers(routes), background).await;
+    serve(&config, layers(routes), background, handle).await;
+}
+
+/// Installs the global Prometheus recorder with lens's buckets and creates every series at
+/// zero. Call it before [`prepare`], so the startup gauges land on it.
+pub fn install_metrics() -> netray_common::server::PrometheusHandle {
+    netray_common::server::install_metrics(
+        crate::metrics::HISTOGRAM_BUCKETS,
+        crate::metrics::init_zero_series,
+    )
+    .expect("failed to install the metrics recorder")
 }
 
 /// Builds lens's state, its stores and its routes; binds nothing.
@@ -129,7 +140,8 @@ pub async fn prepare(config: &config::Config, registry: netray_engine::Registry)
         }
         let store = std::sync::Arc::new(store);
         state.history_store = Some(std::sync::Arc::clone(&store));
-        tokio::spawn(history::run_sweep_loop(store));
+        tokio::spawn(history::run_sweep_loop(std::sync::Arc::clone(&store)));
+        history::set_gauges(&store).await;
         tracing::info!(db_path = %db_path.display(), "history enabled");
     }
 
@@ -165,7 +177,12 @@ pub fn probe_router() -> Router {
 
 /// Binds and serves `app` until a shutdown signal, runs the metrics listener, and drains the
 /// runs in flight.
-pub async fn serve(config: &config::Config, app: Router, background: Background) {
+pub async fn serve(
+    config: &config::Config,
+    app: Router,
+    background: Background,
+    metrics: netray_common::server::PrometheusHandle,
+) {
     let Background { client_runs, runs } = background;
 
     // 6. Graceful shutdown channel.
@@ -186,13 +203,9 @@ pub async fn serve(config: &config::Config, app: Router, background: Background)
         "metrics server starting — ensure this address is NOT publicly reachable"
     );
     tokio::spawn(async move {
-        if let Err(e) = netray_common::server::serve_metrics_with(
-            metrics_addr,
-            metrics_shutdown,
-            crate::metrics::HISTOGRAM_BUCKETS,
-            crate::metrics::init_zero_series,
-        )
-        .await
+        if let Err(e) =
+            netray_common::server::serve_metrics_handle(metrics_addr, metrics_shutdown, metrics)
+                .await
         {
             tracing::error!(error = %e, "metrics server failed");
         }
@@ -301,7 +314,7 @@ pub fn routes(state: state::AppState) -> Router {
         )
         .merge(Scalar::with_url("/docs", openapi))
         .layer(axum::middleware::from_fn(|req, next| {
-            netray_common::middleware::http_metrics("lens", req, next)
+            netray_common::middleware::http_metrics("netray", req, next)
         }))
 }
 

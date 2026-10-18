@@ -1092,10 +1092,10 @@ pub async fn inspect(
 
     let duration_ms = request_start.elapsed().as_millis() as u64;
 
-    metrics::histogram!("tlsight_inspect_duration_ms").record(duration_ms as f64);
-    metrics::counter!("tlsight_ips_inspected_total").increment(inspected_ips.len() as u64);
+    metrics::histogram!("netray_tls_inspect_duration_ms").record(duration_ms as f64);
+    metrics::counter!("netray_tls_ips_inspected_total").increment(inspected_ips.len() as u64);
     if !skipped_ips.is_empty() {
-        metrics::counter!("tlsight_skipped_ips_total").increment(skipped_ips.len() as u64);
+        metrics::counter!("netray_tls_skipped_ips_total").increment(skipped_ips.len() as u64);
     }
 
     tracing::info!(
@@ -1150,7 +1150,7 @@ async fn inspect_port(
             let _permit = semaphore.acquire().await.ok();
             let mut result = tls::inspect_ip(ip, port, hostname.as_deref(), timeout).await;
             if result.error.is_some() {
-                metrics::counter!("tlsight_handshake_errors_total").increment(1);
+                metrics::counter!("netray_tls_handshake_errors_total").increment(1);
             }
 
             // Run validation if we got a chain

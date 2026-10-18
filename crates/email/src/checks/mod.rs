@@ -317,7 +317,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let (result, ips, hosts, is_null_mx, addr_errors, measured) =
                     mx::check_mx(&domain, dns.as_ref(), enrichment_client.as_deref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "mx")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "mx")
                     .record(elapsed);
                 Phase0Result::Mx {
                     result,
@@ -342,7 +342,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let (result, flat, dash_all, only_dash_all, measured) =
                     spf::check_spf_measured(&domain, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "spf")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "spf")
                     .record(elapsed);
                 Phase0Result::Spf {
                     result,
@@ -366,7 +366,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let (result, policy, sp, rua_ok, records) =
                     dmarc::check_dmarc(&domain, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "dmarc")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "dmarc")
                     .record(elapsed);
                 Phase0Result::Dmarc {
                     result,
@@ -390,7 +390,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let (result, present, records) =
                     tls_rpt::check_tls_rpt(&domain, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "tls_rpt")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "tls_rpt")
                     .record(elapsed);
                 Phase0Result::TlsRpt {
                     result,
@@ -411,7 +411,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let start = std::time::Instant::now();
                 let (result, ad) = dnssec::check_dnssec(&domain, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "dnssec")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "dnssec")
                     .record(elapsed);
                 Phase0Result::Dnssec {
                     result,
@@ -433,7 +433,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let (result, present, records) =
                     bimi::check_bimi_measured(&domain, dns.as_ref(), &fetch).await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "bimi")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "bimi")
                     .record(elapsed);
                 Phase0Result::Bimi {
                     result,
@@ -533,7 +533,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let category = phase0_categories.get(&e.id()).copied().unwrap_or("unknown");
                 if e.is_panic() {
                     metrics::counter!(
-                        "beacon_check_task_panics_total",
+                        "netray_email_check_task_panics_total",
                         "category" => category,
                     )
                     .increment(1);
@@ -593,7 +593,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     );
                 }
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "dkim")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "dkim")
                     .record(elapsed);
                 Phase1Result::Dkim {
                     result,
@@ -617,7 +617,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                     mta_sts::check_mta_sts_measured(&domain, dns.as_ref(), &fetch).await;
                 let present = info.is_some();
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "mta_sts")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "mta_sts")
                     .record(elapsed);
                 Phase1Result::MtaSts {
                     result,
@@ -640,7 +640,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let (result, has_tlsa, records) =
                     dane::check_dane(&mx_hosts_clone, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "dane")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "dane")
                     .record(elapsed);
                 Phase1Result::Dane {
                     result,
@@ -663,7 +663,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let (result, answers) =
                     fcrdns::check_fcrdns(&mx_ips_clone, &addr_errors, dns.as_ref()).await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "fcrdns")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "fcrdns")
                     .record(elapsed);
                 Phase1Result::Fcrdns { result, answers }
             }
@@ -690,7 +690,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 )
                 .await;
                 let elapsed = start.elapsed().as_secs_f64();
-                metrics::histogram!("beacon_check_duration_seconds", "category" => "dnsbl")
+                metrics::histogram!("netray_email_check_duration_seconds", "category" => "dnsbl")
                     .record(elapsed);
                 Phase1Result::Dnsbl { result, answers }
             }
@@ -755,7 +755,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
                 let category = phase1_categories.get(&e.id()).copied().unwrap_or("unknown");
                 if e.is_panic() {
                     metrics::counter!(
-                        "beacon_check_task_panics_total",
+                        "netray_email_check_task_panics_total",
                         "category" => category,
                     )
                     .increment(1);
@@ -834,7 +834,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     let cross_start = std::time::Instant::now();
     let cross_result = cross_validation::cross_validate(&all_results);
     let cross_elapsed = cross_start.elapsed().as_secs_f64();
-    metrics::histogram!("beacon_check_duration_seconds", "category" => "cross_validation")
+    metrics::histogram!("netray_email_check_duration_seconds", "category" => "cross_validation")
         .record(cross_elapsed);
 
     if tx
@@ -871,7 +871,7 @@ async fn run_inspection_inner<R: DnsLookup + 'static>(
     } else {
         compute_grade(&verdicts_list)
     };
-    metrics::counter!("beacon_grade_total", "grade" => grade.as_str()).increment(1);
+    metrics::counter!("netray_email_grade_total", "grade" => grade.as_str()).increment(1);
 
     let verdicts_map: HashMap<String, Verdict> = all_check_results
         .iter()

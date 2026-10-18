@@ -32,12 +32,16 @@ pub async fn shutdown_signal() {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "prometheus")]
-pub use prometheus_server::{metrics_recorder, serve_metrics, serve_metrics_with};
+pub use prometheus_server::{
+    PrometheusHandle, install_metrics, metrics_recorder, serve_metrics, serve_metrics_handle,
+    serve_metrics_with,
+};
 
 #[cfg(feature = "prometheus")]
 mod prometheus_server {
     use axum::Router;
     use metrics_exporter_prometheus::Matcher;
+    pub use metrics_exporter_prometheus::PrometheusHandle;
     use std::net::SocketAddr;
 
     /// Build, without installing, a Prometheus recorder. Each `(name, buckets)` entry
@@ -77,11 +81,30 @@ mod prometheus_server {
         buckets: &[(&str, &[f64])],
         after_install: impl FnOnce() + Send,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let handle = install_metrics(buckets, after_install)?;
+        serve_metrics_handle(addr, shutdown, handle).await
+    }
+
+    /// Install the global Prometheus recorder with per-histogram `buckets` and run
+    /// `after_install`, so metrics registered before the metrics server binds are kept.
+    /// Returns the handle [`serve_metrics_handle`] renders from.
+    pub fn install_metrics(
+        buckets: &[(&str, &[f64])],
+        after_install: impl FnOnce(),
+    ) -> Result<PrometheusHandle, Box<dyn std::error::Error + Send + Sync>> {
         let recorder = metrics_recorder(buckets);
         let handle = recorder.handle();
         metrics::set_global_recorder(recorder)?;
         after_install();
+        Ok(handle)
+    }
 
+    /// Bind a metrics-only HTTP server on `addr` rendering `handle` at `/metrics`.
+    pub async fn serve_metrics_handle(
+        addr: SocketAddr,
+        shutdown: tokio::sync::watch::Receiver<bool>,
+        handle: PrometheusHandle,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let app = Router::new().route(
             "/metrics",
             axum::routing::get(move || {
