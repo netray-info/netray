@@ -1,24 +1,23 @@
 import { test, expect } from '@playwright/test';
-import { resolveEnv, toolOrigins } from '../fixtures/env.js';
+import { apex, hostHeaders, origins } from '../fixtures/env.js';
 import {
-  assertToolHeaders,
-  assertSiteHeaders,
-  assertCorsPreflight,
   assertAppHeaders,
+  assertCorsPreflight,
+  assertSecureHeaders,
+  assertSiteHeaders,
 } from '../fixtures/security-headers.js';
 
-for (const { name, url } of toolOrigins()) {
-  for (const path of ['/', '/health']) {
-    test(`${name}: security headers on GET ${path}`, async ({ request }) => {
-      const response = await request.get(`${url}${path}`);
-      assertToolHeaders(response);
-    });
-  }
+for (const origin of origins()) {
+  test(`${origin.name}: security headers on GET /health`, async ({ request }) => {
+    const response = await request.get(`${origin.url}/health`, { headers: hostHeaders(origin) });
+    assertSecureHeaders(response);
+  });
 
-  test(`${name}: CORS preflight on /health`, async ({ request }) => {
-    const response = await request.fetch(`${url}/health`, {
+  test(`${origin.name}: CORS preflight on /health`, async ({ request }) => {
+    const response = await request.fetch(`${origin.url}/health`, {
       method: 'OPTIONS',
       headers: {
+        ...hostHeaders(origin),
         Origin: 'https://example.com',
         'Access-Control-Request-Method': 'POST',
         'Access-Control-Request-Headers': 'content-type',
@@ -27,14 +26,15 @@ for (const { name, url } of toolOrigins()) {
     assertCorsPreflight(response);
   });
 
-  test(`${name}: X-Request-Id header present`, async ({ request }) => {
-    const response = await request.get(`${url}/health`);
+  test(`${origin.name}: X-Request-Id header present`, async ({ request }) => {
+    const response = await request.get(`${origin.url}/health`, { headers: hostHeaders(origin) });
     assertAppHeaders(response);
   });
 }
 
-test('site: security headers on GET /guide/', async ({ request }) => {
-  const response = await request.get(`${resolveEnv().site}/guide/`);
+test('apex: security headers on GET /guide/', async ({ request }) => {
+  const origin = apex();
+  const response = await request.get(`${origin.url}/guide/`, { headers: hostHeaders(origin) });
   expect(response.status()).toBe(200);
   assertSiteHeaders(response);
 });

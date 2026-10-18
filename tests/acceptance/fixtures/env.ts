@@ -1,84 +1,48 @@
 export type TestEnv = 'local' | 'production';
 
-export interface ServiceURLs {
-  site: string;
-  ip: string;
-  dns: string;
-  tls: string;
-  http: string;
-  email: string;
-  lens: string;
+export type OriginName = 'apex' | 'dns' | 'tls' | 'http' | 'ip';
+
+export interface Origin {
+  name: OriginName;
+  url: string;
+  /** Set locally, where one origin serves every name: the `Host` header that picks the name. */
+  host?: string;
 }
 
-const ENVS: Record<TestEnv, ServiceURLs> = {
-  local: {
-    site: 'http://localhost:8080',
-    ip: 'http://localhost:8000',
-    dns: 'http://localhost:8081',
-    tls: 'http://localhost:8082',
-    http: 'http://localhost:8083',
-    email: 'http://localhost:8084',
-    lens: 'http://localhost:8085',
-  },
-  production: {
-    site: 'https://netray.info',
-    ip: 'https://ip.netray.info',
-    dns: 'https://dns.netray.info',
-    tls: 'https://tls.netray.info',
-    http: 'https://http.netray.info',
-    email: 'https://email.netray.info',
-    lens: 'https://lens.netray.info',
-  },
-};
-
-export function resolveEnv(): ServiceURLs {
-  const env = (process.env.TEST_ENV ?? 'local') as TestEnv;
-  const urls = ENVS[env];
-  if (!urls) {
-    throw new Error(`Unknown TEST_ENV: ${env}. Expected 'local' or 'production'.`);
-  }
-  if (env !== 'local') return urls;
-  // `just acceptance-local` starts the stack on free ports and passes them as
-  // LOCAL_<NAME>_URL, so it never collides with other servers on the default ports.
-  const overridden = { ...urls };
-  for (const name of Object.keys(urls) as (keyof ServiceURLs)[]) {
-    const url = process.env[`LOCAL_${name.toUpperCase()}_URL`];
-    if (url) overridden[name] = url;
-  }
-  return overridden;
-}
+const NAMES: { name: OriginName; host: string }[] = [
+  { name: 'apex', host: 'netray.info' },
+  { name: 'dns', host: 'dns.netray.info' },
+  { name: 'tls', host: 'tls.netray.info' },
+  { name: 'http', host: 'http.netray.info' },
+  { name: 'ip', host: 'ip.netray.info' },
+];
 
 export function testEnv(): TestEnv {
-  return (process.env.TEST_ENV ?? 'local') as TestEnv;
+  const env = process.env.TEST_ENV ?? 'local';
+  if (env !== 'local' && env !== 'production') {
+    throw new Error(`Unknown TEST_ENV: ${env}. Expected 'local' or 'production'.`);
+  }
+  return env;
 }
 
 export function isProduction(): boolean {
   return testEnv() === 'production';
 }
 
-/** All 7 origins (static site + 6 tools) */
-export function allOrigins(): { name: string; url: string }[] {
-  const urls = resolveEnv();
-  return [
-    { name: 'site', url: urls.site },
-    { name: 'ip', url: urls.ip },
-    { name: 'dns', url: urls.dns },
-    { name: 'tls', url: urls.tls },
-    { name: 'http', url: urls.http },
-    { name: 'email', url: urls.email },
-    { name: 'lens', url: urls.lens },
-  ];
+/** The apex and the four inspector hosts: five URLs in production, one local origin by `Host`. */
+export function origins(): Origin[] {
+  if (isProduction()) {
+    return NAMES.map(({ name, host }) => ({ name, url: `https://${host}` }));
+  }
+  const url = process.env.LOCAL_URL ?? 'http://localhost:8082';
+  return NAMES.map(({ name, host }) => ({ name, url, host }));
 }
 
-/** 6 tool origins (no static site) */
-export function toolOrigins(): { name: string; url: string }[] {
-  const urls = resolveEnv();
-  return [
-    { name: 'ip', url: urls.ip },
-    { name: 'dns', url: urls.dns },
-    { name: 'tls', url: urls.tls },
-    { name: 'http', url: urls.http },
-    { name: 'email', url: urls.email },
-    { name: 'lens', url: urls.lens },
-  ];
+export function apex(): Origin {
+  return origins()[0];
+}
+
+/** The request headers that address an origin: `Host` when one origin serves every name. */
+export function hostHeaders(origin: Origin): Record<string, string> {
+  return origin.host ? { Host: origin.host } : {};
 }

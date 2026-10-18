@@ -1,20 +1,23 @@
 import { test, expect } from '@playwright/test';
-import { resolveEnv, toolOrigins } from '../fixtures/env.js';
+import { hostHeaders, origins } from '../fixtures/env.js';
 
-// Static site (nginx) has no /health endpoint; test only tool origins
-// Additionally test that the static site root returns 200
-test('site: GET / returns 200', async ({ request }) => {
-  const urls = resolveEnv();
-  const response = await request.get(`${urls.site}/`);
-  expect(response.status()).toBe(200);
-});
-
-for (const { name, url } of toolOrigins()) {
-  test(`${name}: GET /health returns 200 with status ok`, async ({ request }) => {
-    test.fixme(name === 'email', 'beacon not yet deployed behind Traefik');
-    const response = await request.get(`${url}/health`);
+for (const origin of origins()) {
+  test(`${origin.name}: GET /health returns 200 with status ok`, async ({ request }) => {
+    const response = await request.get(`${origin.url}/health`, { headers: hostHeaders(origin) });
     expect(response.status()).toBe(200);
-    const body = await response.json();
-    expect(body).toEqual({ status: 'ok' });
+    expect(await response.json()).toEqual({ status: 'ok' });
+  });
+}
+
+// A V1 container answers /health on these hosts too; only the one 0.30.0 process redirects their
+// /docs to the apex's API v1 docs (requirement 13h), so this tells the hosts reached it.
+for (const origin of origins().filter((o) => o.name !== 'apex')) {
+  test(`${origin.name}: served by the one process (/docs redirects to the apex)`, async ({ request }) => {
+    const response = await request.get(`${origin.url}/docs`, {
+      headers: hostHeaders(origin),
+      maxRedirects: 0,
+    });
+    expect(response.status()).toBe(301);
+    expect(response.headers()['location']).toMatch(/^https:\/\/[^/]+\/api\/v1\/docs$/);
   });
 }

@@ -58,3 +58,13 @@ G1: C1–C7, C9–C12 (one group: every criterion changes `crates/lens/src/metri
 9. `crates/web`: `metrics` dependency; `netray_entry_views_total` on an entry page view.
 10. Module run path series → `netray_<module>_<suffix>` (dns `run_check`, circuit breaker, tls `inspect`, http `inspect`, email checks and resolver, ip enrichment and backend); dns `endpoint` label → `operation`, email `target` → `fetch`.
 11. `specs/sdd/v2.md` §9.2 badge row cites the new series. CHANGELOG stays with Phase 8 (inventory).
+
+## Phase 5 — Agreement
+
+### Groups
+
+G1: C3, C7, C8 (`tests/acceptance/`). C1, C2, C4, C5 already hold for main's views (`crates/netray/tests/agreement.rs`); C6 deferred. One group with obvious files, so the plan was written without a planner run.
+
+### Plan
+
+- **G1** `tests/acceptance/agreement/prod.spec.ts` (new): for `netray.info` and `example.com`, one `POST /api/v1/domains/{domain}/runs` each without streaming through a request context; page grade = API grade = badge letter; open issues = API warn/fail checks; every evidence view names the same entry. No page navigation; only the two domains. `playwright.config.ts`: `prod` = that spec plus `smoke/health`, `smoke/ready`, `smoke/security-headers`, `smoke/tls-certs`. `fixtures/env.ts`: no `lens`; production = the apex plus `dns.`, `tls.`, `http.`, `ip.`; local = one origin (`LOCAL_URL`) addressed by `Host`; smoke specs follow. Removed: `services/*`, `integration/cross-links.spec.ts`, `static-site/*`, the `api-contract` specs against V1 (`/api/meta`); others rewritten for V2 or removed when their subject is gone.

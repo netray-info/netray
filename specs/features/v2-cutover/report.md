@@ -70,6 +70,9 @@ Merged: v2-history, v2-admission, v2-entries, v2-spectrum, v2-pages. Open: v2-ap
 | `scoring.html` "Testing DKIM selectors" section and `domain-security-audit.html:79`'s `jq '{grade, complete, sections}'` over the runs answer: prose that V2 makes false (no selector parameter; the run answer is `{recorded, entry_id, run, diff}`) | `crates/web/templates/pages/guides/` | Phase 8 prose pass, against the merged v2-api |
 | CHANGELOG: every ended series and its successor (`lens_check_requests_total{result}` → `netray_runs_total{trigger}`, `cache_hit`/`rate_limited`/`joined` without successor; every `lens_`, module and ip rename) | `CHANGELOG.md` | Phase 8 (requirement 17's last sentence, requirement 24) |
 | UA parser for the in-process ip module: v2-api's `?field=user_agent` (and the caller form's user-agent data) renders `Other, , Other, ` because `IpModule` has no UA parser; V1 ifconfig parsed it from its `user_agent_regexes` data file. Move the parser from the ifconfig service code into the ip module, add `user_agent_regexes` as a `[modules.ip]` key (the legacy row for top-level `user_agent_regexes` then names `[modules.ip].user_agent_regexes`), and test that `?field=user_agent` equals V1's answer (orchestrator, 2026-10-18) | `crates/ip/src/` (V1 ifconfig code → module) | Phase 6, before Phase 7 deletes the ifconfig service; needs v2-api merged |
+| `just acceptance-local`: still starts `netray site` and six subcommands with `LOCAL_<NAME>_URL`; must start one `netray serve` and pass `LOCAL_URL` (Phase 5's `env.ts`), with the `v2-inspectors` seed and `ACCEPTANCE_ENV` (requirement 7) | `justfile` | Phase 7 |
+| `tests/acceptance/schemas/ecosystem-meta.schema.json`, read by `tests/repo/test_meta_schema.sh` | `tests/` | Phase 7 (requirement 7 removes or rewrites `test_meta_schema`) |
+| `agreement/prod.spec.ts` selectors (`.grade__letter`, `.check-row__code`/`__tone`, `og:url` entry ID) on pages main lacks | `tests/acceptance/agreement/prod.spec.ts` | confirm at the v2-result-page merge (`TODO(v2-result-page)`) |
 | wiring test: `lens_registry` hands `netray_ip::enrichment_client` to the four modules (review AMENDMENT, Phase 2) | `crates/netray/src/main.rs` | Phase 6, with the registry's move into the composition root |
 | host-router answers bypass the layers' `http_metrics` (no `path` label for probes and host 404s) | `crates/web/src/host/` | Phase 4 metrics / Phase 6 middleware move |
 
@@ -277,3 +280,35 @@ netray_history_entries 0
 - NIT: the predecessor head is read outside the store's write lock (a sweep racing a record can count a predecessor for a `First` record); deriving it from `Recorded::Identical | Changed` would avoid it.
 - NIT: the history gauges move only at startup and after the hourly sweep (R19's wording), not on record.
 - NIT: `netray_run_interval_seconds`' top finite bucket is 30 days under a 90-day retention.
+
+## Phase 5 — Agreement
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R20: `crates/netray/tests/agreement.rs` builds the `serve` application with stub modules and a temporary store and runs four states (complete with warn and fail; a fixed check against a stored predecessor; N/A by design, no MX; not tested from here); for each, the result page, open issues, every evidence view, the badge, the OG card's geometry and `/api/v1` show the same grade, the same status per check ID and the same warn/fail set; runs in `just adlc-verify`, offline | already_implemented for the views on main (entry page, badge, OG card, entry card, stored run); the result page, issues, evidence views, `/api/v1` and the stream join at the v2-api/v2-inspectors/v2-result-page merges (Decision log 2026-10-18) | crates/netray/tests/agreement.rs |
+| C2 | R21: an incomplete state (one section times out after a stored entry exists): the stream and `/api/v1`'s run answer say `incomplete` with the same statuses; badge, OG card and `GET /api/v1/domains/{domain}` show the stored entry byte-for-byte unchanged | already_implemented for the views on main (entry page, badge, OG card, entry card, stored run); the result page, issues, evidence views, `/api/v1` and the stream join at the v2-api/v2-inspectors/v2-result-page merges (Decision log 2026-10-18) | crates/netray/tests/agreement.rs |
+| C3 | R22: `tests/acceptance/agreement/prod.spec.ts` (netray.info and example.com, one run each via `POST /api/v1/domains/{domain}/runs` without streaming; page grade = API grade = badge letter; open issues = API warn/fail; every evidence view names the same entry; request contexts only, no browser navigation); `prod` = that spec + `smoke/health`, `smoke/ready`, `smoke/security-headers`, `smoke/tls-certs`, held by `test_acceptance_prod_subset.sh`; `fixtures/env.ts` drops the `lens` origin (production: apex + four inspector hosts; local: one origin by `Host`); V1 specs (`services/*`, `api-contract` against `/api/meta`, `integration/cross-links`, `static-site`) removed or rewritten | green | tests/repo/test_acceptance_prod_subset.sh |
+| C4 | GIVEN each of the four complete states WHEN read through page, issues, evidence views, badge, OG geometry and `/api/v1` THEN grade, per-check statuses and warn/fail set equal | already_implemented for the views on main (entry page, badge, OG card, entry card, stored run); the result page, issues, evidence views, `/api/v1` and the stream join at the v2-api/v2-inspectors/v2-result-page merges (Decision log 2026-10-18) | crates/netray/tests/agreement.rs |
+| C5 | GIVEN a stored entry and a run whose email section times out WHEN streamed THEN stream and API run say `incomplete` with equal statuses; badge, OG and `GET /api/v1/domains/{domain}` equal their answers from before the run | already_implemented for the views on main (entry page, badge, OG card, entry card, stored run); the result page, issues, evidence views, `/api/v1` and the stream join at the v2-api/v2-inspectors/v2-result-page merges (Decision log 2026-10-18) | crates/netray/tests/agreement.rs |
+| C6 | GIVEN the fixed-check state WHEN the page and `/api/v1/domains/{domain}/diff` are read THEN both name the same check as fixed | test-unwritable (deferred until v2-api and v2-result-page merge: no result page or `/diff` on main; Decision log 2026-10-18) | |
+| C7 | GIVEN `playwright.config.ts` WHEN `test_acceptance_prod_subset.sh` runs THEN `prod` lists exactly the five specs of requirement 22 | green | tests/repo/test_acceptance_prod_subset.sh |
+| C8 | GIVEN `agreement/prod.spec.ts` WHEN grepped THEN it navigates no page with a browser and names no domain other than `netray.info` and `example.com` | green | tests/repo/test_acceptance_prod_subset.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 75362 | 99 |
+
+### Behavioural verification
+
+skipped: the Phase 5 entry point is the Playwright `prod` project against a deployed 0.30.0 (the operator's run after the deploy) or `just acceptance-local`, which still starts the V1 processes until Phase 7 rewrites it. Offline, the reviewer type-checked the staged suite (`tsc --noEmit` clean) and listed it (`playwright test --list`: 33 tests in `prod`); `crates/netray/tests/agreement.rs` runs in the gate.
+
+### Review
+
+- AMENDMENT (repaired in phase): `viewIssues` collected every check row, so passed checks and the evidence copies would fail the issues comparison on a page that follows the SDD; it now takes warn and fail rows once each (selector scope stays a `TODO(v2-result-page)`).
+- AMENDMENT (repaired in phase): health, ready and header checks on `dns.`, `tls.`, `http.`, `ip.` pass against the V1 containers as well; `smoke/health.spec.ts` adds a per-host `/docs` → 301 to the apex's `/api/v1/docs` (row 13h), which only the one process answers.
+- DEFERRED: `just acceptance-local` neither sets `LOCAL_URL` nor starts `serve`, and its default list names the removed `static-site/assets.spec.ts`; Phase 7 (inventory).
+- Kept in the rewrite: the CORS preflight on `/health` (lens's layers answer it under `serve` since Phase 2).
