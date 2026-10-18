@@ -350,8 +350,10 @@ async fn netray_metrics_c10_badge_og_and_visit_runs_count_their_trigger() {
     assert_eq!(get(&app, "/og/example.net.png").await, StatusCode::OK);
     assert_eq!(snap.counter(RUNS, &[("trigger", "og")]), 1);
 
+    // V1's `/api/check` is an API client's run: it counts under `trigger="api"` (the visit
+    // trigger is exercised through `admit(Trigger::Visit)` in C9).
     assert_eq!(post_check(&app, "example.org").await, StatusCode::OK);
-    assert_eq!(snap.counter(RUNS, &[("trigger", "visit")]), 1);
+    assert_eq!(snap.counter(RUNS, &[("trigger", "api")]), 1);
 }
 
 // C11: every refusal reason counts under `netray_admission_rejections_total{reason}`.
