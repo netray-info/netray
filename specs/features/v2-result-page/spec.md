@@ -783,6 +783,8 @@ GIVEN the stack seeded on any day WHEN `/shop.example.com` and `/stale.example.c
   contract (implementer under the operator's autonomy mandate, 2026-10-17).
 
 - Taken over from v2-spectrum's phase 3 review (deferred there, 2026-10-17): the IP group name spills past the plate's right edge and makes the spectrum box scroll at container widths 432–920 px; this feature fixes it with the page layout and a 390/1440 px screenshot shows it gone (implementer under the operator's autonomy mandate, 2026-10-17).
+- A warn or fail whose check ID the current catalogue no longer holds (an entry recorded before a release removed the check) is left out of the open issues and listed last in the passed-checks details under its ID, over a fallback owner group: requirement 7's title, finding, fix hint and guide all come from the catalogue, and requirement 9's groups from its owner and severity (implementer under the operator's autonomy mandate, 2026-10-18; Phase 1 review).
+- A changed evidence block with no items by design (a text shape, a shape change) reads its block ID alone, and one item reads "1 item", over "(0 items)": requirement 11's count is the items `BlockChangeKind::Changed` carries (implementer under the operator's autonomy mandate, 2026-10-18; Phase 1 review).
 
 ## Open decisions
 
