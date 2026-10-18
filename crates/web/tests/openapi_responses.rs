@@ -208,12 +208,42 @@ const fn email(status: u16, accept: Option<&'static str>, body: &'static str) ->
     }
 }
 
+const DNS_OK: &str = r#"{"domain":"example.com"}"#;
+const DNS_BAD: &str = r#"{"domain":"example.com","record_types":["NOPE"]}"#;
+const TRACE_BAD: &str = r#"{"domain":"example.com","record_type":"AXFR"}"#;
+const DNSSEC_BAD: &str = r#"{"domain":""}"#;
+
+/// A DNS job case: the stub backend answers `example.com` from its zone.
+fn dns(job: &'static str, status: u16, accept: Option<&'static str>, body: &'static str) -> Case {
+    let doc_path: &'static str = format!("/api/v1/dns/{job}").leak();
+    let uri: &'static str = format!("/dns/{job}").leak();
+    Case {
+        accept,
+        ..ip(doc_path, "post", uri, status, Some(body))
+    }
+}
+
+/// The SSE event names a DNS path may emit and the component of its `done` event.
+fn dns_events(doc_path: &str) -> (&'static [&'static str], &'static str) {
+    match doc_path {
+        "/api/v1/dns/query" => (&["batch", "error", "enrichment", "done"], "DnsQueryDone"),
+        "/api/v1/dns/compare" => (&["batch", "error", "enrichment", "done"], "DnsCompareDone"),
+        "/api/v1/dns/authcompare" => (
+            &["batch", "error", "enrichment", "done"],
+            "DnsAuthCompareDone",
+        ),
+        "/api/v1/dns/trace" => (&["hop", "error", "enrichment", "done"], "DnsTraceDone"),
+        "/api/v1/dns/dnssec" => (&["chain", "error", "done"], "DnsDnssecDone"),
+        other => panic!("not a DNS path: {other}"),
+    }
+}
+
 const BATCH: &str = r#"{"addresses":["192.0.2.1","192.0.2.2"]}"#;
 const DIFF: &str = r#"{"a":"192.0.2.1","b":"192.0.2.2"}"#;
 const DIFF_BAD: &str = r#"{"a":"192.0.2.1","b":"nope"}"#;
 
 fn cases() -> Vec<Case> {
-    vec![
+    let mut v = vec![
         case("/api/v1/catalogue", "get", "/catalogue", 200, 0),
         case("/api/v1/catalogue", "get", "/catalogue", 429, 1),
         case("/api/v1/profiles/{n}", "get", "/profiles/3", 200, 0),
@@ -334,7 +364,19 @@ fn cases() -> Vec<Case> {
         email(200, None, EMAIL_OK),
         email(200, Some("text/event-stream"), EMAIL_OK),
         email(400, None, EMAIL_BAD),
-    ]
+    ];
+    for job in ["query", "compare", "authcompare"] {
+        v.push(dns(job, 200, None, DNS_OK));
+        v.push(dns(job, 200, Some("text/event-stream"), DNS_OK));
+        v.push(dns(job, 400, None, DNS_BAD));
+    }
+    v.push(dns("trace", 200, None, DNS_OK));
+    v.push(dns("trace", 200, Some("text/event-stream"), DNS_OK));
+    v.push(dns("trace", 400, None, TRACE_BAD));
+    v.push(dns("dnssec", 200, None, DNS_OK));
+    v.push(dns("dnssec", 200, Some("text/event-stream"), DNS_OK));
+    v.push(dns("dnssec", 400, None, DNSSEC_BAD));
+    v
 }
 
 fn run(status: Status, findings: Vec<String>) -> Run {
@@ -422,6 +464,7 @@ fn app(store: Option<Arc<HistoryStore>>, ip_off: bool) -> axum::Router {
         email: Some(Arc::new(netray_email::testing::stub_inspector(
             netray_email::testing::example_dns(),
         ))),
+        dns: Some(netray_dns::testing::stub_jobs()),
     };
     let config = ApiConfig {
         per_ip_burst: 1,
@@ -584,6 +627,32 @@ async fn responses_match_the_committed_document() {
                     ["evidence", "summary"],
                     "{label}: type sequence"
                 );
+                continue;
+            }
+            if c.doc_path.starts_with("/api/v1/dns/") {
+                let (allowed, done) = dns_events(c.doc_path);
+                assert_eq!(
+                    events.last().map(|(e, _)| e.as_str()),
+                    Some("done"),
+                    "{label}: last event"
+                );
+                for (event, data) in &events {
+                    assert!(
+                        allowed.contains(&event.as_str()),
+                        "{label}: event {event} not allowed"
+                    );
+                    let body: Value = serde_json::from_str(data)
+                        .unwrap_or_else(|e| panic!("{label}: {event} data is not JSON: {e}"));
+                    let component = match event.as_str() {
+                        "batch" => "DnsBatch",
+                        "error" => "DnsErrorEvent",
+                        "enrichment" => "DnsEnrichmentEvent",
+                        "hop" => "DnsHopEvent",
+                        "chain" => "DnsChainEvent",
+                        _ => done,
+                    };
+                    validate_component(&doc, component, &body, &format!("{label} {event}"));
+                }
                 continue;
             }
             let names: Vec<&str> = events.iter().map(|(e, _)| e.as_str()).collect();
