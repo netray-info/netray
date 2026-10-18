@@ -84,7 +84,7 @@ features across the whole workspace:
 
 CI takes that branch because it copies the data image into `crates/ip/data`:
 
-```quote .github/workflows/ci.yml:48
+```quote .github/workflows/ci.yml:56
           cp -n "$RUNNER_TEMP"/ifconfig-data/* crates/ip/data/
 ```
 
@@ -93,6 +93,6 @@ also holds the preinstalled toolchains and the restored ~1.2 GB cache. PR #27 ad
 and dependencies (`jsonschema`, `criterion`) until the second tree no longer fit: the job sets
 nothing that bounds the target directory's size or frees runner disk before the build:
 
-```quote .github/workflows/ci.yml:50
+```quote .github/workflows/ci.yml:58
       - run: just check
 ```
