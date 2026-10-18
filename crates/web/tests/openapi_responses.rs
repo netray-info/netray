@@ -196,6 +196,17 @@ const TLS_OK: &str = r#"{"host":"example.com"}"#;
 const TLS_BLOCKED: &str = r#"{"host":"10.0.0.1"}"#;
 const HTTP_OK: &str = r#"{"url":"https://example.com/"}"#;
 const HTTP_BAD: &str = r#"{"url":"http://example.com/"}"#;
+const EMAIL_OK: &str = r#"{"domain":"example.com"}"#;
+const EMAIL_BAD: &str = r#"{"domain":"not a domain"}"#;
+const EMAIL: &str = "/api/v1/email/inspect";
+
+/// An email inspection case: the stub inspector answers `example.com` from its zone.
+const fn email(status: u16, accept: Option<&'static str>, body: &'static str) -> Case {
+    Case {
+        accept,
+        ..ip(EMAIL, "post", "/email/inspect", status, Some(body))
+    }
+}
 
 const BATCH: &str = r#"{"addresses":["192.0.2.1","192.0.2.2"]}"#;
 const DIFF: &str = r#"{"a":"192.0.2.1","b":"192.0.2.2"}"#;
@@ -320,6 +331,9 @@ fn cases() -> Vec<Case> {
             400,
             Some(HTTP_BAD),
         ),
+        email(200, None, EMAIL_OK),
+        email(200, Some("text/event-stream"), EMAIL_OK),
+        email(400, None, EMAIL_BAD),
     ]
 }
 
@@ -405,6 +419,9 @@ fn app(store: Option<Arc<HistoryStore>>, ip_off: bool) -> axum::Router {
         ip: (!ip_off).then(|| Arc::new(StubIpLookup::new()) as Arc<dyn netray_ip::IpLookup>),
         tls: Some(stub_state(Arc::new(StubTlsBackend::new())).inspector()),
         http: Some(Arc::new(StubHttpInspect::new())),
+        email: Some(Arc::new(netray_email::testing::stub_inspector(
+            netray_email::testing::example_dns(),
+        ))),
     };
     let config = ApiConfig {
         per_ip_burst: 1,
@@ -528,6 +545,47 @@ async fn responses_match_the_committed_document() {
             );
             let bytes = resp.into_body().collect().await.unwrap().to_bytes();
             let events = sse_events(std::str::from_utf8(&bytes).unwrap());
+            if c.doc_path == EMAIL {
+                // beacon's events carry no SSE event name: the `type` field of the data tags them.
+                assert!(
+                    events.iter().all(|(e, _)| e.is_empty()),
+                    "{label}: email events carry event names: {events:?}"
+                );
+                let schema = &content["text/event-stream"]["schema"];
+                assert!(schema.is_object(), "{label}: no event-stream schema");
+                let mut root = schema.clone();
+                root.as_object_mut()
+                    .unwrap()
+                    .insert("components".into(), doc["components"].clone());
+                let validator = jsonschema::validator_for(&root)
+                    .unwrap_or_else(|e| panic!("{label}: schema does not compile: {e}"));
+                let mut types = Vec::new();
+                for (_, data) in &events {
+                    let body: Value = serde_json::from_str(data)
+                        .unwrap_or_else(|e| panic!("{label}: data is not JSON: {e}"));
+                    let errors: Vec<String> = validator
+                        .iter_errors(&body)
+                        .map(|e| e.to_string())
+                        .collect();
+                    assert!(
+                        errors.is_empty(),
+                        "{label}: event violates schema: {errors:?}\n{body}"
+                    );
+                    types.push(body["type"].as_str().unwrap_or_default().to_string());
+                }
+                let n = types.len();
+                assert!(n >= 3, "{label}: type sequence {types:?}");
+                assert!(
+                    types[..n - 2].iter().all(|t| t == "category"),
+                    "{label}: type sequence {types:?}"
+                );
+                assert_eq!(
+                    &types[n - 2..],
+                    ["evidence", "summary"],
+                    "{label}: type sequence"
+                );
+                continue;
+            }
             let names: Vec<&str> = events.iter().map(|(e, _)| e.as_str()).collect();
             assert_eq!(names, ["section", "done"], "{label}: event order");
             for (event, data) in &events {
