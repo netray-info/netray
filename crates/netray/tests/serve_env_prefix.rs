@@ -48,22 +48,42 @@ fn run(args: &[&str], var: (&str, &str)) -> (Option<i32>, String) {
         std::thread::sleep(Duration::from_millis(50));
     };
     let mut out = String::new();
-    child.stdout.take().unwrap().read_to_string(&mut out).unwrap();
-    child.stderr.take().unwrap().read_to_string(&mut out).unwrap();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut out)
+        .unwrap();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut out)
+        .unwrap();
     (code, out)
 }
 
 fn config_file() -> std::path::PathBuf {
-    let path = std::env::temp_dir().join(format!("netray-serve-env-prefix-{}.toml", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "netray-serve-env-prefix-{}.toml",
+        std::process::id()
+    ));
     std::fs::write(&path, VALID_CONFIG).unwrap();
     path
 }
 
 fn assert_refused(args: &[&str], var: &str) {
     let (code, out) = run(args, (var, "127.0.0.1:1"));
-    assert_eq!(code, Some(1), "`netray {args:?}` with {var} must exit 1, output:\n{out}");
+    assert_eq!(
+        code,
+        Some(1),
+        "`netray {args:?}` with {var} must exit 1, output:\n{out}"
+    );
     for needle in [var, "NETRAY_*", "NETRAY_CONFIG"] {
-        assert!(out.contains(needle), "output of {args:?} with {var} must name {needle}, got:\n{out}");
+        assert!(
+            out.contains(needle),
+            "output of {args:?} with {var} must name {needle}, got:\n{out}"
+        );
     }
 }
 
@@ -84,6 +104,13 @@ fn serve_refuses_retired_env_prefixes() {
     assert_refused(&["serve", path], "lens_server__bind");
 
     // Neighbour: the new prefix alone is not refused.
-    let (code, out) = run(&["serve", "--check-config", path], ("NETRAY_SERVER__BIND", "127.0.0.1:0"));
-    assert_eq!(code, Some(0), "NETRAY_SERVER__BIND alone must pass the config check, output:\n{out}");
+    let (code, out) = run(
+        &["serve", "--check-config", path],
+        ("NETRAY_SERVER__BIND", "127.0.0.1:0"),
+    );
+    assert_eq!(
+        code,
+        Some(0),
+        "NETRAY_SERVER__BIND alone must pass the config check, output:\n{out}"
+    );
 }

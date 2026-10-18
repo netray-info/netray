@@ -4,7 +4,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 const PREFIXES: [&str; 7] = [
-    "LENS_", "NETRAY_", "PRISM_", "TLSIGHT_", "SPECTRA_", "BEACON_", "IFCONFIG_",
+    "LENS_",
+    "NETRAY_",
+    "PRISM_",
+    "TLSIGHT_",
+    "SPECTRA_",
+    "BEACON_",
+    "IFCONFIG_",
 ];
 
 fn netray(args: &[&str]) -> Output {
@@ -91,7 +97,10 @@ fn example_config_holds_every_table_and_key() {
     let text = std::fs::read_to_string(crate_file("netray.example.toml"))
         .expect("netray.example.toml must exist");
     let table_keys: &[(&str, &[&str])] = &[
-        ("server", &["bind", "metrics_bind", "trusted_proxies", "apex"]),
+        (
+            "server",
+            &["bind", "metrics_bind", "trusted_proxies", "apex"],
+        ),
         ("engine", &["resolve_timeout_ms", "profile_path"]),
         ("store", &["enabled", "db_path"]),
         (

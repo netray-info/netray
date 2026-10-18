@@ -32,11 +32,31 @@ fn check_config(name: &str, toml: &str) -> (Option<i32>, String) {
 #[test]
 fn serve_refuses_legacy_keys_with_their_destination() {
     let rows: &[(&str, &str, &[&str])] = &[
-        ("c4", "[snapshots]\nenabled = true\n", &["snapshots", "removed in 0.30.0"]),
-        ("c12", "[history]\ndb_path = \"h.db\"\n", &["[store] db_path"]),
-        ("c13", "[cache]\nttl_seconds = 300\n", &["[admission] cache_window_seconds"]),
-        ("c14", "[rate_limit]\nper_ip_burst = 3\n", &["[admission] per_ip_burst"]),
-        ("c16", "geoip_city_db = \"x\"\n", &["[modules.ip].geoip_city_db"]),
+        (
+            "c4",
+            "[snapshots]\nenabled = true\n",
+            &["snapshots", "removed in 0.30.0"],
+        ),
+        (
+            "c12",
+            "[history]\ndb_path = \"h.db\"\n",
+            &["[store] db_path"],
+        ),
+        (
+            "c13",
+            "[cache]\nttl_seconds = 300\n",
+            &["[admission] cache_window_seconds"],
+        ),
+        (
+            "c14",
+            "[rate_limit]\nper_ip_burst = 3\n",
+            &["[admission] per_ip_burst"],
+        ),
+        (
+            "c16",
+            "geoip_city_db = \"x\"\n",
+            &["[modules.ip].geoip_city_db"],
+        ),
         ("c17", "[dns]\nservers = [\"google\"]\n", &["dns"]),
         (
             "c18a",
@@ -53,14 +73,26 @@ fn serve_refuses_legacy_keys_with_their_destination() {
             "[server]\nadmin_token = \"t\"\n",
             &["admin_token", "removed in 0.30.0"],
         ),
-        ("c21a", "[cache]\nttl_secs = 60\n", &["removed in 0.30.0", "ifconfig"]),
+        (
+            "c21a",
+            "[cache]\nttl_secs = 60\n",
+            &["removed in 0.30.0", "ifconfig"],
+        ),
         (
             "c21b",
             "[cache]\nenabled = true\n",
             &["[admission] cache_enabled", "ifconfig", "removed"],
         ),
-        ("c21c", "[rate_limit]\nper_target_per_minute = 120\n", &["[api.ip]"]),
-        ("c22a", "user_agent_regexes = \"x\"\n", &["user_agent_regexes"]),
+        (
+            "c21c",
+            "[rate_limit]\nper_target_per_minute = 120\n",
+            &["[api.ip]"],
+        ),
+        (
+            "c22a",
+            "user_agent_regexes = \"x\"\n",
+            &["user_agent_regexes"],
+        ),
         (
             "c22b",
             "[backends]\nresolve_timeout_ms = 1000\n",
@@ -76,7 +108,11 @@ fn serve_refuses_legacy_keys_with_their_destination() {
             "[scoring]\nprofile_path = \"p.toml\"\n",
             &["[engine] profile_path"],
         ),
-        ("c22e", "[site]\ntitle = \"x\"\n", &["site", "removed in 0.30.0"]),
+        (
+            "c22e",
+            "[site]\ntitle = \"x\"\n",
+            &["site", "removed in 0.30.0"],
+        ),
     ];
     let mut failures = Vec::new();
     for (name, toml, needles) in rows {
@@ -96,10 +132,7 @@ fn serve_refuses_legacy_keys_with_their_destination() {
 
 #[test]
 fn serve_refuses_a_legacy_key_before_deserialization() {
-    let (code, text) = check_config(
-        "order",
-        "bogus_key = 1\n[history]\ndb_path = \"h.db\"\n",
-    );
+    let (code, text) = check_config("order", "bogus_key = 1\n[history]\ndb_path = \"h.db\"\n");
     assert_eq!(code, Some(1), "{text}");
     assert!(
         text.contains("[store] db_path"),

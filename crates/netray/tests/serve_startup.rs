@@ -60,7 +60,10 @@ fn run(args: &[&str], dir: &Path) -> (Option<i32>, String) {
         );
         std::thread::sleep(Duration::from_millis(100));
     };
-    (status.code(), std::fs::read_to_string(&log).unwrap_or_default())
+    (
+        status.code(),
+        std::fs::read_to_string(&log).unwrap_or_default(),
+    )
 }
 
 fn health_status(port: u16) -> Option<String> {
@@ -79,7 +82,10 @@ fn serve_answers_health_with_the_history_store_on() {
     let cfg = dir.join("netray.toml");
     std::fs::write(
         &cfg,
-        format!("[store]\nenabled = true\ndb_path = \"{}\"\n", dir.join("history.db").display()),
+        format!(
+            "[store]\nenabled = true\ndb_path = \"{}\"\n",
+            dir.join("history.db").display()
+        ),
     )
     .unwrap();
     let (port, metrics) = (free_port(), free_port());
@@ -87,7 +93,10 @@ fn serve_answers_health_with_the_history_store_on() {
     let mut child = Killed(
         command(&["serve", cfg.to_str().unwrap()])
             .env("NETRAY_SERVER__BIND", format!("127.0.0.1:{port}"))
-            .env("NETRAY_SERVER__METRICS_BIND", format!("127.0.0.1:{metrics}"))
+            .env(
+                "NETRAY_SERVER__METRICS_BIND",
+                format!("127.0.0.1:{metrics}"),
+            )
             .stdout(log.try_clone().unwrap())
             .stderr(log)
             .spawn()
@@ -126,7 +135,10 @@ fn serve_refuses_an_unopenable_history_store_and_check_config_passes() {
     let path = cfg.to_str().unwrap();
     let (code, out) = run(&["serve", path], &dir);
     assert!(code.is_some_and(|c| c != 0), "serve exited {code:?}: {out}");
-    assert!(out.to_lowercase().contains("history"), "output does not name the history store: {out}");
+    assert!(
+        out.to_lowercase().contains("history"),
+        "output does not name the history store: {out}"
+    );
     let (code, out) = run(&["serve", "--check-config", path], &dir);
     assert_eq!(code, Some(0), "--check-config: {out}");
 }

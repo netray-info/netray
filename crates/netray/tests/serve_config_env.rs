@@ -11,7 +11,10 @@ struct Outcome {
 }
 
 fn write_file(tag: &str, contents: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!("netray-serve-config-{}-{tag}.toml", std::process::id()));
+    let path = std::env::temp_dir().join(format!(
+        "netray-serve-config-{}-{tag}.toml",
+        std::process::id()
+    ));
     std::fs::write(&path, contents).unwrap();
     path
 }
@@ -47,19 +50,32 @@ fn check(tag: &str, contents: &str, env: &[(&str, &str)]) -> Outcome {
 fn refused(tag: &str, contents: &str, env: &[(&str, &str)], needle: &str) {
     let o = check(tag, contents, env);
     assert_eq!(o.code, Some(1), "{tag}: must exit 1, output: {}", o.text);
-    assert!(o.text.contains(needle), "{tag}: output must contain {needle:?}, got: {}", o.text);
+    assert!(
+        o.text.contains(needle),
+        "{tag}: output must contain {needle:?}, got: {}",
+        o.text
+    );
 }
 
 fn accepted(tag: &str, contents: &str, env: &[(&str, &str)]) {
     let o = check(tag, contents, env);
     assert_eq!(o.code, Some(0), "{tag}: must exit 0, output: {}", o.text);
-    assert!(o.text.contains("config ok:"), "{tag}: must print `config ok:`, got: {}", o.text);
+    assert!(
+        o.text.contains("config ok:"),
+        "{tag}: must print `config ok:`, got: {}",
+        o.text
+    );
 }
 
 #[test]
 fn serve_check_config_env_overrides_and_validation() {
     // C9: the IP module needs both databases; the env var supplies the missing one.
-    refused("c9-alone", "[modules.ip]\ngeoip_asn_db = \"/y\"\n", &[], "geoip_city_db");
+    refused(
+        "c9-alone",
+        "[modules.ip]\ngeoip_asn_db = \"/y\"\n",
+        &[],
+        "geoip_city_db",
+    );
     accepted(
         "c9-env",
         "[modules.ip]\ngeoip_asn_db = \"/y\"\n",
@@ -67,11 +83,36 @@ fn serve_check_config_env_overrides_and_validation() {
     );
 
     // C2: validate rules kept.
-    refused("c2-slots", "", &[("NETRAY_ADMISSION__DOMAIN_RUN_SLOTS", "0")], "admission.domain_run_slots");
-    refused("c2-burst", "", &[("NETRAY_ADMISSION__PER_IP_BURST", "0")], "admission.per_ip_burst");
-    refused("c2-badge", "[badges]\nttl_seconds = 0\n", &[], "badges.ttl_seconds");
-    refused("c2-resolve", "[engine]\nresolve_timeout_ms = 5000\n", &[], "resolve_timeout_ms");
-    refused("c2-sum", "[modules.tls]\ndeadline_ms = 20000\n", &[], "deadline");
+    refused(
+        "c2-slots",
+        "",
+        &[("NETRAY_ADMISSION__DOMAIN_RUN_SLOTS", "0")],
+        "admission.domain_run_slots",
+    );
+    refused(
+        "c2-burst",
+        "",
+        &[("NETRAY_ADMISSION__PER_IP_BURST", "0")],
+        "admission.per_ip_burst",
+    );
+    refused(
+        "c2-badge",
+        "[badges]\nttl_seconds = 0\n",
+        &[],
+        "badges.ttl_seconds",
+    );
+    refused(
+        "c2-resolve",
+        "[engine]\nresolve_timeout_ms = 5000\n",
+        &[],
+        "resolve_timeout_ms",
+    );
+    refused(
+        "c2-sum",
+        "[modules.tls]\ndeadline_ms = 20000\n",
+        &[],
+        "deadline",
+    );
     refused("c2-unknown", "[store]\nbogus = 1\n", &[], "bogus");
     accepted("c2-apex", "[server]\napex = \"localhost\"\n", &[]);
 
