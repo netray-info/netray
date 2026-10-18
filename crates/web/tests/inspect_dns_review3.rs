@@ -92,8 +92,8 @@ fn app(inspect: InspectConfig) -> (Router, Budget) {
             dns_module: Some(Arc::new(recorder)),
             ..Default::default()
         });
-    let deps = InspectDeps::new(Arc::new(InspectJobs::new(state)), inspect)
-        .with_ip_extractor(extractor);
+    let deps =
+        InspectDeps::new(Arc::new(InspectJobs::new(state)), inspect).with_ip_extractor(extractor);
     (inspect_router(deps), budget)
 }
 
@@ -137,5 +137,8 @@ async fn the_band_runs_under_the_configured_dns_deadline() {
 
     assert_eq!(status, 200, "{s}");
     let ms = budget.lock().unwrap().expect("the band ran");
-    assert!(ms > 60_000, "the band's deadline was {ms} ms away, not the route's 90 000");
+    assert!(
+        ms > 60_000,
+        "the band's deadline was {ms} ms away, not the route's 90 000"
+    );
 }
