@@ -148,8 +148,8 @@ async fn c2_invalid_url_is_one_fragment_and_the_backend_is_not_called() {
     assert_eq!(names, ["fragment", "end"], "{events:?}");
     assert_eq!(events[0].1, "inspect-result");
     assert!(
-        events[0].2.to_lowercase().contains("http"),
-        "validation message names the scheme rule: {}",
+        events[0].2.contains("invalid URL: Unsupported scheme: ftp"),
+        "the job function's validation message: {}",
         events[0].2
     );
     assert!(rec.targets.lock().unwrap().is_empty());

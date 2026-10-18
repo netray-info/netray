@@ -37,8 +37,8 @@ impl DomainRuns for NoRuns {
 }
 
 fn app() -> (Router, Arc<StubTlsBackend>) {
-    let backend =
-        Arc::new(StubTlsBackend::new().with_host("example.com", vec![[192, 0, 2, 1].into()]));
+    // The stub resolves every name to a global address; documentation ranges are blocked targets.
+    let backend = Arc::new(StubTlsBackend::new());
     let inspector = stub_state(backend.clone()).inspector();
     let state = ApiState::new(ApiConfig::default(), Arc::new(NoRuns)).with_parts(ApiParts {
         tls: Some(inspector),
@@ -72,7 +72,7 @@ async fn c1_tls_inputs_run_and_stream_the_module_translation() {
         ("example.com", &[443]),
         ("example.com:8443", &[8443]),
         ("example.com:443,8443", &[443, 8443]),
-        ("192.0.2.7", &[443]),
+        ("93.184.215.14", &[443]),
         ("example.com:25", &[25]),
         ("example.com:587", &[587]),
     ];

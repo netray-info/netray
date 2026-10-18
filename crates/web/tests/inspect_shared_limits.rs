@@ -132,9 +132,8 @@ async fn tls_per_target_budget_spent_on_v1_refuses_the_page() {
         "[tls]\nper_target_burst = 2\nper_target_per_minute = 1\nper_ip_burst = 1000\nper_ip_per_minute = 1000\n",
     )
     .expect("[api.tls] keys parse");
-    let backend = Arc::new(
-        StubTlsBackend::new().with_host("example.com", vec!["192.0.2.50".parse().unwrap()]),
-    );
+    // The stub resolves every name to a global address; documentation ranges are blocked targets.
+    let backend = Arc::new(StubTlsBackend::new());
     let parts = ApiParts {
         tls: Some(stub_state(backend.clone()).inspector()),
         ..Default::default()
