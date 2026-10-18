@@ -162,6 +162,20 @@ impl EmailModule {
     }
 }
 
+impl EmailModule {
+    /// The inspector over this module's config, resolvers, fetch and enrichment; it has its own
+    /// slots, not the module's semaphore.
+    pub fn inspector(&self) -> crate::job::EmailInspector {
+        crate::job::EmailInspector::new(
+            self.config.clone(),
+            self.dns_resolver.clone(),
+            self.dnsbl_resolver.clone(),
+            self.fetch.clone(),
+            self.enrichment_client.clone(),
+        )
+    }
+}
+
 /// Aborts the inspection task when the run future is dropped.
 struct AbortOnDrop(JoinHandle<()>);
 

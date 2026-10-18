@@ -32,6 +32,7 @@ use crate::api::{BatchEvent, QUERY_SEMAPHORE_PERMITS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::config::{Config, ConfigError, ModuleConfig};
 use crate::error::ApiError;
+use crate::jobs::{DnsBackend, DnsJobs};
 use crate::parser::ParsedQuery;
 use crate::security::QueryPolicy;
 
@@ -141,6 +142,18 @@ impl DnsModule {
             config,
             enrichment,
         })
+    }
+
+    /// The DNS jobs over this module's configuration, circuit breakers and query semaphore, with
+    /// no enrichment and no `prism_*` metrics.
+    pub fn jobs(&self) -> DnsJobs {
+        DnsJobs::new(
+            Arc::new(self.config.clone()),
+            self.circuit_breakers.clone(),
+            self.query_semaphore.clone(),
+            None,
+            DnsBackend::production(),
+        )
     }
 
     fn query(&self, domain: &str) -> Result<ParsedQuery, ApiError> {

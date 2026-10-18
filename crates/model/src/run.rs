@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::evidence::Block;
+use crate::evidence::{Block, BlockId};
 use crate::{CheckId, Grade, Protocol, Status, canonical};
 
 /// One scan as stored for history.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Run {
     pub profile_version: u32,
     pub engine_version: String,
@@ -21,14 +21,14 @@ pub struct Run {
 }
 
 /// How one protocol's section ended.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct RunSection {
     pub protocol: Protocol,
     pub outcome: SectionKind,
     pub reason: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SectionKind {
     Measured,
@@ -37,11 +37,16 @@ pub enum SectionKind {
     TimedOut,
 }
 
-/// A check's id and status, without findings or evidence references.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// A check's id, status, findings and evidence references. Findings and evidence are outside
+/// the fingerprint and the diff.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct RunCheck {
     pub id: CheckId,
     pub status: Status,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub findings: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<BlockId>,
 }
 
 /// Lower-case hex SHA-256 of the run's canonical JSON: profile version, check statuses and

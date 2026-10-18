@@ -101,7 +101,7 @@ async fn entry_rest(
     }
 }
 
-fn well_formed(id: &str) -> bool {
+pub(crate) fn well_formed(id: &str) -> bool {
     id.len() == 8 && id.bytes().all(|b| b.is_ascii_alphanumeric())
 }
 

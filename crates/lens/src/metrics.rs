@@ -132,7 +132,16 @@ pub fn init_zero_series() {
         "netray_rate_limit_hits_total",
         "Requests refused by a rate limiter, by scope"
     );
-    for scope in ["per_ip", "global", "badge", "og"] {
+    for scope in [
+        "per_ip",
+        "global",
+        "badge",
+        "og",
+        "api_v1",
+        "api_v1_ip",
+        "api_v1_ip_target",
+        "api_v1_ip_batch",
+    ] {
         metrics::counter!("netray_rate_limit_hits_total", "scope" => scope).increment(0);
     }
     metrics::describe_gauge!("netray_runs_in_flight", "Runs in flight");

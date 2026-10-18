@@ -54,8 +54,8 @@ mime_guess = { workspace = true }
 
 # OpenAPI
 utoipa = { workspace = true, features = ["axum_extras"] }
-utoipa-axum = "0.2"
-utoipa-scalar = { version = "0.3", features = ["axum"] }
+utoipa-axum = { workspace = true }
+utoipa-scalar = { workspace = true, features = ["axum"] }
 
 # UUID for request IDs
 uuid = { workspace = true, features = ["v7"] }

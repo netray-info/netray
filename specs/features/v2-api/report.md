@@ -1,0 +1,438 @@
+# Report: v2-api
+
+## Phase 1 — API module, stored findings, contract harness, catalogue, profiles, meta
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R1: API v1 in netray-web `api::router(ApiState)`, `DomainRuns` seam, lens `validate`, netray builds parts, lens names no module | green | crates/web/tests/api_domain_runs.rs, crates/lens/tests/api_v1_runs_validate.rs |
+| C2 | R2: OpenAPI 3.1 by utoipa, title "netray API", workspace version, `/api/v1` paths, served + docs, ErrorResponse `$ref`, no untyped schema | green | crates/web/tests/openapi_document.rs |
+| C3 | R3: model and engine types derive ToSchema; CheckSpec/Profile Serialize; goldens byte-identical | green | crates/engine/tests/schema_derives.rs |
+| C4 | R4: `RunCheck.findings`/`.evidence`, optional, copied by build_run, ignored by fingerprint and diff | green | crates/lens/tests/history_findings.rs, crates/model/tests/run_check_fields.rs |
+| C5 | R5: committed `api-v1.openapi.json`, compatibility check + equality check, UPDATE_GOLDEN only when compatible | green | crates/web/tests/openapi_contract.rs, crates/web/tests/contract_edges.rs |
+| C6 | R6: every endpoint's responses validated against the fixture (jsonschema); coverage guard | green | crates/web/tests/openapi_responses.rs |
+| C7 | R7: every non-2xx v1 answer carries the error shape; unknown `/api/v1/` path is 404 JSON, outside reaches SPA | green | crates/lens/tests/api_v1_mount.rs, crates/web/tests/api_edges.rs, crates/lens/tests/api_v1_edges.rs |
+| C8 | R8: `[api]` config (enabled, per-IP limiter, inspector tables), deny_unknown_fields, enabled=false serves no v1 JSON | green | crates/lens/tests/api_v1_limits.rs, crates/lens/tests/api_config.rs, crates/lens/tests/api_v1_disabled.rs |
+| C9 | R9: per-client limits keyed by `client_ip_from`'s address | green | crates/lens/tests/api_v1_limits.rs |
+| C10 | R15: `test_api_no_verdict.sh` with self-test fixtures | green | tests/repo/test_api_no_verdict.sh |
+| C11 | R16: `GET /catalogue` every CheckSpec in file order, eleven fields | green | crates/web/tests/api_reads.rs |
+| C12 | R17: `GET /profiles/{n}`; unknown 404; non-integer 400 INVALID_INPUT | green | crates/web/tests/api_reads.rs, crates/web/tests/api_edges.rs |
+| C13 | R18: `GET /meta` fields and limits | green | crates/web/tests/api_reads.rs, crates/lens/tests/api_v1_meta.rs |
+| C14 | R32: every V1 API unchanged; lens and contract goldens byte-identical | green | crates/lens/tests/api_v1_mount.rs (+ lens_golden.rs, contract_*.rs) |
+| C15 | R33: SDD §3.1, §3.5/§4.1 and §10 amended | green | tests/repo/test_api_sdd.sh |
+| C16 | R35: `/api/v1/docs` Scalar page, relaxed CSP, unlimited, not a document path, absent when disabled | green | crates/lens/tests/api_v1_docs.rs |
+| C17 | S: `/api/v1/openapi.json` equals the committed fixture ignoring info.version | green | crates/web/tests/openapi_contract.rs |
+| C18 | S: deleted response property fails naming path and property; UPDATE_GOLDEN leaves fixture unchanged | green | crates/web/tests/openapi_contract.rs |
+| C19 | S: property type integer→string fails | green | crates/web/tests/openapi_contract.rs |
+| C20 | S: new optional response property passes compat, fails equality naming the command, passes after UPDATE_GOLDEN | green | crates/web/tests/openapi_contract.rs |
+| C21 | S: request property becoming required fails | green | crates/web/tests/openapi_contract.rs |
+| C22 | S: untyped-schema walk fails on `{"type":"object"}` naming location; passes on the repository's document | green | crates/web/tests/openapi_document.rs, crates/web/tests/contract_edges.rs |
+| C23 | S: coverage test fails naming a path without 2xx and error case | green | crates/web/tests/openapi_responses.rs |
+| C24 | S: `/api/v1/docs` 200 text/html loading the document, relaxed CSP vs strict on catalogue, 11 burst unlimited, no `/docs` path; disabled not served | green | crates/lens/tests/api_v1_docs.rs |
+| C25 | S: `/catalogue` lists every check of checks.toml in file order with eleven fields, validates | green | crates/web/tests/api_reads.rs |
+| C26 | S: `/profiles/3` weights equal v3.toml; `/profiles/99` 404; `/profiles/x` 400 | green | crates/web/tests/api_reads.rs |
+| C27 | S: `/meta` api v1, workspace version, profiles contains 3, limits 30 and 8 under default config | green | crates/web/tests/api_reads.rs, crates/lens/tests/api_v1_meta.rs |
+| C28 | S: `/api/v1/nope` 404 JSON; `/nope` SPA index | green | crates/lens/tests/api_v1_mount.rs, crates/lens/tests/api_v1_edges.rs |
+| C29 | S: `[api] enabled=false`: no v1 JSON; `/api/check/example.com` as before | green | crates/lens/tests/api_v1_mount.rs, crates/lens/tests/api_v1_disabled.rs |
+| C30 | S: 11th `/catalogue` in a burst 429 RATE_LIMITED + Retry-After; 11 `/openapi.json` none limited | green | crates/lens/tests/api_v1_limits.rs |
+| C31 | S: X-Real-Ip from trusted proxy with spoofed CF-Connecting-IP keys on X-Real-Ip | green | crates/lens/tests/api_v1_limits.rs |
+| C32 | S: unknown key under `[api]` or `[api.ip]` rejected; `--check-config` exits 1 naming the key | green | crates/lens/tests/api_config.rs, tests/repo/test_check_config.sh |
+| C33 | S: Run JSON without findings/evidence parses empty and reserialises to the same bytes | green | crates/model/tests/run_check_fields.rs |
+| C34 | S: recorded stub run stores warn message in findings and `dns.caa` in evidence; N/A section's check carries neither | green | crates/lens/tests/history_findings.rs |
+| C35 | S: runs differing only in findings/evidence: equal fingerprints, empty diff, Identical; status change differs | green | crates/store/tests/findings_identical.rs |
+| C36 | S: no-verdict check flags planted fixture, passes clean, ignores outside src/api, passes repository | green | tests/repo/test_api_no_verdict.sh |
+| C37 | S: lens `/api-docs/openapi.json` lists no `/api/v1` path; lens and contract goldens unchanged | green | crates/lens/tests/api_v1_mount.rs |
+| C38 | S: test_web_crate.sh passes with axum, Router under api/, netray→netray-web; fails on planted Router in components.rs or edition≠2024; lens-no-module unchanged | green | tests/repo/test_web_crate.sh |
+
+### Behavioural verification
+
+`netray lens` built from the branch, started on `crates/lens/lens.example.toml` with the binds moved to 127.0.0.1:18185/19195:
+
+```
+$ netray lens --check-config lens-bv.toml   -> config ok (rc 0)
+$ curl /api/v1/meta
+{"version":"0.26.0","api":"v1","current_profile":3,"profiles":[3],"evidence_schema_version":1,"limits":{"api":{"per_ip_per_minute":60,"per_ip_burst":10},"admission":{"client_budget_per_hour":30,"domain_run_slots":8},"rate_limit":{"per_ip_per_minute":10,"per_ip_burst":3,"global_per_minute":100,"global_burst":20}}}
+$ curl -i /api/v1/profiles/x  -> 400 application/json {"error":{"code":"INVALID_INPUT","message":"profile version `x` is not an integer"}}
+$ curl -i /api/v1/nope        -> 404 application/json {"error":{"code":"NOT_FOUND","message":"no such endpoint"}}
+$ curl -D- /api/v1/docs       -> 200, CSP script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net
+$ 11x /api/v1/catalogue       -> 200 x8, 429 x3 (two limited requests before: meta, profiles/x; burst 10)
+```
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 model/engine derives, RunCheck fields | 3 | opus (inherited) | 93409 | 260 |
+| G2 netray-web api module, contract harness | 2 | opus (inherited) | 115482 | 269 |
+| G3 lens wiring, netray, SDD | 2 | opus (inherited) | 94602 | 977 |
+| review fixes (pass 1) | 1 | opus (inherited) | 76786 | 178 |
+| review fix (pass 2): v1 off leaves 413 and CSP alone | 1 | orchestrator | - | - |
+
+### Review
+
+Pass 1 (reader over the phase diff): 6 BLOCKER, 7 AMENDMENT, 1 DEFERRED, 2 NIT. Blockers fixed through a new failing-test commit (`/api/v1/` trailing slash, 405 error shape, invalid UTF-8 path, contract parameters, one-sided `format`/`items`, annotation-only untyped schemas). Amendments repaired in this phase and logged in the spec's Decision log (413 code, no-verdict patterns, configured scoring profile, digits-only profile versions, `oneOf` by content, `lens_rate_limit_hits_total{scope="api_v1"}`); stale findings on `Identical` kept per X2 and logged.
+Pass 2: 1 BLOCKER (with `[api] enabled = false` the 413 rewrite still answered JSON under `/api/v1`), fixed test-first; 2 AMENDMENT (413 documented on every v1 operation; contract errors name the component) repaired and logged; 3 NIT listed.
+Deferred: `ApiParts` empty and the `[api.<inspector>]` tables keyless until Phases 4-7; `/meta` limits gain the IP and inspector values then.
+NITs: `untyped_schemas` does not walk `propertyNames` or response `headers`; the no-verdict grep is line-based (a rustfmt-wrapped grouped import escapes it); `Retry-After` rounds governor's wait down (inherited helper).
+
+## Phase 2 — Domain and entry reads
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: `GET /domains/{domain}` normalised by `DomainRuns::validate`, latest entry fields, run as stored, 404/400/503 | green | crates/web/tests/api_domains.rs, crates/lens/tests/api_v1_domains.rs, crates/web/tests/api_read_errors.rs |
+| C2 | R11: `GET /domains/{domain}/diff` `{entry_id, predecessor_id, diff}`, first entry nulls, 404 | green | crates/web/tests/api_domains.rs |
+| C3 | R12: `GET /domains/{domain}/history` every entry newest first, five fields, 404 | green | crates/web/tests/api_domains.rs |
+| C4 | R13: `/entries/{id}` and `/entries/{id}/diff`: 200 / 410 / 404 / 500 by v2-entries' rule | green | crates/web/tests/api_entries.rs, crates/web/tests/api_read_errors.rs |
+| C5 | S: `GET /api/v1/domains/Example.COM.` 200 with the entry, run equals stored Run incl. findings/evidence | green | crates/web/tests/api_domains.rs, crates/lens/tests/api_v1_domains.rs |
+| C6 | S: no entry for example.org 404 NOT_FOUND; `*.example.com` 400 DOMAIN_INVALID | green | crates/web/tests/api_domains.rs, crates/lens/tests/api_v1_domains.rs |
+| C7 | S: e1 → e2: diff endpoint entry_id e2, predecessor e1, diff equals stored | green | crates/web/tests/api_domains.rs |
+| C8 | S: only a first entry: diff and predecessor_id null | green | crates/web/tests/api_domains.rs |
+| C9 | S: e1 → e2 → e3 history three items newest first, exactly five keys | green | crates/web/tests/api_domains.rs |
+| C10 | S: existing entry ID: `/entries/{id}` and `/entries/{id}/diff` 200 in the domain shapes | green | crates/web/tests/api_entries.rs |
+| C11 | S: swept entry 410 GONE naming no domain; never-issued 410; `abc`/`AAAA-AAA` 404 | green | crates/web/tests/api_entries.rs |
+| C12 | S: live V1 snapshot ID that is no entry 410 GONE | green | crates/web/tests/api_entries.rs |
+| C13 | S: unreadable store after open: `/entries/AAAAAAAA` 500 INTERNAL_ERROR, not 410 | green | crates/web/tests/api_entries.rs |
+| C14 | S: `[history] enabled = false`: domains and entries 503 UNAVAILABLE | green | crates/web/tests/api_domains.rs, crates/web/tests/api_entries.rs, crates/lens/tests/api_v1_domains.rs |
+| C15 | S: predecessor swept: `/entries/{id}/diff` stored diff with predecessor_id null | green | crates/web/tests/api_entries.rs |
+| C16 | R15 (last sentence) + R6: served run/diff equal the store's as JSON; new paths validated against the document with coverage | green | crates/web/tests/openapi_responses.rs, crates/web/tests/api_domains.rs, crates/web/tests/api_entries.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 domain and entry reads | 2 | opus (inherited) | 47921 | 151 |
+| review fix (pass 1): documented 500, extractor-refused id 404 | 1 | orchestrator | - | - |
+
+### Review
+
+Pass 1: 2 BLOCKER (domain reads answered an undocumented 500 on a failed store read; entries answered an undocumented 400 for an id the extractor refused), fixed test-first (crates/web/tests/api_read_errors.rs); 2 AMENDMENT (the same two gaps in the spec) repaired and logged; 1 DEFERRED (`/history` parses every full entry to answer five fields: a store query of its own when it matters); 1 NIT (nullable `predecessor_id`/`diff` absent from `required`).
+Pass 2: 0 BLOCKER, 0 AMENDMENT; 1 NIT (criteria rows still open, fixed with this commit).
+
+### Behavioural verification
+
+`netray lens` from the branch on the example config with a fresh history store (no entries; a real check needs network a worktree build does not have):
+
+```
+/api/v1/domains/Example.COM.        -> 404 {"error":{"code":"NOT_FOUND","message":"no entry for example.com"}}
+/api/v1/domains/%2A.example.com     -> 400 {"error":{"code":"DOMAIN_INVALID","message":"invalid domain: wildcard domains are not accepted"}}
+/api/v1/domains/example.com/history -> 404 NOT_FOUND
+/api/v1/entries/AAAAAAAA            -> 410 {"error":{"code":"GONE","message":"no entry with this id"}}
+/api/v1/entries/abc                 -> 404 NOT_FOUND
+/api/v1/entries/AAAAAAAA/diff       -> 410 GONE
+```
+Seeded-store answers (200 shapes, stored run and diff as JSON) are asserted by crates/web/tests/api_domains.rs, api_entries.rs and crates/lens/tests/api_v1_domains.rs.
+
+## Phase 3 — Fresh runs
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R14: `POST /domains/{domain}/runs` via `DomainRuns::start` (Api), order, join, refusal codes and Retry-After, prefetch 503, JSON/SSE answers | green | crates/web/tests/api_runs.rs, crates/web/tests/openapi_responses.rs |
+| C2 | R37: `/api/check` racing the store commit gets the fresh result or joins, never 429 THROTTLED or the replaced entry | green | crates/lens/tests/admission_head_race.rs |
+| C3 | S: no entry, complete stub run, JSON: 200 recorded first, non-null entry_id, one new entry | green | crates/lens/tests/api_v1_runs.rs |
+| C4 | S: no Accept header: JSON, not SSE | green | crates/lens/tests/api_v1_runs.rs |
+| C5 | S: identical stub run outside the throttle minute: identical, latest entry id, count unchanged | green | crates/lens/tests/api_v1_runs.rs |
+| C6 | S: incomplete run with hard fail: not_stored, entry_id null, run.complete false, grade F | green | crates/lens/tests/api_v1_runs.rs |
+| C7 | S: store writes fail: 200 not_stored, entry_id null | green | crates/lens/tests/api_v1_runs.rs |
+| C8 | S: text/event-stream: one section event per section, then done validating as the JSON answer | green | crates/lens/tests/api_v1_runs.rs |
+| C9 | S: run started 10 s ago: 429 THROTTLED Retry-After 50, rejection metric throttle +1, no run | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C10 | S: run started 60 s ago: a run starts | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C11 | S: client_budget_per_hour 1, one run spent: 429 BUDGET_EXHAUSTED with Retry-After | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C12 | S: domain_run_slots 1 and a gated run: 429 BUSY Retry-After 1 | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C13 | S: [rate_limit] per-IP 1/min burst 1: second post 429 RATE_LIMITED; [api] per_ip_burst 1: two runs start | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C14 | S: run in flight started by /api/check: post joins, carries the run, store records once | green | crates/lens/tests/api_v1_runs_join.rs |
+| C15 | S: latest entry 2 min old inside cache window, outside throttle: a fresh run starts | green | crates/lens/tests/api_v1_runs_join.rs |
+| C16 | S: Sec-Purpose prerender, no run: 503 PREFETCH_REFUSED no-store, no run, next request not throttled; gated run in flight: joins | green | crates/lens/tests/api_v1_runs_join.rs |
+| C17 | S: body with dkim_selectors: no selector probed, recorded like a run without options | green | crates/lens/tests/api_v1_runs_join.rs |
+| C18 | S: run started by v1: /api/check V1 response byte-identical to one for a run started by /api/check | green | crates/lens/tests/api_v1_runs_join.rs |
+| C19 | S: LensRuns::start with per-IP limit spent: Refused IpLimit before admit; global: GlobalLimit; both 429 RATE_LIMITED | green | crates/lens/tests/api_v1_runs_limits.rs (refusal), crates/web/tests/api_runs.rs (429 mapping) |
+| C20 | S: gated run with DNS and TLS finished, SSE: first two section events DNS and TLS before the gate opens, done follows Recorded | green | crates/lens/tests/api_v1_runs_join.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 (C1) | 1 | sonnet | 65726 | 150 |
+| G2 (C2) | 1 | sonnet | 53812 | 103 |
+| G3 (C3–C20) | 1 | sonnet | 32731 | 44 |
+| review fixes (C2) | 2 | opus | 41274 | 169 |
+
+G2's `admission_head_race_c2_request_joins_a_recording_run` was red on most runs after the coder's green: the store's deferred `BEGIN` failed run 2's record with `SQLITE_BUSY` (`Recorded(None)`) once the outside write lock committed. Fixed by `BEGIN IMMEDIATE` in `record` and `sweep` (`crates/store/src/lib.rs`, Decision log).
+
+### Review
+
+First pass: 1 BLOCKER, 3 AMENDMENT.
+- BLOCKER `routes.rs` join after the head read missed a run that recorded and deregistered meanwhile: fixed (the run registered before the head read is kept and joined).
+- AMENDMENT incomplete runs were joined: requirement 37 narrowed to complete runs, fixed (repaired in phase).
+- AMENDMENT an `Identical` record kept `429`: the re-read head compares ID and `last_seen_at`, fixed (repaired in phase).
+- AMENDMENT `POST /domains/{domain}/runs` with history off answers `not_stored`, not `503`: Decision log exemption (repaired in phase).
+
+Second pass: 1 BLOCKER, 1 AMENDMENT, 1 NIT.
+- BLOCKER the head read could return the run's own entry before its rendering was held, ending in `429`: fixed (a throttle refusal first joins a complete registered run).
+- AMENDMENT a run living entirely inside the head read is missed: spec reworded, Decision log.
+- NIT the review fixes have no dedicated test: listed for the branch review.
+
+### Behavioural verification
+
+`./target/debug/netray lens <dev config on 127.0.0.1:18485>` from the worktree build (no outbound network from this path, so modules time out):
+
+```
+$ curl -s -i -X POST http://127.0.0.1:18485/api/v1/domains/not_a..domain/runs
+HTTP/1.1 400 Bad Request
+{"error":{"code":"DOMAIN_INVALID","message":"invalid domain: domain contains an empty label"}}
+$ curl -s -i -X POST -H 'Sec-Purpose: prefetch;prerender' http://127.0.0.1:18485/api/v1/domains/example.com/runs
+HTTP/1.1 503 Service Unavailable
+cache-control: no-store
+{"error":{"code":"PREFETCH_REFUSED","message":"a prefetch does not start a run"}}
+$ curl -s -X POST -H 'Accept: application/json' http://127.0.0.1:18485/api/v1/domains/example.com/runs
+{"recorded":"not_stored","entry_id":null,"run":{"complete":false,"grade":"incomplete",...},...}
+$ curl -s -i -X POST http://127.0.0.1:18485/api/v1/domains/example.com/runs
+HTTP/1.1 429 Too Many Requests
+retry-after: 44
+{"error":{"code":"THROTTLED","message":"the domain was checked moments ago"}}
+$ curl -s http://127.0.0.1:18485/api/v1/openapi.json  # post /api/v1/domains/{domain}/runs responses
+['200', '400', '413', '429', '503']
+```
+
+## Phase 4 — ip. functions under v1 and the curl root
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R19: `GET /ip` (caller via `lookup_caller`) and `GET /ip/{address}` (via `lookup`); non-global address 400 unless `internal_mode`; no `[modules.ip]` → 503 | green | crates/web/tests/api_ip_lookup.rs, crates/web/tests/openapi_responses.rs |
+| C2 | R20: `?field=` fifteen names as `text/plain` with newline via `to_plain`; caller-dependent names only on `/ip`; errors name the caller form or list valid names; enums in the document | green | crates/web/tests/api_ip_fields.rs |
+| C3 | R21: `POST /ip/batch` typed items in order, `BATCH_TOO_MANY` over `batch_max_size`, per-IP 1 token + batch-address N tokens, `validate()` burst ≥ max size, 429 with Retry-After; ifconfig's `/batch` unchanged | green | crates/web/tests/api_ip_batch.rs |
+| C4 | R22: `GET /ip/range/{cidr}` with `/` or `%2F`, `RangeResponse`; special or malformed prefix 400 | green | crates/web/tests/api_ip_range.rs |
+| C5 | R23: `POST /ip/diff` `{a, b}` typed `DiffResponse`, charges 2 tokens | green | crates/web/tests/api_ip_range.rs |
+| C6 | R24: `GET /asn/{n}` `AsnLookupResponse`; non-number 400 | green | crates/web/tests/api_ip_range.rs |
+| C7 | R25: `[api.ip]` limits and hard caps as `validate()` rules with `startup_rejects` rows; lookup logic in netray-ip functions both routes call; `ip.` answers unchanged | green | tests/repo/test_check_config.sh, crates/web/tests/api_ip_batch.rs, crates/ip/tests/offline_routes.rs |
+| C8 | R26: gate test on the `netray ip` router: curl `GET /` → 200 `text/plain` `<caller>\n`; browser → not `text/plain`; joins `test-rust-offline` | already_implemented | crates/ip/tests/offline_routes.rs |
+| C9 | R36: `IpLookup` seam in `ApiState`, `IpModule` implements it; `testing::StubIpLookup` answers from the golden; v1 IP tests need no GeoIP data | green | crates/web/tests/api_ip_lookup.rs |
+| C10 | S: caller 192.0.2.10 behind trusted proxy: `GET /api/v1/ip` its `Ifconfig`, validates against the document | green | crates/web/tests/api_ip_lookup.rs |
+| C11 | S: `/ip/198.51.100.1?field=country`: 200 text/plain stub country + newline | green | crates/web/tests/api_ip_fields.rs |
+| C12 | S: eleven address fields on `/ip` and `/ip/198.51.100.1` equal `to_plain` over the stub | green | crates/web/tests/api_ip_fields.rs |
+| C13 | S: caller fields `user_agent`, `tcp`, `host`, `headers` on `/ip` rendered from the request | green | crates/web/tests/api_ip_fields.rs |
+| C14 | S: caller field on `/ip/{address}` 400 naming `/api/v1/ip?field=…`; `?field=nope` 400 listing names | green | crates/web/tests/api_ip_fields.rs |
+| C15 | S: `/ip/10.0.0.1` 400 by default, 200 with `internal_mode = true` | green | crates/web/tests/api_ip_lookup.rs |
+| C16 | S: batch of 100: 200, 100 items in order, 1 per-IP + 100 batch tokens; 101 → `BATCH_TOO_MANY`; one malformed → its `error` | green | crates/web/tests/api_ip_batch.rs |
+| C17 | S: 10 batch tokens left, batch of 11 → 429 `RATE_LIMITED` Retry-After; 11 one-address batches → eleventh refused by per-IP | green | crates/web/tests/api_ip_batch.rs |
+| C18 | S: `batch_addresses_burst = 50`, `batch_max_size = 100`: lens exits 1 naming the key; `startup_rejects` row | green | tests/repo/test_check_config.sh, crates/web/tests/api_ip_batch.rs |
+| C19 | S: ifconfig's `/batch` with 11 addresses: 429 `Retry-After: 1` as today | already_implemented | crates/ip/tests/offline_routes.rs |
+| C20 | S: `/ip/range/192.0.2.0/24` and `%2F` same `RangeResponse`; `10.0.0.0/8` 400 | green | crates/web/tests/api_ip_range.rs |
+| C21 | S: `/ip/range` without prefix 400 `INVALID_INPUT` | green | crates/web/tests/api_ip_range.rs |
+| C22 | S: `POST /ip/diff` two addresses: typed `DiffResponse` with today's fields | green | crates/web/tests/api_ip_range.rs |
+| C23 | S: `/asn/64496` `AsnLookupResponse`; `/asn/abc` 400 | green | crates/web/tests/api_ip_range.rs |
+| C24 | S: lens without `[modules.ip]`: `/api/v1/ip` 503 `UNAVAILABLE` naming the IP module | green | crates/web/tests/api_ip_lookup.rs |
+| C25 | S: `batch_max_size = 101` exits 1 naming the key, `startup_rejects` row; 100 starts | green | tests/repo/test_check_config.sh, crates/web/tests/api_ip_batch.rs |
+| C26 | S: `netray ip` router `GET /` curl → 200 text/plain `127.0.0.1\n`; browser → not text/plain | already_implemented | crates/ip/tests/offline_routes.rs |
+| C27 | S: today's `ip.` `/json`, `/batch`, `/range?cidr=` answers unchanged | already_implemented | crates/ip/tests/offline_routes.rs |
+| C28 | S: `StubIpLookup` called directly returns the same `Ifconfig` as `GET /api/v1/ip/198.51.100.1` | green | crates/web/tests/api_ip_lookup.rs |
+
+C8, C19, C26 and C27 pass before any code: the curl root and ifconfig's own routes exist; their tests protect them through the move (C8's gate entry is the new `--test offline_routes` in `test-rust-offline`).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 (C8, C19, C26, C27) | 1 | sonnet | 120030 | 384 |
+| G2 (C7, C18, C25) | 1 | sonnet | 37371 | 165 |
+| G3 (C1–C6, C9–C17, C20–C24, C28) | 2 | sonnet | 113482 | 329 |
+| review fixes | 1 | opus | 46355 | 192 |
+
+### Review
+
+First pass: 2 BLOCKER, 1 AMENDMENT, 2 NIT.
+- BLOCKER `IpModule::lookup_caller` dropped the User-Agent (no parser): `UserAgent::unparsed` keeps the raw string; test in `crates/ip/tests/module.rs`.
+- BLOCKER `?field=` answers `text/plain` but the document listed only JSON: 200 lists both; `openapi_responses.rs` now checks the response's own media type.
+- AMENDMENT `per_ip_burst = 1` refused every diff: `validate()` requires 2 (Decision log), `startup_rejects` row.
+- NIT bare `/ip/range` answers 400 without the module: kept, Decision log.
+- NIT new rate-limit scopes were not zero-initialised: added to lens's list.
+
+Second pass: 0 BLOCKER, 1 AMENDMENT, 1 DEFERRED.
+- AMENDMENT v1's IP limiters were never pruned: pruned once a minute (Decision log).
+- DEFERRED `?field=user_agent` text without a parser: Decision log, before v2-cutover.
+
+### Behavioural verification
+
+`./target/debug/netray lens <dev config on 127.0.0.1:18485>` from the worktree build. `[modules.ip]` needs GeoIP databases, which this machine does not have (`modules.ip: geoip_city_db and geoip_asn_db are required when [modules.ip] is set`), so only the paths without the module ran; the module paths are covered by the gate tests over `StubIpLookup`.
+
+```
+$ curl -s -A curl/8.5.0 http://127.0.0.1:18485/api/v1/ip?field=ip
+{"error":{"code":"UNAVAILABLE","message":"the IP module is off: [modules.ip] is not configured"}} [503 application/json]
+$ curl -s http://127.0.0.1:18485/api/v1/ip/range
+{"error":{"code":"INVALID_INPUT","message":"missing CIDR prefix: use /api/v1/ip/range/{cidr}"}} [400 application/json]
+$ curl -s -X POST -d '{"addresses":["8.8.8.8","nope"]}' http://127.0.0.1:18485/api/v1/ip/batch
+{"error":{"code":"UNAVAILABLE","message":"the IP module is off: [modules.ip] is not configured"}} [503]
+```
+
+## Phase 5 — TLS and HTTP inspectors
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R27: `POST /tls/inspect` `{host, port=443}` `deny_unknown_fields`, STARTTLS by port, tlsight's `InspectResponse`, input parsing, target policy with rebinding re-check, per-IP/per-target cost limits, handshake semaphore; axum-free inspection type in netray-tls that tlsight and v1 both call; tlsight unchanged | green | crates/web/tests/api_tls_limits.rs, crates/web/tests/api_http.rs, tests/repo/test_check_config.sh, crates/tls/tests/inspector.rs |
+| C2 | R28: `POST /http/inspect` `{url}` spectra's `InspectResponse` via `parse_url`, per-IP/per-target limiter, `validate_target`, `inspect_and_assemble` | green | crates/http/tests/job.rs, crates/web/tests/api_http.rs |
+| C3 | R31: job functions take typed request + handle, return typed result or typed refusal, no axum type; per-IP/per-target limiters once in `ApiState` behind `Arc` | green | crates/web/tests/api_tls_limits.rs, crates/web/tests/api_http.rs |
+| C4 | S: `{"host":"example.com"}` stub handshake → `InspectResponse` for port 443, valid against the document | green | crates/web/tests/api_tls.rs, crates/web/tests/openapi_responses.rs |
+| C5 | S: `{"host":"mail.example.com","port":25}` → SMTP STARTTLS as tlsight decides | green | crates/web/tests/api_tls.rs, crates/tls/tests/inspector.rs |
+| C6 | S: `{"host":"localhost","port":443}` → 400 `INVALID_INPUT` (single-label host) | green | crates/web/tests/api_tls.rs |
+| C7 | S: `{"host":"10.0.0.1"}` → 403 `TARGET_BLOCKED` from the target policy | green | crates/web/tests/api_tls_policy.rs |
+| C8 | S: `{"host":"internal.example.com"}` resolving to 10.0.0.5 → 403 `TARGET_BLOCKED` | green | crates/web/tests/api_tls_policy.rs |
+| C9 | S: `{"host":"example.com","starttls":"smtp"}` → 400 `INVALID_INPUT` | green | crates/web/tests/api_tls.rs |
+| C10 | S: per-target TLS budget exhausted for example.com, fresh address → 429 with `Retry-After` | green | crates/web/tests/api_tls_limits.rs |
+| C11 | S: second route holding the TLS per-IP limiter's `Arc` spent the budget → v1 429 with `Retry-After` | green | crates/web/tests/api_tls_limits.rs |
+| C12 | S: tlsight's `POST /api/inspect` with the same stub unchanged | green | crates/tls/tests/inspector.rs |
+| C13 | S: `/http/inspect` `https://example.com/` → spectra's `InspectResponse`; `https://127.0.0.1/` → 403 `TARGET_BLOCKED`; `http://example.com/` → 400 `INVALID_INPUT` | green | crates/web/tests/api_http.rs, crates/web/tests/openapi_responses.rs |
+| C14 | S: TLS job type called directly with a stub, result through `netray_tls::module::translate` → blocks and checks | green | crates/tls/tests/inspector.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 netray-tls seam and inspector | 1 | sonnet | 99899 | 329 |
+| G2 netray-http job seam | 1 | sonnet | 75949 | 170 |
+| G3 netray-web config, routes, compose | 1 | sonnet | 97687 | 237 |
+| G4 binary wiring, example config, fixture | 1 (cut off by the API limit after its edits; green on the orchestrator's run) | sonnet | n/a | n/a |
+
+### Behavioural verification
+
+`./target/debug/netray lens <lens.dev.toml on 127.0.0.1:18485, temp stores>` from the worktree build.
+
+```
+$ curl -X POST /api/v1/tls/inspect -d '{"host":"localhost","port":443}'
+{"error":{"code":"INVALID_INPUT","message":"invalid hostname: single-label hostname not allowed"}} [400]
+$ curl -X POST /api/v1/tls/inspect -d '{"host":"10.0.0.1"}'
+{"error":{"code":"TARGET_BLOCKED","message":"blocked target: all resolved IPs for 10.0.0.1 are in blocked ranges"}} [403]
+$ curl -X POST /api/v1/tls/inspect -d '{"host":"example.com","starttls":"smtp"}'
+{"error":{"code":"INVALID_INPUT","message":"Failed to deserialize the JSON body into the target type: starttls: unknown field `starttls`, expected `host` or `port` at line 1 column 32"}} [400]
+$ curl -X POST /api/v1/http/inspect -d '{"url":"https://127.0.0.1/"}'
+{"error":{"code":"TARGET_BLOCKED","message":"blocked target: Target resolves to a reserved address"}} [403]
+$ curl -X POST /api/v1/http/inspect -d '{"url":"http://example.com/"}'
+{"error":{"code":"INVALID_INPUT","message":"invalid URL: Submit the URL with https:// scheme; port-80 probing is automatic."}} [400]
+$ curl /api/v1/meta | jq -c .limits.tls,.limits.http
+{"per_ip_per_minute":30,"per_ip_burst":10,"per_target_per_minute":60,"per_target_burst":20}
+{"per_ip_per_minute":10,"per_ip_burst":5,"per_target_per_minute":30,"per_target_burst":10}
+$ curl -X POST /api/v1/tls/inspect -d '{"host":"example.com"}' | jq -c '{v:.summary.verdict, port:.ports[0].port, ...}'
+{"v":"warn","port":443,"ips":[{"ip":"172.66.147.243","err":{"code":"HANDSHAKE_TIMEOUT",...}}, ...]}  [200]
+```
+
+The live inspection answers 200 with tlsight's shape on port 443; its handshakes time out because a freshly built binary gets no outbound network on this machine (known local limit), and the stubbed 200 paths are covered by the gate tests.
+
+### Review
+
+Reader over the phase diff: 0 BLOCKER, 2 AMENDMENT, 1 DEFERRED, 3 NIT.
+
+- AMENDMENT (repaired in phase, decision log): v1 `/http/inspect` omits `enrichment.detail_url` (no key carries the IP-detail base); `[api.tls]`/`[api.http]` refuse only zeros, no cross-key rule, as tlsight and spectra.
+- DEFERRED: a per-target TLS refusal charges the caller's per-IP tokens twice (full cost, then the reduced retry) — tlsight's existing cap-and-warn logic, now also on v1.
+- NIT: C12's test compares tlsight with the inspector that both share (tlsight's `integration` and `contract_golden` tests pin its answers); C5's `starttls` label is set from the port after the stub, only the port-25 call is the STARTTLS evidence; criteria statuses were open at review time (now green).
+
+## Phase 6 — Email inspection
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R29: `POST /email/inspect` `{domain}` runs `run_all_checks` live with `parse_domain`, the per-IP limiter and the semaphore; full semaphore 503 `UNAVAILABLE`; nothing stored; SSE `category`/`evidence`/`summary` with `Accept: text/event-stream`, else one typed `{categories, evidence, summary}` | green | crates/email/tests/job.rs, crates/web/tests/api_email_limits.rs, tests/repo/test_check_config.sh |
+| C2 | S: `{"domain":"example.com"}`, stub resolver, `Accept: application/json` → one `{categories, evidence, summary}` object valid against the document; history store unchanged | green | crates/web/tests/api_email.rs, crates/web/tests/openapi_responses.rs |
+| C3 | S: `Accept: text/event-stream` → `category` events, one `evidence`, a `summary`, in order, each valid against its event schema, no `error` event | green | crates/web/tests/api_email.rs, crates/web/tests/openapi_responses.rs |
+| C4 | S: full inspection semaphore → 503 `UNAVAILABLE`; one free permit → 200 | green | crates/web/tests/api_email_limits.rs, crates/email/tests/job.rs |
+| C5 | S: `{"domain":"192.0.2.1"}` → the status beacon's `POST /inspect` answers; `{"domain":"not a domain"}` → 400 `INVALID_INPUT` | green | crates/web/tests/api_email.rs, crates/email/tests/inspect_route.rs, crates/email/tests/job.rs |
+| C6 | S: beacon's `POST /inspect` unchanged | already_implemented | crates/email/tests/inspect_route.rs |
+
+C6 passes before any code: beacon's route exists; `inspect_route.rs` pins it through the move into the job.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 netray-email job seam | 1 | sonnet | 84711 | 184 |
+| G2 netray-web email route, config, document | 1 | sonnet | 70426 | 515 |
+| G3 binary wiring, example config, fixture | 1 | sonnet | 35110 | 270 |
+
+### Behavioural verification
+
+`./target/debug/netray lens <lens.dev.toml on 127.0.0.1:18485, temp stores>` from the worktree build.
+
+```
+$ curl -X POST /api/v1/email/inspect -d '{"domain":"not a domain"}'
+{"error":{"code":"INVALID_INPUT","message":"invalid domain: domain must have at least two labels"}} [400]
+$ curl -X POST /api/v1/email/inspect -d '{"domain":"example.com","dkim_selectors":["s1"]}'
+{"error":{"code":"INVALID_INPUT","message":"Failed to deserialize the JSON body into the target type: dkim_selectors: unknown field `dkim_selectors`, expected `domain` at line 1 column 40"}} [400]
+$ curl /api/v1/meta | jq -c .limits.email
+{"per_ip_per_minute":10,"per_ip_burst":10,"max_concurrent_inspections":16}
+$ curl -N -H 'Accept: text/event-stream' -X POST /api/v1/email/inspect -d '{"domain":"example.com"}' | grep -o '"type":"[a-z]*"' | uniq -c
+  12 "type":"category"
+   1 "type":"evidence"
+   1 "type":"summary"
+$ curl -X POST /api/v1/email/inspect -d '{"domain":"example.com"}' | jq -c '{n:(.categories|length), e:(.evidence|length), s:(.summary|keys)}'
+{"n":12,"e":10,"s":["duration_ms","grade","verdicts"]} [200]
+```
+
+### Review
+
+Reader over the phase diff: 0 BLOCKER, 0 AMENDMENT, 0 DEFERRED, 5 NIT.
+
+- NIT: lens zero-initialises no `api_v1_email` (nor Phase 5's `api_v1_tls*`/`api_v1_http*`) rate-limit series; v1's email SSE sends no keep-alive comments (beacon's does, every 15 s); beacon's `do_inspect` span no longer records `selectors`, and no `domain` on a slot refusal; no test covers `EmailJob`'s task abort on drop; `collect_equals_the_streamed_events` sorts both sides, so arrival order is unchecked.
+
+## Phase 7 — DNS inspector jobs and the SDD
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R30: `POST /dns/query`, `/dns/trace`, `/dns/compare`, `/dns/authcompare`, `/dns/dnssec` take prism's bodies, apply `QueryPolicy::validate`, `check_query_cost` per IP, global and per target, the breakers and the semaphore with `[api.dns]`; SSE prism's events, else one typed collected object per job; the fan-out moves into netray-dns functions prism and v1 both call; prism unchanged | green | crates/dns/tests/jobs.rs, crates/web/tests/api_dns_limits.rs, tests/repo/test_check_config.sh |
+| C2 | R34: SDD §7.1 records the shapes this spec fixes; the Phase 3 table marks V3.1–V3.4 built by `v2-api` | green | tests/repo/test_api_sdd.sh |
+| C3 | S: `/dns/query` `example.com A`, stub resolver, `Accept: application/json` → typed collected object valid against the document | green | crates/web/tests/api_dns.rs, crates/web/tests/openapi_responses.rs |
+| C4 | S: the same with `Accept: text/event-stream` → prism's `/api/query` events, each valid against its schema | green | crates/web/tests/api_dns.rs, crates/web/tests/openapi_responses.rs |
+| C5 | S: trace, compare, authcompare, dnssec with a stub → 200, valid against the document, both forms | green | crates/web/tests/api_dns.rs, crates/web/tests/openapi_responses.rs |
+| C6 | S: a query `QueryPolicy` refuses → 400 with the error shape | green | crates/web/tests/api_dns_limits.rs, crates/dns/tests/jobs.rs |
+| C7 | S: per-target DNS budget exhausted → 429 with `Retry-After` | green | crates/web/tests/api_dns_limits.rs |
+| C8 | S: prism's `/api/query`, `/api/trace`, `/api/compare`, `/api/authcompare`, `/api/dnssec` with the same stubs unchanged | green | crates/dns/tests/jobs_prism.rs |
+| C9 | S: the generated document after this phase has every §7.1 row's path and method | green | crates/web/tests/openapi_sdd.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 DNS seam, stub state, limiter scopes, goldens | 3 (red: two test defects — prism's `DnssecRequest` in the `Dns*` filter, unnormalised `latency_ms` and hash-map server order); green after the orchestrator's `ADLC-Test-Change` | sonnet | 126909 | 317 |
+| G2 fan-outs into `DnsJobs` | 1 | sonnet | 239964 | 559 |
+| G3 netray-web `/dns/*`, `[api.dns]` | 1 | sonnet | 99220 | 456 |
+| G4 binary wiring, SDD, fixture | 1 | sonnet | 66475 | 303 |
+
+### Behavioural verification
+
+`./target/debug/netray lens <lens.dev.toml on 127.0.0.1:18485, temp stores>` from the worktree build (the dev config allows arbitrary servers, so a documentation-range server reaches the target policy).
+
+```
+$ curl -X POST /api/v1/dns/query -d '{"domain":"example.com","record_types":["NOPE"]}'
+{"error":{"code":"INVALID_INPUT","message":"invalid record type: NOPE"}} [400]
+$ curl -X POST /api/v1/dns/query -d '{"domain":"example.com","servers":["192.0.2.1"]}'
+{"error":{"code":"TARGET_BLOCKED","message":"blocked target IP: 192.0.2.1 (blocked address range)"}} [403]
+$ curl -X POST /api/v1/dns/trace -d '{"domain":"example.com","record_type":"AXFR"}'
+{"error":{"code":"INVALID_INPUT","message":"invalid record type: AXFR"}} [400]
+$ curl /api/v1/meta | jq -c .limits.dns
+{"per_ip_per_minute":120,"per_ip_burst":64,"per_target_per_minute":60,"per_target_burst":20,"global_per_minute":1000,"global_burst":50,"per_ip_max_streams":10}
+$ curl -X POST /api/v1/dns/query -d '{"domain":"example.com","record_types":["A"]}' | jq -c '{keys:keys, b:(.batches|length), done:.done.total_queries}'
+{"keys":["batches","done","enrichment","errors"],"b":1,"done":1}
+$ curl -N -H 'Accept: text/event-stream' -X POST /api/v1/dns/query -d '{"domain":"example.com","record_types":["A"]}' | grep '^event:' | uniq -c
+   1 event: batch
+   1 event: done
+```
+
+### Review
+
+Reader over the phase diff: 0 BLOCKER, 2 AMENDMENT, 0 DEFERRED, 1 NIT; the coder's six flagged items (cache on disconnect, uncached errors, `prism_*` metrics, limiter labels, authcompare bytes, enrichment IPs) verified unchanged.
+
+- AMENDMENT (repaired in phase): `[api.dns]` lets a policy-accepted job cost more than the global burst (refused forever, as prism refuses it) — decision log, prism's defaults kept; SDD §7.1 named only SMTP for STARTTLS — now SMTP 25/587, IMAP 143, FTP 21.
+- Noted: prism's `?stream=false` no longer truncates a job longer than its buffer (decision log).
+- NIT: the `api_v1_dns*` (and Phase 5/6) rate-limit scopes are not zero-initialised in lens.
+
+### Checks to build
+
+- Every rate-limit scope a v1 limiter passes (`api_v1_tls*`, `api_v1_http*`, `api_v1_email`, `api_v1_dns*`) is in lens's zero-initialised series list (`crates/lens/src/metrics.rs`); a test over `ApiState::new`'s scopes would hold it.

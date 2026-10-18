@@ -42,10 +42,14 @@ fn stored_run(dnssec: Status, caa: Status) -> (Run, Vec<SectionEvent>) {
             RunCheck {
                 id: CheckId::parse("dns.dnssec").unwrap(),
                 status: dnssec,
+                findings: vec![],
+                evidence: vec![],
             },
             RunCheck {
                 id: CheckId::parse("dns.caa").unwrap(),
                 status: caa,
+                findings: vec![],
+                evidence: vec![],
             },
         ],
         blocks: vec![],

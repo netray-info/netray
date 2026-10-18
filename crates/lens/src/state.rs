@@ -32,6 +32,9 @@ pub type BadgeRecomputeLimiter = KeyedLimiter<String>;
 pub type BadgeCheckFn =
     Arc<dyn Fn(String) -> Pin<Box<dyn Future<Output = CheckOutput> + Send>> + Send + Sync>;
 
+/// Hook awaited by `/api/check` after its head and cache step and before `admit`.
+pub type BeforeAdmit = Arc<dyn Fn() -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+
 /// Shared application state passed to every axum handler via `axum::extract::State`.
 #[derive(Clone)]
 pub struct AppState {
@@ -72,6 +75,10 @@ pub struct AppState {
     pub slots: Arc<tokio::sync::Semaphore>,
     /// `None` when `client_budget_per_hour` is 0: no client may start a budgeted run.
     pub client_budget: Option<Arc<ClientBudgetLimiter>>,
+    /// Module-side parts of API v1, handed in by `crates/netray`.
+    pub api_parts: netray_web::api::ApiParts,
+    /// Awaited by `/api/check` after its head and cache step and before `admit`.
+    pub before_admit: Option<BeforeAdmit>,
 }
 
 impl AppState {
@@ -187,6 +194,8 @@ impl AppState {
             throttle: Arc::new(crate::admission::Throttle::default()),
             slots,
             client_budget,
+            api_parts: netray_web::api::ApiParts::default(),
+            before_admit: None,
         })
     }
 }
@@ -255,6 +264,7 @@ mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             admission: crate::config::AdmissionConfig::default(),
+            api: Default::default(),
             og_cards: crate::config::OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
             history: crate::config::HistoryConfig::default(),

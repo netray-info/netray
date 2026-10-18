@@ -37,6 +37,8 @@ fn run() -> Run {
         checks: vec![RunCheck {
             id: CheckId::parse("dns.dnssec_valid").unwrap(),
             status: Status::Pass,
+            findings: vec![],
+            evidence: vec![],
         }],
         blocks: vec![],
     }

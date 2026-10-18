@@ -8,9 +8,10 @@ use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionO
 use netray_model::evidence::{Block, BlockId, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType};
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 
-use crate::backend::{DnsCache, Ifconfig, IfconfigParam, get_ifconfig, new_dns_cache};
+use crate::backend::{DnsCache, Ifconfig, UserAgent, new_dns_cache};
 use crate::config::{Config, ModuleConfig};
 use crate::enrichment::{EnrichmentContext, LoadError};
+use crate::lookup::{AsnLookupResponse, IpLookup, IpRefusal, RangeResponse, asn_lookup, enrich, range_lookup};
 
 // ---------------------------------------------------------------------------
 // Module
@@ -112,48 +113,77 @@ impl IpModule {
             }
         }
     }
+}
 
-    async fn lookup(&self, ip: IpAddr) -> Result<Ifconfig, String> {
-        let (enrichment, dns_cache) = match &self.source {
-            Source::Live {
-                enrichment, dns_cache, ..
-            } => (enrichment, dns_cache),
-            #[cfg(feature = "testing")]
-            Source::Stub(json) => {
-                return serde_json::from_str(json).map_err(|e| e.to_string());
+#[cfg(feature = "testing")]
+fn stub_answer(json: &str) -> Result<Ifconfig, IpRefusal> {
+    serde_json::from_str(json).map_err(|e| IpRefusal::Unavailable(e.to_string()))
+}
+
+impl IpLookup for IpModule {
+    fn lookup(&self, ip: IpAddr) -> BoxFuture<'_, Result<Ifconfig, IpRefusal>> {
+        Box::pin(async move {
+            match &self.source {
+                Source::Live {
+                    enrichment, dns_cache, ..
+                } => {
+                    let ctx = enrichment.load_full();
+                    Ok(enrich(&ctx, dns_cache, SocketAddr::new(ip, 0), None, true, None).await)
+                }
+                #[cfg(feature = "testing")]
+                Source::Stub(json) => stub_answer(json),
             }
-        };
-        let ctx = enrichment.load();
-        let remote = SocketAddr::new(ip, 0);
-        let param = IfconfigParam {
-            remote: &remote,
-            user_agent_header: &None,
-            user_agent_parser: ctx.user_agent_parser.as_deref(),
-            geoip_city_db: ctx.geoip_city_db.as_deref(),
-            geoip_asn_db: ctx.geoip_asn_db.as_deref(),
-            tor_exit_nodes: &ctx.tor_exit_nodes,
-            feodo_botnet_ips: ctx.feodo_botnet_ips.as_deref(),
-            cins_army_ips: ctx.cins_army_ips.as_deref(),
-            vpn_ranges: ctx.vpn_ranges.as_deref(),
-            cloud_provider_db: ctx.cloud_provider_db.as_deref(),
-            datacenter_ranges: ctx.datacenter_ranges.as_deref(),
-            bot_db: ctx.bot_db.as_deref(),
-            spamhaus_drop: ctx.spamhaus_drop.as_deref(),
-            asn_patterns: &ctx.asn_patterns,
-            asn_info: ctx.asn_info.as_deref(),
-            dns_resolver: &ctx.dns_resolver,
-            dns_cache,
-            skip_dns: true,
-            lang: None,
-        };
-        Ok(get_ifconfig(&param).await)
+        })
+    }
+
+    fn lookup_caller<'a>(
+        &'a self,
+        remote: SocketAddr,
+        user_agent: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<Ifconfig, IpRefusal>> {
+        Box::pin(async move {
+            match &self.source {
+                Source::Live {
+                    enrichment, dns_cache, ..
+                } => {
+                    let ctx = enrichment.load_full();
+                    let mut ifconfig = enrich(&ctx, dns_cache, remote, user_agent, false, None).await;
+                    if ifconfig.user_agent.is_none() {
+                        ifconfig.user_agent = user_agent.map(UserAgent::unparsed);
+                    }
+                    Ok(ifconfig)
+                }
+                #[cfg(feature = "testing")]
+                Source::Stub(json) => stub_answer(json),
+            }
+        })
+    }
+
+    fn range<'a>(&'a self, cidr: &'a str) -> BoxFuture<'a, Result<RangeResponse, IpRefusal>> {
+        Box::pin(async move {
+            match &self.source {
+                Source::Live { enrichment, .. } => range_lookup(&enrichment.load(), cidr),
+                #[cfg(feature = "testing")]
+                Source::Stub(_) => Err(IpRefusal::Unavailable("stub module holds no range data".into())),
+            }
+        })
+    }
+
+    fn asn(&self, n: u32) -> BoxFuture<'_, Result<AsnLookupResponse, IpRefusal>> {
+        Box::pin(async move {
+            match &self.source {
+                Source::Live { enrichment, .. } => Ok(asn_lookup(&enrichment.load(), n)),
+                #[cfg(feature = "testing")]
+                Source::Stub(_) => Err(IpRefusal::Unavailable("stub module holds no ASN data".into())),
+            }
+        })
     }
 }
 
 impl EnrichmentSource for IpModule {
     fn lookup(&self, ip: IpAddr) -> futures::future::BoxFuture<'_, Option<IpInfo>> {
         Box::pin(async move {
-            let ifconfig = IpModule::lookup(self, ip).await.ok()?;
+            let ifconfig = IpLookup::lookup(self, ip).await.ok()?;
             let network = serde_json::to_value(&ifconfig.network).ok()?;
             serde_json::from_value(network).ok()
         })
@@ -209,7 +239,7 @@ impl Module for IpModule {
         Box::pin(async move {
             let (sample, total) = sample(facts);
             let lookups = futures::future::join_all(sample.into_iter().map(|ip| async move {
-                let result = self.lookup(ip).await;
+                let result = IpLookup::lookup(self, ip).await.map_err(|refusal| refusal.to_string());
                 (ip, result)
             }))
             .await;

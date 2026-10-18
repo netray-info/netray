@@ -1,5 +1,7 @@
 use std::net::IpAddr;
 use std::num::NonZeroU32;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use governor::Quota;
 use governor::RateLimiter;
@@ -8,46 +10,109 @@ use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use crate::config::LimitsConfig;
 use crate::error::AppError;
 
+/// Per-IP and per-target quotas, per minute with a burst.
+#[derive(Debug, Clone, Copy)]
+pub struct Quotas {
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub per_target_per_minute: u32,
+    pub per_target_burst: u32,
+}
+
+/// The metric prefix and the two scope labels a limiter reports its rejections under.
+#[derive(Debug, Clone, Copy)]
+pub struct Scopes {
+    pub metrics_prefix: &'static str,
+    pub per_ip: &'static str,
+    pub per_target: &'static str,
+}
+
+const PRUNE_EVERY: Duration = Duration::from_secs(60);
+
 pub struct RateLimitState {
     per_ip: KeyedLimiter<IpAddr>,
     per_target: KeyedLimiter<String>,
+    scopes: Scopes,
+    last_prune: Mutex<Instant>,
 }
 
 impl RateLimitState {
     pub fn new(config: &LimitsConfig) -> Self {
+        Self::scoped(
+            &Quotas {
+                per_ip_per_minute: config.per_ip_per_minute,
+                per_ip_burst: config.per_ip_burst,
+                per_target_per_minute: config.per_target_per_minute,
+                per_target_burst: config.per_target_burst,
+            },
+            Scopes {
+                metrics_prefix: "spectra",
+                per_ip: "per_ip",
+                per_target: "per_target",
+            },
+        )
+    }
+
+    /// Build the limiters from validated, non-zero quotas.
+    pub fn scoped(quotas: &Quotas, scopes: Scopes) -> Self {
         let per_ip = RateLimiter::keyed(
             Quota::per_minute(
-                NonZeroU32::new(config.per_ip_per_minute).expect("validated non-zero"),
+                NonZeroU32::new(quotas.per_ip_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(config.per_ip_burst).expect("validated non-zero")),
+            .allow_burst(NonZeroU32::new(quotas.per_ip_burst).expect("validated non-zero")),
         );
 
         let per_target = RateLimiter::keyed(
             Quota::per_minute(
-                NonZeroU32::new(config.per_target_per_minute).expect("validated non-zero"),
+                NonZeroU32::new(quotas.per_target_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(config.per_target_burst).expect("validated non-zero")),
+            .allow_burst(NonZeroU32::new(quotas.per_target_burst).expect("validated non-zero")),
         );
 
-        Self { per_ip, per_target }
+        Self {
+            per_ip,
+            per_target,
+            scopes,
+            last_prune: Mutex::new(Instant::now()),
+        }
+    }
+
+    /// Drop the keys of both maps that have refilled, at most once per minute.
+    pub fn prune_if_due(&self) {
+        let Ok(mut last) = self.last_prune.try_lock() else {
+            return;
+        };
+        if last.elapsed() < PRUNE_EVERY {
+            return;
+        }
+        *last = Instant::now();
+        self.per_ip.retain_recent();
+        self.per_ip.shrink_to_fit();
+        self.per_target.retain_recent();
+        self.per_target.shrink_to_fit();
     }
 
     pub fn check(&self, client_ip: IpAddr, hostname: &str) -> Result<(), AppError> {
         let cost = NonZeroU32::new(1).expect("1 is non-zero");
 
-        check_keyed_cost(&self.per_ip, &client_ip, cost, "per_ip", "spectra").map_err(|r| {
-            AppError::RateLimited {
-                retry_after_secs: r.retry_after_secs,
-                scope: r.scope,
-            }
+        check_keyed_cost(
+            &self.per_ip,
+            &client_ip,
+            cost,
+            self.scopes.per_ip,
+            self.scopes.metrics_prefix,
+        )
+        .map_err(|r| AppError::RateLimited {
+            retry_after_secs: r.retry_after_secs,
+            scope: r.scope,
         })?;
 
         check_keyed_cost(
             &self.per_target,
             &hostname.to_lowercase(),
             cost,
-            "per_target",
-            "spectra",
+            self.scopes.per_target,
+            self.scopes.metrics_prefix,
         )
         .map_err(|r| AppError::RateLimited {
             retry_after_secs: r.retry_after_secs,

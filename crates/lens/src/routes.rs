@@ -16,7 +16,10 @@ use utoipa_axum::router::OpenApiRouter;
 use netray_engine::profile::Profile;
 use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION};
 
-use crate::admission::{Admit, Refusal, Trigger, admit, admit_dkim, check_limits, until_done};
+use crate::admission::{
+    Admit, Reason, Refusal, RunStream, Trigger, admit, admit_dkim, admit_uncounted, check_limits,
+    count_rejection, join_recording, registered, until_done,
+};
 use crate::badge::render::svg_for_grade;
 use crate::badge::{BadgeQuery, compute_etag, parse_badge_request};
 use crate::cache::CachedResult;
@@ -748,6 +751,24 @@ fn refusal_response(r: &Refusal) -> Response {
     .into_response()
 }
 
+/// The held rendering of a head that differs from `prior` (id, last seen), inside the cache
+/// window: a run recorded it while the request was on its way to `admit`.
+async fn newer_head(
+    state: &AppState,
+    domain: &str,
+    prior: Option<&(String, i64)>,
+) -> Option<std::sync::Arc<crate::cache::CachedResult>> {
+    let cache = state.cache.as_ref()?;
+    let lookup = crate::cache::head(state, domain).await?;
+    let unchanged = prior.is_some_and(|(id, last_seen_at)| {
+        *id == lookup.head.id && *last_seen_at == lookup.head.last_seen_at
+    });
+    if !lookup.fresh || unchanged {
+        return None;
+    }
+    cache.get(&lookup.head.id).await
+}
+
 async fn run_check_handler(
     state: AppState,
     client_ip: IpAddr,
@@ -768,27 +789,61 @@ async fn run_check_handler(
 
     // 2. Rate limit.
     if let Err(r) = check_limits(&state, client_ip) {
-        metrics::counter!("netray_admission_rejections_total", "reason" => "limit").increment(1);
+        count_rejection(&r);
         return refusal_response(&r);
     }
 
     // 3. Cache lookup (only when no per-request options like dkim_selectors): the head is
-    // inside the window and its V1 rendering is held.
+    // inside the window and its V1 rendering is held. A run that has published and is still
+    // recording is newer than that head: join it instead.
+    // The run registered before the head read stays joinable after it records and deregisters.
+    // It is kept for the throttle refusal of step 4: a run that recorded between the head
+    // read and `admit` throttles the request, which then joins it.
+    let mut prior_head = None;
+    let mut recording = None;
+    let mut before_head: Option<RunStream> = None;
     if dkim_selectors.is_none()
         && let Some(cache) = &state.cache
-        && let Some(lookup) = crate::cache::head(&state, &domain).await
-        && lookup.fresh
-        && let Some(cached) = cache.get(&lookup.head.id).await
     {
-        return if sync {
-            sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
-        } else {
-            sse_response_from_cached(domain, &cached, true, &state.scoring_profile)
-        };
+        before_head = registered(&state, &domain);
+        if let Some(lookup) = crate::cache::head(&state, &domain).await {
+            if lookup.fresh
+                && let Some(cached) = cache.get(&lookup.head.id).await
+            {
+                let joinable = if before_head
+                    .as_ref()
+                    .is_some_and(RunStream::published_complete)
+                {
+                    before_head.take()
+                } else {
+                    join_recording(&state, &domain)
+                };
+                match joinable {
+                    Some(stream) => recording = Some(stream),
+                    None => {
+                        return if sync {
+                            sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
+                        } else {
+                            sse_response_from_cached(domain, &cached, true, &state.scoring_profile)
+                        };
+                    }
+                }
+            }
+            prior_head = Some((lookup.head.id, lookup.head.last_seen_at));
+        }
+    }
+
+    if dkim_selectors.is_none()
+        && recording.is_none()
+        && let Some(hook) = &state.before_admit
+    {
+        hook().await;
     }
 
     // 4. Start or join the domain's run.
-    let mut stream = if let Some(selectors) = dkim_selectors {
+    let mut stream = if let Some(stream) = recording {
+        stream
+    } else if let Some(selectors) = dkim_selectors {
         if prefetch {
             return crate::error::AppError::PrefetchRefused.into_response();
         }
@@ -808,14 +863,37 @@ async fn run_check_handler(
             Err(r) => return refusal_response(&r),
         }
     } else {
-        match admit(&state, &domain, client_ip, Trigger::Api, prefetch) {
+        match admit_uncounted(&state, &domain, client_ip, Trigger::Api, prefetch) {
             Admit::Admitted(stream) => {
                 if !stream.joined() {
                     state.client_runs.record(client_ip);
                 }
                 stream
             }
-            Admit::Refused(r) => return refusal_response(&r),
+            Admit::Refused(r) => {
+                let late = if r.reason == Reason::Throttle {
+                    before_head
+                        .filter(RunStream::published_complete)
+                        .or_else(|| join_recording(&state, &domain))
+                } else {
+                    None
+                };
+                if let Some(stream) = late {
+                    stream
+                } else {
+                    if r.reason == Reason::Throttle
+                        && let Some(cached) = newer_head(&state, &domain, prior_head.as_ref()).await
+                    {
+                        return if sync {
+                            sync_response_from_cached(domain, &cached, true, &state.scoring_profile)
+                        } else {
+                            sse_response_from_cached(domain, &cached, true, &state.scoring_profile)
+                        };
+                    }
+                    count_rejection(&r);
+                    return refusal_response(&r);
+                }
+            }
             Admit::NotStarted => return crate::error::AppError::PrefetchRefused.into_response(),
         }
     };
@@ -1728,6 +1806,7 @@ pub mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             admission: crate::config::AdmissionConfig::default(),
+            api: Default::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),
             history: crate::config::HistoryConfig::default(),

@@ -11,6 +11,7 @@ pub mod format;
 pub mod handlers;
 #[cfg(test)]
 mod ip_cache_tests;
+pub mod lookup;
 pub mod middleware;
 pub mod module;
 pub mod negotiate;
@@ -41,6 +42,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 pub use config::{Config, ModuleConfig};
+pub use lookup::{IpLookup, IpRefusal};
 pub use module::{IpModule, enrichment_client, translate};
 pub use state::ProjectInfo;
 

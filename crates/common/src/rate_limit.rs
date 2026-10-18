@@ -58,6 +58,16 @@ pub fn check_direct_cost(
     cost: NonZeroU32,
     metrics_prefix: &'static str,
 ) -> Result<(), RateLimitRejection> {
+    check_direct_cost_scoped(limiter, cost, "global", metrics_prefix)
+}
+
+/// Check a direct rate limiter, reporting a rejection under `scope`.
+pub fn check_direct_cost_scoped(
+    limiter: &RateLimiter<governor::state::NotKeyed, governor::state::InMemoryState, DefaultClock>,
+    cost: NonZeroU32,
+    scope: &'static str,
+    metrics_prefix: &'static str,
+) -> Result<(), RateLimitRejection> {
     let retry_secs = match limiter.check_n(cost) {
         Ok(Ok(())) => return Ok(()),
         Ok(Err(not_until)) => {
@@ -68,10 +78,10 @@ pub fn check_direct_cost(
         Err(_) => 60,
     };
     let counter_name = format!("{metrics_prefix}_rate_limit_hits_total");
-    metrics::counter!(counter_name, "scope" => "global").increment(1);
+    metrics::counter!(counter_name, "scope" => scope).increment(1);
     Err(RateLimitRejection {
         retry_after_secs: retry_secs.max(1),
-        scope: "global",
+        scope,
     })
 }
 

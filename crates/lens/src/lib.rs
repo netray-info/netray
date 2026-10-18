@@ -1,5 +1,6 @@
 pub mod admission;
 pub mod api_doc;
+pub mod api_v1;
 pub mod badge;
 pub mod cache;
 pub mod check;
@@ -42,7 +43,11 @@ pub fn init_telemetry(config: &config::Config) {
     );
 }
 
-pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Registry) {
+pub async fn run_with(
+    config_arg: Option<String>,
+    registry: netray_engine::Registry,
+    parts: netray_web::api::ApiParts,
+) {
     // 1. Load config (first arg or LENS_CONFIG env var).
     let config_path = config_arg.or_else(|| std::env::var("LENS_CONFIG").ok());
 
@@ -101,6 +106,7 @@ pub async fn prepare(config: &config::Config, registry: netray_engine::Registry)
     // 3. Build app state.
     let mut state = state::AppState::with_registry(config.clone(), registry)
         .expect("failed to build app state");
+    state.api_parts = parts;
 
     // 3a. Init snapshot store if enabled.
     if config.snapshots.enabled {
@@ -246,7 +252,10 @@ fn frontend_router_with(shell: spa::Shell) -> Router {
         .fallback(spa::handler)
         .with_state(shell)
         .merge(netray_web::pages::router())
-        .layer(axum::middleware::from_fn(security_headers_mw))
+        .layer(axum::middleware::from_fn_with_state(
+            false,
+            security_headers_mw,
+        ))
 }
 
 /// The SPA shell, `/robots.txt` and the shared pages with their security headers.
@@ -287,6 +296,31 @@ pub fn routes(state: state::AppState) -> Router {
         _ => Router::new(),
     };
 
+    let api_routes = if config.api.enabled {
+        let limits = netray_web::api::AdmissionLimits {
+            client_budget_per_hour: config.admission.client_budget_per_hour,
+            domain_run_slots: config.admission.domain_run_slots,
+            rate_limit_per_ip_per_minute: config.rate_limit.per_ip_per_minute,
+            rate_limit_per_ip_burst: config.rate_limit.per_ip_burst,
+            rate_limit_global_per_minute: config.rate_limit.global_per_minute,
+            rate_limit_global_burst: config.rate_limit.global_burst,
+        };
+        let api_state = netray_web::api::ApiState::new(
+            config.api.clone(),
+            std::sync::Arc::new(api_v1::LensRuns::new(state.clone())),
+        )
+        .with_store(state.history_store.clone())
+        .with_ip_extractor(state.ip_extractor.clone())
+        .with_admission_limits(limits)
+        .with_parts(state.api_parts.clone())
+        .with_profile(state.scoring_profile.clone());
+        Router::new()
+            .nest("/api/v1", netray_web::api::router(api_state))
+            .route("/api/v1/", axum::routing::any(api_v1_not_found))
+    } else {
+        Router::new()
+    };
+
     // 5. Build the main app with all middleware.
     Router::new()
         .merge(health_router.with_state(state.clone()))
@@ -305,6 +339,7 @@ pub fn routes(state: state::AppState) -> Router {
         .merge(frontend_router_with(shell))
         .merge(entry_routes)
         .merge(netray_web::entries::privacy_router())
+        .merge(api_routes)
         .route(
             "/api-docs/openapi.json",
             get({
@@ -353,11 +388,40 @@ pub fn layers(router: Router) -> Router {
         )
         .layer(CompressionLayer::new())
         .layer(RequestBodyLimitLayer::new(8 * 1024))
+        .layer(axum::middleware::from_fn_with_state(
+            config.api.enabled,
+            api_v1_payload_too_large,
+        ))
         .layer(cors_layer())
-        .layer(axum::middleware::from_fn(security_headers_mw))
+        .layer(axum::middleware::from_fn_with_state(
+            config.api.enabled,
+            security_headers_mw,
+        ))
         .layer(axum::middleware::from_fn(
             netray_common::middleware::request_id,
         ))
+}
+
+async fn api_v1_not_found() -> axum::response::Response {
+    use axum::response::IntoResponse;
+    netray_web::api::V1Error::NotFound("no such endpoint".into()).into_response()
+}
+
+/// A 413 from the body limit under `/api/v1` answers in the v1 error shape, while v1 is mounted.
+async fn api_v1_payload_too_large(
+    axum::extract::State(api_enabled): axum::extract::State<bool>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let path = request.uri().path();
+    let under_v1 = api_enabled && (path == "/api/v1" || path.starts_with("/api/v1/"));
+    let response = next.run(request).await;
+    if under_v1 && response.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE {
+        netray_web::api::V1Error::PayloadTooLarge.into_response()
+    } else {
+        response
+    }
 }
 
 async fn robots_txt() -> impl axum::response::IntoResponse {
@@ -389,12 +453,20 @@ async fn wait_for_shutdown(mut rx: tokio::sync::watch::Receiver<bool>) {
 }
 
 async fn security_headers_mw(
+    axum::extract::State(api_enabled): axum::extract::State<bool>,
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    let path = request.uri().path();
+    let relaxed_prefix =
+        if api_enabled && (path == "/api/v1/docs" || path.starts_with("/api/v1/docs/")) {
+            "/api/v1/docs"
+        } else {
+            "/docs"
+        };
     let layer_fn = security_headers_layer(SecurityHeadersConfig {
         extra_script_src: vec!["https://cdn.jsdelivr.net".to_string()],
-        relaxed_csp_path_prefix: "/docs".to_string(),
+        relaxed_csp_path_prefix: relaxed_prefix.to_string(),
         keep_inner: true,
         ..Default::default()
     });

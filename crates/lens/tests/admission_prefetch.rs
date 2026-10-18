@@ -215,10 +215,14 @@ fn stored_run(grade: Grade, profile_version: u32) -> Run {
             RunCheck {
                 id: CheckId::parse("dns.dnssec_valid").unwrap(),
                 status: Status::Pass,
+                findings: vec![],
+                evidence: vec![],
             },
             RunCheck {
                 id: CheckId::parse("tls.caa_compliant").unwrap(),
                 status: Status::Pass,
+                findings: vec![],
+                evidence: vec![],
             },
         ],
         blocks: vec![],

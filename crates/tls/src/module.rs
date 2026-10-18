@@ -151,6 +151,11 @@ impl TlsModule {
         })
     }
 
+    /// The inspection over this module's own state.
+    pub fn inspector(&self) -> crate::inspector::TlsInspector {
+        self.state.inspector()
+    }
+
     async fn measure(&self, ctx: &RunContext, facts: &Facts) -> Result<InspectResponse, AppError> {
         let start = Instant::now();
         let config = self.state.config.load();

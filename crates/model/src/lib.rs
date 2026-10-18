@@ -12,7 +12,9 @@ use std::fmt;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// The protocol a check belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, utoipa::ToSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Protocol {
     Dns,
@@ -91,6 +93,17 @@ impl fmt::Display for CheckId {
     }
 }
 
+impl utoipa::PartialSchema for CheckId {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        utoipa::openapi::ObjectBuilder::new()
+            .schema_type(utoipa::openapi::schema::Type::String)
+            .examples(["tls.chain_trusted"])
+            .into()
+    }
+}
+
+impl utoipa::ToSchema for CheckId {}
+
 impl Serialize for CheckId {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_str(self)
@@ -117,7 +130,7 @@ impl fmt::Display for CheckIdError {
 impl std::error::Error for CheckIdError {}
 
 /// The outcome of one check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
     Pass,
@@ -129,7 +142,7 @@ pub enum Status {
 }
 
 /// How serious a failed check is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     Critical,
@@ -139,7 +152,7 @@ pub enum Severity {
 }
 
 /// Who can fix a failed check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FixOwner {
     DnsProvider,
@@ -151,7 +164,7 @@ pub enum FixOwner {
 }
 
 /// The overall grade of a scan.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
 pub enum Grade {
     #[serde(rename = "A+")]
     APlus,

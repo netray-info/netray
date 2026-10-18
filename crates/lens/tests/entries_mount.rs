@@ -75,6 +75,7 @@ fn base_config() -> Config {
         snapshots: SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),
         admission: lens::config::AdmissionConfig::default(),
+        api: Default::default(),
     }
 }
 
@@ -185,6 +186,8 @@ fn a_run() -> Run {
         checks: vec![RunCheck {
             id: CheckId::parse("dns.dnssec_valid").unwrap(),
             status: Status::Pass,
+            findings: vec![],
+            evidence: vec![],
         }],
         blocks: vec![],
     }

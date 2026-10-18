@@ -1,0 +1,7540 @@
+{
+  "components": {
+    "schemas": {
+      "AddressField": {
+        "description": "The fields of `?field=` that describe an address.",
+        "enum": [
+          "ip",
+          "asn",
+          "country",
+          "city",
+          "region",
+          "timezone",
+          "latitude",
+          "longitude",
+          "isp",
+          "location",
+          "network"
+        ],
+        "type": "string"
+      },
+      "AdmissionMeta": {
+        "properties": {
+          "client_budget_per_hour": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "domain_run_slots": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "client_budget_per_hour",
+          "domain_run_slots"
+        ],
+        "type": "object"
+      },
+      "ApiLimits": {
+        "properties": {
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst"
+        ],
+        "type": "object"
+      },
+      "AsnLookupResponse": {
+        "properties": {
+          "asn": {
+            "description": "ASN number.",
+            "example": 15169,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "category": {
+            "description": "ASN category from ipverse/as-metadata.",
+            "example": "hosting",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_anycast": {
+            "description": "Whether this ASN is known to be anycast.",
+            "example": false,
+            "type": "boolean"
+          },
+          "network_role": {
+            "description": "Network role from ipverse/as-metadata.",
+            "example": "tier1_transit",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "description": "Organization name from MaxMind ASN database.",
+            "example": "Google LLC",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "asn",
+          "is_anycast"
+        ],
+        "type": "object"
+      },
+      "BatchItem": {
+        "description": "The lookup of one address, or why it was not answered.",
+        "oneOf": [
+          {
+            "properties": {
+              "address": {
+                "description": "The address as requested.",
+                "type": "string"
+              },
+              "result": {
+                "$ref": "#/components/schemas/Ifconfig"
+              }
+            },
+            "required": [
+              "address",
+              "result"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "address": {
+                "description": "The address as requested.",
+                "type": "string"
+              },
+              "error": {
+                "$ref": "#/components/schemas/ErrorInfo"
+              }
+            },
+            "required": [
+              "address",
+              "error"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "BatchRequest": {
+        "additionalProperties": false,
+        "description": "The addresses of a batch lookup.",
+        "properties": {
+          "addresses": {
+            "description": "At most `batch_max_size` addresses, answered in this order.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "addresses"
+        ],
+        "type": "object"
+      },
+      "BatchResponse": {
+        "description": "One answer per requested address, in request order.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BatchItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "Block": {
+        "description": "One block of evidence.",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/BlockId"
+          },
+          "shape": {
+            "$ref": "#/components/schemas/Shape"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "shape"
+        ],
+        "type": "object"
+      },
+      "BlockChange": {
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/BlockId"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BlockChangeKind"
+          }
+        },
+        "required": [
+          "block",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "BlockChangeKind": {
+        "oneOf": [
+          {
+            "enum": [
+              "added"
+            ],
+            "type": "string"
+          },
+          {
+            "enum": [
+              "removed"
+            ],
+            "type": "string"
+          },
+          {
+            "description": "`items` by shape: fields and table, `~ key` per changed key or row, `- key` per removed\nand `+ key` per added one; records, a signed descriptor per added or removed record;\nchain, the changed positions as strings; tree, the changed node paths; text, none.",
+            "properties": {
+              "changed": {
+                "description": "`items` by shape: fields and table, `~ key` per changed key or row, `- key` per removed\nand `+ key` per added one; records, a signed descriptor per added or removed record;\nchain, the changed positions as strings; tree, the changed node paths; text, none.",
+                "properties": {
+                  "items": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "items"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "changed"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "BlockId": {
+        "examples": [
+          "tls.chain@192.0.2.1:443"
+        ],
+        "type": "string"
+      },
+      "Browser": {
+        "properties": {
+          "family": {
+            "example": "Chrome",
+            "type": "string"
+          },
+          "major": {
+            "example": "120",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "minor": {
+            "example": "0",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "patch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "example": "120.0",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "version"
+        ],
+        "type": "object"
+      },
+      "CaaInfo": {
+        "properties": {
+          "issuer_allowed": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "issuewild_present": {
+            "type": "boolean"
+          },
+          "records": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "records",
+          "issuewild_present"
+        ],
+        "type": "object"
+      },
+      "CacheControlDirectives": {
+        "properties": {
+          "immutable": {
+            "type": "boolean"
+          },
+          "max_age": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "must_revalidate": {
+            "type": "boolean"
+          },
+          "no_cache": {
+            "type": "boolean"
+          },
+          "no_store": {
+            "type": "boolean"
+          },
+          "private": {
+            "type": "boolean"
+          },
+          "public": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "public",
+          "private",
+          "no_store",
+          "no_cache",
+          "must_revalidate",
+          "immutable"
+        ],
+        "type": "object"
+      },
+      "CachingReport": {
+        "properties": {
+          "age": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cache_control": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "directives": {
+            "$ref": "#/components/schemas/CacheControlDirectives"
+          },
+          "etag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_modified": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vary": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "directives",
+          "vary"
+        ],
+        "type": "object"
+      },
+      "CallerField": {
+        "description": "The fields of `?field=` on the caller's own address: the address fields and what the request carries.",
+        "enum": [
+          "ip",
+          "asn",
+          "country",
+          "city",
+          "region",
+          "timezone",
+          "latitude",
+          "longitude",
+          "isp",
+          "location",
+          "network",
+          "tcp",
+          "user_agent",
+          "host",
+          "headers"
+        ],
+        "type": "string"
+      },
+      "CatalogueResponse": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CheckSpec"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checks"
+        ],
+        "type": "object"
+      },
+      "Category": {
+        "enum": [
+          "certificate",
+          "protocol",
+          "configuration"
+        ],
+        "type": "string"
+      },
+      "CdnReport": {
+        "properties": {
+          "cache_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detected": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "indicators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "indicators"
+        ],
+        "type": "object"
+      },
+      "CertInfo": {
+        "description": "Parsed certificate info.",
+        "properties": {
+          "ca_issuers_url": {
+            "description": "CA Issuers URL from AIA extension (OID 1.3.6.1.5.5.7.48.2).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cert_policy": {
+            "description": "Certificate policy classification: \"EV\", \"OV\", \"DV\", or \"unknown\".",
+            "type": "string"
+          },
+          "days_remaining": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "fingerprint_sha1": {
+            "type": "string"
+          },
+          "fingerprint_sha256": {
+            "type": "string"
+          },
+          "is_expired": {
+            "type": "boolean"
+          },
+          "is_self_signed": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "key_size": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "key_type": {
+            "type": "string"
+          },
+          "lifetime_days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "not_after": {
+            "type": "string"
+          },
+          "not_before": {
+            "type": "string"
+          },
+          "ocsp_url": {
+            "description": "OCSP responder URL from AIA extension (OID 1.3.6.1.5.5.7.48.1).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "sans": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "signature_algorithm": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "subject",
+          "issuer",
+          "sans",
+          "serial",
+          "not_before",
+          "not_after",
+          "days_remaining",
+          "key_type",
+          "key_size",
+          "signature_algorithm",
+          "fingerprint_sha256",
+          "fingerprint_sha1",
+          "lifetime_days",
+          "is_expired",
+          "is_self_signed",
+          "cert_policy"
+        ],
+        "type": "object"
+      },
+      "ChainFinding": {
+        "description": "A validation finding for a DNSSEC chain level.",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ChainLevel": {
+        "description": "A single zone level in the DNSSEC chain.",
+        "properties": {
+          "dnskey_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            },
+            "type": "array"
+          },
+          "ds_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ChainFinding"
+            },
+            "type": "array"
+          },
+          "is_final": {
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "format": "double",
+            "type": "number"
+          },
+          "level": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rrsig_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            },
+            "type": "array"
+          },
+          "servers_queried": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "zone",
+          "servers_queried",
+          "dnskey_records",
+          "ds_records",
+          "rrsig_records",
+          "findings",
+          "latency_ms",
+          "is_final"
+        ],
+        "type": "object"
+      },
+      "ChangeClass": {
+        "enum": [
+          "fixed",
+          "improved",
+          "new",
+          "worse",
+          "now_applicable",
+          "no_longer_applicable",
+          "into_not_tested",
+          "out_of_not_tested",
+          "into_not_measured",
+          "out_of_not_measured",
+          "added",
+          "removed",
+          "added_by_release",
+          "removed_by_release"
+        ],
+        "type": "string"
+      },
+      "CheckChange": {
+        "properties": {
+          "class": {
+            "$ref": "#/components/schemas/ChangeClass"
+          },
+          "from": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Status"
+              }
+            ]
+          },
+          "id": {
+            "$ref": "#/components/schemas/CheckId"
+          },
+          "to": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Status"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "class"
+        ],
+        "type": "object"
+      },
+      "CheckId": {
+        "examples": [
+          "tls.chain_trusted"
+        ],
+        "type": "string"
+      },
+      "CheckResult": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/EmailCategory"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "enrichment": {
+            "items": {
+              "$ref": "#/components/schemas/IpEnrichment"
+            },
+            "type": "array"
+          },
+          "sub_checks": {
+            "items": {
+              "$ref": "#/components/schemas/SubCheck"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "category",
+          "verdict",
+          "title",
+          "detail",
+          "sub_checks"
+        ],
+        "type": "object"
+      },
+      "CheckSpec": {
+        "description": "One catalogue entry.",
+        "properties": {
+          "finding": {
+            "type": "string"
+          },
+          "fix_hint": {
+            "type": "string"
+          },
+          "fix_owner": {
+            "$ref": "#/components/schemas/FixOwner"
+          },
+          "guide": {
+            "type": "string"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CheckId"
+          },
+          "impact": {
+            "type": "string"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/Severity"
+          },
+          "short": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "protocol",
+          "title",
+          "finding",
+          "impact",
+          "fix_hint",
+          "fix_owner",
+          "severity",
+          "source",
+          "guide",
+          "short"
+        ],
+        "type": "object"
+      },
+      "CloudInfo": {
+        "properties": {
+          "provider": {
+            "example": "aws",
+            "type": "string"
+          },
+          "region": {
+            "example": "us-east-1",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "example": "EC2",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "ConsistencyMismatch": {
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Per-IP values, keyed by IP address string.",
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "field",
+          "values"
+        ],
+        "type": "object"
+      },
+      "ConsistencyResult": {
+        "properties": {
+          "certificates_match": {
+            "type": "boolean"
+          },
+          "cipher_suites_match": {
+            "type": "boolean"
+          },
+          "mismatches": {
+            "items": {
+              "$ref": "#/components/schemas/ConsistencyMismatch"
+            },
+            "type": "array"
+          },
+          "tls_versions_match": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "certificates_match",
+          "tls_versions_match",
+          "cipher_suites_match"
+        ],
+        "type": "object"
+      },
+      "CookieEntry": {
+        "properties": {
+          "domain": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expires": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "httponly": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "samesite": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secure": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "secure",
+          "httponly"
+        ],
+        "type": "object"
+      },
+      "CorsReport": {
+        "properties": {
+          "allows_any_origin": {
+            "type": "boolean"
+          },
+          "allows_credentials": {
+            "type": "boolean"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProbeError"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "reflects_origin": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "allows_any_origin",
+          "reflects_origin",
+          "allows_credentials",
+          "status",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CspReport": {
+        "properties": {
+          "directives": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "enforced": {
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "report_only": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "status",
+          "enforced",
+          "report_only",
+          "directives",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "CtInfo": {
+        "properties": {
+          "sct_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scts": {
+            "items": {
+              "$ref": "#/components/schemas/SctEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sct_count",
+          "scts"
+        ],
+        "type": "object"
+      },
+      "Device": {
+        "properties": {
+          "brand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "family": {
+            "example": "Other",
+            "type": "string"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "family"
+        ],
+        "type": "object"
+      },
+      "Diff": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CheckChange"
+            },
+            "type": "array"
+          },
+          "engine_changed": {
+            "description": "Whether the two runs' engine versions differ.",
+            "type": "boolean"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BlockChange"
+            },
+            "type": "array"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/GradeChange"
+          }
+        },
+        "required": [
+          "checks",
+          "evidence",
+          "grade",
+          "engine_changed"
+        ],
+        "type": "object"
+      },
+      "DiffRequest": {
+        "properties": {
+          "a": {
+            "description": "First IP address to compare.",
+            "example": "8.8.8.8",
+            "type": "string"
+          },
+          "b": {
+            "description": "Second IP address to compare.",
+            "example": "1.1.1.1",
+            "type": "string"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ],
+        "type": "object"
+      },
+      "DiffResponse": {
+        "description": "The two answers of a diff, one entry per top-level field of `Ifconfig`.",
+        "properties": {
+          "ip": {
+            "$ref": "#/components/schemas/IpDiff"
+          },
+          "location": {
+            "$ref": "#/components/schemas/LocationDiff"
+          },
+          "network": {
+            "$ref": "#/components/schemas/NetworkDiff"
+          },
+          "tcp": {
+            "$ref": "#/components/schemas/TcpDiff"
+          },
+          "user_agent": {
+            "$ref": "#/components/schemas/UserAgentDiff"
+          }
+        },
+        "required": [
+          "ip",
+          "location",
+          "network",
+          "tcp",
+          "user_agent"
+        ],
+        "type": "object"
+      },
+      "DiffView": {
+        "properties": {
+          "diff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Diff"
+              }
+            ]
+          },
+          "entry_id": {
+            "type": "string"
+          },
+          "predecessor_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "entry_id"
+        ],
+        "type": "object"
+      },
+      "DnsAuthCompareDone": {
+        "description": "Summary of an authcompare job.",
+        "properties": {
+          "auth_servers": {
+            "description": "Discovered authoritative nameservers, e.g. [\"ns1.example.com (1.2.3.4)\"].",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cache_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "total_queries": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "total_queries",
+          "duration_ms",
+          "warnings",
+          "auth_servers"
+        ],
+        "type": "object"
+      },
+      "DnsAuthCompareEvent": {
+        "description": "An event of an authcompare job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsBatch"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsEnrichmentEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsAuthCompareDone"
+          }
+        ]
+      },
+      "DnsAuthCompareResult": {
+        "description": "The events of the job, collected.",
+        "properties": {
+          "batches": {
+            "items": {
+              "$ref": "#/components/schemas/DnsBatch"
+            },
+            "type": "array"
+          },
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsAuthCompareDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsEnrichmentEvent"
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batches",
+          "errors",
+          "enrichment",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnsBatch": {
+        "description": "The answers for one record type: one per record type, transport or source.\n\nSerialises with the human-readable record fields injected (`*_human`, `*_explain`,\n`txt_string`); [`DnsBatch::cache_value`] is the same without them.",
+        "properties": {
+          "completed": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lookups": {
+            "$ref": "#/components/schemas/DnsLookups"
+          },
+          "record_type": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "source": {
+            "description": "Source of this batch: \"recursive\" or \"authoritative\" (authcompare only).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "transport": {
+            "description": "Transport used for this batch (compare only).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "request_id",
+          "record_type",
+          "lookups",
+          "completed",
+          "total"
+        ],
+        "type": "object"
+      },
+      "DnsChainEvent": {
+        "description": "One zone level of a DNSSEC chain.",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/ChainLevel"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "level"
+        ],
+        "type": "object"
+      },
+      "DnsCloudInfo": {
+        "description": "Cloud provider metadata from the enrichment API.",
+        "properties": {
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "DnsCompareDone": {
+        "description": "Summary of a compare job.",
+        "properties": {
+          "cache_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "total_queries": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "transports": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "total_queries",
+          "duration_ms",
+          "warnings",
+          "transports"
+        ],
+        "type": "object"
+      },
+      "DnsCompareEvent": {
+        "description": "An event of a compare job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsBatch"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsEnrichmentEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsCompareDone"
+          }
+        ]
+      },
+      "DnsCompareResult": {
+        "description": "The events of the job, collected.",
+        "properties": {
+          "batches": {
+            "items": {
+              "$ref": "#/components/schemas/DnsBatch"
+            },
+            "type": "array"
+          },
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsCompareDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsEnrichmentEvent"
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batches",
+          "errors",
+          "enrichment",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnsContext": {
+        "properties": {
+          "caa": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CaaInfo"
+              }
+            ]
+          },
+          "lookup_errors": {
+            "description": "The lookups that failed or got no definitive answer: \"caa\", \"tlsa\", \"https\".",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resolved_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resolved_ips"
+        ],
+        "type": "object"
+      },
+      "DnsDnssecDone": {
+        "description": "Summary of a dnssec job.",
+        "properties": {
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "levels": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "duration_ms",
+          "levels"
+        ],
+        "type": "object"
+      },
+      "DnsDnssecEvent": {
+        "description": "An event of a dnssec job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsChainEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsDnssecDone"
+          }
+        ]
+      },
+      "DnsDnssecResult": {
+        "description": "The events of a dnssec job, collected.",
+        "properties": {
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsDnssecDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/DnsChainEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "levels",
+          "errors",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnsDuration": {
+        "properties": {
+          "nanos": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "secs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "secs",
+          "nanos"
+        ],
+        "type": "object"
+      },
+      "DnsEnrichmentEvent": {
+        "description": "Enrichment of the IP addresses the job found.",
+        "properties": {
+          "enrichments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsIpInfo"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "enrichments"
+        ],
+        "type": "object"
+      },
+      "DnsErrorEvent": {
+        "description": "A non-fatal error of a job, e.g. one resolver failing.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "DnsHopEvent": {
+        "description": "One delegation level of a trace.",
+        "properties": {
+          "hop": {
+            "$ref": "#/components/schemas/TraceHop"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "hop"
+        ],
+        "type": "object"
+      },
+      "DnsIpInfo": {
+        "description": "Metadata about a single IP address from the enrichment API.",
+        "properties": {
+          "asn": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cloud": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsCloudInfo"
+              }
+            ]
+          },
+          "is_c2": {
+            "type": "boolean"
+          },
+          "is_datacenter": {
+            "type": "boolean"
+          },
+          "is_spamhaus": {
+            "type": "boolean"
+          },
+          "is_tor": {
+            "type": "boolean"
+          },
+          "is_vpn": {
+            "type": "boolean"
+          },
+          "network_role": {
+            "description": "ASN network role from ipverse/as-metadata (e.g. \"Midsize Transit\", \"Access Provider\").",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "description": "IP classification: \"cloud\", \"datacenter\", \"residential\", \"vpn\", etc.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "DnsLookup": {
+        "description": "One server's answer to one query.",
+        "properties": {
+          "name_server": {
+            "description": "The server, e.g. `udp:192.0.2.1:53`.",
+            "type": "string"
+          },
+          "query": {
+            "$ref": "#/components/schemas/DnsQuery"
+          },
+          "result": {
+            "$ref": "#/components/schemas/DnsLookupResult"
+          }
+        },
+        "required": [
+          "query",
+          "name_server",
+          "result"
+        ],
+        "type": "object"
+      },
+      "DnsLookupError": {
+        "anyOf": [
+          {
+            "enum": [
+              "QueryRefused",
+              "ServerFailure",
+              "Timeout",
+              "NoRecordsFound",
+              "CancelledError",
+              "RuntimePanicError"
+            ],
+            "type": "string"
+          },
+          {
+            "properties": {
+              "ResolveError": {
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "ResolveError"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "ProtoError": {
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "ProtoError"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "DnsLookupRecord": {
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsRData"
+            },
+            "description": "The record data by type name: a string for A, AAAA, NS, CNAME, PTR and every\nauthoritative record, an object of the type's fields for the others.",
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ttl": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "ttl",
+          "data"
+        ],
+        "type": "object"
+      },
+      "DnsLookupResult": {
+        "description": "A response, an NXDOMAIN or NODATA answer, or an error, as a single-key object.",
+        "oneOf": [
+          {
+            "properties": {
+              "Response": {
+                "$ref": "#/components/schemas/DnsResponse"
+              }
+            },
+            "required": [
+              "Response"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "NxDomain": {
+                "$ref": "#/components/schemas/DnsNxDomain"
+              }
+            },
+            "required": [
+              "NxDomain"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "Error": {
+                "$ref": "#/components/schemas/DnsLookupError"
+              }
+            },
+            "required": [
+              "Error"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "DnsLookups": {
+        "description": "All lookups of one batch.",
+        "properties": {
+          "lookups": {
+            "items": {
+              "$ref": "#/components/schemas/DnsLookup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "lookups"
+        ],
+        "type": "object"
+      },
+      "DnsMeta": {
+        "properties": {
+          "global_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "global_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_max_streams": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "per_target_per_minute",
+          "per_target_burst",
+          "global_per_minute",
+          "global_burst",
+          "per_ip_max_streams"
+        ],
+        "type": "object"
+      },
+      "DnsNxDomain": {
+        "properties": {
+          "referral": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "response_code": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsResponseCode"
+              }
+            ]
+          },
+          "response_time": {
+            "$ref": "#/components/schemas/DnsDuration"
+          }
+        },
+        "required": [
+          "response_time"
+        ],
+        "type": "object"
+      },
+      "DnsQuery": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "record_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "record_type"
+        ],
+        "type": "object"
+      },
+      "DnsQueryDone": {
+        "description": "Summary of a query job.",
+        "properties": {
+          "cache_key": {
+            "description": "Cache key for retrieving this result via permalink.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "degraded_providers": {
+            "description": "Providers skipped due to open circuit breakers during this query.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "dnssec": {
+            "description": "Whether DNSSEC mode was requested.",
+            "type": "boolean"
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "total_queries": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "transport": {
+            "description": "Transport used for this query (e.g., \"udp\", \"tls\").",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "total_queries",
+          "duration_ms",
+          "warnings",
+          "transport",
+          "dnssec"
+        ],
+        "type": "object"
+      },
+      "DnsQueryEvent": {
+        "description": "An event of a query job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsBatch"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsEnrichmentEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsQueryDone"
+          }
+        ]
+      },
+      "DnsQueryResult": {
+        "description": "The events of the job, collected.",
+        "properties": {
+          "batches": {
+            "items": {
+              "$ref": "#/components/schemas/DnsBatch"
+            },
+            "type": "array"
+          },
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsQueryDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsEnrichmentEvent"
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batches",
+          "errors",
+          "enrichment",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnsRData": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsRDataField"
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "DnsRDataField": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          },
+          {
+            "items": {
+              "$ref": "#/components/schemas/DnsRDataField"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsRDataField"
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "DnsRecord": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "rdata": {
+            "type": "string"
+          },
+          "record_type": {
+            "type": "string"
+          },
+          "ttl": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "ttl",
+          "record_type",
+          "rdata"
+        ],
+        "type": "object"
+      },
+      "DnsResponse": {
+        "properties": {
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsLookupRecord"
+            },
+            "type": "array"
+          },
+          "response_time": {
+            "$ref": "#/components/schemas/DnsDuration"
+          },
+          "valid_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "records",
+          "response_time"
+        ],
+        "type": "object"
+      },
+      "DnsResponseCode": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ]
+      },
+      "DnsTraceDone": {
+        "description": "Summary of a trace job.",
+        "properties": {
+          "cache_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hops": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "duration_ms",
+          "hops"
+        ],
+        "type": "object"
+      },
+      "DnsTraceEvent": {
+        "description": "An event of a trace job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsHopEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsEnrichmentEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsTraceDone"
+          }
+        ]
+      },
+      "DnsTraceResult": {
+        "description": "The events of a trace job, collected.",
+        "properties": {
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsTraceDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsEnrichmentEvent"
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          },
+          "hops": {
+            "items": {
+              "$ref": "#/components/schemas/DnsHopEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "hops",
+          "errors",
+          "enrichment",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnssecRequest": {
+        "properties": {
+          "domain": {
+            "description": "Domain name to validate (e.g. `\"example.com\"`).",
+            "type": "string"
+          },
+          "timeout_secs": {
+            "description": "Query timeout per level in seconds. Clamped to config max.",
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "EmailCategory": {
+        "enum": [
+          "mx",
+          "spf",
+          "dkim",
+          "dmarc",
+          "mta_sts",
+          "tls_rpt",
+          "dane",
+          "dnssec",
+          "bimi",
+          "fcrdns",
+          "dnsbl",
+          "cross_validation"
+        ],
+        "type": "string"
+      },
+      "EmailGrade": {
+        "enum": [
+          "F",
+          "D",
+          "C",
+          "B",
+          "A",
+          "skipped"
+        ],
+        "type": "string"
+      },
+      "EmailInspectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "example": "example.com",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "EmailInspectResult": {
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CheckResult"
+            },
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EmailSummary"
+          }
+        },
+        "required": [
+          "categories",
+          "evidence",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "EmailMeta": {
+        "properties": {
+          "max_concurrent_inspections": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "max_concurrent_inspections"
+        ],
+        "type": "object"
+      },
+      "EmailSummary": {
+        "properties": {
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/EmailGrade"
+          },
+          "verdicts": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Verdict"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "grade",
+          "verdicts",
+          "duration_ms"
+        ],
+        "type": "object"
+      },
+      "EnrichmentInfo": {
+        "properties": {
+          "detail_url": {
+            "description": "Public IP-tool page for `ip`; absent when no `[meta] ip_base_url` is configured.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ip": {
+            "type": "string"
+          },
+          "ip_type": {
+            "description": "IP classification: \"cloud\", \"datacenter\", \"residential\", \"vpn\", \"cdn\", \"isp\", etc.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "description": "ASN network role (e.g. \"Midsize Transit\", \"Access Provider\").",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "threat": {
+            "description": "Threat flag: \"C2\", \"DROP\", or \"TOR\" if the IP is flagged.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ip"
+        ],
+        "type": "object"
+      },
+      "EntryView": {
+        "properties": {
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "engine_version": {
+            "type": "string"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "predecessor_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "profile_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "run": {
+            "$ref": "#/components/schemas/Run"
+          }
+        },
+        "required": [
+          "id",
+          "domain",
+          "created_at",
+          "last_seen_at",
+          "profile_version",
+          "grade",
+          "engine_version",
+          "run"
+        ],
+        "type": "object"
+      },
+      "ErrorInfo": {
+        "description": "Error detail contained in an error response.",
+        "properties": {
+          "code": {
+            "description": "Machine-readable error code (e.g. `INVALID_DOMAIN`).",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable error message.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "description": "JSON body returned for all error responses.\n\nWire format: `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorInfo"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "FieldPair": {
+        "items": false,
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "description": "The schema of a [`Value`]: the tagged union as it serialises. An address is its text form.",
+            "oneOf": [
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "text"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "int"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "format": "int64",
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "bool"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "time"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "duration"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "format": "int64",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "t": {
+                    "enum": [
+                      "addr"
+                    ],
+                    "type": "string"
+                  },
+                  "v": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "v",
+                  "t"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        ],
+        "type": "array"
+      },
+      "FingerprintReport": {
+        "properties": {
+          "info_leakage": {
+            "$ref": "#/components/schemas/InfoLeakage"
+          },
+          "server": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "info_leakage"
+        ],
+        "type": "object"
+      },
+      "FixOwner": {
+        "description": "Who can fix a failed check.",
+        "enum": [
+          "dns_provider",
+          "registrar",
+          "certificate_provider",
+          "web_server",
+          "mail_provider",
+          "hosting"
+        ],
+        "type": "string"
+      },
+      "Grade": {
+        "description": "The overall grade of a scan.",
+        "enum": [
+          "A+",
+          "A",
+          "B",
+          "C",
+          "D",
+          "F",
+          "incomplete"
+        ],
+        "type": "string"
+      },
+      "GradeChange": {
+        "description": "The grade of both runs. `rescored` is the predecessor re-scored under the current profile,\nset only when the profile versions differ.",
+        "properties": {
+          "from": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "rescored": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Grade"
+              }
+            ]
+          },
+          "to": {
+            "$ref": "#/components/schemas/Grade"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "HeaderCheck": {
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "HealthCheck": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "status",
+          "label",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "HistoryItem": {
+        "properties": {
+          "created_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "id": {
+            "type": "string"
+          },
+          "last_seen_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "profile_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "last_seen_at",
+          "grade",
+          "profile_version"
+        ],
+        "type": "object"
+      },
+      "HistoryResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryItem"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "type": "object"
+      },
+      "HstsCheck": {
+        "properties": {
+          "include_sub_domains": {
+            "type": "boolean"
+          },
+          "max_age": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "preload": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "status",
+          "include_sub_domains",
+          "preload"
+        ],
+        "type": "object"
+      },
+      "HstsInfo": {
+        "properties": {
+          "include_sub_domains": {
+            "type": "boolean"
+          },
+          "max_age": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "preload": {
+            "type": "boolean"
+          },
+          "present": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "present",
+          "max_age",
+          "include_sub_domains",
+          "preload"
+        ],
+        "type": "object"
+      },
+      "HttpCheckStatus": {
+        "enum": [
+          "pass",
+          "skip",
+          "warn",
+          "fail"
+        ],
+        "type": "string"
+      },
+      "HttpInspectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "HttpInspectResponse": {
+        "properties": {
+          "alt_svc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "caching": {
+            "$ref": "#/components/schemas/CachingReport"
+          },
+          "cdn": {
+            "$ref": "#/components/schemas/CdnReport"
+          },
+          "compression": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cookies": {
+            "items": {
+              "$ref": "#/components/schemas/CookieEntry"
+            },
+            "type": "array"
+          },
+          "cors": {
+            "$ref": "#/components/schemas/CorsReport"
+          },
+          "deprecated_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "enrichment": {
+            "$ref": "#/components/schemas/EnrichmentInfo"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProbeError"
+              }
+            ]
+          },
+          "final_url": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "$ref": "#/components/schemas/FingerprintReport"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "http_upgrade": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HttpUpgrade"
+              }
+            ]
+          },
+          "http_version": {
+            "type": "string"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/QualityReport"
+          },
+          "redirects": {
+            "items": {
+              "$ref": "#/components/schemas/RedirectHop"
+            },
+            "type": "array"
+          },
+          "reporting": {
+            "$ref": "#/components/schemas/ReportingReport"
+          },
+          "security": {
+            "$ref": "#/components/schemas/SecurityReport"
+          },
+          "status": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "final_url",
+          "timestamp",
+          "duration_ms",
+          "http_version",
+          "status",
+          "redirects",
+          "headers",
+          "security",
+          "cors",
+          "cookies",
+          "caching",
+          "cdn",
+          "fingerprint",
+          "deprecated_headers",
+          "reporting",
+          "quality",
+          "enrichment"
+        ],
+        "type": "object"
+      },
+      "HttpUpgrade": {
+        "properties": {
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProbeError"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "redirects": {
+            "items": {
+              "$ref": "#/components/schemas/RedirectHop"
+            },
+            "type": "array"
+          },
+          "redirects_to_https": {
+            "type": "boolean"
+          },
+          "same_host": {
+            "type": "boolean"
+          },
+          "status_code": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "redirects_to_https",
+          "same_host",
+          "message",
+          "redirects"
+        ],
+        "type": "object"
+      },
+      "Ifconfig": {
+        "properties": {
+          "ip": {
+            "$ref": "#/components/schemas/Ip"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "network": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "tcp": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Tcp"
+              }
+            ]
+          },
+          "user_agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserAgent"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ip",
+          "location",
+          "network"
+        ],
+        "type": "object"
+      },
+      "InfoLeakage": {
+        "properties": {
+          "exposed_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "status",
+          "exposed_headers"
+        ],
+        "type": "object"
+      },
+      "InspectionError": {
+        "description": "Per-IP error detail embedded in inspection results.",
+        "properties": {
+          "code": {
+            "description": "Machine-readable error code: `HANDSHAKE_FAILED`, `HANDSHAKE_TIMEOUT` or\n`NOT_TESTED_FROM_HERE`.",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable error message.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "InspectorMeta": {
+        "properties": {
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "per_target_per_minute",
+          "per_target_burst"
+        ],
+        "type": "object"
+      },
+      "Ip": {
+        "properties": {
+          "addr": {
+            "example": "203.0.113.42",
+            "type": "string"
+          },
+          "hostname": {
+            "example": "dns.example.com",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "example": "4",
+            "type": "string"
+          }
+        },
+        "required": [
+          "addr",
+          "version"
+        ],
+        "type": "object"
+      },
+      "IpDiff": {
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/Ip"
+          },
+          "b": {
+            "$ref": "#/components/schemas/Ip"
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "equal"
+        ],
+        "type": "object"
+      },
+      "IpEnrichment": {
+        "description": "Enrichment data for an IP address, included in MX results for frontend display.",
+        "properties": {
+          "asn": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ip": {
+            "type": "string"
+          },
+          "ip_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ip"
+        ],
+        "type": "object"
+      },
+      "IpInfo": {
+        "description": "Metadata about a single IP address from the enrichment API.",
+        "properties": {
+          "asn": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cloud": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TlsCloudInfo"
+              }
+            ]
+          },
+          "is_c2": {
+            "type": "boolean"
+          },
+          "is_datacenter": {
+            "type": "boolean"
+          },
+          "is_spamhaus": {
+            "type": "boolean"
+          },
+          "is_tor": {
+            "type": "boolean"
+          },
+          "is_vpn": {
+            "type": "boolean"
+          },
+          "network_role": {
+            "description": "ASN network role from ipverse/as-metadata (e.g. \"Midsize Transit\", \"Access Provider\").",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "description": "IP classification: \"cloud\", \"datacenter\", \"residential\", \"vpn\", etc.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "IpInspectionResult": {
+        "description": "Result of inspecting a single IP on a single port.",
+        "properties": {
+          "chain": {
+            "items": {
+              "$ref": "#/components/schemas/CertInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "ct": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CtInfo"
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IpInfo"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InspectionError"
+              }
+            ]
+          },
+          "ip": {
+            "type": "string"
+          },
+          "ip_version": {
+            "type": "string"
+          },
+          "tls": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TlsParams"
+              }
+            ]
+          },
+          "validation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ValidationResult"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ip",
+          "ip_version"
+        ],
+        "type": "object"
+      },
+      "IpMeta": {
+        "properties": {
+          "batch_addresses_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "batch_addresses_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "batch_max_size": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "per_target_per_minute",
+          "per_target_burst",
+          "batch_max_size",
+          "batch_addresses_per_minute",
+          "batch_addresses_burst"
+        ],
+        "type": "object"
+      },
+      "Limits": {
+        "properties": {
+          "admission": {
+            "$ref": "#/components/schemas/AdmissionMeta"
+          },
+          "api": {
+            "$ref": "#/components/schemas/ApiLimits"
+          },
+          "dns": {
+            "$ref": "#/components/schemas/DnsMeta"
+          },
+          "email": {
+            "$ref": "#/components/schemas/EmailMeta"
+          },
+          "http": {
+            "$ref": "#/components/schemas/InspectorMeta"
+          },
+          "ip": {
+            "$ref": "#/components/schemas/IpMeta"
+          },
+          "rate_limit": {
+            "$ref": "#/components/schemas/RateLimitMeta"
+          },
+          "tls": {
+            "$ref": "#/components/schemas/InspectorMeta"
+          }
+        },
+        "required": [
+          "api",
+          "admission",
+          "rate_limit",
+          "ip",
+          "tls",
+          "http",
+          "email",
+          "dns"
+        ],
+        "type": "object"
+      },
+      "Location": {
+        "properties": {
+          "accuracy_radius_km": {
+            "example": 100,
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "city": {
+            "example": "Berlin",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city_localized": {
+            "description": "Localized city name when `?lang=` is specified and a locale other than `en` was found.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "continent": {
+            "example": "Europe",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "continent_code": {
+            "example": "EU",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country": {
+            "example": "Germany",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country_iso": {
+            "example": "DE",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country_localized": {
+            "description": "Localized country name when `?lang=` is specified and a locale other than `en` was found.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_eu": {
+            "example": true,
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "latitude": {
+            "example": 52.52,
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "longitude": {
+            "example": 13.405,
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "postal_code": {
+            "example": "10115",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "example": "Berlin",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region_code": {
+            "example": "BE",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "registered_country": {
+            "description": "Country where the IP block is registered (differs from `country` for VPN exit nodes).",
+            "example": "United States",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "registered_country_iso": {
+            "example": "US",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "example": "Europe/Berlin",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "LocationDiff": {
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "b": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "equal"
+        ],
+        "type": "object"
+      },
+      "Meta": {
+        "properties": {
+          "api": {
+            "type": "string"
+          },
+          "current_profile": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "evidence_schema_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/Limits"
+          },
+          "profiles": {
+            "items": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "api",
+          "current_profile",
+          "profiles",
+          "evidence_schema_version",
+          "limits"
+        ],
+        "type": "object"
+      },
+      "Network": {
+        "properties": {
+          "asn": {
+            "example": 64496,
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "asn_category": {
+            "description": "ASN category from ipverse/as-metadata (hosting/isp/business/education_research/government_admin).",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "asn_registered": {
+            "description": "ASN registration date from ipverse/as-metadata (YYYY-MM-DD). Null for internal IPs or unknown ASNs.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NetworkBot",
+                "description": "Bot identity when the IP is a known crawler range."
+              }
+            ]
+          },
+          "cloud": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CloudInfo",
+                "description": "Cloud provider identity when the IP is a cloud CIDR match."
+              }
+            ]
+          },
+          "iana_label": {
+            "description": "IANA special-purpose address registry label, if applicable.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "infra_type": {
+            "description": "Infrastructure dimension, orthogonal to type. One of: internal, cloud, datacenter, government, education, business, residential.",
+            "example": "residential",
+            "type": "string"
+          },
+          "is_anycast": {
+            "description": "True when the IP belongs to a known anycast network (Cloudflare, Akamai, Fastly, Google DNS).",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_bot": {
+            "example": false,
+            "type": "boolean"
+          },
+          "is_c2": {
+            "description": "True when the IP is an active Feodo botnet C2 node.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_cins": {
+            "description": "True when the IP appears in the CINS Army bad-actor list.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_datacenter": {
+            "example": false,
+            "type": "boolean"
+          },
+          "is_internal": {
+            "description": "True when the IP belongs to a private or reserved range (RFC 1918, loopback, link-local, IPv6 ULA).",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_spamhaus": {
+            "description": "True when the IP falls in a Spamhaus DROP/EDROP hijacked netblock.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_tor": {
+            "example": false,
+            "type": "boolean"
+          },
+          "is_vpn": {
+            "example": false,
+            "type": "boolean"
+          },
+          "network_role": {
+            "description": "Network role from ipverse/as-metadata (e.g. \"stub\", \"tier1_transit\").",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "example": "Example Telecom AG",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prefix": {
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "description": "Primary signal: highest-priority classification. One of: internal, c2, bot, cloud, vpn, tor, spamhaus, datacenter, residential.",
+            "example": "residential",
+            "type": "string"
+          },
+          "vpn": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/VpnInfo",
+                "description": "VPN identity when the IP is a VPN match."
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "infra_type",
+          "is_internal",
+          "is_datacenter",
+          "is_vpn",
+          "is_tor",
+          "is_bot",
+          "is_c2",
+          "is_spamhaus",
+          "is_anycast",
+          "is_cins"
+        ],
+        "type": "object"
+      },
+      "NetworkBot": {
+        "properties": {
+          "provider": {
+            "example": "googlebot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "type": "object"
+      },
+      "NetworkDiff": {
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "b": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "equal"
+        ],
+        "type": "object"
+      },
+      "Node": {
+        "description": "A node of a `tree` block.",
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/Node"
+            },
+            "type": "array"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/FieldPair"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields",
+          "children"
+        ],
+        "type": "object"
+      },
+      "OS": {
+        "properties": {
+          "family": {
+            "example": "Mac OS X",
+            "type": "string"
+          },
+          "major": {
+            "example": "14",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "minor": {
+            "example": "0",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "patch": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "patch_minor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "example": "14.0",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "version"
+        ],
+        "type": "object"
+      },
+      "OcspInfo": {
+        "properties": {
+          "next_update": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stapled": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "this_update": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "stapled"
+        ],
+        "type": "object"
+      },
+      "OcspRevocationResult": {
+        "description": "Result of a live OCSP revocation check via the AIA OCSP responder URL.",
+        "properties": {
+          "checked_at": {
+            "description": "ISO 8601 timestamp when this check was performed",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Revocation reason string when status == \"revoked\"; \"blocked\" when the responder URL\nwas refused",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revoked_at": {
+            "description": "ISO 8601 revocation time (only set when status == \"revoked\")",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "\"good\", \"revoked\", or \"unknown\"",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checked_at"
+        ],
+        "type": "object"
+      },
+      "PortQualityResult": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            },
+            "type": "array"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "PortResult": {
+        "properties": {
+          "consistency": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConsistencyResult"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InspectionError"
+              }
+            ]
+          },
+          "ips": {
+            "items": {
+              "$ref": "#/components/schemas/IpInspectionResult"
+            },
+            "type": "array"
+          },
+          "port": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PortQualityResult"
+              }
+            ]
+          },
+          "tlsa": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TlsaInfo"
+              }
+            ]
+          },
+          "validation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ValidationResult"
+              }
+            ]
+          }
+        },
+        "required": [
+          "port",
+          "ips"
+        ],
+        "type": "object"
+      },
+      "PostQueryRequest": {
+        "properties": {
+          "dnssec": {
+            "description": "Enable DNSSEC mode (adds DNSKEY and DS record types).",
+            "type": "boolean"
+          },
+          "domain": {
+            "description": "Domain name to query (e.g. `\"example.com\"`).",
+            "type": "string"
+          },
+          "record_types": {
+            "description": "DNS record types to query (e.g. `[\"A\", \"MX\"]`). Defaults to A, AAAA, CNAME, MX.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "servers": {
+            "description": "DNS servers to use (e.g. `[\"cloudflare\", \"8.8.8.8\"]`). Defaults to config default_servers.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "transport": {
+            "description": "Transport: `udp` (default), `tcp`, `tls`, or `https`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "ProbeError": {
+        "description": "Why a probe got no response.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ProbeErrorKind"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ProbeErrorKind": {
+        "enum": [
+          "timeout",
+          "refused",
+          "reset",
+          "tls",
+          "blocked",
+          "unreachable"
+        ],
+        "type": "string"
+      },
+      "Profile": {
+        "description": "A parsed scoring profile.",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sections": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SectionWeights"
+            },
+            "propertyNames": {
+              "description": "The protocol a check belongs to.",
+              "enum": [
+                "dns",
+                "tls",
+                "http",
+                "email",
+                "ip"
+              ],
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "thresholds": {
+            "description": "Grade thresholds, highest first.",
+            "items": {
+              "$ref": "#/components/schemas/Threshold"
+            },
+            "type": "array"
+          },
+          "version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "sections",
+          "thresholds"
+        ],
+        "type": "object"
+      },
+      "Protocol": {
+        "description": "The protocol a check belongs to.",
+        "enum": [
+          "dns",
+          "tls",
+          "http",
+          "email",
+          "ip"
+        ],
+        "type": "string"
+      },
+      "QualityCheck": {
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "status"
+        ],
+        "type": "object"
+      },
+      "QualityReport": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/QualityCheck"
+            },
+            "type": "array"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "QualityResult": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            },
+            "type": "array"
+          },
+          "hsts": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HstsInfo"
+              }
+            ]
+          },
+          "https_redirect": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RedirectInfo"
+              }
+            ]
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "RangeResponse": {
+        "properties": {
+          "asn": {
+            "description": "ASN that originates this prefix (from MaxMind lookup on the network address).",
+            "example": 15169,
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cidr": {
+            "description": "The CIDR prefix as provided.",
+            "example": "8.8.8.0/24",
+            "type": "string"
+          },
+          "is_c2": {
+            "description": "True if the network address is a Feodo C2 node.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_cloud": {
+            "description": "True if the network address is a cloud CIDR.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_datacenter": {
+            "description": "True if the network address is a datacenter.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_spamhaus": {
+            "description": "True if the network address matches Spamhaus DROP.",
+            "example": false,
+            "type": "boolean"
+          },
+          "is_vpn": {
+            "description": "True if the network address matches VPN ranges.",
+            "example": false,
+            "type": "boolean"
+          },
+          "network_type": {
+            "description": "Network type classification of the network address.",
+            "example": "cloud",
+            "type": "string"
+          },
+          "org": {
+            "description": "Organization name for the ASN.",
+            "example": "Google LLC",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "cidr",
+          "network_type",
+          "is_cloud",
+          "is_vpn",
+          "is_datacenter",
+          "is_spamhaus",
+          "is_c2"
+        ],
+        "type": "object"
+      },
+      "RateLimitMeta": {
+        "properties": {
+          "global_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "global_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "global_per_minute",
+          "global_burst"
+        ],
+        "type": "object"
+      },
+      "Record": {
+        "description": "A DNS resource record.",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Value"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/Value"
+          },
+          "ttl": {
+            "$ref": "#/components/schemas/Value"
+          },
+          "type": {
+            "$ref": "#/components/schemas/Value"
+          }
+        },
+        "required": [
+          "owner",
+          "type",
+          "ttl",
+          "data"
+        ],
+        "type": "object"
+      },
+      "RecordedKind": {
+        "description": "What the history did with a finished run.",
+        "enum": [
+          "first",
+          "identical",
+          "changed",
+          "not_stored"
+        ],
+        "type": "string"
+      },
+      "RedirectHop": {
+        "properties": {
+          "http_version": {
+            "type": "string"
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "status",
+          "http_version"
+        ],
+        "type": "object"
+      },
+      "RedirectInfo": {
+        "properties": {
+          "redirect_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ReferralGroup": {
+        "description": "A group of servers that returned the same NS referral set.",
+        "properties": {
+          "is_majority": {
+            "type": "boolean"
+          },
+          "ns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "servers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ns_names",
+          "servers",
+          "is_majority"
+        ],
+        "type": "object"
+      },
+      "ReportingReport": {
+        "properties": {
+          "csp_reporting": {
+            "type": "boolean"
+          },
+          "nel": {
+            "type": "boolean"
+          },
+          "report_to": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "report_to",
+          "nel",
+          "csp_reporting"
+        ],
+        "type": "object"
+      },
+      "Run": {
+        "description": "One scan as stored for history.",
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/RunCheck"
+            },
+            "type": "array"
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "engine_version": {
+            "type": "string"
+          },
+          "evidence_schema_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "profile_version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/RunSection"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "profile_version",
+          "engine_version",
+          "evidence_schema_version",
+          "grade",
+          "complete",
+          "sections",
+          "checks",
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "RunAnswer": {
+        "description": "The answer of a fresh run: the run, how the history recorded it, and the diff when it has one.",
+        "properties": {
+          "diff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Diff"
+              }
+            ]
+          },
+          "entry_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recorded": {
+            "$ref": "#/components/schemas/RecordedKind"
+          },
+          "run": {
+            "$ref": "#/components/schemas/Run"
+          }
+        },
+        "required": [
+          "recorded",
+          "run"
+        ],
+        "type": "object"
+      },
+      "RunCheck": {
+        "description": "A check's id, status, findings and evidence references. Findings and evidence are outside\nthe fingerprint and the diff.",
+        "properties": {
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/BlockId"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "$ref": "#/components/schemas/CheckId"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "type": "object"
+      },
+      "RunSection": {
+        "description": "How one protocol's section ended.",
+        "properties": {
+          "outcome": {
+            "$ref": "#/components/schemas/SectionKind"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "protocol",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "RunSectionEvent": {
+        "description": "One finished section of a running check, as the `section` event of the stream.",
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/RunCheck"
+            },
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SectionKind"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "protocol",
+          "outcome",
+          "checks",
+          "blocks"
+        ],
+        "type": "object"
+      },
+      "SctEntry": {
+        "properties": {
+          "log_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "log_id",
+          "timestamp"
+        ],
+        "type": "object"
+      },
+      "SectionKind": {
+        "enum": [
+          "measured",
+          "not_applicable",
+          "incomplete",
+          "timed_out"
+        ],
+        "type": "string"
+      },
+      "SectionWeights": {
+        "description": "One section's weight, its weighted checks and the checks whose failure forces `F`.",
+        "properties": {
+          "checks": {
+            "additionalProperties": {
+              "format": "int32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "propertyNames": {
+              "examples": [
+                "tls.chain_trusted"
+              ],
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "hard_fail": {
+            "items": {
+              "$ref": "#/components/schemas/CheckId"
+            },
+            "type": "array"
+          },
+          "weight": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "weight",
+          "checks",
+          "hard_fail"
+        ],
+        "type": "object"
+      },
+      "SecurityReport": {
+        "properties": {
+          "coep": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "coop": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "corp": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "csp": {
+            "$ref": "#/components/schemas/CspReport"
+          },
+          "hsts": {
+            "$ref": "#/components/schemas/HstsCheck"
+          },
+          "permissions_policy": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "referrer_policy": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "x_content_type_options": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "x_frame_options": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          }
+        },
+        "required": [
+          "hsts",
+          "csp",
+          "x_frame_options",
+          "permissions_policy",
+          "x_content_type_options",
+          "referrer_policy",
+          "coop",
+          "coep",
+          "corp"
+        ],
+        "type": "object"
+      },
+      "ServerOutcome": {
+        "description": "Outcome classification for a single server response.",
+        "oneOf": [
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "referral"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "answer"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "error"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "message",
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ServerResult": {
+        "description": "One server's outcome within a hop.",
+        "properties": {
+          "answer_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            },
+            "type": "array"
+          },
+          "authority_zone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latency_ms": {
+            "format": "double",
+            "type": "number"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ServerOutcome"
+          },
+          "referral_ns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "server_ip": {
+            "type": "string"
+          },
+          "server_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "server_ip",
+          "latency_ms",
+          "outcome"
+        ],
+        "type": "object"
+      },
+      "Severity": {
+        "description": "How serious a failed check is.",
+        "enum": [
+          "critical",
+          "high",
+          "medium",
+          "low"
+        ],
+        "type": "string"
+      },
+      "Shape": {
+        "description": "The schema of a [`Shape`], the adjacently tagged union as it serialises.",
+        "oneOf": [
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/Record"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "records"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "properties": {
+                  "columns": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/Value"
+                      },
+                      "type": "array"
+                    },
+                    "type": "array"
+                  }
+                },
+                "required": [
+                  "key",
+                  "columns",
+                  "rows"
+                ],
+                "type": "object"
+              },
+              "kind": {
+                "enum": [
+                  "table"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "items": {
+                    "$ref": "#/components/schemas/FieldPair"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "chain"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/Node"
+              },
+              "kind": {
+                "enum": [
+                  "tree"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "items": {
+                  "$ref": "#/components/schemas/FieldPair"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "enum": [
+                  "fields"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "data": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "text"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "data",
+              "kind"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "SseEvent": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CheckResult"
+              },
+              {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "category"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "properties": {
+              "duration_ms": {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "grade": {
+                "$ref": "#/components/schemas/EmailGrade"
+              },
+              "type": {
+                "enum": [
+                  "summary"
+                ],
+                "type": "string"
+              },
+              "verdicts": {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Verdict"
+                },
+                "propertyNames": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "grade",
+              "verdicts",
+              "duration_ms",
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "The evidence blocks of the run, sent once right before `Summary`.",
+            "properties": {
+              "blocks": {
+                "items": {
+                  "$ref": "#/components/schemas/Block"
+                },
+                "type": "array"
+              },
+              "type": {
+                "enum": [
+                  "evidence"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "blocks",
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Status": {
+        "description": "The outcome of one check.",
+        "enum": [
+          "pass",
+          "warn",
+          "fail",
+          "not_applicable",
+          "not_tested",
+          "unmeasured"
+        ],
+        "type": "string"
+      },
+      "SubCheck": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "name",
+          "verdict",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "Summary": {
+        "properties": {
+          "checks": {
+            "$ref": "#/components/schemas/SummaryChecks"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "SummaryChecks": {
+        "properties": {
+          "caa_compliant": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "chain_trusted": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "consistency": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "ct_logged": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "dane_valid": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "hostname_match": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "not_expired": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "ocsp_stapled": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "chain_trusted",
+          "not_expired",
+          "hostname_match",
+          "caa_compliant",
+          "dane_valid",
+          "ct_logged",
+          "ocsp_stapled",
+          "consistency"
+        ],
+        "type": "object"
+      },
+      "Tcp": {
+        "properties": {
+          "port": {
+            "example": 54321,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "port"
+        ],
+        "type": "object"
+      },
+      "TcpDiff": {
+        "properties": {
+          "a": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Tcp"
+              }
+            ]
+          },
+          "b": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Tcp"
+              }
+            ]
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "equal"
+        ],
+        "type": "object"
+      },
+      "Threshold": {
+        "description": "One grade threshold as served: the lowest score that earns `grade`.",
+        "properties": {
+          "grade": {
+            "$ref": "#/components/schemas/Grade"
+          },
+          "min": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "grade",
+          "min"
+        ],
+        "type": "object"
+      },
+      "TlsCheckStatus": {
+        "enum": [
+          "pass",
+          "warn",
+          "fail",
+          "skip"
+        ],
+        "type": "string"
+      },
+      "TlsCloudInfo": {
+        "description": "Cloud provider metadata from the enrichment API.",
+        "properties": {
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "TlsInspectRequest": {
+        "additionalProperties": false,
+        "description": "One host and port to inspect.",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "default": 443,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      },
+      "TlsInspectResponse": {
+        "properties": {
+          "dns": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsContext"
+              }
+            ]
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "input_mode": {
+            "type": "string"
+          },
+          "ports": {
+            "items": {
+              "$ref": "#/components/schemas/PortResult"
+            },
+            "type": "array"
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/QualityResult"
+              }
+            ]
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "skipped_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Summary"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "hostname",
+          "input_mode",
+          "summary",
+          "ports",
+          "duration_ms"
+        ],
+        "type": "object"
+      },
+      "TlsParams": {
+        "properties": {
+          "alpn": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cipher_suite": {
+            "type": "string"
+          },
+          "ech_advertised": {
+            "description": "Whether ECH (Encrypted Client Hello) is advertised via the HTTPS DNS record.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "handshake_ms": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "key_exchange_group": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ocsp": {
+            "$ref": "#/components/schemas/OcspInfo"
+          },
+          "ocsp_live": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OcspRevocationResult",
+                "description": "Live OCSP revocation check result (queried after handshake if AIA OCSP URL is present)."
+              }
+            ]
+          },
+          "sni": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "starttls": {
+            "description": "STARTTLS protocol used to upgrade the connection (e.g. \"smtp\"), if applicable.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "cipher_suite",
+          "ocsp",
+          "handshake_ms"
+        ],
+        "type": "object"
+      },
+      "TlsaInfo": {
+        "properties": {
+          "dane_valid": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "dnssec_signed": {
+            "type": "boolean"
+          },
+          "records": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "records",
+          "dnssec_signed"
+        ],
+        "type": "object"
+      },
+      "TraceHop": {
+        "description": "A single delegation hop in the trace.",
+        "properties": {
+          "is_final": {
+            "type": "boolean"
+          },
+          "level": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "referral_groups": {
+            "items": {
+              "$ref": "#/components/schemas/ReferralGroup"
+            },
+            "type": "array"
+          },
+          "server_results": {
+            "items": {
+              "$ref": "#/components/schemas/ServerResult"
+            },
+            "type": "array"
+          },
+          "servers_queried": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "zone",
+          "servers_queried",
+          "server_results",
+          "referral_groups",
+          "is_final"
+        ],
+        "type": "object"
+      },
+      "TraceRequest": {
+        "properties": {
+          "domain": {
+            "description": "Domain name to trace (e.g. `\"example.com\"`).",
+            "type": "string"
+          },
+          "record_type": {
+            "description": "DNS record type to trace (default: `\"A\"`).",
+            "type": "string"
+          },
+          "timeout_secs": {
+            "description": "Query timeout per hop in seconds. Clamped to config max.",
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "UserAgent": {
+        "properties": {
+          "browser": {
+            "$ref": "#/components/schemas/Browser"
+          },
+          "device": {
+            "$ref": "#/components/schemas/Device"
+          },
+          "os": {
+            "$ref": "#/components/schemas/OS"
+          },
+          "raw": {
+            "example": "curl/8.7.1",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "device",
+          "os",
+          "browser"
+        ],
+        "type": "object"
+      },
+      "UserAgentDiff": {
+        "properties": {
+          "a": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserAgent"
+              }
+            ]
+          },
+          "b": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UserAgent"
+              }
+            ]
+          },
+          "equal": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "equal"
+        ],
+        "type": "object"
+      },
+      "ValidationResult": {
+        "properties": {
+          "any_expired": {
+            "type": "boolean"
+          },
+          "any_not_yet_valid": {
+            "type": "boolean"
+          },
+          "chain_order_correct": {
+            "type": "boolean"
+          },
+          "chain_trust_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "chain_trusted": {
+            "type": "boolean"
+          },
+          "earliest_expiry": {
+            "type": "string"
+          },
+          "earliest_expiry_days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ends_at_anchor": {
+            "type": "boolean"
+          },
+          "leaf_covers_hostname": {
+            "type": "boolean"
+          },
+          "terminates_at_self_signed": {
+            "type": "boolean"
+          },
+          "weakest_signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chain_trusted",
+          "terminates_at_self_signed",
+          "ends_at_anchor",
+          "chain_order_correct",
+          "leaf_covers_hostname",
+          "any_expired",
+          "any_not_yet_valid",
+          "weakest_signature",
+          "earliest_expiry",
+          "earliest_expiry_days"
+        ],
+        "type": "object"
+      },
+      "Value": {
+        "description": "The schema of a [`Value`]: the tagged union as it serialises. An address is its text form.",
+        "oneOf": [
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "text"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "int"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "format": "int64",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "bool"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "time"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "duration"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "t": {
+                "enum": [
+                  "addr"
+                ],
+                "type": "string"
+              },
+              "v": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "v",
+              "t"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "Verdict": {
+        "enum": [
+          "skip",
+          "info",
+          "pass",
+          "warn",
+          "fail"
+        ],
+        "type": "string"
+      },
+      "VpnInfo": {
+        "properties": {
+          "provider": {
+            "description": "Provider name when identified via ASN heuristic; None when only CIDR matched.",
+            "example": null,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "license": {
+      "identifier": "MIT",
+      "name": "MIT"
+    },
+    "title": "netray API",
+    "version": "0.26.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/asn/{n}": {
+      "get": {
+        "operationId": "asn",
+        "parameters": [
+          {
+            "description": "The AS number, digits only",
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsnLookupResponse"
+                }
+              }
+            },
+            "description": "The AS's classification"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a number"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "What is known about an autonomous system.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/catalogue": {
+      "get": {
+        "operationId": "catalogue_handler",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueResponse"
+                }
+              }
+            },
+            "description": "The catalogue"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "summary": "Every check of the catalogue, in file order.",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/v1/dns/authcompare": {
+      "post": {
+        "operationId": "dns_authcompare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsAuthCompareResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsAuthCompareEvent"
+                }
+              }
+            },
+            "description": "The recursive and the authoritative lookups of the domain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "The recursive answer against the authoritative one, queried from the domain's name servers.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/compare": {
+      "post": {
+        "operationId": "dns_compare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCompareResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCompareEvent"
+                }
+              }
+            },
+            "description": "The lookups of the domain per transport"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "The same query over UDP, TCP, DNS-over-TLS and DNS-over-HTTPS, to compare the transports.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/dnssec": {
+      "post": {
+        "operationId": "dns_dnssec",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DnssecRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsDnssecResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsDnssecEvent"
+                }
+              }
+            },
+            "description": "The levels of the chain of trust"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body or invalid domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "The DNSSEC chain of trust of a name, one level per zone from the root.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/query": {
+      "post": {
+        "operationId": "dns_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsQueryResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsQueryEvent"
+                }
+              }
+            },
+            "description": "The lookups of the domain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "Resolves a domain over the configured resolvers: one batch per provider and record type.\nWith `Accept: text/event-stream` the same events arrive as they complete.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/trace": {
+      "post": {
+        "operationId": "dns_trace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TraceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsTraceResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsTraceEvent"
+                }
+              }
+            },
+            "description": "The hops of the delegation"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, invalid domain or record type"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "The delegation path of a name from the root servers, one hop per server asked.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/domains/{domain}": {
+      "get": {
+        "operationId": "domain_entry",
+        "parameters": [
+          {
+            "description": "The domain, any form the suite accepts",
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
+                }
+              }
+            },
+            "description": "The latest entry"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a domain"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry for this domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "A domain's latest entry.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/domains/{domain}/diff": {
+      "get": {
+        "operationId": "domain_changes",
+        "parameters": [
+          {
+            "description": "The domain, any form the suite accepts",
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiffView"
+                }
+              }
+            },
+            "description": "The changes of the latest entry"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a domain"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry for this domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "What changed in a domain's latest entry against its predecessor.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/domains/{domain}/history": {
+      "get": {
+        "operationId": "domain_history",
+        "parameters": [
+          {
+            "description": "The domain, any form the suite accepts",
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            },
+            "description": "The entries, newest first"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a domain"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry for this domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "A domain's entries, newest first.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/domains/{domain}/runs": {
+      "post": {
+        "operationId": "start_run",
+        "parameters": [
+          {
+            "description": "The domain to check",
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAnswer"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSectionEvent"
+                }
+              }
+            },
+            "description": "The run and how the history recorded it; with `Accept: text/event-stream`, `section` events as they arrive, then one `done` event carrying the same answer"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a valid domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Throttled, budget spent, rate limited or no free run slot"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A prefetch does not start a run"
+          }
+        },
+        "summary": "Start a fresh run of a domain and answer with it; takes no body.",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/email/inspect": {
+      "post": {
+        "operationId": "email_inspect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailInspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailInspectResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/SseEvent"
+                }
+              }
+            },
+            "description": "The inspection of the domain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, unknown field, invalid domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The inspection ended without a summary"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The email module is off, or every inspection slot is taken"
+          }
+        },
+        "summary": "The mail posture of a domain: twelve categories, the evidence and a summary. With\n`Accept: text/event-stream` the same events arrive as they complete.",
+        "tags": [
+          "email"
+        ]
+      }
+    },
+    "/api/v1/entries/{id}": {
+      "get": {
+        "operationId": "entry_read",
+        "parameters": [
+          {
+            "description": "The entry id, eight letters or digits",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntryView"
+                }
+              }
+            },
+            "description": "The entry"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not an entry id"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry with this id"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "One entry by id.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/entries/{id}/diff": {
+      "get": {
+        "operationId": "entry_changes",
+        "parameters": [
+          {
+            "description": "The entry id, eight letters or digits",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiffView"
+                }
+              }
+            },
+            "description": "The changes of the entry"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not an entry id"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No entry with this id"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history could not be read"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The history is switched off"
+          }
+        },
+        "summary": "What changed in one entry against its predecessor.",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/v1/http/inspect": {
+      "post": {
+        "operationId": "http_inspect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HttpInspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpInspectResponse"
+                }
+              }
+            },
+            "description": "The inspection of the URL"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, unknown field, invalid URL"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The target is not a public address (`TARGET_BLOCKED`)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The HTTP module is off, the host did not resolve, or the request timed out"
+          }
+        },
+        "summary": "The security headers, redirects and content policy of a URL.",
+        "tags": [
+          "http"
+        ]
+      }
+    },
+    "/api/v1/ip": {
+      "get": {
+        "operationId": "caller",
+        "parameters": [
+          {
+            "description": "Answer this one field as text/plain, with a trailing newline",
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CallerField"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ifconfig"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The caller's lookup; with `?field`, that one value as text/plain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unknown field"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "The caller's address, or one field of it.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/ip/batch": {
+      "post": {
+        "operationId": "batch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchResponse"
+                }
+              }
+            },
+            "description": "One item per address, in order"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, no addresses, or `BATCH_TOO_MANY`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "Up to `batch_max_size` addresses in one request.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/ip/diff": {
+      "post": {
+        "operationId": "compare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiffRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiffResponse"
+                }
+              }
+            },
+            "description": "Both lookups, part by part, with whether the parts are equal"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, malformed or non-global address"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "Two addresses side by side.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/ip/range/{cidr}": {
+      "get": {
+        "operationId": "range",
+        "parameters": [
+          {
+            "description": "A CIDR prefix; the slash may be sent as `%2F`",
+            "in": "path",
+            "name": "cidr",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RangeResponse"
+                }
+              }
+            },
+            "description": "The prefix's classification"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed or private, loopback or link-local prefix"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "What is known about a CIDR prefix.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/ip/{address}": {
+      "get": {
+        "operationId": "address",
+        "parameters": [
+          {
+            "description": "An IPv4 or IPv6 address",
+            "in": "path",
+            "name": "address",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Answer this one field as text/plain, with a trailing newline",
+            "in": "query",
+            "name": "field",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/AddressField"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ifconfig"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The address's lookup; with `?field`, that one value as text/plain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed or non-global address, caller-only or unknown field"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The IP module is off"
+          }
+        },
+        "summary": "One global address, or one field of it.",
+        "tags": [
+          "ip"
+        ]
+      }
+    },
+    "/api/v1/meta": {
+      "get": {
+        "operationId": "meta_handler",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Meta"
+                }
+              }
+            },
+            "description": "Deployment metadata"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "summary": "Version, profiles and the limits this deployment runs with.",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/v1/profiles/{n}": {
+      "get": {
+        "operationId": "profile_handler",
+        "parameters": [
+          {
+            "description": "Profile version, an integer",
+            "in": "path",
+            "name": "n",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "The profile"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not an integer"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unknown profile version"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "summary": "One scoring profile.",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/v1/tls/inspect": {
+      "post": {
+        "operationId": "tls_inspect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TlsInspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TlsInspectResponse"
+                }
+              }
+            },
+            "description": "The inspection of the host on the port"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, unknown field, invalid host or port"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The target is not a public address (`TARGET_BLOCKED`)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The TLS module is off, the host did not resolve, or the handshake timed out"
+          }
+        },
+        "summary": "The certificate chain, validation and quality of a host on one port.",
+        "tags": [
+          "tls"
+        ]
+      }
+    }
+  }
+}

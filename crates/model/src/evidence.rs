@@ -113,6 +113,17 @@ impl fmt::Display for BlockId {
     }
 }
 
+impl utoipa::PartialSchema for BlockId {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        utoipa::openapi::ObjectBuilder::new()
+            .schema_type(utoipa::openapi::schema::Type::String)
+            .examples(["tls.chain@192.0.2.1:443"])
+            .into()
+    }
+}
+
+impl utoipa::ToSchema for BlockId {}
+
 impl Serialize for BlockId {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.collect_str(self)
@@ -249,25 +260,32 @@ impl fmt::Display for ValueType {
 
 pub type Key = String;
 pub type Fields = Vec<(Key, Value)>;
+
 /// A table column, named by its registered key.
 pub type Column = Key;
 /// A table row, one value per column in column order.
 pub type Row = Vec<Value>;
 
 /// A DNS resource record.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Record {
+    #[schema(value_type = ValueSchema)]
     pub owner: Value,
     #[serde(rename = "type")]
+    #[schema(value_type = ValueSchema)]
     pub rtype: Value,
+    #[schema(value_type = ValueSchema)]
     pub ttl: Value,
+    #[schema(value_type = ValueSchema)]
     pub data: Value,
 }
 
 /// A node of a `tree` block.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Node {
+    #[schema(value_type = Vec<FieldPair>)]
     pub fields: Fields,
+    #[schema(no_recursion)]
     pub children: Vec<Node>,
 }
 
@@ -301,6 +319,101 @@ impl Shape {
     }
 }
 
+/// The schema of a [`Value`]: the tagged union as it serialises. An address is its text form.
+#[derive(utoipa::ToSchema)]
+#[serde(tag = "t", content = "v", rename_all = "snake_case")]
+#[schema(as = Value)]
+#[allow(dead_code)]
+enum ValueSchema {
+    Text(String),
+    Int(i64),
+    Bool(bool),
+    Time(String),
+    Duration(u64),
+    Addr(String),
+}
+
+impl utoipa::PartialSchema for Value {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        <ValueSchema as utoipa::PartialSchema>::schema()
+    }
+}
+
+impl utoipa::ToSchema for Value {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "Value".into()
+    }
+
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        <ValueSchema as utoipa::ToSchema>::schemas(schemas);
+    }
+}
+
+/// One `[key, value]` entry of [`Fields`], as the tuple serialises.
+struct FieldPair;
+
+impl utoipa::PartialSchema for FieldPair {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        use utoipa::openapi::RefOr;
+        use utoipa::openapi::schema::{ArrayBuilder, ObjectBuilder, Schema, Type};
+        let key = Schema::Object(ObjectBuilder::new().schema_type(Type::String).build());
+        let RefOr::T(value) = <Value as utoipa::PartialSchema>::schema() else {
+            unreachable!("a derived schema is inline")
+        };
+        ArrayBuilder::new()
+            .items(utoipa::openapi::schema::ArrayItems::False)
+            .prefix_items([key, value])
+            .min_items(Some(2))
+            .max_items(Some(2))
+            .into()
+    }
+}
+
+impl utoipa::ToSchema for FieldPair {}
+
+/// The schema of a [`Shape`], the adjacently tagged union as it serialises.
+#[derive(utoipa::ToSchema)]
+#[serde(tag = "kind", content = "data", rename_all = "snake_case")]
+#[allow(dead_code)]
+enum ShapeSchema {
+    Records(Vec<Record>),
+    Table {
+        key: String,
+        columns: Vec<String>,
+        rows: Vec<Vec<ValueSchema>>,
+    },
+    Chain(Vec<Vec<FieldPair>>),
+    Tree(Node),
+    Fields(Vec<FieldPair>),
+    Text(String),
+}
+
+impl utoipa::PartialSchema for Shape {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        <ShapeSchema as utoipa::PartialSchema>::schema()
+    }
+}
+
+impl utoipa::ToSchema for Shape {
+    fn name() -> std::borrow::Cow<'static, str> {
+        "Shape".into()
+    }
+
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        <ShapeSchema as utoipa::ToSchema>::schemas(schemas);
+    }
+}
+
 /// The kind of a [`Shape`], as a register declares it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -314,7 +427,7 @@ pub enum ShapeKind {
 }
 
 /// One block of evidence.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Block {
     pub id: BlockId,
     pub title: String,

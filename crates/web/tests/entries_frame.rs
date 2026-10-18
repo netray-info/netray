@@ -51,6 +51,8 @@ fn entry() -> Entry {
             checks: vec![RunCheck {
                 id: CheckId::parse("dns.dnssec_valid").unwrap(),
                 status: Status::Fail,
+                findings: vec![],
+                evidence: vec![],
             }],
             blocks: vec![],
         },

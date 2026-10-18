@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use hickory_proto::op::{Message, MessageType, OpCode};
-use hickory_proto::rr::rdata::{NS, SOA};
+use hickory_proto::rr::rdata::{A, CAA, MX, NS, SOA, TXT};
 use hickory_proto::rr::{Name, RData, Record, RecordType};
 use mhost::resolver::Lookups;
 use netray_common::fetch::Resolve;
@@ -17,12 +17,14 @@ use netray_engine::{
 use netray_model::{CheckId, Protocol};
 use serde::de::DeserializeOwned;
 
-use crate::api::CheckEvent;
 use crate::api::check::{
     LintEvent, check_ns_delegation_consistency, check_ns_lame_delegation, unanswered_events,
     unique_lines,
 };
+use crate::api::{AppState, CheckEvent, QUERY_SEMAPHORE_PERMITS};
+use crate::config::{Config, ModuleConfig};
 use crate::dns_raw::{RawError, RawOutbound, RawResponse, RawSend, SendFuture};
+use crate::jobs::{DnsBackend, DnsJobs, ResolverLookup};
 use crate::module::{dns_checks, facts_from_lookups, translate};
 
 struct GoldenModule(SectionOutcome);
@@ -270,4 +272,201 @@ impl RawSend for StubSend {
         };
         Box::pin(async move { result })
     }
+}
+
+const ZONE: &str = "example.com";
+const ZONE_TTL: u32 = 300;
+
+fn in_zone(name: &str) -> bool {
+    name.trim_end_matches('.').eq_ignore_ascii_case(ZONE)
+}
+
+struct ZoneLookup;
+
+impl ResolverLookup for ZoneLookup {
+    fn lookup(
+        &self,
+        resolver: &mhost::resolver::Resolver,
+        query: mhost::resolver::MultiQuery,
+    ) -> futures::future::BoxFuture<'static, mhost::resolver::ResolverResult<Lookups>> {
+        let name_server = resolver.name();
+        let lookups: Vec<serde_json::Value> = query
+            .into_uni_queries()
+            .into_iter()
+            .map(|uni| {
+                let name = uni.name().to_string();
+                let record_type = uni.record_type().to_string();
+                let data = if in_zone(&name) {
+                    zone_data(&record_type)
+                } else {
+                    Vec::new()
+                };
+                let result = if data.is_empty() {
+                    serde_json::json!({ "NxDomain": {
+                        "response_time": { "secs": 0, "nanos": 10_000_000 },
+                        "response_code": "NOERROR"
+                    }})
+                } else {
+                    let records: Vec<serde_json::Value> = data
+                        .into_iter()
+                        .map(|data| {
+                            serde_json::json!({
+                                "name": name, "type": record_type, "ttl": ZONE_TTL, "data": data
+                            })
+                        })
+                        .collect();
+                    serde_json::json!({ "Response": {
+                        "records": records,
+                        "response_time": { "secs": 0, "nanos": 10_000_000 },
+                        "valid_until": "2099-01-01T00:00:00Z"
+                    }})
+                };
+                serde_json::json!({
+                    "query": { "name": name, "record_type": record_type },
+                    "name_server": name_server,
+                    "result": result
+                })
+            })
+            .collect();
+        let decoded: Lookups = serde_json::from_value(serde_json::json!({ "lookups": lookups }))
+            .expect("zone lookups decode");
+        Box::pin(async move { Ok(decoded) })
+    }
+}
+
+fn zone_data(record_type: &str) -> Vec<serde_json::Value> {
+    match record_type {
+        "A" => vec![serde_json::json!({ "A": "192.0.2.10" })],
+        "MX" => {
+            vec![serde_json::json!({ "MX": { "preference": 10, "exchange": "mx1.example.com." } })]
+        }
+        "TXT" => vec![serde_json::json!({ "TXT": { "txt_data": [b"v=spf1 -all".to_vec()] } })],
+        "NS" => vec![
+            serde_json::json!({ "NS": "ns1.example.com." }),
+            serde_json::json!({ "NS": "ns2.example.com." }),
+        ],
+        "CAA" => vec![serde_json::json!({
+            "CAA": { "issuer_critical": false, "tag": "issue", "value": "letsencrypt.org" }
+        })],
+        _ => Vec::new(),
+    }
+}
+
+fn zone_records(name: &Name, record_type: RecordType) -> Vec<Record> {
+    if !in_zone(&name.to_ascii()) {
+        return Vec::new();
+    }
+    let host = |h: &str| Name::from_ascii(h).expect("zone host name");
+    let rdata = match record_type {
+        RecordType::A => vec![RData::A(A(Ipv4Addr::new(192, 0, 2, 10)))],
+        RecordType::MX => vec![RData::MX(MX::new(10, host("mx1.example.com.")))],
+        RecordType::TXT => vec![RData::TXT(TXT::new(vec!["v=spf1 -all".to_string()]))],
+        RecordType::NS => vec![
+            RData::NS(NS(host("ns1.example.com."))),
+            RData::NS(NS(host("ns2.example.com."))),
+        ],
+        RecordType::CAA => vec![RData::CAA(CAA::new_issue(
+            false,
+            Some(host("letsencrypt.org.")),
+            Vec::new(),
+        ))],
+        _ => Vec::new(),
+    };
+    rdata
+        .into_iter()
+        .map(|data| Record::from_rdata(name.clone(), ZONE_TTL, data))
+        .collect()
+}
+
+struct ZoneSend;
+
+impl RawSend for ZoneSend {
+    fn send(
+        &self,
+        _server: SocketAddr,
+        name: Name,
+        record_type: RecordType,
+        _dnssec_ok: bool,
+        _timeout: Duration,
+    ) -> SendFuture {
+        let mut message = Message::new(0, MessageType::Response, OpCode::Query);
+        message.metadata.authoritative = true;
+        for record in zone_records(&name, record_type) {
+            message.add_answer(record);
+        }
+        let response = RawResponse {
+            message,
+            latency: Duration::from_millis(1),
+        };
+        Box::pin(async move { Ok(response) })
+    }
+}
+
+/// A backend serving a fixed `example.com.` zone with no network: A 192.0.2.10, MX, TXT, NS
+/// (`ns1`, `ns2`) and CAA; every other name and type is NODATA. The raw outbound answers every
+/// server authoritatively from the same zone, unsigned.
+pub fn stub_backend() -> DnsBackend {
+    DnsBackend {
+        lookup: Arc::new(ZoneLookup),
+        raw: RawOutbound {
+            allow: |ip| match ip {
+                IpAddr::V4(v4) => !v4.is_private() && !v4.is_loopback(),
+                IpAddr::V6(v6) => !v6.is_loopback(),
+            },
+            resolver: Arc::new(StubResolve(HashMap::from([
+                (
+                    "ns1.example.com".to_string(),
+                    IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1)),
+                ),
+                (
+                    "ns2.example.com".to_string(),
+                    IpAddr::V4(Ipv4Addr::new(192, 0, 2, 2)),
+                ),
+            ]))),
+            sender: Arc::new(ZoneSend),
+        },
+    }
+}
+
+/// An `AppState` over the default configuration whose backend is [`stub_backend`].
+pub fn stub_state() -> AppState {
+    let config = crate::config::Config::load(None).expect("default config must be valid");
+    AppState {
+        circuit_breakers: Arc::new(crate::circuit_breaker::CircuitBreakerRegistry::new(
+            &config.circuit_breaker,
+        )),
+        ip_extractor: Arc::new(crate::security::IpExtractor::new(
+            &config.server.trusted_proxies,
+        )),
+        result_cache: Arc::new(crate::result_cache::ResultCache::new()),
+        hot_state: crate::reload::HotState::new(&config),
+        ip_enrichment: None,
+        query_semaphore: Arc::new(tokio::sync::Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+        config: Arc::new(config),
+        backend: stub_backend(),
+    }
+}
+
+/// The jobs over the default configuration and [`stub_backend`]: fresh circuit breakers, the
+/// query semaphore, no enrichment, no `prism_*` metrics.
+pub fn stub_jobs() -> DnsJobs {
+    let config: ModuleConfig = serde_json::from_str("{}").expect("default module config");
+    stub_jobs_with(
+        config
+            .into_config()
+            .expect("default module config is valid"),
+    )
+}
+
+/// [`stub_jobs`] over `config`.
+pub fn stub_jobs_with(config: Config) -> DnsJobs {
+    DnsJobs::new(
+        Arc::new(config.clone()),
+        Arc::new(crate::circuit_breaker::CircuitBreakerRegistry::new(
+            &config.circuit_breaker,
+        )),
+        Arc::new(tokio::sync::Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+        None,
+        stub_backend(),
+    )
 }
