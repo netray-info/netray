@@ -109,7 +109,12 @@ async fn get(app: &Router, uri: &str) -> (StatusCode, String, String, Option<Str
         .get("location")
         .map(|v| v.to_str().unwrap().to_string());
     let bytes = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    (status, ct, String::from_utf8_lossy(&bytes).into_owned(), loc)
+    (
+        status,
+        ct,
+        String::from_utf8_lossy(&bytes).into_owned(),
+        loc,
+    )
 }
 
 const SPA_SHELL: &str = "<div id=\"root\"";
@@ -147,8 +152,7 @@ fn app_without_history() -> Router {
 }
 
 fn is_result_router_page(body: &str) -> bool {
-    body.contains("id=\"result\"")
-        || (body.contains(IDLE_FORM) && body.contains("/inspect/dns"))
+    body.contains("id=\"result\"") || (body.contains(IDLE_FORM) && body.contains("/inspect/dns"))
 }
 
 #[tokio::test]
@@ -165,7 +169,10 @@ async fn lens_serves_idle_and_result_pages_with_history_enabled() {
     let (status, _, body, _) = get(&app, "/shop.example.com").await;
     assert_eq!(status, StatusCode::OK);
     assert!(!body.contains(SPA_SHELL), "result is still the SPA shell");
-    assert!(body.contains("id=\"result\""), "result page missing: {body}");
+    assert!(
+        body.contains("id=\"result\""),
+        "result page missing: {body}"
+    );
     assert!(body.contains(&id), "entry id {id} missing: {body}");
 
     let (status, _, _, loc) = get(&app, "/?d=Example.com").await;
@@ -187,12 +194,18 @@ async fn result_router_does_not_answer_robots_share_or_api_paths() {
 
     for uri in ["/r/abcdefgh", "/api/check/example.com"] {
         let (_, _, body, _) = get(&app, uri).await;
-        assert!(!is_result_router_page(&body), "{uri} answered by result router: {body}");
+        assert!(
+            !is_result_router_page(&body),
+            "{uri} answered by result router: {body}"
+        );
     }
 
     // Guard against the vacuous pass: the result router must exist at all.
     let (_, _, body, _) = get(&app, "/").await;
-    assert!(is_result_router_page(&body), "result router not mounted at /");
+    assert!(
+        is_result_router_page(&body),
+        "result router not mounted at /"
+    );
 }
 
 #[tokio::test]
@@ -208,11 +221,20 @@ async fn result_router_does_not_answer_static_and_well_known_paths() {
     ] {
         let (status, ct, body, _) = get(&app, uri).await;
         let (p_status, p_ct, _, _) = get(&plain, uri).await;
-        assert_eq!(status, p_status, "{uri}: status differs from history-less app");
-        assert_eq!(ct, p_ct, "{uri}: content-type differs from history-less app");
+        assert_eq!(
+            status, p_status,
+            "{uri}: status differs from history-less app"
+        );
+        assert_eq!(
+            ct, p_ct,
+            "{uri}: content-type differs from history-less app"
+        );
         assert!(!body.contains("id=\"result\""), "{uri}: result page served");
     }
 
     let (_, _, body, _) = get(&app, "/").await;
-    assert!(is_result_router_page(&body), "result router not mounted at /");
+    assert!(
+        is_result_router_page(&body),
+        "result router not mounted at /"
+    );
 }
