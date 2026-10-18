@@ -796,6 +796,16 @@
         ],
         "type": "object"
       },
+      "RecordedKind": {
+        "description": "What the history did with a finished run.",
+        "enum": [
+          "first",
+          "identical",
+          "changed",
+          "not_stored"
+        ],
+        "type": "string"
+      },
       "Run": {
         "description": "One scan as stored for history.",
         "properties": {
@@ -849,6 +859,38 @@
         ],
         "type": "object"
       },
+      "RunAnswer": {
+        "description": "The answer of a fresh run: the run, how the history recorded it, and the diff when it has one.",
+        "properties": {
+          "diff": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Diff"
+              }
+            ]
+          },
+          "entry_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recorded": {
+            "$ref": "#/components/schemas/RecordedKind"
+          },
+          "run": {
+            "$ref": "#/components/schemas/Run"
+          }
+        },
+        "required": [
+          "recorded",
+          "run"
+        ],
+        "type": "object"
+      },
       "RunCheck": {
         "description": "A check's id, status, findings and evidence references. Findings and evidence are outside\nthe fingerprint and the diff.",
         "properties": {
@@ -896,6 +938,42 @@
         "required": [
           "protocol",
           "outcome"
+        ],
+        "type": "object"
+      },
+      "RunSectionEvent": {
+        "description": "One finished section of a running check, as the `section` event of the stream.",
+        "properties": {
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/RunCheck"
+            },
+            "type": "array"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/SectionKind"
+          },
+          "protocol": {
+            "$ref": "#/components/schemas/Protocol"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "protocol",
+          "outcome",
+          "checks",
+          "blocks"
         ],
         "type": "object"
       },
@@ -1576,6 +1654,83 @@
         "summary": "A domain's entries, newest first.",
         "tags": [
           "history"
+        ]
+      }
+    },
+    "/api/v1/domains/{domain}/runs": {
+      "post": {
+        "operationId": "start_run",
+        "parameters": [
+          {
+            "description": "The domain to check",
+            "in": "path",
+            "name": "domain",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAnswer"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunSectionEvent"
+                }
+              }
+            },
+            "description": "The run and how the history recorded it; with `Accept: text/event-stream`, `section` events as they arrive, then one `done` event carrying the same answer"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not a valid domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Throttled, budget spent, rate limited or no free run slot"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A prefetch does not start a run"
+          }
+        },
+        "summary": "Start a fresh run of a domain and answer with it; takes no body.",
+        "tags": [
+          "runs"
         ]
       }
     },

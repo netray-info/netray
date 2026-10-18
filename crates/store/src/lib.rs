@@ -172,7 +172,7 @@ impl HistoryStore {
         F: FnOnce(&Run, &Run) -> Diff,
     {
         let _guard = self.write.lock().await;
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
         let latest = latest_in(&mut tx, domain).await?;
 
         if !run.complete {
@@ -250,7 +250,7 @@ impl HistoryStore {
     pub async fn sweep(&self, now: i64) -> Result<u64, StoreError> {
         let _guard = self.write.lock().await;
         let cutoff = now - RETENTION_SECS;
-        let mut tx = self.pool.begin().await?;
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
 
         let domains: Vec<String> = sqlx::query_scalar("SELECT DISTINCT domain FROM entries")
             .fetch_all(&mut *tx)

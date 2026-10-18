@@ -5,17 +5,24 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Method, Request};
 use http_body_util::BodyExt;
+use netray_engine::{SectionEvent, SectionOutcome};
+use netray_ip::testing::StubIpLookup;
+use netray_model::CheckResult;
 use netray_model::diff::diff;
 use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION, Shape};
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{CheckId, Grade, Protocol, Status};
 use netray_store::{HistoryStore, Recorded};
 use netray_web::api::{
-    ApiConfig, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger, router,
+    ApiConfig, ApiParts, ApiState, DomainRefusal, DomainRuns, RefusalReason, RunEvent, RunRefusal,
+    RunStart, RunTrigger, router,
 };
 use serde_json::Value;
 use tower::ServiceExt;
 
+/// Scripted by domain: `ok.example.com` is admitted with a fixed event list ending in
+/// `Recorded(Some(First))`, `throttled.example.com` is refused by the throttle,
+/// `pre.example.com` is not started (prefetch); any other domain is not started.
 struct StubRuns;
 
 impl DomainRuns for StubRuns {
@@ -30,12 +37,47 @@ impl DomainRuns for StubRuns {
     }
     fn start<'a>(
         &'a self,
-        _domain: &'a str,
+        domain: &'a str,
         _client: std::net::IpAddr,
         _trigger: RunTrigger,
         _prefetch: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = RunStart> + Send + 'a>> {
-        Box::pin(async { RunStart::NotStarted })
+        Box::pin(async move {
+            match domain {
+                "ok.example.com" => {
+                    let events = vec![
+                        RunEvent::Section(SectionEvent {
+                            protocol: Protocol::Dns,
+                            outcome: SectionOutcome::Measured {
+                                checks: vec![CheckResult {
+                                    id: CheckId::parse("dns.dnssec_valid").unwrap(),
+                                    status: Status::Pass,
+                                    findings: vec![],
+                                    evidence: vec![BlockId::parse("dns.caa").unwrap()],
+                                }],
+                                evidence: vec![Block {
+                                    id: BlockId::parse("dns.caa").unwrap(),
+                                    title: "CAA".into(),
+                                    shape: Shape::Text("0 issue \"example.org\"".into()),
+                                }],
+                            },
+                        }),
+                        RunEvent::Done(run(Status::Pass, vec![])),
+                        RunEvent::Recorded(Some(Recorded::First {
+                            id: "AbCd1234".into(),
+                        })),
+                    ];
+                    RunStart::Admitted(Box::pin(futures::stream::iter(events)))
+                }
+                "throttled.example.com" => RunStart::Refused(RunRefusal {
+                    reason: RefusalReason::Throttle,
+                    retry_after_s: 42,
+                    last_run_ago_s: Some(5),
+                    last_incomplete: false,
+                }),
+                _ => RunStart::NotStarted,
+            }
+        })
     }
 }
 
@@ -56,6 +98,12 @@ struct Case {
     uri: &'static str,
     status: u16,
     warmup: usize,
+    /// The `Accept` header sent, if any.
+    accept: Option<&'static str>,
+    /// A JSON request body, if any.
+    body: Option<&'static str>,
+    /// No IP module in the parts: every IP endpoint answers 503.
+    ip_off: bool,
 }
 
 const fn case(
@@ -72,6 +120,9 @@ const fn case(
         uri,
         status,
         warmup,
+        accept: None,
+        body: None,
+        ip_off: false,
     }
 }
 
@@ -83,8 +134,65 @@ const fn seeded(doc_path: &'static str, uri: &'static str, status: u16) -> Case 
         uri,
         status,
         warmup: 0,
+        accept: None,
+        body: None,
+        ip_off: false,
     }
 }
+
+const RUNS: &str = "/api/v1/domains/{domain}/runs";
+
+const fn post_run(uri: &'static str, status: u16, accept: Option<&'static str>) -> Case {
+    Case {
+        store: Store::Absent,
+        doc_path: RUNS,
+        method: "post",
+        uri,
+        status,
+        warmup: 0,
+        accept,
+        body: None,
+        ip_off: false,
+    }
+}
+
+/// An IP endpoint case against the stub lookup, with an optional JSON body.
+const fn ip(
+    doc_path: &'static str,
+    method: &'static str,
+    uri: &'static str,
+    status: u16,
+    body: Option<&'static str>,
+) -> Case {
+    Case {
+        store: Store::Absent,
+        doc_path,
+        method,
+        uri,
+        status,
+        warmup: 0,
+        accept: None,
+        body,
+        ip_off: false,
+    }
+}
+
+/// An IP endpoint case with no IP module configured.
+const fn ip_off(
+    doc_path: &'static str,
+    method: &'static str,
+    uri: &'static str,
+    body: Option<&'static str>,
+) -> Case {
+    Case {
+        ip_off: true,
+        ..ip(doc_path, method, uri, 503, body)
+    }
+}
+
+const BATCH: &str = r#"{"addresses":["192.0.2.1","192.0.2.2"]}"#;
+const DIFF: &str = r#"{"a":"192.0.2.1","b":"192.0.2.2"}"#;
+const DIFF_BAD: &str = r#"{"a":"192.0.2.1","b":"nope"}"#;
 
 fn cases() -> Vec<Case> {
     vec![
@@ -136,6 +244,39 @@ fn cases() -> Vec<Case> {
         case("/api/v1/entries/{id}", "get", "/entries/AAAAAAAA", 503, 0),
         seeded("/api/v1/entries/{id}/diff", "/entries/{e2}/diff", 200),
         seeded("/api/v1/entries/{id}/diff", "/entries/AAAAAAAA/diff", 410),
+        post_run("/domains/ok.example.com/runs", 200, None),
+        post_run(
+            "/domains/ok.example.com/runs",
+            200,
+            Some("text/event-stream"),
+        ),
+        post_run("/domains/bad_domain/runs", 400, None),
+        post_run("/domains/throttled.example.com/runs", 429, None),
+        post_run("/domains/pre.example.com/runs", 503, None),
+        ip("/api/v1/ip", "get", "/ip", 200, None),
+        ip_off("/api/v1/ip", "get", "/ip", None),
+        ip("/api/v1/ip/{address}", "get", "/ip/192.0.2.1", 200, None),
+        ip("/api/v1/ip/{address}", "get", "/ip/not-an-ip", 400, None),
+        ip("/api/v1/ip/batch", "post", "/ip/batch", 200, Some(BATCH)),
+        ip_off("/api/v1/ip/batch", "post", "/ip/batch", Some(BATCH)),
+        ip(
+            "/api/v1/ip/range/{cidr}",
+            "get",
+            "/ip/range/192.0.2.0/24",
+            200,
+            None,
+        ),
+        ip(
+            "/api/v1/ip/range/{cidr}",
+            "get",
+            "/ip/range/10.0.0.0/8",
+            400,
+            None,
+        ),
+        ip("/api/v1/ip/diff", "post", "/ip/diff", 200, Some(DIFF)),
+        ip("/api/v1/ip/diff", "post", "/ip/diff", 400, Some(DIFF_BAD)),
+        ip("/api/v1/asn/{n}", "get", "/asn/64496", 200, None),
+        ip("/api/v1/asn/{n}", "get", "/asn/x", 400, None),
     ]
 }
 
@@ -216,20 +357,80 @@ fn fixture() -> Value {
     serde_json::from_str(&text).expect("committed document is JSON")
 }
 
-fn app(store: Option<Arc<HistoryStore>>) -> axum::Router {
+fn app(store: Option<Arc<HistoryStore>>, ip_off: bool) -> axum::Router {
+    let parts = ApiParts {
+        ip: (!ip_off).then(|| Arc::new(StubIpLookup::new()) as Arc<dyn netray_ip::IpLookup>),
+        ..Default::default()
+    };
     let config = ApiConfig {
         per_ip_burst: 1,
         ..Default::default()
     };
-    router(ApiState::new(config, Arc::new(StubRuns)).with_store(store))
+    router(
+        ApiState::new(config, Arc::new(StubRuns))
+            .with_store(store)
+            .with_parts(parts),
+    )
 }
 
 fn request(method: &str, uri: &str) -> Request<Body> {
-    Request::builder()
+    request_accepting(method, uri, None, None)
+}
+
+fn request_accepting(
+    method: &str,
+    uri: &str,
+    accept: Option<&str>,
+    body: Option<&str>,
+) -> Request<Body> {
+    let mut b = Request::builder()
         .method(Method::from_bytes(method.to_uppercase().as_bytes()).unwrap())
-        .uri(uri)
-        .body(Body::empty())
+        .uri(uri);
+    if let Some(a) = accept {
+        b = b.header("accept", a);
+    }
+    match body {
+        Some(json) => b
+            .header("content-type", "application/json")
+            .body(Body::from(json.to_string()))
+            .unwrap(),
+        None => b.body(Body::empty()).unwrap(),
+    }
+}
+
+/// Validates `body` against the named `components.schemas` entry of the document.
+fn validate_component(doc: &Value, name: &str, body: &Value, label: &str) {
+    let mut root = doc["components"]["schemas"][name].clone();
+    assert!(root.is_object(), "{label}: component {name} not documented");
+    root.as_object_mut()
         .unwrap()
+        .insert("components".into(), doc["components"].clone());
+    let validator = jsonschema::validator_for(&root)
+        .unwrap_or_else(|e| panic!("{label}: {name} does not compile: {e}"));
+    let errors: Vec<String> = validator.iter_errors(body).map(|e| e.to_string()).collect();
+    assert!(
+        errors.is_empty(),
+        "{label}: body violates {name}: {errors:?}\nbody: {body}"
+    );
+}
+
+/// The `(event, data)` pairs of an SSE body.
+fn sse_events(text: &str) -> Vec<(String, String)> {
+    text.split("\n\n")
+        .filter(|b| !b.trim().is_empty())
+        .map(|block| {
+            let mut event = String::new();
+            let mut data = Vec::new();
+            for line in block.lines() {
+                if let Some(v) = line.strip_prefix("event:") {
+                    event = v.trim().to_string();
+                } else if let Some(v) = line.strip_prefix("data:") {
+                    data.push(v.strip_prefix(' ').unwrap_or(v).to_string());
+                }
+            }
+            (event, data.join("\n"))
+        })
+        .collect()
 }
 
 #[tokio::test]
@@ -239,19 +440,22 @@ async fn responses_match_the_committed_document() {
         let label = format!("{} {} -> {}", c.method, c.doc_path, c.status);
         let mut uri = c.uri.to_string();
         let (app, _dir) = match c.store {
-            Store::Absent => (app(None), None),
+            Store::Absent => (app(None, c.ip_off), None),
             Store::Seeded => {
                 let (store, dir, ids) = seed().await;
                 for (placeholder, id) in &ids {
                     uri = uri.replace(placeholder, id);
                 }
-                (app(Some(store)), Some(dir))
+                (app(Some(store), false), Some(dir))
             }
         };
         for _ in 0..c.warmup {
             app.clone().oneshot(request(c.method, &uri)).await.unwrap();
         }
-        let resp = app.oneshot(request(c.method, &uri)).await.unwrap();
+        let resp = app
+            .oneshot(request_accepting(c.method, &uri, c.accept, c.body))
+            .await
+            .unwrap();
         assert_eq!(resp.status().as_u16(), c.status, "{label}: status");
 
         let documented = &doc["paths"][c.doc_path][c.method]["responses"][c.status.to_string()];
@@ -263,6 +467,37 @@ async fn responses_match_the_committed_document() {
             .map(|v| v.to_str().unwrap().to_string())
             .unwrap_or_default();
         let content = &documented["content"];
+        if c.status == 429 && c.doc_path == RUNS {
+            assert!(
+                resp.headers().contains_key("retry-after"),
+                "{label}: no Retry-After header"
+            );
+        }
+        if c.accept == Some("text/event-stream") {
+            assert!(
+                content.get("text/event-stream").is_some(),
+                "{label}: text/event-stream not documented"
+            );
+            assert!(
+                content_type.starts_with("text/event-stream"),
+                "{label}: content type {content_type}"
+            );
+            let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+            let events = sse_events(std::str::from_utf8(&bytes).unwrap());
+            let names: Vec<&str> = events.iter().map(|(e, _)| e.as_str()).collect();
+            assert_eq!(names, ["section", "done"], "{label}: event order");
+            for (event, data) in &events {
+                let body: Value = serde_json::from_str(data)
+                    .unwrap_or_else(|e| panic!("{label}: {event} data is not JSON: {e}"));
+                let component = if event == "section" {
+                    "RunSectionEvent"
+                } else {
+                    "RunAnswer"
+                };
+                validate_component(&doc, component, &body, &format!("{label} {event}"));
+            }
+            continue;
+        }
         if content.get("text/plain").is_some() {
             assert!(
                 content_type.starts_with("text/plain"),

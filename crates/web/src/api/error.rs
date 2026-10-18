@@ -16,6 +16,10 @@ pub enum V1Error {
     MethodNotAllowed,
     PayloadTooLarge,
     RateLimited { retry_after_secs: u64 },
+    Throttled { retry_after_secs: u64 },
+    BudgetExhausted { retry_after_secs: u64 },
+    Busy { retry_after_secs: u64 },
+    PrefetchRefused,
 }
 
 impl fmt::Display for V1Error {
@@ -30,6 +34,10 @@ impl fmt::Display for V1Error {
             Self::MethodNotAllowed => f.write_str("method not allowed"),
             Self::PayloadTooLarge => f.write_str("request body too large"),
             Self::RateLimited { .. } => f.write_str("rate limit exceeded"),
+            Self::Throttled { .. } => f.write_str("the domain was checked moments ago"),
+            Self::BudgetExhausted { .. } => f.write_str("the hourly run budget is spent"),
+            Self::Busy { .. } => f.write_str("every run slot is taken"),
+            Self::PrefetchRefused => f.write_str("a prefetch does not start a run"),
         }
     }
 }
@@ -44,7 +52,11 @@ impl ApiError for V1Error {
             Self::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             Self::PayloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
-            Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            Self::RateLimited { .. }
+            | Self::Throttled { .. }
+            | Self::BudgetExhausted { .. }
+            | Self::Busy { .. } => StatusCode::TOO_MANY_REQUESTS,
+            Self::PrefetchRefused => StatusCode::SERVICE_UNAVAILABLE,
         }
     }
 
@@ -59,12 +71,19 @@ impl ApiError for V1Error {
             Self::MethodNotAllowed => "METHOD_NOT_ALLOWED",
             Self::PayloadTooLarge => "PAYLOAD_TOO_LARGE",
             Self::RateLimited { .. } => "RATE_LIMITED",
+            Self::Throttled { .. } => "THROTTLED",
+            Self::BudgetExhausted { .. } => "BUDGET_EXHAUSTED",
+            Self::Busy { .. } => "BUSY",
+            Self::PrefetchRefused => "PREFETCH_REFUSED",
         }
     }
 
     fn retry_after_secs(&self) -> Option<u64> {
         match self {
-            Self::RateLimited { retry_after_secs } => Some(*retry_after_secs),
+            Self::RateLimited { retry_after_secs }
+            | Self::Throttled { retry_after_secs }
+            | Self::BudgetExhausted { retry_after_secs }
+            | Self::Busy { retry_after_secs } => Some(*retry_after_secs),
             _ => None,
         }
     }
@@ -72,6 +91,13 @@ impl ApiError for V1Error {
 
 impl IntoResponse for V1Error {
     fn into_response(self) -> Response {
-        build_error_response(&self)
+        let mut response = build_error_response(&self);
+        if matches!(self, Self::PrefetchRefused) {
+            response.headers_mut().insert(
+                axum::http::header::CACHE_CONTROL,
+                axum::http::HeaderValue::from_static("no-store"),
+            );
+        }
+        response
     }
 }

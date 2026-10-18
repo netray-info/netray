@@ -50,3 +50,31 @@ G1: C1-C16 (all five routes share `crates/web/src/api/mod.rs` `read_routes`, the
 - crates/web/src/api/mod.rs: the five routes in `read_routes()` behind the per-IP limiter.
 - tests/fixtures/contracts/api-v1.openapi.json regenerated (compatible growth).
 - No lens or SDD change (§7.1 already lists the endpoints).
+
+## Phase 3 — Fresh runs
+
+### Groups
+
+G1: C1 (and C19's 429 mapping) · G2: C2 · G3: C3–C20 (C19's refusal before `admit`). G3 needs G1's route; G2 is independent.
+
+### Plan
+
+#### G1 — the route in netray-web
+1. `crates/web/src/api/error.rs`: `V1Error` gains `Throttled`, `BudgetExhausted`, `Busy` (429 + Retry-After) and `PrefetchRefused` (503, `Cache-Control: no-store`).
+2. `crates/web/src/api/runs.rs`: `RunAnswer`, `RunSectionEvent` (from `netray_engine::SectionEvent`), the `Recorded` → `RunAnswer` mapping, handler `start_run` (no body extractor): validate, client as `limit::client_ip`, `is_prefetch`, `start(.., Api, prefetch)`, refusal mapping, SSE (`section` … `done`) or JSON after `Recorded`; a stream ending early → 500.
+3. `crates/web/src/api/mod.rs`: schemas `RunAnswer`, `RunSectionEvent`; `run_routes()` merged into `openapi()` and into `router()` outside the `[api]` limiter's `route_layer`.
+4. `tests/fixtures/contracts/api-v1.openapi.json`: regenerated (`UPDATE_GOLDEN=1 cargo test -p netray-web --test openapi_contract`).
+
+Tests: `cargo test -p netray-web --test api_runs --test openapi_responses --test openapi_contract`.
+
+#### G2 — requirement 37 in lens
+1. `crates/lens/src/state.rs`: `AppState::before_admit` (default `None`).
+2. `crates/lens/src/admission.rs`: uncounted refusal builder plus `count_rejection`; `admit_uncounted` (today's `admit` body; `admit` counts); `join_recording(state, domain)` returns a joining `RunStream` when the domain's run has published `Done`.
+3. `crates/lens/src/routes.rs` `run_check_handler`: keep the prior head id; a fresh held head first tries `join_recording`; await `before_admit`; on a `Throttle` refusal re-read the head and answer a different, fresh, held entry as a cache hit, else count and refuse.
+
+Tests: `cargo test -p lens --test admission_head_race` plus the `admission_*` and `history_cache*` regressions.
+
+#### G3 — `LensRuns::start`
+1. `crates/lens/src/api_v1.rs`: `check_limits` → `Refused(IpLimit|GlobalLimit)`; `admit` (the counting one) with the trigger mapped; events mapped `Section`/`Done(run)`/`Recorded`; a fresh run counts `count_request("fresh")` and `client_runs.record`, a join `count_request("joined")`, as `/api/check` does.
+
+Tests: `cargo test -p lens --test api_v1_runs --test api_v1_runs_join --test api_v1_runs_limits`.

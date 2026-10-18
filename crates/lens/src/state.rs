@@ -33,6 +33,9 @@ pub type BadgeRecomputeLimiter = KeyedLimiter<String>;
 pub type BadgeCheckFn =
     Arc<dyn Fn(String) -> Pin<Box<dyn Future<Output = CheckOutput> + Send>> + Send + Sync>;
 
+/// Hook awaited by `/api/check` after its head and cache step and before `admit`.
+pub type BeforeAdmit = Arc<dyn Fn() -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+
 /// Shared application state passed to every axum handler via `axum::extract::State`.
 #[derive(Clone)]
 pub struct AppState {
@@ -75,6 +78,8 @@ pub struct AppState {
     pub client_budget: Option<Arc<ClientBudgetLimiter>>,
     /// Module-side parts of API v1, handed in by `crates/netray`.
     pub api_parts: netray_web::api::ApiParts,
+    /// Awaited by `/api/check` after its head and cache step and before `admit`.
+    pub before_admit: Option<BeforeAdmit>,
 }
 
 impl AppState {
@@ -194,6 +199,7 @@ impl AppState {
             slots,
             client_budget,
             api_parts: netray_web::api::ApiParts::default(),
+            before_admit: None,
         })
     }
 }

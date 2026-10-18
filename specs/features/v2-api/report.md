@@ -124,3 +124,76 @@ Pass 2: 0 BLOCKER, 0 AMENDMENT; 1 NIT (criteria rows still open, fixed with this
 /api/v1/entries/AAAAAAAA/diff       -> 410 GONE
 ```
 Seeded-store answers (200 shapes, stored run and diff as JSON) are asserted by crates/web/tests/api_domains.rs, api_entries.rs and crates/lens/tests/api_v1_domains.rs.
+
+## Phase 3 — Fresh runs
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R14: `POST /domains/{domain}/runs` via `DomainRuns::start` (Api), order, join, refusal codes and Retry-After, prefetch 503, JSON/SSE answers | green | crates/web/tests/api_runs.rs, crates/web/tests/openapi_responses.rs |
+| C2 | R37: `/api/check` racing the store commit gets the fresh result or joins, never 429 THROTTLED or the replaced entry | green | crates/lens/tests/admission_head_race.rs |
+| C3 | S: no entry, complete stub run, JSON: 200 recorded first, non-null entry_id, one new entry | green | crates/lens/tests/api_v1_runs.rs |
+| C4 | S: no Accept header: JSON, not SSE | green | crates/lens/tests/api_v1_runs.rs |
+| C5 | S: identical stub run outside the throttle minute: identical, latest entry id, count unchanged | green | crates/lens/tests/api_v1_runs.rs |
+| C6 | S: incomplete run with hard fail: not_stored, entry_id null, run.complete false, grade F | green | crates/lens/tests/api_v1_runs.rs |
+| C7 | S: store writes fail: 200 not_stored, entry_id null | green | crates/lens/tests/api_v1_runs.rs |
+| C8 | S: text/event-stream: one section event per section, then done validating as the JSON answer | green | crates/lens/tests/api_v1_runs.rs |
+| C9 | S: run started 10 s ago: 429 THROTTLED Retry-After 50, rejection metric throttle +1, no run | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C10 | S: run started 60 s ago: a run starts | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C11 | S: client_budget_per_hour 1, one run spent: 429 BUDGET_EXHAUSTED with Retry-After | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C12 | S: domain_run_slots 1 and a gated run: 429 BUSY Retry-After 1 | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C13 | S: [rate_limit] per-IP 1/min burst 1: second post 429 RATE_LIMITED; [api] per_ip_burst 1: two runs start | green | crates/lens/tests/api_v1_runs_limits.rs |
+| C14 | S: run in flight started by /api/check: post joins, carries the run, store records once | green | crates/lens/tests/api_v1_runs_join.rs |
+| C15 | S: latest entry 2 min old inside cache window, outside throttle: a fresh run starts | green | crates/lens/tests/api_v1_runs_join.rs |
+| C16 | S: Sec-Purpose prerender, no run: 503 PREFETCH_REFUSED no-store, no run, next request not throttled; gated run in flight: joins | green | crates/lens/tests/api_v1_runs_join.rs |
+| C17 | S: body with dkim_selectors: no selector probed, recorded like a run without options | green | crates/lens/tests/api_v1_runs_join.rs |
+| C18 | S: run started by v1: /api/check V1 response byte-identical to one for a run started by /api/check | green | crates/lens/tests/api_v1_runs_join.rs |
+| C19 | S: LensRuns::start with per-IP limit spent: Refused IpLimit before admit; global: GlobalLimit; both 429 RATE_LIMITED | green | crates/lens/tests/api_v1_runs_limits.rs (refusal), crates/web/tests/api_runs.rs (429 mapping) |
+| C20 | S: gated run with DNS and TLS finished, SSE: first two section events DNS and TLS before the gate opens, done follows Recorded | green | crates/lens/tests/api_v1_runs_join.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 (C1) | 1 | sonnet | 65726 | 150 |
+| G2 (C2) | 1 | sonnet | 53812 | 103 |
+| G3 (C3–C20) | 1 | sonnet | 32731 | 44 |
+| review fixes (C2) | 2 | opus | 41274 | 169 |
+
+G2's `admission_head_race_c2_request_joins_a_recording_run` was red on most runs after the coder's green: the store's deferred `BEGIN` failed run 2's record with `SQLITE_BUSY` (`Recorded(None)`) once the outside write lock committed. Fixed by `BEGIN IMMEDIATE` in `record` and `sweep` (`crates/store/src/lib.rs`, Decision log).
+
+### Review
+
+First pass: 1 BLOCKER, 3 AMENDMENT.
+- BLOCKER `routes.rs` join after the head read missed a run that recorded and deregistered meanwhile: fixed (the run registered before the head read is kept and joined).
+- AMENDMENT incomplete runs were joined: requirement 37 narrowed to complete runs, fixed (repaired in phase).
+- AMENDMENT an `Identical` record kept `429`: the re-read head compares ID and `last_seen_at`, fixed (repaired in phase).
+- AMENDMENT `POST /domains/{domain}/runs` with history off answers `not_stored`, not `503`: Decision log exemption (repaired in phase).
+
+Second pass: 1 BLOCKER, 1 AMENDMENT, 1 NIT.
+- BLOCKER the head read could return the run's own entry before its rendering was held, ending in `429`: fixed (a throttle refusal first joins a complete registered run).
+- AMENDMENT a run living entirely inside the head read is missed: spec reworded, Decision log.
+- NIT the review fixes have no dedicated test: listed for the branch review.
+
+### Behavioural verification
+
+`./target/debug/netray lens <dev config on 127.0.0.1:18485>` from the worktree build (no outbound network from this path, so modules time out):
+
+```
+$ curl -s -i -X POST http://127.0.0.1:18485/api/v1/domains/not_a..domain/runs
+HTTP/1.1 400 Bad Request
+{"error":{"code":"DOMAIN_INVALID","message":"invalid domain: domain contains an empty label"}}
+$ curl -s -i -X POST -H 'Sec-Purpose: prefetch;prerender' http://127.0.0.1:18485/api/v1/domains/example.com/runs
+HTTP/1.1 503 Service Unavailable
+cache-control: no-store
+{"error":{"code":"PREFETCH_REFUSED","message":"a prefetch does not start a run"}}
+$ curl -s -X POST -H 'Accept: application/json' http://127.0.0.1:18485/api/v1/domains/example.com/runs
+{"recorded":"not_stored","entry_id":null,"run":{"complete":false,"grade":"incomplete",...},...}
+$ curl -s -i -X POST http://127.0.0.1:18485/api/v1/domains/example.com/runs
+HTTP/1.1 429 Too Many Requests
+retry-after: 44
+{"error":{"code":"THROTTLED","message":"the domain was checked moments ago"}}
+$ curl -s http://127.0.0.1:18485/api/v1/openapi.json  # post /api/v1/domains/{domain}/runs responses
+['200', '400', '413', '429', '503']
+```

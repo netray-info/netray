@@ -3216,6 +3216,7 @@ dependencies = [
  "jsonschema",
  "netray-common",
  "netray-engine",
+ "netray-ip",
  "netray-model",
  "netray-store",
  "percent-encoding",
