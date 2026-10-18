@@ -76,7 +76,11 @@ async fn c4_no_entry_for_the_domain_answers_404_linking_the_domain_page() {
         });
 
         let res = app
-            .oneshot(Request::get("/example.com/dns").body(Body::empty()).unwrap())
+            .oneshot(
+                Request::get("/example.com/dns")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .unwrap();
         let status = res.status();
@@ -89,7 +93,10 @@ async fn c4_no_entry_for_the_domain_answers_404_linking_the_domain_page() {
         let body = String::from_utf8_lossy(&bytes);
 
         assert_eq!(status, StatusCode::NOT_FOUND, "{label}: status");
-        assert!(content_type.starts_with("text/html"), "{label}: {content_type}");
+        assert!(
+            content_type.starts_with("text/html"),
+            "{label}: {content_type}"
+        );
         assert!(body.contains(r#"href="/example.com""#), "{label}: {body}");
     }
 }

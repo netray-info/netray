@@ -94,8 +94,7 @@ async fn c5_entry_evidence_route_answers_200_410_404_and_500() {
     assert_eq!(status, StatusCode::NOT_FOUND, "malformed id");
 
     let (store, dir) = open().await;
-    let options =
-        sqlx::sqlite::SqliteConnectOptions::new().filename(dir.path().join("history.db"));
+    let options = sqlx::sqlite::SqliteConnectOptions::new().filename(dir.path().join("history.db"));
     let pool = sqlx::SqlitePool::connect_with(options).await.unwrap();
     sqlx::query("DROP TABLE entries")
         .execute(&pool)

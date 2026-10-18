@@ -69,7 +69,6 @@ fn base_config() -> Config {
     }
 }
 
-
 fn a_run() -> Run {
     Run {
         profile_version: 3,
@@ -120,7 +119,9 @@ async fn entry_card_and_evidence_view_are_answered_by_their_own_handlers() {
     history.migrate().await.unwrap();
     let history = Arc::new(history);
     let id = match history
-        .record(ENTRY_DOMAIN, &a_run(), &[], NOW, |p, c| diff(p, c, &[], None))
+        .record(ENTRY_DOMAIN, &a_run(), &[], NOW, |p, c| {
+            diff(p, c, &[], None)
+        })
         .await
         .unwrap()
     {
@@ -143,7 +144,10 @@ async fn entry_card_and_evidence_view_are_answered_by_their_own_handlers() {
 
     let (status, ct, body) = get(&app, &format!("/r/{id}/tls")).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(ct.starts_with("text/html"), "evidence view content-type: {ct}");
+    assert!(
+        ct.starts_with("text/html"),
+        "evidence view content-type: {ct}"
+    );
     assert!(body.contains(r#"data-protocol="tls""#), "body: {body}");
     assert!(body.contains(&format!("entry {id}")), "body: {body}");
 

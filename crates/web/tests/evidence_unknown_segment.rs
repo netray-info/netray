@@ -47,7 +47,9 @@ async fn unknown_segment_under_an_existing_entry_answers_the_pages_404() {
         .unwrap();
     store.migrate().await.unwrap();
     let id = match store
-        .record("a.example.com", &run(), &[], T, |p, c| diff(p, c, &[], None))
+        .record("a.example.com", &run(), &[], T, |p, c| {
+            diff(p, c, &[], None)
+        })
         .await
         .unwrap()
     {
@@ -68,8 +70,8 @@ async fn unknown_segment_under_an_existing_entry_answers_the_pages_404() {
         .await
         .unwrap();
     let status = resp.status();
-    let body = String::from_utf8_lossy(&resp.into_body().collect().await.unwrap().to_bytes())
-        .into_owned();
+    let body =
+        String::from_utf8_lossy(&resp.into_body().collect().await.unwrap().to_bytes()).into_owned();
 
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert!(body.contains("<h1>Nothing here</h1>"), "got: {body}");
