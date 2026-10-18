@@ -36,6 +36,27 @@ const VIEW_LINK: Record<Protocol, string> = {
   email: '/inspect/dns?q=example.com%20MX',
   ip: '/inspect/dns?q=example.com%20A',
 };
+// Per-block links of the seeded run, in block order: a dns.<type> block links its shared owner
+// (the domain when the block is empty); email.dmarc and email.mta_sts link their policy names.
+const BLOCK_LINKS: Partial<Record<Protocol, string[]>> = {
+  dns: [
+    '/inspect/dns?q=example.com.%20A',
+    '/inspect/dns?q=example.com.%20AAAA',
+    '/inspect/dns?q=example.com.%20MX',
+    '/inspect/dns?q=example.com%20CAA',
+    '/inspect/dns?q=example.com.%20NS',
+    '/inspect/dns?q=example.com.%20HTTPS',
+    '/inspect/dns?q=example.com%20CNAME',
+    '/inspect/dns?q=example.com.%20DNSKEY',
+    '/inspect/dns?q=example.com.%20DS',
+    '/inspect/dns?q=example.com.%20NSEC',
+    '/inspect/dns?q=example.com%20NSEC3',
+    '/inspect/dns?q=example.com.%20SOA',
+    '/inspect/dns?q=example.com%20SVCB',
+    '/inspect/dns?q=example.com.%20TXT',
+  ],
+  email: ['/inspect/dns?q=_dmarc.example.com%20TXT', '/inspect/dns?q=_mta-sts.example.com%20TXT'],
+};
 const ROW_LINKS: Partial<Record<Protocol, string[]>> = {
   tls: [
     '/inspect/tls?h=192.0.2.10:443',
@@ -160,6 +181,10 @@ for (const protocol of PROTOCOLS) {
         const explore = await hrefs(page, '.evidence-view__explore');
         expect(explore[0]).toBe(VIEW_LINK[protocol]);
         for (const row of ROW_LINKS[protocol] ?? []) expect(explore).toContain(row);
+        for (const block of BLOCK_LINKS[protocol] ?? []) expect(explore).toContain(block);
+        expect(explore).toHaveLength(
+          1 + (ROW_LINKS[protocol]?.length ?? 0) + (BLOCK_LINKS[protocol]?.length ?? 0),
+        );
 
         if (width.name === '390') await expectNoPageScroll(page);
         await shot(page, `${DOMAIN}-${protocol}`, width.name, theme);
