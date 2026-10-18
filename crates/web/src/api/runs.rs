@@ -175,7 +175,7 @@ fn refusal_error(refusal: RunRefusal) -> V1Error {
     }
 }
 
-fn wants_event_stream(headers: &HeaderMap) -> bool {
+pub(super) fn wants_event_stream(headers: &HeaderMap) -> bool {
     headers
         .get_all(header::ACCEPT)
         .iter()

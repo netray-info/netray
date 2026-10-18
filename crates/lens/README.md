@@ -195,6 +195,14 @@ slot (`[admission] domain_run_slots`, 8) and the client's hourly budget
 request carrying `Sec-Purpose: prefetch` or `prerender` never starts a run: without a stored
 result or a run to join it answers `503 PREFETCH_REFUSED`.
 
+API v1 is mounted at `/api/v1` and configured in `[api]` (`enabled`, `per_ip_per_minute`,
+`per_ip_burst`); `enabled = false` mounts nothing. Its document is `/api/v1/openapi.json`, rendered
+at `/api/v1/docs`. Besides the domain, entry and run endpoints it serves the inspectors over the
+same job functions as their services: `/ip*` and `/asn/{n}` (`[api.ip]`, needs `[modules.ip]`),
+`/tls/inspect` (`[api.tls]`), `/http/inspect` (`[api.http]`), `/email/inspect` (`[api.email]`) and
+`/dns/{query,trace,compare,authcompare,dnssec}` (`[api.dns]`). Each `[api.<inspector>]` table holds
+that inspector's per-client limits; `lens.example.toml` lists the keys and defaults.
+
 ### Other endpoints
 
 | Endpoint | Description |

@@ -29,6 +29,12 @@ fn document_header_and_paths() {
         ("/api/v1/meta", "get"),
         ("/api/v1/tls/inspect", "post"),
         ("/api/v1/http/inspect", "post"),
+        ("/api/v1/email/inspect", "post"),
+        ("/api/v1/dns/query", "post"),
+        ("/api/v1/dns/trace", "post"),
+        ("/api/v1/dns/compare", "post"),
+        ("/api/v1/dns/authcompare", "post"),
+        ("/api/v1/dns/dnssec", "post"),
     ] {
         assert!(
             paths.get(path).is_some_and(|p| p.get(method).is_some()),

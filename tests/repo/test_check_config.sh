@@ -124,6 +124,20 @@ startup_rejects=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_ip_burst = 0\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_target_per_minute = 0\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_target_burst = 0\\n\\n[site]|"
+    # specs/features/v2-api Phase 6: [api.email] limits
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nmax_concurrent_inspections = 0\\n\\n[site]|"
+    # specs/features/v2-api Phase 7: [api.dns] limits
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_target_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_target_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_max_streams = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_burst = 17\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_burst = 17\\n\\n[site]|"
 )
 n=0
 for row in "${startup_rejects[@]}"; do
@@ -137,9 +151,9 @@ for row in "${startup_rejects[@]}"; do
     fi
     run_check "$sub" "$tmp/$sub.reject$n.toml"
     [ "$rc" -eq 1 ] || fail "$sub: startup-rejected value ($expr) exited $rc, expected 1"
-    # An `[api.ip]`, `[api.tls]` or `[api.http]` row must be refused by its rule, not as an
-    # unknown field: the output names the key and does not say "unknown field".
-    if [[ "$expr" =~ \[api\.(ip|tls|http)\] ]]; then
+    # An `[api.ip]`, `[api.tls]`, `[api.http]`, `[api.email]` or `[api.dns]` row must be refused by its
+    # rule, not as an unknown field: the output names the key and does not say "unknown field".
+    if [[ "$expr" =~ \[api\.(ip|tls|http|email|dns)\] ]]; then
         section="${BASH_REMATCH[1]}"
         key="${expr#*\\n}"
         key="${key%% =*}"

@@ -4,6 +4,8 @@ use std::fmt;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use netray_common::error::{ApiError, build_error_response};
+use netray_dns::DnsRefusal;
+use netray_email::EmailRefusal;
 use netray_http::HttpRefusal;
 use netray_ip::IpRefusal;
 use netray_tls::TlsRefusal;
@@ -128,6 +130,32 @@ impl From<HttpRefusal> for V1Error {
             HttpRefusal::Blocked(msg) => Self::TargetBlocked(msg),
             HttpRefusal::RateLimited { retry_after_secs } => Self::RateLimited { retry_after_secs },
             HttpRefusal::Unavailable(msg) => Self::Unavailable(msg),
+        }
+    }
+}
+
+impl From<EmailRefusal> for V1Error {
+    fn from(refusal: EmailRefusal) -> Self {
+        match refusal {
+            EmailRefusal::InvalidInput(msg) => Self::InvalidInput(msg),
+            EmailRefusal::RateLimited { retry_after_secs } => {
+                Self::RateLimited { retry_after_secs }
+            }
+            EmailRefusal::Busy => Self::Unavailable(
+                "the email inspector is busy: every inspection slot is taken".into(),
+            ),
+            EmailRefusal::Unavailable(msg) => Self::Unavailable(msg),
+        }
+    }
+}
+
+impl From<DnsRefusal> for V1Error {
+    fn from(refusal: DnsRefusal) -> Self {
+        match refusal {
+            DnsRefusal::InvalidInput(msg) => Self::InvalidInput(msg),
+            DnsRefusal::Blocked(msg) => Self::TargetBlocked(msg),
+            DnsRefusal::RateLimited { retry_after_secs } => Self::RateLimited { retry_after_secs },
+            DnsRefusal::Unavailable(msg) => Self::Unavailable(msg),
         }
     }
 }

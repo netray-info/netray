@@ -37,14 +37,14 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::RequestId;
 use crate::api::query::{
-    EnrichmentEvent, StreamParams, build_resolver_group, effective_server_specs,
-    extract_ips_from_cached_events, make_error_event, parse_server_spec, record_breaker_outcomes,
-    target_keys_from_servers,
+    StreamParams, build_resolver_group, effective_server_specs, extract_ips_from_cached_events,
+    make_error_event, parse_server_spec, record_breaker_outcomes, target_keys_from_servers,
 };
 use crate::api::{AppState, BatchEvent, CollectedResponse, STREAM_TIMEOUT_SECS};
 use crate::circuit_breaker::{BreakerState, CircuitBreakerRegistry};
 use crate::dns_raw::{self, NOT_PUBLIC, RawOutbound};
 use crate::error::{ApiError, ErrorResponse};
+use crate::jobs::DnsEnrichmentEvent;
 use crate::parser::ParsedQuery;
 use crate::record_format;
 use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
@@ -386,7 +386,7 @@ async fn stream_check_events(
                     .unwrap_or_else(|_| Event::default().event("batch").data("{}"))
             }
             CheckEvent::Enrichment(enrichments) => {
-                let enrichment_event = EnrichmentEvent {
+                let enrichment_event = DnsEnrichmentEvent {
                     request_id: request_id.clone(),
                     enrichments,
                 };

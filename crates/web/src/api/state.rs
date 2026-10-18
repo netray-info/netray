@@ -6,6 +6,8 @@ use std::sync::Arc;
 use governor::{Quota, RateLimiter};
 use netray_common::ip_extract::IpExtractor;
 use netray_common::rate_limit::KeyedLimiter;
+use netray_dns::DnsJobs;
+use netray_email::{EmailInspect, InspectSlots};
 use netray_engine::profile::{Profile, Profiles};
 use netray_http::HttpInspect;
 use netray_ip::IpLookup;
@@ -32,9 +34,11 @@ pub struct AdmissionLimits {
 /// Module-side parts handed in by `crates/netray`.
 #[derive(Clone, Default)]
 pub struct ApiParts {
+    pub dns: Option<DnsJobs>,
     pub ip: Option<Arc<dyn IpLookup>>,
     pub tls: Option<TlsInspector>,
     pub http: Option<Arc<dyn HttpInspect>>,
+    pub email: Option<Arc<dyn EmailInspect>>,
 }
 
 /// The three limiters of the ip endpoints, keyed by the caller address (per-target by the
@@ -99,6 +103,9 @@ pub struct ApiState {
     ip_limiters: Arc<IpLimiters>,
     tls_limiters: Arc<netray_tls::security::RateLimitState>,
     http_limiters: Arc<netray_http::security::RateLimitState>,
+    email_limiter: Arc<netray_email::security::RateLimitState>,
+    email_slots: InspectSlots,
+    dns_limiter: Arc<netray_dns::security::RateLimitState>,
     header_filters: Arc<RegexSet>,
 }
 
@@ -134,6 +141,35 @@ impl ApiState {
                 per_target: "api_v1_http_target",
             },
         ));
+        let email_limiter = Arc::new(netray_email::security::RateLimitState::scoped(
+            &netray_email::security::rate_limit::Quotas {
+                per_ip_per_minute: config.email.per_ip_per_minute,
+                per_ip_burst: config.email.per_ip_burst,
+            },
+            netray_email::security::rate_limit::Scopes {
+                metrics_prefix: "lens",
+                per_ip: "api_v1_email",
+            },
+        ));
+        let email_slots = InspectSlots::new(config.email.max_concurrent_inspections as usize);
+        let dns_limiter = Arc::new(netray_dns::security::RateLimitState::scoped(
+            &netray_dns::security::rate_limit::Quotas {
+                per_ip_per_minute: config.dns.per_ip_per_minute,
+                per_ip_burst: config.dns.per_ip_burst,
+                per_target_per_minute: config.dns.per_target_per_minute,
+                per_target_burst: config.dns.per_target_burst,
+                global_per_minute: config.dns.global_per_minute,
+                global_burst: config.dns.global_burst,
+                per_ip_max_streams: config.dns.per_ip_max_streams,
+            },
+            netray_dns::security::rate_limit::Scopes {
+                metrics_prefix: "lens",
+                per_ip: "api_v1_dns",
+                per_target: "api_v1_dns_target",
+                global: "api_v1_dns_global",
+                max_streams: "api_v1_dns_streams",
+            },
+        ));
         let header_filters = Arc::new(header_filters(&config.ip.filtered_headers));
         Self {
             config,
@@ -147,6 +183,9 @@ impl ApiState {
             ip_limiters,
             tls_limiters,
             http_limiters,
+            email_limiter,
+            email_slots,
+            dns_limiter,
             header_filters,
         }
     }
@@ -217,12 +256,32 @@ impl ApiState {
         &self.http_limiters
     }
 
+    pub fn email_limiter(&self) -> &Arc<netray_email::security::RateLimitState> {
+        &self.email_limiter
+    }
+
+    pub fn email_slots(&self) -> &InspectSlots {
+        &self.email_slots
+    }
+
+    pub fn dns_limiter(&self) -> &Arc<netray_dns::security::RateLimitState> {
+        &self.dns_limiter
+    }
+
+    pub fn dns_jobs(&self) -> Option<&DnsJobs> {
+        self.parts.dns.as_ref()
+    }
+
     pub fn tls_inspector(&self) -> Option<&TlsInspector> {
         self.parts.tls.as_ref()
     }
 
     pub fn http_inspect(&self) -> Option<&Arc<dyn HttpInspect>> {
         self.parts.http.as_ref()
+    }
+
+    pub fn email_inspect(&self) -> Option<&Arc<dyn EmailInspect>> {
+        self.parts.email.as_ref()
     }
 
     pub(super) fn header_filters(&self) -> &RegexSet {
