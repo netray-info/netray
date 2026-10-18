@@ -63,6 +63,7 @@ fn live_state() -> AppState {
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
         admission: lens::config::AdmissionConfig::default(),
+        inspect: Default::default(),
         api: Default::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),

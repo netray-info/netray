@@ -23,6 +23,7 @@ pub use api::dnssec::DnssecRequest;
 pub use api::query::PostQueryRequest;
 pub use api::trace::TraceRequest;
 pub use config::ModuleConfig;
+pub use jobs::blocks;
 pub use jobs::{
     DnsAuthCompareDone, DnsAuthCompareEvent, DnsAuthCompareResult, DnsBackend, DnsBatch,
     DnsChainEvent, DnsCompareDone, DnsCompareEvent, DnsCompareResult, DnsDnssecDone,

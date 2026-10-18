@@ -307,7 +307,7 @@ fn evidence_block_renders_every_shape() {
             EvidenceShape::Records(vec![RecordRow {
                 owner: "www.example.com".into(),
                 rtype: "CNAME".into(),
-                ttl: 3600,
+                ttl: "3600".into(),
                 data: "edge.example.com".into(),
             }]),
             "records",

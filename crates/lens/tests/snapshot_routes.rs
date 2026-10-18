@@ -63,6 +63,7 @@ fn base_config() -> Config {
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
         admission: lens::config::AdmissionConfig::default(),
+        inspect: Default::default(),
         api: Default::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block main %}
+{% if let Some(section) = section %}
+<h1>{{ domain }} · {{ protocol }}</h1>
+{{ section|safe }}
+{% for link in links %}<p><a class="evidence-view__explore" href="{{ link.href }}">{{ link.label }}</a></p>
+{% endfor %}
+{% else %}
+<h1>No entry for {{ domain }}</h1>
+<p>Nothing has been recorded for this domain yet. <a href="{{ home_href }}">Check {{ domain }}</a>.</p>
+{% endif %}
+{% endblock %}

@@ -10,7 +10,7 @@
   </table>
   {% when EvidenceShape::Table with { columns, rows } %}
   <table class="evidence-block__table">
-    <thead><tr>{% for column in columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+    <thead><tr>{% for column in columns %}<th{% if column.key %} data-key="true"{% endif %}>{{ column.name }}</th>{% endfor %}</tr></thead>
     {% for row in rows %}
     <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
     {% endfor %}
@@ -24,7 +24,7 @@
   {% when EvidenceShape::Tree(items) %}
   <ul class="evidence-block__tree">
     {% for item in items %}
-    <li class="evidence-block__tree-item" data-depth="{{ item.depth }}" style="--evidence-block-depth: {{ item.depth }}">{{ item.text }}</li>
+    <li class="evidence-block__tree-item" data-depth="{{ item.depth_attr() }}">{{ item.text }}</li>
     {% endfor %}
   </ul>
   {% when EvidenceShape::Fields(fields) %}

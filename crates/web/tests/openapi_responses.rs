@@ -465,6 +465,7 @@ fn app(store: Option<Arc<HistoryStore>>, ip_off: bool) -> axum::Router {
             netray_email::testing::example_dns(),
         ))),
         dns: Some(netray_dns::testing::stub_jobs()),
+        dns_module: None,
     };
     let config = ApiConfig {
         per_ip_burst: 1,

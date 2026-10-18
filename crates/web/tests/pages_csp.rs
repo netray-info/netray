@@ -11,7 +11,7 @@ use netray_web::pages;
 use sha2::{Digest, Sha256};
 use tower::ServiceExt;
 
-const RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"}]},"eagerness":"moderate"}]}"#;
+const RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"},{"href_matches":"/inspect/*"}]},"eagerness":"moderate"}]}"#;
 
 fn app() -> Router {
     Router::new()
@@ -145,11 +145,11 @@ fn patterns(v: &serde_json::Value, out: &mut Vec<String>) {
 }
 
 #[test]
-fn the_rules_prerender_only_guide_and_report_pages() {
+fn the_rules_prerender_only_guide_report_and_inspector_pages() {
     let v: serde_json::Value = serde_json::from_str(pages::SPECULATION_RULES).unwrap();
     let mut pats = Vec::new();
     patterns(&v, &mut pats);
-    assert_eq!(pats.len(), 2);
+    assert_eq!(pats.len(), 3);
     for path in [
         "/",
         "/example.com",
@@ -159,7 +159,7 @@ fn the_rules_prerender_only_guide_and_report_pages() {
     ] {
         assert!(!pats.iter().any(|p| glob(p, path)), "{path} must not match");
     }
-    for path in ["/guide/dnssec", "/r/abc12345"] {
+    for path in ["/guide/dnssec", "/r/abc12345", "/inspect/dns"] {
         assert_eq!(pats.iter().filter(|p| glob(p, path)).count(), 1, "{path}");
     }
 }

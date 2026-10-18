@@ -46,14 +46,17 @@ pub struct EntriesDeps {
     pub card: CardRenderer,
 }
 
-/// Serves `/r/{id}` and answers every other path under `/r/` with the 404 page.
+/// Serves `/r/{id}` and `/r/{id}/og.png`; `/r/`, `/r/{id}/`, `/r/{id}/{segment}/` and every path
+/// of three or more segments under `/r/` answer the 404 page. The two-segment
+/// `/r/{id}/{inspector}` is left to the evidence router.
 pub fn router(deps: EntriesDeps) -> axum::Router {
     axum::Router::<EntriesDeps>::new()
         .route("/r/{id}", get(entry_page))
         .route("/r/{id}/og.png", get(entry_card))
         .route("/r/", get(unmatched))
         .route("/r/{id}/", get(unmatched))
-        .route("/r/{id}/{*rest}", get(unmatched))
+        .route("/r/{id}/{segment}/", get(unmatched))
+        .route("/r/{id}/{segment}/{*rest}", get(unmatched))
         .with_state(deps)
 }
 

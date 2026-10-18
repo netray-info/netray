@@ -153,6 +153,10 @@ pub enum AuthResult {
     Response {
         records: Vec<AuthRecord>,
         response_time: WireDuration,
+        /// The response code of an answer that is no answer (REFUSED, SERVFAIL, …); not on
+        /// the V1 wire.
+        #[serde(skip)]
+        failure: Option<String>,
     },
     NxDomain {
         response_time: WireDuration,
@@ -166,6 +170,10 @@ pub struct AuthRecord {
     #[serde(rename = "type")]
     pub record_type: String,
     pub ttl: u32,
+    /// The record data in zone-file form, as the recursive rows of the inspector's table show
+    /// it; not on the V1 wire.
+    #[serde(skip)]
+    pub presentation: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]

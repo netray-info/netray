@@ -74,6 +74,11 @@ impl TlsInspector {
         Self { state }
     }
 
+    /// tlsight's input rules with this inspector's `limits.max_ports`.
+    pub fn parse(&self, input: &str) -> Result<ParsedInput, AppError> {
+        input::parse_input(input, self.state.config.load().limits.max_ports)
+    }
+
     /// Inspects `req.host` on `req.port`; a port in `host` is ignored, as tlsight's POST does.
     pub async fn inspect(
         &self,
@@ -82,8 +87,7 @@ impl TlsInspector {
         limits: &RateLimitState,
         request_id: String,
     ) -> Result<InspectResponse, TlsRefusal> {
-        let max_ports = self.state.config.load().limits.max_ports;
-        let mut parsed = input::parse_input(&req.host, max_ports)?;
+        let mut parsed = self.parse(&req.host)?;
         if req.port == 0 {
             return Err(AppError::InvalidPort("port must be 1-65535".to_string()).into());
         }

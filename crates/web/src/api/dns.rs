@@ -26,7 +26,7 @@ use super::limit;
 use super::runs::wants_event_stream;
 use super::state::ApiState;
 
-const DNS_OFF: &str = "the DNS inspector is off: no DNS module was built";
+pub(super) const DNS_OFF: &str = "the DNS inspector is off: no DNS module was built";
 
 fn jobs_of(state: &ApiState) -> Result<&DnsJobs, V1Error> {
     state

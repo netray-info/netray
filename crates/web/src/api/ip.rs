@@ -166,7 +166,7 @@ fn seam(state: &ApiState) -> Result<Arc<dyn IpLookup>, V1Error> {
         .ok_or_else(|| V1Error::Unavailable(UNAVAILABLE.into()))
 }
 
-fn charge(
+pub(super) fn charge(
     limiter: &KeyedLimiter<IpAddr>,
     key: IpAddr,
     cost: u32,
