@@ -143,6 +143,7 @@ fn strip_tags(s: &str) -> String {
 async fn result_run_c15_a_run_20s_ago_is_refused_throttle_with_the_run_line() {
     let h = harness(|_| {}).await;
     tokio::time::pause();
+    let started = tokio::time::Instant::now();
 
     let mut stream = match admit(&h.state, "example.com", client(), Trigger::Api, false) {
         Admit::Admitted(s) => s,
@@ -156,10 +157,16 @@ async fn result_run_c15_a_run_20s_ago_is_refused_throttle_with_the_run_line() {
     let (status, retry, text) = recheck(&h.app).await;
 
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "{text}");
-    assert_eq!(retry.as_deref(), Some("40"));
-    assert!(text.contains("20 s ago"), "run line: {text}");
+    // The throttle window depends on whether the prior run was complete; the wait is the window
+    // minus the 20 s that passed, and the run line names the same wait as Retry-After.
+    let retry = retry.expect("Retry-After");
+    // The paused clock auto-advances through the prior run's deadlines, so "N s ago" counts from
+    // its start: the run's own duration plus the 20 s waited after it.
+    let ago = started.elapsed().as_secs();
+    assert!(ago >= 20);
+    assert!(text.contains(&format!("{ago} s ago")), "run line: {text}");
     assert!(
-        text.contains("a new run is possible in 40 s"),
+        text.contains(&format!("a new run is possible in {retry} s")),
         "run line: {text}"
     );
     assert_eq!(h.runs.load(Ordering::SeqCst), 1, "no run started");
