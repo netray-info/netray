@@ -242,6 +242,43 @@ pub fn app(state: state::AppState) -> Router {
         _ => Router::new(),
     };
 
+    let result_routes = match &state.history_store {
+        Some(history) if config.history.enabled => {
+            let spa_shell = shell.clone();
+            let fallback: std::sync::Arc<
+                dyn Fn(
+                        axum::extract::Request,
+                    )
+                        -> futures::future::BoxFuture<'static, axum::response::Response>
+                    + Send
+                    + Sync,
+            > = std::sync::Arc::new(move |req: axum::extract::Request| {
+                let spa_shell = spa_shell.clone();
+                Box::pin(async move {
+                    spa::handler(axum::extract::State(spa_shell), req.uri().clone()).await
+                })
+            });
+            netray_web::pages::result::router(
+                netray_web::pages::result::ResultState::new(
+                    history.clone(),
+                    std::sync::Arc::new(api_v1::LensRuns::new(state.clone())),
+                    config.cache.ttl_seconds,
+                )
+                .with_ip_extractor(state.ip_extractor.clone())
+                .with_fallback(fallback),
+            )
+            .layer(axum::middleware::map_response(
+                |mut response: axum::response::Response| async move {
+                    response
+                        .headers_mut()
+                        .remove("cross-origin-resource-policy");
+                    response
+                },
+            ))
+        }
+        _ => Router::new(),
+    };
+
     let limits = netray_web::api::AdmissionLimits {
         client_budget_per_hour: config.admission.client_budget_per_hour,
         domain_run_slots: config.admission.domain_run_slots,
@@ -294,6 +331,7 @@ pub fn app(state: state::AppState) -> Router {
         .merge(inspect_routes)
         .merge(frontend_router_with(shell))
         .merge(entry_routes)
+        .merge(result_routes)
         .merge(netray_web::entries::privacy_router())
         .merge(api_routes)
         .route(

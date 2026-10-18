@@ -4,17 +4,19 @@
 use std::collections::BTreeMap;
 
 use netray_engine::catalogue::{Catalogue, CheckSpec};
-use netray_engine::profile::Profiles;
+use netray_engine::profile::{Profile, Profiles};
 use netray_model::diff::{BlockChangeKind, ChangeClass, Diff};
 use netray_model::evidence::BlockId;
 use netray_model::run::{Run, RunCheck, SectionKind};
 use netray_model::{CheckId, FixOwner, Protocol, Severity, Status};
 use netray_store::{Entry, Recorded};
 
-use crate::components::{CheckRowView, DiffBlockView, DiffEntry, Tone};
+use crate::components::{
+    CheckRowView, DiffBlockView, DiffEntry, Tone, TraceRow, TraceView, line_tone,
+};
 use crate::entries::view::{epoch_days_to_ymd, grade_letter, status_tone};
 use crate::evidence::href;
-use crate::spectrum::{RunInput, SectionState};
+use crate::spectrum::{Layout, RunInput, SectionState};
 
 /// Where an issue's evidence link points.
 pub enum Links<'a> {
@@ -473,8 +475,8 @@ fn status_word(status: Status) -> &'static str {
 }
 
 /// The spans of equal consecutive statuses: (status, first timestamp, last timestamp, points).
-fn spans(points: &[(i64, Status)]) -> Vec<(Status, i64, i64, usize)> {
-    let mut out: Vec<(Status, i64, i64, usize)> = Vec::new();
+fn spans<T: Copy + PartialEq>(points: &[(i64, T)]) -> Vec<(T, i64, i64, usize)> {
+    let mut out: Vec<(T, i64, i64, usize)> = Vec::new();
     for (at, status) in points {
         match out.last_mut() {
             Some(span) if span.0 == *status => {
@@ -517,10 +519,29 @@ pub fn issue_since(points: &[(i64, Status)]) -> Option<String> {
     }
 }
 
+/// As `issue_since` over points where `None` marks a run that lacks the check, which counts as a
+/// state of its own.
+pub fn issue_since_present(points: &[(i64, Option<Status>)]) -> Option<String> {
+    let spans = spans(points);
+    match spans.as_slice() {
+        [] | [_] => None,
+        [.., (_, start, _, _)] => Some(month_day(*start)),
+    }
+}
+
 /// The layout input of a stored run; `None` when its profile version is unknown.
 pub fn layout_input(run: &Run) -> Option<RunInput<'static>> {
-    let profile = Profiles::get(run.profile_version)?;
-    Some(RunInput {
+    Some(layout_input_with(run, Profiles::get(run.profile_version)?))
+}
+
+/// The layout input of a stored run; an unknown profile version falls back to the current profile.
+pub fn layout_input_or_current(run: &Run) -> RunInput<'static> {
+    let profile = Profiles::get(run.profile_version).unwrap_or_else(Profiles::current);
+    layout_input_with(run, profile)
+}
+
+fn layout_input_with(run: &Run, profile: &'static Profile) -> RunInput<'static> {
+    RunInput {
         statuses: run
             .checks
             .iter()
@@ -539,5 +560,51 @@ pub fn layout_input(run: &Run) -> Option<RunInput<'static>> {
             })
             .collect(),
         profile,
-    })
+    }
+}
+
+/// A Unix timestamp as "YYYY-MM-DD HH:MM", UTC.
+pub fn utc_minute(timestamp: i64) -> String {
+    let (year, month, day) = date_of(timestamp);
+    let secs = timestamp.max(0);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}",
+        secs % 86_400 / 3_600,
+        secs % 3_600 / 60
+    )
+}
+
+/// The trace of a layout: one row per run, newest first, `entries` in the layout's run order.
+pub fn trace_view(layout: &Layout, entries: &[&Entry]) -> TraceView {
+    TraceView {
+        rows: layout
+            .runs
+            .iter()
+            .zip(entries)
+            .enumerate()
+            .map(|(k, (run, entry))| TraceRow {
+                date: utc_minute(entry.created_at),
+                grade: grade_letter(entry.grade).to_string(),
+                cells: run.tones.iter().map(|t| line_tone(*t)).collect(),
+                current: k == 0,
+            })
+            .collect(),
+    }
+}
+
+/// What a run says about one protocol's section: "measured", "not applicable: <reason>" or
+/// "incomplete: <reason>"; a section the run does not list counts as measured.
+pub fn section_outcome(run: &Run, protocol: Protocol) -> String {
+    let Some(section) = run.sections.iter().find(|s| s.protocol == protocol) else {
+        return "measured".to_string();
+    };
+    let word = match section.outcome {
+        SectionKind::Measured => return "measured".to_string(),
+        SectionKind::NotApplicable => "not applicable",
+        SectionKind::Incomplete | SectionKind::TimedOut => "incomplete",
+    };
+    match &section.reason {
+        Some(reason) => format!("{word}: {reason}"),
+        None => word.to_string(),
+    }
 }

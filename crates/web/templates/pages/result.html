@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% import "components/grade.html" as grade %}
+{% import "components/run_line.html" as run_line %}
+{% import "components/trace.html" as trace %}
+{% import "components/diff_block.html" as diff_block %}
+{% import "components/grouping_switch.html" as grouping_switch %}
+{% import "components/check_row.html" as check_row %}
+{% block main %}
+<div id="result" class="result" data-state="{{ state }}" data-domain="{{ domain }}">
+<header id="result-header">
+{% if let Some(e) = shown %}{% call grade::grade(e.grade) %}{% endcall %}{% endif %}
+<h1>{{ domain }}</h1>
+<div id="run-line">{% if let Some(e) = shown %}{% call run_line::run_line(e.run_line) %}{% endcall %}{% else %}<p>not checked yet</p>{% endif %}</div>
+<div id="progress"></div>
+<form id="recheck" class="recheck" method="post" action="/{{ href }}/run" data-island="stream" data-stream-url="/{{ href }}/run"{% if autostart %} data-stream-autostart="visit"{% endif %}>
+<button type="submit" name="trigger" value="{{ trigger }}">{{ trigger_label }}</button>
+</form>
+{% if let Some(e) = shown %}{% if let Some(share) = e.share %}<a id="share" href="/r/{{ share }}">share</a>{% endif %}{% endif %}
+</header>
+<figure id="spectrum">
+{% if let Some(e) = shown %}{{ e.spectrum|safe }}{% endif %}
+<div id="trace">{% if let Some(e) = shown %}{% call trace::trace(e.trace) %}{% endcall %}{% endif %}</div>
+<ul id="legend">
+<li>pass</li>
+<li>warn</li>
+<li>fail</li>
+<li>fixed</li>
+<li>muted</li>
+</ul>
+</figure>
+<section id="diff">
+{% if let Some(e) = shown %}{% call diff_block::diff_block(e.diff) %}{% endcall %}{% endif %}
+</section>
+<section id="issues">
+<div hidden>{% call grouping_switch::grouping_switch(switch) %}{% endcall %}</div>
+{% if let Some(e) = shown %}
+{% for group in e.groups %}
+<section class="issue-group" data-group="{{ group.key }}">
+<h3>{{ group.label }}</h3>
+{% for row in group.rows %}
+<div class="issue" data-owner="{{ row.owner }}" data-severity="{{ row.severity }}" data-protocol="{{ row.protocol }}" data-status="{{ row.status }}" data-order="{{ row.order }}">
+{% call check_row::check_row(row.view) %}{% endcall %}
+</div>
+{% endfor %}
+</section>
+{% endfor %}
+{% endif %}
+</section>
+<section id="evidence">
+{% for item in evidence %}
+<div id="evidence-{{ item.protocol }}">
+{% if let Some(link) = item.href %}<a href="{{ link }}">{{ item.protocol }}</a> <span>{{ item.outcome }}</span>{% endif %}
+</div>
+{% endfor %}
+</section>
+<details id="passed">
+<summary>Checks that passed or do not apply</summary>
+{% if let Some(e) = shown %}{% for row in e.passed %}{% call check_row::check_row(row) %}{% endcall %}{% endfor %}{% endif %}
+</details>
+</div>
+{% endblock %}

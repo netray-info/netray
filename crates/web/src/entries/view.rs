@@ -95,7 +95,7 @@ pub(crate) fn grade_letter(grade: Grade) -> &'static str {
     }
 }
 
-fn grade_tone(grade: Grade) -> Tone {
+pub(crate) fn grade_tone(grade: Grade) -> Tone {
     match grade {
         Grade::APlus | Grade::A | Grade::B => Tone::Pass,
         Grade::C | Grade::D => Tone::Warn,

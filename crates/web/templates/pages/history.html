@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block main %}
+{% if rows.is_empty() %}
+<h1>{{ domain }}</h1>
+<p>not checked yet</p>
+<p><a href="/{{ href }}">Check {{ domain }}</a></p>
+{% else %}
+<h1>{{ domain }}</h1>
+<p><a href="/{{ href }}">Back to the latest result</a></p>
+<table id="history">
+<thead>
+<tr><th>entry</th><th>created</th><th>last seen</th><th>grade</th><th>profile</th><th>changes</th></tr>
+</thead>
+<tbody>
+{% for row in rows %}
+<tr><td><a href="/r/{{ row.id }}">{{ row.id }}</a></td><td>{{ row.created }}</td><td>{{ row.last_seen }}</td><td>{{ row.grade }}</td><td>{{ row.profile }}</td><td>{{ row.changes }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+{% endblock %}

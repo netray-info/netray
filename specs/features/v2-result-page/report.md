@@ -46,3 +46,61 @@ The first coder run left one red test whose fixture contradicted itself (`ip.rep
 ### Behavioural verification
 
 skipped: Phase 1 is pure view functions with no entry point; the routes arrive in Phase 2.
+
+## Phase 2 — Server-rendered pages
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R1: result::router(ResultState) serves GET /, GET /{domain}, POST /{domain}/run, GET /{domain}/history; non-domain first segments (no dot, root files, .well-known, bimi-logo.svg) are not answered; GET / with d → ?d= handler; lens merges it ahead of spa::handler; every response carries v2-pages' CSP | green | crates/web/tests/result_page_csp.rs, crates/lens/tests/result_mount.rs |
+| C2 | R2: segment validated by DomainRuns::validate; refused → 400 not-found template with reason and input; normalised differs → GET 301, POST 400 | green | crates/web/tests/result_page_domain.rs |
+| C3 | R3: GET /{domain} renders the latest entry in §5.7 order; no admission, no run, no store write; without entry 200 "not checked yet" + check button | green | crates/web/tests/result_page_render.rs |
+| C4 | R4: run line "run of <YYYY-MM-DD HH:MM> UTC · entry <id>"; data-state fresh/stale/none by [cache] ttl_seconds | green | crates/web/tests/result_page_render.rs |
+| C5 | R5: share link to /r/<id>; absent without entry and for an incomplete run | green | crates/web/tests/result_page_render.rs |
+| C6 | R14 (stored): one element per protocol id="evidence-<protocol>" linking /r/<id>/<protocol> with the section outcome; no block rendered | green | crates/web/tests/result_page_evidence.rs |
+| C7 | R15: spectrum and trace over the latest and at most 23 older entries; bands, data-run, data-shown, data-unmeasured; trace rows data-run; figure id="spectrum"; legend pass, warn, fail, fixed, muted | green | crates/web/tests/result_page_spectrum.rs |
+| C8 | R18: GET /{domain}/history lists every entry newest first with link, created, last seen, grade, profile version, changes; without entry 404 "not checked yet" with link to /<domain> | green | crates/web/tests/result_page_history.rs |
+| C9 | R24: / is the idle page: query_input action / name d, recent list, examples example.com and netray.info, tagline and scope sentence, four /inspect/<tool> links | green | crates/web/tests/result_page_idle.rs |
+| C10 | R31: test_header_parity.sh expects for lens's GET / the CSP lens answers for /guide/, without unsafe-inline/unsafe-eval; /health and the rest unchanged | green | tests/repo/test_header_parity.sh |
+| C11 | GIVEN a stored entry for shop.example.com WHEN GET THEN header, spectrum, diff, issues, evidence, details in order, run line names the id, store and admission saw no call | green | crates/web/tests/result_page_render.rs |
+| C12 | GIVEN last seen 10 min ago THEN stale + autostart visit; 1 min ago fresh, no autostart; none → none, "not checked yet", check button, autostart | green | crates/web/tests/result_page_render.rs |
+| C13 | GIVEN a stored entry THEN each evidence-<protocol> links /r/<id>/<protocol>, no evidence_block markup | green | crates/web/tests/result_page_evidence.rs |
+| C14 | GIVEN GET /Shop.Example.com. THEN 301 to /shop.example.com; GET /1.2.3.4 THEN 400 with validate's reason | green | crates/web/tests/result_page_domain.rs |
+| C15 | GIVEN a stored entry THEN five band groups, one data-run group per shown entry, data-shown only on run 0; older entry with email timed out and tls not applicable → band-email run group data-unmeasured, band-tls not | green | crates/web/tests/result_page_spectrum.rs |
+| C16 | GIVEN lens's app WHEN GET /robots.txt, /r/abcdefgh, /api/check/example.com THEN none answered by the result router | green | crates/lens/tests/result_mount.rs |
+| C17 | GIVEN 30 entries WHEN GET /shop.example.com/history THEN 30 rows link /r/<id>; the trace shows 24 | green | crates/web/tests/result_page_history.rs |
+| C18 | GIVEN GET / THEN idle page with input, examples, tagline, four inspect links; GET /?d=Example.com THEN 301 to /example.com | green | crates/web/tests/result_page_idle.rs |
+| C19 | GIVEN any response of the result routes THEN its CSP equals v2-pages' and script-src has no unsafe-inline | green | crates/web/tests/result_page_csp.rs |
+| C20 | GIVEN lens's GET / WHEN test_header_parity.sh runs THEN v2-pages' CSP there without unsafe-inline, lens's CSP on /health, passes | green | tests/repo/test_header_parity.sh |
+| C21 | GIVEN lens's app WHEN GET /favicon.svg, /favicon.ico, /bimi-logo.svg, /.well-known/mta-sts.txt THEN none answered by the result router | green | crates/lens/tests/result_mount.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 web pages | 3 (one red test was a fixture storing an incomplete run; fixed in b391ba07) | sonnet | 130446 | 275 |
+| G2 lens mount | 1 | sonnet | 32685 | 86 |
+| review fixes | 3 (one red test looked at the wrong chunk; fixed in 3cbde74b) | sonnet | 45734 | 115 |
+
+`tests/repo/test_smoke_services.sh` compared lens's `/` with its SPA fallback; lens's `/` is the idle page now, so the lens row checks the shell marker (72f8d55d, `ADLC-Test-Change`).
+
+### Review
+
+- BLOCKER (fixed): entries with a profile version this build does not embed were dropped, so the page read "not checked yet"; they are now mapped with `Profiles::current()` (Decision log).
+- AMENDMENT (repaired in phase, Decision log): `since` counts an entry lacking the check as its own state.
+- NIT (fixed, Decision log): a wrong method on a non-domain segment answered 405; it reaches lens's fallback.
+- DEFERRED: `POST /{domain}/run` answers 501 until Phase 3.
+- NIT (kept): `GET /localhost.` 301s to `/localhost`, which has no dot and falls to the SPA; `GET /?%64=…` shows the idle page.
+
+### Behavioural verification
+
+Seeded store (`cargo run -p netray-store --example seed`), `netray lens lens.dev.toml` with `LENS_HISTORY__DB_PATH`:
+
+```
+GET /                    200, CSP script-src 'self' 'sha256-FBZu…', action="/" name="d", /inspect/{dns,tls,http,ip}
+GET /example.com         200, data-state="fresh", entry 7cVwAwQZ, ids result-header spectrum diff issues evidence passed in order
+GET /Example.com.        301 → /example.com
+GET /example.com/history 200, 1 row linking /r/<id>
+GET /does-not-exist      SPA shell (id="root")
+```

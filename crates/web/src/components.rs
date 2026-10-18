@@ -260,7 +260,7 @@ pub struct SpectrumView {
     pub regions: Vec<SpectrumRegion>,
 }
 
-fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
+pub(crate) fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
     use crate::spectrum::LineTone;
     match tone {
         LineTone::Pass => Tone::Pass,
