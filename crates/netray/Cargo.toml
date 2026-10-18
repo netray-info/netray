@@ -31,3 +31,4 @@ clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
 netray-ip = { path = "../ip", features = ["testing"] }
+netray-store = { workspace = true }
