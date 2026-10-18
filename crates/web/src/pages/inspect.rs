@@ -2,7 +2,7 @@
 //! form, `POST /inspect/{tool}/run` streams one job. The jobs themselves reach the routes only
 //! through [`InspectorJobs`].
 
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::convert::Infallible;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
@@ -22,7 +22,9 @@ use futures::StreamExt;
 use futures::future::BoxFuture;
 use futures::stream::{BoxStream, FuturesUnordered};
 use netray_common::ip_extract::IpExtractor;
+use netray_engine::profile::Profiles;
 use netray_model::evidence::Block;
+use netray_model::{CheckResult, Protocol};
 use percent_encoding::{percent_decode_str, utf8_percent_encode};
 use serde::de::{Deserialize, Deserializer};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -32,12 +34,15 @@ use url::{Host, Url};
 use super::errors::LOCATION_SET;
 use super::headers::secure;
 use super::{Frame, not_found, page, server_error};
-use crate::components::{self, QueryInputView};
+use crate::components::{self, QueryInputView, SpectrumView};
 use crate::evidence::{block_view, live_run_line};
+use crate::spectrum::{RunInput, layout};
 use crate::stream::{end, fragment};
 
 const RESULT_ID: &str = "inspect-result";
 const BACKLINK_ID: &str = "inspect-backlink";
+const BAND_ID: &str = "inspect-band";
+const BAND_WIDTH: u32 = 432;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Tool {
@@ -215,17 +220,28 @@ pub struct JobPart {
     pub output: BoxFuture<'static, Result<Vec<Block>, String>>,
 }
 
+type BandChecks = BoxFuture<'static, Result<Vec<CheckResult>, String>>;
+
 pub struct Job {
     parts: Vec<JobPart>,
+    band: Option<(Protocol, BandChecks)>,
 }
 
 impl Job {
     pub fn new(parts: Vec<JobPart>) -> Job {
-        Job { parts }
+        Job { parts, band: None }
+    }
+
+    /// The protocol's live band: the job's checks, streamed after the parts. `Err(text)` renders
+    /// that text in the band region.
+    pub fn with_band(mut self, protocol: Protocol, checks: BandChecks) -> Job {
+        self.band = Some((protocol, checks));
+        self
     }
 }
 
-/// The seam to the job functions (requirement 13); the real implementation lives in the binary.
+/// The seam to the job functions (requirement 13); the real implementation is
+/// `netray_web::api::InspectJobs`.
 pub trait InspectorJobs: Send + Sync + 'static {
     /// The shared per-client and per-target limiter: `Err(retry_after)` refuses.
     fn admit(&self, tool: Tool, client: IpAddr, input: &str) -> Result<(), Duration>;
@@ -282,12 +298,20 @@ struct BacklinkFragment {
 struct StartFragment {
     run_line: String,
     parts: Vec<(usize, String)>,
+    band: bool,
 }
 
 #[derive(Template)]
 #[template(path = "partials/inspect_part.html")]
 struct PartFragment {
     n: usize,
+    html: Option<String>,
+    text: String,
+}
+
+#[derive(Template)]
+#[template(path = "partials/inspect_band.html")]
+struct BandFragment {
     html: Option<String>,
     text: String,
 }
@@ -401,6 +425,12 @@ async fn run(
     };
     let input = form.remove(tool.field()).unwrap_or_default();
 
+    let Ok(permit) = deps.slots[tool.index()].clone().try_acquire_owned() else {
+        return notice(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "busy, try again in a moment".to_string(),
+        );
+    };
     if let Err(retry_after) = deps.jobs.admit(tool, client, &input) {
         let secs = retry_after.as_secs() + u64::from(retry_after.subsec_nanos() > 0);
         let mut response = notice(
@@ -410,12 +440,6 @@ async fn run(
         response.headers_mut().insert(RETRY_AFTER, secs.into());
         return response;
     }
-    let Ok(permit) = deps.slots[tool.index()].clone().try_acquire_owned() else {
-        return notice(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "busy, try again in a moment".to_string(),
-        );
-    };
     let link = backlink(tool, &input);
     let job = match deps.jobs.start(JobRequest {
         tool,
@@ -440,6 +464,7 @@ struct Run {
     waiting: BTreeSet<usize>,
     queue: VecDeque<Event>,
     deadline: Instant,
+    band: Option<(Protocol, BandChecks)>,
     ended: bool,
 }
 
@@ -458,6 +483,28 @@ fn part_event(n: usize, result: Result<Vec<Block>, String>) -> Option<Event> {
     Some(fragment(&format!("inspect-part-{n}"), &html))
 }
 
+fn band_event(protocol: Protocol, result: Result<Vec<CheckResult>, String>) -> Option<Event> {
+    let (html, text) = match result.and_then(|checks| band_html(protocol, &checks)) {
+        Ok(html) => (Some(html), String::new()),
+        Err(text) => (None, text),
+    };
+    let html = (BandFragment { html, text }).render().ok()?;
+    Some(fragment(BAND_ID, &html))
+}
+
+fn band_html(protocol: Protocol, checks: &[CheckResult]) -> Result<String, String> {
+    let input = RunInput {
+        statuses: checks.iter().map(|c| (c.id.clone(), c.status)).collect(),
+        sections: BTreeMap::new(),
+        profile: Profiles::current(),
+    };
+    let catalogue = netray_engine::catalogue::catalogue().for_protocol(protocol);
+    let l = layout(&input, &[], &catalogue, BAND_WIDTH)
+        .map_err(|_| "the band could not be laid out".to_string())?;
+    let label = format!("{} checks", protocol.as_str().to_ascii_uppercase());
+    components::spectrum(&SpectrumView::from_layout(&l, &label, 0)).map_err(|e| e.to_string())
+}
+
 fn stream_job(
     job: Job,
     link: Option<(String, String)>,
@@ -472,6 +519,7 @@ fn stream_job(
             .enumerate()
             .map(|(n, part)| (n, part.label.clone()))
             .collect(),
+        band: job.band.is_some(),
     }
     .render()
     .ok()?;
@@ -493,6 +541,7 @@ fn stream_job(
             fragment(BACKLINK_ID, &backlink),
         ]),
         deadline,
+        band: job.band,
         ended: false,
     };
     let events = futures::stream::unfold(run, |mut run| async move {
@@ -504,6 +553,16 @@ fn stream_job(
                 return None;
             }
             if run.pending.is_empty() {
+                if let Some((protocol, checks)) = run.band.take() {
+                    let result = timeout_at(run.deadline, checks)
+                        .await
+                        .unwrap_or_else(|_| Err("timed out".to_string()));
+                    run.queue.push_back(
+                        band_event(protocol, result)
+                            .unwrap_or_else(|| fragment(BAND_ID, "render failed")),
+                    );
+                    continue;
+                }
                 run.ended = true;
                 return Some((Ok(end()), run));
             }

@@ -101,3 +101,28 @@ G1: C1–C12, C14–C17 (all need `crates/web/src/pages/{mod,inspect}.rs`) · G2
 3. The protected lens tests with exhaustive `Config { … }` literals gain `inspect: Default::default()` (one line each; `ADLC-Test-Change` per file, precedent 6455529b).
 
 The SDD amendments (requirement 22) land in Phase 7, as the spec orders.
+
+## Phase 6 — TLS, HTTP and IP inspectors
+
+## Groups
+
+G1: C4, C5, C10, C16 · G2: C1, C2, C3, C6, C8, C9, C11, C12, C13, C14, C15 · G3: C7 (in this order: G2 uses G1's `Job::with_band`, G3 uses G2's `api::InspectJobs`).
+
+## Plan
+
+### G1
+- `crates/engine/src/catalogue.rs`: `Catalogue::for_protocol(&self, Protocol) -> Catalogue`, entries filtered in catalogue order.
+- `crates/web/src/pages/inspect.rs`: `Job.band: Option<(Protocol, BoxFuture<Result<Vec<CheckResult>, String>>)>`, `Job::with_band`; `StartFragment.band` placeholder `<div id="inspect-band">`; `BandFragment` + `band_event` over `spectrum::layout(RunInput{statuses, no sections, Profiles::current()}, &[], &catalogue().for_protocol(p), BAND_WIDTH)` and `SpectrumView::from_layout`; the unfold loop awaits the band under the deadline after the parts ("timed out" past it), then `end`.
+- `crates/web/templates/partials/inspect_start.html` (placeholder), `crates/web/templates/partials/inspect_band.html` (new).
+
+### G2
+- `crates/tls/src/inspector.rs`: `TlsInspector::parse(&self, input)` with the inspector's `max_ports`; `inspect` uses it.
+- `crates/web/src/api/jobs.rs` (new): `InspectJobs { state: ApiState }` implementing `pages::InspectorJobs`: admit charges the `ApiState` limiters (TLS `check_cost(client, host, 1)`, HTTP `check(client, host)`, IP `per_ip` then `per_target`), nothing for input `start` refuses; start validates (TLS input and the 143/21 refusal, `parse_url`, `parse_address`), runs the job (TLS `inspect_parsed`, HTTP `target` + `inspect` without a second charge, IP `lookup`/`lookup_caller`) and splits the module translation into the part's blocks and the band's checks.
+- `crates/web/src/api/{mod.rs,inspectors.rs,ip.rs}`: `mod jobs; pub use jobs::InspectJobs;`, v1's off texts and `charge` shared within `api`.
+
+### G3
+- `crates/lens/src/lib.rs` `app()`: `ApiState` built always; `inspect_router(InspectDeps::new(Arc::new(InspectJobs::new(api_state)), config.inspect.clone()).with_ip_extractor(state.ip_extractor.clone()))` merged beside the frontend router, ahead of `spa::handler`.
+
+### Review fix
+- `crates/web/src/api/jobs.rs`: TLS admission charges one unit per port on the shared `[api.tls]` limiter; the inspection runs against a per-job `RateLimitState` (burst `max([api.tls] per_ip_burst, ports)`), so nothing refuses inside the stream; a late `RateLimited` renders "too many requests; try again in N s".
+- `crates/web/src/pages/inspect.rs` `run`: the concurrency slot is taken before `admit`.

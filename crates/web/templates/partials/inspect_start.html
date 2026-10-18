@@ -1,5 +1,5 @@
 <div id="inspect-result">
 {{ run_line|safe }}
 {% for (n, label) in parts %}<div id="inspect-part-{{ n }}">{{ label }} pending</div>
-{% endfor %}
-</div>
+{% endfor %}{% if band %}<div id="inspect-band"></div>
+{% endif %}</div>

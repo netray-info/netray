@@ -199,3 +199,62 @@ config error: …/c.toml: inspect.dns.max_concurrent must be at least 1   exit 1
 == [inspect.tls] bogus = 1
 config error: …/c.toml: unknown field `bogus`, expected `deadline_ms` or `max_concurrent` for key `inspect.tls`   exit 1
 ```
+
+## Phase 6 — TLS, HTTP and IP inspectors
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R15: the TLS inspector accepts tlsight's inputs (`host`, `host:port`, `host:port,port`, addresses), keeps SMTP STARTTLS on 25 and 587, refuses 143 and 21 with "STARTTLS for IMAP and FTP is not supported" before the job; blocks and band are `netray_tls::module::translate` over the job's `InspectResponse` | green | crates/web/tests/inspect_tls_jobs.rs |
+| C2 | R16: the HTTP inspector accepts any `http`/`https` URL, path included, and renders the blocks of `netray_http::translate`; its band is that translation's checks | green | crates/web/tests/inspect_http_jobs.rs |
+| C3 | R17: the IP inspector without `ip` looks up the caller's address (v1's key), with `ip` any global address; blocks and band from `netray_ip::translate(&[(addr, result)], 1)`; without `[modules.ip]` one fragment "IP lookups are unavailable" | green | crates/web/tests/inspect_ip_jobs.rs |
+| C4 | R25: a protocol's band is `spectrum::layout` over `Catalogue::for_protocol(p)` (catalogue order) with the one live run under `Profiles::current()`, no older run, rendered through `SpectrumView` | green | crates/web/tests/inspect_band_layout.rs |
+| C5 | R10 (carried from Phase 5): the band streams after the parts and before `end` | green | crates/web/tests/inspect_band.rs |
+| C6 | R14 (carried from Phase 5): the page route and `/api/v1/<tool>` share one instance of each inspector's per-client and per-target limiters, keyed by v1's caller address | green | crates/web/tests/inspect_shared_limits.rs |
+| C7 | R13 (carried from Phase 5): lens mounts the inspector routes with the real `InspectorJobs` and v1's `IpExtractor` ahead of `spa::handler` | green | crates/lens/tests/inspect_mount.rs |
+| C8 | R11 (carried from Phase 5): a real job run against a store leaves its entry count and every `last_seen_at` unchanged | green | crates/web/tests/inspect_no_store_real.rs |
+| C9 | S: `h=mail.example.com:143` → the stream holds "STARTTLS for IMAP and FTP is not supported" and the job function is not called | green | crates/web/tests/inspect_tls_jobs.rs |
+| C10 | S: a TLS job yielding one `tls.chain` block and a failing `tls.not_expired` → the chain renders and the band carries a fail line for `tls.not_expired` | green | crates/web/tests/inspect_band.rs |
+| C11 | S: `url=https://example.com/path?x=1` → the job receives that URL unchanged | green | crates/web/tests/inspect_http_jobs.rs |
+| C12 | S: `/inspect/ip` from a trusted proxy with `X-Forwarded-For: 192.0.2.7` and no `ip` → the job looks up `192.0.2.7` | green | crates/web/tests/inspect_ip_jobs.rs |
+| C13 | S: `ip=2001:db8::1` → the job looks up `2001:db8::1` and the band is the IP band | green | crates/web/tests/inspect_ip_jobs.rs |
+| C14 | S: lens without `[modules.ip]` → an IP job answers one fragment "IP lookups are unavailable" | green | crates/web/tests/inspect_ip_jobs.rs |
+| C15 | S: `/api/v1/tls/inspect` exhausting the per-target budget of `example.com` → `POST /inspect/tls/run` with `h=example.com` answers `429` | green | crates/web/tests/inspect_shared_limits.rs |
+| C16 | S: `Catalogue::for_protocol(Tls)` holds exactly the TLS checks in catalogue order, and `layout` over it yields one line per TLS check | green | crates/engine/tests/catalogue_for_protocol.rs, crates/web/tests/inspect_band_layout.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 4 | sonnet | 52542 | 133 |
+| G2 | 1 | sonnet | 65122 | 132 |
+| G3 | 1 | sonnet | 28286 | 42 |
+
+### Review
+
+Pass 1: BLOCKER a TLS page job could pass admission and be refused inside the 200 stream ("rate limited (api_v1_tls)", a limiter scope in UI copy), because admission charged one unit and the inspection charged ports-by-addresses again (fixed: admission charges one unit per port on the shared `[api.tls]` instance, the inspection runs against a per-job limiter with `[api.tls]`'s burst, a late `RateLimited` renders "too many requests"; decision logged); AMENDMENT a "busy" answer charged the shared limiters (repaired in phase: the slot is taken before admission, decision logged); AMENDMENT IP admission charges the caller before validating (repaired in phase as a decision: v1's order kept); DEFERRED the DNS placeholder until Phase 7; NIT a part timed out with a band that still renders when the job lands in the same instant; NIT the TLS page job logs an empty request id. Regression tests: `crates/web/tests/inspect_review_phase6.rs`. Pass 2: no blocker, the fixes hold; DEFERRED a port count above `[api.tls]`'s burst is refused with `Retry-After: 60` on every retry, as tlsight V1 refuses it (unreachable with the defaults, burst 10/20 over `max_ports` 7); NIT the per-job limiter's cap path counts a `rate_limit_hits_total{scope="inspect_tls"}` without refusing.
+
+### Behavioural verification
+
+`target/debug/netray lens` on `crates/lens/lens.dev.toml` (no `[modules.ip]`), port 18431:
+
+```
+== GET /inspect/tls?h=example.com
+HTTP/1.1 200 OK
+<form class="query-input" action="/inspect/tls" method="get" data-island="stream" data-stream-url="/inspect/tls/run" data-stream-autostart="load">
+<div id="inspect-result"></div>
+== POST /inspect/tls/run h=mail.example.com:143
+HTTP/1.1 200 OK   content-type: text/event-stream
+event: fragment
+data: {"id":"inspect-result","html":"<div id=\"inspect-result\"><p>STARTTLS for IMAP and FTP is not supported</p></div>"}
+== POST /inspect/ip/run ip=
+event: fragment
+data: {"id":"inspect-result","html":"<div id=\"inspect-result\"><p>IP lookups are unavailable</p></div>"}
+event: end
+== POST /inspect/http/run url=https://example.com/
+event: fragment  inspect-result: run line "live · … not recorded", part pending
+event: fragment  inspect-backlink: <a href="/example.com">Back to example.com</a>
+event: fragment  inspect-part-0: <section class="evidence-block" id="ev-http.redirects" data-shape="chain"> …
+event: fragment  inspect-band: <div class="spectrum"> … min-width: calc(12 * var(--spectrum-line-pitch-min)) (the 12 HTTP checks)
+```

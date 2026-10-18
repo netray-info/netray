@@ -70,7 +70,7 @@ Each is marked `(I<n>)` where a requirement uses it. If one is missing or differ
 10. `POST /inspect/<tool>/run` takes the form field and answers an SSE stream of `fragment` events `{"id", "html"}` ending with `end` (I5): first the run line "live · not recorded" with the job's parts pending, then each part's evidence blocks through requirement 1's renderer as it finishes, then the band, then `end`. Invalid input answers one fragment in the result region with the validation message of the job function and ends the stream. A refusal by the per-client or per-target limit answers `429` with `Retry-After` and one fragment "too many requests; try again in N s" (default wording, not interviewed). A request carrying `Sec-Purpose: prefetch` or `prerender`, as `netray_common::prefetch::is_prefetch` decides it (v2-admission requirement 18), starts nothing and answers `503` with `Cache-Control: no-store` (S8; the answer v2-admission and v2-api give a prefetch that starts nothing).
 11. Every inspector run renders `run_line` with "live · not recorded" and no `grade` component (§6.2, §8.3); no job writes to `history.db` or calls the store, and no job passes the domain-run admission (§4.4). A test runs a job against a store and asserts its entry count and every `last_seen_at` unchanged.
 12. When the target is a host name, the page links to `/<registrable domain>` of that name by the Public Suffix List (§6.2, S29); an address target or a name without a registrable domain gets no link. The list comes from one PSL crate added as a workspace dependency, whose licence `cargo deny` accepts (default, not interviewed).
-13. Inspector jobs reach the routes through one trait in `netray-web` (`InspectorJobs`), so router tests run offline with a stub. The real implementation lives in the binary beside `lens_registry` (`crates/netray/src/main.rs:143-238`), over the I1 functions, the module translations and the process's module instances (`Arc<IpModule>`, the DNS module); the binary builds netray-web's router with it and hands it to `lens::run_with`, which merges it ahead of `spa::handler` (X1). lens names no module crate (`test_lens_names_no_module.sh`), and the inspector routes in `crates/web/src/pages/` reach jobs only through `InspectorJobs`; netray-web's `api/` module, not this feature, depends on the module crates (v2-api requirement 1) (default, not interviewed).
+13. Inspector jobs reach the routes through one trait in `netray-web` (`InspectorJobs`), so router tests run offline with a stub. The real implementation, `netray_web::api::InspectJobs`, lives in netray-web's `api` module over API v1's `ApiState` (the module parts the binary builds beside `lens_registry`, `crates/netray/src/main.rs:143-238`, and hands to `lens::run_with`: the I1 functions and the process's module instances, `Arc<IpModule>`, later the DNS module) and the module translations; lens builds netray-web's inspector router with it beside API v1 and merges it ahead of `spa::handler` (X1). lens names no module crate (`test_lens_names_no_module.sh`), and the inspector routes in `crates/web/src/pages/` reach jobs only through `InspectorJobs`; netray-web's `api/` module, not this feature, depends on the module crates (v2-api requirement 1) (default, not interviewed).
 14. Each inspector has its own deadline and concurrency limit (P12, P13): `[inspect.dns|tls|http|ip] deadline_ms, max_concurrent` in the lens config beside `[api.*]` (I2; v2-cutover moves both into `netray.toml`), `deny_unknown_fields`, parsed by `netray lens --check-config`; defaults DNS 30 000 (V1's DNS stream deadline, `crates/dns/src/api/mod.rs:34`; `max_timeout_secs` still clamps each query or hop inside it), TLS 15 000, HTTP 30 000 (the V1 budgets) and IP 5 000 ms, 8 slots each (default, not interviewed). A zero value is a startup reject with a `validate()` rule and a `startup_rejects` row in `tests/repo/test_check_config.sh`. A full inspector answers one fragment "busy, try again in a moment" and does not queue; a job past its deadline keeps its finished parts and marks the others "timed out". The page route and `/api/v1/<tool>` share one instance of each inspector's per-client and per-target limiters (I2), keyed by the same caller address as v1.
 15. The TLS inspector accepts the inputs of `crates/tls/src/input.rs:29-35`, uses SMTP STARTTLS on ports 25 and 587 as today, and refuses ports 143 and 21 with "STARTTLS for IMAP and FTP is not supported" before calling the job (§6.2; default wording, not interviewed). Its blocks and band are `netray_tls::module::translate` over the job's `InspectResponse` (I1), the band of port 443 or the first port as `translate` picks.
 16. The HTTP inspector accepts any `http` or `https` URL, path included, and renders the redirect chain, headers and the other blocks of `netray_http::module::translate` over the job's `InspectResponse`; its band is that translation's checks (I1).
@@ -180,7 +180,7 @@ GIVEN `GET /inspect/email` THEN `404`.
 **Depends on:** Phase 5
 **Requirements:** 15, 16, 17, 25
 
-`crates/netray`: the real `InspectorJobs` over the TLS, HTTP and IP functions (I1), the module translations, the shared limiter instances (I2), the port refusal, the caller address, mounted through `lens::run_with`. `crates/engine`: `Catalogue::for_protocol`. `crates/web`: the band through `spectrum::layout` (I6), carried by `Job` and streamed after the parts (requirement 10's "then the band"). Router tests use stubs; one job test per inspector with the module crate's `testing` feature where it exists.
+`crates/web/src/api`: the real `InspectorJobs` over the TLS, HTTP and IP functions (I1), the module translations, the shared limiter instances (I2), the port refusal; `crates/lens`: mounted beside API v1 with v1's caller address. `crates/engine`: `Catalogue::for_protocol`. `crates/web`: the band through `spectrum::layout` (I6), carried by `Job` and streamed after the parts (requirement 10's "then the band"). Router tests use stubs; one job test per inspector with the module crate's `testing` feature where it exists.
 
 ### Test Scenarios
 
@@ -356,6 +356,31 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
   Phase 6 decisions), over its tip `300bee1c`, a commit of v2-api's failing Phase 6 email tests:
   Phase 6 needs only the TLS, HTTP and IP functions, and the gate stays green (implementer under
   the operator's autonomy mandate, 2026-10-18).
+
+- The real `InspectorJobs` in netray-web's `api` module over API v1's `ApiState`, built by lens
+  beside `/api/v1`, over an implementation in the binary beside `lens_registry` (requirement 13 as
+  first written): `ApiState` already holds the module parts the binary hands in and the `[api.*]`
+  limiter instances, so the page and v1 share one instance by construction, v1's validation
+  (`parse_address`, `parse_url`, tlsight's input rules) is reused, and the jobs are tested from
+  `crates/web/tests` with the module crates' `testing` stubs; a binary crate offers no test
+  target for them (implementer under the operator's autonomy mandate, 2026-10-18).
+- The page's TLS and HTTP admission charges the shared `[api.tls]`/`[api.http]` limiters before
+  the job, so a refusal is the `429` of requirement 10 and never a message inside the 200 stream:
+  HTTP once (`check(client, host)`, as v1 charges before resolution; the job then resolves and
+  inspects without a second charge); TLS one unit per port (`check_cost(client, host, ports)`),
+  the inspection then running against a per-job limiter whose burst is `[api.tls]`'s (at least the
+  port count), so tlsight's cap-and-warn still bounds the addresses and nothing refuses after
+  admission. Over charging one unit and letting the inspection charge ports-by-addresses again
+  (refused inside the stream, review of Phase 6) or a peek (governor has none): a page job costs a
+  single-address host what v1 costs, a multi-address host less, bounded by `[inspect.tls]`
+  concurrency (implementer under the operator's autonomy mandate, 2026-10-18).
+- The inspector takes its concurrency slot before admission, over admission first: a "busy"
+  answer then charges no `[api.*]` budget shared with v1 (review of Phase 6; implementer under the
+  operator's autonomy mandate, 2026-10-18).
+- The IP inspector charges the caller's `per_ip` unit before validating the address, as v1's
+  `GET /api/v1/ip/{address}` does, over charging nothing for refused input: one limiter, one rule
+  (review of Phase 6; implementer under the operator's autonomy mandate, 2026-10-18).
+- The HTTP inspector validates with the job function's `parse_url` (`https://` or a bare host, `http://` refused with "Submit the URL with https:// scheme; port-80 probing is automatic."), over accepting `http://` as requirement 16's "any `http` or `https` URL" reads: v1 and the V1 page refuse it the same way, the port-80 probe already reports the plain-HTTP side, and requirement 10 shows the job function's own validation message (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 

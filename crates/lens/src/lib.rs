@@ -242,24 +242,33 @@ pub fn app(state: state::AppState) -> Router {
         _ => Router::new(),
     };
 
-    let api_routes = if config.api.enabled {
-        let limits = netray_web::api::AdmissionLimits {
-            client_budget_per_hour: config.admission.client_budget_per_hour,
-            domain_run_slots: config.admission.domain_run_slots,
-            rate_limit_per_ip_per_minute: config.rate_limit.per_ip_per_minute,
-            rate_limit_per_ip_burst: config.rate_limit.per_ip_burst,
-            rate_limit_global_per_minute: config.rate_limit.global_per_minute,
-            rate_limit_global_burst: config.rate_limit.global_burst,
-        };
-        let api_state = netray_web::api::ApiState::new(
-            config.api.clone(),
-            std::sync::Arc::new(api_v1::LensRuns::new(state.clone())),
+    let limits = netray_web::api::AdmissionLimits {
+        client_budget_per_hour: config.admission.client_budget_per_hour,
+        domain_run_slots: config.admission.domain_run_slots,
+        rate_limit_per_ip_per_minute: config.rate_limit.per_ip_per_minute,
+        rate_limit_per_ip_burst: config.rate_limit.per_ip_burst,
+        rate_limit_global_per_minute: config.rate_limit.global_per_minute,
+        rate_limit_global_burst: config.rate_limit.global_burst,
+    };
+    let api_state = netray_web::api::ApiState::new(
+        config.api.clone(),
+        std::sync::Arc::new(api_v1::LensRuns::new(state.clone())),
+    )
+    .with_store(state.history_store.clone())
+    .with_ip_extractor(state.ip_extractor.clone())
+    .with_admission_limits(limits)
+    .with_parts(state.api_parts.clone())
+    .with_profile(state.scoring_profile.clone());
+
+    let inspect_routes = netray_web::pages::inspect_router(
+        netray_web::pages::InspectDeps::new(
+            std::sync::Arc::new(netray_web::api::InspectJobs::new(api_state.clone())),
+            config.inspect.clone(),
         )
-        .with_store(state.history_store.clone())
-        .with_ip_extractor(state.ip_extractor.clone())
-        .with_admission_limits(limits)
-        .with_parts(state.api_parts.clone())
-        .with_profile(state.scoring_profile.clone());
+        .with_ip_extractor(state.ip_extractor.clone()),
+    );
+
+    let api_routes = if config.api.enabled {
         Router::new()
             .nest("/api/v1", netray_web::api::router(api_state))
             .route("/api/v1/", axum::routing::any(api_v1_not_found))
@@ -282,6 +291,7 @@ pub fn app(state: state::AppState) -> Router {
             Router::new()
         })
         .with_state(state)
+        .merge(inspect_routes)
         .merge(frontend_router_with(shell))
         .merge(entry_routes)
         .merge(netray_web::entries::privacy_router())
