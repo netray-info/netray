@@ -622,6 +622,42 @@
         ],
         "type": "string"
       },
+      "CheckResult": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/EmailCategory"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "enrichment": {
+            "items": {
+              "$ref": "#/components/schemas/IpEnrichment"
+            },
+            "type": "array"
+          },
+          "sub_checks": {
+            "items": {
+              "$ref": "#/components/schemas/SubCheck"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "category",
+          "verdict",
+          "title",
+          "detail",
+          "sub_checks"
+        ],
+        "type": "object"
+      },
       "CheckSpec": {
         "description": "One catalogue entry.",
         "properties": {
@@ -1038,6 +1074,124 @@
         },
         "required": [
           "resolved_ips"
+        ],
+        "type": "object"
+      },
+      "EmailCategory": {
+        "enum": [
+          "mx",
+          "spf",
+          "dkim",
+          "dmarc",
+          "mta_sts",
+          "tls_rpt",
+          "dane",
+          "dnssec",
+          "bimi",
+          "fcrdns",
+          "dnsbl",
+          "cross_validation"
+        ],
+        "type": "string"
+      },
+      "EmailGrade": {
+        "enum": [
+          "F",
+          "D",
+          "C",
+          "B",
+          "A",
+          "skipped"
+        ],
+        "type": "string"
+      },
+      "EmailInspectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "example": "example.com",
+            "type": "string"
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
+      "EmailInspectResult": {
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CheckResult"
+            },
+            "type": "array"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EmailSummary"
+          }
+        },
+        "required": [
+          "categories",
+          "evidence",
+          "summary"
+        ],
+        "type": "object"
+      },
+      "EmailMeta": {
+        "properties": {
+          "max_concurrent_inspections": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "max_concurrent_inspections"
+        ],
+        "type": "object"
+      },
+      "EmailSummary": {
+        "properties": {
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "grade": {
+            "$ref": "#/components/schemas/EmailGrade"
+          },
+          "verdicts": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Verdict"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "grade",
+          "verdicts",
+          "duration_ms"
         ],
         "type": "object"
       },
@@ -1848,6 +2002,38 @@
         ],
         "type": "object"
       },
+      "IpEnrichment": {
+        "description": "Enrichment data for an IP address, included in MX results for frontend display.",
+        "properties": {
+          "asn": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ip": {
+            "type": "string"
+          },
+          "ip_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ip"
+        ],
+        "type": "object"
+      },
       "IpInfo": {
         "description": "Metadata about a single IP address from the enrichment API.",
         "properties": {
@@ -2039,6 +2225,9 @@
           "api": {
             "$ref": "#/components/schemas/ApiLimits"
           },
+          "email": {
+            "$ref": "#/components/schemas/EmailMeta"
+          },
           "http": {
             "$ref": "#/components/schemas/InspectorMeta"
           },
@@ -2058,7 +2247,8 @@
           "rate_limit",
           "ip",
           "tls",
-          "http"
+          "http",
+          "email"
         ],
         "type": "object"
       },
@@ -3458,6 +3648,87 @@
           }
         ]
       },
+      "SseEvent": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CheckResult"
+              },
+              {
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "category"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          {
+            "properties": {
+              "duration_ms": {
+                "format": "int64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "grade": {
+                "$ref": "#/components/schemas/EmailGrade"
+              },
+              "type": {
+                "enum": [
+                  "summary"
+                ],
+                "type": "string"
+              },
+              "verdicts": {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Verdict"
+                },
+                "propertyNames": {
+                  "type": "string"
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "grade",
+              "verdicts",
+              "duration_ms",
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "The evidence blocks of the run, sent once right before `Summary`.",
+            "properties": {
+              "blocks": {
+                "items": {
+                  "$ref": "#/components/schemas/Block"
+                },
+                "type": "array"
+              },
+              "type": {
+                "enum": [
+                  "evidence"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "blocks",
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "Status": {
         "description": "The outcome of one check.",
         "enum": [
@@ -3469,6 +3740,25 @@
           "unmeasured"
         ],
         "type": "string"
+      },
+      "SubCheck": {
+        "properties": {
+          "detail": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "name",
+          "verdict",
+          "detail"
+        ],
+        "type": "object"
       },
       "Summary": {
         "properties": {
@@ -4026,6 +4316,16 @@
           }
         ]
       },
+      "Verdict": {
+        "enum": [
+          "skip",
+          "info",
+          "pass",
+          "warn",
+          "fail"
+        ],
+        "type": "string"
+      },
       "VpnInfo": {
         "properties": {
           "provider": {
@@ -4514,6 +4814,92 @@
         "summary": "Start a fresh run of a domain and answer with it; takes no body.",
         "tags": [
           "runs"
+        ]
+      }
+    },
+    "/api/v1/email/inspect": {
+      "post": {
+        "operationId": "email_inspect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailInspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailInspectResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/SseEvent"
+                }
+              }
+            },
+            "description": "The inspection of the domain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, unknown field, invalid domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The inspection ended without a summary"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The email module is off, or every inspection slot is taken"
+          }
+        },
+        "summary": "The mail posture of a domain: twelve categories, the evidence and a summary. With\n`Accept: text/event-stream` the same events arrive as they complete.",
+        "tags": [
+          "email"
         ]
       }
     },

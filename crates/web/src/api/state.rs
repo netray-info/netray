@@ -6,6 +6,7 @@ use std::sync::Arc;
 use governor::{Quota, RateLimiter};
 use netray_common::ip_extract::IpExtractor;
 use netray_common::rate_limit::KeyedLimiter;
+use netray_email::{EmailInspect, InspectSlots};
 use netray_engine::profile::{Profile, Profiles};
 use netray_http::HttpInspect;
 use netray_ip::IpLookup;
@@ -35,6 +36,7 @@ pub struct ApiParts {
     pub ip: Option<Arc<dyn IpLookup>>,
     pub tls: Option<TlsInspector>,
     pub http: Option<Arc<dyn HttpInspect>>,
+    pub email: Option<Arc<dyn EmailInspect>>,
 }
 
 /// The three limiters of the ip endpoints, keyed by the caller address (per-target by the
@@ -99,6 +101,8 @@ pub struct ApiState {
     ip_limiters: Arc<IpLimiters>,
     tls_limiters: Arc<netray_tls::security::RateLimitState>,
     http_limiters: Arc<netray_http::security::RateLimitState>,
+    email_limiter: Arc<netray_email::security::RateLimitState>,
+    email_slots: InspectSlots,
     header_filters: Arc<RegexSet>,
 }
 
@@ -134,6 +138,17 @@ impl ApiState {
                 per_target: "api_v1_http_target",
             },
         ));
+        let email_limiter = Arc::new(netray_email::security::RateLimitState::scoped(
+            &netray_email::security::rate_limit::Quotas {
+                per_ip_per_minute: config.email.per_ip_per_minute,
+                per_ip_burst: config.email.per_ip_burst,
+            },
+            netray_email::security::rate_limit::Scopes {
+                metrics_prefix: "lens",
+                per_ip: "api_v1_email",
+            },
+        ));
+        let email_slots = InspectSlots::new(config.email.max_concurrent_inspections as usize);
         let header_filters = Arc::new(header_filters(&config.ip.filtered_headers));
         Self {
             config,
@@ -147,6 +162,8 @@ impl ApiState {
             ip_limiters,
             tls_limiters,
             http_limiters,
+            email_limiter,
+            email_slots,
             header_filters,
         }
     }
@@ -217,12 +234,24 @@ impl ApiState {
         &self.http_limiters
     }
 
+    pub fn email_limiter(&self) -> &Arc<netray_email::security::RateLimitState> {
+        &self.email_limiter
+    }
+
+    pub fn email_slots(&self) -> &InspectSlots {
+        &self.email_slots
+    }
+
     pub fn tls_inspector(&self) -> Option<&TlsInspector> {
         self.parts.tls.as_ref()
     }
 
     pub fn http_inspect(&self) -> Option<&Arc<dyn HttpInspect>> {
         self.parts.http.as_ref()
+    }
+
+    pub fn email_inspect(&self) -> Option<&Arc<dyn EmailInspect>> {
+        self.parts.email.as_ref()
     }
 
     pub(super) fn header_filters(&self) -> &RegexSet {

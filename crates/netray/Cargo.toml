@@ -11,7 +11,7 @@ netray-engine = { workspace = true }
 netray-model = { workspace = true }
 netray-web = { workspace = true }
 
-netray-email = { path = "../email" }
+netray-email = { workspace = true }
 netray-ip = { workspace = true }
 lens = { path = "../lens" }
 netray-dns = { path = "../dns" }

@@ -147,6 +147,7 @@ struct LensModules {
     ip: Option<Arc<netray_ip::IpModule>>,
     tls: Arc<netray_tls::TlsModule>,
     http: Arc<netray_http::HttpModule>,
+    email: Arc<netray_email::EmailModule>,
 }
 
 /// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
@@ -179,9 +180,11 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
     let email_config: netray_email::ModuleConfig = table
         .try_into()
         .map_err(|e| format!("modules.email: {e}"))?;
-    let email = netray_email::EmailModule::new(email_config)
-        .await
-        .map_err(|e| format!("modules.email: {e}"))?;
+    let email = Arc::new(
+        netray_email::EmailModule::new(email_config)
+            .await
+            .map_err(|e| format!("modules.email: {e}"))?,
+    );
     let table = match cfg.modules.get("tls") {
         Some(table) => table.clone(),
         None => {
@@ -216,7 +219,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
         .with(Box::new(Shared(dns.clone())))
         .with_facts(Box::new(Shared(dns)))
         .with(Box::new(Shared(http.clone())))
-        .with(Box::new(email))
+        .with(Box::new(Shared(email.clone())))
         .with(Box::new(Shared(tls.clone())));
     let Some(table) = cfg.modules.get("ip").cloned() else {
         tracing::warn!("modules.ip is not configured: the IP section is off");
@@ -225,6 +228,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
             ip: None,
             tls,
             http,
+            email,
         });
     };
     let ip_config: netray_ip::ModuleConfig =
@@ -241,6 +245,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
             ip: None,
             tls,
             http,
+            email,
         });
     }
     for (key, path) in [
@@ -264,6 +269,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
         ip: Some(ip),
         tls,
         http,
+        email,
     })
 }
 
@@ -328,6 +334,7 @@ async fn main() -> anyhow::Result<()> {
                 ip,
                 tls,
                 http,
+                email,
             } = lens_registry(&cfg, true)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
@@ -337,6 +344,7 @@ async fn main() -> anyhow::Result<()> {
                     .map(|module| module as std::sync::Arc<dyn netray_ip::IpLookup>),
                 tls: Some(tls.inspector()),
                 http: Some(http as Arc<dyn netray_http::HttpInspect>),
+                email: Some(Arc::new(email.inspector()) as Arc<dyn netray_email::EmailInspect>),
             };
             if let Some(ip) = ip {
                 reload_ip_on_sighup(ip);

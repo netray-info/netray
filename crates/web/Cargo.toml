@@ -13,6 +13,7 @@ netray-store = { workspace = true }
 netray-ip = { workspace = true }
 netray-tls = { workspace = true }
 netray-http = { workspace = true }
+netray-email = { workspace = true }
 askama = { workspace = true }
 axum = { workspace = true }
 tracing = { workspace = true }
@@ -42,3 +43,4 @@ jsonschema = { version = "0.30", default-features = false }
 netray-ip = { workspace = true, features = ["testing"] }
 netray-tls = { workspace = true, features = ["testing"] }
 netray-http = { workspace = true, features = ["testing"] }
+netray-email = { workspace = true, features = ["testing"] }

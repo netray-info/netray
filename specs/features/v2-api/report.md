@@ -331,3 +331,51 @@ Reader over the phase diff: 0 BLOCKER, 2 AMENDMENT, 1 DEFERRED, 3 NIT.
 - AMENDMENT (repaired in phase, decision log): v1 `/http/inspect` omits `enrichment.detail_url` (no key carries the IP-detail base); `[api.tls]`/`[api.http]` refuse only zeros, no cross-key rule, as tlsight and spectra.
 - DEFERRED: a per-target TLS refusal charges the caller's per-IP tokens twice (full cost, then the reduced retry) — tlsight's existing cap-and-warn logic, now also on v1.
 - NIT: C12's test compares tlsight with the inspector that both share (tlsight's `integration` and `contract_golden` tests pin its answers); C5's `starttls` label is set from the port after the stub, only the port-25 call is the STARTTLS evidence; criteria statuses were open at review time (now green).
+
+## Phase 6 — Email inspection
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R29: `POST /email/inspect` `{domain}` runs `run_all_checks` live with `parse_domain`, the per-IP limiter and the semaphore; full semaphore 503 `UNAVAILABLE`; nothing stored; SSE `category`/`evidence`/`summary` with `Accept: text/event-stream`, else one typed `{categories, evidence, summary}` | green | crates/email/tests/job.rs, crates/web/tests/api_email_limits.rs, tests/repo/test_check_config.sh |
+| C2 | S: `{"domain":"example.com"}`, stub resolver, `Accept: application/json` → one `{categories, evidence, summary}` object valid against the document; history store unchanged | green | crates/web/tests/api_email.rs, crates/web/tests/openapi_responses.rs |
+| C3 | S: `Accept: text/event-stream` → `category` events, one `evidence`, a `summary`, in order, each valid against its event schema, no `error` event | green | crates/web/tests/api_email.rs, crates/web/tests/openapi_responses.rs |
+| C4 | S: full inspection semaphore → 503 `UNAVAILABLE`; one free permit → 200 | green | crates/web/tests/api_email_limits.rs, crates/email/tests/job.rs |
+| C5 | S: `{"domain":"192.0.2.1"}` → the status beacon's `POST /inspect` answers; `{"domain":"not a domain"}` → 400 `INVALID_INPUT` | green | crates/web/tests/api_email.rs, crates/email/tests/inspect_route.rs, crates/email/tests/job.rs |
+| C6 | S: beacon's `POST /inspect` unchanged | already_implemented | crates/email/tests/inspect_route.rs |
+
+C6 passes before any code: beacon's route exists; `inspect_route.rs` pins it through the move into the job.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 netray-email job seam | 1 | sonnet | 84711 | 184 |
+| G2 netray-web email route, config, document | 1 | sonnet | 70426 | 515 |
+| G3 binary wiring, example config, fixture | 1 | sonnet | 35110 | 270 |
+
+### Behavioural verification
+
+`./target/debug/netray lens <lens.dev.toml on 127.0.0.1:18485, temp stores>` from the worktree build.
+
+```
+$ curl -X POST /api/v1/email/inspect -d '{"domain":"not a domain"}'
+{"error":{"code":"INVALID_INPUT","message":"invalid domain: domain must have at least two labels"}} [400]
+$ curl -X POST /api/v1/email/inspect -d '{"domain":"example.com","dkim_selectors":["s1"]}'
+{"error":{"code":"INVALID_INPUT","message":"Failed to deserialize the JSON body into the target type: dkim_selectors: unknown field `dkim_selectors`, expected `domain` at line 1 column 40"}} [400]
+$ curl /api/v1/meta | jq -c .limits.email
+{"per_ip_per_minute":10,"per_ip_burst":10,"max_concurrent_inspections":16}
+$ curl -N -H 'Accept: text/event-stream' -X POST /api/v1/email/inspect -d '{"domain":"example.com"}' | grep -o '"type":"[a-z]*"' | uniq -c
+  12 "type":"category"
+   1 "type":"evidence"
+   1 "type":"summary"
+$ curl -X POST /api/v1/email/inspect -d '{"domain":"example.com"}' | jq -c '{n:(.categories|length), e:(.evidence|length), s:(.summary|keys)}'
+{"n":12,"e":10,"s":["duration_ms","grade","verdicts"]} [200]
+```
+
+### Review
+
+Reader over the phase diff: 0 BLOCKER, 0 AMENDMENT, 0 DEFERRED, 5 NIT.
+
+- NIT: lens zero-initialises no `api_v1_email` (nor Phase 5's `api_v1_tls*`/`api_v1_http*`) rate-limit series; v1's email SSE sends no keep-alive comments (beacon's does, every 15 s); beacon's `do_inspect` span no longer records `selectors`, and no `domain` on a slot refusal; no test covers `EmailJob`'s task abort on drop; `collect_equals_the_streamed_events` sorts both sides, so arrival order is unchecked.

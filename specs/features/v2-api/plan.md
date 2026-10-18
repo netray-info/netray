@@ -161,3 +161,37 @@ G1 (netray-tls) and G2 (netray-http) share no file; G3 needs both; G4 needs G3. 
 - `crates/lens/lens.example.toml`: commented `[api.tls]`/`[api.http]` blocks.
 - `tests/fixtures/contracts/api-v1.openapi.json`: regenerate last (`UPDATE_GOLDEN=1 cargo test -p netray-web --test openapi_contract`).
 - Command: `cargo test -p netray-web --test openapi_contract --test openapi_responses`; `cargo build -p netray && bash tests/repo/test_check_config.sh`; `cargo test -p lens --test api_v1_mount`; then `just adlc-verify`.
+
+## Phase 6 — Email inspection
+
+Binding interface: the spec's Phase 6 decisions and the Phase 6 interface sheet (EmailInspector/EmailInspect, EmailJob, InspectSlots, `[api.email]`, unnamed SSE frames, two-step compose).
+
+## Groups
+
+G1: C1, C4, C5 (crate halves), C6 (guard) · G2: C1 (route, `[api.email]`), C2, C3, C4, C5 (route halves) · G3: C1 (`startup_rejects`), C2, C3 (`openapi_responses` against the regenerated fixture)
+
+Strict order G1 → G2 → G3. G2 breaks the `netray` build (its `ApiParts` literal) until G3.
+
+## Plan
+
+### G1 — netray-email job seam (beacon unchanged)
+- `crates/email/src/security/rate_limit.rs`: `Quotas`, `Scopes`, `scoped`, `prune_if_due`; `new` = beacon scopes.
+- `crates/email/src/quality/types.rs`: `SseEvent::Evidence.blocks` typed as `Block`.
+- `crates/email/src/job.rs` (new): `EmailInspector<R>::start` (parse, selectors, limiter, slot, spawn `run_all_checks`), `EmailInspect`, `EmailJob` (abort on drop, `collect`), `InspectSlots`, `EmailInspectRequest`, `EmailInspectResult`, `EmailSummary`, `EmailRefusal` + `From<MailError>`; `AppState::inspector`, `EmailModule::inspector`.
+- `crates/email/src/lib.rs`: module and re-exports. `crates/email/src/routes.rs`: both handlers through `start`, metrics/gauge/keep-alive unchanged; `validate_and_rate_limit` and `AbortOnDropStream` removed. `crates/email/src/testing.rs`: `example_dns`, `stub_inspector`.
+- Command: `cargo test -p netray-email --features testing --test job --test inspect_route`; regression `cargo test -p netray-email --features testing`; `cargo build -p netray`.
+
+### G2 — netray-web: `[api.email]`, state, route, document
+- Root `Cargo.toml` + `crates/web/Cargo.toml`: `netray-email` (dev-dep with `testing`).
+- `api/config.rs`: `ApiEmailConfig` 10/10/16, zero rules, called after `http`.
+- `api/state.rs`: `ApiParts.email`, `email_limiter` (`api_v1_email`), `email_slots`, accessors.
+- `api/error.rs`: `From<EmailRefusal>` (Busy → 503 naming the slots).
+- `api/runs.rs`: `wants_event_stream` `pub(super)`. `api/email.rs` (new): handler 503 → body → client + prune → inspect → SSE or collected JSON (500 without a summary); doc routes.
+- `api/mod.rs`: two-step compose (`Email` prefix), router merge, `/meta` `limits.email`.
+- Command: `cargo test -p netray-web --test api_email --test api_email_limits --test openapi_document`; regression `cargo test -p netray-web` (`openapi_responses` red until G3).
+
+### G3 — binary wiring, example config, fixture
+- `crates/netray/Cargo.toml` workspace dep; `crates/netray/src/main.rs`: `LensModules.email`, `Shared(email.clone())`, `ApiParts.email`.
+- `crates/lens/lens.example.toml`: commented `[api.email]` block.
+- Fixture regenerated last (only additions).
+- Command: `cargo build -p netray && bash tests/repo/test_check_config.sh`; `UPDATE_GOLDEN=1 cargo test -p netray-web --test openapi_contract`, then `cargo test -p netray-web --test openapi_contract --test openapi_responses --test openapi_document`; then `just adlc-verify`.

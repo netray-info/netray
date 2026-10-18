@@ -47,8 +47,8 @@ impl Default for ApiHttpConfig {
     }
 }
 
-fn non_zero(table: &str, quotas: [(&str, u32); 4]) -> Result<(), String> {
-    for (key, value) in quotas {
+fn non_zero(table: &str, quotas: &[(&str, u32)]) -> Result<(), String> {
+    for &(key, value) in quotas {
         if value == 0 {
             return Err(format!("api.{table}.{key} must be greater than 0"));
         }
@@ -60,7 +60,7 @@ impl ApiTlsConfig {
     pub fn validate(&self) -> Result<(), String> {
         non_zero(
             "tls",
-            [
+            &[
                 ("per_ip_per_minute", self.per_ip_per_minute),
                 ("per_ip_burst", self.per_ip_burst),
                 ("per_target_per_minute", self.per_target_per_minute),
@@ -74,7 +74,7 @@ impl ApiHttpConfig {
     pub fn validate(&self) -> Result<(), String> {
         non_zero(
             "http",
-            [
+            &[
                 ("per_ip_per_minute", self.per_ip_per_minute),
                 ("per_ip_burst", self.per_ip_burst),
                 ("per_target_per_minute", self.per_target_per_minute),
@@ -84,9 +84,40 @@ impl ApiHttpConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+/// The limits of `POST /email/inspect`; the inspection itself runs on `[modules.email]`.
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct ApiEmailConfig {}
+pub struct ApiEmailConfig {
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub max_concurrent_inspections: u32,
+}
+
+impl Default for ApiEmailConfig {
+    fn default() -> Self {
+        Self {
+            per_ip_per_minute: 10,
+            per_ip_burst: 10,
+            max_concurrent_inspections: 16,
+        }
+    }
+}
+
+impl ApiEmailConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        non_zero(
+            "email",
+            &[
+                ("per_ip_per_minute", self.per_ip_per_minute),
+                ("per_ip_burst", self.per_ip_burst),
+                (
+                    "max_concurrent_inspections",
+                    self.max_concurrent_inspections,
+                ),
+            ],
+        )
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
@@ -206,6 +237,7 @@ impl ApiConfig {
         self.ip.validate()?;
         self.tls.validate()?;
         self.http.validate()?;
+        self.email.validate()?;
         Ok(())
     }
 }

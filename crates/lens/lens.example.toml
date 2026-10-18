@@ -115,6 +115,9 @@ per_ip_burst = 10
 # per_target_per_minute = 30          # per inspected host, above 0
 # per_target_burst = 10               # above 0
 # [api.email]
+# per_ip_per_minute = 10              # per caller, POST /email/inspect, above 0
+# per_ip_burst = 10                   # above 0
+# max_concurrent_inspections = 16     # inspections at once, above 0
 # [api.ip]
 # internal_mode = false               # true: private and loopback addresses are looked up
 # filtered_headers = []               # regex patterns of request headers hidden from ?field=headers
