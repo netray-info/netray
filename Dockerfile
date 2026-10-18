@@ -15,6 +15,7 @@ COPY --from=frontend /build/crates/lens/frontend/dist crates/lens/frontend/dist/
 COPY --from=frontend /build/crates/dns/frontend/dist crates/dns/frontend/dist/
 COPY --from=frontend /build/crates/http/frontend/dist crates/http/frontend/dist/
 COPY --from=frontend /build/crates/tls/frontend/dist crates/tls/frontend/dist/
+COPY --from=frontend /build/crates/web/islands/dist crates/web/islands/dist/
 RUN cargo build --release -p netray \
  && mkdir /out \
  && cp "$(find /build/target -xdev -type f -path '*/release/*' -name netray | head -n1)" /out/

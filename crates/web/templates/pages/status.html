@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block main %}
+<h1>Service Status</h1>
+<p>Live uptime for the netray.info services, sourced from UptimeRobot. Data refreshes every 60 seconds.</p>
+<noscript><p>Live status requires JavaScript — check live at <a href="https://stats.uptimerobot.com/36qCbftdDW">stats.uptimerobot.com/36qCbftdDW</a></p></noscript>
+<section class="status-board" data-island="status">
+<p class="status-banner" data-status-banner></p>
+<p class="status-error" data-status-error hidden>Status data unavailable — check live at <a href="https://stats.uptimerobot.com/36qCbftdDW">stats.uptimerobot.com/36qCbftdDW</a></p>
+<div class="status-cards" data-status-monitors></div>
+<h2>Incidents</h2>
+<div class="status-incidents" data-status-incidents></div>
+<template data-status-monitor><article class="status-card" data-state=""><h3 data-field="name"></h3><p data-field="status"></p></article></template>
+<template data-status-incident><article class="status-incident"><h3 data-field="title"></h3><p data-field="date"></p></article></template>
+</section>
+<p>Powered by <a href="https://uptimerobot.com">UptimeRobot</a> — full history at <a href="https://stats.uptimerobot.com/36qCbftdDW">stats.uptimerobot.com/36qCbftdDW</a></p>
+{% endblock %}

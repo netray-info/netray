@@ -162,6 +162,39 @@ const CASES: &[Case] = &[
         )],
         expect: None,
     },
+    // v2-pages requirement 21: application/ld+json is a data block, nothing else is exempt.
+    Case {
+        name: "ld+json data block passes",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/ld+json\">{\"a\":1}</script>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "text/plain script is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"text/plain\">x</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "application/json script is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/json\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "ld+json block with a handler is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/ld+json\" onload=\"x()\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
     // Amended requirement 6: comments, custom properties, SVG attributes, logical sides, case.
     Case {
         name: "comment line before a declaration does not hide its colour",
@@ -673,6 +706,401 @@ const CASES: &[Case] = &[
         files: &[("templates/x.html", "<script src=>alert(1)</script>\n")],
         expect: Some((SCRIPT_RULE, "templates/x.html")),
     },
+    // v2-pages C3/C6/C7/C8: an unquoted askama expression is one opaque value; the next
+    // attribute is parsed on its own.
+    Case {
+        name: "handler after unquoted askama class value",
+        files: &[(
+            "templates/x.html",
+            "<button class={{ c }} onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "handler after unquoted askama script src",
+        files: &[(
+            "templates/x.html",
+            "<script src={{ asset }} onload=\"init()\"></script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "handler after unquoted askama comment value",
+        files: &[(
+            "templates/x.html",
+            "<button class={# c #} onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "handler after unquoted askama statement value",
+        files: &[(
+            "templates/x.html",
+            "<button class={% include \"c.txt\" %} onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "unquoted askama script src with defer passes",
+        files: &[(
+            "templates/x.html",
+            "<script src={{ asset }} defer></script>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "handler glued to an unquoted askama class value",
+        files: &[(
+            "templates/x.html",
+            "<button class={{ c }}onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "handler glued to an unquoted askama script src",
+        files: &[(
+            "templates/x.html",
+            "<script src={{ a }}onload=\"go()\"></script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "apostrophe after an unquoted askama value opens no quote",
+        files: &[(
+            "templates/x.html",
+            "<a title={{ n }}'s onclick=\"go()\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "double quote after an unquoted askama value opens no quote",
+        files: &[(
+            "templates/x.html",
+            "<button class={{ c }}\" onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "stray quote after an unquoted askama value does not hide later tags",
+        files: &[(
+            "templates/x.html",
+            "<p class={{ c }}\">x</p>\n<button onclick=\"go()\">y</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quote after a block span opens the value",
+        files: &[(
+            "templates/x.html",
+            "<a title={% if x %}\"a > b\"{% else %}\"c\"{% endif %} onclick=\"go()\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quote after a comment span opens the value",
+        files: &[(
+            "templates/x.html",
+            "<a title={# tip #}'a > b' onclick=\"go()\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quoted value after a block span ending in = hides no later tag",
+        files: &[(
+            "templates/x.html",
+            "<a href={% if q %}\"/search?q=\"{% endif %}>Search</a>\n<button onclick=\"go()\">y</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "javascript url quoted after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<a href={% if x %}\"javascript:go()\"{% endif %}>x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "style quoted after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<div style={% if warn %}\"color: #f00\"{% endif %}>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "class quoted after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<div class={% if x %}\"spectrum\"{% endif %}>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "value quoted after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<span title={% if live %}\"Go online now\"{% else %}\"Offline\"{% endif %}>x</span>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quote in an else branch after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<a title={% if x %}\"a\"{% else %}\"b > c\"{% endif %} onclick=\"go()\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "javascript url in an else branch is refused",
+        files: &[(
+            "templates/x.html",
+            "<a href={% if x %}\"/a\"{% else %}\"javascript:go()\"{% endif %}>x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "unquoted text after a comment span is refused",
+        files: &[("templates/x.html", "<a href={# t #}javascript:go()>x</a>\n")],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "unquoted text after a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<div class={% if x %}spectrum{% endif %}>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "block span glued to an unquoted value is refused",
+        files: &[(
+            "templates/x.html",
+            "<div class=a{% if x %}spectrum{% endif %}>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quote glued to an include span is refused",
+        files: &[(
+            "templates/x.html",
+            "<button class={% include \"c.txt\" %}\" onclick=\"go()\">x</button>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "block span wrapping a whole attribute passes",
+        files: &[(
+            "templates/x.html",
+            "<a {% if x %}class=\"a\"{% endif %} href=\"/\">x</a>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "block span inside a quoted value passes",
+        files: &[(
+            "templates/x.html",
+            "<a title=\"{% if x %}a > b{% else %}c{% endif %}\" href=\"/\">x</a>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "unquoted askama value before the tag end passes",
+        files: &[(
+            "templates/x.html",
+            "<a href={{ u }}>x</a>\n<img src={{ s }}/>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "block span after a value span inside an unquoted value is refused",
+        files: &[(
+            "templates/x.html",
+            "<div style=width:{{ w }}{% if x %};color:#f00{% endif %}>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "value span inside an unquoted value is refused",
+        files: &[(
+            "templates/x.html",
+            "<div style=width:{{ w }}px;color:red>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "slash glued to a value span before more text is refused",
+        files: &[(
+            "templates/x.html",
+            "<div style={{ s }}/;color:red>x</div>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "empty-rendering value span cannot hide an inline script",
+        files: &[(
+            "templates/x.html",
+            "<script data-x={{ x }} src=/app.js>alert(1)</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "empty-rendering value span cannot hide a style colour",
+        files: &[("templates/x.html", "<div style={{ s }} color:red>x</div>\n")],
+        expect: Some((TOKEN_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "empty-rendering value span cannot hide a component class",
+        files: &[("templates/x.html", "<div class={{ c }} grade>x</div>\n")],
+        expect: Some((OWNERSHIP_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "javascript url in a later branch of a quoted value is refused",
+        files: &[(
+            "templates/x.html",
+            "<a href=\"{% if c %}/x{% else %}javascript:go(){% endif %}\">x</a>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "speculationrules type behind a block span is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"{% if c %}speculationrules{% endif %}\">alert(1)</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "javascript inside an unquoted query is no javascript url",
+        files: &[("templates/x.html", "<a href=/search?q=javascript:x>x</a>\n")],
+        expect: None,
+    },
+    Case {
+        name: "javascript in a title after an unquoted value span is no javascript url",
+        files: &[(
+            "templates/x.html",
+            "<a href={{ u }} title=\"javascript: guide\">x</a>\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "askama span after the speculationrules type word is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"speculationrules{{ x }}\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "askama span after the ld+json type word is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/ld+json{{ x }}\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "block span after the ld+json type word is refused",
+        files: &[(
+            "templates/x.html",
+            "<script type=\"application/ld+json{% if c %}{% endif %}\">{}</script>\n",
+        )],
+        expect: Some((SCRIPT_RULE, "templates/x.html")),
+    },
+    Case {
+        name: "quoted values holding askama and an apostrophe pass",
+        files: &[(
+            "templates/x.html",
+            "<a title=\"it's {{ n }}\" class='{{ c }}' href=\"/\">x</a>\n",
+        )],
+        expect: None,
+    },
+    // v2-pages C4/C9: rule 1 also refuses an island that writes a style; comments and
+    // look-alike identifiers pass.
+    Case {
+        name: "island: style member assignment",
+        files: &[("islands/src/x.ts", "el.style.color = x;\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: style member string assignment",
+        files: &[("islands/src/x.ts", "el.style = \"display: none\";\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: style member bracket access",
+        files: &[("islands/src/x.ts", "el.style[\"color\"] = x;\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: cssText write",
+        files: &[("islands/src/x.ts", "el.cssText = x;\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: setProperty call",
+        files: &[("islands/src/x.ts", "el.setProperty(\"--a\", x);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: insertRule call",
+        files: &[("islands/src/x.ts", "sheet.insertRule(x, 0);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: setAttribute style double quotes",
+        files: &[("islands/src/x.ts", "el.setAttribute(\"style\", x);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: setAttribute style single quotes",
+        files: &[("islands/src/x.ts", "el.setAttribute('style', x);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: setAttribute style with spaces",
+        files: &[("islands/src/x.ts", "el.setAttribute( \"style\", x);\n")],
+        expect: Some((TOKEN_RULE, "islands/src/x.ts")),
+    },
+    Case {
+        name: "island: style in a line comment passes",
+        files: &[("islands/src/x.ts", "// el.style.color = x\nconst a = 1;\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: style in a block comment passes",
+        files: &[("islands/src/x.ts", "/* el.style */\nconst a = 1;\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: dataset write passes",
+        files: &[("islands/src/x.ts", "el.dataset.state = \"warn\";\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: classList add passes",
+        files: &[("islands/src/x.ts", "el.classList.add(\"x\");\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: setAttribute data-state passes",
+        files: &[(
+            "islands/src/x.ts",
+            "el.setAttribute(\"data-state\", \"warn\");\n",
+        )],
+        expect: None,
+    },
+    Case {
+        name: "island: identifier containing style passes",
+        files: &[("islands/src/x.ts", "const styleName = 1;\n")],
+        expect: None,
+    },
+    Case {
+        name: "island: styles member passes",
+        files: &[("islands/src/x.ts", "const s = el.styles;\n")],
+        expect: None,
+    },
 ];
 
 #[test]
@@ -747,4 +1175,36 @@ fn real_tree_passes_the_gate() {
             ))
             .collect::<Vec<_>>()
     );
+}
+
+/// v2-pages C6/C7: the violation names the handler attribute that followed the askama value.
+#[test]
+fn handler_after_unquoted_askama_value_is_named() {
+    for (html, attr) in [
+        (
+            "<button class={{ c }} onclick=\"go()\">x</button>\n",
+            "onclick",
+        ),
+        (
+            "<script src={{ asset }} onload=\"init()\"></script>\n",
+            "onload",
+        ),
+    ] {
+        let root = temp_root();
+        plant(&root, &[("templates/x.html", html)]);
+        let report = check(&root);
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            report
+                .violations
+                .iter()
+                .any(|v| v.rule == SCRIPT_RULE && v.message.contains(attr)),
+            "{html}: expected a rule 3 message naming `{attr}`, got {:?}",
+            report
+                .violations
+                .iter()
+                .map(|v| &v.message)
+                .collect::<Vec<_>>()
+        );
+    }
 }

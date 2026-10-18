@@ -16,6 +16,10 @@ pub struct SecurityHeadersConfig {
 
     /// `Strict-Transport-Security` header value.
     pub hsts: String,
+
+    /// Keep every security header the inner response already carries instead of
+    /// overwriting it; the layer sets only the ones that are absent. Defaults to `false`.
+    pub keep_inner: bool,
 }
 
 impl Default for SecurityHeadersConfig {
@@ -24,6 +28,7 @@ impl Default for SecurityHeadersConfig {
             extra_script_src: Vec::new(),
             relaxed_csp_path_prefix: "/docs".to_string(),
             hsts: "max-age=31536000; includeSubDomains; preload".to_string(),
+            keep_inner: false,
         }
     }
 }
@@ -90,6 +95,7 @@ pub fn security_headers_layer(
     let coop: HeaderValue = "same-origin".parse().expect("valid header value");
     let corp: HeaderValue = "cross-origin".parse().expect("valid header value");
 
+    let keep_inner = config.keep_inner;
     let prefix = config.relaxed_csp_path_prefix;
     let prefix_with_slash = format!("{prefix}/");
 
@@ -118,21 +124,25 @@ pub fn security_headers_layer(
             } else {
                 strict_csp_val
             };
-            headers.insert(axum::http::header::CONTENT_SECURITY_POLICY, csp);
-            headers.insert(axum::http::header::X_CONTENT_TYPE_OPTIONS, nosniff);
-            headers.insert(axum::http::header::X_FRAME_OPTIONS, deny);
-            headers.insert(axum::http::header::REFERRER_POLICY, referrer);
-            headers.insert(axum::http::header::STRICT_TRANSPORT_SECURITY, hsts);
-
-            headers.insert(
+            let mut set = |name: axum::http::HeaderName, value: HeaderValue| {
+                if !(keep_inner && headers.contains_key(&name)) {
+                    headers.insert(name, value);
+                }
+            };
+            set(axum::http::header::CONTENT_SECURITY_POLICY, csp);
+            set(axum::http::header::X_CONTENT_TYPE_OPTIONS, nosniff);
+            set(axum::http::header::X_FRAME_OPTIONS, deny);
+            set(axum::http::header::REFERRER_POLICY, referrer);
+            set(axum::http::header::STRICT_TRANSPORT_SECURITY, hsts);
+            set(
                 axum::http::HeaderName::from_static("permissions-policy"),
                 pp_val,
             );
-            headers.insert(
+            set(
                 axum::http::HeaderName::from_static("cross-origin-opener-policy"),
                 coop,
             );
-            headers.insert(
+            set(
                 axum::http::HeaderName::from_static("cross-origin-resource-policy"),
                 corp,
             );
@@ -172,6 +182,78 @@ mod tests {
             .unwrap();
 
         app.oneshot(request).await.unwrap()
+    }
+
+    async fn inner_csp_handler() -> ([(axum::http::HeaderName, &'static str); 1], &'static str) {
+        (
+            [(
+                axum::http::header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'",
+            )],
+            "ok",
+        )
+    }
+
+    async fn inner_csp_response(config: SecurityHeadersConfig) -> Response {
+        let layer_fn = security_headers_layer(config);
+        let app = Router::new()
+            .route("/inner", get(inner_csp_handler))
+            .route("/test", get(ok_handler))
+            .layer(middleware::from_fn(move |req, next| {
+                let f = layer_fn.clone();
+                async move { f(req, next).await }
+            }));
+        let request = HttpRequest::builder()
+            .uri("/inner")
+            .body(Body::empty())
+            .unwrap();
+        app.oneshot(request).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn keep_inner_preserves_handler_csp() {
+        let config = SecurityHeadersConfig {
+            keep_inner: true,
+            ..Default::default()
+        };
+        let response = inner_csp_response(config).await;
+        assert_eq!(
+            response.headers().get("content-security-policy").unwrap(),
+            "default-src 'none'"
+        );
+        assert!(response.headers().contains_key("x-frame-options"));
+    }
+
+    #[tokio::test]
+    async fn keep_inner_inserts_when_handler_has_none() {
+        let config = SecurityHeadersConfig {
+            keep_inner: true,
+            ..Default::default()
+        };
+        let response = make_response(config, "/test").await;
+        assert!(
+            response
+                .headers()
+                .get("content-security-policy")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("default-src 'self'")
+        );
+    }
+
+    #[tokio::test]
+    async fn default_overwrites_inner_csp() {
+        let response = inner_csp_response(SecurityHeadersConfig::default()).await;
+        assert!(
+            response
+                .headers()
+                .get("content-security-policy")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("default-src 'self'")
+        );
     }
 
     #[tokio::test]

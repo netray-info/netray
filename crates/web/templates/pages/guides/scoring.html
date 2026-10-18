@@ -1,0 +1,286 @@
+{% extends "pages/guide.html" %}
+{% block article %}
+  <p class="guide-lede">
+    netray runs five checks in parallel and produces a single A+&ndash;F grade.
+    This guide explains the scoring model, how email security is split between
+    sending and receiving domains, and how to test specific DKIM selectors.
+  </p>
+
+  <article>
+
+    <h2>What netray checks</h2>
+
+    <p>
+      For any domain, netray calls five backends in parallel and aggregates the results:
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Section</th><th>Tool</th><th>What it measures</th><th>Weight</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>IP</td><td><a href="https://ip.netray.info">the IP inspector</a></td><td>Network type, hosting reputation, geolocation</td><td>10%</td></tr>
+        <tr><td>DNS</td><td><a href="https://dns.netray.info">the DNS inspector</a></td><td>DNSSEC, CAA records, NS delegation, HTTPS records</td><td>20%</td></tr>
+        <tr><td>TLS</td><td><a href="https://tls.netray.info">the TLS inspector</a></td><td>Certificate chain, protocol version, cipher strength</td><td>35%</td></tr>
+        <tr><td>HTTP</td><td><a href="https://http.netray.info">the HTTP inspector</a></td><td>Security headers, HSTS, CORS, cookie attributes</td><td>20%</td></tr>
+        <tr><td>Email</td><td><a href="https://email.netray.info">netray's email checks</a></td><td>SPF, DKIM, DMARC, MTA-STS, DANE, BIMI, DNSBL</td><td>15%</td></tr>
+      </tbody>
+    </table>
+
+    <p>
+      HTTP and Email sections are optional. When a backend is not configured,
+      the remaining weights are rebalanced proportionally — a missing section
+      does not penalise the grade.
+    </p>
+
+    <h2>Scoring algorithm</h2>
+
+    <p>Each check has a verdict and a weight:</p>
+    <ul>
+      <li><strong>pass</strong> &rarr; earns full weight</li>
+      <li><strong>warn</strong> &rarr; earns exactly half its weight (a weight-5 warn earns 2.5)</li>
+      <li><strong>fail</strong> / <strong>not found</strong> &rarr; earns zero</li>
+      <li><strong>skip</strong> &rarr; excluded from both earned and possible totals (not a penalty)</li>
+    </ul>
+
+    <p>
+      A section score is <code>earned / possible &times; 100%</code>.
+      The overall score is the weighted average of active section scores.
+      The letter grade is determined by comparing the overall percentage to
+      fixed thresholds:
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Grade</th><th>Score</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>A+</strong></td><td>&ge; 97%</td><td>Exemplary — all checks pass</td></tr>
+        <tr><td><strong>A</strong></td><td>&ge; 90%</td><td>Excellent — minor gaps only</td></tr>
+        <tr><td><strong>B</strong></td><td>&ge; 75%</td><td>Good — some non-critical findings</td></tr>
+        <tr><td><strong>C</strong></td><td>&ge; 60%</td><td>Fair — notable gaps, action recommended</td></tr>
+        <tr><td><strong>D</strong></td><td>&ge; 40%</td><td>Poor — significant issues present</td></tr>
+        <tr><td><strong>F</strong></td><td>&lt; 40% or hard-fail</td><td>Failing</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Hard failures</h2>
+
+    <p>
+      Four TLS conditions force the grade to <strong>F</strong> regardless of the
+      numeric score:
+    </p>
+    <ul>
+      <li><strong>Untrusted chain</strong> — the certificate is not signed by a
+          trusted CA. Browsers will show a security warning.</li>
+      <li><strong>Expired certificate</strong> — any certificate in the chain
+          is past its validity period.</li>
+      <li><strong>Hostname mismatch</strong> — the certificate does not cover
+          the checked hostname. Browsers will show a security warning.</li>
+      <li><strong>TLS unreachable</strong> — no address completed a TLS
+          handshake.</li>
+    </ul>
+
+    <p>
+      These conditions indicate an immediately broken service, so the score is
+      irrelevant. All other findings contribute to the numeric score rather than
+      triggering a hard override.
+    </p>
+
+    <h2>Email security: sending vs. receiving</h2>
+
+    <p>
+      Email security has two distinct concerns that apply to different domains:
+    </p>
+
+    <ul>
+      <li>
+        <strong>Sending identity</strong> — SPF, DKIM, and DMARC.
+        These apply to <em>every</em> domain, because any domain can be spoofed in
+        the <code>From:</code> header of an email, even domains that never send mail.
+        A parked domain with no MX records still needs SPF and DMARC to prevent
+        impersonation.
+      </li>
+      <li>
+        <strong>Receiving infrastructure</strong> — MX records, MTA-STS, DANE/TLSA,
+        TLS-RPT, BIMI, FCrDNS, and DNSBL reputation.
+        These only apply to domains that actively receive email. A parked or
+        web-only domain with no MX records has no receiving infrastructure to check.
+      </li>
+    </ul>
+
+    <p>
+      netray reflects this split in the ten scored checks of the Email section:
+    </p>
+
+    <table>
+      <thead>
+        <tr><th>Check</th><th>Applies to</th><th>Weight</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>SPF</strong></td>
+          <td>All domains</td>
+          <td>3</td>
+        </tr>
+        <tr>
+          <td><strong>DKIM</strong></td>
+          <td>All domains</td>
+          <td>3</td>
+        </tr>
+        <tr>
+          <td><strong>DMARC</strong></td>
+          <td>All domains</td>
+          <td>4</td>
+        </tr>
+        <tr>
+          <td><strong>MX</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>MTA-STS</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>TLS-RPT</strong></td>
+          <td>Domains with MX records</td>
+          <td>1</td>
+        </tr>
+        <tr>
+          <td><strong>BIMI</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>DANE</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>DNSBL</strong></td>
+          <td>Domains with MX records</td>
+          <td>2</td>
+        </tr>
+        <tr>
+          <td><strong>FCrDNS</strong></td>
+          <td>Domains with MX records</td>
+          <td>1</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      When netray detects no MX records, the seven MX-dependent checks are marked
+      <strong>not applicable</strong> and use a <code>skip</code> verdict.
+      Skip verdicts are excluded from both earned and possible totals, so a
+      parked domain is not penalised for missing receiving infrastructure.
+      Only SPF, DKIM and DMARC (weight 10) are scored.
+    </p>
+
+    <h2>Worked example: mail domain vs. parked domain</h2>
+
+    <h3>Mail domain (MX records present)</h3>
+    <p>
+      <code>example.com</code> runs email. All ten checks are scored.
+      SPF, DKIM, and DMARC pass; MTA-STS is in testing mode (warn); everything else passes.
+    </p>
+    <ul>
+      <li>SPF, DKIM, DMARC: 10/10</li>
+      <li>MX, DNSBL, FCrDNS: 5/5</li>
+      <li>MTA-STS: 1/2 (a warn earns half the weight)</li>
+      <li>TLS-RPT, DANE, BIMI: 5/5</li>
+      <li>Email section: 21/22 = 95.5% &rarr; grade A</li>
+    </ul>
+
+    <h3>Parked domain (no MX records)</h3>
+    <p>
+      <code>parked.example.com</code> is used only for web. No MX records exist.
+      The seven MX-dependent checks are skipped automatically.
+    </p>
+    <ul>
+      <li>SPF: 3/3, DMARC: 4/4 (mandatory even for parked domains)</li>
+      <li>DKIM: skipped (no DKIM keys published)</li>
+      <li>MX, MTA-STS, TLS-RPT, BIMI, DANE, DNSBL, FCrDNS: skipped (no MX)</li>
+      <li>Email section: 7/7 = 100% &rarr; grade A+</li>
+    </ul>
+    <p>
+      A parked domain with correct SPF and DMARC records scores A+ on the email
+      section — the absence of receiving infrastructure is not a deficiency.
+    </p>
+
+    <h2>Testing DKIM selectors</h2>
+
+    <p>
+      By default, netray's email checks use a built-in map of known DKIM selectors for major
+      email providers (Google Workspace, Microsoft 365, etc.). For custom selectors,
+      pass them via the <code>dkim_selectors</code> parameter:
+    </p>
+
+<pre><code># Via URL parameter
+https://netray.info/?d=example.com&dkim_selectors=google,selector1
+
+# Via curl
+curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs?dkim_selectors=default,s1' \
+  | jq '.checks[] | select(.id | startswith("email.dkim"))'</code></pre>
+
+    <p>Selector validation rules:</p>
+    <ul>
+      <li>Characters: <code>[a-zA-Z0-9-]</code> only</li>
+      <li>Length: 1&ndash;63 characters per selector</li>
+      <li>Count: 1&ndash;10 selectors per request</li>
+      <li>Separator: comma (whitespace around commas is trimmed)</li>
+    </ul>
+
+    <p>
+      Invalid selectors return HTTP 400 before any backend call.
+      Absent <code>dkim_selectors</code> parameter: netray's email checks use their built-in provider map.
+    </p>
+
+    <h2>Section states</h2>
+
+    <p>A section can be in one of three states:</p>
+
+    <table>
+      <thead>
+        <tr><th>State</th><th>Effect on scoring</th><th>When it occurs</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Scored</strong></td>
+          <td>Contributes to the overall weighted average</td>
+          <td>Backend responded successfully</td>
+        </tr>
+        <tr>
+          <td><strong>Errored</strong></td>
+          <td>Excluded from scoring silently</td>
+          <td>Backend unreachable or timed out</td>
+        </tr>
+        <tr>
+          <td><strong>Not applicable</strong></td>
+          <td>Excluded from scoring; reason recorded in <code>summary.not_applicable</code></td>
+          <td>Email backend timed out internally (grade: "Skipped")</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>
+      An errored section does not lower the grade — the overall score is computed
+      from whatever sections are available. A footnote appears in the UI when
+      <code>not_applicable</code> is non-empty.
+    </p>
+
+    <h2>Cache behaviour</h2>
+
+    <p>
+      Results are cached per domain for 5 minutes. The <code>X-Cache</code> response
+      header indicates <code>HIT</code> or <code>MISS</code>.
+      Requests with <code>dkim_selectors</code> always bypass the cache, since
+      selector-specific results cannot be shared.
+    </p>
+
+  </article>
+{% endblock %}
+{% block related_extra %}<li><a href="/api/v1/openapi.json">netray API reference</a></li>
+{% endblock %}

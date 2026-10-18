@@ -179,7 +179,7 @@ async fn spa_routes_still_answer_the_shell_with_stores_disabled() {
     let privacy = netray_web::entries::render::privacy().unwrap();
     for path in ["/", "/some-client-route"] {
         let direct = lens::spa::handler(
-            axum::extract::State(a.state.clone()),
+            axum::extract::State(lens::spa::Shell(a.state.rendered_html.clone())),
             path.parse::<axum::http::Uri>().unwrap(),
         )
         .await;

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block head %}{% for json in ld %}<script type="application/ld+json">{{ json|safe }}</script>
+{% endfor %}{% endblock %}
+{% block main %}
+<h1>{{ guide.title }}</h1>
+{% block article %}{% endblock %}
+<section class="guide-related">
+<h2>Related guides</h2>
+<ul>
+{% block related_extra %}{% endblock %}
+{% for r in related %}<li><a href="/guide/{{ r.slug }}">{{ r.title }}</a></li>
+{% endfor %}</ul>
+</section>
+{% endblock %}
