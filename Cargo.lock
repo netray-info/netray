@@ -2831,7 +2831,9 @@ dependencies = [
  "netray-model",
  "netray-tls",
  "percent-encoding",
+ "serde",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
 ]

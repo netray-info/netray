@@ -9,6 +9,8 @@ use netray_engine::{
 };
 use netray_model::{CheckId, Protocol};
 
+mod config;
+mod legacy;
 mod site;
 
 #[derive(Parser)]
@@ -24,6 +26,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// The netray.info product: every host, one process
+    Serve {
+        config: Option<String>,
+        /// Validate the configuration file at PATH and exit
+        #[arg(long, value_name = "PATH")]
+        check_config: Option<String>,
+    },
     /// Domain health checker (netray.info)
     Lens {
         config: Option<String>,
@@ -250,6 +259,20 @@ fn reload_ip_on_sighup(ip: Arc<netray_ip::IpModule>) {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
+        Command::Serve {
+            check_config: Some(path),
+            ..
+        } => {
+            tracing_subscriber::fmt()
+                .with_max_level(tracing::Level::WARN)
+                .with_writer(std::io::stderr)
+                .init();
+            let loaded = match config::Config::load(Some(&path), std::env::vars_os().collect()) {
+                Ok(cfg) => lens_registry(&cfg.to_lens(), false).await.map(drop),
+                Err(e) => Err(e.to_string()),
+            };
+            check_config(&path, |_| loaded)
+        }
         Command::Lens {
             check_config: Some(path),
             ..
@@ -287,6 +310,24 @@ async fn main() -> anyhow::Result<()> {
             check_config: Some(path),
             ..
         } => check_config(&path, netray_ip::config::Config::load),
+        Command::Serve { config, .. } => {
+            let path = config.or_else(|| std::env::var("NETRAY_CONFIG").ok());
+            let cfg = match config::Config::load(path.as_deref(), std::env::vars_os().collect()) {
+                Ok(cfg) => cfg.to_lens(),
+                Err(e) => {
+                    eprintln!("failed to load configuration: {e}");
+                    std::process::exit(1)
+                }
+            };
+            lens::init_telemetry(&cfg);
+            let (registry, ip) = lens_registry(&cfg, true)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
+            if let Some(ip) = ip {
+                reload_ip_on_sighup(ip);
+            }
+            lens::run_config(cfg, registry).await
+        }
         Command::Lens { config, .. } => {
             let path = config.or_else(|| std::env::var("LENS_CONFIG").ok());
             let cfg = lens::config::Config::load(path.as_deref())

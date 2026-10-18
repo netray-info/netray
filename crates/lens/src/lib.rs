@@ -49,6 +49,12 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
+    run_config(config, registry).await;
+}
+
+/// Serves lens's application on a loaded configuration. Like [`run_with`], it installs no
+/// subscriber.
+pub async fn run_config(config: config::Config, registry: netray_engine::Registry) {
     tracing::info!(
         bind = %config.server.bind,
         http_module = config.backends.http.is_some(),

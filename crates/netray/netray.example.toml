@@ -1,0 +1,65 @@
+# netray.toml: the one configuration of `netray serve`. Every key is shown at its default,
+# commented; uncomment to change. `NETRAY_<TABLE>__<KEY>` overrides a key, `NETRAY_CONFIG` names
+# this file. Check a file with `netray serve --check-config <path>`.
+
+[server]
+# bind = "0.0.0.0:8082"
+# metrics_bind = "127.0.0.1:9090"    # keep this address off the public network
+# trusted_proxies = []
+# apex = "netray.info"
+
+[engine]
+# resolve_timeout_ms = 1500          # must stay below the [modules.ip], [modules.tls] and [modules.http] deadline_ms
+# profile_path = "profile.toml"      # unset: the built-in scoring profile
+
+[store]
+# enabled = true
+# db_path = "history.db"
+
+[admission]
+# client_budget_per_hour = 30
+# domain_run_slots = 8
+# per_ip_per_minute = 10
+# per_ip_burst = 3
+# global_per_minute = 100
+# global_burst = 20
+# cache_enabled = true
+# cache_window_seconds = 300
+
+[badges]
+# enabled = true
+# ttl_seconds = 3600
+# default_label = "lens"
+# max_label_len = 32
+
+[og_cards]
+# enabled = true
+
+[telemetry]
+# enabled = false
+# otlp_endpoint = "http://localhost:4318"
+# service_name = ""
+# sample_rate = 1.0
+# log_format = "text"                # "text" or "json"
+
+# Each module runs on its defaults when its table is absent. `deadline_ms` is the module's section
+# window; the slowest of dns, tls, http and email plus ip must stay below 20000 ms.
+
+# [modules.dns]
+# deadline_ms = 2000
+
+# [modules.tls]
+# deadline_ms = 2000
+
+# [modules.http]
+# deadline_ms = 2000
+
+# [modules.email]
+# deadline_ms = 2000
+
+# Once [modules.ip] is set it must name geoip_city_db and geoip_asn_db, and a missing file refuses
+# startup. Without it the IP section is off.
+# [modules.ip]
+# deadline_ms = 2000
+# geoip_city_db = "/netray/data/GeoLite2-City.mmdb"
+# geoip_asn_db = "/netray/data/GeoLite2-ASN.mmdb"

@@ -535,6 +535,9 @@ GIVEN `architecture-rules.md` WHEN read THEN the env prefix rule names `NETRAY_`
 
 - Phases 1–5 built ahead on main while lane C and v2-api finish, Phase 6 onward after all eight merged (operator, 2026-10-18, X6): the branch rebases onto each landing and re-runs the gate; what a later feature adds to crates/lens or config is folded into Phase 6's inventory then.
 
+- Phase 1 builds `netray.toml` without `[api]`, `[api.<inspector>]` and `[inspect.<tool>]`, and their scenarios (C15, C18's `[inspect.http]` half) wait for the merge of `v2-api` and `v2-inspectors`, over defining interim structs in `crates/netray`: `v2-api` requirement 8 defines the `[api]` structs in `netray_web::api` and `v2-inspectors` the `[inspect.*]` ones, so a second definition here would fork them and conflict on merge; until then a top-level `[api]` or `[inspect.<tool>]` fails through `deny_unknown_fields`, and the merge commit embeds the siblings' types and adds the tests (implementer under the operator's autonomy mandate, 2026-10-18).
+- In Phase 1 `serve` translates `netray.toml` into lens's config and starts lens's application in-process (one listener, no host routing yet), over a new composition before Phase 2: behaviour stays lens's, Phase 2 replaces the composition with netray-web's host router, and Phase 6 moves the survivors out of lens; every registered module's section runs, with `[modules.<m>] deadline_ms` as its window (lens's `[backends.http]`/`[backends.email]` presence switch has no successor, and production sets both) (implementer under the operator's autonomy mandate, 2026-10-18).
+
 ## Open decisions
 
 None.
