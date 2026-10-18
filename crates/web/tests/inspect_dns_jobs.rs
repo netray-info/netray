@@ -103,8 +103,10 @@ async fn c6_trace_flag_streams_a_trace_tree_and_the_query_records() {
 
     let s = run_q(&app, "example.com A +trace").await;
 
+    // One job per request: the flag picks the trace, no query part runs beside it.
     assert!(has_part(&s, "dns.trace", "tree"), "{s}");
-    assert!(s.contains("id=\"ev-dns.a\""), "{s}");
+    assert_eq!(s.matches(r#""id":"inspect-part-"#).count(), 1, "{s}");
+    assert!(!s.contains("id=\"ev-dns.a\""), "{s}");
 }
 
 #[tokio::test]
