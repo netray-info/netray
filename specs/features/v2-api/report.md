@@ -432,3 +432,7 @@ Reader over the phase diff: 0 BLOCKER, 2 AMENDMENT, 0 DEFERRED, 1 NIT; the coder
 - AMENDMENT (repaired in phase): `[api.dns]` lets a policy-accepted job cost more than the global burst (refused forever, as prism refuses it) — decision log, prism's defaults kept; SDD §7.1 named only SMTP for STARTTLS — now SMTP 25/587, IMAP 143, FTP 21.
 - Noted: prism's `?stream=false` no longer truncates a job longer than its buffer (decision log).
 - NIT: the `api_v1_dns*` (and Phase 5/6) rate-limit scopes are not zero-initialised in lens.
+
+### Checks to build
+
+- Every rate-limit scope a v1 limiter passes (`api_v1_tls*`, `api_v1_http*`, `api_v1_email`, `api_v1_dns*`) is in lens's zero-initialised series list (`crates/lens/src/metrics.rs`); a test over `ApiState::new`'s scopes would hold it.
