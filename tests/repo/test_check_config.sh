@@ -97,6 +97,21 @@ startup_rejects=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s/^domain_run_slots = .*/domain_run_slots = 0/"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api]\\nper_ip_per_minute = 0\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api]\\nper_ip_burst = 0\\n\\n[site]|"
+    # specs/features/v2-api C7, C18, C25: the `[api.ip]` limits, checked below by key name
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_per_minute = 601\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 101\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_per_minute = 601\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_burst = 101\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_max_size = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_max_size = 101\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_per_minute = 601\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 50\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 101\\n\\n[site]|"
 )
 n=0
 for row in "${startup_rejects[@]}"; do
@@ -110,6 +125,14 @@ for row in "${startup_rejects[@]}"; do
     fi
     run_check "$sub" "$tmp/$sub.reject$n.toml"
     [ "$rc" -eq 1 ] || fail "$sub: startup-rejected value ($expr) exited $rc, expected 1"
+    # An `[api.ip]` row must be refused by its rule, not as an unknown field: the output names
+    # the key and does not say "unknown field".
+    if [[ "$expr" == *'[api.ip]'* ]]; then
+        key="${expr#*\\n}"
+        key="${key%% =*}"
+        grep -qF "api.ip.$key" <<<"$out" || fail "lens: [api.ip] $key row error does not name api.ip.$key ($out)"
+        ! grep -qi 'unknown field' <<<"$out" || fail "lens: [api.ip] $key row was refused as an unknown field ($out)"
+    fi
 done
 
 # specs/features/v2-admission C6: the lens fixture carries `[admission]` with both keys, and
