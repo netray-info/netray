@@ -34,6 +34,15 @@
       </g>
       {% endfor %}
     </svg>
+    <div class="spectrum__targets">
+      {% for band in view.bands %}
+      {% if let Some(first) = band.runs.first() %}
+      {% for line in first.lines %}
+      <span class="spectrum__target" data-target="{{ line.code }}" style="left: {{ line.x_pct() }}%; width: {{ view.pitch_pct() }}%"></span>
+      {% endfor %}
+      {% endif %}
+      {% endfor %}
+    </div>
     <div class="spectrum__axis">
       {% for region in view.regions %}
       <span class="spectrum__region-label" style="left: {{ region.x_pct() }}%">{{ region.label }}</span>

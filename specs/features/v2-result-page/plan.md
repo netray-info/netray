@@ -73,3 +73,21 @@ G1: `countdown(el)` reads `data-retry-after`, disables `#recheck button[name="tr
 G2: `<figure id="spectrum" data-island="spectrum"…>`, `<section id="issues" data-island="issues">` (attributes after the id); regenerate `islands/test/fixtures/result-*` with `UPDATE_GOLDEN=1 cargo test -p netray-web --test result_islands_fixtures` (protected: `ADLC-Test-Change` per changed fixture).
 G3: `#spectrum[data-refreshing] g[data-protocol]:not([data-live])` and `#result:has(#recheck[data-stream-state="running"]) :is(#diff, #issues, #evidence, #passed)` dimmed with a literal opacity; id and attribute selectors only (gate rule 2).
 `islands/dist` is gitignored; rebuild it (`npm run build -w @netray-info/islands`) before cargo tests.
+
+## Phase 5 — Spectrum island
+
+### Groups
+
+G1: C1–C5 (server markup first, then `islands/src/spectrum.ts`; the vitest test reads the regenerated fixture).
+
+### Plan
+
+1. `pages/result/views.rs`: `history_sentences(points: &[(i64, &Run)]) -> Vec<(String, String)>`, oldest first, one per catalogue entry in catalogue order, over `history_sentence`; a check missing from a run counts as `not_tested`.
+2. `pages/result/mod.rs`: `Shown.sentences`, `SpectrumPart.sentences`, `spectrum_part(.., sentences)`; computed over stored entries only (`stored_shown` over the chosen entries reversed; `not_stored_shown`/`unrecorded_shown` over the history before the run); `run.rs` `figure` passes the sentences of the stored entries (never a live row, keeps `result-run.sse` deterministic).
+3. `partials/result_spectrum.html`: plate, `#spectrum-gutter`, `#spectrum-sentence`, `#spectrum-stepper` (two `button type="button" data-step`), `#trace`, `#legend`, `<ul id="spectrum-sentences" hidden>` — nothing new between `#trace` and `#legend`; no `spectrum__*`/`trace__*` classes in the partial (gate rule 2).
+4. `components/spectrum.html`: after the bands, `<g class="spectrum__targets">` with one `<rect class="spectrum__target" data-target="<id>" x=… y="0" height="100%" />` per line of each band's first run (template only; `data-target`, not `data-code`).
+5. CSS: `static/spectrum.css` `.spectrum__target` (transparent, pointer events, pitch-wide, centred); `static/trace.css` `.trace__row--hover` (enlarged via the trace row token), `.trace__row--pinned`; `static/pages.css` `#spectrum-stepper` hidden above 480 px, flex with 44 px buttons below.
+6. `islands/src/spectrum.ts` (hovered, pinned, selected; shown = hovered ?? pinned ?? 0; toggles `data-shown`, row classes and `aria-pressed`, gutter and sentence text; phone width via `matchMedia("(max-width: 480px)")` skips hover; stepper clamps 0..oldest; targets set the selection on pointerenter/click; never `hidden` or `style`); `register("spectrum", spectrum)` in main.ts.
+7. Regenerate `islands/test/fixtures/result-{trace,fresh,stale}.html` and `result-run.sse` (`UPDATE_GOLDEN=1`), protected: `ADLC-Test-Change` per file.
+
+Decision: a check an entry lacks reads "not tested" in its line's sentence, over leaving the sentence empty: the layout mutes such a line, and every line's target then shows a sentence (implementer under the operator's autonomy mandate, 2026-10-19).

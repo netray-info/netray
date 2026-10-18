@@ -221,3 +221,17 @@ main td {
 #result:has(#recheck[data-stream-state="running"]) :is(#diff, #issues, #evidence, #passed) {
   opacity: 0.6;
 }
+#spectrum-stepper {
+  display: none;
+}
+@media (max-width: 480px) {
+  #spectrum-stepper {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+  #spectrum-stepper button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

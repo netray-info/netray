@@ -25,8 +25,8 @@ use super::views::{self, Grouping, Links};
 use super::{
     EvidenceInner, PROTOCOLS, Parts, ResultState, RunLineBody, SHOWN, Shown, assemble,
     domain_segment, evidence_part, figure_parts, full_page, href_of, is_fresh, issues_part,
-    not_stored_shown, progress_part, recorded_entry, resolve, run_line_part, spectrum_part,
-    stored_parts, unrecorded_shown,
+    not_stored_shown, progress_part, recorded_entry, resolve, run_line_part, sentences_of,
+    spectrum_part, stored_parts, unrecorded_shown,
 };
 use crate::api::{RunEvent, RunEvents, RunRefusal, RunStart, RunTrigger, wants_event_stream};
 use crate::client::client_ip;
@@ -279,8 +279,9 @@ impl Live {
             .map(|s| s.protocol.as_str())
             .collect::<Vec<_>>()
             .join(" ");
+        let sentences = sentences_of(self.entries.iter().take(SHOWN - 1).rev());
         let html = figure_parts(&self.domain, &current, &older, &rows, &live)
-            .and_then(|(plate, trace)| spectrum_part(&plate, &trace, true));
+            .and_then(|(plate, trace)| spectrum_part(&plate, &trace, &sentences, true));
         self.push("spectrum", html);
     }
 

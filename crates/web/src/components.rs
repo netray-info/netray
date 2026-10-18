@@ -277,6 +277,11 @@ pub(crate) fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
 }
 
 impl SpectrumView {
+    /// One line's share of the plate width, the width of its hit target.
+    fn pitch_pct(&self) -> String {
+        format!("{:.4}", 100.0 / self.line_count.max(1) as f64)
+    }
+
     /// The view of a layout: percent positions from px, one band per protocol group, one run
     /// group and one label set per run, `shown` marking the run on display.
     pub fn from_layout(layout: &crate::spectrum::Layout, label: &str, shown: usize) -> Self {

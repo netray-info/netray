@@ -187,3 +187,35 @@ C2 and C4 held before this phase's code: the stream island (v2-pages) already po
 ### Behavioural verification
 
 skipped: the islands run in a browser; vitest over the Rust-rendered fixtures (`islands/test/fixtures/result-*`) drives them, and Phase 8's Playwright run covers the refusal countdown on the seeded stack.
+
+## Phase 5 — Spectrum island
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R17: the spectrum island holds hovered run, pinned run and selected line, writes only data, aria, class and text, shows a run by moving data-shown; hover enlarges a row with date and grade in the gutter; click pins with marker and aria-pressed; line hover shows its sentence; at 480 px a stepper with 44 px buttons and full-height line targets | green | crates/web/islands/test/spectrum.test.ts, crates/web/tests/result_page_trace.rs |
+| C2 | GIVEN three trace rows WHEN row 2 is hovered THEN every line's data-tone and label equal row 2's precomputed state; WHEN the pointer leaves THEN the current run's state returns | green | crates/web/islands/test/spectrum.test.ts |
+| C3 | GIVEN row 2 clicked WHEN row 3 is hovered and left THEN row 2's state returns; WHEN row 2 is clicked again THEN it is released | green | crates/web/islands/test/spectrum.test.ts |
+| C4 | GIVEN the phone width WHEN the older-run button is pressed twice THEN the run two steps older is shown; GIVEN a line tapped THEN its sentence is shown | green | crates/web/islands/test/spectrum.test.ts |
+| C5 | GIVEN any interaction WHEN the DOM is diffed THEN only data, aria, class attributes and text changed | green | crates/web/islands/test/spectrum.test.ts |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 markup and island | 2 | sonnet | 83844 | 206 |
+| review fixes | 2 | sonnet | 42248 | 89 |
+
+The line targets are HTML spans over the plate, not SVG rects: happy-dom's SVG elements have no `click()`, and the overlay tiles the plate at the line pitch.
+
+### Review
+
+- BLOCKER (fixed, Decision log, tests 5f6d8011): `aria-current` stayed on run 0 while another run was shown; the marker now follows the shown run.
+- AMENDMENT (repaired in phase, Decision log): the end page of an unstored run had sentences from the stored history alone, contradicting the shown line or empty on a first visit; the run is now the newest point.
+- NIT (fixed): a pinned row carried bold and enlarged cells besides the marker.
+- NIT (fixed, Decision log): the stepper rendered on a page with fewer than two runs.
+
+### Behavioural verification
+
+skipped: the island runs in a browser; vitest drives it over the Rust-rendered `result-trace.html`, and Phase 8's Playwright run pins and steps a run on the seeded stack.

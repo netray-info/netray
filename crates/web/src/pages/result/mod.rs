@@ -338,6 +338,7 @@ struct Shown {
     share: Option<String>,
     plate: String,
     trace: String,
+    sentences: Vec<(String, String)>,
     refreshing: bool,
     diff: Option<DiffBlockView>,
     groups: Vec<IssueGroup>,
@@ -354,6 +355,7 @@ impl Shown {
             share: None,
             plate: String::new(),
             trace: String::new(),
+            sentences: Vec::new(),
             refreshing: false,
             diff: None,
             groups: Vec::new(),
@@ -511,6 +513,7 @@ fn stored_shown(entries: &[Entry], recorded: Option<&Recorded>) -> Option<Shown>
         share: entry.run.complete.then(|| entry.id.clone()),
         plate,
         trace,
+        sentences: sentences_of(chosen.iter().rev().copied()),
         refreshing: false,
         diff: Some(diff),
         groups: views::issues(
@@ -587,6 +590,7 @@ fn not_stored_shown(
         share: None,
         plate,
         trace,
+        sentences: sentences_through(entries, done),
         refreshing: false,
         diff: Some(views::recorded_diff_view(recorded, entries.first(), cat).block),
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
@@ -610,6 +614,7 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
         share: None,
         plate,
         trace,
+        sentences: sentences_through(entries, done),
         refreshing: false,
         diff: Some(views::not_recorded_view().block),
         groups: views::issues(done, cat, Links::Live, Grouping::Owner, &BTreeMap::new()),
@@ -617,6 +622,25 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
         evidence,
         recheck: true,
     })
+}
+
+/// The history sentence of every catalogue line over `entries`, oldest first.
+fn sentences_of<'a>(entries: impl Iterator<Item = &'a Entry>) -> Vec<(String, String)> {
+    let points: Vec<(i64, &Run)> = entries.map(|e| (e.created_at, &e.run)).collect();
+    views::history_sentences(&points)
+}
+
+/// The sentences over the history `entries` (newest first) with the run `done`, not stored, as
+/// the newest point dated now.
+fn sentences_through(entries: &[Entry], done: &Run) -> Vec<(String, String)> {
+    let mut points: Vec<(i64, &Run)> = entries
+        .iter()
+        .take(SHOWN - 1)
+        .rev()
+        .map(|e| (e.created_at, &e.run))
+        .collect();
+    points.push((now(), done));
+    views::history_sentences(&points)
 }
 
 /// The entry a stored `recorded` answer names, built from the finished run `done` when the
@@ -702,7 +726,9 @@ struct HeaderPart<'a> {
 struct SpectrumPart<'a> {
     plate: &'a str,
     trace: &'a str,
+    sentences: &'a [(String, String)],
     refreshing: bool,
+    stepper: bool,
 }
 
 #[derive(Template)]
@@ -744,13 +770,20 @@ fn progress_part(ray: &str) -> Option<String> {
     warn_render("progress", trimmed(&ProgressPart { ray }))
 }
 
-fn spectrum_part(plate: &str, trace: &str, refreshing: bool) -> Option<String> {
+fn spectrum_part(
+    plate: &str,
+    trace: &str,
+    sentences: &[(String, String)],
+    refreshing: bool,
+) -> Option<String> {
     warn_render(
         "spectrum",
         trimmed(&SpectrumPart {
             plate,
             trace,
+            sentences,
             refreshing,
+            stepper: trace.matches("data-run=").count() >= 2,
         }),
     )
 }
@@ -829,7 +862,12 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
         run_line,
         progress,
         share,
-        spectrum: spectrum_part(&shown.plate, &shown.trace, shown.refreshing)?,
+        spectrum: spectrum_part(
+            &shown.plate,
+            &shown.trace,
+            &shown.sentences,
+            shown.refreshing,
+        )?,
         diff,
         issues: issues_part(&shown.groups)?,
         evidence,

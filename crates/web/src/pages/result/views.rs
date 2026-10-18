@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use netray_engine::catalogue::{Catalogue, CheckSpec};
+use netray_engine::catalogue::{Catalogue, CheckSpec, catalogue};
 use netray_engine::profile::{Profile, Profiles};
 use netray_engine::{SectionEvent, SectionOutcome};
 use netray_model::diff::{BlockChangeKind, ChangeClass, Diff};
@@ -518,6 +518,29 @@ pub fn history_sentence(points: &[(i64, Status)]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" \u{00b7} ")
+}
+
+/// The history sentence of every catalogue line over `points` (oldest first), as (check id,
+/// sentence) in catalogue order; a run that lacks a check counts as `not_tested` for it.
+pub fn history_sentences(points: &[(i64, &Run)]) -> Vec<(String, String)> {
+    catalogue()
+        .entries()
+        .iter()
+        .map(|spec| {
+            let line: Vec<(i64, Status)> = points
+                .iter()
+                .map(|(at, run)| {
+                    let status = run
+                        .checks
+                        .iter()
+                        .find(|c| c.id == spec.id)
+                        .map_or(Status::NotTested, |c| c.status);
+                    (*at, status)
+                })
+                .collect();
+            (spec.id.to_string(), history_sentence(&line))
+        })
+        .collect()
 }
 
 /// The start of the current span, unless it covers every point.
