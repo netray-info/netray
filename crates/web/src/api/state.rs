@@ -7,9 +7,11 @@ use governor::{Quota, RateLimiter};
 use netray_common::ip_extract::IpExtractor;
 use netray_common::rate_limit::KeyedLimiter;
 use netray_engine::profile::{Profile, Profiles};
+use netray_http::HttpInspect;
 use netray_ip::IpLookup;
 use netray_ip::extractors::header_filters;
 use netray_store::HistoryStore;
+use netray_tls::TlsInspector;
 use regex::RegexSet;
 use serde::Serialize;
 
@@ -31,6 +33,8 @@ pub struct AdmissionLimits {
 #[derive(Clone, Default)]
 pub struct ApiParts {
     pub ip: Option<Arc<dyn IpLookup>>,
+    pub tls: Option<TlsInspector>,
+    pub http: Option<Arc<dyn HttpInspect>>,
 }
 
 /// The three limiters of the ip endpoints, keyed by the caller address (per-target by the
@@ -93,6 +97,8 @@ pub struct ApiState {
     profile: Option<Arc<Profile>>,
     limiter: Arc<KeyedLimiter<IpAddr>>,
     ip_limiters: Arc<IpLimiters>,
+    tls_limiters: Arc<netray_tls::security::RateLimitState>,
+    http_limiters: Arc<netray_http::security::RateLimitState>,
     header_filters: Arc<RegexSet>,
 }
 
@@ -102,6 +108,32 @@ impl ApiState {
         let burst = NonZeroU32::new(config.per_ip_burst).unwrap_or(NonZeroU32::MIN);
         let limiter = RateLimiter::keyed(Quota::per_minute(per_minute).allow_burst(burst));
         let ip_limiters = Arc::new(IpLimiters::new(&config.ip));
+        let tls_limiters = Arc::new(netray_tls::security::RateLimitState::scoped(
+            &netray_tls::security::rate_limit::Quotas {
+                per_ip_per_minute: config.tls.per_ip_per_minute,
+                per_ip_burst: config.tls.per_ip_burst,
+                per_target_per_minute: config.tls.per_target_per_minute,
+                per_target_burst: config.tls.per_target_burst,
+            },
+            netray_tls::security::rate_limit::Scopes {
+                metrics_prefix: "lens",
+                per_ip: "api_v1_tls",
+                per_target: "api_v1_tls_target",
+            },
+        ));
+        let http_limiters = Arc::new(netray_http::security::RateLimitState::scoped(
+            &netray_http::security::rate_limit::Quotas {
+                per_ip_per_minute: config.http.per_ip_per_minute,
+                per_ip_burst: config.http.per_ip_burst,
+                per_target_per_minute: config.http.per_target_per_minute,
+                per_target_burst: config.http.per_target_burst,
+            },
+            netray_http::security::rate_limit::Scopes {
+                metrics_prefix: "lens",
+                per_ip: "api_v1_http",
+                per_target: "api_v1_http_target",
+            },
+        ));
         let header_filters = Arc::new(header_filters(&config.ip.filtered_headers));
         Self {
             config,
@@ -113,6 +145,8 @@ impl ApiState {
             profile: None,
             limiter: Arc::new(limiter),
             ip_limiters,
+            tls_limiters,
+            http_limiters,
             header_filters,
         }
     }
@@ -173,6 +207,22 @@ impl ApiState {
 
     pub fn ip_lookup(&self) -> Option<&Arc<dyn IpLookup>> {
         self.parts.ip.as_ref()
+    }
+
+    pub fn tls_limiters(&self) -> &Arc<netray_tls::security::RateLimitState> {
+        &self.tls_limiters
+    }
+
+    pub fn http_limiters(&self) -> &Arc<netray_http::security::RateLimitState> {
+        &self.http_limiters
+    }
+
+    pub fn tls_inspector(&self) -> Option<&TlsInspector> {
+        self.parts.tls.as_ref()
+    }
+
+    pub fn http_inspect(&self) -> Option<&Arc<dyn HttpInspect>> {
+        self.parts.http.as_ref()
     }
 
     pub(super) fn header_filters(&self) -> &RegexSet {

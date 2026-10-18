@@ -105,7 +105,15 @@ per_ip_per_minute = 60
 per_ip_burst = 10
 # [api.dns]
 # [api.tls]
+# per_ip_per_minute = 30              # per caller, POST /tls/inspect, above 0
+# per_ip_burst = 10                   # above 0
+# per_target_per_minute = 60          # per inspected host, above 0
+# per_target_burst = 20               # above 0
 # [api.http]
+# per_ip_per_minute = 10              # per caller, POST /http/inspect, above 0
+# per_ip_burst = 5                    # above 0
+# per_target_per_minute = 30          # per inspected host, above 0
+# per_target_burst = 10               # above 0
 # [api.email]
 # [api.ip]
 # internal_mode = false               # true: private and loopback addresses are looked up

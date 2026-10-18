@@ -190,13 +190,13 @@ fn charge_caller(
     Ok(client)
 }
 
-type Peer = Option<Extension<ConnectInfo<SocketAddr>>>;
+pub(super) type Peer = Option<Extension<ConnectInfo<SocketAddr>>>;
 
-fn peer_of(peer: Peer) -> Option<SocketAddr> {
+pub(super) fn peer_of(peer: Peer) -> Option<SocketAddr> {
     peer.map(|Extension(ConnectInfo(addr))| addr)
 }
 
-fn json_body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, V1Error> {
+pub(super) fn json_body<T>(body: Result<Json<T>, JsonRejection>) -> Result<T, V1Error> {
     match body {
         Ok(Json(value)) => Ok(value),
         Err(e) if e.status() == StatusCode::PAYLOAD_TOO_LARGE => Err(V1Error::PayloadTooLarge),

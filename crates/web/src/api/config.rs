@@ -5,13 +5,84 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields, default)]
 pub struct ApiDnsConfig {}
 
-#[derive(Debug, Clone, Default, Deserialize)]
+/// The limiters of `POST /tls/inspect`; the inspection itself runs on `[modules.tls]`.
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct ApiTlsConfig {}
+pub struct ApiTlsConfig {
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub per_target_per_minute: u32,
+    pub per_target_burst: u32,
+}
 
-#[derive(Debug, Clone, Default, Deserialize)]
+impl Default for ApiTlsConfig {
+    fn default() -> Self {
+        Self {
+            per_ip_per_minute: 30,
+            per_ip_burst: 10,
+            per_target_per_minute: 60,
+            per_target_burst: 20,
+        }
+    }
+}
+
+/// The limiters of `POST /http/inspect`; the inspection itself runs on `[modules.http]`.
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct ApiHttpConfig {}
+pub struct ApiHttpConfig {
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub per_target_per_minute: u32,
+    pub per_target_burst: u32,
+}
+
+impl Default for ApiHttpConfig {
+    fn default() -> Self {
+        Self {
+            per_ip_per_minute: 10,
+            per_ip_burst: 5,
+            per_target_per_minute: 30,
+            per_target_burst: 10,
+        }
+    }
+}
+
+fn non_zero(table: &str, quotas: [(&str, u32); 4]) -> Result<(), String> {
+    for (key, value) in quotas {
+        if value == 0 {
+            return Err(format!("api.{table}.{key} must be greater than 0"));
+        }
+    }
+    Ok(())
+}
+
+impl ApiTlsConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        non_zero(
+            "tls",
+            [
+                ("per_ip_per_minute", self.per_ip_per_minute),
+                ("per_ip_burst", self.per_ip_burst),
+                ("per_target_per_minute", self.per_target_per_minute),
+                ("per_target_burst", self.per_target_burst),
+            ],
+        )
+    }
+}
+
+impl ApiHttpConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        non_zero(
+            "http",
+            [
+                ("per_ip_per_minute", self.per_ip_per_minute),
+                ("per_ip_burst", self.per_ip_burst),
+                ("per_target_per_minute", self.per_target_per_minute),
+                ("per_target_burst", self.per_target_burst),
+            ],
+        )
+    }
+}
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields, default)]
@@ -133,6 +204,8 @@ impl ApiConfig {
             return Err("api.per_ip_burst must be greater than 0".into());
         }
         self.ip.validate()?;
+        self.tls.validate()?;
+        self.http.validate()?;
         Ok(())
     }
 }

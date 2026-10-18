@@ -269,3 +269,65 @@ $ curl -s http://127.0.0.1:18485/api/v1/ip/range
 $ curl -s -X POST -d '{"addresses":["8.8.8.8","nope"]}' http://127.0.0.1:18485/api/v1/ip/batch
 {"error":{"code":"UNAVAILABLE","message":"the IP module is off: [modules.ip] is not configured"}} [503]
 ```
+
+## Phase 5 — TLS and HTTP inspectors
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R27: `POST /tls/inspect` `{host, port=443}` `deny_unknown_fields`, STARTTLS by port, tlsight's `InspectResponse`, input parsing, target policy with rebinding re-check, per-IP/per-target cost limits, handshake semaphore; axum-free inspection type in netray-tls that tlsight and v1 both call; tlsight unchanged | green | crates/web/tests/api_tls_limits.rs, crates/web/tests/api_http.rs, tests/repo/test_check_config.sh, crates/tls/tests/inspector.rs |
+| C2 | R28: `POST /http/inspect` `{url}` spectra's `InspectResponse` via `parse_url`, per-IP/per-target limiter, `validate_target`, `inspect_and_assemble` | green | crates/http/tests/job.rs, crates/web/tests/api_http.rs |
+| C3 | R31: job functions take typed request + handle, return typed result or typed refusal, no axum type; per-IP/per-target limiters once in `ApiState` behind `Arc` | green | crates/web/tests/api_tls_limits.rs, crates/web/tests/api_http.rs |
+| C4 | S: `{"host":"example.com"}` stub handshake → `InspectResponse` for port 443, valid against the document | green | crates/web/tests/api_tls.rs, crates/web/tests/openapi_responses.rs |
+| C5 | S: `{"host":"mail.example.com","port":25}` → SMTP STARTTLS as tlsight decides | green | crates/web/tests/api_tls.rs, crates/tls/tests/inspector.rs |
+| C6 | S: `{"host":"localhost","port":443}` → 400 `INVALID_INPUT` (single-label host) | green | crates/web/tests/api_tls.rs |
+| C7 | S: `{"host":"10.0.0.1"}` → 403 `TARGET_BLOCKED` from the target policy | green | crates/web/tests/api_tls_policy.rs |
+| C8 | S: `{"host":"internal.example.com"}` resolving to 10.0.0.5 → 403 `TARGET_BLOCKED` | green | crates/web/tests/api_tls_policy.rs |
+| C9 | S: `{"host":"example.com","starttls":"smtp"}` → 400 `INVALID_INPUT` | green | crates/web/tests/api_tls.rs |
+| C10 | S: per-target TLS budget exhausted for example.com, fresh address → 429 with `Retry-After` | green | crates/web/tests/api_tls_limits.rs |
+| C11 | S: second route holding the TLS per-IP limiter's `Arc` spent the budget → v1 429 with `Retry-After` | green | crates/web/tests/api_tls_limits.rs |
+| C12 | S: tlsight's `POST /api/inspect` with the same stub unchanged | green | crates/tls/tests/inspector.rs |
+| C13 | S: `/http/inspect` `https://example.com/` → spectra's `InspectResponse`; `https://127.0.0.1/` → 403 `TARGET_BLOCKED`; `http://example.com/` → 400 `INVALID_INPUT` | green | crates/web/tests/api_http.rs, crates/web/tests/openapi_responses.rs |
+| C14 | S: TLS job type called directly with a stub, result through `netray_tls::module::translate` → blocks and checks | green | crates/tls/tests/inspector.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 netray-tls seam and inspector | 1 | sonnet | 99899 | 329 |
+| G2 netray-http job seam | 1 | sonnet | 75949 | 170 |
+| G3 netray-web config, routes, compose | 1 | sonnet | 97687 | 237 |
+| G4 binary wiring, example config, fixture | 1 (cut off by the API limit after its edits; green on the orchestrator's run) | sonnet | n/a | n/a |
+
+### Behavioural verification
+
+`./target/debug/netray lens <lens.dev.toml on 127.0.0.1:18485, temp stores>` from the worktree build.
+
+```
+$ curl -X POST /api/v1/tls/inspect -d '{"host":"localhost","port":443}'
+{"error":{"code":"INVALID_INPUT","message":"invalid hostname: single-label hostname not allowed"}} [400]
+$ curl -X POST /api/v1/tls/inspect -d '{"host":"10.0.0.1"}'
+{"error":{"code":"TARGET_BLOCKED","message":"blocked target: all resolved IPs for 10.0.0.1 are in blocked ranges"}} [403]
+$ curl -X POST /api/v1/tls/inspect -d '{"host":"example.com","starttls":"smtp"}'
+{"error":{"code":"INVALID_INPUT","message":"Failed to deserialize the JSON body into the target type: starttls: unknown field `starttls`, expected `host` or `port` at line 1 column 32"}} [400]
+$ curl -X POST /api/v1/http/inspect -d '{"url":"https://127.0.0.1/"}'
+{"error":{"code":"TARGET_BLOCKED","message":"blocked target: Target resolves to a reserved address"}} [403]
+$ curl -X POST /api/v1/http/inspect -d '{"url":"http://example.com/"}'
+{"error":{"code":"INVALID_INPUT","message":"invalid URL: Submit the URL with https:// scheme; port-80 probing is automatic."}} [400]
+$ curl /api/v1/meta | jq -c .limits.tls,.limits.http
+{"per_ip_per_minute":30,"per_ip_burst":10,"per_target_per_minute":60,"per_target_burst":20}
+{"per_ip_per_minute":10,"per_ip_burst":5,"per_target_per_minute":30,"per_target_burst":10}
+$ curl -X POST /api/v1/tls/inspect -d '{"host":"example.com"}' | jq -c '{v:.summary.verdict, port:.ports[0].port, ...}'
+{"v":"warn","port":443,"ips":[{"ip":"172.66.147.243","err":{"code":"HANDSHAKE_TIMEOUT",...}}, ...]}  [200]
+```
+
+The live inspection answers 200 with tlsight's shape on port 443; its handshakes time out because a freshly built binary gets no outbound network on this machine (known local limit), and the stubbed 200 paths are covered by the gate tests.
+
+### Review
+
+Reader over the phase diff: 0 BLOCKER, 2 AMENDMENT, 1 DEFERRED, 3 NIT.
+
+- AMENDMENT (repaired in phase, decision log): v1 `/http/inspect` omits `enrichment.detail_url` (no key carries the IP-detail base); `[api.tls]`/`[api.http]` refuse only zeros, no cross-key rule, as tlsight and spectra.
+- DEFERRED: a per-target TLS refusal charges the caller's per-IP tokens twice (full cost, then the reduced retry) — tlsight's existing cap-and-warn logic, now also on v1.
+- NIT: C12's test compares tlsight with the inspector that both share (tlsight's `integration` and `contract_golden` tests pin its answers); C5's `starttls` label is set from the port after the stub, only the port-25 call is the STARTTLS evidence; criteria statuses were open at review time (now green).

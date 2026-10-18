@@ -13,6 +13,7 @@ use utoipa::ToSchema;
 
 use utoipa::OpenApi;
 
+use crate::backend::TlsBackend;
 use crate::config::Config;
 use crate::dns::{AnsweredRecord, CaaLookup, TlsaLookup};
 use crate::error::{AppError, ErrorResponse};
@@ -476,104 +477,15 @@ async fn do_inspect(
     parsed: input::ParsedInput,
     request_id: String,
 ) -> Result<Response, AppError> {
-    let request_start = Instant::now();
-    let config = state.config.load();
-
     let span = tracing::Span::current();
     span.record("request_id", &request_id);
     span.record("client_ip", tracing::field::display(&client_ip));
     metrics::counter!("tlsight_inspections_total").increment(1);
 
-    let hostname_str = match &parsed.target {
-        Target::Hostname(h) => h.clone(),
-        Target::Ip(ip) => ip.to_string(),
-    };
-    let mut warnings = Vec::new();
-    let mut skipped_ips = Vec::new();
-
-    tracing::info!(
-        hostname = %hostname_str,
-        client_ip = %client_ip,
-        request_id = %request_id,
-        "inspect start"
-    );
-
-    let ips = resolve_target(&state, &parsed.target).await?;
-    let allowed_ips = filter_allowed(
-        ips,
-        config.limits.allow_blocked_targets,
-        &hostname_str,
-        &mut warnings,
-    )
-    .inspect_err(|_| {
-        tracing::warn!(
-            client_ip = %client_ip,
-            target = %hostname_str,
-            "blocked target: all resolved IPs in blocked ranges"
-        );
-    })?;
-
-    // Cap-and-warn: compute cost and reduce IPs if over budget
-    let full_cost = parsed.ports.len() as u32 * allowed_ips.len() as u32;
-    let inspected_ips = if state
-        .rate_limiter
-        .check_cost(client_ip, &hostname_str, full_cost)
-        .is_ok()
-    {
-        allowed_ips
-    } else {
-        // Try with reduced IPs
-        let budget = state.rate_limiter.remaining_budget(client_ip);
-        let (selected, skipped) =
-            cap_to_budget(&allowed_ips, parsed.ports.len(), budget, &mut warnings);
-
-        if selected.is_empty() {
-            // Even 1 IP doesn't fit — hard reject
-            tracing::warn!(
-                client_ip = %client_ip,
-                scope = "per_ip",
-                "rate limited"
-            );
-            return Err(AppError::RateLimited {
-                retry_after_secs: 60,
-                scope: "per_ip",
-            });
-        }
-
-        let reduced_cost = parsed.ports.len() as u32 * selected.len() as u32;
-        if let Err(e) = state
-            .rate_limiter
-            .check_cost(client_ip, &hostname_str, reduced_cost)
-        {
-            if let AppError::RateLimited { scope, .. } = &e {
-                tracing::warn!(
-                    client_ip = %client_ip,
-                    scope = *scope,
-                    "rate limited"
-                );
-            }
-            return Err(e);
-        }
-
-        skipped_ips = skipped;
-        selected
-    };
-
-    let resp = inspect(
-        &state,
-        &config,
-        InspectRequest {
-            parsed,
-            ips: inspected_ips,
-            warnings,
-            skipped_ips,
-            request_id,
-            start: request_start,
-            caa: None,
-            ech: None,
-        },
-    )
-    .await?;
+    let resp = state
+        .inspector()
+        .inspect_parsed(parsed, client_ip, &state.rate_limiter, request_id)
+        .await?;
 
     // Extract soonest-expiring leaf cert for response headers
     let cert_expiry_info: Option<(String, i64)> = resp
@@ -617,15 +529,9 @@ pub struct InspectRequest {
 
 /// Resolves the target to its addresses; an IP target is its own address.
 pub async fn resolve_target(state: &AppState, target: &Target) -> Result<Vec<IpAddr>, AppError> {
-    // Resolve IPs via mhost (same resolver used for CAA/TLSA — unified DNS path).
     // Resolved IPs are re-checked against target_policy (DNS rebinding protection).
     match target {
-        Target::Hostname(h) => {
-            let resolver = state.dns_resolver.as_ref().ok_or_else(|| {
-                AppError::DnsResolutionFailed("DNS resolver not available".to_string())
-            })?;
-            resolve_hostname(h, resolver).await
-        }
+        Target::Hostname(h) => state.backend.resolve(h).await,
         Target::Ip(ip) => Ok(vec![*ip]),
     }
 }
@@ -802,15 +708,19 @@ pub async fn inspect(
             let trust_store = state.trust_store.load_full();
             let check_ct = config.validation.check_ct;
             let semaphore = Arc::clone(&state.handshake_semaphore);
+            let backend = Arc::clone(&state.backend);
             join_set.spawn(async move {
                 inspect_port(
                     &ips,
                     port,
                     hostname.as_deref(),
                     handshake_timeout,
-                    trust_store,
-                    check_ct,
-                    semaphore,
+                    PortEnv {
+                        trust_store,
+                        check_ct,
+                        semaphore,
+                        backend,
+                    },
                 )
                 .await
             });
@@ -1130,25 +1040,41 @@ fn starttls_protocol_for_port(port: u16) -> Option<String> {
     }
 }
 
+/// What a port's handshakes share: trust anchors, the CT switch, the handshake permits and
+/// the backend that performs them.
+struct PortEnv {
+    trust_store: Arc<rustls::RootCertStore>,
+    check_ct: bool,
+    semaphore: Arc<tokio::sync::Semaphore>,
+    backend: Arc<dyn TlsBackend>,
+}
+
 /// Inspect a single port across all IPs.
 async fn inspect_port(
     ips: &[std::net::IpAddr],
     port: u16,
     hostname: Option<&str>,
     timeout: Duration,
-    trust_store: Arc<rustls::RootCertStore>,
-    check_ct: bool,
-    semaphore: Arc<tokio::sync::Semaphore>,
+    env: PortEnv,
 ) -> PortResult {
+    let PortEnv {
+        trust_store,
+        check_ct,
+        semaphore,
+        backend,
+    } = env;
     let mut join_set = tokio::task::JoinSet::new();
 
     for (idx, &ip) in ips.iter().enumerate() {
         let semaphore = Arc::clone(&semaphore);
         let trust_store = Arc::clone(&trust_store);
+        let backend = Arc::clone(&backend);
         let hostname = hostname.map(|h| h.to_string());
         join_set.spawn(async move {
             let _permit = semaphore.acquire().await.ok();
-            let mut result = tls::inspect_ip(ip, port, hostname.as_deref(), timeout).await;
+            let mut result = backend
+                .handshake(ip, port, hostname.as_deref(), timeout)
+                .await;
             if result.error.is_some() {
                 metrics::counter!("tlsight_handshake_errors_total").increment(1);
             }
@@ -1292,7 +1218,7 @@ fn compute_consistency(ip_results: &[tls::IpInspectionResult]) -> Option<Consist
 /// Falls back to an error if the resolver is unavailable or returns no addresses.
 /// IP filtering (DNS rebinding protection) is applied by the caller via
 /// `target_policy::check_allowed_with_policy` immediately after this returns.
-async fn resolve_hostname(
+pub(crate) async fn resolve_hostname(
     hostname: &str,
     resolver: &Arc<crate::dns::DnsResolver>,
 ) -> Result<Vec<std::net::IpAddr>, AppError> {
