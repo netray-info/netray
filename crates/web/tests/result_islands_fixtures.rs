@@ -186,7 +186,8 @@ async fn post_run(f: &Fixture) -> String {
     body_of(&f.app, req).await
 }
 
-/// Replace every stored entry id with `ENTRY<n>`, numbered by first appearance in `text`.
+/// Replace every stored entry id with `ENTRY<n>`, numbered by first appearance in `text`, and the
+/// wall-clock minute of the live run with `NOW`.
 async fn normalise(store: &HistoryStore, text: String) -> String {
     let mut ids: Vec<(usize, String)> = store
         .entries(DOMAIN)
@@ -200,7 +201,11 @@ async fn normalise(store: &HistoryStore, text: String) -> String {
     for (n, (_, id)) in ids.iter().enumerate() {
         out = out.replace(id.as_str(), &format!("ENTRY{n}"));
     }
-    out
+    // The live run's trace row carries the wall clock; every fixed fixture time lies in 2025.
+    regex::Regex::new(r"20(2[6-9]|[3-9][0-9])-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}")
+        .unwrap()
+        .replace_all(&out, "NOW")
+        .into_owned()
 }
 
 fn check(name: &str, got: &str) {
