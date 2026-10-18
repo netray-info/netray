@@ -11,7 +11,15 @@ fn violations_in(rel: &str) -> Vec<String> {
         .violations
         .iter()
         .filter(|v| v.path == Path::new(rel))
-        .map(|v| format!("rule {} {}:{} {}", v.rule, v.path.display(), v.line, v.message))
+        .map(|v| {
+            format!(
+                "rule {} {}:{} {}",
+                v.rule,
+                v.path.display(),
+                v.line,
+                v.message
+            )
+        })
         .collect()
 }
 
@@ -47,8 +55,10 @@ fn pages_css_dims_refreshing_bands_and_a_running_stream_and_passes_the_gate() {
         "no rule dims [data-refreshing] bands lacking data-live"
     );
     assert!(
-        selectors.iter().any(|s| s.contains("[data-stream-state=\"running\"]")
-            || s.contains("[data-stream-state=running]")),
+        selectors
+            .iter()
+            .any(|s| s.contains("[data-stream-state=\"running\"]")
+                || s.contains("[data-stream-state=running]")),
         "no rule dims the result while the stream form runs"
     );
     let found = violations_in("static/pages.css");
