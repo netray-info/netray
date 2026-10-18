@@ -154,3 +154,36 @@ POST /example.com/run (SSE, trigger=recheck)  429, retry-after: 3600, v2-pages C
 POST /example.com/run (form, trigger=recheck) 429, full page, "too many checks from your address; try again in …"
 POST /example.com/run (SSE, trigger=visit, fresh head)  fragments result-grade run-line progress result-share spectrum diff issues evidence-dns…evidence-ip passed
 ```
+
+## Phase 4 — Stream wiring and countdown
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R23: re-check form is the stream island with a trigger button; autostart only for stale/none; countdown island ticks data-retry-after and enables re-check at 0; CSS dims un-live bands of [data-refreshing] and the page while running; no island writes a style; spectrum, issues and countdown islands mount on end-fragment nodes | green | crates/web/islands/test/result-stream.test.ts, crates/web/islands/test/countdown.test.ts, crates/web/tests/result_islands_gate.rs |
+| C2 | GIVEN a rendered stale page and a stubbed SSE answer WHEN the islands mount THEN the stream island posts once with trigger=visit; fresh posts nothing; re-check pressed posts trigger=recheck | already_implemented | crates/web/islands/test/result-stream.test.ts |
+| C3 | GIVEN a stubbed 429 stream with one refusal fragment WHEN applied THEN the run line shows the reason and the countdown island is mounted on it | green | crates/web/islands/test/countdown.test.ts |
+| C4 | GIVEN the start fragment WHEN inserted THEN the spectrum carries data-refreshing; GIVEN the end fragment THEN it no longer does | already_implemented | crates/web/islands/test/result-stream.test.ts |
+| C5 | GIVEN a refused fragment with data-retry-after="2" WHEN two ticks pass THEN the countdown reads 0 and re-check is enabled | green | crates/web/islands/test/countdown.test.ts |
+| C6 | GIVEN the end fragments WHEN inserted THEN the spectrum, issues and countdown islands are mounted on the new nodes | green | crates/web/islands/test/result-stream.test.ts |
+| C7 | GIVEN the countdown island's source WHEN the gate runs THEN it passes rule 1 (no style writes) | green | crates/web/tests/result_islands_gate.rs |
+
+C2 and C4 held before this phase's code: the stream island (v2-pages) already posts the autostart trigger and applies the start and end fragments; their tests stay as protection.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 countdown, G2 islands markup, G3 CSS (one coder, in order) | 3 | sonnet | 34577 | 77 |
+| review fix (deadline) | 2 | sonnet | 29106 | 26 |
+
+### Review
+
+- AMENDMENT (repaired in phase, Decision log, test be443a10): the countdown counted ticks, so a hidden tab or the back-forward cache kept re-check disabled past `Retry-After`; it now counts to a deadline.
+- NIT (Decision log): the countdown reaches the re-check button outside its element; requirement 23 asks for it.
+- The run fixture carried the live run's wall-clock minute and broke after midnight; the generator writes it as NOW (60acebd0).
+
+### Behavioural verification
+
+skipped: the islands run in a browser; vitest over the Rust-rendered fixtures (`islands/test/fixtures/result-*`) drives them, and Phase 8's Playwright run covers the refusal countdown on the seeded stack.

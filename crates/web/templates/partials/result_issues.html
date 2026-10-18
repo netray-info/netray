@@ -1,6 +1,6 @@
 {% import "components/grouping_switch.html" as grouping_switch %}
 {% import "components/check_row.html" as check_row %}
-<section id="issues">
+<section id="issues" data-island="issues">
 <div hidden>{% call grouping_switch::grouping_switch(switch) %}{% endcall %}</div>
 {% for group in groups %}
 <section class="issue-group" data-group="{{ group.key }}">

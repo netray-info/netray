@@ -60,3 +60,16 @@ Decisions (implementer under the operator's autonomy mandate, 2026-10-18):
 - A missing or unknown `trigger` answers 400, over defaulting to `visit`: the form always sends one of the two values.
 - `Recorded(None)` is treated as `NotStored { diff: None }`.
 - Requirement 30's §5.2 amendment lands with Phase 8, as the spec lists it.
+
+## Phase 4 — Stream wiring and countdown
+
+### Groups
+
+G1: C5, C7, C3 (`islands/src/countdown.ts`, `main.ts`) · G2: C6, re-checking C2 and C4 (`partials/result_spectrum.html`, `result_issues.html`, regenerated fixtures) · G3: C1 (`static/pages.css`).
+
+### Plan
+
+G1: `countdown(el)` reads `data-retry-after`, disables `#recheck button[name="trigger"]` while above 0, ticks with `setInterval` 1000 ms writing text and `data-retry-after`, clears and enables at 0; `register("countdown", countdown)` in main.ts; no style writes (gate rule 1).
+G2: `<figure id="spectrum" data-island="spectrum"…>`, `<section id="issues" data-island="issues">` (attributes after the id); regenerate `islands/test/fixtures/result-*` with `UPDATE_GOLDEN=1 cargo test -p netray-web --test result_islands_fixtures` (protected: `ADLC-Test-Change` per changed fixture).
+G3: `#spectrum[data-refreshing] g[data-protocol]:not([data-live])` and `#result:has(#recheck[data-stream-state="running"]) :is(#diff, #issues, #evidence, #passed)` dimmed with a literal opacity; id and attribute selectors only (gate rule 2).
+`islands/dist` is gitignored; rebuild it (`npm run build -w @netray-info/islands`) before cargo tests.

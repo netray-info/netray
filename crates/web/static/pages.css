@@ -215,3 +215,9 @@ main td {
   padding: var(--space-3) 0;
   border-bottom: var(--line-hair) solid var(--color-line);
 }
+#spectrum[data-refreshing] g[data-protocol]:not([data-live]) {
+  opacity: 0.4;
+}
+#result:has(#recheck[data-stream-state="running"]) :is(#diff, #issues, #evidence, #passed) {
+  opacity: 0.6;
+}
