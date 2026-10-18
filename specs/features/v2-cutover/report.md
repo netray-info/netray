@@ -20,7 +20,7 @@
 | C12 | GIVEN `[snapshots] enabled = true` WHEN checked THEN exit 1, `snapshots` removed in 0.30.0 | green | serve_legacy_keys.rs |
 | C13 | GIVEN `[history] db_path` WHEN checked THEN exit 1 naming `[store] db_path` | green | serve_legacy_keys.rs |
 | C14 | GIVEN `[cache] ttl_seconds = 300` THEN names `[admission] cache_window_seconds`; GIVEN `[rate_limit] per_ip_burst = 3` THEN names `[admission] per_ip_burst` | green | serve_legacy_keys.rs |
-| C15 | GIVEN `[api.ip] batch_max_size = 50` and `[inspect.tls] deadline_ms = 15000` THEN exit 0; `batch_max_size = 101` at `serve` exits 1 naming the key | test-unwritable (deferred until v2-api and v2-inspectors merge: their types do not exist on main; Decision log 2026-10-18) | |
+| C15 | GIVEN `[api.ip] batch_max_size = 50` and `[inspect.tls] deadline_ms = 15000` THEN exit 0; `batch_max_size = 101` at `serve` exits 1 naming the key | test-unwritable (deferred: `[api]` half to Phase 6 now that v2-api is merged, `[inspect.*]` half until v2-inspectors merges; Decision log 2026-10-18) | |
 | C16 | GIVEN top-level `geoip_city_db` THEN exit 1 naming `[modules.ip].geoip_city_db` | green | serve_legacy_keys.rs |
 | C17 | GIVEN top-level `[dns]` THEN exit 1 pointing to the CHANGELOG table | green | serve_legacy_keys.rs |
 | C18 | GIVEN top-level `[inspect] max_redirects = 5` THEN exit 1 naming `[modules.http.inspect].max_redirects`; GIVEN `[inspect.http] max_concurrent = 4` THEN exit 0 | green | serve_legacy_keys.rs (first half; `[inspect.http]` half deferred with C15) |
@@ -49,7 +49,7 @@ Merged: v2-history, v2-admission, v2-entries, v2-spectrum, v2-pages. Open: v2-ap
 | `[badges]`, `[og_cards]`, `[telemetry]` | lens | same tables |
 | `[snapshots]`, `[site]`, `[ecosystem]` | lens | legacy: removed |
 | `[modules.*]` | lens, built by `lens_registry` (`crates/netray/src/main.rs`) | `[modules.*]`; `lens_registry` stays in `crates/netray` |
-| `[api]`, `[api.<inspector>]` | *pending* v2-api (structs in `netray_web::api`) | `netray.toml [api]` |
+| `[api]`, `[api.<inspector>]` | merged (v2-api, 309c6611): `netray_web::api::ApiConfig`, read by lens's config; under `serve`, `to_lens` sets it to its defaults (`enabled = true`, 60/min, burst 10) because `netray.toml` has no `[api]` yet | `netray.toml [api]`: C15 with its failing test, Phase 6 |
 | `[inspect.<tool>]` | *pending* v2-inspectors | `netray.toml [inspect]` |
 | `admission.rs` (`check_limits`, `admit`, `RunStream`, slots, throttle, per-client limiter, `Sec-Purpose`) | `crates/lens/src/admission.rs` | `netray-web` (Phase 6) |
 | `check.rs` orchestration, run step | `crates/lens/src/check.rs` | `netray-engine` (Phase 6) |
@@ -60,7 +60,8 @@ Merged: v2-history, v2-admission, v2-entries, v2-spectrum, v2-pages. Open: v2-ap
 | `pages::router()`, `entries::router`, `privacy_router()` mounts | `crates/lens/src/lib.rs:193-246` | composed by netray-web host router (Phase 2) |
 | badge, OG (`badge/`, `og/`) | `crates/lens/src` | `netray-web` (Phase 6) |
 | middleware stack (security, layer order) | `crates/lens/src/lib.rs`, `security/` | `netray-web` (Phase 6) |
-| `DomainRuns` implementation | *pending* v2-api | `netray-web` |
+| `DomainRuns` implementation | merged: `crates/lens/src/api_v1.rs` (`LensRuns`); `ApiParts` built by `LensModules::split` in `crates/netray/src/main.rs` | `netray-web` (Phase 6) |
+| `netray_api_requests_total{endpoint}`: registered at startup (Phase 4) but counted by no `/api/v1` route yet; requirement 18's `/api/v1` half | `crates/lens/src/metrics.rs`, `crates/web/src/api/` | Phase 6, with the middleware move |
 | real `InspectorJobs` | *pending* v2-inspectors | `crates/netray` |
 | `GET /`, `/{domain}`, run POST, history routes | *pending* v2-result-page | netray-web, composed by the host router |
 | series `lens_check_requests_total`, `lens_badge_requests_total`, `lens_rate_limit_hits_total`, `lens_admission_rejections_total`, `lens_runs_in_flight`, `lens_history_record_errors_total` | `crates/lens/src/metrics.rs` | Phase 4 renames / ends |
