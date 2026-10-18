@@ -67,7 +67,11 @@ elsif ci
   check_job = {} unless check_job.is_a?(Hash)
   fails << "ci.yml: check job does not bound debuginfo (env CARGO_PROFILE_DEV_DEBUG: line-tables-only)" unless (check_job["env"] || {})["CARGO_PROFILE_DEV_DEBUG"] == "line-tables-only"
   csteps = Array(check_job["steps"]).select { |s| s.is_a?(Hash) }
-  i_free = csteps.index { |s| %w[/usr/share/dotnet /opt/ghc /usr/local/lib/android].all? { |p| s["run"].to_s.include?(p) } && s["run"].to_s.include?("df -h /") }
+  i_free = csteps.index do |s|
+    r = s["run"].to_s
+    rm = r.lines.find { |l| l =~ /\brm -rf\b/ }.to_s
+    %w[/usr/share/dotnet /opt/ghc /usr/local/lib/android].all? { |p| rm.include?(p) } && r.scan("df -h /").size >= 2
+  end
   i_setup = csteps.index { |s| s["run"].to_s.include?("just adlc-setup") }
   fails << "ci.yml: no step frees runner disk (dotnet, ghc, android; df -h /) before just adlc-setup" unless i_free && i_setup && i_free < i_setup
 end
