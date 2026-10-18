@@ -5,14 +5,16 @@ use std::collections::BTreeMap;
 
 use netray_engine::catalogue::{Catalogue, CheckSpec};
 use netray_engine::profile::{Profile, Profiles};
+use netray_engine::{SectionEvent, SectionOutcome};
 use netray_model::diff::{BlockChangeKind, ChangeClass, Diff};
-use netray_model::evidence::BlockId;
-use netray_model::run::{Run, RunCheck, SectionKind};
-use netray_model::{CheckId, FixOwner, Protocol, Severity, Status};
+use netray_model::evidence::{BlockId, EVIDENCE_SCHEMA_VERSION};
+use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
+use netray_model::{CheckId, FixOwner, Grade, Protocol, Severity, Status};
 use netray_store::{Entry, Recorded};
 
+use crate::api::{RefusalReason, RunRefusal};
 use crate::components::{
-    CheckRowView, DiffBlockView, DiffEntry, Tone, TraceRow, TraceView, line_tone,
+    CheckRowView, DiffBlockView, DiffEntry, SegmentState, Tone, TraceRow, TraceView, line_tone,
 };
 use crate::entries::view::{epoch_days_to_ymd, grade_letter, status_tone};
 use crate::evidence::href;
@@ -330,6 +332,9 @@ pub struct DiffView {
 /// The note of an entry that has no previous state to compare with.
 pub const FIRST_STATE: &str = "first state recorded \u{2014} re-check after your change";
 
+/// The run line part and the diff note of a complete run whose record failed.
+pub const NOT_RECORDED: &str = "not recorded";
+
 const DIFF_TITLE: &str = "Changes since the previous entry";
 
 fn empty_view(note: Option<String>) -> DiffView {
@@ -342,6 +347,11 @@ fn empty_view(note: Option<String>) -> DiffView {
         },
         grade: Vec::new(),
     }
+}
+
+/// The diff block of a complete run whose record failed.
+pub fn not_recorded_view() -> DiffView {
+    empty_view(Some(NOT_RECORDED.to_string()))
 }
 
 /// The diff block of a stored entry: the rows of its diff, or the first-state note.
@@ -550,14 +560,7 @@ fn layout_input_with(run: &Run, profile: &'static Profile) -> RunInput<'static> 
         sections: run
             .sections
             .iter()
-            .map(|s| {
-                let state = match s.outcome {
-                    SectionKind::Measured => SectionState::Measured,
-                    SectionKind::NotApplicable => SectionState::NotApplicable,
-                    SectionKind::Incomplete | SectionKind::TimedOut => SectionState::Unmeasured,
-                };
-                (s.protocol, state)
-            })
+            .map(|s| (s.protocol, section_state(&s.outcome)))
             .collect(),
         profile,
     }
@@ -574,22 +577,138 @@ pub fn utc_minute(timestamp: i64) -> String {
     )
 }
 
-/// The trace of a layout: one row per run, newest first, `entries` in the layout's run order.
-pub fn trace_view(layout: &Layout, entries: &[&Entry]) -> TraceView {
+/// The trace of a layout: one row per run, newest first, `rows` the (created_at, grade) of each
+/// run in the layout's run order.
+pub fn trace_view(layout: &Layout, rows: &[(i64, Grade)]) -> TraceView {
     TraceView {
         rows: layout
             .runs
             .iter()
-            .zip(entries)
+            .zip(rows)
             .enumerate()
-            .map(|(k, (run, entry))| TraceRow {
-                date: utc_minute(entry.created_at),
-                grade: grade_letter(entry.grade).to_string(),
+            .map(|(k, (run, (created_at, grade)))| TraceRow {
+                date: utc_minute(*created_at),
+                grade: grade_letter(*grade).to_string(),
                 cells: run.tones.iter().map(|t| line_tone(*t)).collect(),
                 current: k == 0,
             })
             .collect(),
     }
+}
+
+/// The run so far: the sections that arrived, in arrival order; not complete, grade incomplete.
+pub fn live_run(sections: &[SectionEvent]) -> Run {
+    let mut run = Run {
+        profile_version: Profiles::current().version,
+        engine_version: env!("CARGO_PKG_VERSION").to_string(),
+        evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        grade: Grade::Incomplete,
+        complete: false,
+        sections: Vec::new(),
+        checks: Vec::new(),
+        blocks: Vec::new(),
+    };
+    for event in sections {
+        let (outcome, reason) = match &event.outcome {
+            SectionOutcome::Measured { checks, evidence } => {
+                run.checks.extend(checks.iter().map(|c| RunCheck {
+                    id: c.id.clone(),
+                    status: c.status,
+                    findings: c.findings.clone(),
+                    evidence: c.evidence.clone(),
+                }));
+                run.blocks.extend(evidence.iter().cloned());
+                (SectionKind::Measured, None)
+            }
+            SectionOutcome::NotApplicable { reason } => {
+                (SectionKind::NotApplicable, Some(reason.clone()))
+            }
+            SectionOutcome::Incomplete { reason } => {
+                (SectionKind::Incomplete, Some(reason.clone()))
+            }
+            SectionOutcome::TimedOut => (SectionKind::TimedOut, None),
+        };
+        run.sections.push(RunSection {
+            protocol: event.protocol,
+            outcome,
+            reason,
+        });
+    }
+    run
+}
+
+fn section_state(kind: &SectionKind) -> SectionState {
+    match kind {
+        SectionKind::Measured => SectionState::Measured,
+        SectionKind::NotApplicable => SectionState::NotApplicable,
+        SectionKind::Incomplete | SectionKind::TimedOut => SectionState::Unmeasured,
+    }
+}
+
+/// The layout input of a run in progress: the sections that finished come from `live`, every
+/// other protocol keeps what `stored` (the latest stored run) showed. A finished section that
+/// is incomplete or timed out is unmeasured.
+pub fn live_input(stored: Option<&Run>, live: &Run) -> RunInput<'static> {
+    let finished = |p: Protocol| live.sections.iter().any(|s| s.protocol == p);
+    let mut statuses = BTreeMap::new();
+    let mut sections = BTreeMap::new();
+    if let Some(stored) = stored {
+        for c in stored.checks.iter().filter(|c| !finished(c.id.protocol())) {
+            statuses.insert(c.id.clone(), c.status);
+        }
+        for s in stored.sections.iter().filter(|s| !finished(s.protocol)) {
+            sections.insert(s.protocol, section_state(&s.outcome));
+        }
+    }
+    for c in &live.checks {
+        statuses.insert(c.id.clone(), c.status);
+    }
+    for s in &live.sections {
+        sections.insert(s.protocol, section_state(&s.outcome));
+    }
+    RunInput {
+        statuses,
+        sections,
+        profile: Profiles::current(),
+    }
+}
+
+/// The segments of the progress ray in `PROTOCOLS` order: pending until the section arrived,
+/// then done, or incomplete for an incomplete or timed-out one.
+pub fn segment_states(run: &Run) -> [SegmentState; 5] {
+    PROTOCOLS.map(|p| {
+        match run
+            .sections
+            .iter()
+            .find(|s| s.protocol == p)
+            .map(|s| &s.outcome)
+        {
+            None => SegmentState::Pending,
+            Some(SectionKind::Measured | SectionKind::NotApplicable) => SegmentState::Done,
+            Some(SectionKind::Incomplete | SectionKind::TimedOut) => SegmentState::Incomplete,
+        }
+    })
+}
+
+/// The refusal sentence of a refused run: the lead text, and the seconds a countdown follows it
+/// with.
+pub fn refusal_line(refusal: &RunRefusal) -> (String, u64) {
+    let lead = match (refusal.reason, refusal.last_run_ago_s) {
+        (RefusalReason::Throttle, Some(ago)) if refusal.last_incomplete => {
+            format!("a run {ago} s ago was incomplete; a new run is possible in ")
+        }
+        (RefusalReason::Throttle, Some(ago)) => {
+            format!("checked {ago} s ago; a new run is possible in ")
+        }
+        (RefusalReason::Throttle, None) => "a new run is possible in ".to_string(),
+        (RefusalReason::Budget | RefusalReason::IpLimit, _) => {
+            "too many checks from your address; try again in ".to_string()
+        }
+        (RefusalReason::GlobalLimit | RefusalReason::Slots, _) => {
+            "netray is busy; try again in ".to_string()
+        }
+    };
+    (lead, refusal.retry_after_s)
 }
 
 /// What a run says about one protocol's section: "measured", "not applicable: <reason>" or

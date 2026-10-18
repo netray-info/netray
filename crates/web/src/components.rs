@@ -204,6 +204,11 @@ impl SpectrumBand {
     fn boundary_pct(&self) -> Option<String> {
         self.boundary.map(|b| format!("{b:.4}"))
     }
+
+    /// Whether `live`, a space-separated list of protocol names, names this band.
+    fn is_live(&self, live: &str) -> bool {
+        live.split(' ').any(|p| p == self.protocol)
+    }
 }
 
 /// One label: `x` the leader in percent of the plate, `width` the box width in px.
@@ -468,8 +473,24 @@ component!(
     spectrum,
     SpectrumTemplate,
     SpectrumView,
-    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view) %}{% endcall %}"
+    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\") %}{% endcall %}"
 );
+
+#[derive(Template)]
+#[template(
+    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, live) %}{% endcall %}",
+    ext = "html"
+)]
+struct SpectrumLiveTemplate<'a> {
+    view: &'a SpectrumView,
+    live: &'a str,
+}
+
+/// Renders the `spectrum` component with the bands named in `live` (space-separated protocol
+/// names) marked as measured by the run on display.
+pub fn spectrum_live(view: &SpectrumView, live: &str) -> askama::Result<String> {
+    SpectrumLiveTemplate { view, live }.render()
+}
 component!(
     trace,
     TraceTemplate,

@@ -104,3 +104,53 @@ GET /Example.com.        301 → /example.com
 GET /example.com/history 200, 1 row linking /r/<id>
 GET /does-not-exist      SPA shell (id="root")
 ```
+
+## Phase 3 — Run route and fragments
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6: re-check/check form posts trigger to /<domain>/run; without SSE accept runs or joins to the end then 303 /<domain>; refused → 429 Retry-After full page with R21's line | green | crates/web/tests/result_run_form.rs |
+| C2 | R19: SSE POST reaches DomainRuns::start(domain, client, trigger, prefetch); fresh visit starts nothing; start/section/end fragments per §5.3; NotStarted 503 no-store | green | crates/web/tests/result_run_stream.rs |
+| C3 | R20: every fragment rendered by the page's templates; end fragment HTML equals the page element of the same id | green | crates/web/tests/result_run_equal.rs |
+| C4 | R21: refusal answers 429 Retry-After and one run-line fragment with reason and countdown (data-retry-after), then end; four sentences | green | crates/web/tests/result_run_refusal.rs |
+| C5 | R22: incomplete run's end fragments: grade incomplete or F, finished sections with unmeasured bands, no share link, live evidence, diff per R12 | green | crates/web/tests/result_run_incomplete.rs |
+| C6 | GIVEN stub modules finishing dns, tls, http, email, ip WHEN POSTed with SSE THEN start, five section groups in order, end fragments, end | green | crates/web/tests/result_run_stream.rs |
+| C7 | GIVEN a finished run WHEN each end fragment is compared with the page templates rendered for the same run THEN equal; end fragments include #spectrum and the open issues | green | crates/web/tests/result_run_equal.rs |
+| C8 | GIVEN any section fragment WHEN parsed in a template THEN its root is figure#spectrum, a ray, issues or evidence element, never an SVG g; finished bands carry data-live | green | crates/web/tests/result_run_stream.rs |
+| C9 | GIVEN live tls check not_tested and Done run not_applicable WHEN end fragments arrive THEN spectrum, issues and passed checks show not_applicable | green | crates/web/tests/result_run_equal.rs |
+| C10 | GIVEN Changed with a warn referencing dns.caa THEN issue links /r/<new id>/dns#ev-dns.caa as the GET page; NotStored THEN #ev-dns.caa | green | crates/web/tests/result_run_links.rs |
+| C11 | GIVEN email section times out THEN its ray segment incomplete, band's current run group data-unmeasured, email evidence the live partial, end header incomplete; with a failed hard fail F | green | crates/web/tests/result_run_incomplete.rs |
+| C12 | GIVEN a complete run recorded Changed THEN each evidence element links /r/<new id>/<protocol> | green | crates/web/tests/result_run_links.rs |
+| C13 | GIVEN a run in flight with two sections done WHEN a second request joins THEN it first receives those two sections' fragments, then the rest | green | crates/web/tests/result_run_stream.rs |
+| C14 | GIVEN a fresh head WHEN trigger=visit THEN start not called, stored end fragments and end; trigger=recheck THEN start called with recheck | green | crates/web/tests/result_run_stream.rs |
+| C15 | GIVEN lens's implementation and a run 20 s ago WHEN recheck THEN refused throttle with last_run_ago_s 20; per-IP limit spent THEN ip_limit before admit | green | crates/lens/tests/result_run_admission.rs |
+| C16 | GIVEN throttle, last_incomplete, 40 s ago, retry 20 s THEN 429, Retry-After: 20, one fragment "a run 40 s ago was incomplete; a new run is possible in 20 s" | green | crates/web/tests/result_run_refusal.rs |
+| C17 | GIVEN budget, ip_limit, global_limit, slots refusals THEN address, address, busy, busy sentences | green | crates/web/tests/result_run_refusal.rs |
+| C18 | GIVEN Sec-Purpose: prefetch and NotStarted THEN 503 Cache-Control: no-store | green | crates/web/tests/result_run_stream.rs |
+| C19 | GIVEN a form POST without SSE accept WHEN the run completes THEN 303 /<domain>; refusal THEN 429 full page with the line | green | crates/web/tests/result_run_form.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 run route | 1 | sonnet | 162763 | 391 |
+| G2 lens | 0 (no production change; the lens test's fixed 40 s / 20 s assumed a complete prior run and a stopped clock, fixed in 15613357) | — | — | — |
+| review fixes | 2 | sonnet | 58430 | 101 |
+
+### Review
+
+- AMENDMENT (repaired in phase, Decision log, tests 730d76c0): the end fragments replaced `#result-header`, detaching the stream island's form so `data-stream-state` and `netray:stream-end` landed on a detached node; they now replace `result-grade`, `run-line`, `progress` and `result-share`.
+- AMENDMENT (repaired in phase, Decision log): a complete run whose record failed (`Recorded(None)`) showed as incomplete; it keeps its grade and reads "not recorded".
+- AMENDMENT (repaired in phase, Decision log): a failed history re-read after a stored record fell back to the not-stored view; the Done run now renders as the recorded entry.
+
+### Behavioural verification
+
+Seeded store, `netray lens` with `LENS_ADMISSION__CLIENT_BUDGET_PER_HOUR=0`:
+
+```
+POST /example.com/run (SSE, trigger=recheck)  429, retry-after: 3600, v2-pages CSP, event fragment run-line, end
+POST /example.com/run (form, trigger=recheck) 429, full page, "too many checks from your address; try again in …"
+POST /example.com/run (SSE, trigger=visit, fresh head)  fragments result-grade run-line progress result-share spectrum diff issues evidence-dns…evidence-ip passed
+```

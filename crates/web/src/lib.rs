@@ -6,6 +6,7 @@
 //! its explore-live links.
 
 pub mod api;
+mod client;
 pub mod components;
 pub mod contrast;
 pub mod entries;

@@ -1,0 +1,11 @@
+<figure id="spectrum"{% if refreshing %} data-refreshing{% endif %}>
+{{ plate|safe }}
+<div id="trace">{{ trace|safe }}</div>
+<ul id="legend">
+<li>pass</li>
+<li>warn</li>
+<li>fail</li>
+<li>fixed</li>
+<li>muted</li>
+</ul>
+</figure>
