@@ -3,6 +3,35 @@
 {% block main %}
 <h1>{{ heading }}</h1>
 {% call c::query_input(query, stream_url, autostart) %}{% endcall %}
+{% if stream_url == "/inspect/dns/run" %}
+<p>+check is not a separate job: the DNS band covers its checks.</p>
+<fieldset data-island="dns">
+  <legend>Build the query</legend>
+  <label><input type="checkbox" name="dns-type" value="A"> A</label>
+  <label><input type="checkbox" name="dns-type" value="AAAA"> AAAA</label>
+  <label><input type="checkbox" name="dns-type" value="CNAME"> CNAME</label>
+  <label><input type="checkbox" name="dns-type" value="MX"> MX</label>
+  <label><input type="checkbox" name="dns-type" value="TXT"> TXT</label>
+  <label><input type="checkbox" name="dns-type" value="NS"> NS</label>
+  <label><input type="checkbox" name="dns-type" value="SOA"> SOA</label>
+  <label><input type="checkbox" name="dns-type" value="CAA"> CAA</label>
+  <label><input type="checkbox" name="dns-type" value="SRV"> SRV</label>
+  <label><input type="checkbox" name="dns-type" value="HTTPS"> HTTPS</label>
+  <label><input type="radio" name="dns-job" value="query" checked> query</label>
+  <label><input type="radio" name="dns-job" value="trace"> trace</label>
+  <label><input type="radio" name="dns-job" value="dnssec"> dnssec</label>
+  <label><input type="radio" name="dns-job" value="compare"> compare</label>
+  <label><input type="radio" name="dns-job" value="auth"> auth</label>
+  <label>Resolver <select name="dns-resolver">
+    <option value="" selected>default</option>
+    <option value="cloudflare">cloudflare</option>
+    <option value="google">google</option>
+    <option value="quad9">quad9</option>
+    <option value="mullvad">mullvad</option>
+    <option value="public">public</option>
+  </select></label>
+</fieldset>
+{% endif %}
 <noscript><p>A live run needs JavaScript. Enable it, or read the guides.</p></noscript>
 {% include "partials/inspect_backlink.html" %}
 <div id="inspect-result"></div>

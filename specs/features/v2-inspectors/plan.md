@@ -126,3 +126,43 @@ G1: C4, C5, C10, C16 · G2: C1, C2, C3, C6, C8, C9, C11, C12, C13, C14, C15 · G
 ### Review fix
 - `crates/web/src/api/jobs.rs`: TLS admission charges one unit per port on the shared `[api.tls]` limiter; the inspection runs against a per-job `RateLimitState` (burst `max([api.tls] per_ip_burst, ports)`), so nothing refuses inside the stream; a late `RateLimited` renders "too many requests; try again in N s".
 - `crates/web/src/pages/inspect.rs` `run`: the concurrency slot is taken before `admit`.
+
+## Phase 7 — DNS inspector
+
+## Groups
+
+G1: C1 (netray-dns half) · G2: C1 (route half), C2, C6, C7, C8, C9 · G3: C3, C4, C10, C11, C12 · G4: C5 (G1 before G2; G3 and G4 touch no file of G1/G2).
+
+## Plan
+
+### G1
+- `crates/dns/src/module.rs`: `records_block`, `block_id`, `rdata_text` `pub(crate)` (skip a type whose id does not parse instead of `block_id`'s `expect`).
+- `crates/dns/src/jobs/mod.rs`: `compare_parsed`, `authcompare_parsed` beside `query_parsed` (`compare`/`authcompare` delegate, v1 unchanged); `pub mod blocks;`.
+- `crates/dns/src/jobs/blocks.rs` (new): `query_blocks` (one `records` block per type, `dns.<type>`), `compare_blocks` (`table` `dns.compare`), `authcompare_blocks` (`table` `dns.authcompare`), `trace_blocks` (`tree` `dns.trace`), `dnssec_blocks` (`tree` `dns.dnssec_chain`), each exactly one block for the non-query jobs.
+- `crates/dns/src/lib.rs`: `pub use jobs::blocks;`.
+
+### G2
+- `crates/web/src/pages/inspect.rs`: `Refusal`, `Job::with_gate`; `run` awaits the gate under the deadline after `start` (429 helper shared with `admit`, `Invalid` → notice, elapsed → "timed out").
+- `crates/web/src/pages/mod.rs`: re-export `Refusal`.
+- `crates/web/src/api/state.rs`: `ApiParts.dns_module: Option<Arc<dyn Module>>`, `dns_module()`.
+- `crates/web/src/api/dns.rs`: `DNS_OFF` shared in `api`.
+- `crates/web/src/api/jobs.rs`: `start_dns`: parse `q`; parts query (+trace, +dnssec, +compare, +auth) fed by oneshots from one gate that starts every job against `dns_limiter()` (v1's instance) and maps refusals; the band runs the DNS module on the registrable domain once every start succeeded ("No registrable domain, so no DNS band." / "The DNS band is unavailable.").
+- `crates/web/Cargo.toml`: tokio `rt` for the band task. `crates/netray/src/main.rs`: `dns_module: Some(dns.clone())`.
+
+### G3
+- `crates/web/templates/pages/inspector.html`: on the DNS page the `+check` sentence and the `data-island="dns"` picker (types, job radios, resolver select), no style, no new class.
+- `crates/web/islands/src/dns.ts` (new): `buildQuery`, `dns(el)` writing only the form's `q`; `crates/web/islands/src/main.ts`: `register("dns", dns)`.
+
+### G4
+- `specs/sdd/v2.md` §6.1, §6.2, the V4.7 row: requirement 22's amendments.
+
+### Operator decision fix (2026-10-18)
+- `crates/dns/src/jobs/blocks.rs` `query_blocks`: a type no lookup answered → `fields` block `dns.<type>` (`outcome` "not measured", `reason`); `authcompare_blocks` reads `AuthRecord.presentation`.
+- `crates/dns/src/jobs/events.rs` `AuthRecord.presentation` (`#[serde(skip)]`), filled in `jobs/mod.rs` from `dns_raw::rdata_presentation`.
+- `crates/dns/src/module.rs` `DnsModule::admitted_by_caller`; `crates/netray/src/main.rs` builds the band module with it.
+- `crates/web/src/api/jobs.rs` `dns_part`: no block → the part's error; errors beside blocks → `dns.errors` table.
+
+### Third review fix
+- `crates/dns/src/module.rs` `rdata_text`: SRV, TLSA, SSHFP, NAPTR, HINFO; `crates/dns/src/dns_raw.rs` `rdata_presentation` mirrors it per type.
+- `crates/dns/src/jobs/events.rs` `AuthResult::Response.failure` (`#[serde(skip)]`), set in `jobs/mod.rs` from the response code; `blocks.rs` renders it as a failed row.
+- `crates/web/src/api/jobs.rs`: `dns.warnings` from the summary; band deadline from `JobRequest.deadline` (`crates/web/src/pages/inspect.rs`).

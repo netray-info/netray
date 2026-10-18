@@ -8,7 +8,9 @@ use mhost::RecordType;
 use mhost::lints::CheckResult as LintResult;
 use mhost::resolver::lookup::LookupResult;
 use mhost::resolver::{Lookup, Lookups, MultiQuery};
-use mhost::resources::rdata::{CAA, DigestType, DnssecAlgorithm, SVCB};
+use mhost::resources::rdata::{
+    CAA, CertUsage, DigestType, DnssecAlgorithm, Matching, SSHFP, SVCB, Selector, TLSA,
+};
 use mhost::resources::{RData, Record};
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{
@@ -114,7 +116,8 @@ pub struct DnsModule {
     servers: Vec<String>,
     circuit_breakers: Arc<CircuitBreakerRegistry>,
     query_semaphore: Arc<Semaphore>,
-    per_target: KeyedLimiter<String>,
+    /// `None` for an instance admitted by its caller ([`DnsModule::admitted_by_caller`]).
+    per_target: Option<KeyedLimiter<String>>,
 }
 
 impl DnsModule {
@@ -132,10 +135,18 @@ impl DnsModule {
         Ok(Self {
             circuit_breakers: Arc::new(CircuitBreakerRegistry::new(&config.circuit_breaker)),
             query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
-            per_target,
+            per_target: Some(per_target),
             servers,
             config,
         })
+    }
+
+    /// This module without its per-target limit, for a caller that admits each run itself (the
+    /// DNS inspector's band runs under the inspector job's `[api.dns]` admission and its
+    /// concurrency limit, so it never refuses inside the job's stream).
+    pub fn admitted_by_caller(mut self) -> Self {
+        self.per_target = None;
+        self
     }
 
     /// The DNS jobs over this module's configuration, circuit breakers and query semaphore, with
@@ -159,10 +170,13 @@ impl DnsModule {
     /// The per-target part of a route's cost: each server pays `cost` (the check's steps, or the
     /// record types of a query).
     fn charge_targets(&self, parsed: &ParsedQuery, cost: u32) -> Result<(), ApiError> {
+        let Some(per_target) = &self.per_target else {
+            return Ok(());
+        };
         let servers = effective_server_specs(parsed, &self.config);
         let cost = NonZeroU32::new(cost).expect("non-zero cost");
         for key in target_keys_from_servers(&servers) {
-            check_keyed_cost(&self.per_target, &key, cost, "per_target", "prism").map_err(|r| {
+            check_keyed_cost(per_target, &key, cost, "per_target", "prism").map_err(|r| {
                 ApiError::RateLimited {
                     retry_after_secs: r.retry_after_secs,
                     scope: r.scope,
@@ -345,7 +359,7 @@ pub fn facts_from_lookups(lookups: &Lookups) -> Facts {
 }
 
 /// The id of the records block of `record_type`, `dns.<type>`.
-fn block_id(record_type: &str) -> BlockId {
+pub(crate) fn block_id(record_type: &str) -> BlockId {
     BlockId::parse(&format!("dns.{}", record_type.to_lowercase())).expect("static block id")
 }
 
@@ -361,7 +375,7 @@ fn answered(lookup: &Lookup) -> bool {
 /// The records block `dns.<type>` of `lookups`: their records, each (owner, type, data) once
 /// with the highest TTL seen, in (owner, type, data) order. `None` when no lookup answered
 /// (Rule M).
-fn records_block<'a>(
+pub(crate) fn records_block<'a>(
     record_type: RecordType,
     lookups: impl IntoIterator<Item = &'a Lookup>,
 ) -> Option<Block> {
@@ -440,8 +454,75 @@ fn digest_type_number(digest_type: DigestType) -> u8 {
     }
 }
 
+/// `bytes` as upper-case hex, as zone files write TLSA and SSHFP data.
+pub(crate) fn hex_upper(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02X}")).collect()
+}
+
+/// The number of an IANA mnemonic mhost prints as `Unassigned(<n>)`.
+fn unassigned(display: &str) -> u8 {
+    display
+        .strip_prefix("Unassigned(")
+        .and_then(|rest| rest.strip_suffix(')'))
+        .and_then(|n| n.parse().ok())
+        .unwrap_or(0)
+}
+
+/// A TLSA record in zone-file form, e.g. `3 1 1 ABCD01`.
+fn tlsa_presentation(tlsa: &TLSA) -> String {
+    let usage = match tlsa.cert_usage() {
+        CertUsage::PkixTa => 0,
+        CertUsage::PkixEe => 1,
+        CertUsage::DaneTa => 2,
+        CertUsage::DaneEe => 3,
+        CertUsage::Private => 255,
+        CertUsage::Unassigned(n) => n,
+    };
+    let selector = match tlsa.selector() {
+        Selector::Full => 0,
+        Selector::Spki => 1,
+        Selector::Private => 255,
+        Selector::Unassigned(n) => n,
+    };
+    let matching = match tlsa.matching() {
+        Matching::Raw => 0,
+        Matching::Sha256 => 1,
+        Matching::Sha512 => 2,
+        Matching::Private => 255,
+        Matching::Unassigned(n) => n,
+    };
+    format!(
+        "{usage} {selector} {matching} {}",
+        hex_upper(tlsa.cert_data())
+    )
+}
+
+/// An SSHFP record in zone-file form, e.g. `4 2 12EF`. mhost does not export the two
+/// mnemonic enums, so their numbers are read from the mnemonic.
+fn sshfp_presentation(sshfp: &SSHFP) -> String {
+    let algorithm = match sshfp.algorithm().to_string().as_str() {
+        "Reserved" => 0,
+        "RSA" => 1,
+        "DSA" => 2,
+        "ECDSA" => 3,
+        "Ed25519" => 4,
+        "Ed448" => 6,
+        other => unassigned(other),
+    };
+    let fingerprint_type = match sshfp.fingerprint_type().to_string().as_str() {
+        "Reserved" => 0,
+        "SHA-1" => 1,
+        "SHA-256" => 2,
+        other => unassigned(other),
+    };
+    format!(
+        "{algorithm} {fingerprint_type} {}",
+        hex_upper(sshfp.fingerprint())
+    )
+}
+
 /// The record data in zone-file form.
-fn rdata_text(data: &RData) -> String {
+pub(crate) fn rdata_text(data: &RData) -> String {
     match data {
         RData::A(ip) => ip.to_string(),
         RData::AAAA(ip) => ip.to_string(),
@@ -451,6 +532,25 @@ fn rdata_text(data: &RData) -> String {
         RData::CAA(caa) => caa_presentation(caa),
         RData::HTTPS(svcb) | RData::SVCB(svcb) => svcb_presentation(svcb),
         RData::MX(mx) => format!("{} {}", mx.preference(), mx.exchange()),
+        RData::SRV(srv) => format!(
+            "{} {} {} {}",
+            srv.priority(),
+            srv.weight(),
+            srv.port(),
+            srv.target()
+        ),
+        RData::TLSA(tlsa) => tlsa_presentation(tlsa),
+        RData::SSHFP(sshfp) => sshfp_presentation(sshfp),
+        RData::NAPTR(naptr) => format!(
+            "{} {} \"{}\" \"{}\" \"{}\" {}",
+            naptr.order(),
+            naptr.preference(),
+            naptr.flags(),
+            naptr.services(),
+            naptr.regexp(),
+            naptr.replacement()
+        ),
+        RData::HINFO(hinfo) => format!("\"{}\" \"{}\"", hinfo.cpu(), hinfo.os()),
         RData::SOA(soa) => format!(
             "{} {} {} {} {} {} {}",
             soa.mname(),

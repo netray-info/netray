@@ -384,6 +384,70 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
 - feature/v2-api merged before Phase 7 at `eaaf3037` (its Phase 7 DNS jobs, `3638a083`, and a
   README commit), over waiting for v2-api to land on main: Phase 7 needs the DNS job functions,
   and the gate is green on the merge (implementer under the operator's autonomy mandate, 2026-10-18).
+- A DNS inspector request runs one job, the flag's (`+trace`, then `+dnssec`, `+compare`, `+auth`
+  in that order when several are given; a query without one), over the query beside every
+  flagged job as the V1 page's tabs did: one job is one `[api.dns]` charge and one refusal, where
+  several started in turn left the earlier ones charged and running when a later one was refused
+  with `429` (review of Phase 7; implementer under the operator's autonomy mandate, 2026-10-18).
+- The DNS band runs on its own `DnsModule` instance, built by the binary from `[modules.dns]`
+  beside the registry's, over the registry's instance: the module charges its own per-target
+  limiter per run, and the inspector's band would spend the budget the result page's DNS section
+  needs (P13; review of Phase 7; implementer under the operator's autonomy mandate, 2026-10-18).
+- An address target (`q=192.0.2.1`) has no registrable domain and no DNS band, over the Public
+  Suffix List's reading of `192.0.2.1` as the domain `2.1` (review of Phase 7; implementer under
+  the operator's autonomy mandate, 2026-10-18).
+- A DNS lookup that failed shows its error in the inspector, never an empty answer (Rule M): a job
+  with no answer and an error is the part's error text; a compare or authcompare row whose lookup
+  failed carries the error as its outcome; trace and DNSSEC nodes omit a latency they did not
+  measure; table key columns are unique per row (`<transport> <type>`, `<source> <server> <type>`)
+  (review of Phase 7; implementer under the operator's autonomy mandate, 2026-10-18).
+- The `dns` island writes `q` only once it holds a domain, over writing the picked types into an
+  empty field, which the next change read back as the domain (review of Phase 7; implementer under
+  the operator's autonomy mandate, 2026-10-18).
+
+- Rule M in the DNS inspector: a visible "not measured" outcome per failed record type in
+  `query_blocks` (a `fields` block `dns.<type>` with `outcome` and `reason`), a partly failed
+  query showing the answered types beside the failed ones, never an empty part, over a per-part
+  note line beside the blocks or deferring the gap to v2-result-page as V1-parity debt: Rule M
+  holds for every record type the inspector was asked for (operator, 2026-10-18).
+- The DNS band runs under the inspector job's admission (`[api.dns]` through the gate, the
+  `[inspect.dns]` concurrency slot) on a `DnsModule` built `admitted_by_caller()`, with no
+  per-target limiter of its own, so the 200 stream never refuses, over different band limits or a
+  narrower SDD sentence: SDD §6.2 and requirement 10 allow a refusal only as the `429` before the
+  stream (operator, 2026-10-18).
+- Error events a DNS job emits beside its blocks are shown in one `table` block `dns.errors`
+  "Not measured" (message, code; each message once), and a job that ended unfinished adds "the job
+  ended before it finished", over dropping them once a block exists: `+auth` on a zone with no NS
+  records otherwise hid "could not discover authoritative nameservers" (second review of Phase 7;
+  implementer under the operator's autonomy mandate, 2026-10-18).
+- The authcompare table renders authoritative records in the zone-file form of `rdata_text` (TXT
+  strings quoted) through a `#[serde(skip)]` `AuthRecord.presentation`, over normalising hickory's
+  display text afterwards: hickory's TXT display drops the string boundaries, and the V1 wire stays
+  byte-identical (second review of Phase 7; implementer under the operator's autonomy mandate,
+  2026-10-18).
+- Every record type the DNS picker offers renders in zone-file form (SRV, TLSA, SSHFP, NAPTR and
+  HINFO added to `rdata_text`, TLSA and SSHFP hex upper-case as `dig` prints it), and
+  `rdata_presentation` mirrors `rdata_text` type by type for authoritative rows (CAA value quoted
+  as sent, SVCB/HTTPS without hickory's trailing commas), over hickory's display for every type
+  but TXT: the authcompare table showed mismatches that were not there (third review of Phase 7;
+  implementer under the operator's autonomy mandate, 2026-10-18).
+- An authoritative answer whose response code is neither NOERROR nor NXDOMAIN (REFUSED,
+  SERVFAIL) is a failed row, its code in the records and outcome cells, carried by a
+  `#[serde(skip)]` `failure` on `AuthResult::Response`, over "no records": a lame delegation is
+  no measured empty answer (Rule M; third review of Phase 7; implementer under the operator's
+  autonomy mandate, 2026-10-18).
+- A DNS job's summary warnings (unrecognized server, truncated server list, an NS address the
+  outbound policy refuses) are shown in a `table` block `dns.warnings` "Warnings" beside its
+  blocks, over dropping them: the V1 page shows them, and the authcompare job reports refused NS
+  addresses only there (third review of Phase 7; implementer under the operator's autonomy
+  mandate, 2026-10-18).
+- An authoritative query that failed (timeout, I/O) stays a `dns.errors` row naming its server,
+  over a synthesised `authcompare` row per record type: v2-api's job emits it as an error event
+  without a record type, and inventing the row would change that job (third review of Phase 7;
+  implementer under the operator's autonomy mandate, 2026-10-18).
+- The DNS band's `RunContext` deadline is the route's `[inspect.dns] deadline_ms`, passed in
+  `JobRequest.deadline`, over a fixed 30 s: requirement 19 runs the band under the job's deadline
+  (third review of Phase 7; implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 

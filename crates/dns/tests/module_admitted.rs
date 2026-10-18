@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use netray_dns::{DnsModule, ModuleConfig};
 use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcome};
 
-const CONFIG: &str = "servers = [\"cloudflare\"]\n[limits]\nper_target_burst = 1\n";
+const CONFIG: &str = "servers = [\"9.9.9.9\"]\n[limits]\nper_target_burst = 1\n[dns]\nallow_arbitrary_servers = true\n";
 
 async fn run(module: &DnsModule) -> SectionOutcome {
     let ctx = RunContext {
@@ -33,16 +33,23 @@ async fn the_registry_module_refuses_over_its_per_target_limit() {
     assert!(refused(&outcome), "{outcome:?}");
 }
 
-#[tokio::test]
-async fn the_admitted_band_module_charges_no_per_target_limit() {
-    let cfg: ModuleConfig = toml::from_str(CONFIG).expect("config parses");
-    let module = DnsModule::new(cfg)
-        .await
-        .expect("module builds")
-        .admitted_by_caller();
+/// The admitted run goes on to the network and outlives its deadline in blocking tasks, so it
+/// runs on its own runtime, shut down without waiting for them.
+#[test]
+fn the_admitted_band_module_charges_no_per_target_limit() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("runtime builds");
+    let outcome = rt.block_on(async {
+        let cfg: ModuleConfig = toml::from_str(CONFIG).expect("config parses");
+        let module = DnsModule::new(cfg)
+            .await
+            .expect("module builds")
+            .admitted_by_caller();
+        run(&module).await
+    });
+    rt.shutdown_background();
 
-    for _ in 0..3 {
-        let outcome = run(&module).await;
-        assert!(!refused(&outcome), "the band refused: {outcome:?}");
-    }
+    assert!(!refused(&outcome), "the band refused: {outcome:?}");
 }

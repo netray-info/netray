@@ -212,6 +212,8 @@ pub struct JobRequest {
     pub tool: Tool,
     pub input: String,
     pub client: IpAddr,
+    /// The route's deadline for this job (`[inspect.<tool>] deadline_ms` from the request).
+    pub deadline: std::time::Instant,
 }
 
 /// One part of a job, streamed as it finishes.
@@ -222,14 +224,35 @@ pub struct JobPart {
 
 type BandChecks = BoxFuture<'static, Result<Vec<CheckResult>, String>>;
 
+/// Why a job's admission gate refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Refusal {
+    RateLimited(Duration),
+    Invalid(String),
+}
+
+type Gate = BoxFuture<'static, Result<(), Refusal>>;
+
 pub struct Job {
     parts: Vec<JobPart>,
     band: Option<(Protocol, BandChecks)>,
+    gate: Option<Gate>,
 }
 
 impl Job {
     pub fn new(parts: Vec<JobPart>) -> Job {
-        Job { parts, band: None }
+        Job {
+            parts,
+            band: None,
+            gate: None,
+        }
+    }
+
+    /// Awaited by the route before it answers: `RateLimited` answers 429, `Invalid` one notice,
+    /// a gate past the deadline one "timed out" notice. `Ok` streams the job.
+    pub fn with_gate(mut self, gate: Gate) -> Job {
+        self.gate = Some(gate);
+        self
     }
 
     /// The protocol's live band: the job's checks, streamed after the parts. `Err(text)` renders
@@ -390,6 +413,16 @@ fn sse(status: StatusCode, events: Vec<Event>) -> Response {
     (status, Sse::new(stream)).into_response()
 }
 
+fn too_many_requests(retry_after: Duration) -> Response {
+    let secs = retry_after.as_secs() + u64::from(retry_after.subsec_nanos() > 0);
+    let mut response = notice(
+        StatusCode::TOO_MANY_REQUESTS,
+        format!("too many requests; try again in {secs} s"),
+    );
+    response.headers_mut().insert(RETRY_AFTER, secs.into());
+    response
+}
+
 fn notice(status: StatusCode, message: String) -> Response {
     match (NoticeFragment { message }).render() {
         Ok(html) => sse(status, vec![fragment(RESULT_ID, &html), end()]),
@@ -432,24 +465,27 @@ async fn run(
         );
     };
     if let Err(retry_after) = deps.jobs.admit(tool, client, &input) {
-        let secs = retry_after.as_secs() + u64::from(retry_after.subsec_nanos() > 0);
-        let mut response = notice(
-            StatusCode::TOO_MANY_REQUESTS,
-            format!("too many requests; try again in {secs} s"),
-        );
-        response.headers_mut().insert(RETRY_AFTER, secs.into());
-        return response;
+        return too_many_requests(retry_after);
     }
     let link = backlink(tool, &input);
-    let job = match deps.jobs.start(JobRequest {
+    let deadline = Instant::now() + Duration::from_millis(deps.config.limits(tool).deadline_ms);
+    let mut job = match deps.jobs.start(JobRequest {
         tool,
         input,
         client,
+        deadline: deadline.into_std(),
     }) {
         Ok(job) => job,
         Err(message) => return notice(StatusCode::OK, message),
     };
-    let deadline = Instant::now() + Duration::from_millis(deps.config.limits(tool).deadline_ms);
+    if let Some(gate) = job.gate.take() {
+        match timeout_at(deadline, gate).await {
+            Ok(Ok(())) => {}
+            Ok(Err(Refusal::RateLimited(retry_after))) => return too_many_requests(retry_after),
+            Ok(Err(Refusal::Invalid(message))) => return notice(StatusCode::OK, message),
+            Err(_) => return notice(StatusCode::OK, "timed out".to_string()),
+        }
+    }
     match stream_job(job, link, permit, deadline) {
         Some(events) => (StatusCode::OK, Sse::new(events)).into_response(),
         None => server_error(),

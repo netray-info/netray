@@ -149,6 +149,7 @@ struct LensModules {
     http: Arc<netray_http::HttpModule>,
     email: Arc<netray_email::EmailModule>,
     dns: Arc<netray_dns::DnsModule>,
+    dns_band: Arc<netray_dns::DnsModule>,
 }
 
 /// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
@@ -211,6 +212,12 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
     };
     let dns_config: netray_dns::ModuleConfig =
         table.try_into().map_err(|e| format!("modules.dns: {e}"))?;
+    let dns_band = Arc::new(
+        netray_dns::DnsModule::new(dns_config.clone())
+            .await
+            .map_err(|e| format!("modules.dns: {e}"))?
+            .admitted_by_caller(),
+    );
     let dns = Arc::new(
         netray_dns::DnsModule::new(dns_config)
             .await
@@ -231,6 +238,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
             http,
             email,
             dns,
+            dns_band,
         });
     };
     let ip_config: netray_ip::ModuleConfig =
@@ -249,6 +257,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
             http,
             email,
             dns,
+            dns_band,
         });
     }
     for (key, path) in [
@@ -274,6 +283,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
         http,
         email,
         dns,
+        dns_band,
     })
 }
 
@@ -340,6 +350,7 @@ async fn main() -> anyhow::Result<()> {
                 http,
                 email,
                 dns,
+                dns_band,
             } = lens_registry(&cfg, true)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
@@ -351,6 +362,7 @@ async fn main() -> anyhow::Result<()> {
                 http: Some(http as Arc<dyn netray_http::HttpInspect>),
                 email: Some(Arc::new(email.inspector()) as Arc<dyn netray_email::EmailInspect>),
                 dns: Some(dns.jobs()),
+                dns_module: Some(dns_band as Arc<dyn netray_engine::Module>),
             };
             if let Some(ip) = ip {
                 reload_ip_on_sighup(ip);

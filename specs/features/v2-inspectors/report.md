@@ -258,3 +258,64 @@ event: fragment  inspect-backlink: <a href="/example.com">Back to example.com</a
 event: fragment  inspect-part-0: <section class="evidence-block" id="ev-http.redirects" data-shape="chain"> …
 event: fragment  inspect-band: <div class="spectrum"> … min-width: calc(12 * var(--spectrum-line-pitch-min)) (the 12 HTTP checks)
 ```
+
+## Phase 7 — DNS inspector
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R18: the DNS inspector offers query, trace (`+trace`), resolver compare (`+compare`), authoritative compare (`+auth`) and DNSSEC chain (`+dnssec`), parsed by `crates/dns/src/parser.rs`, run through v2-api's DNS jobs; `netray-dns` maps each job's collected object to blocks (trace and DNSSEC `tree`, compares `table`, query `records`, ids under `dns.`); `+check` is not a job and the page says the band covers it | green | crates/dns/tests/job_blocks.rs, crates/web/tests/inspect_dns_jobs.rs |
+| C2 | R19: for every DNS job the DNS module runs live on the registrable domain, concurrently and under the same deadline, its checks the DNS band; without a registrable domain the band region says so | green | crates/web/tests/inspect_dns_band.rs |
+| C3 | R20: a `dns` island builds `q` from record types, resolver and job and writes it into the form; no layout, no verdict, no style writes; vitest tests in the gate; bundle under the 30 KB gzip cap | green | crates/web/islands/test/dns.test.ts, crates/web/tests/inspect_dns_page.rs |
+| C4 | R21: this feature's templates, stylesheets and island pass the gate of §8.5 and the codename check, containing neither "lens" nor a codename | green | crates/web/tests/inspect_gate.rs |
+| C5 | R22: `specs/sdd/v2.md` amended: §6.1/§6.2 cite `crates/tls/src/tls/connect.rs` (and `:201`), not `crates/tlsight/…`; §6.1 states the run line's timestamp, the `ev-<block id>` anchors and the explore-live derivation; §6.2 names the job route, the limits, the band restriction and `/inspect/<tool>` on netray-web's router before v2-cutover; the Phase 4 table marks V4.7 built by `v2-inspectors` | green | tests/repo/test_sdd_v2_inspectors.sh |
+| C6 | S: `q=example.com A +trace` → the trace job runs and renders a `tree` block | green | crates/web/tests/inspect_dns_jobs.rs |
+| C7 | S: `q=_dmarc.example.com TXT` → the query job runs and the DNS band is computed for `example.com` | green | crates/web/tests/inspect_dns_band.rs |
+| C8 | S: `q=example.com +compare` and `+auth` → each renders a `table` block | green | crates/web/tests/inspect_dns_jobs.rs |
+| C9 | S: `q=com NS` → the band region says there is no registrable domain and no DNS module run happens | green | crates/web/tests/inspect_dns_band.rs |
+| C10 | S: `q=example.com +check` → the page says the band covers the check and no `+check` job runs | green | crates/web/tests/inspect_dns_page.rs, crates/web/tests/inspect_dns_jobs.rs |
+| C11 | S: the `dns` island with types `A`, `MX` and `+dnssec` → `q` reads `example.com A MX +dnssec` | green | crates/web/islands/test/dns.test.ts |
+| C12 | S: the crate's templates, stylesheets and islands → the gate and the codename check both pass | green | crates/web/tests/inspect_gate.rs |
+| C13 | Operator 2026-10-18, Rule M: every record type whose lookups failed shows "not measured" with its reason; a partly failed query shows both; an error event after a block is kept; authcompare renders TXT one way | green | crates/dns/tests/job_blocks_rule_m.rs, crates/web/tests/inspect_dns_rule_m.rs |
+| C14 | Operator 2026-10-18: the DNS band runs under the job's admission, no module limiter inside the stream | green | crates/dns/tests/module_admitted.rs |
+| C15 | Third review: offered types in zone-file form, authcompare rows rendered alike, an authoritative REFUSED a failed row, summary warnings shown, the band under the route's deadline | green | crates/dns/tests/job_blocks_rendering.rs, crates/web/tests/inspect_dns_review3.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 73478 | 146 |
+| G2 | 2 | sonnet | 80457 | 181 |
+| G3 | 2 | sonnet | 34925 | 51 |
+| G4 | 2 | sonnet | 46270 | 50 |
+
+### Review
+
+Pass 1: BLOCKERs — several DNS jobs per request charged and ran the earlier ones when a later one was refused (fixed: one job per request); an address target got a band on the PSL's `2.1` (fixed); a failed job rendered an empty part (fixed for error events); compare/authcompare rows of failed lookups read as NODATA and their key columns repeated (fixed: `lookup` key, `outcome` cell); trace and DNSSEC nodes published a 0 ms latency placeholder (fixed); the island wrote picked types into an empty `q` (fixed). AMENDMENT the band spent the registry DNS module's per-target budget (fixed: its own `DnsModule`). Regression tests: `crates/dns/tests/job_blocks_review.rs`, `crates/web/tests/inspect_dns_review.rs`, `crates/web/islands/test/dns-review.test.ts`. Deferred: an authoritative REFUSED/SERVFAIL arrives as an empty `AuthResult::Response` (v2-api's event type has no rcode).
+Pass 2: BLOCKER (surviving pass 1's Rule M finding) a query whose lookups all fail without an error event (SERVFAIL, timeout: non-definite `LookupResult`s inside the batches) still yields no block and an `Ok` empty part, and a partly failed query drops the failed type silently; AMENDMENT error events are dropped whenever the job yielded a block (`+auth` with no NS); AMENDMENT authcompare renders TXT differently for authoritative (hickory Display) and recursive (`rdata_text`) rows; AMENDMENT the band's own `DnsModule` per-target limiter (keyed by the shared resolver, 19 per run) refuses inside the 200 stream, which SDD §6.2 and requirement 10 forbid. Halted: blocker surviving two passes (handoff `specs/handoff/feature-v2-inspectors.md`).
+Operator decision (2026-10-18): Rule M per failed type and the band under the job's admission; fixed with the two amendments, tests `96e460c2` (C13, C14): `query_blocks` emits a "not measured" `fields` block per failed type, `dns_part` keeps error events in a `dns.errors` table and never streams an empty part, `AuthRecord.presentation` (serde-skipped) carries the zone-file form, the band's `DnsModule` is `admitted_by_caller()`.
+Pass 3 (over the fix): BLOCKERs — SRV/TLSA/SSHFP/NAPTR/HINFO data rendered as Rust Debug; authoritative rows rendered HTTPS/SRV/CAA unlike recursive rows; an authoritative REFUSED/SERVFAIL read "no records"; refused NS addresses vanished without a note; the band's deadline a fixed 30 s instead of `[inspect.dns] deadline_ms`. All fixed (tests `4d7672f7`, C15). AMENDMENTs — summary warnings dropped (fixed: `dns.warnings`); failed authoritative queries only in `dns.errors` (kept, logged). NITs — the behavioural transcript predated one job per request (re-run below); duplicate authcompare keys when two NS share an address (`build_server_list`, v2-api's job; deferred).
+
+### Behavioural verification
+
+`target/debug/netray lens` on `crates/lens/lens.dev.toml` (ports 18431/19431), live network, after the third review's fix:
+
+```
+== POST /inspect/dns/run q=dnssec-failed.org A
+fragment inspect-result / inspect-backlink
+fragment inspect-part-0   ev-dns.a (fields): "not measured", reason SERVFAIL
+fragment inspect-band     <div class="spectrum"> …
+end
+== POST /inspect/dns/run q=example.com MX +trace
+fragment inspect-part-0   ev-dns.trace (tree)          (one job per request: the trace only)
+fragment inspect-band     <div class="spectrum"> …
+end
+== POST /inspect/dns/run q=example.com A @nosuchserver
+fragment inspect-part-0   ev-dns.a (records), ev-dns.warnings (table): "unrecognized server: @nosuchserver"
+end
+== POST /inspect/dns/run q=nons.invalid-netray-test.com +auth
+fragment inspect-part-0   ev-dns.authcompare (table), ev-dns.errors (table): "could not discover authoritative nameservers", ev-dns.warnings (table)
+end
+== GET /inspect/dns  → 200
+```

@@ -5,8 +5,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use hickory_proto::op::{Message, MessageType, OpCode};
-use hickory_proto::rr::rdata::{A, CAA, MX, NS, SOA, TXT};
+use hickory_proto::op::{Message, MessageType, OpCode, ResponseCode};
+use hickory_proto::rr::rdata::{A, CAA, HINFO, MX, NAPTR, NS, SOA, SRV, SSHFP, TLSA, TXT};
 use hickory_proto::rr::{Name, RData, Record, RecordType};
 use mhost::resolver::Lookups;
 use netray_common::fetch::Resolve;
@@ -286,12 +286,77 @@ const SERVFAIL_NAME: &str = "dnssec-failed.org";
 /// This name's A lookup answers the zone's address, its AAAA lookup SERVFAIL.
 const PARTIAL_NAME: &str = "partial.example.net";
 
+/// This name answers SRV, TLSA, SSHFP, NAPTR, HINFO and the zone's NS, recursively and
+/// authoritatively.
+const TYPES_NAME: &str = "types.example.com";
+/// This name's NS are the zone's; its authoritative servers answer every query REFUSED.
+const LAME_NAME: &str = "lame.example.com";
+
+fn named(name: &str, wanted: &str) -> bool {
+    name.trim_end_matches('.').eq_ignore_ascii_case(wanted)
+}
+
+fn types_data(record_type: &str) -> Vec<serde_json::Value> {
+    match record_type {
+        "SRV" => vec![serde_json::json!({ "SRV": {
+            "priority": 10, "weight": 5, "port": 5060, "target": "sip.example.com."
+        }})],
+        "TLSA" => vec![serde_json::json!({ "TLSA": {
+            "cert_usage": "DaneEe", "selector": "Spki", "matching": "Sha256",
+            "cert_data": [0xab, 0xcd, 0x01]
+        }})],
+        "SSHFP" => vec![serde_json::json!({ "SSHFP": {
+            "algorithm": "Ed25519", "fingerprint_type": "SHA256", "fingerprint": [0x12, 0xef]
+        }})],
+        "NAPTR" => vec![serde_json::json!({ "NAPTR": {
+            "order": 100, "preference": 10, "flags": "S", "services": "SIP+D2U",
+            "regexp": "", "replacement": "_sip._udp.example.com."
+        }})],
+        "HINFO" => vec![serde_json::json!({ "HINFO": { "cpu": "INTEL", "os": "LINUX" } })],
+        "NS" => zone_data("NS"),
+        _ => Vec::new(),
+    }
+}
+
+fn types_records(record_type: RecordType) -> Vec<RData> {
+    let host = |h: &str| Name::from_ascii(h).expect("zone host name");
+    match record_type {
+        RecordType::SRV => vec![RData::SRV(SRV::new(10, 5, 5060, host("sip.example.com.")))],
+        RecordType::TLSA => vec![RData::TLSA(TLSA::new(
+            3.into(),
+            1.into(),
+            1.into(),
+            vec![0xab, 0xcd, 0x01],
+        ))],
+        RecordType::SSHFP => vec![RData::SSHFP(SSHFP::new(
+            4.into(),
+            2.into(),
+            vec![0x12, 0xef],
+        ))],
+        RecordType::NAPTR => vec![RData::NAPTR(NAPTR::new(
+            100,
+            10,
+            b"S".to_vec().into_boxed_slice(),
+            b"SIP+D2U".to_vec().into_boxed_slice(),
+            Vec::new().into_boxed_slice(),
+            host("_sip._udp.example.com."),
+        ))],
+        RecordType::HINFO => vec![RData::HINFO(HINFO::new(
+            "INTEL".to_string(),
+            "LINUX".to_string(),
+        ))],
+        _ => Vec::new(),
+    }
+}
+
 fn is_partial(name: &str) -> bool {
-    name.trim_end_matches('.').eq_ignore_ascii_case(PARTIAL_NAME)
+    name.trim_end_matches('.')
+        .eq_ignore_ascii_case(PARTIAL_NAME)
 }
 
 fn servfails(name: &str, record_type: &str) -> bool {
-    name.trim_end_matches('.').eq_ignore_ascii_case(SERVFAIL_NAME)
+    name.trim_end_matches('.')
+        .eq_ignore_ascii_case(SERVFAIL_NAME)
         || (is_partial(name) && record_type == "AAAA")
 }
 
@@ -312,6 +377,10 @@ impl ResolverLookup for ZoneLookup {
                 let record_type = uni.record_type().to_string();
                 let data = if in_zone(&name) || (is_partial(&name) && record_type == "A") {
                     zone_data(&record_type)
+                } else if named(&name, TYPES_NAME) {
+                    types_data(&record_type)
+                } else if named(&name, LAME_NAME) && record_type == "NS" {
+                    zone_data("NS")
                 } else {
                     Vec::new()
                 };
@@ -372,6 +441,12 @@ fn zone_data(record_type: &str) -> Vec<serde_json::Value> {
 }
 
 fn zone_records(name: &Name, record_type: RecordType) -> Vec<Record> {
+    if named(&name.to_ascii(), TYPES_NAME) {
+        return types_records(record_type)
+            .into_iter()
+            .map(|data| Record::from_rdata(name.clone(), ZONE_TTL, data))
+            .collect();
+    }
     if !in_zone(&name.to_ascii()) {
         return Vec::new();
     }
@@ -386,7 +461,7 @@ fn zone_records(name: &Name, record_type: RecordType) -> Vec<Record> {
         ],
         RecordType::CAA => vec![RData::CAA(CAA::new_issue(
             false,
-            Some(host("letsencrypt.org.")),
+            Some(host("letsencrypt.org")),
             Vec::new(),
         ))],
         _ => Vec::new(),
@@ -410,6 +485,10 @@ impl RawSend for ZoneSend {
     ) -> SendFuture {
         let mut message = Message::new(0, MessageType::Response, OpCode::Query);
         message.metadata.authoritative = true;
+        if named(&name.to_ascii(), LAME_NAME) {
+            message.metadata.authoritative = false;
+            message.metadata.response_code = ResponseCode::Refused;
+        }
         for record in zone_records(&name, record_type) {
             message.add_answer(record);
         }
@@ -423,7 +502,9 @@ impl RawSend for ZoneSend {
 
 /// A backend serving a fixed `example.com.` zone with no network: A 192.0.2.10, MX, TXT, NS
 /// (`ns1`, `ns2`) and CAA; every lookup of `dnssec-failed.org` is SERVFAIL; `partial.example.net`
-/// answers A (192.0.2.10) and SERVFAILs AAAA; every other name and type is NODATA. The raw outbound answers every
+/// answers A (192.0.2.10) and SERVFAILs AAAA; `types.example.com` answers SRV, TLSA, SSHFP, NAPTR
+/// and HINFO; `lame.example.com` has the zone's NS, which answer REFUSED; every other name and
+/// type is NODATA. The raw outbound answers every
 /// server authoritatively from the same zone, unsigned.
 pub fn stub_backend() -> DnsBackend {
     DnsBackend {

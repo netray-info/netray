@@ -1,25 +1,33 @@
 //! The inspector jobs of the `/inspect/*` pages over API v1's parts and limiters: one limiter
 //! instance with `/api/v1`, one validation, one inspection per tool.
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 
 use futures::FutureExt;
 use futures::future::BoxFuture;
-use netray_engine::SectionOutcome;
+use netray_dns::parser::ParsedQuery;
+use netray_dns::{
+    DnsAuthCompareResult, DnsCompareResult, DnsDnssecResult, DnsErrorEvent, DnsJob, DnsJobEvent,
+    DnsQueryResult, DnsRefusal, DnsTraceResult, DnssecRequest, TraceRequest, blocks,
+};
+use netray_engine::{Domain, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::Block;
 use netray_model::{CheckResult, Protocol};
 use netray_tls::input::Target;
 use netray_tls::security::rate_limit::{Quotas, Scopes};
 
+use super::dns::DNS_OFF;
 use super::error::V1Error;
 use super::inspectors::{HTTP_OFF, TLS_OFF};
 use super::ip::charge;
 use super::state::ApiState;
-use crate::pages::{InspectorJobs, Job, JobPart, JobRequest, Tool};
+use crate::pages::{InspectorJobs, Job, JobPart, JobRequest, Refusal, Tool, registrable_domain};
 
 const NO_STARTTLS: &str = "STARTTLS for IMAP and FTP is not supported";
 const IP_OFF: &str = "IP lookups are unavailable";
-const DNS_SOON: &str = "DNS lookups are not available yet";
+const DNS_BAND_OFF: &str = "The DNS band is unavailable.";
+const DNS_BAND_NONE: &str = "No registrable domain, so no DNS band.";
 
 type Measured = Result<(Vec<Block>, Vec<CheckResult>), String>;
 
@@ -60,6 +68,144 @@ fn job(label: &str, protocol: Protocol, run: BoxFuture<'static, Measured>) -> Jo
         protocol,
         Box::pin(async move { shared.await.map(|(_, checks)| checks) }),
     )
+}
+
+/// A spawned module run that stops when the band is dropped unread.
+struct AbortOnDrop(tokio::task::JoinHandle<SectionOutcome>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
+type Started<E> = tokio::sync::oneshot::Sender<DnsJob<E>>;
+
+/// How a collected DNS job ended: whether it holds no answer, its errors, whether it finished.
+trait Ended {
+    fn ended(&self) -> (bool, &[DnsErrorEvent], bool);
+    /// The warnings of its summary (an unrecognized server, a truncated server list, a refused
+    /// address); trace and DNSSEC summaries carry none.
+    fn warnings(&self) -> &[String] {
+        &[]
+    }
+}
+
+macro_rules! ended {
+    ($result:ty, $answers:ident) => {
+        impl Ended for $result {
+            fn ended(&self) -> (bool, &[DnsErrorEvent], bool) {
+                (self.$answers.is_empty(), &self.errors, self.done.is_some())
+            }
+        }
+    };
+    ($result:ty, $answers:ident, warnings) => {
+        impl Ended for $result {
+            fn ended(&self) -> (bool, &[DnsErrorEvent], bool) {
+                (self.$answers.is_empty(), &self.errors, self.done.is_some())
+            }
+            fn warnings(&self) -> &[String] {
+                self.done.as_ref().map_or(&[], |done| &done.warnings)
+            }
+        }
+    };
+}
+
+ended!(DnsQueryResult, batches, warnings);
+ended!(DnsCompareResult, batches, warnings);
+ended!(DnsAuthCompareResult, batches, warnings);
+ended!(DnsTraceResult, hops);
+ended!(DnsDnssecResult, levels);
+
+/// The `table` block `dns.errors` "Not measured": each distinct error message of a job that
+/// also answered, with its code, so no failure is dropped beside the answers (Rule M).
+fn errors_block(errors: &[DnsErrorEvent]) -> Option<Block> {
+    use netray_model::evidence::{BlockId, Shape, Value};
+    let mut seen = std::collections::BTreeSet::new();
+    let rows: Vec<Vec<Value>> = errors
+        .iter()
+        .filter(|e| seen.insert(e.message.clone()))
+        .map(|e| vec![Value::Text(e.message.clone()), Value::Text(e.code.clone())])
+        .collect();
+    (!rows.is_empty()).then(|| Block {
+        id: BlockId::parse("dns.errors").expect("static block id"),
+        title: "Not measured".to_owned(),
+        shape: Shape::Table {
+            key: "message".to_owned(),
+            columns: vec!["message".to_owned(), "code".to_owned()],
+            rows,
+        },
+    })
+}
+
+/// The `table` block `dns.warnings` "Warnings": each distinct warning of the job's summary.
+fn warnings_block(warnings: &[String]) -> Option<Block> {
+    use netray_model::evidence::{BlockId, Shape, Value};
+    let rows: Vec<Vec<Value>> = warnings
+        .iter()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .map(|w| vec![Value::Text(w.clone())])
+        .collect();
+    (!rows.is_empty()).then(|| Block {
+        id: BlockId::parse("dns.warnings").expect("static block id"),
+        title: "Warnings".to_owned(),
+        shape: Shape::Table {
+            key: "warning".to_owned(),
+            columns: vec!["warning".to_owned()],
+            rows,
+        },
+    })
+}
+
+const UNFINISHED: &str = "the job ended before it finished";
+
+/// A part that awaits its started job, collects it and maps the result to blocks. A job with
+/// no block, or no answer that failed or did not finish, is the part's error, never an empty
+/// part; a job that answered and failed shows its blocks and its errors (Rule M).
+fn dns_part<E: DnsJobEvent>(
+    label: &str,
+    started: tokio::sync::oneshot::Receiver<DnsJob<E>>,
+    to_blocks: fn(&E::Collected) -> Vec<Block>,
+) -> JobPart
+where
+    E::Collected: Ended,
+{
+    JobPart {
+        label: label.into(),
+        output: Box::pin(async move {
+            let job = started.await.map_err(|_| "not started".to_string())?;
+            let collected = job.collect().await;
+            let mut blocks = to_blocks(&collected);
+            let (empty, errors, done) = collected.ended();
+            if blocks.is_empty() || (empty && (!errors.is_empty() || !done)) {
+                return Err(match errors.first() {
+                    Some(e) => e.message.clone(),
+                    None if !done => UNFINISHED.to_string(),
+                    None => "no answer".to_string(),
+                });
+            }
+            let mut errors = errors.to_vec();
+            if !done && errors.is_empty() {
+                errors.push(DnsErrorEvent {
+                    code: "UNFINISHED".to_owned(),
+                    message: UNFINISHED.to_owned(),
+                });
+            }
+            blocks.extend(errors_block(&errors));
+            blocks.extend(warnings_block(collected.warnings()));
+            Ok(blocks)
+        }),
+    }
+}
+
+fn refusal(error: netray_dns::error::ApiError) -> Refusal {
+    match DnsRefusal::from(error) {
+        DnsRefusal::RateLimited { retry_after_secs } => {
+            Refusal::RateLimited(Duration::from_secs(retry_after_secs))
+        }
+        other => Refusal::Invalid(other.to_string()),
+    }
 }
 
 fn retry_after(refusal: V1Error) -> Duration {
@@ -238,6 +384,182 @@ impl InspectJobs {
     }
 }
 
+/// The one job a `q` asks for, with the sender its part waits on.
+enum DnsStart {
+    Query(Started<netray_dns::DnsQueryEvent>),
+    Trace(Started<netray_dns::DnsTraceEvent>),
+    Dnssec(Started<netray_dns::DnsDnssecEvent>),
+    Compare(Started<netray_dns::DnsCompareEvent>),
+    AuthCompare(Started<netray_dns::DnsAuthCompareEvent>),
+}
+
+type DnsBand = (
+    tokio::sync::oneshot::Sender<AbortOnDrop>,
+    Arc<dyn Module>,
+    String,
+    std::time::Instant,
+);
+
+async fn start_dns_job(
+    jobs: netray_dns::DnsJobs,
+    limiter: Arc<netray_dns::security::RateLimitState>,
+    client: IpAddr,
+    parsed: ParsedQuery,
+    start: DnsStart,
+    band: Option<DnsBand>,
+) -> Result<(), Refusal> {
+    limiter.prune_if_due();
+    let limits = &*limiter;
+    match start {
+        DnsStart::Query(tx) => {
+            let job = jobs
+                .query_parsed(parsed, client, limits, String::new())
+                .await
+                .map_err(refusal)?;
+            let _ = tx.send(job);
+        }
+        DnsStart::Trace(tx) => {
+            let record_type = parsed
+                .record_types
+                .first()
+                .map_or_else(|| "A".to_string(), ToString::to_string);
+            let request = TraceRequest {
+                domain: parsed.domain,
+                record_type,
+                timeout_secs: None,
+            };
+            let job = jobs
+                .trace(&request, client, limits, String::new())
+                .await
+                .map_err(refusal)?;
+            let _ = tx.send(job);
+        }
+        DnsStart::Dnssec(tx) => {
+            let request = DnssecRequest {
+                domain: parsed.domain,
+                timeout_secs: None,
+            };
+            let job = jobs
+                .dnssec(&request, client, limits, String::new())
+                .await
+                .map_err(refusal)?;
+            let _ = tx.send(job);
+        }
+        DnsStart::Compare(tx) => {
+            let job = jobs
+                .compare_parsed(parsed, client, limits, String::new())
+                .await
+                .map_err(refusal)?;
+            let _ = tx.send(job);
+        }
+        DnsStart::AuthCompare(tx) => {
+            let job = jobs
+                .authcompare_parsed(parsed, client, limits, String::new())
+                .await
+                .map_err(refusal)?;
+            let _ = tx.send(job);
+        }
+    }
+    if let Some((tx, module, domain, deadline)) = band {
+        let run = tokio::spawn(async move {
+            let ctx = RunContext {
+                deadline,
+                domain: Domain::new(domain),
+                options: Default::default(),
+            };
+            module.run(&ctx, &Facts::default()).await
+        });
+        let _ = tx.send(AbortOnDrop(run));
+    }
+    Ok(())
+}
+
+impl InspectJobs {
+    fn start_dns(&self, req: JobRequest) -> Result<Job, String> {
+        let jobs = self
+            .state
+            .dns_jobs()
+            .ok_or_else(|| DNS_OFF.to_string())?
+            .clone();
+        let parsed = netray_dns::parser::parse(&req.input).map_err(|e| e.to_string())?;
+        let flags: Vec<String> = req
+            .input
+            .split_whitespace()
+            .filter_map(|t| t.strip_prefix('+'))
+            .map(str::to_ascii_lowercase)
+            .collect();
+        let flagged = |name: &str| flags.iter().any(|f| f == name);
+
+        let (part, start) = if flagged("trace") {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            (
+                dns_part("trace", rx, blocks::trace_blocks),
+                DnsStart::Trace(tx),
+            )
+        } else if parsed.dnssec || flagged("dnssec") {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            (
+                dns_part("dnssec", rx, blocks::dnssec_blocks),
+                DnsStart::Dnssec(tx),
+            )
+        } else if flagged("compare") {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            (
+                dns_part("compare", rx, blocks::compare_blocks),
+                DnsStart::Compare(tx),
+            )
+        } else if flagged("auth") {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            (
+                dns_part("authcompare", rx, blocks::authcompare_blocks),
+                DnsStart::AuthCompare(tx),
+            )
+        } else {
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            (
+                dns_part("query", rx, blocks::query_blocks),
+                DnsStart::Query(tx),
+            )
+        };
+
+        let domain = parsed.domain.trim_end_matches('.');
+        let registrable = if domain.parse::<IpAddr>().is_ok() {
+            None
+        } else {
+            registrable_domain(domain)
+        };
+        let module = self.state.dns_module().cloned();
+        let (band_tx, band_rx) = tokio::sync::oneshot::channel::<AbortOnDrop>();
+        let (band, band_send): (BoxFuture<'static, Result<Vec<CheckResult>, String>>, _) =
+            match (registrable, module) {
+                (None, _) => (Box::pin(async { Err(DNS_BAND_NONE.to_string()) }), None),
+                (Some(_), None) => (Box::pin(async { Err(DNS_BAND_OFF.to_string()) }), None),
+                (Some(domain), Some(module)) => (
+                    Box::pin(async move {
+                        let mut run = band_rx.await.map_err(|_| "not started".to_string())?;
+                        let outcome = (&mut run.0)
+                            .await
+                            .map_err(|e| format!("the DNS band failed: {e}"))?;
+                        measured(outcome).map(|(_, checks)| checks)
+                    }),
+                    Some((band_tx, module, domain, req.deadline)),
+                ),
+            };
+
+        let gate = start_dns_job(
+            jobs,
+            self.state.dns_limiter().clone(),
+            req.client,
+            parsed,
+            start,
+            band_send,
+        );
+        Ok(Job::new(vec![part])
+            .with_band(Protocol::Dns, band)
+            .with_gate(Box::pin(gate)))
+    }
+}
+
 impl InspectorJobs for InspectJobs {
     fn admit(&self, tool: Tool, client: IpAddr, input: &str) -> Result<(), Duration> {
         match tool {
@@ -253,7 +575,7 @@ impl InspectorJobs for InspectJobs {
             Tool::Tls => self.start_tls(req),
             Tool::Http => self.start_http(req),
             Tool::Ip => self.start_ip(req),
-            Tool::Dns => Err(DNS_SOON.into()),
+            Tool::Dns => self.start_dns(req),
         }
     }
 }
