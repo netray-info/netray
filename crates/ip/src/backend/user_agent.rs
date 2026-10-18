@@ -34,6 +34,35 @@ pub struct UserAgent {
     pub browser: Browser,
 }
 
+impl UserAgent {
+    /// `raw` as given, every family "Other": the answer when no parser is loaded.
+    pub fn unparsed(raw: &str) -> Self {
+        Self {
+            raw: Some(raw.to_string()),
+            device: Device {
+                family: "Other".to_string(),
+                brand: None,
+                model: None,
+            },
+            os: OS {
+                family: "Other".to_string(),
+                major: None,
+                minor: None,
+                patch: None,
+                patch_minor: None,
+                version: String::new(),
+            },
+            browser: Browser {
+                family: "Other".to_string(),
+                major: None,
+                minor: None,
+                patch: None,
+                version: String::new(),
+            },
+        }
+    }
+}
+
 impl From<uaparser::Client<'_>> for UserAgent {
     fn from(ua: uaparser::Client<'_>) -> Self {
         Self {

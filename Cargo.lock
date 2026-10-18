@@ -3220,6 +3220,7 @@ dependencies = [
  "netray-model",
  "netray-store",
  "proptest",
+ "regex",
  "serde",
  "serde_json",
  "sqlx",

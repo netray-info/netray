@@ -295,10 +295,15 @@ async fn main() -> anyhow::Result<()> {
             let (registry, ip) = lens_registry(&cfg, true)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
+            let parts = netray_web::api::ApiParts {
+                ip: ip
+                    .clone()
+                    .map(|module| module as std::sync::Arc<dyn netray_ip::IpLookup>),
+            };
             if let Some(ip) = ip {
                 reload_ip_on_sighup(ip);
             }
-            lens::run_with(path, registry, netray_web::api::ApiParts::default()).await
+            lens::run_with(path, registry, parts).await
         }
         Command::Dns { config, .. } => netray_dns::run(config).await,
         Command::Tls { config, .. } => netray_tls::run(config).await,

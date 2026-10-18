@@ -11,6 +11,7 @@ netray-common = { path = "crates/common" }
 netray-model = { path = "crates/model" }
 netray-engine = { path = "crates/engine" }
 netray-store = { path = "crates/store" }
+netray-ip = { path = "crates/ip" }
 netray-web = { path = "crates/web" }
 
 # Web framework

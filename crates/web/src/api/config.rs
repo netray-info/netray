@@ -17,9 +17,84 @@ pub struct ApiHttpConfig {}
 #[serde(deny_unknown_fields, default)]
 pub struct ApiEmailConfig {}
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct ApiIpConfig {}
+pub struct ApiIpConfig {
+    pub internal_mode: bool,
+    pub filtered_headers: Vec<String>,
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub per_target_per_minute: u32,
+    pub per_target_burst: u32,
+    pub batch_max_size: u32,
+    pub batch_addresses_per_minute: u32,
+    pub batch_addresses_burst: u32,
+}
+
+impl Default for ApiIpConfig {
+    fn default() -> Self {
+        Self {
+            internal_mode: false,
+            filtered_headers: Vec::new(),
+            per_ip_per_minute: 60,
+            per_ip_burst: 10,
+            per_target_per_minute: 120,
+            per_target_burst: 20,
+            batch_max_size: 100,
+            batch_addresses_per_minute: 60,
+            batch_addresses_burst: 100,
+        }
+    }
+}
+
+fn bounded(key: &str, value: u32, cap: u32) -> Result<(), String> {
+    if value == 0 {
+        return Err(format!("api.ip.{key} must be greater than 0"));
+    }
+    if value > cap {
+        return Err(format!("api.ip.{key} ({value}) exceeds hard cap ({cap})"));
+    }
+    Ok(())
+}
+
+impl ApiIpConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        use netray_ip::config::{
+            HARD_CAP_BATCH_SIZE, HARD_CAP_RATE_LIMIT_BURST, HARD_CAP_RATE_LIMIT_PER_MINUTE,
+        };
+        let per_minute = HARD_CAP_RATE_LIMIT_PER_MINUTE;
+        let burst = HARD_CAP_RATE_LIMIT_BURST;
+        let batch = HARD_CAP_BATCH_SIZE as u32;
+        bounded("per_ip_per_minute", self.per_ip_per_minute, per_minute)?;
+        bounded("per_ip_burst", self.per_ip_burst, burst)?;
+        if self.per_ip_burst < 2 {
+            return Err(format!(
+                "api.ip.per_ip_burst ({}) is below the cost of a diff (2)",
+                self.per_ip_burst
+            ));
+        }
+        bounded(
+            "per_target_per_minute",
+            self.per_target_per_minute,
+            per_minute,
+        )?;
+        bounded("per_target_burst", self.per_target_burst, burst)?;
+        bounded("batch_max_size", self.batch_max_size, batch)?;
+        bounded(
+            "batch_addresses_per_minute",
+            self.batch_addresses_per_minute,
+            per_minute,
+        )?;
+        bounded("batch_addresses_burst", self.batch_addresses_burst, burst)?;
+        if self.batch_addresses_burst < self.batch_max_size {
+            return Err(format!(
+                "api.ip.batch_addresses_burst ({}) is below api.ip.batch_max_size ({})",
+                self.batch_addresses_burst, self.batch_max_size
+            ));
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
@@ -57,6 +132,7 @@ impl ApiConfig {
         if self.per_ip_burst == 0 {
             return Err("api.per_ip_burst must be greater than 0".into());
         }
+        self.ip.validate()?;
         Ok(())
     }
 }

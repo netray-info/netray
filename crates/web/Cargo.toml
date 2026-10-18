@@ -10,6 +10,7 @@ netray-common = { workspace = true, features = ["schema"] }
 netray-model = { workspace = true }
 netray-engine = { workspace = true }
 netray-store = { workspace = true }
+netray-ip = { workspace = true }
 askama = { workspace = true }
 axum = { workspace = true }
 tracing = { workspace = true }
@@ -20,6 +21,7 @@ utoipa-axum = { workspace = true }
 utoipa-scalar = { workspace = true, features = ["axum"] }
 governor = { workspace = true }
 futures = { workspace = true }
+regex = { workspace = true }
 
 [build-dependencies]
 serde_json = { workspace = true }
@@ -35,4 +37,4 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 toml = { workspace = true }
 futures = { workspace = true }
 jsonschema = { version = "0.30", default-features = false }
-netray-ip = { path = "../ip", features = ["testing"] }
+netray-ip = { workspace = true, features = ["testing"] }
