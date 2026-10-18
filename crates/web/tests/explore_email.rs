@@ -84,3 +84,9 @@ fn spf_block_has_no_link() {
     );
     assert!(hrefs(&b).is_empty());
 }
+
+#[test]
+fn null_mx_row_has_no_link() {
+    // RFC 7505 null MX: the host is ".", which names no server to inspect.
+    assert!(hrefs(&mx_block(&["."])).is_empty());
+}

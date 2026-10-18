@@ -41,20 +41,25 @@ fn dns_mx_records_with_one_owner_link_to_owner_and_type() {
 }
 
 #[test]
-fn dns_a_records_with_two_owners_link_to_the_first_owner() {
-    let a = block(
-        "dns.a",
+fn dns_records_with_two_owners_query_the_domain_with_the_block_type() {
+    // A CNAME chain: the queried name's own type must survive, so the domain is queried.
+    let txt = block(
+        "dns.txt",
         vec![
-            record("example.com", "A", "192.0.2.1"),
-            record("www.example.com", "A", "192.0.2.2"),
+            record("a.cdn.example.net.", "TXT", "\"v=x\""),
+            record("example.com.", "CNAME", "a.cdn.example.net."),
         ],
     );
-    assert_eq!(hrefs(&a), vec!["/inspect/dns?q=example.com"]);
+    assert_eq!(hrefs(&txt), vec!["/inspect/dns?q=example.com%20TXT"]);
 }
 
 #[test]
-fn dns_block_without_records_yields_no_link() {
-    assert!(hrefs(&block("dns.a", vec![])).is_empty());
+fn dns_block_without_records_queries_the_domain_with_the_block_type() {
+    // An answered empty block (NODATA): the link still asks for the block's type.
+    assert_eq!(
+        hrefs(&block("dns.caa", vec![])),
+        vec!["/inspect/dns?q=example.com%20CAA"]
+    );
 }
 
 #[test]
