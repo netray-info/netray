@@ -51,7 +51,7 @@ impl SegmentState {
 pub struct RecordRow {
     pub owner: String,
     pub rtype: String,
-    pub ttl: u32,
+    pub ttl: String,
     pub data: String,
 }
 
@@ -62,6 +62,25 @@ pub struct Field {
     pub value: String,
 }
 
+/// A table column header; `key` marks the column whose value identifies a row.
+#[derive(Debug, Clone)]
+pub struct TableColumn {
+    pub name: String,
+    pub key: bool,
+}
+
+impl From<&str> for TableColumn {
+    fn from(name: &str) -> Self {
+        TableColumn {
+            name: name.to_string(),
+            key: false,
+        }
+    }
+}
+
+/// The deepest nesting level the stylesheet has a rule for; deeper nodes render at this level.
+pub const MAX_TREE_DEPTH: u8 = 7;
+
 /// One node of a flattened tree; `depth` is its nesting level.
 #[derive(Debug, Clone)]
 pub struct TreeItem {
@@ -69,12 +88,19 @@ pub struct TreeItem {
     pub text: String,
 }
 
+impl TreeItem {
+    /// The `data-depth` value: `depth` clamped to [`MAX_TREE_DEPTH`].
+    pub fn depth_attr(&self) -> u8 {
+        self.depth.min(MAX_TREE_DEPTH)
+    }
+}
+
 /// The shape of an evidence block's content.
 #[derive(Debug, Clone)]
 pub enum EvidenceShape {
     Records(Vec<RecordRow>),
     Table {
-        columns: Vec<String>,
+        columns: Vec<TableColumn>,
         rows: Vec<Vec<String>>,
     },
     Chain(Vec<Vec<Field>>),

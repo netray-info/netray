@@ -40,9 +40,14 @@
 }
 .evidence-block__fields dt { color: var(--color-muted); }
 .evidence-block__fields dd { margin: 0; color: var(--color-ink); }
-.evidence-block__tree-item {
-  padding-inline-start: calc(var(--space-4) * var(--evidence-block-depth, 0));
-}
+.evidence-block__tree-item[data-depth="0"] { padding-inline-start: 0; }
+.evidence-block__tree-item[data-depth="1"] { padding-inline-start: calc(var(--space-4) * 1); }
+.evidence-block__tree-item[data-depth="2"] { padding-inline-start: calc(var(--space-4) * 2); }
+.evidence-block__tree-item[data-depth="3"] { padding-inline-start: calc(var(--space-4) * 3); }
+.evidence-block__tree-item[data-depth="4"] { padding-inline-start: calc(var(--space-4) * 4); }
+.evidence-block__tree-item[data-depth="5"] { padding-inline-start: calc(var(--space-4) * 5); }
+.evidence-block__tree-item[data-depth="6"] { padding-inline-start: calc(var(--space-4) * 6); }
+.evidence-block__tree-item[data-depth="7"] { padding-inline-start: calc(var(--space-4) * 7); }
 .evidence-block__text {
   margin: 0;
   overflow-x: auto;

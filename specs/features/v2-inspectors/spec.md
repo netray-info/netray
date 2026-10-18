@@ -285,6 +285,14 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
   (implementer under the operator's autonomy mandate, 2026-10-17; v2-result-page's contract).
 
 - Stacked on `feature/v2-api` instead of waiting for its merge, and no midday review pause (operator, 2026-10-17/18, X5, X6): the branch is rebased onto origin/main after v2-api merges and lands after it.
+- `RecordRow.ttl` a formatted `String` over keeping `u32`: requirement 1 formats every typed value
+  one way, and a `u32` has no lossless place for a ttl the renderer cannot convert; the protected
+  component test changes under `ADLC-Test-Change` (implementer under the operator's autonomy mandate, 2026-10-18).
+- Phases 1–3 built on `feature/v2-api`'s base before merging origin/main (v2-pages), over merging it
+  first: they need nothing of v2-pages, and v2-api resolves the same conflicts when it merges main;
+  this branch merges main or v2-api before Phase 4 (implementer under the operator's autonomy mandate, 2026-10-18).
+- The phase defaults marked "(default, not interviewed)" are built as written, over halting on each:
+  operator decision X5, no review pause (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 
