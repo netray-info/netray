@@ -8,6 +8,7 @@ pub mod components;
 pub mod contrast;
 pub mod entries;
 pub mod evidence;
+pub mod explore;
 pub mod gate;
 pub mod spectrum;
 pub mod tokens;

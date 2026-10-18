@@ -3218,6 +3218,7 @@ dependencies = [
  "netray-engine",
  "netray-model",
  "netray-store",
+ "percent-encoding",
  "proptest",
  "serde",
  "serde_json",

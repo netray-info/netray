@@ -71,3 +71,36 @@ skipped: Phase 2 adds pure view-model functions and a partial, no route; Phase 4
 ### Verify
 
 `adlc verify`: verified.
+
+## Phase 3 — Explore-live links
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R8: one explore-live link per view, one per row for `tls.addresses`/`email.mx`/`ip.addresses`, one per block for `dns.<type>`/`email.dmarc`/`email.mta_sts`, none otherwise, all from one function; values percent-encoded; apex-relative `/inspect/<tool>` | green | crates/web/tests/explore_dns.rs, explore_tls.rs, explore_email.rs, explore_http_ip.rs |
+| C2 | S: `dns.mx` records sharing owner `example.com` → `/inspect/dns?q=example.com%20MX` | green | crates/web/tests/explore_dns.rs |
+| C3 | S: `tls.addresses` rows `192.0.2.1`, `2001:db8::1` → `?h=192.0.2.1:443`, `?h=%5B2001:db8::1%5D:443` | green | crates/web/tests/explore_tls.rs |
+| C4 | S: `email.mx` host `mx.example.com` → `/inspect/tls?h=mx.example.com:25` | green | crates/web/tests/explore_email.rs |
+| C5 | S: `email.dmarc`, `email.mta_sts` → `_dmarc.example.com TXT`, `_mta-sts.example.com TXT` | green | crates/web/tests/explore_email.rs |
+| C6 | S: `http.headers` → none; HTTP view link `/inspect/http?url=https%3A%2F%2Fexample.com%2F` | green | crates/web/tests/explore_http_ip.rs |
+| C7 | S: TLS view with a two-row `tls.addresses` and a `tls.chain` → exactly three links | green | crates/web/tests/explore_tls.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 | sonnet | 36311 | 47 |
+| G1 (review fix) | 1 | sonnet | 24711 | 28 |
+
+### Review
+
+Pass 1: BLOCKER null MX row linked `h=:25` (fixed: skipped); AMENDMENT empty `dns.<type>` block got no link and requirement 8 asks for one (repaired: `<domain> <TYPE>`); DEFERRED a CNAME chain dropped the type (repaired with the amendment); NIT real owners are FQDNs (accepted by the parser). Pass 2: AMENDMENT a Unicode IDN MX host yields a link the TLS inspector refuses (repaired: non-ASCII hosts get none, decision logged); NIT staged blob stale (restaged). Requirement 8 amended in the spec.
+
+### Behavioural verification
+
+skipped: Phase 3 adds a pure link-derivation module; Phase 4 renders the links on the evidence routes.
+
+### Verify
+
+`adlc verify`: verified.

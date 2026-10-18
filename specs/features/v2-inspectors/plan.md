@@ -32,3 +32,19 @@ G1: C1–C12 — every criterion goes through `crates/web/src/evidence.rs`.
 4. Test fix: `evidence_section_rows.rs`/`evidence_section_href.rs` `created_at` constant `1_778_262_240` (2026-05-08 17:44) → `1_791_469_920` (2026-10-08 14:32), the time the test asserts.
 
 Gotchas: no new stylesheet (`entries_gate.rs` pins the CSS set); no `ip.`/`http.`-style substrings in evidence.rs; row link markup puts `class=` before `href=`.
+
+## Phase 3 — Explore-live links
+
+## Groups
+
+G1: C1–C7 — one new file, `crates/web/src/explore.rs`.
+
+## Plan
+
+### G1
+
+1. `crates/web/Cargo.toml`: `percent-encoding = { workspace = true }` (Cargo.lock follows).
+2. `crates/web/src/explore.rs` (new): `ExploreLink`; encode sets `COMPONENT` (non-alphanumeric minus `-._~`, for `url`) and `QUERY` (`COMPONENT` minus `:`, for `q`, `h`, `ip`); `view_link` per protocol; `block_links` matching module/name and shape (`dns.*` records, `tls.addresses`/`email.mx`/`ip.addresses` table rows by column name, `email.dmarc`/`email.mta_sts` fixed TXT names, else none); `view_links` = view link then the protocol's blocks. IPv6 bracketed for `h` only; `email.mx` trailing dot dropped. Values through `evidence::format_value`.
+3. `crates/web/src/lib.rs`: `pub mod explore;`.
+
+Gotcha: no `Router` word in explore.rs (`test_web_crate.sh`).

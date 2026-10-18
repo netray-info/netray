@@ -20,6 +20,7 @@ utoipa-axum = { workspace = true }
 utoipa-scalar = { workspace = true, features = ["axum"] }
 governor = { workspace = true }
 futures = { workspace = true }
+percent-encoding = { workspace = true }
 
 [build-dependencies]
 serde_json = { workspace = true }
