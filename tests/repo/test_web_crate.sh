@@ -15,13 +15,13 @@ fail() { echo "FAIL: $1"; fails=1; }
 [ -f crates/web/tokens.json ] || fail "crates/web/tokens.json is missing (the crate's token source)"
 [ -f crates/web/build.rs ] || fail "crates/web/build.rs is missing"
 
-# router_offenders <src-root>: files naming a Router outside entries/, pages/ and api/.
+# router_offenders <src-root>: files naming a Router outside entries/, pages/, api/ and host/.
 router_offenders() {
     local root=$1 f rel
     grep -rlE '\bRouter\b' "$root" 2>/dev/null | while IFS= read -r f; do
         rel=${f#"$root"/}
         case "$rel" in
-            entries/*|pages/*|api/*) ;;
+            entries/*|pages/*|api/*|host/*) ;;
             *) echo "$rel" ;;
         esac
     done
@@ -29,16 +29,16 @@ router_offenders() {
 
 scratch=$(mktemp -d) || exit 1
 trap 'rm -rf "$scratch"' EXIT
-mkdir -p "$scratch/ok/entries" "$scratch/ok/pages" "$scratch/ok/api" "$scratch/bad/entries"
-for f in entries/router.rs pages/x.rs api/x.rs; do echo 'fn r() -> Router {}' > "$scratch/ok/$f"; done
+mkdir -p "$scratch/ok/entries" "$scratch/ok/pages" "$scratch/ok/api" "$scratch/ok/host" "$scratch/bad/entries"
+for f in entries/router.rs pages/x.rs api/x.rs host/x.rs; do echo 'fn r() -> Router {}' > "$scratch/ok/$f"; done
 echo 'fn r() -> Router {}' > "$scratch/bad/entries/router.rs"
 echo 'fn r() -> Router {}' > "$scratch/bad/components.rs"
-[ -z "$(router_offenders "$scratch/ok")" ] || fail "self-test: a Router under entries/, pages/ or api/ was refused"
+[ -z "$(router_offenders "$scratch/ok")" ] || fail "self-test: a Router under entries/, pages/, api/ or host/ was refused"
 [ "$(router_offenders "$scratch/bad")" = "components.rs" ] || fail "self-test: a Router in components.rs was not the one refusal"
 
 if [ -d crates/web/src ]; then
     while IFS= read -r f; do
-        fail "crates/web/src/$f names a Router outside entries/, pages/ and api/"
+        fail "crates/web/src/$f names a Router outside entries/, pages/, api/ and host/"
     done < <(router_offenders crates/web/src)
 fi
 
