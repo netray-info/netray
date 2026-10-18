@@ -278,3 +278,37 @@ async fn c5_failed_history_lookup_answers_500_and_warns_with_the_id() {
         .unwrap_or_else(|| panic!("no log line names the ID:\n{logged}"));
     assert!(line.contains("WARN"), "not a warn line: {line}");
 }
+
+// v2-cutover Phase 3 review: `/r/<id>/<protocol>` treats a failed lookup like `/r/<id>`.
+#[tokio::test(flavor = "current_thread")]
+async fn v2_cutover_failed_history_lookup_on_a_protocol_path_answers_500_and_warns() {
+    let (store, dir) = open().await;
+    let options = sqlx::sqlite::SqliteConnectOptions::new().filename(dir.path().join("history.db"));
+    let pool = sqlx::SqlitePool::connect_with(options).await.unwrap();
+    sqlx::query("DROP TABLE entries")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let (v1, calls) = v1_stub(StatusCode::OK, "V1-PAGE-BODY");
+
+    let capture = Capture::default();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(capture.clone())
+        .with_max_level(tracing::Level::TRACE)
+        .with_ansi(false)
+        .finish();
+    let guard = tracing::subscriber::set_default(subscriber);
+    let (status, _, body) = get(&app(store, Some(v1)), "/r/AAAAAAAA/dns").await;
+    drop(guard);
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(!body.contains("V1-PAGE-BODY"));
+    assert!(!body.contains("This entry has expired"));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    let logged = String::from_utf8(capture.0.lock().unwrap().clone()).unwrap();
+    let line = logged
+        .lines()
+        .find(|l| l.contains("AAAAAAAA"))
+        .unwrap_or_else(|| panic!("no log line names the ID:\n{logged}"));
+    assert!(line.contains("WARN"), "not a warn line: {line}");
+}

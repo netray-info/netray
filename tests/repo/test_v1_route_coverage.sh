@@ -52,7 +52,8 @@ routes() {
     done
     # apex: lens's routes after the host redirect, and site/ rows 13l-n
     for n in /api/check '/api/check/*' /api/meta /docs /docs/ /api-docs/openapi.json \
-             /tools /tools/ /api/ /guide/lens; do
+             /tools /tools/ /api/ /api /api/index /api/dns /api/tls /api/http /api/email /api/ip /api/lens \
+             /guide/lens; do
         echo "netray.info|$n"
     done
     for n in index dns tls http email ip lens; do echo "netray.info|/api/$n.html"; done
