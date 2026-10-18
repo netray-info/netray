@@ -33,16 +33,41 @@ function mount(): void {
   issues(root());
 }
 
+function memoryStorage(): Storage {
+  const m = new Map<string, string>();
+  return {
+    getItem: (k: string) => (m.has(k) ? (m.get(k) as string) : null),
+    setItem: (k: string, v: string) => void m.set(k, String(v)),
+    removeItem: (k: string) => void m.delete(k),
+    clear: () => m.clear(),
+    key: (i: number) => [...m.keys()][i] ?? null,
+    get length() {
+      return m.size;
+    },
+  } as Storage;
+}
+
+function useStorage(s: Storage) {
+  vi.stubGlobal("localStorage", s);
+  Object.defineProperty(window, "localStorage", { value: s, configurable: true });
+}
+
+function throwingStorage(): Storage {
+  const boom = () => {
+    throw new Error("storage denied");
+  };
+  return { getItem: boom, setItem: boom, removeItem: boom, clear: boom, key: boom, length: 0 } as unknown as Storage;
+}
+
 let fetchSpy: ReturnType<typeof vi.fn>;
 beforeEach(() => {
-  localStorage.clear();
+  useStorage(memoryStorage());
   fetchSpy = vi.fn();
   vi.stubGlobal("fetch", fetchSpy);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  localStorage.clear();
   document.body.innerHTML = "";
 });
 
@@ -97,11 +122,7 @@ describe("issues island (requirement 10)", () => {
   });
 
   it("keeps the default grouping and never throws when storage throws", () => {
-    const boom = () => {
-      throw new Error("storage denied");
-    };
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(boom);
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(boom);
+    useStorage(throwingStorage());
 
     expect(() => mount()).not.toThrow();
     expect(keys()).toEqual(["dns_provider", "web_server", "hosting"]);

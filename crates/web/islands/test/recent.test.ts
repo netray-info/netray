@@ -8,8 +8,34 @@ let beaconSpy: ReturnType<typeof vi.fn>;
 let added: [string, EventListenerOrEventListenerObject][] = [];
 const realAdd = document.addEventListener.bind(document);
 
+function memoryStorage(): Storage {
+  const m = new Map<string, string>();
+  return {
+    getItem: (k: string) => (m.has(k) ? (m.get(k) as string) : null),
+    setItem: (k: string, v: string) => void m.set(k, String(v)),
+    removeItem: (k: string) => void m.delete(k),
+    clear: () => m.clear(),
+    key: (i: number) => [...m.keys()][i] ?? null,
+    get length() {
+      return m.size;
+    },
+  } as Storage;
+}
+
+function useStorage(s: Storage) {
+  vi.stubGlobal("localStorage", s);
+  Object.defineProperty(window, "localStorage", { value: s, configurable: true });
+}
+
+function throwingStorage(): Storage {
+  const boom = () => {
+    throw new Error("storage denied");
+  };
+  return { getItem: boom, setItem: boom, removeItem: boom, clear: boom, key: boom, length: 0 } as unknown as Storage;
+}
+
 beforeEach(() => {
-  localStorage.clear();
+  useStorage(memoryStorage());
   fetchSpy = vi.fn();
   beaconSpy = vi.fn();
   vi.stubGlobal("fetch", fetchSpy);
@@ -26,7 +52,6 @@ afterEach(() => {
   document.addEventListener = realAdd;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
-  localStorage.clear();
   document.body.innerHTML = "";
 });
 
@@ -78,12 +103,7 @@ describe("recent island", () => {
   });
 
   it("c2: throwing storage neither throws nor shows the list", () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
-      throw new Error("denied");
-    });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("denied");
-    });
+    useStorage(throwingStorage());
     expect(() => page("d.example.com")).not.toThrow();
     document.body.innerHTML = `<ul id="recent" data-island="recent" hidden></ul>`;
     const ul = document.getElementById("recent") as HTMLElement;
