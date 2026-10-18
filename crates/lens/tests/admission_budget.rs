@@ -265,7 +265,7 @@ async fn admission_budget_c14_third_run_of_a_budget_of_two_is_refused() {
     assert_eq!(third.status, StatusCode::TOO_MANY_REQUESTS);
     assert!(third.retry_after.is_some(), "429 carries Retry-After");
     assert_eq!(
-        acc.counter("lens_admission_rejections_total", "reason", "budget"),
+        acc.counter("netray_admission_rejections_total", "reason", "budget"),
         1
     );
     assert_eq!(h.runs.load(Ordering::SeqCst), 2);

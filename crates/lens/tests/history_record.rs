@@ -31,7 +31,7 @@ use serde_json::Value;
 use tempfile::NamedTempFile;
 use tower::ServiceExt;
 
-const ERRORS: &str = "lens_history_record_errors_total";
+const ERRORS: &str = "netray_history_record_errors_total";
 
 #[derive(Clone, Copy)]
 enum Mail {
@@ -448,7 +448,7 @@ fn history_c17_error_counter_renders_at_zero() {
 
     assert!(
         out.lines()
-            .any(|l| l == "lens_history_record_errors_total 0"),
+            .any(|l| l == "netray_history_record_errors_total 0"),
         "missing zero series in:\n{out}"
     );
 }

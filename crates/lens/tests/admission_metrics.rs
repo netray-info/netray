@@ -30,9 +30,9 @@ use netray_store::HistoryStore;
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-const REQUESTS: &str = "lens_check_requests_total";
-const IN_FLIGHT: &str = "lens_runs_in_flight";
-const DURATION: &str = "lens_run_duration_seconds";
+const RUNS: &str = "netray_runs_total";
+const IN_FLIGHT: &str = "netray_runs_in_flight";
+const DURATION: &str = "netray_run_duration_seconds";
 
 /// Production config, cache enabled; per-IP limit as given (burst equals limit).
 fn app(per_ip: u32, dns_gate: Option<(Arc<Notify>, Arc<Notify>)>) -> Router {
@@ -112,21 +112,19 @@ async fn post_check(app: &Router, domain: &str) -> StatusCode {
     status
 }
 
-/// Value of `lens_check_requests_total{result}`; absent series count 0.
-fn requests(s: &Acc, result: &str) -> u64 {
+/// Value of `netray_runs_total{trigger}` summed over `outcome`; absent series count 0.
+fn runs(s: &Acc, trigger: &str) -> u64 {
     s.series()
         .into_iter()
-        .filter(|t| {
-            t.name == REQUESTS && t.labels.iter().any(|(k, v)| k == "result" && v == result)
-        })
+        .filter(|t| t.name == RUNS && t.labels.iter().any(|(k, v)| k == "trigger" && v == trigger))
         .map(|t| t.counter)
         .sum()
 }
 
-fn requests_total(s: &Acc) -> u64 {
+fn runs_total(s: &Acc) -> u64 {
     s.series()
         .into_iter()
-        .filter(|t| t.name == REQUESTS)
+        .filter(|t| t.name == RUNS)
         .map(|t| t.counter)
         .sum()
 }
@@ -215,9 +213,8 @@ async fn admission_c6_fresh_run_counts_fresh_only() {
 
     assert_eq!(post_check(&app, "example.com").await, StatusCode::OK);
 
-    assert_eq!(requests(&snap, "fresh"), 1);
-    assert_eq!(requests(&snap, "cache_hit"), 0);
-    assert_eq!(requests(&snap, "rate_limited"), 0);
+    assert_eq!(runs(&snap, "api"), 1);
+    assert_eq!(runs_total(&snap), 1, "no other trigger counts a run");
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -233,8 +230,9 @@ async fn admission_c7_repeat_within_ttl_counts_cache_hit() {
     wait_for_head_and_rendering(&state, "example.com").await;
     post_check(&app, "example.com").await;
 
-    assert_eq!(requests(&snap, "fresh"), 1);
-    assert_eq!(requests(&snap, "cache_hit"), 1);
+    // `cache_hit` has no successor: the hit starts no run, so only the first counts.
+    assert_eq!(runs(&snap, "api"), 1);
+    assert_eq!(runs_total(&snap), 1);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -250,8 +248,9 @@ async fn admission_c8_second_request_over_per_ip_limit_counts_rate_limited() {
         StatusCode::TOO_MANY_REQUESTS
     );
 
-    assert_eq!(requests(&snap, "rate_limited"), 1);
-    assert_eq!(requests(&snap, "fresh"), 1);
+    // `rate_limited` has no successor: the refused request starts no run.
+    assert_eq!(runs(&snap, "api"), 1);
+    assert_eq!(runs_total(&snap), 1);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -265,12 +264,12 @@ async fn admission_c9_invalid_domain_increments_no_request_series() {
         post_check(&app, "*.example.com").await,
         StatusCode::BAD_REQUEST
     );
-    assert_eq!(requests_total(&snap), 0, "invalid input is not counted");
+    assert_eq!(runs_total(&snap), 0, "invalid input starts no run");
 
     // Control: a valid request after it is the only one counted.
     post_check(&app, "example.com").await;
-    assert_eq!(requests(&snap, "fresh"), 1);
-    assert_eq!(requests_total(&snap), 1);
+    assert_eq!(runs(&snap, "api"), 1);
+    assert_eq!(runs_total(&snap), 1);
 }
 
 #[tokio::test(flavor = "current_thread")]

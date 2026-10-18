@@ -39,7 +39,7 @@ use tempfile::NamedTempFile;
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-const IN_FLIGHT: &str = "lens_runs_in_flight";
+const IN_FLIGHT: &str = "netray_runs_in_flight";
 
 /// Counts how often the wrapped module runs.
 struct Counting {

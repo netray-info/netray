@@ -35,8 +35,8 @@ use netray_store::HistoryStore;
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-const REJECTIONS: &str = "lens_admission_rejections_total";
-const REQUESTS: &str = "lens_check_requests_total";
+const REJECTIONS: &str = "netray_admission_rejections_total";
+const RUNS: &str = "netray_runs_total";
 
 const A: [u8; 4] = [10, 0, 0, 1];
 const B: [u8; 4] = [10, 0, 0, 2];
@@ -228,8 +228,18 @@ fn rejections(s: &Acc, reason: &str) -> u64 {
     counter(s, REJECTIONS, "reason", reason)
 }
 
-fn requests(s: &Acc, result: &str) -> u64 {
-    counter(s, REQUESTS, "result", result)
+/// `netray_runs_total{trigger}` summed over `outcome`.
+fn runs(s: &Acc, trigger: &str) -> u64 {
+    counter(s, RUNS, "trigger", trigger)
+}
+
+/// `netray_runs_total` over every trigger and outcome.
+fn runs_total(s: &Acc) -> u64 {
+    s.series()
+        .into_iter()
+        .filter(|t| t.name == RUNS)
+        .map(|t| t.counter)
+        .sum()
 }
 
 /// Accumulates snapshots: `Snapshotter::snapshot()` resets counters to 0 on read.
@@ -388,7 +398,9 @@ async fn admission_slots_c6_every_refusal_counts_its_reason() {
     assert_eq!(rejections(&snap, "throttle"), 1);
     assert_eq!(rejections(&snap, "budget"), 1);
     assert_eq!(rejections(&snap, "limit"), 1);
-    assert_eq!(requests(&snap, "rate_limited"), 4);
+    // Four refusals start no run: only example.com and example.net ran.
+    assert_eq!(runs(&snap, "api"), 2);
+    assert_eq!(runs_total(&snap), 2);
 }
 
 /// C7 (R20): `check_limits`, `admit`, `Trigger`, `Reason` and `Refusal` are public in `admission`.
@@ -444,7 +456,7 @@ async fn admission_slots_c19_no_free_slot_refuses_check_and_badge() {
     let second = async {
         later().await;
         let refused = check(&app, "example.net").await;
-        let counted = (rejections(&snap, "slots"), requests(&snap, "rate_limited"));
+        let counted = rejections(&snap, "slots");
         let svg = badge_svg(&app, "example.net").await;
         (refused, counted, svg)
     };
@@ -457,7 +469,9 @@ async fn admission_slots_c19_no_free_slot_refuses_check_and_badge() {
     assert_eq!(s1, StatusCode::OK);
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(retry.as_deref(), Some("1"));
-    assert_eq!(counted, (1, 1));
+    assert_eq!(counted, 1);
+    // The refused check and its badge start no run: only example.com ran.
+    assert_eq!(runs_total(&snap), 1);
     assert!(svg.contains(">?</text>"), "badge must show ?, got: {svg}");
 }
 
@@ -484,7 +498,8 @@ async fn admission_slots_c20_the_domain_in_flight_joins_without_a_slot() {
     assert_eq!(s1, StatusCode::OK);
     assert_eq!(s2, StatusCode::OK);
     assert_eq!(h.runs.load(Ordering::SeqCst), 1);
-    assert_eq!(requests(&snap, "joined"), 1);
+    // `joined` has no successor: the joiner starts no run, so only the first counts.
+    assert_eq!(runs_total(&snap), 1);
 }
 
 /// C21: a slots refusal leaves nothing behind: once the slot is free, the same domain runs, is
@@ -541,14 +556,15 @@ async fn admission_slots_c22_a_hit_spends_the_per_ip_limit() {
 
     let app = router(&h.state, A);
     assert_eq!(check(&app, "example.com").await.0, StatusCode::OK);
-    assert_eq!(requests(&snap, "cache_hit"), 1);
+    // `cache_hit` has no successor: the hit starts no run, so only the seeding run counts.
+    assert_eq!(runs_total(&snap), 1);
     let (status, retry) = check(&app, "example.com").await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     assert!(retry.is_some());
     assert_eq!(rejections(&snap, "limit"), 1);
 }
 
-/// C24: the four rejection series and `joined` render at zero before any request.
+/// C24: the four rejection series render at zero before any request.
 #[test]
 fn admission_slots_c24_rejection_series_render_at_zero() {
     let recorder = netray_common::server::metrics_recorder(lens::metrics::HISTOGRAM_BUCKETS);
@@ -559,11 +575,10 @@ fn admission_slots_c24_rejection_series_render_at_zero() {
     let out = handle.render();
 
     for line in [
-        r#"lens_admission_rejections_total{reason="throttle"} 0"#,
-        r#"lens_admission_rejections_total{reason="budget"} 0"#,
-        r#"lens_admission_rejections_total{reason="limit"} 0"#,
-        r#"lens_admission_rejections_total{reason="slots"} 0"#,
-        r#"lens_check_requests_total{result="joined"} 0"#,
+        r#"netray_admission_rejections_total{reason="throttle"} 0"#,
+        r#"netray_admission_rejections_total{reason="budget"} 0"#,
+        r#"netray_admission_rejections_total{reason="limit"} 0"#,
+        r#"netray_admission_rejections_total{reason="slots"} 0"#,
     ] {
         assert!(out.lines().any(|l| l == line), "missing {line} in:\n{out}");
     }

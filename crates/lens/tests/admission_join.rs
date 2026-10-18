@@ -34,7 +34,7 @@ use serde_json::Value;
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-const REQUESTS: &str = "lens_check_requests_total";
+const RUNS: &str = "netray_runs_total";
 
 /// Counts the runs of the module it wraps.
 struct Counting {
@@ -162,12 +162,11 @@ async fn later() {
     tokio::time::sleep(Duration::from_millis(200)).await;
 }
 
-fn requests(s: &Acc, result: &str) -> u64 {
+/// `netray_runs_total{trigger}` summed over `outcome`.
+fn runs(s: &Acc, trigger: &str) -> u64 {
     s.series()
         .into_iter()
-        .filter(|t| {
-            t.name == REQUESTS && t.labels.iter().any(|(k, v)| k == "result" && v == result)
-        })
+        .filter(|t| t.name == RUNS && t.labels.iter().any(|(k, v)| k == "trigger" && v == trigger))
         .map(|t| t.counter)
         .sum()
 }
@@ -242,8 +241,8 @@ async fn admission_join_c1_c6_second_check_joins_the_run_in_flight() {
     }
     let id1 = b1["done"]["snapshot_id"].as_str().expect("snapshot id");
     assert_eq!(b2["done"]["snapshot_id"].as_str(), Some(id1));
-    assert_eq!(requests(&snap, "joined"), 1);
-    assert_eq!(requests(&snap, "fresh"), 1);
+    // `joined` has no successor: the joiner starts no run, so one run counts for both.
+    assert_eq!(runs(&snap, "api"), 1);
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -347,6 +346,5 @@ async fn admission_join_c4_c15_sequential_requests_are_both_fresh() {
 
     assert_eq!(s1, StatusCode::OK);
     assert_eq!(s2, StatusCode::OK);
-    assert_eq!(requests(&snap, "fresh"), 2);
-    assert_eq!(requests(&snap, "joined"), 0);
+    assert_eq!(runs(&snap, "api"), 2);
 }

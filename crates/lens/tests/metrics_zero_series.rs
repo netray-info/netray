@@ -15,18 +15,15 @@ fn zero_series_render_at_zero_and_buckets_are_configured() {
     let out = handle.render();
 
     let expected = [
-        r#"lens_check_requests_total{result="rate_limited"} 0"#,
-        r#"lens_check_requests_total{result="cache_hit"} 0"#,
-        r#"lens_check_requests_total{result="fresh"} 0"#,
-        r#"lens_badge_requests_total{cache="hit"} 0"#,
-        r#"lens_badge_requests_total{cache="miss"} 0"#,
-        r#"lens_badge_requests_total{cache="throttled"} 0"#,
-        r#"lens_badge_requests_total{cache="failed"} 0"#,
-        r#"lens_rate_limit_hits_total{scope="per_ip"} 0"#,
-        r#"lens_rate_limit_hits_total{scope="global"} 0"#,
-        r#"lens_rate_limit_hits_total{scope="badge"} 0"#,
-        r#"lens_rate_limit_hits_total{scope="og"} 0"#,
-        "lens_runs_in_flight 0",
+        r#"netray_badge_requests_total{cache="hit"} 0"#,
+        r#"netray_badge_requests_total{cache="miss"} 0"#,
+        r#"netray_badge_requests_total{cache="throttled"} 0"#,
+        r#"netray_badge_requests_total{cache="failed"} 0"#,
+        r#"netray_rate_limit_hits_total{scope="per_ip"} 0"#,
+        r#"netray_rate_limit_hits_total{scope="global"} 0"#,
+        r#"netray_rate_limit_hits_total{scope="badge"} 0"#,
+        r#"netray_rate_limit_hits_total{scope="og"} 0"#,
+        "netray_runs_in_flight 0",
     ];
     let missing: Vec<&str> = expected
         .iter()
@@ -47,11 +44,11 @@ fn zero_series_render_at_zero_and_buckets_are_configured() {
             .to_vec()
     };
     assert_eq!(
-        buckets("lens_run_duration_seconds"),
+        buckets("netray_run_duration_seconds"),
         vec![0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 30.0]
     );
     assert_eq!(
-        buckets("lens_client_hourly_runs"),
+        buckets("netray_client_hourly_runs"),
         vec![1.0, 2.0, 3.0, 5.0, 10.0, 20.0, 50.0, 100.0]
     );
 }

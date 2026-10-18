@@ -24,7 +24,7 @@ use netray_common::server::metrics_recorder;
 use netray_store::HistoryStore;
 use tower::ServiceExt;
 
-const NAME: &str = "lens_client_hourly_runs";
+const NAME: &str = "netray_client_hourly_runs";
 
 fn ip(last: u8) -> IpAddr {
     IpAddr::from([192, 0, 2, last])

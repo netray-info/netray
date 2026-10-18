@@ -38,9 +38,9 @@ use netray_store::HistoryStore;
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-const REJECTIONS: &str = "lens_admission_rejections_total";
-const BADGES: &str = "lens_badge_requests_total";
-const REQUESTS: &str = "lens_check_requests_total";
+const REJECTIONS: &str = "netray_admission_rejections_total";
+const BADGES: &str = "netray_badge_requests_total";
+const RUNS: &str = "netray_runs_total";
 const SHORT_CACHE: &str = "public, max-age=300, s-maxage=300";
 
 fn client() -> IpAddr {
@@ -165,8 +165,18 @@ fn rejections(s: &Acc, reason: &str) -> u64 {
     counter(s, REJECTIONS, "reason", reason)
 }
 
-fn requests(s: &Acc, result: &str) -> u64 {
-    counter(s, REQUESTS, "result", result)
+/// `netray_runs_total{trigger}` summed over `outcome`.
+fn runs(s: &Acc, trigger: &str) -> u64 {
+    counter(s, RUNS, "trigger", trigger)
+}
+
+/// `netray_runs_total` over every trigger and outcome.
+fn runs_total(s: &Acc) -> u64 {
+    s.series()
+        .into_iter()
+        .filter(|t| t.name == RUNS)
+        .map(|t| t.counter)
+        .sum()
 }
 
 fn counter(s: &Acc, name: &str, label: &str, value: &str) -> u64 {
@@ -366,7 +376,8 @@ async fn admission_throttle_c5_dkim_request_is_never_a_hit_and_is_bound_by_the_m
     let (status, retry) = check(&app, "example.com", Some("x")).await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
     assert!(retry.is_some(), "429 carries Retry-After");
-    assert_eq!(requests(&snap, "cache_hit"), 0);
+    // The refused dkim request starts no run: only the first one counts.
+    assert_eq!(runs_total(&snap), 1);
     assert_eq!(rejections(&snap, "throttle"), 1);
 }
 
@@ -385,7 +396,9 @@ async fn admission_throttle_c8_a_run_ended_incomplete_10s_ago_answers_429_with_5
         (StatusCode::TOO_MANY_REQUESTS, Some("50".to_string()))
     );
     assert_eq!(rejections(&snap, "throttle"), 1);
-    assert_eq!(requests(&snap, "rate_limited"), 1);
+    // The refused request starts no run: only the first one counts.
+    assert_eq!(runs(&snap, "api"), 1);
+    assert_eq!(runs_total(&snap), 1);
 }
 
 #[tokio::test(start_paused = true)]
@@ -432,7 +445,7 @@ async fn admission_throttle_c11_a_run_started_by_the_badge_throttles_the_api() {
 }
 
 /// A throttled domain (its minute started by `/api/check`) asked for a badge: the SVG, its
-/// `Cache-Control` and the count of `lens_badge_requests_total{cache="throttled"}`.
+/// `Cache-Control` and the count of `netray_badge_requests_total{cache="throttled"}`.
 async fn throttled_badge(head_grade: Option<Grade>) -> (String, String, u64) {
     let recorder = DebuggingRecorder::new();
     let snap = Acc::new(recorder.snapshotter());

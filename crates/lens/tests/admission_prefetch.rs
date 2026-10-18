@@ -297,6 +297,31 @@ impl Acc {
             .copied()
             .unwrap_or(0)
     }
+
+    /// `netray_runs_total{trigger}` summed over `outcome`.
+    fn runs(&self, trigger: &str) -> u64 {
+        let needle = format!("trigger={trigger}");
+        self.counter_series("netray_runs_total")
+            .into_iter()
+            .filter(|(labels, _)| labels.split(',').any(|l| l == needle))
+            .map(|(_, n)| n)
+            .sum()
+    }
+
+    /// Accumulated `(labels, value)` pairs of every series named `name`.
+    fn counter_series(&self, name: &str) -> Vec<(String, u64)> {
+        self.counter(name, "", "");
+        let total = self.total.borrow();
+        let prefix = format!("{name}{{");
+        total
+            .iter()
+            .filter_map(|(k, n)| {
+                k.strip_prefix(&prefix)
+                    .and_then(|r| r.strip_suffix('}'))
+                    .map(|l| (l.to_string(), *n))
+            })
+            .collect()
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -389,10 +414,8 @@ async fn admission_prefetch_c8_a_prerender_request_joins_the_run_in_flight() {
     assert_eq!(plain.status, StatusCode::OK);
     assert_eq!(joined.status, StatusCode::OK, "the prefetch joined the run");
     assert_eq!(h.runs(), 1, "one run served both");
-    assert_eq!(
-        acc.counter("lens_check_requests_total", "result", "joined"),
-        1
-    );
+    // `joined` has no successor: the prefetch starts no run, so one run counts for both.
+    assert_eq!(acc.runs("api"), 1);
 }
 
 #[tokio::test(flavor = "multi_thread")]

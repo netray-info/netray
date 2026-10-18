@@ -20,36 +20,32 @@ wait_http "http://127.0.0.1:$p/health" 30 || fail "netray lens did not come up o
 
 body=$(curl -s --max-time 5 "http://127.0.0.1:$m/metrics") || fail "no metrics endpoint on $m"
 for series in \
-    'lens_check_requests_total{result="fresh"} 0' \
-    'lens_check_requests_total{result="cache_hit"} 0' \
-    'lens_check_requests_total{result="rate_limited"} 0' \
-    'lens_check_requests_total{result="joined"} 0' \
-    'lens_admission_rejections_total{reason="throttle"} 0' \
-    'lens_admission_rejections_total{reason="budget"} 0' \
-    'lens_admission_rejections_total{reason="limit"} 0' \
-    'lens_admission_rejections_total{reason="slots"} 0' \
-    'lens_badge_requests_total{cache="hit"} 0' \
-    'lens_badge_requests_total{cache="miss"} 0' \
-    'lens_badge_requests_total{cache="throttled"} 0' \
-    'lens_badge_requests_total{cache="failed"} 0' \
-    'lens_rate_limit_hits_total{scope="per_ip"} 0' \
-    'lens_rate_limit_hits_total{scope="global"} 0' \
-    'lens_rate_limit_hits_total{scope="badge"} 0' \
-    'lens_rate_limit_hits_total{scope="og"} 0' \
-    'lens_runs_in_flight 0'; do
+    'netray_admission_rejections_total{reason="throttle"} 0' \
+    'netray_admission_rejections_total{reason="budget"} 0' \
+    'netray_admission_rejections_total{reason="limit"} 0' \
+    'netray_admission_rejections_total{reason="slots"} 0' \
+    'netray_badge_requests_total{cache="hit"} 0' \
+    'netray_badge_requests_total{cache="miss"} 0' \
+    'netray_badge_requests_total{cache="throttled"} 0' \
+    'netray_badge_requests_total{cache="failed"} 0' \
+    'netray_rate_limit_hits_total{scope="per_ip"} 0' \
+    'netray_rate_limit_hits_total{scope="global"} 0' \
+    'netray_rate_limit_hits_total{scope="badge"} 0' \
+    'netray_rate_limit_hits_total{scope="og"} 0' \
+    'netray_runs_in_flight 0'; do
     printf '%s\n' "$body" | grep -qxF -- "$series" || fail "zero series missing before any request: $series"
 done
 
 curl -s -o /dev/null --max-time 30 "http://127.0.0.1:$p/api/check/example.com?sync=true"
 body=$(curl -s --max-time 5 "http://127.0.0.1:$m/metrics")
-printf '%s\n' "$body" | grep -qxF 'lens_check_requests_total{result="fresh"} 1' \
+printf '%s\n' "$body" | grep -qE '^netray_runs_total\{[^}]*trigger="api"[^}]*\} 1$' \
     || fail "fresh run not counted"
 for le in 0.5 1 2 5 10 15 20 30 +Inf; do
-    printf '%s\n' "$body" | grep -qF "lens_run_duration_seconds_bucket{le=\"$le\"} " \
-        || fail "lens_run_duration_seconds lacks bucket le=$le"
+    printf '%s\n' "$body" | grep -qF "netray_run_duration_seconds_bucket{le=\"$le\"} " \
+        || fail "netray_run_duration_seconds lacks bucket le=$le"
 done
-printf '%s\n' "$body" | grep -q '^lens_run_duration_seconds{quantile=' \
-    && fail "lens_run_duration_seconds renders as a summary"
-printf '%s\n' "$body" | grep -qxF 'lens_runs_in_flight 0' || fail "runs in flight not back at 0"
+printf '%s\n' "$body" | grep -q '^netray_run_duration_seconds{quantile=' \
+    && fail "netray_run_duration_seconds renders as a summary"
+printf '%s\n' "$body" | grep -qxF 'netray_runs_in_flight 0' || fail "runs in flight not back at 0"
 
 echo "PASS"
