@@ -1,5 +1,7 @@
 import { countdown } from "./countdown";
 import { dns } from "./dns";
+import { issues } from "./issues";
+import { recent } from "./recent";
 import { spectrum } from "./spectrum";
 import { status } from "./status";
 import { stream } from "./stream";
@@ -30,6 +32,8 @@ export function mount(root: ParentNode): void {
 register("stream", (el) => stream(el as HTMLFormElement, mount));
 register("countdown", countdown);
 register("dns", dns);
+register("issues", issues);
+register("recent", recent);
 register("spectrum", spectrum);
 register("status", status);
 register("theme", theme);

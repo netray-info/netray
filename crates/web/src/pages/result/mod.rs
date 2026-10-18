@@ -334,6 +334,7 @@ enum EvidenceInner {
 /// Everything the page shows apart from the frame, before it is rendered into parts.
 struct Shown {
     grade: Option<GradeView>,
+    date: Option<String>,
     run_line: RunLineBody,
     share: Option<String>,
     plate: String,
@@ -351,6 +352,7 @@ impl Shown {
     fn none() -> Self {
         Shown {
             grade: None,
+            date: None,
             run_line: RunLineBody::Text("not checked yet".to_string()),
             share: None,
             plate: String::new(),
@@ -509,6 +511,7 @@ fn stored_shown(entries: &[Entry], recorded: Option<&Recorded>) -> Option<Shown>
     };
     Some(Shown {
         grade: Some(grade_view(entry.grade)),
+        date: Some(views::run_date(entry.created_at)),
         run_line: RunLineBody::Line(entry_run_line(entry.created_at, &entry.id)),
         share: entry.run.complete.then(|| entry.id.clone()),
         plate,
@@ -586,6 +589,7 @@ fn not_stored_shown(
     let evidence = done_evidence(done, evidence::incomplete_run_line)?;
     Some(Shown {
         grade: Some(grade_view(grade)),
+        date: Some(views::run_date(now())),
         run_line: RunLineBody::Line(evidence::incomplete_run_line()),
         share: None,
         plate,
@@ -608,6 +612,7 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
     let evidence = done_evidence(done, evidence::live_run_line)?;
     Some(Shown {
         grade: Some(grade_view(done.grade)),
+        date: Some(views::run_date(now())),
         run_line: RunLineBody::Line(RunLineView {
             parts: vec![views::NOT_RECORDED.to_string()],
         }),
@@ -699,6 +704,7 @@ struct ProgressPart<'a> {
 #[template(path = "partials/result_grade.html")]
 struct GradePart<'a> {
     grade: &'a Option<GradeView>,
+    date: &'a Option<String>,
 }
 
 #[derive(Template)]
@@ -822,6 +828,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
         "result-grade",
         trimmed(&GradePart {
             grade: &shown.grade,
+            date: &shown.date,
         }),
     )?;
     let share = warn_render(

@@ -40,6 +40,7 @@ pub enum Grouping {
 pub struct IssueRow {
     pub view: CheckRowView,
     pub owner: &'static str,
+    pub owner_label: &'static str,
     pub severity: &'static str,
     pub protocol: &'static str,
     pub status: &'static str,
@@ -180,6 +181,7 @@ fn issue_row(
             guide_href: Some(spec.guide.clone()),
         },
         owner: owner_word(spec.fix_owner),
+        owner_label: owner_label(spec.fix_owner),
         severity: severity_word(spec.severity),
         protocol: spec.protocol.as_str(),
         status: if check.status == Status::Fail {
@@ -424,6 +426,12 @@ pub fn diff_view(diff: Option<&Diff>, catalogue: &Catalogue) -> DiffView {
 
 fn date_of(timestamp: i64) -> (u64, u8, u8) {
     epoch_days_to_ymd(timestamp.div_euclid(86_400).max(0) as u64)
+}
+
+/// The UTC date of `timestamp`, `YYYY-MM-DD`.
+pub fn run_date(timestamp: i64) -> String {
+    let (year, month, day) = date_of(timestamp);
+    format!("{year:04}-{month:02}-{day:02}")
 }
 
 fn month_day(timestamp: i64) -> String {

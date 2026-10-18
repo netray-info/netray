@@ -91,3 +91,16 @@ G1: C1–C5 (server markup first, then `islands/src/spectrum.ts`; the vitest tes
 7. Regenerate `islands/test/fixtures/result-{trace,fresh,stale}.html` and `result-run.sse` (`UPDATE_GOLDEN=1`), protected: `ADLC-Test-Change` per file.
 
 Decision: a check an entry lacks reads "not tested" in its line's sentence, over leaving the sentence empty: the layout mutes such a line, and every line's target then shows a sentence (implementer under the operator's autonomy mandate, 2026-10-19).
+
+## Phase 6 — Issues and recent islands
+
+### Groups
+
+G1: C1, C3, C4 · G2: C2, C5 · G3: C6 (budget only). G1 and G2 share one line each in `islands/src/main.ts`; they run one after the other.
+
+### Plan
+
+G1: `IssueRow.owner_label` from `owner_label(spec.fix_owner)` (views.rs); `data-owner-label` on `.issue` in `partials/result_issues.html`; `islands/src/issues.ts` (unhide the switch wrapper, regroup the same row nodes in fixed key order, severity → fail before warn → data-order, labels from the rows / values / protocol map, `aria-pressed`, `netray.grouping` in try/catch); `register("issues", issues)`.
+G2: `run_date(ts)` and `Shown.date` (stored: the entry's `created_at`; not-stored and unrecorded ends: now), `GradePart.date`; `#result-grade` carries `data-grade` and `data-date` when a grade shows; `data-island="recent"` on `#result`; `islands/src/recent.ts` (fresh page writes at mount; `netray:stream-end` listener re-reads `#result-grade`; skips `incomplete`; dedupe, newest first, at most 8; idle list renders `<li>` with link, grade, date and unhides; no fetch, beacon or cookie); `register("recent", recent)`.
+Fixtures regenerated after each group (`UPDATE_GOLDEN=1`; `result-issues.html`, `result-trace.html`, `result-fresh.html`, `result-stale.html`, `result-run.sse`), each under `ADLC-Test-Change`.
+G3: none; `budget.test.ts` passes (3.5 KB of 30 KB gzipped today).

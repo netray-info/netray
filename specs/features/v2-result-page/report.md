@@ -219,3 +219,34 @@ The line targets are HTML spans over the plate, not SVG rects: happy-dom's SVG e
 ### Behavioural verification
 
 skipped: the island runs in a browser; vitest drives it over the Rust-rendered `result-trace.html`, and Phase 8's Playwright run pins and steps a run on the seeded stack.
+
+## Phase 6 — Issues and recent islands
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: the issues island regroups rows in place from their attributes with no request, stores the choice under netray.grouping with every access in try/catch, applies a stored choice on load, unhides the grouping switch and marks the pressed option | green | crates/web/islands/test/issues.test.ts, crates/web/tests/result_page_islands_markup.rs |
+| C2 | R25: the recent island writes domain, grade and date to netray.recent when a page shows a final grade (fresh page or stream end), newest first, one per domain, at most 8; the idle page renders the list with grade and date; it sends nothing and sets no cookie; when storage fails the list stays hidden | green | crates/web/islands/test/recent.test.ts, crates/web/tests/result_page_islands_markup.rs |
+| C3 | GIVEN the default grouping WHEN severity is pressed THEN rows regroup critical to low with no request and netray.grouping is severity; GIVEN a reload THEN severity is applied | green | crates/web/islands/test/issues.test.ts |
+| C4 | GIVEN localStorage throws WHEN the island loads THEN the default grouping stays and nothing throws | green | crates/web/islands/test/issues.test.ts |
+| C5 | GIVEN nine result pages shown WHEN the idle page loads THEN eight recent domains are listed, newest first, one per domain, and no request was made | green | crates/web/islands/test/recent.test.ts |
+| C6 | GIVEN the bundle with all islands of this feature WHEN v2-pages' size test runs THEN it passes | already_implemented | crates/web/islands/test/budget.test.ts |
+
+C6 holds by v2-pages' existing `budget.test.ts`: the bundle with every island of this feature is 4.4 KB of 30 KB gzipped.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 issues, G2 recent (one coder, in order) | 5 | sonnet | 70298 | 218 |
+
+Node 26's global `localStorage` getter shadowed happy-dom's, so both new vitest files failed in their setup; they now install per-test storage stubs as `theme.test.ts` does (fbc35a69).
+
+### Review
+
+No finding: regrouping reproduces the server's owner grouping, the islands remount on new fragments, the recent list renders through text nodes and caps at eight.
+
+### Behavioural verification
+
+skipped: the islands run in a browser; vitest drives them over the Rust-rendered `result-issues.html`, and Phase 8's Playwright run groups by severity and fills the idle page's recent list on the seeded stack.
