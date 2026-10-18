@@ -113,6 +113,15 @@ startup_rejects=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_per_minute = 601\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 50\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 101\\n\\n[site]|"
+    # specs/features/v2-api Phase 5: [api.tls] / [api.http] limits
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_target_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_target_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_target_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_target_burst = 0\\n\\n[site]|"
 )
 n=0
 for row in "${startup_rejects[@]}"; do
@@ -126,13 +135,14 @@ for row in "${startup_rejects[@]}"; do
     fi
     run_check "$sub" "$tmp/$sub.reject$n.toml"
     [ "$rc" -eq 1 ] || fail "$sub: startup-rejected value ($expr) exited $rc, expected 1"
-    # An `[api.ip]` row must be refused by its rule, not as an unknown field: the output names
-    # the key and does not say "unknown field".
-    if [[ "$expr" == *'[api.ip]'* ]]; then
+    # An `[api.ip]`, `[api.tls]` or `[api.http]` row must be refused by its rule, not as an
+    # unknown field: the output names the key and does not say "unknown field".
+    if [[ "$expr" =~ \[api\.(ip|tls|http)\] ]]; then
+        section="${BASH_REMATCH[1]}"
         key="${expr#*\\n}"
         key="${key%% =*}"
-        grep -qF "api.ip.$key" <<<"$out" || fail "lens: [api.ip] $key row error does not name api.ip.$key ($out)"
-        ! grep -qi 'unknown field' <<<"$out" || fail "lens: [api.ip] $key row was refused as an unknown field ($out)"
+        grep -qF "api.$section.$key" <<<"$out" || fail "lens: [api.$section] $key row error does not name api.$section.$key ($out)"
+        ! grep -qi 'unknown field' <<<"$out" || fail "lens: [api.$section] $key row was refused as an unknown field ($out)"
     fi
 done
 
