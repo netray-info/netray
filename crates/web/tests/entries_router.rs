@@ -218,8 +218,8 @@ async fn c16_unmatched_and_malformed_paths_answer_404_with_the_not_found_body() 
         "/r/%C0".to_string(),
         "/r/".to_string(),
         "/r/AAAAAAAA/".to_string(),
-        "/r/a/b".to_string(),
-        format!("/r/{id}/other"),
+        "/r/a/b/c".to_string(),
+        format!("/r/{id}/other/x"),
     ];
     for path in paths {
         let (status, _, body) = get(&app, &path).await;

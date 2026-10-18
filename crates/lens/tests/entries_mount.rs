@@ -246,8 +246,8 @@ async fn history_enabled_mounts_entries_router() {
     let gone = get(&w.app, "/r/AAAAAAAA").await;
     assert_eq!(gone.status, StatusCode::GONE);
 
-    // The entries router's catch-all answers 404 with the shared body.
-    let rest = get(&w.app, &format!("/r/{id}/whatever")).await;
+    // The entries router's catch-all (`/r/{id}/{segment}/{*rest}`) answers 404 with the shared body.
+    let rest = get(&w.app, &format!("/r/{id}/whatever/x")).await;
     assert_eq!(rest.status, StatusCode::NOT_FOUND);
     assert_eq!(rest.body, NOT_FOUND_HTML);
 }
