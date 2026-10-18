@@ -13,7 +13,7 @@ use super::headers::secure;
 use super::{Frame, page};
 use crate::components::QueryInputView;
 
-const LOCATION_SET: &AsciiSet = &NON_ALPHANUMERIC
+pub(super) const LOCATION_SET: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'.')
     .remove(b'-')
     .remove(b'_')

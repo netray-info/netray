@@ -224,12 +224,19 @@ pub fn app(state: state::AppState) -> Router {
 
     let entry_routes = match &state.history_store {
         Some(history) if config.history.enabled => {
+            let v1 = (config.snapshots.enabled && state.snapshot_store.is_some())
+                .then(|| routes::v1_lookup(state.clone()));
             netray_web::entries::router(netray_web::entries::EntriesDeps {
                 history: history.clone(),
-                v1: (config.snapshots.enabled && state.snapshot_store.is_some())
-                    .then(|| routes::v1_lookup(state.clone())),
+                v1: v1.clone(),
                 card: og::handler::entry_card_renderer(&state),
             })
+            .merge(netray_web::pages::evidence_router(
+                netray_web::pages::EvidenceDeps {
+                    history: history.clone(),
+                    v1,
+                },
+            ))
         }
         _ if config.snapshots.enabled => routes::snapshot_router().with_state(state.clone()),
         _ => Router::new(),

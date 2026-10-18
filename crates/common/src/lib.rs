@@ -22,6 +22,7 @@ pub mod backend;
 pub mod config;
 #[cfg(feature = "cors")]
 pub mod cors;
+pub mod domain;
 pub mod ecosystem;
 #[cfg(feature = "enrichment")]
 pub mod enrichment;

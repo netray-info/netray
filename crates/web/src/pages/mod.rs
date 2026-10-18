@@ -4,6 +4,7 @@
 mod assets;
 pub mod compare;
 mod errors;
+mod evidence;
 pub mod guides;
 mod headers;
 mod jsonld;
@@ -17,6 +18,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 
 pub use errors::{not_found, query_redirect, server_error};
+pub use evidence::{EvidenceDeps, evidence_router};
 
 /// The speculation rules every page embeds; the CSP allows exactly their hash.
 pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"}]},"eagerness":"moderate"}]}"#;

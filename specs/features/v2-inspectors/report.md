@@ -104,3 +104,48 @@ skipped: Phase 3 adds a pure link-derivation module; Phase 4 renders the links o
 ### Verify
 
 `adlc verify`: verified.
+
+## Phase 4 — Evidence view routes
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6: five literal routes `/{domain}/{dns,tls,http,email,ip}` and `/r/{id}/{segment}` on netray-web's router (malformed `404`, entry `200`, live V1 snapshot ID `404`, else `410`, failed lookup `500`); `entries::router` narrowed to `/r/{id}/{segment}/{*rest}`; mounted by lens only with `entries::router`; no run, no store write | green | crates/web/tests/evidence_routes.rs, entries_router.rs (c16 rows) |
+| C2 | S: one `example.com` entry → `GET /example.com/tls` `200` with its TLS view | green | crates/web/tests/evidence_latest.rs |
+| C3 | S: `GET /Example.COM./tls` → the same view as `/example.com/tls` | green | crates/web/tests/evidence_latest.rs |
+| C4 | S: no entry → `GET /example.com/dns` `404` linking `/example.com` | green | crates/web/tests/evidence_latest_missing.rs |
+| C5 | S: `/r/<id>/email` `200`; well-formed unknown ID `410`; `/r/abc/tls` `404`; failing store `500` | green | crates/web/tests/evidence_entry.rs |
+| C6 | S: `/r/<id>/smtp` `404` with v2-pages' page; lens merged, history on: `/example.com/smtp` → SPA shell | green | crates/web/tests/evidence_unknown_segment.rs, crates/lens/tests/evidence_spa_fallthrough.rs |
+| C7 | S: lens merged, history on: `/assets/index-<hash>.js` served by the SPA handler with its type and immutable cache | green | crates/lens/tests/evidence_assets.rs |
+| C8 | S: lens merged: `/r/<id>`, `/r/<id>/og.png`, `/r/<id>/tls` each answered by its handler, no route conflict; `/r/<id>/tls/x` `404` | green | crates/lens/tests/evidence_mount.rs |
+| C9 | S: lens history off, snapshots on: `/r/<snapshot id>/tls` answers as before (`snapshot_router`'s `404`) | already_implemented | crates/lens/tests/evidence_snapshots_only.rs |
+| C10 | S: any evidence route request leaves entry count and every `last_seen_at` unchanged | green | crates/web/tests/evidence_readonly.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 54777 | 110 |
+| G2 | 1 | sonnet | 27537 | 51 |
+| review fix | 1 | sonnet | 38837 | 73 |
+
+### Review
+
+Pass 1: BLOCKER non-UTF-8 path segments answered axum's `400` (fixed: `PathRejection` → 404 page); BLOCKER a failed V1 lookup answered `404` (fixed: 5xx → `500`); BLOCKER the domain segment used the `?d=` normaliser, not lens's `validate_domain` rule (fixed: rule moved to `netray_common::domain::validate`, lens wraps it); BLOCKER the no-entry link put a raw domain in `href` (`/\evil.com`; fixed: percent-encoded); AMENDMENT `/r/{id}/{segment}/` reached the SPA (repaired in phase: route added, requirement 6 amended). Regression tests: `crates/web/tests/evidence_review.rs`. Pass 2: no BLOCKER, no AMENDMENT; DEFERRED the no-entry page's `/<domain>` link reaches the V1 SPA until v2-result-page serves `/{domain}` (requirement 6 names the target).
+
+### Behavioural verification
+
+`target/debug/netray lens` with `crates/lens/lens.dev.toml`, an empty temporary `history.db` (history on), on 127.0.0.1:18431; `curl -s -w '%{http_code}'` per path:
+
+```
+/example.com/tls 404 text/html; charset=utf-8 | <h1>No entry for example.com</h1> href="/example.com"
+/Example.COM./dns 404 text/html; charset=utf-8 | <h1>No entry for example.com</h1> href="/example.com"
+/r/AAAAAAAA/tls 410 text/html; charset=utf-8 | <h1>This entry has expired</h1>
+/r/abc/tls 404 text/html; charset=utf-8 | <h1>Nothing here</h1>
+/r/AAAAAAAA/smtp 404 text/html; charset=utf-8 | <h1>Nothing here</h1>
+/example.com/smtp 200 text/html; charset=utf-8 | <div id="root">   (SPA shell)
+/r/AAAAAAAA/tls/x 404 text/html; charset=utf-8 | <h1>Snapshot not found</h1>   (narrowed entries catch-all)
+```
+
+A `200` view of a stored entry is covered by `evidence_latest.rs`, `evidence_entry.rs` and `evidence_mount.rs`; the seed that puts an entry into a running stack is Phase 8.

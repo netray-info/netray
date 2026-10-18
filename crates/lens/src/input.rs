@@ -1,5 +1,3 @@
-use std::net::IpAddr;
-
 use crate::error::AppError;
 
 /// Validate and normalize a domain name input string.
@@ -15,55 +13,7 @@ use crate::error::AppError;
 /// Does NOT perform DNS resolution. Target IP policy checks happen after
 /// resolution in the check orchestration layer.
 pub fn validate_domain(input: &str) -> Result<String, AppError> {
-    let trimmed = input.trim();
-
-    if trimmed.is_empty() {
-        return Err(AppError::DomainInvalid(
-            "domain must not be empty".to_string(),
-        ));
-    }
-
-    // Reject bare IP addresses.
-    if trimmed.parse::<IpAddr>().is_ok() {
-        return Err(AppError::DomainInvalid(format!(
-            "IP addresses are not accepted as domain input: {trimmed}"
-        )));
-    }
-
-    let lower = trimmed.to_lowercase();
-
-    // Reject wildcards.
-    if lower.starts_with('*') {
-        return Err(AppError::DomainInvalid(
-            "wildcard domains are not accepted".to_string(),
-        ));
-    }
-
-    // Strip trailing dot before length checks (FQDN notation is fine, normalize it away).
-    let domain = lower.strip_suffix('.').unwrap_or(&lower);
-
-    if domain.len() > 253 {
-        return Err(AppError::DomainInvalid(format!(
-            "domain exceeds 253 characters (got {})",
-            domain.len()
-        )));
-    }
-
-    // Validate each label.
-    for label in domain.split('.') {
-        if label.len() > 63 {
-            return Err(AppError::DomainInvalid(format!(
-                "label exceeds 63 characters: {label}"
-            )));
-        }
-        if label.is_empty() {
-            return Err(AppError::DomainInvalid(
-                "domain contains an empty label".to_string(),
-            ));
-        }
-    }
-
-    Ok(domain.to_string())
+    netray_common::domain::validate(input).map_err(AppError::DomainInvalid)
 }
 
 #[cfg(test)]

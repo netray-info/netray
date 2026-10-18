@@ -48,3 +48,31 @@ G1: C1–C7 — one new file, `crates/web/src/explore.rs`.
 3. `crates/web/src/lib.rs`: `pub mod explore;`.
 
 Gotcha: no `Router` word in explore.rs (`test_web_crate.sh`).
+
+## Phase 4 — Evidence view routes
+
+## Groups
+
+G1: C2, C3, C4, C5, C10 (C6's netray-web half goes green with it) · G2: C1, C6, C7, C8 · C9 already_implemented: G2 leaves lens's snapshot arm untouched. G2 depends on G1 (`evidence_router`).
+
+## Plan
+
+### G1
+
+1. `crates/web/src/pages/errors.rs`: `normalise` `pub(super)`, reused for the domain segment (trim, lowercase, one trailing dot dropped, must contain a dot).
+2. `crates/web/templates/pages/evidence.html` (new): extends `base.html`; entry branch renders the pre-rendered section (`render_section(&entry_section(..))`) and one `<a>` per `explore::view_links` link (class `evidence-view__explore`, not a gate component root); missing branch links `/<domain>`. No codename, no "lens".
+3. `crates/web/src/pages/evidence.rs` (new): `EvidenceDeps { history, v1 }`, `evidence_router`; five literal routes `/{domain}/{dns,tls,http,email,ip}` and `/r/{id}/{segment}`, no fallback. Latest: normalise → `HistoryStore::latest` → `Err` 500, `Some` 200 (`no-cache`), `None` 404 (`no-store`) linking `/<domain>`. Entry: segment one of five else `not_found()`; `well_formed` else `not_found()`; `get` → `Err` 500, `Some` 200 (`public, max-age=3600`), `None` → v1 `Some(_)` → `not_found()`, else 410 `entries::render::gone()`. No store write, no run.
+4. `crates/web/src/pages/mod.rs`: `mod evidence; pub use evidence::{EvidenceDeps, evidence_router};`.
+
+### G2
+
+1. `crates/web/src/entries/routes.rs` `router`: `/r/{id}/{*rest}` → `/r/{id}/{segment}/{*rest}`; doc comment updated.
+2. `crates/lens/src/lib.rs` `app`: in the `[history] enabled` arm compute the V1 lookup once and merge `netray_web::pages::evidence_router(EvidenceDeps { history, v1 })` beside `entries::router`; snapshot and empty arms unchanged.
+
+Protected tests moved to three segments under `ADLC-Test-Change` in the test commit: `crates/web/tests/entries_router.rs` (c16), `crates/web/tests/entries_og.rs` (c7), `crates/lens/tests/entries_mount.rs` (`history_enabled_mounts_entries_router`).
+
+Risk noted: with lens mounted, a dotless first segment (`/api/dns`) now matches `/{domain}/dns` and answers the 404 page instead of the SPA shell; requirement 6 gives these five literal second segments to this router.
+
+### Review fix
+
+`crates/common/src/domain.rs` (`validate`, lens's `validate_domain` rule; `crates/lens/src/input.rs` wraps it) replaces `normalise` in the latest handler; both handlers answer the 404 page on a `PathRejection`; a 5xx V1 answer is `500`; the no-entry href is percent-encoded with `errors::LOCATION_SET`; `entries::router` adds `/r/{id}/{segment}/`.
