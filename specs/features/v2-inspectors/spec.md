@@ -381,6 +381,9 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
   `GET /api/v1/ip/{address}` does, over charging nothing for refused input: one limiter, one rule
   (review of Phase 6; implementer under the operator's autonomy mandate, 2026-10-18).
 - The HTTP inspector validates with the job function's `parse_url` (`https://` or a bare host, `http://` refused with "Submit the URL with https:// scheme; port-80 probing is automatic."), over accepting `http://` as requirement 16's "any `http` or `https` URL" reads: v1 and the V1 page refuse it the same way, the port-80 probe already reports the plain-HTTP side, and requirement 10 shows the job function's own validation message (implementer under the operator's autonomy mandate, 2026-10-18).
+- feature/v2-api merged before Phase 7 at `eaaf3037` (its Phase 7 DNS jobs, `3638a083`, and a
+  README commit), over waiting for v2-api to land on main: Phase 7 needs the DNS job functions,
+  and the gate is green on the merge (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 
