@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block head %}{% for json in ld %}<script type="application/ld+json">{{ json|safe }}</script>
+{% endfor %}{% endblock %}
+{% block main %}
+<h1>All Guides</h1>
+<p class="guide-lede">Reference guides, how-tos, and deep dives on DNS, TLS, IP, and email security.</p>
+<div class="guide-index">
+{% for (category, guides) in categories %}<section>
+<h2>{{ category }}</h2>
+<ul>
+{% for g in guides %}<li><a href="https://netray.info/guide/{{ g.slug }}">{{ g.title }}</a> — {{ g.description }}</li>
+{% endfor %}</ul>
+</section>
+{% endfor %}</div>
+{% endblock %}

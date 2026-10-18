@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 160">
+<svg id="netray-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 160">
 <title>netray</title>
 <style>
-text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 100px }
-text, rect { fill: #0f1216 }
+#netray-logo text { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 100px }
+#netray-logo text, #netray-logo rect { fill: #0f1216 }
 @media (prefers-color-scheme: dark) {
-text, rect { fill: #e7e9ec }
+#netray-logo text, #netray-logo rect { fill: #e7e9ec }
 }
 </style>
 <text x="0" y="93" font-weight="400" textLength="125" lengthAdjust="spacingAndGlyphs">net</text>

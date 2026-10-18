@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% import "components/query_input.html" as c %}
+{% block main %}
+<h1>Nothing here</h1>
+{% call c::query_input(query) %}{% endcall %}
+{% if invalid %}
+<p>
+Enter a domain name, e.g. example.com.
+</p>
+{% endif %}
+<p><a href="/guide/">Read the guide</a> or <a href="/compare">compare the tools</a>.</p>
+{% endblock %}

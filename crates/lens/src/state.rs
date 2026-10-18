@@ -20,7 +20,6 @@ use crate::check::CheckOutput;
 use crate::config::Config;
 use crate::modules::ModuleSection;
 use crate::security::rate_limit::{GlobalRateLimiter, PerIpRateLimiter};
-use crate::spa::{Assets, render_apex_html};
 
 /// Per-client GCRA budget of fresh runs, keyed by client address.
 pub type ClientBudgetLimiter = KeyedLimiter<IpAddr>;
@@ -171,10 +170,7 @@ impl AppState {
             });
         }
 
-        let rendered_html = Assets::get("index.html").map(|f| {
-            let template = std::str::from_utf8(&f.data).unwrap_or("").to_string();
-            Arc::new(render_apex_html(&template, &config.site))
-        });
+        let rendered_html = crate::spa::render_shell(&config.site);
 
         let font_db = crate::og::fonts::init_font_db();
 

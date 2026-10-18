@@ -85,7 +85,8 @@ fn page_templates_extend_base_and_use_only_component_macros() {
         );
     }
 
-    // No new stylesheet: base.css plus the ten component sheets, nothing else.
+    // No new stylesheet: base.css plus the ten component sheets, and v2-pages' pages.css
+    // (v2-pages requirement 10), nothing else.
     let mut sheets: Vec<String> = std::fs::read_dir(root().join("static"))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
@@ -93,6 +94,7 @@ fn page_templates_extend_base_and_use_only_component_macros() {
         .collect();
     sheets.sort();
     let mut want: Vec<String> = SHEETS.iter().map(|s| format!("{s}.css")).collect();
+    want.push("pages.css".to_string());
     want.sort();
     assert_eq!(sheets, want);
 }

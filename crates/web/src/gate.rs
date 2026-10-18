@@ -1,6 +1,6 @@
 //! The design-system gate (SDD §8.5): scans the view layer's templates, stylesheets and islands
 //! for colour, radius, font and line-width literals outside the tokens, for a second
-//! implementation of an R44 component, and for inline scripts.
+//! implementation of an R44 component, for inline scripts (the speculation rules and `application/ld+json` data blocks pass), and for style writes in an island.
 //!
 //! Every file is reduced to the text a rule may look at before it is scanned: comments are
 //! blanked (same length, so offsets and line numbers stay true), and a template is cut into its
@@ -16,7 +16,7 @@ use crate::tokens;
 pub const TOKEN_RULE: u8 = 1;
 /// Rule 2: an R44 component's class outside its own macro file or stylesheet.
 pub const OWNERSHIP_RULE: u8 = 2;
-/// Rule 3: an inline script other than the speculation rules.
+/// Rule 3: an inline script other than the speculation rules or an `application/ld+json` data block.
 pub const SCRIPT_RULE: u8 = 3;
 
 /// The R44 components; a component's CSS class is its name with `_` turned into `-`.
@@ -177,7 +177,7 @@ impl Tokens {
 }
 
 /// Scans `templates/**/*.html`, `static/**/*.css` and `islands/**/*.ts` under `root`; a missing
-/// directory is empty and SVGs are never scanned.
+/// directory is empty, `node_modules` is skipped, and SVGs are never scanned.
 pub fn check(root: &Path) -> Report {
     let tokens = Tokens::load(tokens::CSS);
     let mut report = Report {
@@ -205,6 +205,9 @@ fn walk(dir: &Path, ext: &str, out: &mut Vec<PathBuf>) {
     };
     for path in entries.flatten().map(|e| e.path()) {
         if path.is_dir() {
+            if path.file_name().is_some_and(|n| n == "node_modules") {
+                continue;
+            }
             walk(&path, ext, out);
         } else if path.extension().is_some_and(|e| e == ext) {
             out.push(path);
@@ -333,6 +336,8 @@ struct Attr<'a> {
     name: String,
     /// Offset and content of the value, if there is one.
     value: Option<(usize, &'a str)>,
+    /// Whether the value sits in quotes; false for a value span and an unquoted value.
+    quoted: bool,
 }
 
 struct Tag<'a> {
@@ -343,6 +348,8 @@ struct Tag<'a> {
     attrs: Vec<Attr<'a>>,
     /// Offset and content of a `<style>` or `<script>` element's body.
     body: Option<(usize, &'a str)>,
+    /// Offset and attribute name of each askama span misplaced in an unquoted value.
+    refused: Vec<(usize, String)>,
 }
 
 impl<'a> Tag<'a> {
@@ -356,8 +363,10 @@ impl<'a> Tag<'a> {
     }
 }
 
-/// Every start tag in `text`; the body of a `<style>` or `<script>` is not scanned for tags.
-fn tags(text: &str) -> Vec<Tag<'_>> {
+/// Every start tag in `text`; the body of a `<style>` or `<script>` is not scanned for tags. A tag
+/// holding an unquoted leading value span comes twice: once more read with the span blanked, as it
+/// renders when the span is empty.
+fn tags<'a>(text: &'a str, askama: &[Span]) -> Vec<Tag<'a>> {
     let (bytes, mut out, mut i) = (text.as_bytes(), Vec::new(), 0);
     while let Some(start) = text[i..].find('<').map(|n| i + n) {
         let name_at = start + 1;
@@ -371,10 +380,12 @@ fn tags(text: &str) -> Vec<Tag<'_>> {
         let name = text[name_at..name_at + name_len].to_ascii_lowercase();
         let attrs_at = name_at + name_len;
         let end = tag_end(text, attrs_at);
+        let (attrs, refused, dual) = parse_attrs(text, attrs_at, end, askama);
         let mut tag = Tag {
-            attrs: parse_attrs(text, attrs_at, end),
+            attrs,
             body: None,
             name,
+            refused,
             start,
         };
         i = (end + 1).min(text.len());
@@ -386,6 +397,15 @@ fn tags(text: &str) -> Vec<Tag<'_>> {
                 .map_or(text.len(), |n| i + n);
             tag.body = Some((i, &text[i..body_end]));
             i = body_end;
+        }
+        if dual {
+            out.push(Tag {
+                attrs: parse_attrs(text, attrs_at, end, &[]).0,
+                body: tag.body,
+                name: tag.name.clone(),
+                refused: Vec::new(),
+                start,
+            });
         }
         out.push(tag);
     }
@@ -406,8 +426,18 @@ fn tag_end(text: &str, from: usize) -> usize {
     text.len()
 }
 
-fn parse_attrs(text: &str, from: usize, to: usize) -> Vec<Attr<'_>> {
-    let (bytes, mut out, mut i) = (text.as_bytes(), Vec::new(), from);
+/// The attributes between `from` and `to`, the askama spans misplaced in an unquoted value (a
+/// transparent span starting one, any span glued to its end, and any byte but whitespace or a `/`
+/// before `>` glued to the end of a value span), and whether a value span starts one.
+fn parse_attrs<'a>(
+    text: &'a str,
+    from: usize,
+    to: usize,
+    askama: &[Span],
+) -> (Vec<Attr<'a>>, Vec<(usize, String)>, bool) {
+    let (bytes, mut out, mut refused, mut i) = (text.as_bytes(), Vec::new(), Vec::new(), from);
+    let mut dual = false;
+    let span_at = |at: usize| askama.iter().find(|&&(s, _, _)| s == at).copied();
     let skip_space = |mut j: usize| {
         while j < to && bytes[j].is_ascii_whitespace() {
             j += 1;
@@ -426,39 +456,97 @@ fn parse_attrs(text: &str, from: usize, to: usize) -> Vec<Attr<'_>> {
         let name = text[name_at..i].to_ascii_lowercase();
         let eq = skip_space(i);
         if eq >= to || bytes[eq] != b'=' {
-            out.push(Attr { name, value: None });
+            out.push(Attr {
+                name,
+                quoted: false,
+                value: None,
+            });
             continue;
         }
         let at = skip_space(eq + 1);
-        let (value_at, value_end) = if at < to && matches!(bytes[at], b'"' | b'\'') {
-            let end = text[at + 1..to]
-                .find(char::from(bytes[at]))
-                .map_or(to, |n| at + 1 + n);
-            i = (end + 1).min(to);
-            (at + 1, end)
-        } else {
-            i = at;
-            while i < to && !bytes[i].is_ascii_whitespace() {
-                i += 1;
+        let first = askama
+            .iter()
+            .filter(|&&(s, _, _)| s > eq && s < to && text[eq + 1..s].trim().is_empty())
+            .min_by_key(|&&(s, _, _)| s)
+            .copied();
+        let mut quoted = false;
+        let (value_at, value_end) = match first {
+            Some((s, e, true)) => {
+                i = e.min(to);
+                dual = true;
+                if i < to
+                    && (span_at(i).is_some()
+                        || !(bytes[i].is_ascii_whitespace() || (bytes[i] == b'/' && i + 1 == to)))
+                {
+                    refused.push((i, name.clone()));
+                }
+                (s, i)
             }
-            (at, i)
+            other => {
+                if let Some((s, _, _)) = other {
+                    refused.push((s, name.clone()));
+                }
+                if at < to && matches!(bytes[at], b'"' | b'\'') {
+                    let end = text[at + 1..to]
+                        .find(char::from(bytes[at]))
+                        .map_or(to, |n| at + 1 + n);
+                    i = (end + 1).min(to);
+                    quoted = true;
+                    (at + 1, end)
+                } else {
+                    i = at;
+                    while i < to && !bytes[i].is_ascii_whitespace() {
+                        i += 1;
+                    }
+                    if i > at && span_at(i).is_some() {
+                        refused.push((i, name.clone()));
+                    }
+                    (at, i)
+                }
+            }
         };
         out.push(Attr {
             name,
+            quoted,
             value: Some((value_at, &text[value_at..value_end])),
         });
     }
-    out
+    (out, refused, dual)
 }
+
+/// An askama span: `(start, end, value)`. A value span (`{{ … }}`, `{% include … %}`) renders
+/// text; any other span renders nothing.
+type Span = (usize, usize, bool);
 
 fn scan_template(rel: &Path, raw: &str, tokens: &Tokens, out: &mut Vec<Finding>) {
     let mut text = blank(raw, "<!--", "-->", ' ');
-    let mut askama = Vec::new();
+    let mut askama: Vec<Span> = Vec::new();
     for (open, close) in [("{#", "#}"), ("{{", "}}"), ("{%", "%}")] {
-        askama.extend(spans(&text, open, close));
+        askama.extend(spans(&text, open, close).into_iter().map(|(s, e)| {
+            let value = match open {
+                "{{" => true,
+                "{%" => text[s + 2..e]
+                    .trim_start_matches(['-', '+', '~'])
+                    .trim_start()
+                    .starts_with("include"),
+                _ => false,
+            };
+            (s, e, value)
+        }));
         text = blank(&text, open, close, ' ');
     }
-    for tag in tags(&text) {
+    let from = out.len();
+    for tag in tags(&text, &askama) {
+        for (at, name) in &tag.refused {
+            out.push((
+                SCRIPT_RULE,
+                *at,
+                format!(
+                    "askama span misplaced in the unquoted `{name}` value: control flow and \
+                     comments go inside a quoted value"
+                ),
+            ));
+        }
         for (at, value) in tag.values("style") {
             scan_css_region(value, at, tokens, out);
         }
@@ -498,12 +586,17 @@ fn scan_template(rel: &Path, raw: &str, tokens: &Tokens, out: &mut Vec<Finding>)
             }
         }
         for name in ["href", "src", "action", "formaction", "xlink:href"] {
-            for (_, value) in tag.values(name) {
-                if value
-                    .trim_start()
-                    .to_ascii_lowercase()
-                    .starts_with("javascript:")
-                {
+            for attr in tag.attrs.iter().filter(|a| a.name == name) {
+                let Some((_, value)) = attr.value else {
+                    continue;
+                };
+                let lower = value.to_ascii_lowercase();
+                let hit = if attr.quoted {
+                    lower.contains("javascript:")
+                } else {
+                    lower.trim_start().starts_with("javascript:")
+                };
+                if hit {
                     out.push((
                         SCRIPT_RULE,
                         tag.start,
@@ -515,21 +608,27 @@ fn scan_template(rel: &Path, raw: &str, tokens: &Tokens, out: &mut Vec<Finding>)
         if tag.name == "script" {
             let has_src = tag.values("src").any(|(at, v)| {
                 !v.trim().is_empty()
-                    || askama.iter().any(|&(s, e)| {
+                    || askama.iter().any(|&(s, e, _)| {
                         (s < at + v.len() && at < e)
                             || (e <= at
                                 && text[e..at].trim().is_empty()
                                 && text[..s].trim_end().ends_with('='))
                     })
             });
-            let speculation = tag
-                .values("type")
-                .any(|(_, v)| v.trim().eq_ignore_ascii_case("speculationrules"));
+            let speculation = tag.values("type").any(|(at, v)| {
+                let word = v.trim();
+                (word.eq_ignore_ascii_case("speculationrules")
+                    || word.eq_ignore_ascii_case("application/ld+json"))
+                    && !askama.iter().any(|&(s, e, _)| s < at + v.len() && at < e)
+            });
             if !has_src && !speculation {
                 out.push((SCRIPT_RULE, tag.start, "inline `<script>`".to_string()));
             }
         }
     }
+    let mut seen = HashSet::new();
+    let found = out.split_off(from);
+    out.extend(found.into_iter().filter(|f| seen.insert(f.clone())));
 }
 
 /// Whether an attribute name has the shape of an event handler: `on` and three or more lower
@@ -684,7 +783,7 @@ fn mask_urls(text: &str) -> (String, Vec<(usize, &str)>) {
 /// The colours a data URI's text holds: SVG colour attributes and `style` attributes.
 fn data_uri_colours(uri: &str) -> Vec<String> {
     let mut out = Vec::new();
-    for tag in tags(uri) {
+    for tag in tags(uri, &[]) {
         for attr in SVG_COLOUR_ATTRS {
             for (_, value) in tag.values(attr) {
                 out.extend(colour_hits(value, true).into_iter().map(|(_, l)| l));
@@ -917,9 +1016,12 @@ fn token_findings(prop: &str, value: &str, at: usize, tokens: &Tokens, out: &mut
 // Islands
 // ---------------------------------------------------------------------------------------------
 
-/// Rule 1 for an island: its string literals are scanned for colours, its comments never.
+/// Rule 1 for an island: its string literals are scanned for colours and its code for style
+/// writes; its comments never.
 fn scan_island(text: &str, out: &mut Vec<Finding>) {
-    for (at, string) in lex(text, true).1 {
+    let (code, strings) = lex(text, true);
+    out.extend(style_writes(&code));
+    for (at, string) in strings {
         for lit in island_colours(string) {
             out.push((
                 TOKEN_RULE,
@@ -928,6 +1030,40 @@ fn scan_island(text: &str, out: &mut Vec<Finding>) {
             ));
         }
     }
+}
+
+/// The style writes in comment-blanked island code: a `.style` member, `cssText`,
+/// `setProperty(`, `insertRule(` and `setAttribute("style", …)`.
+fn style_writes(code: &str) -> Vec<Finding> {
+    let ident = |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '$';
+    let mut out = Vec::new();
+    for (at, _) in code.match_indices(".style") {
+        if !code[at + 6..].chars().next().is_some_and(ident) {
+            out.push((TOKEN_RULE, at, "style member in an island".to_string()));
+        }
+    }
+    for (at, _) in code.match_indices("cssText") {
+        let before = code[..at].chars().next_back().is_some_and(ident);
+        if !before && !code[at + 7..].chars().next().is_some_and(ident) {
+            out.push((TOKEN_RULE, at, "`cssText` in an island".to_string()));
+        }
+    }
+    for call in ["setProperty(", "insertRule("] {
+        for (at, _) in code.match_indices(call) {
+            out.push((TOKEN_RULE, at, format!("`{call}` in an island")));
+        }
+    }
+    for (at, _) in code.match_indices("setAttribute(") {
+        let arg = code[at + 13..].trim_start();
+        if arg.starts_with("\"style\"") || arg.starts_with("'style'") {
+            out.push((
+                TOKEN_RULE,
+                at,
+                "`setAttribute` of style in an island".to_string(),
+            ));
+        }
+    }
+    out
 }
 
 /// The colours a string literal holds. The string itself is a colour when it is exactly a hex

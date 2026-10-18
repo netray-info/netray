@@ -1,0 +1,85 @@
+{% extends "pages/guide.html" %}
+{% import "components/query_input.html" as c %}
+{% block article %}
+  <p class="guide-lede">How certificate chains build trust from your server to a root CA, and how to check them.</p>
+
+  <article>
+    <h2>What is a certificate chain?</h2>
+    <p>When a client connects to a server over TLS (HTTPS), the server presents a certificate to prove its identity. But a single certificate is not enough. The client needs a <strong>chain of trust</strong> that links the server's certificate back to a Certificate Authority (CA) it already trusts.</p>
+    <p>A typical chain has three parts:</p>
+    <ol>
+      <li><strong>Leaf certificate</strong> (end-entity): issued to your domain, contains your public key and Subject Alternative Names (SANs).</li>
+      <li><strong>Intermediate certificate(s)</strong>: issued by the root CA to a subordinate CA. Most CAs use at least one intermediate to keep the root key offline and protected.</li>
+      <li><strong>Root certificate</strong>: a self-signed certificate pre-installed in the client's trust store (browsers, operating systems, language runtimes).</li>
+    </ol>
+    <p>During the TLS handshake, the server sends its leaf certificate plus any intermediates. The client walks the chain upward, verifying each signature, until it reaches a root it trusts. If any link is missing or invalid, the connection fails.</p>
+
+    <h2>Why certificate chains matter</h2>
+    <p>A broken chain is one of the most common causes of TLS errors. If the server omits an intermediate certificate, some clients may be able to fetch it themselves (via the Authority Information Access extension), but many will not. The result is intermittent failures: a browser on desktop works fine because its trust store cached the intermediate from a previous connection, while a mobile app or API client fails with a "certificate verify failed" error.</p>
+    <p>Chain issues are particularly insidious because they may not affect your own testing environment but break for a subset of users in production.</p>
+
+    <h2>How chain validation works</h2>
+    <p>For each certificate in the chain, the client verifies:</p>
+    <ul>
+      <li><strong>Signature</strong>: the certificate's signature is valid under the issuer's public key.</li>
+      <li><strong>Validity period</strong>: the current time is between the <code>notBefore</code> and <code>notAfter</code> dates.</li>
+      <li><strong>Revocation status</strong>: the certificate has not been revoked, checked via CRL or OCSP.</li>
+      <li><strong>Name constraints</strong>: the subject or SAN matches the requested hostname.</li>
+      <li><strong>Key usage</strong>: the certificate is authorized for its role (e.g., digital signature for a leaf, certificate signing for an intermediate).</li>
+    </ul>
+    <p>Modern clients also check for Certificate Transparency (CT) Signed Certificate Timestamps (SCTs), which prove the certificate was logged in public CT logs before issuance.</p>
+
+    <h2>How to check a certificate chain</h2>
+    <p>You can inspect a server's certificate chain using command-line tools:</p>
+    <pre><code># Using openssl
+openssl s_client -connect example.com:443 -showcerts
+
+# Using curl with verbose output
+curl -vI https://example.com 2>&1 | grep -A 5 "Server certificate"</code></pre>
+    <p>These tools show you the certificates the server sends during the handshake, including the order and completeness of the chain. Look for the chain depth and verify that each issuer DN matches the next certificate's subject DN.</p>
+    <p>For a more comprehensive analysis -- including expiry warnings, signature algorithm checks, SAN validation, OCSP stapling status, and CT SCT verification -- use a dedicated TLS inspection tool.</p>
+
+    <h2>Chain order and best practices</h2>
+    <p>The server should send certificates in order: leaf first, followed by intermediates, with the root omitted (since clients already have it). Sending the root wastes bandwidth and adds no security benefit. Some servers send certificates out of order, which most modern TLS libraries handle gracefully, but older clients may reject.</p>
+    <p>When configuring your server, include all intermediate certificates in your certificate file. If your CA provided separate files, concatenate them:</p>
+    <pre><code># Correct order for Nginx/Apache
+cat leaf.pem intermediate.pem > fullchain.pem</code></pre>
+
+    <h2>Common mistakes</h2>
+    <ul>
+      <li><strong>Missing intermediate</strong>: The most frequent chain error. The server sends only the leaf certificate, and clients without a cached intermediate fail. Always include the full chain.</li>
+      <li><strong>Expired intermediate</strong>: Intermediates have their own validity periods. A valid leaf with an expired intermediate breaks the chain. Monitor intermediate expiry alongside your leaf certificates.</li>
+      <li><strong>Wrong intermediate</strong>: CAs sometimes issue certificates from different intermediates. Using an intermediate that did not sign your leaf produces a signature verification failure. Match the issuer DN on your leaf to the subject DN of the intermediate.</li>
+      <li><strong>Including the root</strong>: Not harmful but wasteful. Some scanners flag it. The root should come from the client's trust store, not the server.</li>
+      <li><strong>Self-signed certificates in production</strong>: Self-signed certificates have no chain -- the leaf is the root. Clients reject them unless explicitly configured to trust them, which defeats the purpose of public PKI.</li>
+      <li><strong>Cross-signed chain confusion</strong>: During CA transitions (like the Let's Encrypt DST Root CA X3 to ISRG Root X1 migration), servers may need to choose which chain to serve based on their client population's trust store age.</li>
+    </ul>
+
+    <h2>Certificate Transparency</h2>
+    <p>Certificate Transparency (CT) is a framework that requires CAs to log all issued certificates in publicly auditable append-only logs. Browsers like Chrome require SCTs (Signed Certificate Timestamps) as proof of logging. SCTs can be delivered via the certificate itself (embedded), a TLS extension, or OCSP stapling. Missing SCTs cause Chrome to show a warning or reject the certificate entirely.</p>
+  </article>
+
+  <section class="guide-tool">
+    <h2>Inspect a certificate chain</h2>
+    {% call c::query_input(crate::pages::guides::tool("https://tls.netray.info/", "h", "example.com", "Inspect")) %}{% endcall %}
+    <p class="guide-tool__hint">Performs a full TLS handshake and analyzes the certificate chain, expiry, algorithms, OCSP, and CT.</p>
+  </section>
+
+  <section id="fix">
+    <h2>How to fix this</h2>
+    <h3>Trusted certificate chain</h3>
+    <p>Your certificate is not trusted by major browsers — ensure you're using a certificate from a public CA and that the full chain including intermediates is configured.</p>
+    <h3>Complete certificate chain</h3>
+    <p>Configure your web server to serve the full certificate chain including all intermediate certificates, not just the leaf certificate.</p>
+    <h3>Signature algorithm</h3>
+    <p>Replace your certificate — SHA-1 signatures are no longer trusted by browsers and must be upgraded to SHA-256 or stronger.</p>
+    <h3>Key strength</h3>
+    <p>Reissue your certificate with at least a 2048-bit RSA key or a 256-bit ECDSA key — shorter keys are no longer accepted by modern clients.</p>
+    <h3>Certificate expiry</h3>
+    <p>Your certificate has expired — renew it immediately, as browsers will block all access to your site until it is replaced.</p>
+    <h3>Hostname match</h3>
+    <p>Your certificate's Subject Alternative Names don't cover this hostname — reissue a certificate that includes all domains you serve on this server.</p>
+    <h3>OCSP stapling</h3>
+    <p>Enable OCSP stapling in your web server so browsers don't need to make a live round-trip to your CA on every TLS handshake.</p>
+  </section>
+{% endblock %}
