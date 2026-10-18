@@ -16,7 +16,8 @@ use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 
-pub use errors::{not_found, query_redirect, server_error};
+pub(crate) use errors::domain_path;
+pub use errors::{not_found, query_redirect, query_redirect_absolute, server_error};
 
 /// The speculation rules every page embeds; the CSP allows exactly their hash.
 pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"}]},"eagerness":"moderate"}]}"#;

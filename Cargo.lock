@@ -2829,6 +2829,7 @@ dependencies = [
  "netray-http",
  "netray-ip",
  "netray-model",
+ "netray-store",
  "netray-tls",
  "netray-web",
  "percent-encoding",

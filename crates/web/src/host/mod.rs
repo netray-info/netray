@@ -3,6 +3,8 @@
 //! the pages, `mta-sts.<apex>` only the policy, the inspector hosts their own routers, and every
 //! other name a 404.
 
+mod legacy;
+
 use std::convert::Infallible;
 use std::sync::Arc;
 
@@ -10,7 +12,7 @@ use axum::Router;
 use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::header::{CACHE_CONTROL, CONTENT_TYPE, HOST, X_CONTENT_TYPE_OPTIONS};
-use axum::http::{HeaderValue, StatusCode};
+use axum::http::{HeaderValue, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use tower::ServiceExt;
@@ -130,11 +132,26 @@ async fn dispatch(State(hosts): State<Arc<Hosts>>, req: Request) -> Response {
     let Some(host) = host_of(&req) else {
         return not_found();
     };
+    let legacy = legacy::Legacy {
+        apex: &hosts.apex,
+        method: req.method(),
+        uri: req.uri(),
+    };
     if host == hosts.apex {
+        if path == "/"
+            && matches!(*req.method(), Method::GET | Method::HEAD)
+            && let Some(response) = crate::pages::query_redirect_absolute(&hosts.apex, req.uri())
+        {
+            return response;
+        }
+        if let Some(response) = legacy.apex_legacy() {
+            return response;
+        }
         return match path {
             "/favicon.svg" | "/bimi-logo.svg" => call(&hosts.apex_files, req).await,
-            "/favicon.ico" | "/r" | "/r/" | "/api" | "/api/" | "/inspect" | "/inspect/"
-            | "/metrics" => crate::pages::not_found().await,
+            "/favicon.ico" | "/r" | "/r/" | "/inspect" | "/inspect/" | "/metrics" => {
+                crate::pages::not_found().await
+            }
             _ if path == "/.well-known" || path.starts_with("/.well-known/") => {
                 crate::pages::not_found().await
             }
@@ -145,10 +162,24 @@ async fn dispatch(State(hosts): State<Arc<Hosts>>, req: Request) -> Response {
         .strip_suffix(hosts.apex.as_str())
         .and_then(|rest| rest.strip_suffix('.'));
     match label {
-        Some("dns") => inspector(&hosts.dns, req).await,
-        Some("tls") => inspector(&hosts.tls, req).await,
-        Some("http") => inspector(&hosts.http, req).await,
-        Some("ip") => inspector(&hosts.ip, req).await,
+        Some("lens") => legacy.lens_host(),
+        Some("email") => legacy.email_host(),
+        Some("dns") => match legacy.subdomain_common() {
+            Some(response) => response,
+            None => inspector(&hosts.dns, req).await,
+        },
+        Some("tls") => match legacy.subdomain_common() {
+            Some(response) => response,
+            None => inspector(&hosts.tls, req).await,
+        },
+        Some("http") => match legacy.subdomain_common() {
+            Some(response) => response,
+            None => inspector(&hosts.http, req).await,
+        },
+        Some("ip") => match legacy.ip_successor().or_else(|| legacy.subdomain_common()) {
+            Some(response) => response,
+            None => inspector(&hosts.ip, req).await,
+        },
         Some("mta-sts") => call(&hosts.mta_sts, req).await,
         _ => not_found(),
     }

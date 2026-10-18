@@ -67,6 +67,7 @@ Merged: v2-history, v2-admission, v2-entries, v2-spectrum, v2-pages. Open: v2-ap
 | services' own `Config` + loaders (dns, tls, http, email, ip) | `crates/<m>/src/config.rs` | deleted Phase 7; their keys in the legacy table |
 | guide samples naming V1 subdomain APIs (e.g. `guides/domain-security-audit.html:83` `dns.netray.info/api/query`, the `email.netray.info/inspect/…` sample) | `crates/web/templates/pages/guides/` | rewritten to `/api/v1/…` in Phase 3 with a repo check (orchestrator, 2026-10-18) |
 | `scoring.html:222` `?d=example.com&dkim_selectors=…` sample | `crates/web/templates/pages/guides/scoring.html` | sample without `dkim_selectors`, Phase 3 (Decision log) |
+| `scoring.html` "Testing DKIM selectors" section and `domain-security-audit.html:79`'s `jq '{grade, complete, sections}'` over the runs answer: prose that V2 makes false (no selector parameter; the run answer is `{recorded, entry_id, run, diff}`) | `crates/web/templates/pages/guides/` | Phase 8 prose pass, against the merged v2-api |
 | wiring test: `lens_registry` hands `netray_ip::enrichment_client` to the four modules (review AMENDMENT, Phase 2) | `crates/netray/src/main.rs` | Phase 6, with the registry's move into the composition root |
 | host-router answers bypass the layers' `http_metrics` (no `path` label for probes and host 404s) | `crates/web/src/host/` | Phase 4 metrics / Phase 6 middleware move |
 
@@ -160,3 +161,64 @@ metrics main: 404  metrics listener: 200
 - NIT (fixed): MTA-STS policy `Cache-Control: no-cache`, as `netray site` served it.
 - NIT: an absolute-form request target loses to the `Host` header (RFC 9112 §3.2.2); Traefik sends origin-form.
 - NIT: `netray lens`'s kept `ip_url` warning stays silent when `ip_url` is set without `[modules.ip]` (enrichment off); `netray lens` goes in Phase 7.
+
+## Phase 3 — Redirects and 410
+
+### Criteria
+
+Each row also covers the Phase 3 scenarios that name it. Redirects apply to GET and HEAD, a 410 to any method; every `Location` is absolute `https://<apex>…`; every 410 from an `/api` or `/api-docs` path carries `{"error":{"code":"gone","message":…}}` naming the successor; `/health`, `/ready` match first.
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | 13a: `lens.<apex>` any path and query but probes → 301 `https://<apex><path>[?<query>]` | green | crates/web/tests/host_redirects.rs |
+| C2 | 13b: apex `/?d=<value>` → 301 absolute `https://<apex>/<domain>`; unparsable → 400 with the query refilled | green | crates/web/tests/host_redirects.rs |
+| C3 | 13c: `email.<apex>/?q=<domain> <selectors…>` → 301 `https://<apex>/<domain>/email` from the first token | green | crates/web/tests/host_redirects.rs |
+| C4 | 13d: `email.<apex>/?domain=<domain>` → the same; `q` wins over `domain` | green | crates/web/tests/host_redirects.rs |
+| C5 | 13e: `email.<apex>/` without q/domain, unparsable domain, or any other path (not f–h, probes) → 301 `https://<apex>/` | green | crates/web/tests/host_redirects.rs |
+| C6 | 13f: `/api/*` on `dns.`, `tls.`, `http.`, `email.`, `ip.` → 410 naming `https://<apex>/api/v1` | green | crates/web/tests/host_redirects.rs |
+| C7 | 13g: `email.<apex>/inspect`, `/inspect/<domain>` → 410 naming `https://<apex>/api/v1/email/inspect` | green | crates/web/tests/host_redirects.rs |
+| C8 | 13h: `/docs`, `/docs/` on the five subdomains → 301 `https://<apex>/api/v1/docs`; `/api-docs/openapi.json` there → 410 naming `https://<apex>/api/v1/openapi.json` | green | crates/web/tests/host_redirects.rs |
+| C9 | 13i: apex `/api/check`, `/api/check/<domain>` → 410 naming `https://<apex>/api/v1/domains/{domain}/runs`; other apex `/api/<x>` (x ≠ v1) → 410 naming `https://<apex>/api/v1`; row m first | green | crates/web/tests/host_redirects.rs |
+| C10 | 13j: apex `/r/<id>`, `/r/<id>/og.png`, `/r/<id>/<protocol>` for a well-formed non-entry ID → 410 (page names no domain; og.png empty body); malformed → 404; stored entry → 200 | green | crates/netray/tests/serve_entries_gone.rs |
+| C11 | 13k: `dns./?q=…`, `tls./?h=…`, `http./?url=…`, `ip./?ip=…` → 200 inspector; `dns./?r=` ignored | test-unwritable (deferred until v2-inspectors merges; Decision log 2026-10-18) | |
+| C12 | 13l: apex `/tools`, `/tools/` → 301 `https://<apex>/` | green | crates/web/tests/host_redirects.rs |
+| C13 | 13m: apex `/api/`, `/api/<name>.html` (index, dns, tls, http, email, ip, lens) → 301 `https://<apex>/api/v1/docs` | green | crates/web/tests/host_redirects.rs |
+| C14 | 13n: apex `/guide/lens` → 301 `https://<apex>/guide/scoring` | green | crates/web/tests/host_redirects.rs |
+| C15 | 13o: apex `/docs`, `/docs/` → 301 `https://<apex>/api/v1/docs`; apex `/api-docs/openapi.json` → 410 naming `https://<apex>/api/v1/openapi.json` | green | crates/web/tests/host_redirects.rs |
+| C16 | 14: every `ip.` route of the V1 router but `/`, probes and `/docs` → 410 naming its successor (json/yaml/toml/csv/all/ip → `/api/v1/ip`; `/ip/cidr`, `/range` → `/api/v1/ip/range/{cidr}`; `/asn[/…]` → `/api/v1/asn/{n}`; field family bare and `/{fmt}` → `/api/v1/ip?field=<name>`; `/ipv4`, `/ipv6` → `/api/v1/ip/{address}` naming `curl -4`/`curl -6`; `/batch` → `/api/v1/ip/batch`; `/diff` → `/api/v1/ip/diff`; `/meta`, `/api/meta` → `/api/v1/meta`; `/api-docs/openapi.json` → `/api/v1/openapi.json`) | green | crates/web/tests/host_redirects.rs |
+| C17 | 14 neighbour: `ip./` with a curl user agent → 200 `text/plain` caller address; a browser gets the inspector | test-unwritable (deferred until v2-api and v2-inspectors merge: `lookup_caller` and the inspector are theirs; Decision log 2026-10-18) | |
+| C18 | 15: a repo test fails when a V1 route (list kept in the test) or a `site/` path of rows l–n has no row in the table-driven test | already_implemented (the check passes once the table exists; its self-tests fail on a removed row) | tests/repo/test_v1_route_coverage.sh |
+| C19 | orchestrator 2026-10-18: no template under `crates/web/templates/` names a V1 subdomain API path (`<sub>.netray.info/api/…`, `email.netray.info/inspect…`, `ip.netray.info/<cut route>`); the guide samples name their `/api/v1/…` equivalents; a repo check holds it | green | tests/repo/test_no_v1_samples.sh |
+| C20 | Decision log 2026-10-18: `scoring.html`'s `?d=` sample carries no `dkim_selectors` | green | tests/repo/test_no_v1_samples.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1–G3 (one coder; disjoint files, one build) | 1 | sonnet | 67403 | 210 |
+| review fix (extensionless docs URLs, failed lookup 500, scoring sentence) | 1 | sonnet | n/a | n/a |
+
+### Behavioural verification
+
+`netray serve` on 127.0.0.1:18123; `curl -H "Host: <h>" <path>`:
+
+```
+lens.netray.info     /r/abcd1234?x=1          301 https://netray.info/r/abcd1234?x=1
+netray.info          /?d=Example.COM          301 https://netray.info/example.com
+email.netray.info    /?q=example.com%20google 301 https://netray.info/example.com/email
+dns.netray.info      /api/query               410 {"error":{"code":"gone","message":"This endpoint has been removed. Use https://netray.info/api/v1."}}
+ip.netray.info       /country                 410 {"error":{"code":"gone","message":"… Use https://netray.info/api/v1/ip?field=country."}}
+netray.info          /api/check/example.com   410 {"error":{"code":"gone","message":"… Use https://netray.info/api/v1/domains/{domain}/runs."}}
+netray.info          /tools                   301 https://netray.info/
+```
+
+### Review
+
+- AMENDMENT (repaired in phase): the V1 site served its API docs extensionless (`/api/dns`, sitemap and canonicals) and at `/api`; row 13m now covers `/api`, `/api/index` and `/api/<name>` beside `/api/<name>.html` (rows and coverage list extended).
+- AMENDMENT (repaired in phase): `/r/<id>/<protocol>` folded a failed store lookup into 404; it answers 500 with a WARN naming the ID, as `/r/<id>` does.
+- DEFERRED (repaired in phase): the scoring guide's new clause tied `dkim_selectors` to the runs endpoint; reverted to main's wording, the section stays with Phase 8.
+- DEFERRED: until `v2-result-page` replaces lens's SPA at the apex `/` (or Phase 7 deletes it), a build of this branch runs no check from the apex page: the SPA calls `/api/meta` and `/api/check/<domain>`, now 410. The branch merges only after all eight features (X6).
+- NIT: the DNS sample still says "lint results" (false in V1 too); Phase 8 prose.
+- NIT: `POST /?d=…` falls through to the apex router instead of 405.
+- NIT: `ip./all/cidr` answers 404, not 410.
+- NIT: `email./?domain=..` redirects to `https://<apex>/./email`.

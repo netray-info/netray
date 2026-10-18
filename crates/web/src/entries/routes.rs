@@ -53,7 +53,7 @@ pub fn router(deps: EntriesDeps) -> axum::Router {
         .route("/r/{id}/og.png", get(entry_card))
         .route("/r/", get(unmatched))
         .route("/r/{id}/", get(unmatched))
-        .route("/r/{id}/{*rest}", get(unmatched))
+        .route("/r/{id}/{*rest}", get(entry_rest))
         .with_state(deps)
 }
 
@@ -73,6 +73,32 @@ async fn unmatched() -> Response {
         NOT_FOUND_HTML,
     )
         .into_response()
+}
+
+const PROTOCOLS: [&str; 5] = ["dns", "tls", "http", "email", "ip"];
+
+async fn entry_rest(
+    State(deps): State<EntriesDeps>,
+    path: Result<Path<(String, String)>, PathRejection>,
+) -> Response {
+    let Ok(Path((id, rest))) = path else {
+        return unmatched().await;
+    };
+    if !well_formed(&id) || !PROTOCOLS.contains(&rest.as_str()) {
+        return unmatched().await;
+    }
+    match deps.history.get(&id).await {
+        Ok(None) => page(StatusCode::GONE, render::gone()),
+        Ok(Some(_)) => unmatched().await,
+        Err(e) => {
+            tracing::warn!(id = %id, error = %e, "history lookup failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": {"code": "INTERNAL", "message": "entry unavailable"}})),
+            )
+                .into_response()
+        }
+    }
 }
 
 fn well_formed(id: &str) -> bool {

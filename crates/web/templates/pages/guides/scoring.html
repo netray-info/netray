@@ -218,8 +218,8 @@
       pass them via the <code>dkim_selectors</code> parameter:
     </p>
 
-<pre><code># Via URL parameter
-https://netray.info/?d=example.com&dkim_selectors=google,selector1
+<pre><code># The evidence page of a domain
+https://netray.info/example.com
 
 # Via curl
 curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs?dkim_selectors=default,s1' \
