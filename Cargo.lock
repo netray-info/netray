@@ -2834,8 +2834,10 @@ dependencies = [
  "netray-web",
  "percent-encoding",
  "serde",
+ "tempfile",
  "tokio",
  "toml",
+ "tower",
  "tracing",
  "tracing-subscriber",
 ]
