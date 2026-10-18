@@ -352,6 +352,11 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
   prefill: a run started from the form inspects what was typed, not what the URL carried
   (review of Phase 5; implementer under the operator's autonomy mandate, 2026-10-18).
 
+- feature/v2-api merged before Phase 6 at `8fbe4263` (its Phase 5 TLS and HTTP seams and the
+  Phase 6 decisions), over its tip `300bee1c`, a commit of v2-api's failing Phase 6 email tests:
+  Phase 6 needs only the TLS, HTTP and IP functions, and the gate stays green (implementer under
+  the operator's autonomy mandate, 2026-10-18).
+
 ## Open decisions
 
 None.
