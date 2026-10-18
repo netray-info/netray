@@ -208,14 +208,14 @@ async fn post_run(app: &Router) -> (StatusCode, Vec<(String, String, String)>) {
     (status, events)
 }
 
-/// Fragments before the first `result-header` (the section phase) and from it on (the end phase).
+/// Fragments before the first `result-grade` (the section phase) and from it on (the end phase).
 fn split_phases(
     events: &[(String, String, String)],
 ) -> (&[(String, String, String)], &[(String, String, String)]) {
     let at = events
         .iter()
-        .position(|(_, id, _)| id == "result-header")
-        .unwrap_or_else(|| panic!("no result-header fragment in {events:?}"));
+        .position(|(_, id, _)| id == "result-grade")
+        .unwrap_or_else(|| panic!("no result-grade fragment in {events:?}"));
     events.split_at(at)
 }
 

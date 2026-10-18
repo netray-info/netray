@@ -264,8 +264,11 @@ fn last<'a>(fragments: &'a [(String, String)], id: &str) -> &'a str {
         .1
 }
 
-const END_IDS: [&str; 10] = [
-    "result-header",
+const END_IDS: [&str; 13] = [
+    "result-grade",
+    "run-line",
+    "progress",
+    "result-share",
     "spectrum",
     "diff",
     "issues",

@@ -278,7 +278,15 @@ fn expected_ids(order: &[usize]) -> Vec<String> {
         }
         want.push(format!("evidence-{p}"));
     }
-    for f in ["result-header", "spectrum", "diff", "issues"] {
+    for f in [
+        "result-grade",
+        "run-line",
+        "progress",
+        "result-share",
+        "spectrum",
+        "diff",
+        "issues",
+    ] {
         want.push(f.to_string());
     }
     for (_, p, _) in ORDER {
@@ -325,6 +333,11 @@ async fn c6_c8_fragments_arrive_in_section_order_and_carry_their_own_id() {
     let frags = fragments(&reply.body);
     assert_eq!(ids(&frags), expected_ids(CANON));
 
+    // The form lives in #result-header and is never re-sent.
+    for (id, html) in &frags {
+        assert_ne!(id, "result-header");
+        assert!(!html.contains(r#"data-island="stream""#), "{id}: {html}");
+    }
     for (id, html) in &frags {
         let trimmed = html.trim_start();
         assert!(trimmed.starts_with('<'), "{id}: {html}");
@@ -388,7 +401,10 @@ async fn c14_a_fresh_head_answers_from_the_store_on_visit_and_runs_on_recheck() 
     assert_eq!(
         ids(&frags),
         [
-            "result-header",
+            "result-grade",
+            "run-line",
+            "progress",
+            "result-share",
             "spectrum",
             "diff",
             "issues",
@@ -400,11 +416,8 @@ async fn c14_a_fresh_head_answers_from_the_store_on_visit_and_runs_on_recheck() 
             "passed"
         ]
     );
-    assert!(
-        frags[0].1.contains(&format!("entry {id}")),
-        "{}",
-        frags[0].1
-    );
+    let run_line = &frags.iter().find(|(i, _)| i == "run-line").unwrap().1;
+    assert!(run_line.contains(&format!("entry {id}")), "{run_line}");
     assert_eq!(f.store.entries(DOMAIN).await.unwrap().len(), 1);
 
     let recheck = post(&f.app, "recheck", &[]).await;

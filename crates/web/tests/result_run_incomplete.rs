@@ -235,15 +235,17 @@ async fn c5_c11_an_incomplete_run_streams_unmeasured_and_is_not_recorded() {
         assert_live_partial(nth(&events, "evidence-email", 0), "email");
 
         // end fragments
-        let header = last(&events, "result-header");
+        let grade_html = last(&events, "result-grade");
         assert!(
-            header.contains(&format!(r#"grade__letter">{letter}<"#)),
-            "{letter}: {header}"
+            grade_html.contains(&format!(r#"grade__letter">{letter}<"#)),
+            "{letter}: {grade_html}"
         );
         if letter == "incomplete" {
-            assert!(header.contains("incomplete, not recorded"), "{header}");
-            assert!(!header.contains(r#"id="share""#), "{header}");
-            assert!(!header.contains("/r/"), "{header}");
+            let run_line = last(&events, "run-line");
+            assert!(run_line.contains("incomplete, not recorded"), "{run_line}");
+            let share = last(&events, "result-share");
+            assert!(!share.contains("<a"), "{share}");
+            assert!(!share.contains("/r/"), "{share}");
             assert!(
                 last(&events, "diff").contains("not recorded: this run is incomplete"),
                 "{events:?}"
