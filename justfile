@@ -120,6 +120,8 @@ acceptance-local *args:
     trap 'rm -rf "$tmp"; _netray_cleanup' EXIT
     mkdir -p "$tmp/custom_cas"
 
+    cargo run -q -p netray-store --example seed -- "$tmp/history.db" tests/acceptance/fixtures/history || { echo "seed failed" >&2; exit 1; }
+
     site_port=$(free_port)
     start_bg "$tmp/site.log" "$bin" site --bind "127.0.0.1:$site_port" --root site
     wait_http "http://127.0.0.1:$site_port/" 30 || { echo "netray site did not answer on 127.0.0.1:$site_port" >&2; exit 1; }
@@ -150,8 +152,11 @@ acceptance-local *args:
         export "LOCAL_$(printf %s "$sub" | tr a-z A-Z)_URL=http://localhost:$port"
     done
 
+    specs=({{args}})
+    [ ${#specs[@]} -gt 0 ] || specs=(smoke/security-headers.spec.ts static-site/assets.spec.ts)
+    specs=("${specs[@]#tests/acceptance/}")
     cd tests/acceptance
-    TEST_ENV=local npx playwright test --no-deps {{ if args == "" { "smoke/security-headers.spec.ts static-site/assets.spec.ts" } else { args } }}
+    TEST_ENV=local npx playwright test --no-deps "${specs[@]}"
     status=$?
     exit $status
 

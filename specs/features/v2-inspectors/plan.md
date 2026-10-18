@@ -166,3 +166,24 @@ G1: C1 (netray-dns half) · G2: C1 (route half), C2, C6, C7, C8, C9 · G3: C3, C
 - `crates/dns/src/module.rs` `rdata_text`: SRV, TLSA, SSHFP, NAPTR, HINFO; `crates/dns/src/dns_raw.rs` `rdata_presentation` mirrors it per type.
 - `crates/dns/src/jobs/events.rs` `AuthResult::Response.failure` (`#[serde(skip)]`), set in `jobs/mod.rs` from the response code; `blocks.rs` renders it as a failed row.
 - `crates/web/src/api/jobs.rs`: `dns.warnings` from the summary; band deadline from `JobRequest.deadline` (`crates/web/src/pages/inspect.rs`).
+
+## Phase 8 — Behavioural verification with screenshots
+
+## Groups
+
+G1: C1, C3, C4, C5, C6 · G2: C2, C7, C8, C9, C10 (G2 runs against the stack G1 seeds).
+
+## Plan
+
+### G1
+
+1. `crates/store/src/seed.rs` (new): `pub async fn seed(db_path, fixture_dir, seed_now) -> Result<usize, SeedError>` — read `*.json` sorted by name as `serde_json::Value`, refuse any top-level key besides `domain`, `age_seconds`, `run` (naming the file), require strictly decreasing `age_seconds` per domain (naming both files), then open, migrate and `record(domain, &run, &[], seed_now - age, |p, c| diff(p, c, &[], None))` each; hangs on `HistoryStore::open/migrate/record` and `netray_model::diff::diff`.
+2. `crates/store/src/lib.rs`: `pub mod seed;`.
+3. `crates/store/examples/seed.rs` (new): args `<db path> <fixture dir>`, `seed_now` from `SystemTime`, exit 1 printing the error.
+4. `tests/acceptance/fixtures/history/example.com.json` (new): the scrubbed live example.com run (all 54 catalogue ids, five shapes).
+5. `justfile` `acceptance-local`: run the seed into `$tmp/history.db` before the services start, abort on failure; forward `args` (leading `tests/acceptance/` stripped) to Playwright, default list otherwise.
+6. `tests/acceptance/playwright.config.ts`: project `local`, `testDir: './v2'`, `@live` excluded unless asked for.
+
+### G2
+
+No production file planned; the committed spec runs against the seeded stack (`just acceptance-local tests/acceptance/v2/inspectors.spec.ts`, `@live` from main's target path). A browser-only failure lands in `crates/web/templates/*` or `crates/web/static/*`.

@@ -319,3 +319,75 @@ fragment inspect-part-0   ev-dns.authcompare (table), ev-dns.errors (table): "co
 end
 == GET /inspect/dns  → 200
 ```
+
+## Phase 8 — Behavioural verification with screenshots
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R23: `crates/store/examples/seed.rs` (`cargo run -p netray-store --example seed -- <db> <dir>`) migrates and records every fixture of `tests/acceptance/fixtures/history/` through `HistoryStore::record` with the model's diff at `seed_now - age_seconds`, sorted by file name; fixture `{"domain","age_seconds","run"}`; refuses extra top-level keys and non-decreasing ages per domain before any record; `just acceptance-local` seeds lens's `history.db`; one `example.com` fixture (age 0, records/table/chain/fields/text blocks, findings, evidence refs); a Rust test holds every fixture run to the catalogue, each ID once | green | crates/store/tests/seed.rs, crates/engine/tests/history_fixtures.rs, tests/repo/test_acceptance_seed.sh |
+| C2 | R24: `tests/acceptance/v2/inspectors.spec.ts` (project `local`) opens every evidence view and inspector at 1280/390 px, light/dark; asserts run line, check-row order, shared-evidence line, explore-live hrefs, no page scroll at 390 px outside the band, `/inspect/email` 404; screenshots per view/width/theme; `@live` runs one job per inspector | green | tests/acceptance/v2/inspectors.spec.ts |
+| C3 | S: `example.com.json` (age 0) seeded at `seed_now` → one entry, `created_at` = `last_seen_at` = `seed_now` | green | crates/store/tests/seed.rs |
+| C4 | S: `a.json` age 600, `b.json` age 0, one domain → recorded in that order at `seed_now - 600` and `seed_now` | green | crates/store/tests/seed.rs |
+| C5 | S: `a.json` age 0, `b.json` age 600 (or 0) → non-zero, names both files, no entry | green | crates/store/tests/seed.rs |
+| C6 | S: a fixture with `"created_at"` → non-zero, names the file, no entry | green | crates/store/tests/seed.rs |
+| C7 | S: `/example.com/tls` at 390 px dark → run line names the entry, no page scroll, screenshot | green | tests/acceptance/v2/inspectors.spec.ts |
+| C8 | S: `/inspect/{dns,tls,http,ip}` at 1280 px light → form renders, screenshot | green | tests/acceptance/v2/inspectors.spec.ts |
+| C9 | S: `/example.com/email` → `email.mx` row's explore-live href is `/inspect/tls?h=<host>:25` | green | tests/acceptance/v2/inspectors.spec.ts |
+| C10 | S: `@live` `/inspect/tls?h=netray.info` with JS → streams, "live · not recorded", band, no grade, entry count unchanged | green | tests/acceptance/v2/inspectors.spec.ts |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 (seed, fixture, recipe, `local` project) | 2 | sonnet | 42008 | 55 |
+| G2 (evidence blocks fit 390 px) | 1 + 1 (follow-up: tables scroll inside the block instead of breaking short tokens) | sonnet | 51527 | 84 |
+| review BLOCKER (incomplete run) | 1 | sonnet | 25696 | 14 |
+
+The fixture `tests/acceptance/fixtures/history/example.com.json` is a live lens run of example.com
+(2026-10-18) with documentation addresses and example.com names in place of the provider's, plus
+an MX host, MTA-STS (fields and the policy text block) and an `ip` section (`ip.addresses`,
+`ip.reputation`) added: the live domain has a null MX, so no text block and no `email.mx` link, and a
+checkout has no GeoLite2 data, so no ip section (implementer under the operator's autonomy mandate, 2026-10-18).
+
+### Behavioural verification
+
+```
+$ cargo run -q -p netray-store --example seed -- $T/history.db tests/acceptance/fixtures/history
+seeded 1 fixture(s) into $T/history.db
+exit=0
+$ sqlite3 $T/history.db "select domain, created_at=last_seen_at, count(*) from entries"
+example.com|1|1
+$ cargo run -q -p netray-store --example seed -- $T/bad.db $T/bad   # a.json carries created_at
+seed fixture: a.json: unknown top-level key `created_at` (allowed: domain, age_seconds, run)
+exit=1
+$ just acceptance-local tests/acceptance/v2/inspectors.spec.ts
+  43 passed (6.5s)
+$ just acceptance-local tests/acceptance/v2/inspectors.spec.ts --grep @live
+  4 passed, 1 failed: live job /inspect/ip — a checkout has no GeoLite2 data, so lens runs without
+  [modules.ip] and the ip job answers that IP lookup is off; C10 (/inspect/tls?h=netray.info: streams,
+  "live · not recorded", band, no grade, entry counts of example.com and netray.info unchanged) passed
+```
+
+Before the fix the offline set failed at 390 px: `/example.com/dns` scrollWidth 942 and
+`/example.com/tls` 941 (DNSKEY and HTTPS record data, the TLS addresses table); evidence blocks now
+scroll a too-wide table inside the block and wrap field and chain values
+(`crates/web/static/evidence_block.css`).
+
+Screenshots (gitignored, not committed), in `tests/acceptance/test-results/v2-inspectors/`:
+
+| file | shows |
+|---|---|
+| `example.com-<dns,tls,http,email,ip>-<1280,390>-<light,dark>.png` (20) | the evidence view of the seeded entry: run line, the protocol's check rows in catalogue order with their evidence links, shared-evidence line, the protocol's blocks, explore-live links |
+| `inspect-<dns,tls,http,ip>-<1280,390>-<light,dark>.png` (16) | the inspector form before a job: target field, Run button, empty result; DNS adds the query builder |
+| `live-inspect-<tls,dns,http>-<1280-light,390-dark>.png` (6, taken by hand from a local lens) | a live job's result: "live · not recorded", the job's blocks and the protocol's band, no grade |
+
+### Review
+
+| class | finding | outcome |
+|---|---|---|
+| BLOCKER | `seed` counted a fixture with an incomplete run as seeded while `record` stored nothing | fixed: the seed refuses it naming the file (test `incomplete_run_fails_naming_the_file_and_stores_nothing`) |
+| AMENDMENT | seeded fingerprints and diffs use no volatile paths and no rescoring, unlike lens | decision log: kept as requirement 23 prescribes; fixtures needing lens's exact form say so (affected_phase 8, repaired_in_phase yes) |
+| AMENDMENT | the `@live` ip job cannot pass without GeoLite2 data in the local stack | decision log: test kept for a stack with the data; run recorded above (affected_phase 8, repaired_in_phase yes) |
+| DEFERRED | the age-order guard does not compare against a store that already holds the domain; `record` clamps silently | v2-cutover, which runs the seed for `serve` into a possibly non-empty store |
