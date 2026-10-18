@@ -303,3 +303,18 @@ async fn reload_picks_up_replaced_feodo_list() {
     assert!(flagged(module.run(&ctx(), &facts).await), "listed after reload");
     std::fs::remove_dir_all(&dir).ok();
 }
+
+/// 2026-10-18 Decision log: a module without a UA parser answers the User-Agent unparsed, its raw
+/// string kept.
+#[tokio::test]
+async fn lookup_caller_keeps_the_raw_user_agent_without_a_parser() {
+    use netray_ip::IpLookup;
+    let module = IpModule::new(toml::from_str("").unwrap()).await.expect("module builds");
+    let remote = "198.51.100.7:51000".parse().unwrap();
+    let answer = module
+        .lookup_caller(remote, Some("curl/8.5.0"))
+        .await
+        .expect("lookup answers");
+    let ua = answer.user_agent.expect("user_agent is present, not null");
+    assert_eq!(ua.raw.as_deref(), Some("curl/8.5.0"));
+}
