@@ -256,7 +256,7 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
   it) and extended by `v2-result-page`, over a second, `sqlite3`-loaded `history-seed.sql`:
   the seed calls `HistoryStore::migrate` (`crates/store/src/lib.rs:145`) and then
   `HistoryStore::record` (`:160`), which computes the fingerprint and takes the model's diff
-  (`netray_model::diff::diff`) as its `diff` argument, so fixtures go through the same write path
+  (`netray_model::diff::diff`) as its `diff` argument, so fixtures go through the same `record` write path
   as a run and cannot drift from the schema, and no `sqlite3` CLI joins the toolchain (implementer under the operator's autonomy mandate, 2026-10-17).
 - The prefilled form carries v2-pages' `data-stream-autostart="load"`, over a `data-autostart` attribute: v2-pages' `stream` island reads only `data-stream-autostart`, and the job route ignores the `trigger` field it adds (implementer under the operator's autonomy mandate, 2026-10-17).
 - A prefetched job POST answers `503` with `Cache-Control: no-store`, decided by `netray_common::prefetch::is_prefetch`, over `403`: one answer and one helper for every request that starts nothing on prefetch, as v2-admission and v2-api answer it (implementer under the operator's autonomy mandate, 2026-10-17).
@@ -452,6 +452,22 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
   (`Cargo.lock`, `crates/web/Cargo.toml`, the `netray-web` crate doc) resolved to this branch's
   side, a superset of main's dependencies, over a rebase: the branch is merged, never rebased, and
   from here on carries one feature (implementer under the operator's autonomy mandate, 2026-10-18).
+
+- The seed records with no volatile paths and the model's diff without rescoring, as requirement 23
+  prescribes, over lens's per-module volatile list and `netray_engine::history::diff`: netray-store
+  cannot reach either, and the acceptance stack never records example.com live. Seeded
+  fingerprints and diffs are therefore not byte-equal to lens's for the same run (a TTL-only change
+  is a new entry, not Identical); a fixture that needs lens's exact fingerprint or diff says so and
+  brings it with the feature that needs it (review of Phase 8; implementer under the operator's
+  autonomy mandate, 2026-10-18).
+- The `@live` ip job of requirement 24 runs only where lens has `[modules.ip]`, i.e. GeoLite2 data;
+  `lens.dev.toml` has none in a checkout, so `just acceptance-local … --grep @live` reports that one
+  job as failed there, over a skip marker or a data fetch in the recipe: the test stays as written
+  for a stack with the data, and report.md records the run (review of Phase 8; implementer under the
+  operator's autonomy mandate, 2026-10-18).
+- The seed refuses a fixture whose run is incomplete, naming the file: `record` stores nothing for
+  it, and the seed would report it as seeded (review of Phase 8; implementer under the operator's
+  autonomy mandate, 2026-10-18).
 
 ## Open decisions
 
