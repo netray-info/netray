@@ -29,7 +29,7 @@ fn client_ip(state: &ApiState, req: &Request) -> IpAddr {
 
 pub(super) async fn per_ip(State(state): State<ApiState>, req: Request, next: Next) -> Response {
     let ip = client_ip(&state, &req);
-    match check_keyed_cost(state.limiter(), &ip, NonZeroU32::MIN, "api_v1", "lens") {
+    match check_keyed_cost(state.limiter(), &ip, NonZeroU32::MIN, "api_v1", "netray") {
         Ok(()) => next.run(req).await,
         Err(rejection) => V1Error::RateLimited {
             retry_after_secs: rejection.retry_after_secs,

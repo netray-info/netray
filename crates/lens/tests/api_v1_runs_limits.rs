@@ -36,7 +36,7 @@ use netray_web::api::{DomainRuns, RefusalReason, RunStart, RunTrigger};
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-const REJECTIONS: &str = "lens_admission_rejections_total";
+const REJECTIONS: &str = "netray_admission_rejections_total";
 
 fn client() -> IpAddr {
     IpAddr::from([127, 0, 0, 1])

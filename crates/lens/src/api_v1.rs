@@ -37,6 +37,7 @@ impl DomainRuns for LensRuns {
     ) -> BoxFuture<'a, RunStart> {
         Box::pin(async move {
             if let Err(r) = admission::check_limits(&self.state, client) {
+                admission::count_rejection(&r);
                 return RunStart::Refused(refusal(r));
             }
             let trigger = match trigger {
@@ -46,10 +47,7 @@ impl DomainRuns for LensRuns {
             };
             match admission::admit(&self.state, domain, client, trigger, prefetch) {
                 Admit::Admitted(stream) => {
-                    if stream.joined() {
-                        crate::metrics::count_request("joined");
-                    } else {
-                        crate::metrics::count_request("fresh");
+                    if !stream.joined() {
                         self.state.client_runs.record(client);
                     }
                     RunStart::Admitted(Box::pin(futures::stream::unfold(stream, events)))

@@ -159,7 +159,7 @@ fn zero_series_include_the_api_v1_rate_limit_scope() {
     let out = handle.render();
     assert!(
         out.lines()
-            .any(|l| l == r#"lens_rate_limit_hits_total{scope="api_v1"} 0"#),
+            .any(|l| l == r#"netray_rate_limit_hits_total{scope="api_v1"} 0"#),
         "missing api_v1 zero series in:\n{out}"
     );
 }

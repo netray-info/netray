@@ -42,7 +42,7 @@ use tempfile::NamedTempFile;
 use tokio::sync::Notify;
 use tower::ServiceExt;
 
-const REJECTIONS: &str = "lens_admission_rejections_total";
+const REJECTIONS: &str = "netray_admission_rejections_total";
 
 /// The first run answers `first`, every later run `later`.
 struct Switch {

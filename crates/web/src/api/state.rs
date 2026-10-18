@@ -123,7 +123,7 @@ impl ApiState {
                 per_target_burst: config.tls.per_target_burst,
             },
             netray_tls::security::rate_limit::Scopes {
-                metrics_prefix: "lens",
+                metrics_prefix: "netray",
                 per_ip: "api_v1_tls",
                 per_target: "api_v1_tls_target",
             },
@@ -136,7 +136,7 @@ impl ApiState {
                 per_target_burst: config.http.per_target_burst,
             },
             netray_http::security::rate_limit::Scopes {
-                metrics_prefix: "lens",
+                metrics_prefix: "netray",
                 per_ip: "api_v1_http",
                 per_target: "api_v1_http_target",
             },
@@ -147,7 +147,7 @@ impl ApiState {
                 per_ip_burst: config.email.per_ip_burst,
             },
             netray_email::security::rate_limit::Scopes {
-                metrics_prefix: "lens",
+                metrics_prefix: "netray",
                 per_ip: "api_v1_email",
             },
         ));
@@ -163,7 +163,7 @@ impl ApiState {
                 per_ip_max_streams: config.dns.per_ip_max_streams,
             },
             netray_dns::security::rate_limit::Scopes {
-                metrics_prefix: "lens",
+                metrics_prefix: "netray",
                 per_ip: "api_v1_dns",
                 per_target: "api_v1_dns_target",
                 global: "api_v1_dns_global",
