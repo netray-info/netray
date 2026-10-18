@@ -276,5 +276,43 @@ run_check lens "$tmp/lens.noipurl.toml"
 grep -qF 'modules.http.enrichment.ip_url is not set' <<<"$out" \
     || fail "lens: config without enrichment ip_url does not warn ($out)"
 
+# v2-cutover C5: `netray serve --check-config` over the shipped configs, and the serve
+# startup refusals as startup_rejects rows built from the example by perl substitution.
+serve_example="$REPO_ROOT/crates/netray/netray.example.toml"
+for f in "$serve_example" "$REPO_ROOT/crates/netray/netray.dev.toml"; do
+    run_check serve "$f"
+    [ "$rc" -eq 0 ] || fail "serve: $f exited $rc, expected 0 ($out)"
+    grep -qF "config ok: $f" <<<"$out" || fail "serve: stdout lacks 'config ok: $f' ($out)"
+done
+{ echo 'bogus_key = 1'; cat "$serve_example"; } >"$tmp/serve.unknown.toml"
+run_check serve "$tmp/serve.unknown.toml"
+[ "$rc" -eq 1 ] || fail "serve: unknown key exited $rc, expected 1"
+run_check serve "$tmp/serve.does-not-exist.toml"
+[ "$rc" -eq 1 ] || fail "serve: missing file exited $rc, expected 1"
+
+# section|expr-body|must-name
+serve_rejects=(
+    "admission|domain_run_slots = 0|"
+    "admission|per_ip_per_minute = 0|"
+    "admission|per_ip_burst = 0|"
+    "admission|global_per_minute = 0|"
+    "admission|global_burst = 0|"
+    "badges|ttl_seconds = 0|"
+    "telemetry|enabled = true\\notlp_endpoint = \"http://bad host:4318\"|telemetry.otlp_endpoint"
+)
+n=0
+for row in "${serve_rejects[@]}"; do
+    IFS='|' read -r section body names <<<"$row"
+    n=$((n + 1))
+    perl -pe "s|^\\[$section\\]\$|[$section]\\n$body|" "$serve_example" >"$tmp/serve.reject$n.toml"
+    if cmp -s "$serve_example" "$tmp/serve.reject$n.toml"; then
+        fail "serve: substitution for [$section] $body did not change the example"
+        continue
+    fi
+    run_check serve "$tmp/serve.reject$n.toml"
+    [ "$rc" -eq 1 ] || fail "serve: startup-rejected value ([$section] $body) exited $rc, expected 1 ($out)"
+    [ -z "$names" ] || grep -qF "$names" <<<"$out" || fail "serve: [$section] $body error does not name $names ($out)"
+done
+
 [ "$failures" -eq 0 ] || { echo "FAIL: test_check_config: $failures failure(s)" >&2; exit 1; }
 echo "PASS: test_check_config"
