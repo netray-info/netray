@@ -430,8 +430,8 @@ pub(crate) async fn until_done(stream: &mut RunStream) -> Option<Arc<Published>>
     None
 }
 
-/// Takes the run out of the map when the task ends, panic included, unless a newer run
-/// already took the key.
+/// Takes the run out of the map before it publishes `Recorded`, or when the task ends
+/// without it, panic included, unless a newer run already took the key.
 struct Deregister {
     runs: Arc<Runs>,
     key: String,
@@ -459,7 +459,7 @@ async fn run_task(
     _live: LiveRun,
     ticket: Ticket,
 ) {
-    let _deregister = key.map(|key| Deregister {
+    let deregister = key.map(|key| Deregister {
         runs: Arc::clone(&state.runs),
         key,
         rx: tx.subscribe(),
@@ -502,6 +502,8 @@ async fn run_task(
 
     let recorded = crate::history::record(&state, &domain, dkim, &published.run).await;
     crate::cache::hold(&state, recorded.as_ref(), &published).await;
+    // Out of the register before the stream ends: a caller that read `Recorded` never joins this run.
+    drop(deregister);
     tx.send_modify(|s| s.recorded = Some(recorded));
     drop(ticket);
 }
@@ -534,5 +536,70 @@ mod tests {
             .await
             .expect("drain completes once the run ends");
         held.await.unwrap();
+    }
+
+    /// A run whose stream has ended on `Recorded` is no longer in the register, so a prefetch
+    /// that comes after it gets `NotStarted` instead of joining the finished run. The test holds
+    /// the register's lock while it reads the run: the run's task cannot deregister meanwhile, so
+    /// the order of deregistration and `Recorded` is observed, not raced.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    // Holding the register's std mutex across the reads is the point: it blocks deregistration.
+    #[allow(clippy::await_holding_lock)]
+    async fn recorded_follows_deregistration() {
+        let mut state = AppState::new(crate::routes::tests::test_config_with_rate_limit(
+            1000, 1000,
+        ))
+        .unwrap();
+        state.badge_check_fn = Some(Arc::new(|domain: String| {
+            Box::pin(async move {
+                CheckOutput {
+                    domain,
+                    sections: HashMap::new(),
+                    score: crate::score::OverallScore {
+                        sections: HashMap::new(),
+                        overall_percentage: 80.0,
+                        grade: "B".to_string(),
+                        hard_fail_triggered: false,
+                        hard_fail_checks: vec![],
+                        not_applicable: HashMap::new(),
+                        complete: true,
+                    },
+                    duration_ms: 1,
+                }
+            })
+        }));
+        let client = IpAddr::from([127, 0, 0, 1]);
+        let Admit::Admitted(mut stream) =
+            admit(&state, "example.com", client, Trigger::Badge, false)
+        else {
+            panic!("the first admit starts a run");
+        };
+
+        let register = state.runs.lock();
+        let recorded = tokio::time::timeout(Duration::from_millis(500), async {
+            while let Some(event) = stream.next().await {
+                if matches!(event, RunEvent::Recorded(_)) {
+                    return true;
+                }
+            }
+            false
+        })
+        .await
+        .unwrap_or(false);
+        let registered = register.contains_key(&cache_key("example.com"));
+        drop(register);
+        assert!(
+            !(recorded && registered),
+            "the stream ended on Recorded while the run was still joinable"
+        );
+
+        while stream.next().await.is_some() {}
+        assert!(
+            matches!(
+                admit(&state, "example.com", client, Trigger::Badge, true),
+                Admit::NotStarted
+            ),
+            "a prefetch after the run's end: NotStarted"
+        );
     }
 }
