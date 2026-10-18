@@ -82,7 +82,10 @@ fn example_com_fixture_holds_every_block_shape_and_evidence_references() {
         ShapeKind::Fields,
         ShapeKind::Text,
     ] {
-        assert!(kinds.contains(&want), "example.com run holds no {want:?} block");
+        assert!(
+            kinds.contains(&want),
+            "example.com run holds no {want:?} block"
+        );
     }
 
     assert!(
@@ -93,7 +96,12 @@ fn example_com_fixture_holds_every_block_shape_and_evidence_references() {
         fixture.run.checks.iter().any(|c| !c.evidence.is_empty()),
         "no check carries evidence references"
     );
-    let ids: BTreeSet<String> = fixture.run.blocks.iter().map(|b| b.id.to_string()).collect();
+    let ids: BTreeSet<String> = fixture
+        .run
+        .blocks
+        .iter()
+        .map(|b| b.id.to_string())
+        .collect();
     for check in &fixture.run.checks {
         for r in &check.evidence {
             assert!(
