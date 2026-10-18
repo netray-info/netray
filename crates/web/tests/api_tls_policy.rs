@@ -69,7 +69,8 @@ async fn blocked_targets_answer_403_without_a_handshake() {
         ),
         (
             r#"{"host":"internal.example.com"}"#,
-            StubTlsBackend::new().with_host("internal.example.com", vec!["10.0.0.5".parse().unwrap()]),
+            StubTlsBackend::new()
+                .with_host("internal.example.com", vec!["10.0.0.5".parse().unwrap()]),
             "name resolving to a private address",
         ),
     ];
@@ -79,7 +80,9 @@ async fn blocked_targets_answer_403_without_a_handshake() {
         assert_eq!(status, StatusCode::FORBIDDEN, "{label}: {json}");
         assert_eq!(json["error"]["code"], "TARGET_BLOCKED", "{label}: {json}");
         assert!(
-            json["error"]["message"].as_str().is_some_and(|m| !m.is_empty()),
+            json["error"]["message"]
+                .as_str()
+                .is_some_and(|m| !m.is_empty()),
             "{label}: {json}"
         );
         assert!(backend.calls().is_empty(), "{label}: a handshake was made");

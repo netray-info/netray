@@ -77,8 +77,8 @@ async fn inspect(app: &Router, body: Value) -> Reply {
 
 fn validate_inspect_response(body: &Value) {
     let doc = serde_json::to_value(openapi()).unwrap();
-    let schema = &doc["paths"]["/api/v1/http/inspect"]["post"]["responses"]["200"]["content"]
-        ["application/json"]["schema"];
+    let schema = &doc["paths"]["/api/v1/http/inspect"]["post"]["responses"]["200"]["content"]["application/json"]
+        ["schema"];
     assert!(schema.is_object(), "200 schema not documented: {schema}");
     let mut root = schema.clone();
     root.as_object_mut()

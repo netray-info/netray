@@ -10,8 +10,7 @@ use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use netray_tls::testing::{StubTlsBackend, stub_state};
 use netray_web::api::{
-    ApiConfig, ApiParts, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger, openapi,
-    router,
+    ApiConfig, ApiParts, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger, openapi, router,
 };
 use serde_json::{Value, json};
 use tower::ServiceExt;
@@ -63,8 +62,8 @@ async fn post(app: Router, body: Value) -> (StatusCode, Value) {
 
 fn validate_200(body: &Value) {
     let doc = serde_json::to_value(openapi()).unwrap();
-    let schema = &doc["paths"]["/api/v1/tls/inspect"]["post"]["responses"]["200"]["content"]
-        ["application/json"]["schema"];
+    let schema = &doc["paths"]["/api/v1/tls/inspect"]["post"]["responses"]["200"]["content"]["application/json"]
+        ["schema"];
     assert!(schema.is_object(), "200 schema not documented");
     let mut root = schema.clone();
     root.as_object_mut()
@@ -97,7 +96,10 @@ async fn port_25_uses_smtp_starttls() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["ports"][0]["port"], 25, "{body}");
-    assert_eq!(body["ports"][0]["ips"][0]["tls"]["starttls"], "smtp", "{body}");
+    assert_eq!(
+        body["ports"][0]["ips"][0]["tls"]["starttls"], "smtp",
+        "{body}"
+    );
     let calls = stub.calls();
     assert_eq!(calls.len(), 1, "{calls:?}");
     assert_eq!(calls[0].1, 25);

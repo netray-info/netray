@@ -292,7 +292,13 @@ fn cases() -> Vec<Case> {
         ip("/api/v1/ip/diff", "post", "/ip/diff", 400, Some(DIFF_BAD)),
         ip("/api/v1/asn/{n}", "get", "/asn/64496", 200, None),
         ip("/api/v1/asn/{n}", "get", "/asn/x", 400, None),
-        ip("/api/v1/tls/inspect", "post", "/tls/inspect", 200, Some(TLS_OK)),
+        ip(
+            "/api/v1/tls/inspect",
+            "post",
+            "/tls/inspect",
+            200,
+            Some(TLS_OK),
+        ),
         ip(
             "/api/v1/tls/inspect",
             "post",
@@ -300,7 +306,13 @@ fn cases() -> Vec<Case> {
             403,
             Some(TLS_BLOCKED),
         ),
-        ip("/api/v1/http/inspect", "post", "/http/inspect", 200, Some(HTTP_OK)),
+        ip(
+            "/api/v1/http/inspect",
+            "post",
+            "/http/inspect",
+            200,
+            Some(HTTP_OK),
+        ),
         ip(
             "/api/v1/http/inspect",
             "post",

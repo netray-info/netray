@@ -122,7 +122,8 @@ async fn localhost_is_invalid_input() {
 
 #[tokio::test]
 async fn private_literal_and_private_resolution_are_blocked() {
-    let stub = Arc::new(StubTlsBackend::new().with_host("internal.example.com", vec![ip("10.0.0.5")]));
+    let stub =
+        Arc::new(StubTlsBackend::new().with_host("internal.example.com", vec![ip("10.0.0.5")]));
     let inspector = stub_state(stub.clone()).inspector();
     for host in ["10.0.0.1", "internal.example.com"] {
         let err = inspector
