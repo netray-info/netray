@@ -171,6 +171,7 @@ async fn since_starts_where_a_check_first_appears() {
     let want = format!("{m:02}-{d:02}");
     let row = body
         .split(r#"<article class="check-row""#)
+        .skip(1)
         .find(|r| r.contains("tls.caa_compliant"))
         .expect("caa issue row");
     assert!(
