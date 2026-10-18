@@ -463,6 +463,8 @@ fn stored_run(profile_version: u32) -> Run {
         checks: vec![RunCheck {
             id: CheckId::parse("dns.dnssec_valid").unwrap(),
             status: Status::Pass,
+            findings: Vec::new(),
+            evidence: Vec::new(),
         }],
         blocks: vec![],
     }
@@ -516,7 +518,7 @@ async fn netray_metrics_c12_history_gauges_are_set_at_startup_and_after_a_sweep(
         ip_golden("ifconfig-json.json"),
         tls_golden("tlsight-inspect.json"),
     );
-    let _prepared = lens::prepare(&config, registry).await;
+    let _prepared = lens::prepare(&config, registry, netray_web::api::ApiParts::default()).await;
 
     assert_eq!(snap.gauge("netray_history_entries"), Some(2.0));
     assert_eq!(snap.gauge("netray_history_domains"), Some(2.0));

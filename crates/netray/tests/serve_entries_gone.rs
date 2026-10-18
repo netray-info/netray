@@ -134,6 +134,8 @@ fn seed(db: &Path) -> String {
         checks: vec![RunCheck {
             id: CheckId::parse("dns.dnssec_valid").unwrap(),
             status: Status::Pass,
+            findings: Vec::new(),
+            evidence: Vec::new(),
         }],
         blocks: vec![],
     };

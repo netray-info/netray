@@ -338,6 +338,6 @@ async fn spent_limiter_burst_is_rate_limited() {
 #[tokio::test]
 async fn module_builds_its_jobs() {
     let cfg: ModuleConfig = serde_json::from_str("{}").unwrap();
-    let module = DnsModule::new(cfg).await.expect("module builds");
+    let module = DnsModule::new(cfg, None).await.expect("module builds");
     let _jobs: DnsJobs = module.jobs();
 }

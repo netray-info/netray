@@ -54,7 +54,7 @@ pub async fn run_with(
     let config =
         config::Config::load(config_path.as_deref()).expect("failed to load configuration");
 
-    run_config(config, registry).await;
+    run_config(config, registry, parts).await;
 }
 
 /// What [`serve`] needs besides the app: the counters and the run registry behind it.
@@ -72,10 +72,20 @@ pub struct Prepared {
 
 /// Serves lens's application on a loaded configuration. Like [`run_with`], it installs no
 /// subscriber.
-pub async fn run_config(config: config::Config, registry: netray_engine::Registry) {
+pub async fn run_config(
+    config: config::Config,
+    registry: netray_engine::Registry,
+    parts: netray_web::api::ApiParts,
+) {
     let handle = install_metrics();
-    let Prepared { routes, background } = prepare(&config, registry).await;
-    serve(&config, layers(routes), background, handle).await;
+    let Prepared { routes, background } = prepare(&config, registry, parts).await;
+    serve(
+        &config,
+        layers(routes, config.api.enabled),
+        background,
+        handle,
+    )
+    .await;
 }
 
 /// Installs the global Prometheus recorder with lens's buckets and creates every series at
@@ -88,8 +98,12 @@ pub fn install_metrics() -> netray_common::server::PrometheusHandle {
     .expect("failed to install the metrics recorder")
 }
 
-/// Builds lens's state, its stores and its routes; binds nothing.
-pub async fn prepare(config: &config::Config, registry: netray_engine::Registry) -> Prepared {
+/// Builds lens's state, its stores and its routes, `/api/v1` calling `parts`; binds nothing.
+pub async fn prepare(
+    config: &config::Config,
+    registry: netray_engine::Registry,
+    parts: netray_web::api::ApiParts,
+) -> Prepared {
     tracing::info!(
         bind = %config.server.bind,
         http_module = config.backends.http.is_some(),
@@ -267,7 +281,8 @@ pub fn frontend_router() -> Router {
 
 /// The whole HTTP app: every router, the SPA fallback, the OpenAPI routes and the layer stack.
 pub fn app(state: state::AppState) -> Router {
-    layers(routes(state))
+    let api_enabled = state.config.api.enabled;
+    layers(routes(state), api_enabled)
 }
 
 /// Every router, the SPA fallback and the OpenAPI routes, with the `http_metrics` layer, which
@@ -354,8 +369,9 @@ pub fn routes(state: state::AppState) -> Router {
 }
 
 /// The outer layer stack, outermost first: request id, security headers, CORS, body limit,
-/// compression, trace.
-pub fn layers(router: Router) -> Router {
+/// compression, trace. `api_enabled` (`[api] enabled`) relaxes the headers of `/api/v1/docs` and
+/// answers a 413 under `/api/v1` in the v1 error shape.
+pub fn layers(router: Router, api_enabled: bool) -> Router {
     router
         .layer(
             TraceLayer::new_for_http()
@@ -389,12 +405,12 @@ pub fn layers(router: Router) -> Router {
         .layer(CompressionLayer::new())
         .layer(RequestBodyLimitLayer::new(8 * 1024))
         .layer(axum::middleware::from_fn_with_state(
-            config.api.enabled,
+            api_enabled,
             api_v1_payload_too_large,
         ))
         .layer(cors_layer())
         .layer(axum::middleware::from_fn_with_state(
-            config.api.enabled,
+            api_enabled,
             security_headers_mw,
         ))
         .layer(axum::middleware::from_fn(

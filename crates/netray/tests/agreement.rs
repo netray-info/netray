@@ -122,15 +122,18 @@ async fn world(dns: Plan, email: Plan) -> World {
     let mut state = AppState::with_registry(config, registry).unwrap();
     state.history_store = Some(store.clone());
 
-    let app = lens::layers(netray_web::host::router(HostRouters {
-        apex: "netray.info".to_string(),
-        probes: lens::probe_router(),
-        apex_router: lens::routes(state.clone()),
-        dns: None,
-        tls: None,
-        http: None,
-        ip: None,
-    }))
+    let app = lens::layers(
+        netray_web::host::router(HostRouters {
+            apex: "netray.info".to_string(),
+            probes: lens::probe_router(),
+            apex_router: lens::routes(state.clone()),
+            dns: None,
+            tls: None,
+            http: None,
+            ip: None,
+        }),
+        false,
+    )
     .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 40000))));
     World {
         app,
