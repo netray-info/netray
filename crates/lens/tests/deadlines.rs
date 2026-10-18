@@ -104,6 +104,7 @@ fn state(s: Setup) -> AppState {
         badges: BadgesConfig::default(),
         modules: Default::default(),
         admission: lens::config::AdmissionConfig::default(),
+        inspect: Default::default(),
         api: Default::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: SnapshotsConfig::default(),

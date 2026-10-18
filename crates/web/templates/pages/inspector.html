@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% import "components/query_input.html" as c %}
+{% block main %}
+<h1>{{ heading }}</h1>
+{% call c::query_input(query, stream_url, autostart) %}{% endcall %}
+<noscript><p>A live run needs JavaScript. Enable it, or read the guides.</p></noscript>
+{% include "partials/inspect_backlink.html" %}
+<div id="inspect-result"></div>
+{% endblock %}

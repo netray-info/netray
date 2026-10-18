@@ -76,3 +76,28 @@ Risk noted: with lens mounted, a dotless first segment (`/api/dns`) now matches 
 ### Review fix
 
 `crates/common/src/domain.rs` (`validate`, lens's `validate_domain` rule; `crates/lens/src/input.rs` wraps it) replaces `normalise` in the latest handler; both handlers answer the 404 page on a `PathRejection`; a 5xx V1 answer is `500`; the no-entry href is percent-encoded with `errors::LOCATION_SET`; `entries::router` adds `/r/{id}/{segment}/`.
+
+## Phase 5 — Inspector frame
+
+## Groups
+
+G1: C1–C12, C14–C17 (all need `crates/web/src/pages/{mod,inspect}.rs`) · G2: C13 (lens config; needs G1's `InspectConfig`).
+
+## Plan
+
+### G1
+
+1. `Cargo.toml` `[workspace.dependencies]`: `psl = "2"` (MIT/Apache-2.0, accepted by `deny.toml`); `crates/web/Cargo.toml`: `psl`, `tokio` (`sync`, `time`) as normal dependencies.
+2. `templates/components/query_input.html`: macro `query_input(view, stream_url = "", autostart = false)`; with a `stream_url` the `<form>` carries `data-island="stream" data-stream-url`, and `data-stream-autostart="load"` when `autostart`; every existing caller unchanged (gate rule 2 owns `query-input`, `components.rs` pins `QueryInputView`).
+3. `templates/pages/inspector.html` (new, extends `base.html`): `<h1>`, the query input, a `<noscript>` notice, the PSL back-link, `<div id="inspect-result"></div>`. `templates/partials/inspect_{start,part,notice}.html` (new): fragment bodies, each root carrying its target id.
+4. `crates/web/src/evidence.rs`: `live_run_line()` → parts `live`, `not recorded`.
+5. `crates/web/src/pages/inspect.rs` (new): the Phase 5 interface — `Tool`, `InspectLimits`, `InspectConfig` (per-tool defaults merged under a partial table, `validate` naming `inspect.<tool>.<key>`), `JobRequest`, `JobPart`, `Job::new`, `InspectorJobs`, `InspectDeps` (one semaphore per tool, `IpExtractor`), `inspect_router`; `target_host` + `registrable_domain` (`psl::domain_str`, then `netray_common::domain::validate`), href percent-encoded with `errors::LOCATION_SET`; client address as `api/limit.rs` `client`. POST order: unknown tool 404 → prefetch `503 no-store` → `admit` Err → `429` + `Retry-After` + one fragment → slot full → `503` + "busy" fragment → `start` Err → one fragment → stream (permit held, `timeout_at(deadline)`, parts as they finish, "timed out" for the rest, `end`). Names no module crate.
+6. `crates/web/src/pages/mod.rs`: `mod inspect;` and the re-exports; `SPECULATION_RULES` gains `{"href_matches":"/inspect/*"}`.
+
+### G2
+
+1. `crates/lens/src/config.rs`: `#[serde(default)] pub inspect: netray_web::pages::InspectConfig`; `Config::validate` calls `self.inspect.validate()` after the api check; cfg(test) literals in `config.rs`, `state.rs`, `routes.rs` gain `inspect: Default::default()`.
+2. `crates/lens/lens.example.toml`: commented `[inspect.*]` block with the defaults.
+3. The protected lens tests with exhaustive `Config { … }` literals gain `inspect: Default::default()` (one line each; `ADLC-Test-Change` per file, precedent 6455529b).
+
+The SDD amendments (requirement 22) land in Phase 7, as the spec orders.

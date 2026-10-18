@@ -264,6 +264,7 @@ mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             admission: crate::config::AdmissionConfig::default(),
+            inspect: Default::default(),
             api: Default::default(),
             og_cards: crate::config::OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),

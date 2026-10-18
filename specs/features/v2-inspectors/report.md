@@ -149,3 +149,53 @@ Pass 1: BLOCKER non-UTF-8 path segments answered axum's `400` (fixed: `PathRejec
 ```
 
 A `200` view of a stored entry is covered by `evidence_latest.rs`, `evidence_entry.rs` and `evidence_mount.rs`; the seed that puts an entry into a running stack is Phase 8.
+
+## Phase 5 — Inspector frame
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R9: `GET /inspect/{dns,tls,http,ip}` renders the page on `base.html` with a `query_input` field `q`/`h`/`url`/`ip`, prefilled from the query, an empty result region, `data-island="stream"`, `data-stream-url="/inspect/<tool>/run"`, `data-stream-autostart="load"` when prefilled, a no-JavaScript notice; a GET starts no job; `/inspect/email` `404` | green | crates/web/tests/inspect_page.rs |
+| C2 | R10: `POST /inspect/<tool>/run` streams `fragment` events then `end`: run line first with parts pending, then each part's blocks, then the band (the band: Phase 6, Decision log); invalid input → one fragment with the job function's message, then `end`; `429` with `Retry-After` and one fragment; prefetch → `503` `no-store` | green | crates/web/tests/inspect_stream.rs |
+| C3 | R11: every inspector run renders `run_line` "live · not recorded" and no `grade`; no job writes to the store | green | crates/web/tests/inspect_no_store.rs |
+| C4 | R12: a host-name target links `/<registrable domain>` by the PSL (one workspace PSL crate, licence accepted by `cargo deny`); an address or a name without a registrable domain gets none | green | crates/web/tests/inspect_backlink.rs |
+| C5 | R13: the inspector routes reach jobs only through `InspectorJobs`; router tests run offline with a stub; the routes name no module crate | green | crates/web/tests/inspect_seam.rs |
+| C6 | R14: `[inspect.dns|tls|http|ip] deadline_ms, max_concurrent`, `deny_unknown_fields`, defaults 30000/15000/30000/5000 ms and 8; zero is a startup reject; full → "busy, try again in a moment", no queue; past the deadline finished parts stay, others "timed out"; page route and v1 share one limiter instance (the `admit` hook here; the shared instance: Phase 6, Decision log) | green | crates/web/tests/inspect_config.rs, inspect_limits.rs |
+| C7 | S: `GET /inspect/tls?h=example.com:443` → prefilled, `data-stream-autostart="load"`, empty result region, no job recorded | green | crates/web/tests/inspect_page.rs |
+| C8 | S: `POST /inspect/tls/run`, stub with two blocks → first fragment "live · not recorded", later fragments both blocks, `end`, no `grade` element | green | crates/web/tests/inspect_stream.rs |
+| C9 | S: `POST /inspect/http/run` with `Sec-Purpose: prerender` → `503`, `Cache-Control: no-store`, no job | green | crates/web/tests/inspect_prefetch.rs |
+| C10 | S: `max_concurrent = 1`, one job in flight → second post answers "busy" at once | green | crates/web/tests/inspect_limits.rs |
+| C11 | S: stub limiter refusing with 20 s → `429`, `Retry-After: 20`, one fragment, no job | green | crates/web/tests/inspect_refusal.rs |
+| C12 | S: `deadline_ms = 100`, parts at 50 ms and 500 ms → first shown, second "timed out" | green | crates/web/tests/inspect_limits.rs |
+| C13 | S: `[inspect.dns] max_concurrent = 0` → lens exits non-zero naming the key; unknown key under `[inspect.tls]` → `--check-config` exits 1 naming it | green | tests/repo/test_check_config.sh |
+| C14 | S: target `www.example.com` → page links `/example.com`; `192.0.2.1` → no link | green | crates/web/tests/inspect_backlink.rs |
+| C15 | S: a store and a stub job → entry count and every `last_seen_at` unchanged | green | crates/web/tests/inspect_no_store.rs |
+| C16 | S: speculation rules parsed → `/inspect/dns` matches, `/example.com/tls` does not | green | crates/web/tests/inspect_speculation.rs, pages_csp.rs |
+| C17 | S: `GET /inspect/email` → `404` | green | crates/web/tests/inspect_page.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 1 | sonnet | 74305 | 176 |
+| G2 | 1 | sonnet | 31976 | 218 |
+| review fix 1 | 1 | sonnet | 45343 | 71 |
+| review fix 2 | 1 | sonnet | 29157 | 38 |
+
+### Review
+
+Pass 1: BLOCKER the back-link came only from the GET prefill (fixed: `#inspect-backlink` re-sent as a fragment by every started job, decision logged); BLOCKER the HTTP authority was split by hand (`https://bank.example.com\@evil.example/` linked `/evil.example`; fixed: `url::Url::parse` as the job parses); BLOCKER the TLS input was split before percent-decoding (fixed: the TLS input order); AMENDMENT the band (requirement 10) and the shared limiter instance (requirement 14) need Phase 6 (spec amended: Phase 6 carries both, decision logged); DEFERRED `registrable_domain` case-sensitive (fixed in phase); DEFERRED `InspectDeps::new` trusts no proxy, so Phase 6 must hand it v1's extractor; DEFERRED `inspect_no_store.rs`'s store half cannot fail until a real `InspectorJobs` runs (Phase 6). Regression tests: `crates/web/tests/inspect_review.rs`. Pass 2: the four fixes hold; AMENDMENT a non-host target (`q=https://example.com`, `h=www.example.com/`) still got a back-link (repaired in phase: a host holds only letters, digits, `-`, `_`, `.`); AMENDMENT the stream form had no `[data-stream-error]` element (frontend rules §5; repaired in phase: `query_input` writes it hidden inside a stream form); DEFERRED as pass 1 on `inspect_no_store.rs`; NIT a refused or invalid run keeps the previous back-link (one fragment by requirement 10). Regression tests: `crates/web/tests/inspect_review_second.rs`.
+
+### Behavioural verification
+
+The routes are mounted in lens in Phase 6 (with the real `InspectorJobs`); the router itself is exercised offline by the `inspect_*` tests. The config entry point, `target/debug/netray lens --check-config` on `crates/lens/lens.dev.toml` plus one appended table:
+
+```
+== [inspect.tls] max_concurrent = 2
+config ok: …/c.toml                                                     exit 0
+== [inspect.dns] max_concurrent = 0
+config error: …/c.toml: inspect.dns.max_concurrent must be at least 1   exit 1
+== [inspect.tls] bogus = 1
+config error: …/c.toml: unknown field `bogus`, expected `deadline_ms` or `max_concurrent` for key `inspect.tls`   exit 1
+```

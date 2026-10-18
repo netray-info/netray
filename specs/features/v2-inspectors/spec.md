@@ -180,7 +180,7 @@ GIVEN `GET /inspect/email` THEN `404`.
 **Depends on:** Phase 5
 **Requirements:** 15, 16, 17, 25
 
-`crates/netray`: the real `InspectorJobs` over the TLS, HTTP and IP functions (I1), the module translations, the shared limiter instances (I2), the port refusal, the caller address, mounted through `lens::run_with`. `crates/engine`: `Catalogue::for_protocol`. `crates/web`: the band through `spectrum::layout` (I6). Router tests use stubs; one job test per inspector with the module crate's `testing` feature where it exists.
+`crates/netray`: the real `InspectorJobs` over the TLS, HTTP and IP functions (I1), the module translations, the shared limiter instances (I2), the port refusal, the caller address, mounted through `lens::run_with`. `crates/engine`: `Catalogue::for_protocol`. `crates/web`: the band through `spectrum::layout` (I6), carried by `Job` and streamed after the parts (requirement 10's "then the band"). Router tests use stubs; one job test per inspector with the module crate's `testing` feature where it exists.
 
 ### Test Scenarios
 
@@ -341,6 +341,16 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
 - `entries::router` also answers `/r/{id}/{segment}/` with `404`, over requirement 6's route list
   alone: matchit's catch-all matches no empty rest, and without the route `/r/<id>/tls/` reached
   the SPA shell (review of Phase 4; implementer under the operator's autonomy mandate, 2026-10-18).
+
+- Requirement 10's band and requirement 14's shared limiter instance built in Phase 6, over
+  Phase 5: Phase 5 streams the run line, the parts and `end` and offers the `admit` hook; the band
+  needs requirement 25 and I6, and one limiter instance shared with `/api/v1` exists only once
+  the binary implements `InspectorJobs` (review of Phase 5; implementer under the operator's
+  autonomy mandate, 2026-10-18).
+- The inspector page's PSL back-link sits in its own `#inspect-backlink` element, re-sent as a
+  fragment by every started job from the posted target, over a link computed only from the GET
+  prefill: a run started from the form inspects what was typed, not what the URL carried
+  (review of Phase 5; implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 

@@ -1,7 +1,8 @@
-{% macro query_input(view) %}
-<form class="query-input" action="{{ view.action }}" method="get">
+{% macro query_input(view, stream_url = "", autostart = false) %}
+<form class="query-input" action="{{ view.action }}" method="get"{% if !stream_url.is_empty() %} data-island="stream" data-stream-url="{{ stream_url }}"{% if autostart %} data-stream-autostart="load"{% endif %}{% endif %}>
   <label class="query-input__label" for="query-input-{{ view.name }}">{{ view.label }}</label>
   <input class="query-input__field" id="query-input-{{ view.name }}" type="text" name="{{ view.name }}" placeholder="{{ view.placeholder }}"{% if let Some(value) = view.value %} value="{{ value }}"{% endif %} />
   <button class="query-input__submit" type="submit">{{ view.submit }}</button>
+  {% if !stream_url.is_empty() %}<p class="query-input__error" data-stream-error hidden>The live run failed. Try again.</p>{% endif %}
 </form>
 {% endmacro %}

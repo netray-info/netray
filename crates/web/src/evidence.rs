@@ -112,6 +112,13 @@ pub fn incomplete_run_line() -> RunLineView {
     }
 }
 
+/// The run line of a live inspector run: not stored.
+pub fn live_run_line() -> RunLineView {
+    RunLineView {
+        parts: vec!["live".to_string(), "not recorded".to_string()],
+    }
+}
+
 /// The entry-view URL of a protocol, with the anchor of a block when one is given.
 pub fn href(entry_id: &str, protocol: Protocol, block: Option<&BlockId>) -> String {
     match block {

@@ -73,6 +73,7 @@ fn make_state() -> AppState {
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
         admission: lens::config::AdmissionConfig::default(),
+        inspect: Default::default(),
         api: Default::default(),
         og_cards: OgCardsConfig { enabled: true },
         snapshots: lens::config::SnapshotsConfig::default(),

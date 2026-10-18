@@ -7,6 +7,7 @@ mod errors;
 mod evidence;
 pub mod guides;
 mod headers;
+mod inspect;
 mod jsonld;
 mod status;
 
@@ -19,9 +20,13 @@ use axum::routing::get;
 
 pub use errors::{not_found, query_redirect, server_error};
 pub use evidence::{EvidenceDeps, evidence_router};
+pub use inspect::{
+    InspectConfig, InspectDeps, InspectLimits, InspectorJobs, Job, JobPart, JobRequest, Tool,
+    inspect_router, registrable_domain,
+};
 
 /// The speculation rules every page embeds; the CSP allows exactly their hash.
-pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"}]},"eagerness":"moderate"}]}"#;
+pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matches":"/guide/*"},{"href_matches":"/r/*"},{"href_matches":"/inspect/*"}]},"eagerness":"moderate"}]}"#;
 
 const ROBOTS: &str = "User-agent: *\nAllow: /\nSitemap: https://netray.info/sitemap.xml\n";
 
