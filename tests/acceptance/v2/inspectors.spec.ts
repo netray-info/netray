@@ -58,11 +58,22 @@ interface Spec {
   short: string;
 }
 
+// API v1 limits each client per minute: read the catalogue and the seeded history once per worker.
+let catalogue: Spec[] | undefined;
+let seeded: string[] | undefined;
+
 async function catalogueShorts(request: APIRequestContext, protocol: Protocol): Promise<string[]> {
-  const res = await request.get(`${lens}/api/v1/catalogue`);
-  expect(res.status(), 'GET /api/v1/catalogue').toBe(200);
-  const body = (await res.json()) as { checks: Spec[] };
-  return body.checks.filter((c) => c.protocol === protocol).map((c) => c.short);
+  if (!catalogue) {
+    const res = await request.get(`${lens}/api/v1/catalogue`);
+    expect(res.status(), 'GET /api/v1/catalogue').toBe(200);
+    catalogue = ((await res.json()) as { checks: Spec[] }).checks;
+  }
+  return catalogue.filter((c) => c.protocol === protocol).map((c) => c.short);
+}
+
+async function seededEntryIds(request: APIRequestContext): Promise<string[]> {
+  seeded ??= await entryIds(request, DOMAIN);
+  return seeded;
 }
 
 async function entryIds(request: APIRequestContext, domain: string): Promise<string[]> {
@@ -112,7 +123,7 @@ for (const protocol of PROTOCOLS) {
   for (const width of WIDTHS) {
     for (const theme of THEMES) {
       test(`evidence view ${DOMAIN}/${protocol} at ${width.name} px ${theme}`, async ({ page, request }) => {
-        const ids = await entryIds(request, DOMAIN);
+        const ids = await seededEntryIds(request);
         expect(ids.length, 'the seeded entry exists').toBeGreaterThan(0);
         const entryId = ids[0];
         const shorts = await catalogueShorts(request, protocol);
@@ -186,7 +197,7 @@ test('/inspect/email answers 404', async ({ request }) => {
 
 // C7
 test('C7: /example.com/tls at 390 px dark names the entry, no page scroll, screenshot saved', async ({ page, request }) => {
-  const [entryId] = await entryIds(request, DOMAIN);
+  const [entryId] = await seededEntryIds(request);
   expect(entryId, 'the seeded entry exists').toBeTruthy();
   await prepare(page, WIDTHS[1], 'dark');
   await open(page, `/${DOMAIN}/tls`, 'dark');
