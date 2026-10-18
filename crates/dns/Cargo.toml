@@ -117,3 +117,8 @@ required-features = ["testing"]
 name = "job_blocks_review"
 path = "tests/job_blocks_review.rs"
 required-features = ["testing"]
+
+[[test]]
+name = "job_blocks_rule_m"
+path = "tests/job_blocks_rule_m.rs"
+required-features = ["testing"]

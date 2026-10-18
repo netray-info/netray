@@ -281,6 +281,20 @@ fn in_zone(name: &str) -> bool {
     name.trim_end_matches('.').eq_ignore_ascii_case(ZONE)
 }
 
+/// Every lookup of this name answers SERVFAIL.
+const SERVFAIL_NAME: &str = "dnssec-failed.org";
+/// This name's A lookup answers the zone's address, its AAAA lookup SERVFAIL.
+const PARTIAL_NAME: &str = "partial.example.net";
+
+fn is_partial(name: &str) -> bool {
+    name.trim_end_matches('.').eq_ignore_ascii_case(PARTIAL_NAME)
+}
+
+fn servfails(name: &str, record_type: &str) -> bool {
+    name.trim_end_matches('.').eq_ignore_ascii_case(SERVFAIL_NAME)
+        || (is_partial(name) && record_type == "AAAA")
+}
+
 struct ZoneLookup;
 
 impl ResolverLookup for ZoneLookup {
@@ -296,12 +310,17 @@ impl ResolverLookup for ZoneLookup {
             .map(|uni| {
                 let name = uni.name().to_string();
                 let record_type = uni.record_type().to_string();
-                let data = if in_zone(&name) {
+                let data = if in_zone(&name) || (is_partial(&name) && record_type == "A") {
                     zone_data(&record_type)
                 } else {
                     Vec::new()
                 };
-                let result = if data.is_empty() {
+                let result = if servfails(&name, &record_type) {
+                    serde_json::json!({ "NxDomain": {
+                        "response_time": { "secs": 0, "nanos": 10_000_000 },
+                        "response_code": "SERVFAIL"
+                    }})
+                } else if data.is_empty() {
                     serde_json::json!({ "NxDomain": {
                         "response_time": { "secs": 0, "nanos": 10_000_000 },
                         "response_code": "NOERROR"
@@ -403,7 +422,8 @@ impl RawSend for ZoneSend {
 }
 
 /// A backend serving a fixed `example.com.` zone with no network: A 192.0.2.10, MX, TXT, NS
-/// (`ns1`, `ns2`) and CAA; every other name and type is NODATA. The raw outbound answers every
+/// (`ns1`, `ns2`) and CAA; every lookup of `dnssec-failed.org` is SERVFAIL; `partial.example.net`
+/// answers A (192.0.2.10) and SERVFAILs AAAA; every other name and type is NODATA. The raw outbound answers every
 /// server authoritatively from the same zone, unsigned.
 pub fn stub_backend() -> DnsBackend {
     DnsBackend {
