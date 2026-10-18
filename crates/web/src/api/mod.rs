@@ -32,12 +32,13 @@ pub use error::V1Error;
 pub use runs::{
     DomainRefusal, DomainRuns, RefusalReason, RunEvent, RunEvents, RunRefusal, RunStart, RunTrigger,
 };
+use runs::{RunAnswer, RunSectionEvent};
 pub use state::{AdmissionLimits, ApiParts, ApiState};
 
 const MOUNT: &str = "/api/v1";
 
 #[derive(OpenApi)]
-#[openapi(components(schemas(ErrorResponse)))]
+#[openapi(components(schemas(ErrorResponse, RunAnswer, RunSectionEvent)))]
 struct ApiDoc;
 
 fn read_routes() -> OpenApiRouter<ApiState> {
@@ -52,9 +53,13 @@ fn read_routes() -> OpenApiRouter<ApiState> {
         .routes(routes!(reads::entry_changes))
 }
 
+fn run_routes() -> OpenApiRouter<ApiState> {
+    OpenApiRouter::new().routes(routes!(runs::start_run))
+}
+
 /// The generated v1 document; path keys carry the `/api/v1` mount.
 pub fn openapi() -> utoipa::openapi::OpenApi {
-    let (_, routed) = read_routes().split_for_parts();
+    let (_, routed) = read_routes().merge(run_routes()).split_for_parts();
     let mut doc = ApiDoc::openapi().nest(MOUNT, routed);
     doc.info.title = "netray API".into();
     doc.info.version = env!("CARGO_PKG_VERSION").into();
@@ -68,8 +73,10 @@ pub fn router(state: ApiState) -> Router {
         return Router::new();
     }
     let (limited, _) = read_routes().split_for_parts();
+    let (unlimited, _) = run_routes().split_for_parts();
     limited
         .route_layer(middleware::from_fn_with_state(state.clone(), limit::per_ip))
+        .merge(unlimited)
         .route("/openapi.json", get(|| async { Json(openapi()) }))
         .route("/docs", get(docs::page))
         .route("/", any(not_found))

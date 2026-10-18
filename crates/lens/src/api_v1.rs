@@ -2,8 +2,11 @@
 use std::net::IpAddr;
 
 use futures::future::BoxFuture;
-use netray_web::api::{DomainRefusal, DomainRuns, RunStart, RunTrigger};
+use netray_web::api::{
+    DomainRefusal, DomainRuns, RefusalReason, RunEvent, RunRefusal, RunStart, RunTrigger,
+};
 
+use crate::admission::{self, Admit, Reason, Refusal, RunStream, Trigger};
 use crate::input;
 use crate::state::AppState;
 
@@ -27,11 +30,57 @@ impl DomainRuns for LensRuns {
 
     fn start<'a>(
         &'a self,
-        _domain: &'a str,
-        _client: IpAddr,
-        _trigger: RunTrigger,
-        _prefetch: bool,
+        domain: &'a str,
+        client: IpAddr,
+        trigger: RunTrigger,
+        prefetch: bool,
     ) -> BoxFuture<'a, RunStart> {
-        Box::pin(async { RunStart::NotStarted })
+        Box::pin(async move {
+            if let Err(r) = admission::check_limits(&self.state, client) {
+                return RunStart::Refused(refusal(r));
+            }
+            let trigger = match trigger {
+                RunTrigger::Visit => Trigger::Visit,
+                RunTrigger::Recheck => Trigger::Recheck,
+                RunTrigger::Api => Trigger::Api,
+            };
+            match admission::admit(&self.state, domain, client, trigger, prefetch) {
+                Admit::Admitted(stream) => {
+                    if stream.joined() {
+                        crate::metrics::count_request("joined");
+                    } else {
+                        crate::metrics::count_request("fresh");
+                        self.state.client_runs.record(client);
+                    }
+                    RunStart::Admitted(Box::pin(futures::stream::unfold(stream, events)))
+                }
+                Admit::Refused(r) => RunStart::Refused(refusal(r)),
+                Admit::NotStarted => RunStart::NotStarted,
+            }
+        })
+    }
+}
+
+async fn events(mut stream: RunStream) -> Option<(RunEvent, RunStream)> {
+    let event = match stream.next().await? {
+        admission::RunEvent::Section(ev) => RunEvent::Section(ev),
+        admission::RunEvent::Done(published) => RunEvent::Done(published.run.clone()),
+        admission::RunEvent::Recorded(r) => RunEvent::Recorded(r),
+    };
+    Some((event, stream))
+}
+
+fn refusal(r: Refusal) -> RunRefusal {
+    RunRefusal {
+        reason: match r.reason {
+            Reason::Throttle => RefusalReason::Throttle,
+            Reason::Budget => RefusalReason::Budget,
+            Reason::IpLimit => RefusalReason::IpLimit,
+            Reason::GlobalLimit => RefusalReason::GlobalLimit,
+            Reason::Slots => RefusalReason::Slots,
+        },
+        retry_after_s: r.retry_after_s,
+        last_run_ago_s: r.last_run_ago_s,
+        last_incomplete: r.last_incomplete,
     }
 }

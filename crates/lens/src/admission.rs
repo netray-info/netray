@@ -151,6 +151,15 @@ impl RunStream {
         self.joined
     }
 
+    /// True when the run published `Done` for a complete run.
+    pub(crate) fn published_complete(&self) -> bool {
+        self.rx
+            .borrow()
+            .done
+            .as_ref()
+            .is_some_and(|p| p.run.complete)
+    }
+
     /// The next event; `None` after `Recorded`, or when the run's task ended without one.
     pub async fn next(&mut self) -> Option<RunEvent> {
         let mut closed = false;
@@ -218,25 +227,30 @@ struct Ticket {
     _permit: OwnedSemaphorePermit,
 }
 
+/// A refusal, not yet counted.
 fn refused(
     reason: Reason,
     retry_after_s: u64,
     last_run_ago_s: Option<u64>,
     last_incomplete: bool,
 ) -> Refusal {
-    let label = match reason {
-        Reason::Throttle => "throttle",
-        Reason::Budget => "budget",
-        Reason::IpLimit | Reason::GlobalLimit => "limit",
-        Reason::Slots => "slots",
-    };
-    metrics::counter!("lens_admission_rejections_total", "reason" => label).increment(1);
     Refusal {
         reason,
         retry_after_s,
         last_run_ago_s,
         last_incomplete,
     }
+}
+
+/// Counts a refusal in `lens_admission_rejections_total`.
+pub(crate) fn count_rejection(refusal: &Refusal) {
+    let label = match refusal.reason {
+        Reason::Throttle => "throttle",
+        Reason::Budget => "budget",
+        Reason::IpLimit | Reason::GlobalLimit => "limit",
+        Reason::Slots => "slots",
+    };
+    metrics::counter!("lens_admission_rejections_total", "reason" => label).increment(1);
 }
 
 /// The per-IP and global limiters.
@@ -248,7 +262,9 @@ pub fn check_limits(state: &AppState, client: IpAddr) -> Result<(), Refusal> {
             } else {
                 Reason::IpLimit
             };
-            refused(reason, r.retry_after_secs, None, false)
+            let refusal = refused(reason, r.retry_after_secs, None, false);
+            count_rejection(&refusal);
+            refusal
         },
     )
 }
@@ -324,6 +340,21 @@ pub fn admit(
     trigger: Trigger,
     prefetch: bool,
 ) -> Admit {
+    let admitted = admit_uncounted(state, domain, client, trigger, prefetch);
+    if let Admit::Refused(r) = &admitted {
+        count_rejection(r);
+    }
+    admitted
+}
+
+/// `admit` without counting a refusal: the caller counts it, or answers it another way.
+pub(crate) fn admit_uncounted(
+    state: &AppState,
+    domain: &str,
+    client: IpAddr,
+    trigger: Trigger,
+    prefetch: bool,
+) -> Admit {
     let key = cache_key(domain);
     let mut runs = state.runs.lock();
     if let Some(rx) = runs.get(&key) {
@@ -358,13 +389,28 @@ pub fn admit(
     Admit::Admitted(RunStream::new(rx, false))
 }
 
+/// The domain's registered run as a joined stream. It stays readable after the run
+/// deregisters.
+pub(crate) fn registered(state: &AppState, domain: &str) -> Option<RunStream> {
+    let runs = state.runs.lock();
+    let rx = runs.get(&cache_key(domain))?;
+    Some(RunStream::new(rx.clone(), true))
+}
+
+/// Joins the domain's run when it has published `Done` for a complete run and is still
+/// recording.
+pub(crate) fn join_recording(state: &AppState, domain: &str) -> Option<RunStream> {
+    registered(state, domain).filter(RunStream::published_complete)
+}
+
 /// A run no other caller can join and that is never joined: the DKIM-selector path. It is
 /// bound by the throttle, the slots and the budget like any fresh run.
 pub(crate) fn admit_dkim(state: &AppState, input: CheckInput) -> Result<RunStream, Refusal> {
     let client = input
         .client_ip
         .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
-    let ticket = gate(state, cache_key(&input.domain), client, true, None)?;
+    let ticket =
+        gate(state, cache_key(&input.domain), client, true, None).inspect_err(count_rejection)?;
     let (tx, rx) = watch::channel(RunState::default());
     let live = state.runs.track();
     tokio::spawn(
