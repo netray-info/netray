@@ -562,6 +562,81 @@
         ],
         "type": "object"
       },
+      "ChainFinding": {
+        "description": "A validation finding for a DNSSEC chain level.",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "severity",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ChainLevel": {
+        "description": "A single zone level in the DNSSEC chain.",
+        "properties": {
+          "dnskey_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            },
+            "type": "array"
+          },
+          "ds_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            },
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ChainFinding"
+            },
+            "type": "array"
+          },
+          "is_final": {
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "format": "double",
+            "type": "number"
+          },
+          "level": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "rrsig_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            },
+            "type": "array"
+          },
+          "servers_queried": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "zone",
+          "servers_queried",
+          "dnskey_records",
+          "ds_records",
+          "rrsig_records",
+          "findings",
+          "latency_ms",
+          "is_final"
+        ],
+        "type": "object"
+      },
       "ChangeClass": {
         "enum": [
           "fixed",
@@ -1046,6 +1121,305 @@
         ],
         "type": "object"
       },
+      "DnsAuthCompareDone": {
+        "description": "Summary of an authcompare job.",
+        "properties": {
+          "auth_servers": {
+            "description": "Discovered authoritative nameservers, e.g. [\"ns1.example.com (1.2.3.4)\"].",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "cache_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "total_queries": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "total_queries",
+          "duration_ms",
+          "warnings",
+          "auth_servers"
+        ],
+        "type": "object"
+      },
+      "DnsAuthCompareEvent": {
+        "description": "An event of an authcompare job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsBatch"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsEnrichmentEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsAuthCompareDone"
+          }
+        ]
+      },
+      "DnsAuthCompareResult": {
+        "description": "The events of the job, collected.",
+        "properties": {
+          "batches": {
+            "items": {
+              "$ref": "#/components/schemas/DnsBatch"
+            },
+            "type": "array"
+          },
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsAuthCompareDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsEnrichmentEvent"
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batches",
+          "errors",
+          "enrichment",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnsBatch": {
+        "description": "The answers for one record type: one per record type, transport or source.\n\nSerialises with the human-readable record fields injected (`*_human`, `*_explain`,\n`txt_string`); [`DnsBatch::cache_value`] is the same without them.",
+        "properties": {
+          "completed": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lookups": {
+            "$ref": "#/components/schemas/DnsLookups"
+          },
+          "record_type": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "source": {
+            "description": "Source of this batch: \"recursive\" or \"authoritative\" (authcompare only).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "transport": {
+            "description": "Transport used for this batch (compare only).",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "request_id",
+          "record_type",
+          "lookups",
+          "completed",
+          "total"
+        ],
+        "type": "object"
+      },
+      "DnsChainEvent": {
+        "description": "One zone level of a DNSSEC chain.",
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/ChainLevel"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "level"
+        ],
+        "type": "object"
+      },
+      "DnsCloudInfo": {
+        "description": "Cloud provider metadata from the enrichment API.",
+        "properties": {
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "DnsCompareDone": {
+        "description": "Summary of a compare job.",
+        "properties": {
+          "cache_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "total_queries": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "transports": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "total_queries",
+          "duration_ms",
+          "warnings",
+          "transports"
+        ],
+        "type": "object"
+      },
+      "DnsCompareEvent": {
+        "description": "An event of a compare job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsBatch"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsEnrichmentEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsCompareDone"
+          }
+        ]
+      },
+      "DnsCompareResult": {
+        "description": "The events of the job, collected.",
+        "properties": {
+          "batches": {
+            "items": {
+              "$ref": "#/components/schemas/DnsBatch"
+            },
+            "type": "array"
+          },
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsCompareDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsEnrichmentEvent"
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batches",
+          "errors",
+          "enrichment",
+          "done"
+        ],
+        "type": "object"
+      },
       "DnsContext": {
         "properties": {
           "caa": {
@@ -1074,6 +1448,791 @@
         },
         "required": [
           "resolved_ips"
+        ],
+        "type": "object"
+      },
+      "DnsDnssecDone": {
+        "description": "Summary of a dnssec job.",
+        "properties": {
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "levels": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "duration_ms",
+          "levels"
+        ],
+        "type": "object"
+      },
+      "DnsDnssecEvent": {
+        "description": "An event of a dnssec job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsChainEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsDnssecDone"
+          }
+        ]
+      },
+      "DnsDnssecResult": {
+        "description": "The events of a dnssec job, collected.",
+        "properties": {
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsDnssecDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/DnsChainEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "levels",
+          "errors",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnsDuration": {
+        "properties": {
+          "nanos": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "secs": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "secs",
+          "nanos"
+        ],
+        "type": "object"
+      },
+      "DnsEnrichmentEvent": {
+        "description": "Enrichment of the IP addresses the job found.",
+        "properties": {
+          "enrichments": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsIpInfo"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "enrichments"
+        ],
+        "type": "object"
+      },
+      "DnsErrorEvent": {
+        "description": "A non-fatal error of a job, e.g. one resolver failing.",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "DnsHopEvent": {
+        "description": "One delegation level of a trace.",
+        "properties": {
+          "hop": {
+            "$ref": "#/components/schemas/TraceHop"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "hop"
+        ],
+        "type": "object"
+      },
+      "DnsIpInfo": {
+        "description": "Metadata about a single IP address from the enrichment API.",
+        "properties": {
+          "asn": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cloud": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsCloudInfo"
+              }
+            ]
+          },
+          "is_c2": {
+            "type": "boolean"
+          },
+          "is_datacenter": {
+            "type": "boolean"
+          },
+          "is_spamhaus": {
+            "type": "boolean"
+          },
+          "is_tor": {
+            "type": "boolean"
+          },
+          "is_vpn": {
+            "type": "boolean"
+          },
+          "network_role": {
+            "description": "ASN network role from ipverse/as-metadata (e.g. \"Midsize Transit\", \"Access Provider\").",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "description": "IP classification: \"cloud\", \"datacenter\", \"residential\", \"vpn\", etc.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "DnsLookup": {
+        "description": "One server's answer to one query.",
+        "properties": {
+          "name_server": {
+            "description": "The server, e.g. `udp:192.0.2.1:53`.",
+            "type": "string"
+          },
+          "query": {
+            "$ref": "#/components/schemas/DnsQuery"
+          },
+          "result": {
+            "$ref": "#/components/schemas/DnsLookupResult"
+          }
+        },
+        "required": [
+          "query",
+          "name_server",
+          "result"
+        ],
+        "type": "object"
+      },
+      "DnsLookupError": {
+        "anyOf": [
+          {
+            "enum": [
+              "QueryRefused",
+              "ServerFailure",
+              "Timeout",
+              "NoRecordsFound",
+              "CancelledError",
+              "RuntimePanicError"
+            ],
+            "type": "string"
+          },
+          {
+            "properties": {
+              "ResolveError": {
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "ResolveError"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "ProtoError": {
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "ProtoError"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "DnsLookupRecord": {
+        "properties": {
+          "data": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsRData"
+            },
+            "description": "The record data by type name: a string for A, AAAA, NS, CNAME, PTR and every\nauthoritative record, an object of the type's fields for the others.",
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ttl": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "ttl",
+          "data"
+        ],
+        "type": "object"
+      },
+      "DnsLookupResult": {
+        "description": "A response, an NXDOMAIN or NODATA answer, or an error, as a single-key object.",
+        "oneOf": [
+          {
+            "properties": {
+              "Response": {
+                "$ref": "#/components/schemas/DnsResponse"
+              }
+            },
+            "required": [
+              "Response"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "NxDomain": {
+                "$ref": "#/components/schemas/DnsNxDomain"
+              }
+            },
+            "required": [
+              "NxDomain"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "Error": {
+                "$ref": "#/components/schemas/DnsLookupError"
+              }
+            },
+            "required": [
+              "Error"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "DnsLookups": {
+        "description": "All lookups of one batch.",
+        "properties": {
+          "lookups": {
+            "items": {
+              "$ref": "#/components/schemas/DnsLookup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "lookups"
+        ],
+        "type": "object"
+      },
+      "DnsMeta": {
+        "properties": {
+          "global_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "global_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_max_streams": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "per_target_per_minute",
+          "per_target_burst",
+          "global_per_minute",
+          "global_burst",
+          "per_ip_max_streams"
+        ],
+        "type": "object"
+      },
+      "DnsNxDomain": {
+        "properties": {
+          "referral": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "response_code": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsResponseCode"
+              }
+            ]
+          },
+          "response_time": {
+            "$ref": "#/components/schemas/DnsDuration"
+          }
+        },
+        "required": [
+          "response_time"
+        ],
+        "type": "object"
+      },
+      "DnsQuery": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "record_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "record_type"
+        ],
+        "type": "object"
+      },
+      "DnsQueryDone": {
+        "description": "Summary of a query job.",
+        "properties": {
+          "cache_key": {
+            "description": "Cache key for retrieving this result via permalink.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "degraded_providers": {
+            "description": "Providers skipped due to open circuit breakers during this query.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "dnssec": {
+            "description": "Whether DNSSEC mode was requested.",
+            "type": "boolean"
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "total_queries": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "transport": {
+            "description": "Transport used for this query (e.g., \"udp\", \"tls\").",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "total_queries",
+          "duration_ms",
+          "warnings",
+          "transport",
+          "dnssec"
+        ],
+        "type": "object"
+      },
+      "DnsQueryEvent": {
+        "description": "An event of a query job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsBatch"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsEnrichmentEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsQueryDone"
+          }
+        ]
+      },
+      "DnsQueryResult": {
+        "description": "The events of the job, collected.",
+        "properties": {
+          "batches": {
+            "items": {
+              "$ref": "#/components/schemas/DnsBatch"
+            },
+            "type": "array"
+          },
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsQueryDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsEnrichmentEvent"
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "batches",
+          "errors",
+          "enrichment",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnsRData": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsRDataField"
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "DnsRDataField": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          },
+          {
+            "items": {
+              "$ref": "#/components/schemas/DnsRDataField"
+            },
+            "type": "array"
+          },
+          {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DnsRDataField"
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "DnsRecord": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "rdata": {
+            "type": "string"
+          },
+          "record_type": {
+            "type": "string"
+          },
+          "ttl": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "ttl",
+          "record_type",
+          "rdata"
+        ],
+        "type": "object"
+      },
+      "DnsResponse": {
+        "properties": {
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsLookupRecord"
+            },
+            "type": "array"
+          },
+          "response_time": {
+            "$ref": "#/components/schemas/DnsDuration"
+          },
+          "valid_until": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "records",
+          "response_time"
+        ],
+        "type": "object"
+      },
+      "DnsResponseCode": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "integer"
+          }
+        ]
+      },
+      "DnsTraceDone": {
+        "description": "Summary of a trace job.",
+        "properties": {
+          "cache_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hops": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "duration_ms",
+          "hops"
+        ],
+        "type": "object"
+      },
+      "DnsTraceEvent": {
+        "description": "An event of a trace job.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsHopEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsEnrichmentEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DnsTraceDone"
+          }
+        ]
+      },
+      "DnsTraceResult": {
+        "description": "The events of a trace job, collected.",
+        "properties": {
+          "done": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsTraceDone",
+                "description": "`null` when the stream ended before the job finished."
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsEnrichmentEvent"
+              }
+            ]
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DnsErrorEvent"
+            },
+            "type": "array"
+          },
+          "hops": {
+            "items": {
+              "$ref": "#/components/schemas/DnsHopEvent"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "hops",
+          "errors",
+          "enrichment",
+          "done"
+        ],
+        "type": "object"
+      },
+      "DnssecRequest": {
+        "properties": {
+          "domain": {
+            "description": "Domain name to validate (e.g. `\"example.com\"`).",
+            "type": "string"
+          },
+          "timeout_secs": {
+            "description": "Query timeout per level in seconds. Clamped to config max.",
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "domain"
         ],
         "type": "object"
       },
@@ -2225,6 +3384,9 @@
           "api": {
             "$ref": "#/components/schemas/ApiLimits"
           },
+          "dns": {
+            "$ref": "#/components/schemas/DnsMeta"
+          },
           "email": {
             "$ref": "#/components/schemas/EmailMeta"
           },
@@ -2248,7 +3410,8 @@
           "ip",
           "tls",
           "http",
-          "email"
+          "email",
+          "dns"
         ],
         "type": "object"
       },
@@ -2844,6 +4007,43 @@
         ],
         "type": "object"
       },
+      "PostQueryRequest": {
+        "properties": {
+          "dnssec": {
+            "description": "Enable DNSSEC mode (adds DNSKEY and DS record types).",
+            "type": "boolean"
+          },
+          "domain": {
+            "description": "Domain name to query (e.g. `\"example.com\"`).",
+            "type": "string"
+          },
+          "record_types": {
+            "description": "DNS record types to query (e.g. `[\"A\", \"MX\"]`). Defaults to A, AAAA, CNAME, MX.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "servers": {
+            "description": "DNS servers to use (e.g. `[\"cloudflare\", \"8.8.8.8\"]`). Defaults to config default_servers.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "transport": {
+            "description": "Transport: `udp` (default), `tcp`, `tls`, or `https`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
       "ProbeError": {
         "description": "Why a probe got no response.",
         "properties": {
@@ -3189,6 +4389,32 @@
         ],
         "type": "object"
       },
+      "ReferralGroup": {
+        "description": "A group of servers that returned the same NS referral set.",
+        "properties": {
+          "is_majority": {
+            "type": "boolean"
+          },
+          "ns_names": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "servers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "ns_names",
+          "servers",
+          "is_majority"
+        ],
+        "type": "object"
+      },
       "ReportingReport": {
         "properties": {
           "csp_reporting": {
@@ -3485,6 +4711,102 @@
           "coop",
           "coep",
           "corp"
+        ],
+        "type": "object"
+      },
+      "ServerOutcome": {
+        "description": "Outcome classification for a single server response.",
+        "oneOf": [
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "referral"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "type": {
+                "enum": [
+                  "answer"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "error"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "message",
+              "type"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "ServerResult": {
+        "description": "One server's outcome within a hop.",
+        "properties": {
+          "answer_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            },
+            "type": "array"
+          },
+          "authority_zone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latency_ms": {
+            "format": "double",
+            "type": "number"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ServerOutcome"
+          },
+          "referral_ns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "server_ip": {
+            "type": "string"
+          },
+          "server_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "server_ip",
+          "latency_ms",
+          "outcome"
         ],
         "type": "object"
       },
@@ -4089,6 +5411,71 @@
         ],
         "type": "object"
       },
+      "TraceHop": {
+        "description": "A single delegation hop in the trace.",
+        "properties": {
+          "is_final": {
+            "type": "boolean"
+          },
+          "level": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "referral_groups": {
+            "items": {
+              "$ref": "#/components/schemas/ReferralGroup"
+            },
+            "type": "array"
+          },
+          "server_results": {
+            "items": {
+              "$ref": "#/components/schemas/ServerResult"
+            },
+            "type": "array"
+          },
+          "servers_queried": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "zone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "zone",
+          "servers_queried",
+          "server_results",
+          "referral_groups",
+          "is_final"
+        ],
+        "type": "object"
+      },
+      "TraceRequest": {
+        "properties": {
+          "domain": {
+            "description": "Domain name to trace (e.g. `\"example.com\"`).",
+            "type": "string"
+          },
+          "record_type": {
+            "description": "DNS record type to trace (default: `\"A\"`).",
+            "type": "string"
+          },
+          "timeout_secs": {
+            "description": "Query timeout per hop in seconds. Clamped to config max.",
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "type": "object"
+      },
       "UserAgent": {
         "properties": {
           "browser": {
@@ -4461,6 +5848,416 @@
         "summary": "Every check of the catalogue, in file order.",
         "tags": [
           "reference"
+        ]
+      }
+    },
+    "/api/v1/dns/authcompare": {
+      "post": {
+        "operationId": "dns_authcompare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsAuthCompareResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsAuthCompareEvent"
+                }
+              }
+            },
+            "description": "The recursive and the authoritative lookups of the domain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "The recursive answer against the authoritative one, queried from the domain's name servers.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/compare": {
+      "post": {
+        "operationId": "dns_compare",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCompareResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCompareEvent"
+                }
+              }
+            },
+            "description": "The lookups of the domain per transport"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "The same query over UDP, TCP, DNS-over-TLS and DNS-over-HTTPS, to compare the transports.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/dnssec": {
+      "post": {
+        "operationId": "dns_dnssec",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DnssecRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsDnssecResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsDnssecEvent"
+                }
+              }
+            },
+            "description": "The levels of the chain of trust"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body or invalid domain"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "The DNSSEC chain of trust of a name, one level per zone from the root.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/query": {
+      "post": {
+        "operationId": "dns_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsQueryResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsQueryEvent"
+                }
+              }
+            },
+            "description": "The lookups of the domain"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, invalid domain, record type or server, or a query the DNS policy refuses"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "A server address in a blocked range"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "Resolves a domain over the configured resolvers: one batch per provider and record type.\nWith `Accept: text/event-stream` the same events arrive as they complete.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/trace": {
+      "post": {
+        "operationId": "dns_trace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TraceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsTraceResult"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsTraceEvent"
+                }
+              }
+            },
+            "description": "The hops of the delegation"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, invalid domain or record type"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited, or too many DNS jobs of this caller at once"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The DNS module is off, or no resolver could be built"
+          }
+        },
+        "summary": "The delegation path of a name from the root servers, one hop per server asked.",
+        "tags": [
+          "dns"
         ]
       }
     },

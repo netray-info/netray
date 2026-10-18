@@ -379,3 +379,56 @@ $ curl -X POST /api/v1/email/inspect -d '{"domain":"example.com"}' | jq -c '{n:(
 Reader over the phase diff: 0 BLOCKER, 0 AMENDMENT, 0 DEFERRED, 5 NIT.
 
 - NIT: lens zero-initialises no `api_v1_email` (nor Phase 5's `api_v1_tls*`/`api_v1_http*`) rate-limit series; v1's email SSE sends no keep-alive comments (beacon's does, every 15 s); beacon's `do_inspect` span no longer records `selectors`, and no `domain` on a slot refusal; no test covers `EmailJob`'s task abort on drop; `collect_equals_the_streamed_events` sorts both sides, so arrival order is unchecked.
+
+## Phase 7 — DNS inspector jobs and the SDD
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R30: `POST /dns/query`, `/dns/trace`, `/dns/compare`, `/dns/authcompare`, `/dns/dnssec` take prism's bodies, apply `QueryPolicy::validate`, `check_query_cost` per IP, global and per target, the breakers and the semaphore with `[api.dns]`; SSE prism's events, else one typed collected object per job; the fan-out moves into netray-dns functions prism and v1 both call; prism unchanged | green | crates/dns/tests/jobs.rs, crates/web/tests/api_dns_limits.rs, tests/repo/test_check_config.sh |
+| C2 | R34: SDD §7.1 records the shapes this spec fixes; the Phase 3 table marks V3.1–V3.4 built by `v2-api` | green | tests/repo/test_api_sdd.sh |
+| C3 | S: `/dns/query` `example.com A`, stub resolver, `Accept: application/json` → typed collected object valid against the document | green | crates/web/tests/api_dns.rs, crates/web/tests/openapi_responses.rs |
+| C4 | S: the same with `Accept: text/event-stream` → prism's `/api/query` events, each valid against its schema | green | crates/web/tests/api_dns.rs, crates/web/tests/openapi_responses.rs |
+| C5 | S: trace, compare, authcompare, dnssec with a stub → 200, valid against the document, both forms | green | crates/web/tests/api_dns.rs, crates/web/tests/openapi_responses.rs |
+| C6 | S: a query `QueryPolicy` refuses → 400 with the error shape | green | crates/web/tests/api_dns_limits.rs, crates/dns/tests/jobs.rs |
+| C7 | S: per-target DNS budget exhausted → 429 with `Retry-After` | green | crates/web/tests/api_dns_limits.rs |
+| C8 | S: prism's `/api/query`, `/api/trace`, `/api/compare`, `/api/authcompare`, `/api/dnssec` with the same stubs unchanged | green | crates/dns/tests/jobs_prism.rs |
+| C9 | S: the generated document after this phase has every §7.1 row's path and method | green | crates/web/tests/openapi_sdd.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 DNS seam, stub state, limiter scopes, goldens | 3 (red: two test defects — prism's `DnssecRequest` in the `Dns*` filter, unnormalised `latency_ms` and hash-map server order); green after the orchestrator's `ADLC-Test-Change` | sonnet | 126909 | 317 |
+| G2 fan-outs into `DnsJobs` | 1 | sonnet | 239964 | 559 |
+| G3 netray-web `/dns/*`, `[api.dns]` | 1 | sonnet | 99220 | 456 |
+| G4 binary wiring, SDD, fixture | 1 | sonnet | 66475 | 303 |
+
+### Behavioural verification
+
+`./target/debug/netray lens <lens.dev.toml on 127.0.0.1:18485, temp stores>` from the worktree build (the dev config allows arbitrary servers, so a documentation-range server reaches the target policy).
+
+```
+$ curl -X POST /api/v1/dns/query -d '{"domain":"example.com","record_types":["NOPE"]}'
+{"error":{"code":"INVALID_INPUT","message":"invalid record type: NOPE"}} [400]
+$ curl -X POST /api/v1/dns/query -d '{"domain":"example.com","servers":["192.0.2.1"]}'
+{"error":{"code":"TARGET_BLOCKED","message":"blocked target IP: 192.0.2.1 (blocked address range)"}} [403]
+$ curl -X POST /api/v1/dns/trace -d '{"domain":"example.com","record_type":"AXFR"}'
+{"error":{"code":"INVALID_INPUT","message":"invalid record type: AXFR"}} [400]
+$ curl /api/v1/meta | jq -c .limits.dns
+{"per_ip_per_minute":120,"per_ip_burst":64,"per_target_per_minute":60,"per_target_burst":20,"global_per_minute":1000,"global_burst":50,"per_ip_max_streams":10}
+$ curl -X POST /api/v1/dns/query -d '{"domain":"example.com","record_types":["A"]}' | jq -c '{keys:keys, b:(.batches|length), done:.done.total_queries}'
+{"keys":["batches","done","enrichment","errors"],"b":1,"done":1}
+$ curl -N -H 'Accept: text/event-stream' -X POST /api/v1/dns/query -d '{"domain":"example.com","record_types":["A"]}' | grep '^event:' | uniq -c
+   1 event: batch
+   1 event: done
+```
+
+### Review
+
+Reader over the phase diff: 0 BLOCKER, 2 AMENDMENT, 0 DEFERRED, 1 NIT; the coder's six flagged items (cache on disconnect, uncached errors, `prism_*` metrics, limiter labels, authcompare bytes, enrichment IPs) verified unchanged.
+
+- AMENDMENT (repaired in phase): `[api.dns]` lets a policy-accepted job cost more than the global burst (refused forever, as prism refuses it) — decision log, prism's defaults kept; SDD §7.1 named only SMTP for STARTTLS — now SMTP 25/587, IMAP 143, FTP 21.
+- Noted: prism's `?stream=false` no longer truncates a job longer than its buffer (decision log).
+- NIT: the `api_v1_dns*` (and Phase 5/6) rate-limit scopes are not zero-initialised in lens.

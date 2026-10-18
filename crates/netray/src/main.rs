@@ -148,6 +148,7 @@ struct LensModules {
     tls: Arc<netray_tls::TlsModule>,
     http: Arc<netray_http::HttpModule>,
     email: Arc<netray_email::EmailModule>,
+    dns: Arc<netray_dns::DnsModule>,
 }
 
 /// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
@@ -217,7 +218,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
     );
     let mut registry = Registry::new()
         .with(Box::new(Shared(dns.clone())))
-        .with_facts(Box::new(Shared(dns)))
+        .with_facts(Box::new(Shared(dns.clone())))
         .with(Box::new(Shared(http.clone())))
         .with(Box::new(Shared(email.clone())))
         .with(Box::new(Shared(tls.clone())));
@@ -229,6 +230,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
             tls,
             http,
             email,
+            dns,
         });
     };
     let ip_config: netray_ip::ModuleConfig =
@@ -246,6 +248,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
             tls,
             http,
             email,
+            dns,
         });
     }
     for (key, path) in [
@@ -270,6 +273,7 @@ async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<Lens
         tls,
         http,
         email,
+        dns,
     })
 }
 
@@ -335,6 +339,7 @@ async fn main() -> anyhow::Result<()> {
                 tls,
                 http,
                 email,
+                dns,
             } = lens_registry(&cfg, true)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
@@ -345,6 +350,7 @@ async fn main() -> anyhow::Result<()> {
                 tls: Some(tls.inspector()),
                 http: Some(http as Arc<dyn netray_http::HttpInspect>),
                 email: Some(Arc::new(email.inspector()) as Arc<dyn netray_email::EmailInspect>),
+                dns: Some(dns.jobs()),
             };
             if let Some(ip) = ip {
                 reload_ip_on_sighup(ip);

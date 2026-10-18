@@ -39,7 +39,7 @@ impl std::fmt::Display for TraceError {
 // ---------------------------------------------------------------------------
 
 /// A single delegation hop in the trace.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct TraceHop {
     pub level: usize,
     pub zone: String,
@@ -50,23 +50,26 @@ pub struct TraceHop {
 }
 
 /// One server's outcome within a hop.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ServerResult {
+    #[schema(value_type = String)]
     pub server_ip: IpAddr,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server_name: Option<String>,
     pub latency_ms: f64,
     pub outcome: ServerOutcome,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schema(required = false)]
     pub answer_records: Vec<DnsRecord>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schema(required = false)]
     pub referral_ns: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authority_zone: Option<String>,
 }
 
 /// Outcome classification for a single server response.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ServerOutcome {
     Referral,
@@ -75,9 +78,10 @@ pub enum ServerOutcome {
 }
 
 /// A group of servers that returned the same NS referral set.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ReferralGroup {
     pub ns_names: Vec<String>,
+    #[schema(value_type = Vec<String>)]
     pub servers: Vec<IpAddr>,
     pub is_majority: bool,
 }

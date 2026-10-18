@@ -195,3 +195,44 @@ Strict order G1 → G2 → G3. G2 breaks the `netray` build (its `ApiParts` lite
 - `crates/lens/lens.example.toml`: commented `[api.email]` block.
 - Fixture regenerated last (only additions).
 - Command: `cargo build -p netray && bash tests/repo/test_check_config.sh`; `UPDATE_GOLDEN=1 cargo test -p netray-web --test openapi_contract`, then `cargo test -p netray-web --test openapi_contract --test openapi_responses --test openapi_document`; then `just adlc-verify`.
+
+## Phase 7 — DNS inspector jobs and the SDD
+
+Binding interface: the spec's Phase 7 decisions and the Phase 7 interface sheet (DnsBackend, DnsJobs, DnsJob<E>, DnsRefusal, `[api.dns]`, third compose step, §7.1 rows).
+
+## Groups
+
+G1: C8 · G2: C1, C6 · G3: C3, C4, C5, C7, C9 · G4: C2
+
+Serial. G1 (seam, goldens captured) and G2 (fan-out moved, goldens byte-identical) both edit prism's five handlers and keep the workspace building. G3 breaks `cargo build -p netray` (its `ApiParts` literal) and the contract fixture until G4.
+
+## Plan
+
+### G1 — seam, stub state, limiter scopes, golden capture
+- `crates/common/src/rate_limit.rs`: `check_direct_cost_scoped`; `check_direct_cost` = scope `"global"`.
+- `crates/dns/src/security/rate_limit.rs`: `Quotas`, `Scopes`, `scoped`, `prune_if_due`; `check_query_cost` order unchanged, stored scopes.
+- `crates/dns/src/jobs/mod.rs` (new): `DnsBackend { lookup, raw }`, `production()`, `ResolverLookup`.
+- `crates/dns/src/lib.rs`, `api/mod.rs`: `AppState.backend`. Handlers `query.rs`, `compare.rs`, `authcompare.rs`, `trace.rs` (`walk_with`), `dnssec.rs` (`walk_chain_with`): lookups through the backend, nothing moved.
+- `crates/dns/src/testing.rs`: `stub_backend`, `stub_state`.
+- Compile fix in prism's test literals (`integration.rs`, `parse_system.rs`, `system_resolvers.rs`, `parse_cursor.rs`): `backend: DnsBackend::production()`, committed apart under `ADLC-Test-Change`.
+- Goldens `tests/fixtures/contracts/prism-{query,compare,authcompare,trace,dnssec}.{sse,json}` captured with `UPDATE_GOLDEN=1`.
+- Command: `cargo test -p netray-dns --features testing --test jobs_prism` (twice, stable); regression every netray-dns target but `jobs`, `bash tests/repo/test_raw_query_outbound.sh`.
+
+### G2 — fan-outs into `DnsJobs`
+- `crates/dns/src/jobs/events.rs` (new): moved event payloads, `DnsBatch` (enriched `Serialize`, `cache_value`), `BatchLookups`/`AuthLookups`, event enums, `Dns*Result`, `DnsJobEvent`.
+- `crates/dns/src/jobs/schema.rs` (new): schema-only mirrors, `DnsRData`/`DnsRDataField`.
+- `crates/dns/src/jobs/mod.rs`: `DnsJobs` (query, query_parsed, compare, authcompare, trace, dnssec, `with_prism_metrics`), `DnsJob<E>` (`collect`), `DnsRefusal` + `From<ApiError>`; bodies moved verbatim.
+- `dns_trace.rs`, `dns_raw.rs`, `dns_dnssec.rs`: `ToSchema` on hop/chain types. Request types `pub`, no `deny_unknown_fields`.
+- Handlers: extract → `state.jobs().<job>` → `respond` (result cache unchanged); `check.rs` imports only; `DnsModule::jobs()`; root re-exports; `testing::{stub_jobs, stub_jobs_with}`.
+- Command: `cargo test -p netray-dns --features testing --lib --test jobs --test jobs_prism`; goldens unchanged (`git status tests/fixtures/contracts/prism-*`); regression the whole crate.
+
+### G3 — netray-web `/dns/*`, `[api.dns]`
+- Root and `crates/web/Cargo.toml`: `netray-dns` (dev-dep `testing`).
+- `api/config.rs` `ApiDnsConfig` (seven keys, zero rule, bursts ≥ 18); `api/state.rs` `ApiParts.dns`, `dns_limiter` (`api_v1_dns*`), accessors; `api/error.rs` `From<DnsRefusal>`; `api/dns.rs` (new) five handlers and doc routes; `api/mod.rs` third compose step (`Dns`), router, `/meta` `limits.dns`; `lens.example.toml` `[api.dns]` block.
+- Command: `cargo test -p netray-web --test api_dns --test api_dns_limits --test openapi_sdd --test openapi_document`.
+
+### G4 — binary wiring, SDD, fixture
+- `crates/netray`: workspace dep; `LensModules.dns`, `ApiParts.dns = Some(dns.jobs())`.
+- `specs/sdd/v2.md`: §7.1 answer column and error-code paragraph; V3.1–V3.4 "Built by `v2-api`.".
+- Fixture regenerated last (only additions).
+- Command: `cargo build -p netray`; `UPDATE_GOLDEN=1 cargo test -p netray-web --test openapi_contract`; `cargo test -p netray-web --test openapi_contract --test openapi_responses --test openapi_sdd`; `bash tests/repo/test_check_config.sh`; `bash tests/repo/test_api_sdd.sh`; `just adlc-verify`.

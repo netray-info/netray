@@ -20,7 +20,7 @@ use super::state::ApiState;
 const TLS_OFF: &str = "the TLS inspector is off: no TLS module was built";
 const HTTP_OFF: &str = "the HTTP inspector is off: no HTTP module was built";
 
-fn request_id(headers: &HeaderMap) -> String {
+pub(super) fn request_id(headers: &HeaderMap) -> String {
     headers
         .get("x-request-id")
         .and_then(|value| value.to_str().ok())

@@ -14,6 +14,7 @@ netray-ip = { workspace = true }
 netray-tls = { workspace = true }
 netray-http = { workspace = true }
 netray-email = { workspace = true }
+netray-dns = { workspace = true }
 askama = { workspace = true }
 axum = { workspace = true }
 tracing = { workspace = true }
@@ -44,3 +45,4 @@ netray-ip = { workspace = true, features = ["testing"] }
 netray-tls = { workspace = true, features = ["testing"] }
 netray-http = { workspace = true, features = ["testing"] }
 netray-email = { workspace = true, features = ["testing"] }
+netray-dns = { workspace = true, features = ["testing"] }

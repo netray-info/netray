@@ -4,6 +4,7 @@
 mod compose;
 mod config;
 pub mod contract;
+mod dns;
 mod docs;
 mod email;
 mod error;
@@ -84,6 +85,8 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
     );
     let (_, email) = email::email_doc_routes().split_for_parts();
     let composed = compose::compose(composed, vec![("Email", email)]);
+    let (_, dns) = dns::dns_doc_routes().split_for_parts();
+    let composed = compose::compose(composed, vec![("Dns", dns)]);
     let mut doc = ApiDoc::openapi().nest(MOUNT, composed);
     doc.info.title = "netray API".into();
     doc.info.version = env!("CARGO_PKG_VERSION").into();
@@ -105,6 +108,7 @@ pub fn router(state: ApiState) -> Router {
         .merge(inspectors::tls_doc_routes().split_for_parts().0)
         .merge(inspectors::http_doc_routes().split_for_parts().0)
         .merge(email::email_doc_routes().split_for_parts().0)
+        .merge(dns::dns_doc_routes().split_for_parts().0)
         .route("/openapi.json", get(|| async { Json(openapi()) }))
         .route("/docs", get(docs::page))
         .route("/", any(not_found))
@@ -193,6 +197,18 @@ struct Limits {
     tls: InspectorMeta,
     http: InspectorMeta,
     email: EmailMeta,
+    dns: DnsMeta,
+}
+
+#[derive(Serialize, ToSchema)]
+struct DnsMeta {
+    per_ip_per_minute: u32,
+    per_ip_burst: u32,
+    per_target_per_minute: u32,
+    per_target_burst: u32,
+    global_per_minute: u32,
+    global_burst: u32,
+    per_ip_max_streams: u32,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -301,6 +317,15 @@ async fn meta_handler(State(state): State<ApiState>) -> Json<Meta> {
                 per_ip_per_minute: config.email.per_ip_per_minute,
                 per_ip_burst: config.email.per_ip_burst,
                 max_concurrent_inspections: config.email.max_concurrent_inspections,
+            },
+            dns: DnsMeta {
+                per_ip_per_minute: config.dns.per_ip_per_minute,
+                per_ip_burst: config.dns.per_ip_burst,
+                per_target_per_minute: config.dns.per_target_per_minute,
+                per_target_burst: config.dns.per_target_burst,
+                global_per_minute: config.dns.global_per_minute,
+                global_burst: config.dns.global_burst,
+                per_ip_max_streams: config.dns.per_ip_max_streams,
             },
         },
     })

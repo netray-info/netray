@@ -8,6 +8,7 @@ pub mod dns_dnssec;
 pub mod dns_raw;
 pub mod dns_trace;
 pub mod error;
+pub mod jobs;
 pub mod module;
 pub mod parser;
 pub mod record_format;
@@ -18,7 +19,17 @@ pub mod security;
 pub mod testing;
 
 pub use api::check::{CheckEvent, lint_status};
+pub use api::dnssec::DnssecRequest;
+pub use api::query::PostQueryRequest;
+pub use api::trace::TraceRequest;
 pub use config::ModuleConfig;
+pub use jobs::{
+    DnsAuthCompareDone, DnsAuthCompareEvent, DnsAuthCompareResult, DnsBackend, DnsBatch,
+    DnsChainEvent, DnsCompareDone, DnsCompareEvent, DnsCompareResult, DnsDnssecDone,
+    DnsDnssecEvent, DnsDnssecResult, DnsEnrichmentEvent, DnsErrorEvent, DnsHopEvent, DnsJob,
+    DnsJobEvent, DnsJobs, DnsQueryDone, DnsQueryEvent, DnsQueryResult, DnsRefusal, DnsTraceDone,
+    DnsTraceEvent, DnsTraceResult,
+};
 pub use module::{DnsModule, facts_from_lookups, translate};
 pub use netray_common::middleware::RequestId;
 pub use netray_common::middleware::request_id as request_id_middleware;
@@ -93,6 +104,7 @@ pub async fn run(config_arg: Option<String>) {
         ip_enrichment,
         query_semaphore: Arc::new(tokio::sync::Semaphore::new(api::QUERY_SEMAPHORE_PERMITS)),
         config: Arc::new(config.clone()),
+        backend: DnsBackend::production(),
     };
 
     // Spawn SIGHUP-based hot config reload watcher.

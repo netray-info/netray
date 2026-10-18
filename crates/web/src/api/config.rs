@@ -1,9 +1,32 @@
 //! The `[api]` config table (spec v2-api requirement 8).
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Default, Deserialize)]
+/// The limits of `POST /dns/*`; the jobs themselves run on `[modules.dns]`.
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields, default)]
-pub struct ApiDnsConfig {}
+pub struct ApiDnsConfig {
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub per_target_per_minute: u32,
+    pub per_target_burst: u32,
+    pub global_per_minute: u32,
+    pub global_burst: u32,
+    pub per_ip_max_streams: u32,
+}
+
+impl Default for ApiDnsConfig {
+    fn default() -> Self {
+        Self {
+            per_ip_per_minute: 120,
+            per_ip_burst: 64,
+            per_target_per_minute: 60,
+            per_target_burst: 20,
+            global_per_minute: 1000,
+            global_burst: 50,
+            per_ip_max_streams: 10,
+        }
+    }
+}
 
 /// The limiters of `POST /tls/inspect`; the inspection itself runs on `[modules.tls]`.
 #[derive(Debug, Clone, Deserialize)]
@@ -116,6 +139,38 @@ impl ApiEmailConfig {
                 ),
             ],
         )
+    }
+}
+
+/// The smallest burst that admits a job of the flat cost: trace and dnssec cost 16, the
+/// smallest authcompare 1 x 1 x 2 + 16.
+const DNS_MIN_JOB_BURST: u32 = 18;
+
+impl ApiDnsConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        non_zero(
+            "dns",
+            &[
+                ("per_ip_per_minute", self.per_ip_per_minute),
+                ("per_ip_burst", self.per_ip_burst),
+                ("per_target_per_minute", self.per_target_per_minute),
+                ("per_target_burst", self.per_target_burst),
+                ("global_per_minute", self.global_per_minute),
+                ("global_burst", self.global_burst),
+                ("per_ip_max_streams", self.per_ip_max_streams),
+            ],
+        )?;
+        for (key, value) in [
+            ("per_ip_burst", self.per_ip_burst),
+            ("global_burst", self.global_burst),
+        ] {
+            if value < DNS_MIN_JOB_BURST {
+                return Err(format!(
+                    "api.dns.{key} ({value}) is below {DNS_MIN_JOB_BURST}, the cost of the smallest authcompare"
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -238,6 +293,7 @@ impl ApiConfig {
         self.tls.validate()?;
         self.http.validate()?;
         self.email.validate()?;
+        self.dns.validate()?;
         Ok(())
     }
 }

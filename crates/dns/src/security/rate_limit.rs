@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{Quota, RateLimiter};
@@ -23,6 +24,30 @@ use netray_common::rate_limit::{self, KeyedLimiter};
 use crate::config::LimitsConfig;
 use crate::error::ApiError;
 
+/// Quotas of the three budgets, per minute with a burst, and the stream cap.
+#[derive(Debug, Clone, Copy)]
+pub struct Quotas {
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub per_target_per_minute: u32,
+    pub per_target_burst: u32,
+    pub global_per_minute: u32,
+    pub global_burst: u32,
+    pub per_ip_max_streams: u32,
+}
+
+/// The metric prefix and the scope labels a limiter reports its rejections under.
+#[derive(Debug, Clone, Copy)]
+pub struct Scopes {
+    pub metrics_prefix: &'static str,
+    pub per_ip: &'static str,
+    pub per_target: &'static str,
+    pub global: &'static str,
+    pub max_streams: &'static str,
+}
+
+const PRUNE_EVERY: Duration = Duration::from_secs(60);
+
 /// Rate limiting state shared across all request handlers.
 pub struct RateLimitState {
     per_ip: KeyedLimiter<IpAddr>,
@@ -30,6 +55,8 @@ pub struct RateLimitState {
     global: RateLimiter<NotKeyed, InMemoryState, governor::clock::DefaultClock>,
     active_streams: Arc<Mutex<HashMap<IpAddr, usize>>>,
     per_ip_max_streams: u32,
+    scopes: Scopes,
+    last_prune: Mutex<Instant>,
 }
 
 impl RateLimitState {
@@ -37,28 +64,49 @@ impl RateLimitState {
     ///
     /// Note: Governor's `DefaultKeyedStateStore` (DashMap) never evicts entries.
     /// Memory grows ~50 bytes per unique IP/target key. This is acceptable for
-    /// production workloads — a server restart clears all state. TTL-based
-    /// eviction is a future improvement (see roadmap Tier 4).
+    /// production workloads — a server restart clears all state.
     pub fn new(config: &LimitsConfig) -> Self {
+        Self::scoped(
+            &Quotas {
+                per_ip_per_minute: config.per_ip_per_minute,
+                per_ip_burst: config.per_ip_burst,
+                per_target_per_minute: config.per_target_per_minute,
+                per_target_burst: config.per_target_burst,
+                global_per_minute: config.global_per_minute,
+                global_burst: config.global_burst,
+                per_ip_max_streams: config.per_ip_max_streams,
+            },
+            Scopes {
+                metrics_prefix: "prism",
+                per_ip: "per_ip",
+                per_target: "per_target",
+                global: "global",
+                max_streams: "max_streams",
+            },
+        )
+    }
+
+    /// Build the limiters from validated, non-zero quotas.
+    pub fn scoped(quotas: &Quotas, scopes: Scopes) -> Self {
         let per_ip = RateLimiter::keyed(
             Quota::per_minute(
-                NonZeroU32::new(config.per_ip_per_minute).expect("validated non-zero"),
+                NonZeroU32::new(quotas.per_ip_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(config.per_ip_burst).expect("validated non-zero")),
+            .allow_burst(NonZeroU32::new(quotas.per_ip_burst).expect("validated non-zero")),
         );
 
         let per_target = RateLimiter::keyed(
             Quota::per_minute(
-                NonZeroU32::new(config.per_target_per_minute).expect("validated non-zero"),
+                NonZeroU32::new(quotas.per_target_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(config.per_target_burst).expect("validated non-zero")),
+            .allow_burst(NonZeroU32::new(quotas.per_target_burst).expect("validated non-zero")),
         );
 
         let global = RateLimiter::direct(
             Quota::per_minute(
-                NonZeroU32::new(config.global_per_minute).expect("validated non-zero"),
+                NonZeroU32::new(quotas.global_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(config.global_burst).expect("validated non-zero")),
+            .allow_burst(NonZeroU32::new(quotas.global_burst).expect("validated non-zero")),
         );
 
         Self {
@@ -66,8 +114,25 @@ impl RateLimitState {
             per_target,
             global,
             active_streams: Arc::new(Mutex::new(HashMap::new())),
-            per_ip_max_streams: config.per_ip_max_streams,
+            per_ip_max_streams: quotas.per_ip_max_streams,
+            scopes,
+            last_prune: Mutex::new(Instant::now()),
         }
+    }
+
+    /// Drop the keys of both keyed maps that have refilled, at most once per minute.
+    pub fn prune_if_due(&self) {
+        let Ok(mut last) = self.last_prune.try_lock() else {
+            return;
+        };
+        if last.elapsed() < PRUNE_EVERY {
+            return;
+        }
+        *last = Instant::now();
+        self.per_ip.retain_recent();
+        self.per_ip.shrink_to_fit();
+        self.per_target.retain_recent();
+        self.per_target.shrink_to_fit();
     }
 
     // TODO(Task 6.2): expose rate-limit remaining for X-RateLimit-Remaining header.
@@ -98,37 +163,53 @@ impl RateLimitState {
             let streams = self.active_streams.lock().expect("streams lock poisoned");
             let count = streams.get(&client_ip).copied().unwrap_or(0);
             if count >= self.per_ip_max_streams as usize {
-                metrics::counter!("prism_rate_limit_hits_total", "scope" => "max_streams")
-                    .increment(1);
+                let counter_name = format!("{}_rate_limit_hits_total", self.scopes.metrics_prefix);
+                metrics::counter!(counter_name, "scope" => self.scopes.max_streams).increment(1);
                 return Err(ApiError::RateLimited {
                     retry_after_secs: 1,
-                    scope: "max_streams",
+                    scope: self.scopes.max_streams,
                 });
             }
         }
 
         // 2. Per-IP rate limit (total cost: all lookups charged to this client).
-        rate_limit::check_keyed_cost(&self.per_ip, &client_ip, total_nz, "per_ip", "prism")
-            .map_err(|r| ApiError::RateLimited {
-                retry_after_secs: r.retry_after_secs,
-                scope: r.scope,
-            })?;
+        rate_limit::check_keyed_cost(
+            &self.per_ip,
+            &client_ip,
+            total_nz,
+            self.scopes.per_ip,
+            self.scopes.metrics_prefix,
+        )
+        .map_err(|r| ApiError::RateLimited {
+            retry_after_secs: r.retry_after_secs,
+            scope: r.scope,
+        })?;
 
         // 3. Per-target rate limit (each target only charged its share: record_types).
         for key in target_keys {
-            rate_limit::check_keyed_cost(&self.per_target, key, target_nz, "per_target", "prism")
-                .map_err(|r| ApiError::RateLimited {
+            rate_limit::check_keyed_cost(
+                &self.per_target,
+                key,
+                target_nz,
+                self.scopes.per_target,
+                self.scopes.metrics_prefix,
+            )
+            .map_err(|r| ApiError::RateLimited {
                 retry_after_secs: r.retry_after_secs,
                 scope: r.scope,
             })?;
         }
 
         // 4. Global rate limit (total cost).
-        rate_limit::check_direct_cost(&self.global, total_nz, "prism").map_err(|r| {
-            ApiError::RateLimited {
-                retry_after_secs: r.retry_after_secs,
-                scope: r.scope,
-            }
+        rate_limit::check_direct_cost_scoped(
+            &self.global,
+            total_nz,
+            self.scopes.global,
+            self.scopes.metrics_prefix,
+        )
+        .map_err(|r| ApiError::RateLimited {
+            retry_after_secs: r.retry_after_secs,
+            scope: r.scope,
         })?;
 
         // All checks passed — increment active stream count.

@@ -3215,6 +3215,7 @@ dependencies = [
  "http-body-util",
  "jsonschema",
  "netray-common",
+ "netray-dns",
  "netray-email",
  "netray-engine",
  "netray-http",

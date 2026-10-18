@@ -22,7 +22,7 @@ use crate::dns_raw::{DnsRecord, NOT_PUBLIC, ROOT_SERVERS, RawOutbound, record_to
 // ---------------------------------------------------------------------------
 
 /// A single zone level in the DNSSEC chain.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ChainLevel {
     pub level: usize,
     pub zone: String,
@@ -36,7 +36,7 @@ pub struct ChainLevel {
 }
 
 /// A validation finding for a DNSSEC chain level.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ChainFinding {
     pub severity: String, // "ok", "warning", "failed"
     pub message: String,
