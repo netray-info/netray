@@ -28,3 +28,12 @@
 ### Behavioural verification
 
 skipped: the entry point is the hosted runner; C1, C4 and C7 are verified on the PR's CI run before finish.
+
+### CI evidence
+
+- C1, C7: run 39143803077 (f802ac60) `check` success, 16:10:35Z to 16:36:26Z; `grep -c 'No space left'` 0; `df -h /` 108G avail before, 114G after the free-disk step.
+- C4: `test-rust`'s `cargo test --workspace` ran netray-ip with GeoIP data: `ok_handlers` 113 passed (2 ignored), `admin`, `error_handler`, `rate_limit`, `snapshots_test` passed; `etag_last_modified` 5 ignored (they need `--include-ignored`).
+
+### Checks to build
+
+None: the shape is held by tests/repo/test_workflows.sh.

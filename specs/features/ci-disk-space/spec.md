@@ -1,7 +1,8 @@
 # Spec: CI check job fits the runner disk
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-18
+Finished: 2026-10-18
 
 ## Goal
 
@@ -60,6 +61,7 @@ GIVEN the fix branch pushed WHEN the PR's `CI` run completes THEN the `check` jo
 - Freeing disk and bounding debuginfo together over either alone: the margin was crossed by PR #27's growth and will be again; two independent levers keep headroom (implementer under the operator's autonomy mandate, 2026-10-18).
 - Keep both target trees over merging `adlc-verify`'s offline suite into `test-rust`: the gate's content stays as the justfile defines it (R-J2).
 - Spec approved as drafted (implementer under the operator's autonomy mandate, 2026-10-18).
+- Finish entries (CLAUDE.md bullet, solutions note) written without an operator question; the PR's DCO check fails as on PR #27 and is not required by branch protection, so it does not hold the merge (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 
