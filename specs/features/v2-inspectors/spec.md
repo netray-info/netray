@@ -448,6 +448,10 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
 - The DNS band's `RunContext` deadline is the route's `[inspect.dns] deadline_ms`, passed in
   `JobRequest.deadline`, over a fixed 30 s: requirement 19 runs the band under the job's deadline
   (third review of Phase 7; implementer under the operator's autonomy mandate, 2026-10-18).
+- origin/main merged after Phase 7 (`f537de06`, v2-api landed as PR #27), its three conflicts
+  (`Cargo.lock`, `crates/web/Cargo.toml`, the `netray-web` crate doc) resolved to this branch's
+  side, a superset of main's dependencies, over a rebase: the branch is merged, never rebased, and
+  from here on carries one feature (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 
