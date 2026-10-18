@@ -127,7 +127,8 @@ async fn c10_check_flag_starts_no_job() {
 
     let s = run_q(&app, "example.com +check").await;
 
-    assert_eq!(s.matches("inspect-part-").count(), 1, "{s}");
+    // One part event: the query; `+check` adds none.
+    assert_eq!(s.matches(r#""id":"inspect-part-"#).count(), 1, "{s}");
     assert!(!s.contains("check pending"), "{s}");
     assert!(s.contains("id=\"ev-dns.a\""), "{s}");
 }
