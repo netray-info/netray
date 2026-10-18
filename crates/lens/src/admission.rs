@@ -430,8 +430,8 @@ pub(crate) async fn until_done(stream: &mut RunStream) -> Option<Arc<Published>>
     None
 }
 
-/// Takes the run out of the map when the task ends, panic included, unless a newer run
-/// already took the key.
+/// Takes the run out of the map before it publishes `Recorded`, or when the task ends
+/// without it, panic included, unless a newer run already took the key.
 struct Deregister {
     runs: Arc<Runs>,
     key: String,
@@ -459,7 +459,7 @@ async fn run_task(
     _live: LiveRun,
     ticket: Ticket,
 ) {
-    let _deregister = key.map(|key| Deregister {
+    let deregister = key.map(|key| Deregister {
         runs: Arc::clone(&state.runs),
         key,
         rx: tx.subscribe(),
@@ -502,6 +502,8 @@ async fn run_task(
 
     let recorded = crate::history::record(&state, &domain, dkim, &published.run).await;
     crate::cache::hold(&state, recorded.as_ref(), &published).await;
+    // Out of the register before the stream ends: a caller that read `Recorded` never joins this run.
+    drop(deregister);
     tx.send_modify(|s| s.recorded = Some(recorded));
     drop(ticket);
 }
