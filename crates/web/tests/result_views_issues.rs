@@ -15,7 +15,10 @@ fn check(id: &str, status: Status, findings: &[&str], evidence: &[&str]) -> RunC
         id: CheckId::parse(id).unwrap(),
         status,
         findings: findings.iter().map(|s| s.to_string()).collect(),
-        evidence: evidence.iter().map(|b| BlockId::parse(b).unwrap()).collect(),
+        evidence: evidence
+            .iter()
+            .map(|b| BlockId::parse(b).unwrap())
+            .collect(),
     }
 }
 
@@ -48,7 +51,12 @@ fn run() -> Run {
                 &["max-age is 3600 on example.com", "no includeSubDomains"],
                 &["http.headers@192.0.2.1:443"],
             ),
-            check("tls.hostname_match", Status::Fail, &["netray.info is not covered"], &[]),
+            check(
+                "tls.hostname_match",
+                Status::Fail,
+                &["netray.info is not covered"],
+                &[],
+            ),
             check("tls.chain_trusted", Status::Pass, &["chain verifies"], &[]),
             check("dns.dnskey_algorithm", Status::NotApplicable, &[], &[]),
             check("dns.dnssec_rollover", Status::NotTested, &[], &[]),
@@ -98,11 +106,19 @@ fn issues_by_owner_hold_each_warn_and_fail_once_with_catalogue_texts() {
     );
     assert_eq!(
         dnssec.view.fix.as_deref(),
-        Some("Enable DNSSEC signing at the DNS provider, have its DS record published at the registrar and keep the signatures current.")
+        Some(
+            "Enable DNSSEC signing at the DNS provider, have its DS record published at the registrar and keep the signatures current."
+        )
     );
     assert_eq!(dnssec.view.guide_href.as_deref(), Some("/guide/dnssec"));
-    assert_eq!(dnssec.view.evidence_href.as_deref(), Some("/r/Ab3dE5fG/dns"));
-    assert_eq!((dnssec.owner, dnssec.severity, dnssec.status), ("dns_provider", "high", "warn"));
+    assert_eq!(
+        dnssec.view.evidence_href.as_deref(),
+        Some("/r/Ab3dE5fG/dns")
+    );
+    assert_eq!(
+        (dnssec.owner, dnssec.severity, dnssec.status),
+        ("dns_provider", "high", "warn")
+    );
 
     // tls.hostname_match: the fail, stored findings as body
     let host = rows[1];
@@ -113,15 +129,24 @@ fn issues_by_owner_hold_each_warn_and_fail_once_with_catalogue_texts() {
         host.view.fix.as_deref(),
         Some("Reissue the certificate with every hostname served on this server in its SAN list.")
     );
-    assert_eq!(host.view.guide_href.as_deref(), Some("/guide/certificate-chain"));
+    assert_eq!(
+        host.view.guide_href.as_deref(),
+        Some("/guide/certificate-chain")
+    );
     assert_eq!(host.view.evidence_href.as_deref(), Some("/r/Ab3dE5fG/tls"));
-    assert_eq!((host.owner, host.severity, host.status), ("certificate_provider", "critical", "fail"));
+    assert_eq!(
+        (host.owner, host.severity, host.status),
+        ("certificate_provider", "critical", "fail")
+    );
 
     // http.hsts: findings joined, evidence href points at the first reference
     let hsts = rows[2];
     assert!(matches!(hsts.view.tone, Tone::Warn));
     assert_eq!(hsts.view.title, "HSTS");
-    assert_eq!(hsts.view.body, "max-age is 3600 on example.com no includeSubDomains");
+    assert_eq!(
+        hsts.view.body,
+        "max-age is 3600 on example.com no includeSubDomains"
+    );
     assert_eq!(
         hsts.view.fix.as_deref(),
         Some("Send Strict-Transport-Security with max-age=31536000 on all HTTPS responses.")
@@ -147,7 +172,10 @@ fn issues_exclude_every_other_status() {
         "dns.dnssec_rollover",
         "tls.not_expired",
     ] {
-        assert!(!codes.contains(&absent), "{absent} must not be an issue: {codes:?}");
+        assert!(
+            !codes.contains(&absent),
+            "{absent} must not be an issue: {codes:?}"
+        );
     }
     assert_eq!(codes.len(), 3);
 }
@@ -165,7 +193,10 @@ fn row_body_is_the_findings_or_else_the_catalogue_finding() {
             .body
             .clone()
     };
-    assert_eq!(body("http.hsts"), "max-age is 3600 on example.com no includeSubDomains");
+    assert_eq!(
+        body("http.hsts"),
+        "max-age is 3600 on example.com no includeSubDomains"
+    );
     assert_eq!(
         body("dns.dnssec"),
         catalogue()

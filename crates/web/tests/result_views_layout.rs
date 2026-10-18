@@ -8,7 +8,12 @@ use netray_web::pages::result::views::layout_input;
 use netray_web::spectrum::{SectionState, layout};
 
 fn stored_run(profile_version: u32) -> Run {
-    let statuses = [Status::Pass, Status::Warn, Status::Fail, Status::NotApplicable];
+    let statuses = [
+        Status::Pass,
+        Status::Warn,
+        Status::Fail,
+        Status::NotApplicable,
+    ];
     let checks = catalogue()
         .entries()
         .iter()
@@ -47,7 +52,10 @@ fn c18_layout_input_carries_statuses_sections_and_profile() {
     let run = stored_run(3);
     let input = layout_input(&run).expect("profile 3 is known");
 
-    assert!(std::ptr::eq(input.profile, Profiles::get(3).expect("profile 3")));
+    assert!(std::ptr::eq(
+        input.profile,
+        Profiles::get(3).expect("profile 3")
+    ));
 
     assert_eq!(input.statuses.len(), run.checks.len());
     for c in &run.checks {

@@ -40,12 +40,42 @@ fn every_change_class_yields_one_row_with_its_label() {
         (Improved, Some(Fail), Some(Warn), "improved"),
         (New, Some(Pass), Some(Fail), "new"),
         (Worse, Some(Warn), Some(Fail), "worse"),
-        (NowApplicable, Some(NotApplicable), Some(Pass), "now applicable"),
-        (NoLongerApplicable, Some(Pass), Some(NotApplicable), "no longer applicable"),
-        (IntoNotTested, Some(Pass), Some(NotTested), "into not tested"),
-        (OutOfNotTested, Some(NotTested), Some(Warn), "out of not tested"),
-        (IntoNotMeasured, Some(Pass), Some(Unmeasured), "into not measured"),
-        (OutOfNotMeasured, Some(Unmeasured), Some(Fail), "out of not measured"),
+        (
+            NowApplicable,
+            Some(NotApplicable),
+            Some(Pass),
+            "now applicable",
+        ),
+        (
+            NoLongerApplicable,
+            Some(Pass),
+            Some(NotApplicable),
+            "no longer applicable",
+        ),
+        (
+            IntoNotTested,
+            Some(Pass),
+            Some(NotTested),
+            "into not tested",
+        ),
+        (
+            OutOfNotTested,
+            Some(NotTested),
+            Some(Warn),
+            "out of not tested",
+        ),
+        (
+            IntoNotMeasured,
+            Some(Pass),
+            Some(Unmeasured),
+            "into not measured",
+        ),
+        (
+            OutOfNotMeasured,
+            Some(Unmeasured),
+            Some(Fail),
+            "out of not measured",
+        ),
         (Added, None, Some(Pass), "added"),
         (Removed, Some(Warn), None, "removed"),
         (AddedByRelease, None, Some(Warn), "added by release"),
@@ -106,8 +136,14 @@ fn diff_view_rows_checks_then_blocks_grade_and_engine_note() {
     let v = diff_view(Some(&d), catalogue());
     let e = &v.block.entries;
     assert_eq!(e.len(), 5);
-    assert_eq!((e[0].kind.as_str(), e[0].text.as_str()), ("fixed", "Certificate valid"));
-    assert_eq!((e[1].kind.as_str(), e[1].text.as_str()), ("worse", "DNSSEC signed"));
+    assert_eq!(
+        (e[0].kind.as_str(), e[0].text.as_str()),
+        ("fixed", "Certificate valid")
+    );
+    assert_eq!(
+        (e[1].kind.as_str(), e[1].text.as_str()),
+        ("worse", "DNSSEC signed")
+    );
     assert_eq!(e[2].kind, "added");
     assert!(e[2].text.contains("tls.chain"), "{}", e[2].text);
     assert_eq!(e[3].kind, "removed");
@@ -127,7 +163,10 @@ fn diff_view_rows_checks_then_blocks_grade_and_engine_note() {
 #[test]
 fn rescored_grade_has_two_steps_and_none_has_one() {
     let with = diff_view(
-        Some(&make_diff(vec![], grade(Grade::C, Some(Grade::D), Grade::B))),
+        Some(&make_diff(
+            vec![],
+            grade(Grade::C, Some(Grade::D), Grade::B),
+        )),
         catalogue(),
     );
     assert_eq!(
@@ -147,7 +186,10 @@ fn rescored_grade_has_two_steps_and_none_has_one() {
 
 #[test]
 fn entry_without_a_diff_notes_the_first_state() {
-    assert_eq!(FIRST_STATE, "first state recorded \u{2014} re-check after your change");
+    assert_eq!(
+        FIRST_STATE,
+        "first state recorded \u{2014} re-check after your change"
+    );
     let v = diff_view(None, catalogue());
     assert!(v.block.entries.is_empty());
     assert!(v.grade.is_empty());

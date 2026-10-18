@@ -5,7 +5,7 @@ use netray_engine::catalogue::catalogue;
 use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{Grade, Protocol, Status};
-use netray_web::pages::result::views::{issues, Grouping, IssueGroup, Links};
+use netray_web::pages::result::views::{Grouping, IssueGroup, Links, issues};
 
 const OWNERS: [(&str, &str); 6] = [
     ("dns_provider", "your DNS provider"),
@@ -36,12 +36,13 @@ fn pos(list: &[&str], key: &str) -> usize {
     list.iter().position(|k| *k == key).unwrap()
 }
 
-/// Every catalogue check, in catalogue order: fail, warn, pass cycling by index.
+/// Every catalogue check, in catalogue order: pass, fail, warn cycling by index, so the last
+/// check (the one IP check) is open and every protocol has a group.
 fn status_at(i: usize) -> Status {
     match i % 3 {
-        0 => Status::Fail,
-        1 => Status::Warn,
-        _ => Status::Pass,
+        0 => Status::Pass,
+        1 => Status::Fail,
+        _ => Status::Warn,
     }
 }
 
@@ -105,12 +106,14 @@ fn expected(grouping: Grouping) -> Vec<(String, Vec<String>)> {
             status_at(i) == Status::Fail,
         ));
     }
-    let (keys, key_of): (Vec<&str>, fn(&(usize, String, String, String, bool)) -> &str) =
-        match grouping {
-            Grouping::Owner => (owners, |r| r.1.as_str()),
-            Grouping::Severity => (SEVERITIES.to_vec(), |r| r.2.as_str()),
-            Grouping::Protocol => (protocols, |r| r.3.as_str()),
-        };
+    let (keys, key_of): (
+        Vec<&str>,
+        fn(&(usize, String, String, String, bool)) -> &str,
+    ) = match grouping {
+        Grouping::Owner => (owners, |r| r.1.as_str()),
+        Grouping::Severity => (SEVERITIES.to_vec(), |r| r.2.as_str()),
+        Grouping::Protocol => (protocols, |r| r.3.as_str()),
+    };
     let mut out = Vec::new();
     for key in keys {
         let mut rows: Vec<_> = open.iter().filter(|r| key_of(r) == key).collect();
@@ -197,7 +200,11 @@ fn every_row_carries_the_catalogue_attributes_and_pass_checks_are_absent() {
             assert_eq!(row.severity, word(&spec.severity));
             assert_eq!(row.protocol, spec.protocol.as_str());
             assert_eq!(row.order, i);
-            let status = if status_at(i) == Status::Fail { "fail" } else { "warn" };
+            let status = if status_at(i) == Status::Fail {
+                "fail"
+            } else {
+                "warn"
+            };
             assert_eq!(row.status, status);
             seen += 1;
         }

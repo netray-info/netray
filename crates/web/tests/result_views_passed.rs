@@ -5,7 +5,7 @@ use netray_engine::catalogue::catalogue;
 use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{CheckId, Grade, Protocol, Status};
-use netray_web::pages::result::views::{issues, passed_checks, Grouping, Links};
+use netray_web::pages::result::views::{Grouping, Links, issues, passed_checks};
 
 const NA_REASON: &str = "the domain has no mail exchanger";
 
@@ -81,9 +81,15 @@ fn passed_checks_lists_pass_then_not_applicable_then_not_tested_then_unmeasured(
         .iter()
         .map(|&i| id_at(i).to_string())
         .collect();
-    assert_eq!(codes, expected.iter().map(String::as_str).collect::<Vec<_>>());
+    assert_eq!(
+        codes,
+        expected.iter().map(String::as_str).collect::<Vec<_>>()
+    );
 
-    assert_eq!(rows[2].body, NA_REASON, "not_applicable body is the section reason");
+    assert_eq!(
+        rows[2].body, NA_REASON,
+        "not_applicable body is the section reason"
+    );
     assert_eq!(rows[4].body, "could not check", "unmeasured body");
     for (row, i) in rows.iter().zip([2, 7, 8, 9, 10]) {
         assert_eq!(row.title, cat.entries()[i].title);

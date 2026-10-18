@@ -12,7 +12,10 @@ fn check(evidence: &[&str]) -> RunCheck {
         id: CheckId::parse("tls.caa_compliant").unwrap(),
         status: Status::Warn,
         findings: vec!["issuer is not in the CAA set".into()],
-        evidence: evidence.iter().map(|b| BlockId::parse(b).unwrap()).collect(),
+        evidence: evidence
+            .iter()
+            .map(|b| BlockId::parse(b).unwrap())
+            .collect(),
     }
 }
 
@@ -34,7 +37,13 @@ fn run(check: RunCheck) -> Run {
 }
 
 fn row_href(run: &Run, links: Links<'_>) -> Option<String> {
-    let groups = issues(run, catalogue(), links, Grouping::Protocol, &BTreeMap::new());
+    let groups = issues(
+        run,
+        catalogue(),
+        links,
+        Grouping::Protocol,
+        &BTreeMap::new(),
+    );
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].rows.len(), 1);
     groups[0].rows[0].view.evidence_href.clone()
