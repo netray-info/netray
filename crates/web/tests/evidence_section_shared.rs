@@ -4,7 +4,7 @@ use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION, Shape};
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{CheckId, Grade, Protocol, Status};
 use netray_web::components::RunLineView;
-use netray_web::evidence::{render_section, section};
+use netray_web::evidence::{entry_section, render_section, section};
 
 fn bid(s: &str) -> BlockId {
     BlockId::parse(s).unwrap()
@@ -68,7 +68,8 @@ fn line() -> RunLineView {
 #[test]
 fn foreign_block_is_one_shared_line_in_the_tls_view() {
     let run = run();
-    let view = section(&run, Protocol::Tls, line());
+    // A stored view links the owner's view of the same entry, never the latest one.
+    let view = entry_section("Ab3dE5fG", 1_791_469_920, &run, Protocol::Tls);
     let html = render_section(&view).unwrap();
 
     assert!(
@@ -80,11 +81,35 @@ fn foreign_block_is_one_shared_line_in_the_tls_view() {
 
     assert_eq!(view.shared.len(), 1, "two references, one line");
     assert_eq!(view.shared[0].title, "CAA records");
-    assert_eq!(view.shared[0].href, "dns#ev-dns.caa");
+    assert_eq!(view.shared[0].href, "/r/Ab3dE5fG/dns#ev-dns.caa");
     assert_eq!(
-        html.matches("<a href=\"dns#ev-dns.caa\">CAA records</a>")
+        html.matches("<a href=\"/r/Ab3dE5fG/dns#ev-dns.caa\">CAA records</a>")
             .count(),
         1
+    );
+}
+
+#[test]
+fn live_section_links_a_foreign_block_on_the_same_page() {
+    // The live section is streamed into the result page, which holds every protocol's section.
+    let run = run();
+    let view = section(&run, Protocol::Tls, line());
+    assert_eq!(view.shared.len(), 1);
+    assert_eq!(view.shared[0].href, "#ev-dns.caa");
+}
+
+#[test]
+fn owned_block_feeds_list_every_referencing_check_of_any_protocol() {
+    let run = run();
+    let view = section(&run, Protocol::Dns, line());
+    let cat = netray_engine::catalogue();
+    let short = |id: &str| cat.get(&CheckId::parse(id).unwrap()).unwrap().short.clone();
+    let caa = view.blocks.iter().find(|b| b.id == "ev-dns.caa").unwrap();
+    assert!(caa.feeds.contains(&short("dns.caa")), "{:?}", caa.feeds);
+    assert!(
+        caa.feeds.contains(&short("tls.caa_compliant")),
+        "{:?}",
+        caa.feeds
     );
 }
 
