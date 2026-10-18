@@ -3,7 +3,7 @@
 // Each route is driven through `api_router` over `netray_dns::testing::stub_state()`, with the
 // request header `x-request-id: golden`, once as SSE and once with `?stream=false`. The answers
 // are compared with the goldens `tests/fixtures/contracts/prism-{query,compare,authcompare,trace,
-// dnssec}.{sse,json}` after `duration_ms` -> 0 and `cache_key` -> "KEY"; batch frames are sorted
+// dnssec}.{sse,json}` after `duration_ms`/`latency_ms` -> 0 and `cache_key` -> "KEY"; batch frames are sorted
 // by (transport|source, record_type) with `completed` zeroed, as their arrival order is not fixed.
 //
 // UPDATE_GOLDEN=1 cargo test -p netray-dns --features testing --test jobs_prism   (re)writes them.
@@ -81,14 +81,22 @@ async fn answer(router: &axum::Router, req: Request<Body>) -> (StatusCode, Strin
     (status, String::from_utf8(bytes.to_vec()).unwrap())
 }
 
-/// `duration_ms` -> 0 and `cache_key` -> "KEY" (a string one), recursively.
+/// `duration_ms` and `latency_ms` -> 0 and `cache_key` -> "KEY" (a string one), recursively;
+/// `lookups` and `auth_servers` arrays sorted, as authcompare's server list comes from a hash map
+/// and its order is not fixed.
 fn normalise(v: &mut Value) {
     match v {
         Value::Object(map) => {
             for (k, val) in map.iter_mut() {
                 match k.as_str() {
-                    "duration_ms" => *val = json!(0),
+                    "duration_ms" | "latency_ms" => *val = json!(0),
                     "cache_key" if val.is_string() => *val = json!("KEY"),
+                    "lookups" | "auth_servers" => {
+                        normalise(val);
+                        if let Value::Array(items) = val {
+                            items.sort_by_key(|item| item.to_string());
+                        }
+                    }
                     _ => normalise(val),
                 }
             }
@@ -310,7 +318,8 @@ async fn prism_openapi_names_no_dns_component() {
         .as_object()
         .unwrap()
         .keys()
-        .filter(|k| k.starts_with("Dns"))
+        // `DnssecRequest` is prism's own request body, older than v1's `Dns*` components.
+        .filter(|k| k.starts_with("Dns") && k.as_str() != "DnssecRequest")
         .collect();
     assert!(names.is_empty(), "prism's document names {names:?}");
 }

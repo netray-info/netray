@@ -39,6 +39,7 @@ fn default_state() -> AppState {
         hot_state,
         ip_enrichment: None,
         query_semaphore: Arc::new(tokio::sync::Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+        backend: netray_dns::DnsBackend::production(),
         config: Arc::new(config),
     }
 }
@@ -224,6 +225,7 @@ async fn rate_limit_returns_429() {
         hot_state,
         ip_enrichment: None,
         query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+        backend: netray_dns::DnsBackend::production(),
         config: Arc::new(config),
     };
 

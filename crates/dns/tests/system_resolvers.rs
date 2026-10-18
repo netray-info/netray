@@ -27,6 +27,7 @@ fn state_with(allow_system_resolvers: bool) -> AppState {
         hot_state,
         ip_enrichment: None,
         query_semaphore: Arc::new(tokio::sync::Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+        backend: netray_dns::DnsBackend::production(),
         config: Arc::new(config),
     }
 }
