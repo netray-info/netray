@@ -121,3 +121,24 @@ fn recorded_diff_view_by_outcome() {
         assert_eq!(got_note.as_deref(), want_note, "{name}: note");
     }
 }
+
+#[test]
+fn identical_keeps_the_latest_entrys_own_notes() {
+    let cat = catalogue();
+    let mut engine = diff_with(ChangeClass::Worse);
+    engine.engine_changed = true;
+    let latest = entry(Some(engine));
+    let view = recorded_diff_view(&Recorded::Identical { id: "X".into() }, Some(&latest), cat);
+    assert_eq!(
+        view.block.note.as_deref(),
+        Some("unchanged since 2025-10-09; engine changed between these runs")
+    );
+    let first = entry(None);
+    let view = recorded_diff_view(&Recorded::Identical { id: "X".into() }, Some(&first), cat);
+    assert_eq!(
+        view.block.note.as_deref(),
+        Some(
+            "unchanged since 2025-10-09; first state recorded \u{2014} re-check after your change"
+        )
+    );
+}

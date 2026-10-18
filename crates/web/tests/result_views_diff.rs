@@ -198,3 +198,24 @@ fn entry_without_a_diff_notes_the_first_state() {
         Some("first state recorded \u{2014} re-check after your change")
     );
 }
+
+#[test]
+fn changed_block_counts_one_item_in_the_singular_and_omits_an_empty_count() {
+    let block = |items: Vec<String>| BlockChange {
+        block: BlockId::parse("email.mta_sts_policy").unwrap(),
+        kind: BlockChangeKind::Changed { items },
+    };
+    let mut diff = make_diff(
+        vec![],
+        GradeChange {
+            from: Grade::A,
+            rescored: None,
+            to: Grade::A,
+        },
+    );
+    diff.evidence = vec![block(vec!["~ a".into()]), block(vec![])];
+    let view = diff_view(Some(&diff), catalogue());
+    let e = &view.block.entries;
+    assert_eq!(e[0].text, "email.mta_sts_policy (1 item)");
+    assert_eq!(e[1].text, "email.mta_sts_policy");
+}

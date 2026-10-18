@@ -145,7 +145,7 @@ fn issues_by_owner_hold_each_warn_and_fail_once_with_catalogue_texts() {
     assert_eq!(hsts.view.title, "HSTS");
     assert_eq!(
         hsts.view.body,
-        "max-age is 3600 on example.com no includeSubDomains"
+        "max-age is 3600 on example.com; no includeSubDomains"
     );
     assert_eq!(
         hsts.view.fix.as_deref(),
@@ -195,7 +195,7 @@ fn row_body_is_the_findings_or_else_the_catalogue_finding() {
     };
     assert_eq!(
         body("http.hsts"),
-        "max-age is 3600 on example.com no includeSubDomains"
+        "max-age is 3600 on example.com; no includeSubDomains"
     );
     assert_eq!(
         body("dns.dnssec"),
