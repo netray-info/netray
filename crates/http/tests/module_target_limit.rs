@@ -29,7 +29,7 @@ async fn third_run_for_one_domain_hits_the_per_target_limit() {
     let cfg: ModuleConfig =
         toml::from_str("[limits]\nper_target_per_minute = 2\nper_target_burst = 2\n")
             .expect("ModuleConfig accepts spectra's [limits] per-target keys");
-    let module = HttpModule::new(cfg).expect("module builds");
+    let module = HttpModule::new(cfg, None).expect("module builds");
     let facts = Facts {
         a: vec![Ipv4Addr::LOCALHOST],
         ..Facts::default()

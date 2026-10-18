@@ -12,7 +12,7 @@ use netray_engine::{Domain, Facts, Module, RunContext, RunOptions, SectionOutcom
 
 async fn run(config: &str, domain: &str) -> SectionOutcome {
     let cfg: ModuleConfig = toml::from_str(config).expect("config parses");
-    let module = DnsModule::new(cfg).await.expect("module builds");
+    let module = DnsModule::new(cfg, None).await.expect("module builds");
     let ctx = RunContext {
         deadline: Instant::now() + Duration::from_secs(5),
         domain: Domain::new(domain),

@@ -119,7 +119,7 @@ fn golden_yields_the_ten_email_catalogue_ids_once_each() {
 #[tokio::test]
 async fn module_checks_are_the_ten_email_catalogue_ids() {
     let cfg: ModuleConfig = toml::from_str("[dkim]\nmax_user_selectors = 3").unwrap();
-    let module = EmailModule::new(cfg).await.expect("module builds");
+    let module = EmailModule::new(cfg, None).await.expect("module builds");
     use netray_engine::Module;
     let got: Vec<String> = module.checks().iter().map(|c| c.to_string()).collect();
     let unique: BTreeSet<&String> = got.iter().collect();

@@ -31,7 +31,7 @@ async fn third_run_for_one_host_hits_the_per_target_limit() {
     let cfg: ModuleConfig =
         toml::from_str("[limits]\nper_target_per_minute = 2\nper_target_burst = 2\n")
             .expect("ModuleConfig accepts tlsight's [limits] per-target keys");
-    let module = TlsModule::new(cfg).await.expect("module builds");
+    let module = TlsModule::new(cfg, None).await.expect("module builds");
 
     for n in 1..=2 {
         let r = reason(&module, "127.0.0.1").await;
@@ -56,7 +56,7 @@ async fn third_run_for_one_host_hits_the_per_target_limit() {
 #[tokio::test]
 async fn module_refuses_invalid_input_with_tlsight_messages() {
     let cfg: ModuleConfig = toml::from_str("[limits]\nmax_ports = 3").unwrap();
-    let module = TlsModule::new(cfg).await.expect("module builds");
+    let module = TlsModule::new(cfg, None).await.expect("module builds");
 
     let r = reason(&module, "localhost").await;
     assert!(

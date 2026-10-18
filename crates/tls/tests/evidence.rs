@@ -178,7 +178,7 @@ fn unreachable_fail_references_the_addresses_block() {
 #[tokio::test]
 async fn volatile_paths_are_registered_keys() {
     let cfg: ModuleConfig = toml::from_str("[limits]\nmax_ports = 3").unwrap();
-    let module = TlsModule::new(cfg).await.expect("module builds");
+    let module = TlsModule::new(cfg, None).await.expect("module builds");
     let got: BTreeSet<String> = module
         .volatile()
         .iter()

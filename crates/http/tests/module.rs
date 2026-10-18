@@ -147,7 +147,7 @@ fn module_config_refuses_unknown_key_and_accepts_inspect_timeout() {
 #[test]
 fn http_module_declares_http_checks() {
     let cfg: ModuleConfig = toml::from_str("[inspect]\nrequest_timeout_secs = 5").unwrap();
-    let module = HttpModule::new(cfg).expect("module builds");
+    let module = HttpModule::new(cfg, None).expect("module builds");
     assert_eq!(module.protocol(), Protocol::Http);
     assert!(!module.checks().is_empty());
     for id in module.checks() {
