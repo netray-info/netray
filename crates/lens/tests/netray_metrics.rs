@@ -21,8 +21,8 @@ use axum::body::{Body, to_bytes};
 use axum::extract::connect_info::MockConnectInfo;
 use axum::http::{Request, StatusCode, header};
 use common::{
-    dns_golden_raw, email_golden, facts_golden_raw, facts_with_ips, gated, http_module, ip_golden,
-    pass_throttle, registry_with, tls_golden,
+    dns_golden, dns_golden_raw, email_golden, facts_golden, facts_golden_raw, facts_with_ips,
+    gated, http_module, ip_golden, pass_throttle, registry_with, tls_golden,
 };
 use lens::admission::{Admit, Reason, RunStream, Trigger, admit, check_limits};
 use lens::config::Config;
@@ -590,4 +590,184 @@ async fn netray_metrics_c3_c7_no_series_carries_the_domain_the_address_or_the_en
             }
         }
     }
+}
+
+const SECTION_OUTCOMES: &str = "netray_section_outcomes_total";
+const OUTCOMES: [&str; 4] = ["measured", "incomplete", "not_applicable", "not_tested"];
+
+/// Wraps a module and rewrites its measured checks: `only` limits the rewrite to one check id.
+struct Forced {
+    inner: Box<dyn Module>,
+    only: Option<&'static str>,
+    status: Status,
+}
+
+impl Module for Forced {
+    fn protocol(&self) -> Protocol {
+        self.inner.protocol()
+    }
+    fn checks(&self) -> &'static [CheckId] {
+        self.inner.checks()
+    }
+    fn volatile(&self) -> &'static [EvidencePath] {
+        self.inner.volatile()
+    }
+    fn needs_address_records(&self) -> bool {
+        self.inner.needs_address_records()
+    }
+    fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
+        Box::pin(async move {
+            let mut out = self.inner.run(ctx, facts).await;
+            if let SectionOutcome::Measured { checks, .. } = &mut out {
+                for c in checks
+                    .iter_mut()
+                    .filter(|c| self.only.is_none_or(|id| c.id.to_string() == id))
+                {
+                    c.status = self.status;
+                }
+            }
+            out
+        })
+    }
+}
+
+/// One visit run of example.com on golden modules, `dns` as the DNS module and `with_ip` the
+/// IP module's presence; returns the accumulator.
+async fn section_run(dns: Box<dyn Module>, with_ip: bool) -> Acc {
+    let recorder = DebuggingRecorder::new();
+    let snap = Acc::new(recorder.snapshotter());
+    let _guard = metrics::set_default_local_recorder(&recorder);
+    let mut registry = netray_engine::Registry::new()
+        .with(dns)
+        .with(http_module(Some("spectra-inspect.json")))
+        .with(email_golden("beacon.sse"))
+        .with(tls_golden("tlsight-inspect.json"))
+        .with_facts(facts_golden("prism.sse"));
+    if with_ip {
+        registry = registry.with(ip_golden("ifconfig-json.json"));
+    }
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/lens.production.toml");
+    let config = Config::load(path.to_str()).expect("production config loads");
+    let state = AppState::with_registry(config, registry).unwrap();
+    finish(admitted(admit(
+        &state,
+        "example.com",
+        client(),
+        Trigger::Visit,
+        false,
+    )))
+    .await;
+    snap
+}
+
+fn section_counts(snap: &Acc, section: &str) -> Vec<(&'static str, u64)> {
+    OUTCOMES
+        .iter()
+        .map(|o| {
+            (
+                *o,
+                snap.counter(SECTION_OUTCOMES, &[("section", section), ("outcome", o)]),
+            )
+        })
+        .collect()
+}
+
+// Phase 4, requirement 18: a section's outcome follows the scorer, and a protocol without a
+// section in the run counts nothing (SDD v2 section 9.2; v2-unmeasured R1).
+#[tokio::test(flavor = "current_thread")]
+async fn netray_metrics_section_outcomes_follow_the_scorer() {
+    // Rows: dns module, ip module present, expected dns counts, expected ip counts.
+    // Counts are [measured, incomplete, not_applicable, not_tested].
+    let rows: Vec<(&str, Box<dyn Module>, bool, [u64; 4], [u64; 4])> = vec![
+        (
+            "complete dns section",
+            dns_golden("prism.sse"),
+            true,
+            [1, 0, 0, 0],
+            [1, 0, 0, 0],
+        ),
+        (
+            "weighted dns.dnssec unmeasured",
+            Box::new(Forced {
+                inner: dns_golden("prism.sse"),
+                only: Some("dns.dnssec"),
+                status: Status::Unmeasured,
+            }),
+            true,
+            [0, 1, 0, 0],
+            [1, 0, 0, 0],
+        ),
+        (
+            "ip module not registered",
+            dns_golden("prism.sse"),
+            false,
+            [1, 0, 0, 0],
+            [0, 0, 0, 0],
+        ),
+        (
+            "every dns check not tested",
+            Box::new(Forced {
+                inner: dns_golden("prism.sse"),
+                only: None,
+                status: Status::NotTested,
+            }),
+            true,
+            [0, 0, 0, 1],
+            [1, 0, 0, 0],
+        ),
+    ];
+    for (name, dns, with_ip, want_dns, want_ip) in rows {
+        let snap = section_run(dns, with_ip).await;
+        let got = |s| {
+            section_counts(&snap, s)
+                .into_iter()
+                .map(|(_, n)| n)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            got("dns"),
+            want_dns,
+            "{name}: dns [measured, incomplete, not_applicable, not_tested]"
+        );
+        assert_eq!(
+            got("ip"),
+            want_ip,
+            "{name}: ip [measured, incomplete, not_applicable, not_tested]"
+        );
+    }
+}
+
+// Phase 4, SDD v2 section 9.2: `netray_badge_requests_total` is the badge's series; an OG card
+// refused by admission does not count there.
+#[tokio::test(flavor = "current_thread")]
+async fn netray_metrics_refused_og_request_does_not_count_a_badge_request() {
+    let recorder = DebuggingRecorder::new();
+    let snap = Acc::new(recorder.snapshotter());
+    let _guard = metrics::set_default_local_recorder(&recorder);
+    let w = world(
+        |c| c.cache.enabled = false,
+        facts_golden_raw("prism.sse"),
+        tls_golden("tlsight-inspect.json"),
+        None,
+    )
+    .await;
+    let app = app(&w.state);
+
+    // A run within the minute puts the domain under the throttle; the card request is refused.
+    finish(admitted(admit(
+        &w.state,
+        "example.com",
+        client(),
+        Trigger::Visit,
+        false,
+    )))
+    .await;
+    assert_eq!(get(&app, "/og/example.com.png").await, StatusCode::OK);
+    assert_eq!(
+        snap.counter(REJECTIONS, &[]),
+        1,
+        "the card request was refused by admission"
+    );
+    assert_eq!(snap.counter("netray_badge_requests_total", &[]), 0);
 }
