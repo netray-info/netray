@@ -61,8 +61,16 @@ for row in "${rows[@]}"; do
     [ "$(get /does-not-exist "$tmp/$sub.unknown")" = 200 ] || fail "netray $sub: GET /does-not-exist is not 200"
 
     grep -q '<html' "$tmp/$sub.root" || fail "netray $sub: GET / body has no <html"
-    cmp -s "$tmp/$sub.root" "$tmp/$sub.unknown" \
-        || fail "netray $sub: GET /does-not-exist is not the same body as GET /"
+    if [ "$sub" = lens ]; then
+        # lens's / is netray-web's idle page (v2-result-page); the SPA shell stays the fallback.
+        grep -q 'id="root"' "$tmp/$sub.unknown" \
+            || fail "netray $sub: GET /does-not-exist is not the SPA shell"
+        grep -q 'name="d"' "$tmp/$sub.root" \
+            || fail "netray $sub: GET / is not the idle page"
+    else
+        cmp -s "$tmp/$sub.root" "$tmp/$sub.unknown" \
+            || fail "netray $sub: GET /does-not-exist is not the same body as GET /"
+    fi
 
     kill "$pid" 2>/dev/null
 done
