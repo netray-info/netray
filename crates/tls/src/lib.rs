@@ -1,10 +1,12 @@
 // The tlsight service as a library: `run` is its entry point, started by
 // `netray tls`. The modules are `pub` for the integration tests in `tests/`.
 
+pub mod backend;
 pub mod config;
 pub mod dns;
 pub mod error;
 pub mod input;
+pub mod inspector;
 pub mod module;
 pub mod quality;
 pub mod reload;
@@ -16,7 +18,9 @@ pub mod testing;
 pub mod tls;
 pub mod validate;
 
+pub use backend::TlsBackend;
 pub use config::ModuleConfig;
+pub use inspector::{TlsInspectRequest, TlsInspector, TlsRefusal};
 pub use module::{TlsModule, translate};
 
 pub use netray_common::middleware::RequestId;

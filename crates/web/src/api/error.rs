@@ -4,12 +4,15 @@ use std::fmt;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use netray_common::error::{ApiError, build_error_response};
+use netray_http::HttpRefusal;
 use netray_ip::IpRefusal;
+use netray_tls::TlsRefusal;
 
 #[derive(Debug)]
 pub enum V1Error {
     InvalidInput(String),
     BatchTooMany(String),
+    TargetBlocked(String),
     DomainInvalid(String),
     NotFound(String),
     Gone(String),
@@ -29,6 +32,7 @@ impl fmt::Display for V1Error {
         match self {
             Self::InvalidInput(msg)
             | Self::BatchTooMany(msg)
+            | Self::TargetBlocked(msg)
             | Self::DomainInvalid(msg)
             | Self::NotFound(msg)
             | Self::Gone(msg)
@@ -51,6 +55,7 @@ impl ApiError for V1Error {
             Self::InvalidInput(_) | Self::BatchTooMany(_) | Self::DomainInvalid(_) => {
                 StatusCode::BAD_REQUEST
             }
+            Self::TargetBlocked(_) => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Gone(_) => StatusCode::GONE,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -69,6 +74,7 @@ impl ApiError for V1Error {
         match self {
             Self::InvalidInput(_) => "INVALID_INPUT",
             Self::BatchTooMany(_) => "BATCH_TOO_MANY",
+            Self::TargetBlocked(_) => "TARGET_BLOCKED",
             Self::DomainInvalid(_) => "DOMAIN_INVALID",
             Self::NotFound(_) => "NOT_FOUND",
             Self::Gone(_) => "GONE",
@@ -100,6 +106,28 @@ impl From<IpRefusal> for V1Error {
         match refusal {
             IpRefusal::InvalidInput(msg) => Self::InvalidInput(msg),
             IpRefusal::Unavailable(msg) => Self::Unavailable(msg),
+        }
+    }
+}
+
+impl From<TlsRefusal> for V1Error {
+    fn from(refusal: TlsRefusal) -> Self {
+        match refusal {
+            TlsRefusal::InvalidInput(msg) => Self::InvalidInput(msg),
+            TlsRefusal::Blocked(msg) => Self::TargetBlocked(msg),
+            TlsRefusal::RateLimited { retry_after_secs } => Self::RateLimited { retry_after_secs },
+            TlsRefusal::Unavailable(msg) => Self::Unavailable(msg),
+        }
+    }
+}
+
+impl From<HttpRefusal> for V1Error {
+    fn from(refusal: HttpRefusal) -> Self {
+        match refusal {
+            HttpRefusal::InvalidInput(msg) => Self::InvalidInput(msg),
+            HttpRefusal::Blocked(msg) => Self::TargetBlocked(msg),
+            HttpRefusal::RateLimited { retry_after_secs } => Self::RateLimited { retry_after_secs },
+            HttpRefusal::Unavailable(msg) => Self::Unavailable(msg),
         }
     }
 }

@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use arc_swap::ArcSwap;
 
+use crate::backend::{LiveBackend, TlsBackend};
 use crate::config::Config;
 use crate::dns::DnsResolver;
 use crate::security::{IpExtractor, RateLimitState};
@@ -22,6 +23,7 @@ pub struct AppState {
     pub handshake_semaphore: Arc<Semaphore>,
     pub hsts_tls_connector: Arc<tokio_rustls::TlsConnector>,
     pub dns_resolver: Option<Arc<DnsResolver>>,
+    pub backend: Arc<dyn TlsBackend>,
     pub enrichment_client: Option<Arc<EnrichmentClient>>,
     pub custom_ca_count: usize,
 }
@@ -65,6 +67,7 @@ impl AppState {
             handshake_semaphore: Arc::new(Semaphore::new(config.limits.max_concurrent_handshakes)),
             hsts_tls_connector,
             dns_resolver: None, // Initialized async in main
+            backend: Arc::new(LiveBackend { resolver: None }),
             enrichment_client,
             custom_ca_count,
             config: Arc::new(ArcSwap::from_pointee(config.clone())),
@@ -76,7 +79,11 @@ impl AppState {
     pub async fn init_dns_resolver(&mut self, config: &Config) {
         match DnsResolver::new(config.dns.timeout_secs).await {
             Ok(resolver) => {
-                self.dns_resolver = Some(Arc::new(resolver));
+                let resolver = Arc::new(resolver);
+                self.backend = Arc::new(LiveBackend {
+                    resolver: Some(Arc::clone(&resolver)),
+                });
+                self.dns_resolver = Some(resolver);
                 tracing::info!(
                     check_caa = config.validation.check_caa,
                     check_dane = config.validation.check_dane,

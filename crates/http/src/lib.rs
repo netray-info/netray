@@ -4,6 +4,7 @@ pub mod config;
 pub mod error;
 pub mod input;
 pub mod inspect;
+pub mod job;
 pub mod metrics;
 pub mod module;
 pub mod quality;
@@ -14,6 +15,7 @@ pub mod state;
 pub mod testing;
 
 pub use config::ModuleConfig;
+pub use job::{HttpInspect, HttpInspectRequest, HttpRefusal};
 pub use module::{HttpModule, translate};
 
 pub use netray_common::middleware::RequestId;

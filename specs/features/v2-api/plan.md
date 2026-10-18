@@ -114,3 +114,50 @@ Tests: `bash tests/repo/test_check_config.sh`, `bash tests/repo/test_config_stri
 6. `tests/fixtures/contracts/api-v1.openapi.json`: regenerated.
 
 Tests: `cargo test -p netray-web --test api_ip_lookup --test api_ip_fields --test api_ip_batch --test api_ip_range --test openapi_responses --test openapi_contract --test openapi_document`, then `just adlc-verify`.
+
+## Phase 5 — TLS and HTTP inspectors
+
+Binding interface: the spec's Phase 5 decisions and the Phase 5 interface sheet (TlsBackend, TlsInspector, HttpInspect, `[api.tls]`/`[api.http]`, compose).
+
+## Groups
+
+G1: C12, C14 · G2: C2 · G3: C3, C5, C6, C7, C8, C9, C10, C11 · G4: C1, C4, C13
+
+G1 (netray-tls) and G2 (netray-http) share no file; G3 needs both; G4 needs G3. A criterion with test files in two groups sits in the group where its last test turns green. G3 breaks the `netray` binary build (its `ApiParts` literal) until G4 lands; no `--workspace` run between them.
+
+## Plan
+
+### G1 — netray-tls: backend seam and inspection type
+- `crates/tls/src/backend.rs` (new): `TlsBackend` (`resolve`, `handshake`), `LiveBackend { resolver }` over `resolve_hostname` (`routes.rs:1295`) and `tls::inspect_ip`.
+- `crates/tls/src/state.rs`: `AppState.backend`; `new` → `LiveBackend { None }`, `init_dns_resolver` → `Some(..)`.
+- `crates/tls/src/routes.rs`: `resolve_target` → `state.backend.resolve`; `inspect_port` takes the backend; `do_inspect` calls `state.inspector().inspect_parsed(..)`, keeps counter, span, `x-cert-*`.
+- `crates/tls/src/inspector.rs` (new): `TlsInspector`, `TlsInspectRequest`, `TlsRefusal` + `From<AppError>`; `inspect_parsed` = the moved `do_inspect` block; `inspect` = `parse_input`, port 0 refused, `ports = [port]`; `AppState::inspector`.
+- `crates/tls/src/module.rs`: `TlsModule::inspector`.
+- `crates/tls/src/security/rate_limit.rs`: `Quotas`, `Scopes`, `scoped`, `prune_if_due`; `new` = tlsight scopes.
+- `crates/tls/src/lib.rs`: modules and re-exports. `crates/tls/src/testing.rs`: `StubTlsBackend`, `stub_config`, `stub_state` (installs the ring provider).
+- Command: `cargo test -p netray-tls --features testing --test inspector`; `--lib`; regression `cargo test -p netray-tls --features testing`.
+
+### G2 — netray-http: job seam
+- `crates/http/src/job.rs` (new): `HttpInspect` (`target`, `inspect`), `run`, `inspect`, `HttpInspectRequest`, `HttpRefusal` + `From<AppError>`.
+- `crates/http/src/routes.rs`: `do_inspect_inner` → `job::run`; `impl HttpInspect for AppState` (with `ip_detail_base`).
+- `crates/http/src/module.rs`: `impl HttpInspect for HttpModule`.
+- `crates/http/src/security/rate_limit.rs`: `Quotas`, `Scopes`, `scoped`, `prune_if_due`.
+- `crates/http/src/lib.rs`, `crates/http/src/testing.rs`: re-exports, `StubHttpInspect` (real `pick_target`).
+- Command: `cargo test -p netray-http --features testing --test job`; `--lib`; regression `cargo test -p netray-http --features testing`.
+
+### G3 — netray-web: config, state, errors, routes, composition
+- Root `Cargo.toml`: `netray-tls`, `netray-http` in `[workspace.dependencies]`; `crates/web/Cargo.toml`: both as deps, dev-deps `workspace = true, features = ["testing"]`.
+- `api/config.rs`: `ApiTlsConfig` (30/10/60/20), `ApiHttpConfig` (10/5/30/10), zero rules `api.<t>.<key> must be greater than 0`, called after `ip.validate()`.
+- `api/error.rs`: `V1Error::TargetBlocked` (403 `TARGET_BLOCKED`); `From<TlsRefusal>`, `From<HttpRefusal>`.
+- `api/state.rs`: `ApiParts { ip, tls, http }`; `tls_limiters`/`http_limiters` via `scoped` (scopes `api_v1_tls[_target]`, `api_v1_http[_target]`), accessors.
+- `api/ip.rs`: `json_body`, `Peer`, `peer_of` `pub(super)`.
+- `api/inspectors.rs` (new): `tls_inspect`, `http_inspect`, doc routes, `routes()`; order 503 → body → client + prune → job → `V1Error::from`.
+- `api/compose.rs` (new): component-collision renaming in parts, spectra's two maps typed.
+- `api/mod.rs`: `openapi()` composes; `router()` merges inspector routes outside the `[api]` limiter; `/meta` `limits.tls`/`limits.http`.
+- Command: `cargo test -p netray-web --test api_tls --test api_tls_policy --test api_tls_limits --test api_http --test openapi_document`; `--lib`; regression the `api_ip_*` and `api_edges` tests.
+
+### G4 — binary wiring, example config, fixture
+- `crates/netray/Cargo.toml`: `workspace = true`. `crates/netray/src/main.rs`: `lens_registry` returns the modules; `ApiParts { ip, tls: Some(tls.inspector()), http: Some(http as Arc<dyn HttpInspect>) }`; `Shared<T>` forwards `needs_address_records` and `wants_facts` (else lens runs change).
+- `crates/lens/lens.example.toml`: commented `[api.tls]`/`[api.http]` blocks.
+- `tests/fixtures/contracts/api-v1.openapi.json`: regenerate last (`UPDATE_GOLDEN=1 cargo test -p netray-web --test openapi_contract`).
+- Command: `cargo test -p netray-web --test openapi_contract --test openapi_responses`; `cargo build -p netray && bash tests/repo/test_check_config.sh`; `cargo test -p lens --test api_v1_mount`; then `just adlc-verify`.

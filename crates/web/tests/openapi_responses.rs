@@ -6,6 +6,7 @@ use axum::body::Body;
 use axum::http::{Method, Request};
 use http_body_util::BodyExt;
 use netray_engine::{SectionEvent, SectionOutcome};
+use netray_http::testing::StubHttpInspect;
 use netray_ip::testing::StubIpLookup;
 use netray_model::CheckResult;
 use netray_model::diff::diff;
@@ -13,6 +14,7 @@ use netray_model::evidence::{Block, BlockId, EVIDENCE_SCHEMA_VERSION, Shape};
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
 use netray_model::{CheckId, Grade, Protocol, Status};
 use netray_store::{HistoryStore, Recorded};
+use netray_tls::testing::{StubTlsBackend, stub_state};
 use netray_web::api::{
     ApiConfig, ApiParts, ApiState, DomainRefusal, DomainRuns, RefusalReason, RunEvent, RunRefusal,
     RunStart, RunTrigger, router,
@@ -190,6 +192,11 @@ const fn ip_off(
     }
 }
 
+const TLS_OK: &str = r#"{"host":"example.com"}"#;
+const TLS_BLOCKED: &str = r#"{"host":"10.0.0.1"}"#;
+const HTTP_OK: &str = r#"{"url":"https://example.com/"}"#;
+const HTTP_BAD: &str = r#"{"url":"http://example.com/"}"#;
+
 const BATCH: &str = r#"{"addresses":["192.0.2.1","192.0.2.2"]}"#;
 const DIFF: &str = r#"{"a":"192.0.2.1","b":"192.0.2.2"}"#;
 const DIFF_BAD: &str = r#"{"a":"192.0.2.1","b":"nope"}"#;
@@ -285,6 +292,34 @@ fn cases() -> Vec<Case> {
         ip("/api/v1/ip/diff", "post", "/ip/diff", 400, Some(DIFF_BAD)),
         ip("/api/v1/asn/{n}", "get", "/asn/64496", 200, None),
         ip("/api/v1/asn/{n}", "get", "/asn/x", 400, None),
+        ip(
+            "/api/v1/tls/inspect",
+            "post",
+            "/tls/inspect",
+            200,
+            Some(TLS_OK),
+        ),
+        ip(
+            "/api/v1/tls/inspect",
+            "post",
+            "/tls/inspect",
+            403,
+            Some(TLS_BLOCKED),
+        ),
+        ip(
+            "/api/v1/http/inspect",
+            "post",
+            "/http/inspect",
+            200,
+            Some(HTTP_OK),
+        ),
+        ip(
+            "/api/v1/http/inspect",
+            "post",
+            "/http/inspect",
+            400,
+            Some(HTTP_BAD),
+        ),
     ]
 }
 
@@ -368,7 +403,8 @@ fn fixture() -> Value {
 fn app(store: Option<Arc<HistoryStore>>, ip_off: bool) -> axum::Router {
     let parts = ApiParts {
         ip: (!ip_off).then(|| Arc::new(StubIpLookup::new()) as Arc<dyn netray_ip::IpLookup>),
-        ..Default::default()
+        tls: Some(stub_state(Arc::new(StubTlsBackend::new())).inspector()),
+        http: Some(Arc::new(StubHttpInspect::new())),
     };
     let config = ApiConfig {
         per_ip_burst: 1,

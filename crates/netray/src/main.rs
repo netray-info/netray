@@ -118,6 +118,14 @@ impl<T: Module> Module for Shared<T> {
         self.0.needs_addresses()
     }
 
+    fn wants_facts(&self) -> bool {
+        self.0.wants_facts()
+    }
+
+    fn needs_address_records(&self) -> bool {
+        self.0.needs_address_records()
+    }
+
     fn run<'a>(&'a self, ctx: &'a RunContext, facts: &'a Facts) -> BoxFuture<'a, SectionOutcome> {
         self.0.run(ctx, facts)
     }
@@ -133,17 +141,22 @@ impl<T: FactsProvider> FactsProvider for Shared<T> {
     }
 }
 
+/// The registry and the modules the API and the data reload share.
+struct LensModules {
+    registry: Registry,
+    ip: Option<Arc<netray_ip::IpModule>>,
+    tls: Arc<netray_tls::TlsModule>,
+    http: Arc<netray_http::HttpModule>,
+}
+
 /// Builds the modules the lens config names in `[modules.*]`; a table for a module the binary
 /// does not know is refused, and an absent `[modules.http]`, `[modules.email]`, `[modules.tls]` or
 /// `[modules.dns]` builds the module on its defaults. The IP module needs data: an absent `[modules.ip]` leaves the IP section off
 /// (with a warning), a present one must name `geoip_city_db` and `geoip_asn_db`. The IP module is
-/// returned as well, for its data reload. With `startup` false (`--check-config`) the IP table is
+/// returned as well, for its data reload, and so are the TLS and HTTP modules, for the API. With `startup` false (`--check-config`) the IP table is
 /// parsed and its keys checked, but the data files are neither checked nor read and no IP module
 /// is built.
-async fn lens_registry(
-    cfg: &lens::config::Config,
-    startup: bool,
-) -> Result<(Registry, Option<Arc<netray_ip::IpModule>>), String> {
+async fn lens_registry(cfg: &lens::config::Config, startup: bool) -> Result<LensModules, String> {
     if let Some(name) = cfg
         .modules
         .keys()
@@ -159,8 +172,9 @@ async fn lens_registry(
             "modules.http.enrichment.ip_url is not set: server org and network type stay empty"
         );
     }
-    let module =
-        netray_http::HttpModule::new(module_config).map_err(|e| format!("modules.http: {e}"))?;
+    let http = Arc::new(
+        netray_http::HttpModule::new(module_config).map_err(|e| format!("modules.http: {e}"))?,
+    );
     let table = cfg.modules.get("email").cloned().unwrap_or_default();
     let email_config: netray_email::ModuleConfig = table
         .try_into()
@@ -179,9 +193,11 @@ async fn lens_registry(
     };
     let tls_config: netray_tls::ModuleConfig =
         table.try_into().map_err(|e| format!("modules.tls: {e}"))?;
-    let tls = netray_tls::TlsModule::new(tls_config)
-        .await
-        .map_err(|e| format!("modules.tls: {e}"))?;
+    let tls = Arc::new(
+        netray_tls::TlsModule::new(tls_config)
+            .await
+            .map_err(|e| format!("modules.tls: {e}"))?,
+    );
     let table = match cfg.modules.get("dns") {
         Some(table) => table.clone(),
         None => {
@@ -199,12 +215,17 @@ async fn lens_registry(
     let mut registry = Registry::new()
         .with(Box::new(Shared(dns.clone())))
         .with_facts(Box::new(Shared(dns)))
-        .with(Box::new(module))
+        .with(Box::new(Shared(http.clone())))
         .with(Box::new(email))
-        .with(Box::new(tls));
+        .with(Box::new(Shared(tls.clone())));
     let Some(table) = cfg.modules.get("ip").cloned() else {
         tracing::warn!("modules.ip is not configured: the IP section is off");
-        return Ok((registry, None));
+        return Ok(LensModules {
+            registry,
+            ip: None,
+            tls,
+            http,
+        });
     };
     let ip_config: netray_ip::ModuleConfig =
         table.try_into().map_err(|e| format!("modules.ip: {e}"))?;
@@ -215,7 +236,12 @@ async fn lens_registry(
         );
     }
     if !startup {
-        return Ok((registry, None));
+        return Ok(LensModules {
+            registry,
+            ip: None,
+            tls,
+            http,
+        });
     }
     for (key, path) in [
         ("geoip_city_db", &ip_config.geoip_city_db),
@@ -233,7 +259,12 @@ async fn lens_registry(
             .map_err(|e| format!("modules.ip: {e}"))?,
     );
     registry = registry.with(Box::new(Shared(ip.clone())));
-    Ok((registry, Some(ip)))
+    Ok(LensModules {
+        registry,
+        ip: Some(ip),
+        tls,
+        http,
+    })
 }
 
 /// Reloads the IP module's data on every SIGHUP.
@@ -292,13 +323,20 @@ async fn main() -> anyhow::Result<()> {
             let cfg = lens::config::Config::load(path.as_deref())
                 .map_err(|e| anyhow::anyhow!("failed to load configuration: {e}"))?;
             lens::init_telemetry(&cfg);
-            let (registry, ip) = lens_registry(&cfg, true)
+            let LensModules {
+                registry,
+                ip,
+                tls,
+                http,
+            } = lens_registry(&cfg, true)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
             let parts = netray_web::api::ApiParts {
                 ip: ip
                     .clone()
                     .map(|module| module as std::sync::Arc<dyn netray_ip::IpLookup>),
+                tls: Some(tls.inspector()),
+                http: Some(http as Arc<dyn netray_http::HttpInspect>),
             };
             if let Some(ip) = ip {
                 reload_ip_on_sighup(ip);

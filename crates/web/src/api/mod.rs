@@ -1,10 +1,12 @@
 //! API v1 (spec v2-api): the typed, documented read surface of the suite. `router` is mounted
 //! at `/api/v1` by lens; `openapi()` is the document it serves.
 
+mod compose;
 mod config;
 pub mod contract;
 mod docs;
 mod error;
+mod inspectors;
 mod ip;
 mod limit;
 mod reads;
@@ -71,7 +73,15 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
         .merge(run_routes())
         .merge(ip::ip_doc_routes())
         .split_for_parts();
-    let mut doc = ApiDoc::openapi().nest(MOUNT, routed);
+    let (_, tls) = inspectors::tls_doc_routes().split_for_parts();
+    let (_, http) = inspectors::http_doc_routes().split_for_parts();
+    let mut base = ApiDoc::openapi();
+    base.merge(routed);
+    let composed = compose::compose(
+        base,
+        vec![("Tls", tls), ("Http", inspectors::typed_http_maps(http))],
+    );
+    let mut doc = ApiDoc::openapi().nest(MOUNT, composed);
     doc.info.title = "netray API".into();
     doc.info.version = env!("CARGO_PKG_VERSION").into();
     doc.info.description = None;
@@ -89,6 +99,8 @@ pub fn router(state: ApiState) -> Router {
         .route_layer(middleware::from_fn_with_state(state.clone(), limit::per_ip))
         .merge(unlimited)
         .merge(ip::ip_routes())
+        .merge(inspectors::tls_doc_routes().split_for_parts().0)
+        .merge(inspectors::http_doc_routes().split_for_parts().0)
         .route("/openapi.json", get(|| async { Json(openapi()) }))
         .route("/docs", get(docs::page))
         .route("/", any(not_found))
@@ -174,6 +186,16 @@ struct Limits {
     admission: AdmissionMeta,
     rate_limit: RateLimitMeta,
     ip: IpMeta,
+    tls: InspectorMeta,
+    http: InspectorMeta,
+}
+
+#[derive(Serialize, ToSchema)]
+struct InspectorMeta {
+    per_ip_per_minute: u32,
+    per_ip_burst: u32,
+    per_target_per_minute: u32,
+    per_target_burst: u32,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -250,6 +272,18 @@ async fn meta_handler(State(state): State<ApiState>) -> Json<Meta> {
                 batch_max_size: config.ip.batch_max_size,
                 batch_addresses_per_minute: config.ip.batch_addresses_per_minute,
                 batch_addresses_burst: config.ip.batch_addresses_burst,
+            },
+            tls: InspectorMeta {
+                per_ip_per_minute: config.tls.per_ip_per_minute,
+                per_ip_burst: config.tls.per_ip_burst,
+                per_target_per_minute: config.tls.per_target_per_minute,
+                per_target_burst: config.tls.per_target_burst,
+            },
+            http: InspectorMeta {
+                per_ip_per_minute: config.http.per_ip_per_minute,
+                per_ip_burst: config.http.per_ip_burst,
+                per_target_per_minute: config.http.per_target_per_minute,
+                per_target_burst: config.http.per_target_burst,
             },
         },
     })

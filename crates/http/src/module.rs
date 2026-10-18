@@ -1,5 +1,5 @@
 use std::convert::Infallible;
-use std::net::IpAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
@@ -13,6 +13,7 @@ use netray_model::evidence::{
     Block, BlockId, Fields, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType,
 };
 use netray_model::{CheckId, CheckResult, Protocol, Status};
+use url::Url;
 
 use crate::config::{InspectConfig, ModuleConfig};
 use crate::error::AppError;
@@ -192,6 +193,29 @@ impl HttpModule {
             start,
         )
         .await
+    }
+}
+
+impl crate::job::HttpInspect for HttpModule {
+    fn target<'a>(&'a self, url: &'a Url) -> BoxFuture<'a, Result<SocketAddr, AppError>> {
+        Box::pin(crate::input::validate_target(url))
+    }
+
+    fn inspect<'a>(
+        &'a self,
+        url: &'a Url,
+        target: SocketAddr,
+        start: Instant,
+    ) -> BoxFuture<'a, Result<InspectResponse, AppError>> {
+        Box::pin(crate::inspect::inspect_and_assemble(
+            url,
+            target,
+            &self.inspect,
+            &self.outbound,
+            self.enrichment.as_deref(),
+            None,
+            start,
+        ))
     }
 }
 

@@ -15,8 +15,8 @@ netray-email = { path = "../email" }
 netray-ip = { workspace = true }
 lens = { path = "../lens" }
 netray-dns = { path = "../dns" }
-netray-http = { path = "../http" }
-netray-tls = { path = "../tls" }
+netray-http = { workspace = true }
+netray-tls = { workspace = true }
 
 axum = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs", "signal"] }

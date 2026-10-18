@@ -288,6 +288,113 @@
         ],
         "type": "object"
       },
+      "CaaInfo": {
+        "properties": {
+          "issuer_allowed": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "issuewild_present": {
+            "type": "boolean"
+          },
+          "records": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "records",
+          "issuewild_present"
+        ],
+        "type": "object"
+      },
+      "CacheControlDirectives": {
+        "properties": {
+          "immutable": {
+            "type": "boolean"
+          },
+          "max_age": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "must_revalidate": {
+            "type": "boolean"
+          },
+          "no_cache": {
+            "type": "boolean"
+          },
+          "no_store": {
+            "type": "boolean"
+          },
+          "private": {
+            "type": "boolean"
+          },
+          "public": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "public",
+          "private",
+          "no_store",
+          "no_cache",
+          "must_revalidate",
+          "immutable"
+        ],
+        "type": "object"
+      },
+      "CachingReport": {
+        "properties": {
+          "age": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cache_control": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "directives": {
+            "$ref": "#/components/schemas/CacheControlDirectives"
+          },
+          "etag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_modified": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "vary": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "directives",
+          "vary"
+        ],
+        "type": "object"
+      },
       "CallerField": {
         "description": "The fields of `?field=` on the caller's own address: the address fields and what the request carries.",
         "enum": [
@@ -320,6 +427,138 @@
         },
         "required": [
           "checks"
+        ],
+        "type": "object"
+      },
+      "Category": {
+        "enum": [
+          "certificate",
+          "protocol",
+          "configuration"
+        ],
+        "type": "string"
+      },
+      "CdnReport": {
+        "properties": {
+          "cache_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detected": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "indicators": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "indicators"
+        ],
+        "type": "object"
+      },
+      "CertInfo": {
+        "description": "Parsed certificate info.",
+        "properties": {
+          "ca_issuers_url": {
+            "description": "CA Issuers URL from AIA extension (OID 1.3.6.1.5.5.7.48.2).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cert_policy": {
+            "description": "Certificate policy classification: \"EV\", \"OV\", \"DV\", or \"unknown\".",
+            "type": "string"
+          },
+          "days_remaining": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "fingerprint_sha1": {
+            "type": "string"
+          },
+          "fingerprint_sha256": {
+            "type": "string"
+          },
+          "is_expired": {
+            "type": "boolean"
+          },
+          "is_self_signed": {
+            "type": "boolean"
+          },
+          "issuer": {
+            "type": "string"
+          },
+          "key_size": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "key_type": {
+            "type": "string"
+          },
+          "lifetime_days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "not_after": {
+            "type": "string"
+          },
+          "not_before": {
+            "type": "string"
+          },
+          "ocsp_url": {
+            "description": "OCSP responder URL from AIA extension (OID 1.3.6.1.5.5.7.48.1).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "type": "string"
+          },
+          "sans": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "signature_algorithm": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "position",
+          "subject",
+          "issuer",
+          "sans",
+          "serial",
+          "not_before",
+          "not_after",
+          "days_remaining",
+          "key_type",
+          "key_size",
+          "signature_algorithm",
+          "fingerprint_sha256",
+          "fingerprint_sha1",
+          "lifetime_days",
+          "is_expired",
+          "is_self_signed",
+          "cert_policy"
         ],
         "type": "object"
       },
@@ -461,6 +700,188 @@
         ],
         "type": "object"
       },
+      "ConsistencyMismatch": {
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Per-IP values, keyed by IP address string.",
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "field",
+          "values"
+        ],
+        "type": "object"
+      },
+      "ConsistencyResult": {
+        "properties": {
+          "certificates_match": {
+            "type": "boolean"
+          },
+          "cipher_suites_match": {
+            "type": "boolean"
+          },
+          "mismatches": {
+            "items": {
+              "$ref": "#/components/schemas/ConsistencyMismatch"
+            },
+            "type": "array"
+          },
+          "tls_versions_match": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "certificates_match",
+          "tls_versions_match",
+          "cipher_suites_match"
+        ],
+        "type": "object"
+      },
+      "CookieEntry": {
+        "properties": {
+          "domain": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expires": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "httponly": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "samesite": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secure": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "secure",
+          "httponly"
+        ],
+        "type": "object"
+      },
+      "CorsReport": {
+        "properties": {
+          "allows_any_origin": {
+            "type": "boolean"
+          },
+          "allows_credentials": {
+            "type": "boolean"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProbeError"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "reflects_origin": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "allows_any_origin",
+          "reflects_origin",
+          "allows_credentials",
+          "status",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CspReport": {
+        "properties": {
+          "directives": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "object"
+          },
+          "enforced": {
+            "type": "boolean"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "report_only": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "status",
+          "enforced",
+          "report_only",
+          "directives",
+          "issues"
+        ],
+        "type": "object"
+      },
+      "CtInfo": {
+        "properties": {
+          "sct_count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scts": {
+            "items": {
+              "$ref": "#/components/schemas/SctEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "sct_count",
+          "scts"
+        ],
+        "type": "object"
+      },
       "Device": {
         "properties": {
           "brand": {
@@ -586,6 +1007,82 @@
         },
         "required": [
           "entry_id"
+        ],
+        "type": "object"
+      },
+      "DnsContext": {
+        "properties": {
+          "caa": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CaaInfo"
+              }
+            ]
+          },
+          "lookup_errors": {
+            "description": "The lookups that failed or got no definitive answer: \"caa\", \"tlsa\", \"https\".",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "resolved_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "resolved_ips"
+        ],
+        "type": "object"
+      },
+      "EnrichmentInfo": {
+        "properties": {
+          "detail_url": {
+            "description": "Public IP-tool page for `ip`; absent when no `[meta] ip_base_url` is configured.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ip": {
+            "type": "string"
+          },
+          "ip_type": {
+            "description": "IP classification: \"cloud\", \"datacenter\", \"residential\", \"vpn\", \"cdn\", \"isp\", etc.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "description": "ASN network role (e.g. \"Midsize Transit\", \"Access Provider\").",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "threat": {
+            "description": "Threat flag: \"C2\", \"DROP\", or \"TOR\" if the IP is flagged.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "ip"
         ],
         "type": "object"
       },
@@ -795,6 +1292,23 @@
         ],
         "type": "array"
       },
+      "FingerprintReport": {
+        "properties": {
+          "info_leakage": {
+            "$ref": "#/components/schemas/InfoLeakage"
+          },
+          "server": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "info_leakage"
+        ],
+        "type": "object"
+      },
       "FixOwner": {
         "description": "Who can fix a failed check.",
         "enum": [
@@ -846,6 +1360,56 @@
         ],
         "type": "object"
       },
+      "HeaderCheck": {
+        "properties": {
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "HealthCheck": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "status",
+          "label",
+          "detail"
+        ],
+        "type": "object"
+      },
       "HistoryItem": {
         "properties": {
           "created_at": {
@@ -891,6 +1455,250 @@
         ],
         "type": "object"
       },
+      "HstsCheck": {
+        "properties": {
+          "include_sub_domains": {
+            "type": "boolean"
+          },
+          "max_age": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "preload": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "status",
+          "include_sub_domains",
+          "preload"
+        ],
+        "type": "object"
+      },
+      "HstsInfo": {
+        "properties": {
+          "include_sub_domains": {
+            "type": "boolean"
+          },
+          "max_age": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "preload": {
+            "type": "boolean"
+          },
+          "present": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "present",
+          "max_age",
+          "include_sub_domains",
+          "preload"
+        ],
+        "type": "object"
+      },
+      "HttpCheckStatus": {
+        "enum": [
+          "pass",
+          "skip",
+          "warn",
+          "fail"
+        ],
+        "type": "string"
+      },
+      "HttpInspectRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "HttpInspectResponse": {
+        "properties": {
+          "alt_svc": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "caching": {
+            "$ref": "#/components/schemas/CachingReport"
+          },
+          "cdn": {
+            "$ref": "#/components/schemas/CdnReport"
+          },
+          "compression": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cookies": {
+            "items": {
+              "$ref": "#/components/schemas/CookieEntry"
+            },
+            "type": "array"
+          },
+          "cors": {
+            "$ref": "#/components/schemas/CorsReport"
+          },
+          "deprecated_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "enrichment": {
+            "$ref": "#/components/schemas/EnrichmentInfo"
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProbeError"
+              }
+            ]
+          },
+          "final_url": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "$ref": "#/components/schemas/FingerprintReport"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "http_upgrade": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HttpUpgrade"
+              }
+            ]
+          },
+          "http_version": {
+            "type": "string"
+          },
+          "quality": {
+            "$ref": "#/components/schemas/QualityReport"
+          },
+          "redirects": {
+            "items": {
+              "$ref": "#/components/schemas/RedirectHop"
+            },
+            "type": "array"
+          },
+          "reporting": {
+            "$ref": "#/components/schemas/ReportingReport"
+          },
+          "security": {
+            "$ref": "#/components/schemas/SecurityReport"
+          },
+          "status": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "final_url",
+          "timestamp",
+          "duration_ms",
+          "http_version",
+          "status",
+          "redirects",
+          "headers",
+          "security",
+          "cors",
+          "cookies",
+          "caching",
+          "cdn",
+          "fingerprint",
+          "deprecated_headers",
+          "reporting",
+          "quality",
+          "enrichment"
+        ],
+        "type": "object"
+      },
+      "HttpUpgrade": {
+        "properties": {
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ProbeError"
+              }
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "redirects": {
+            "items": {
+              "$ref": "#/components/schemas/RedirectHop"
+            },
+            "type": "array"
+          },
+          "redirects_to_https": {
+            "type": "boolean"
+          },
+          "same_host": {
+            "type": "boolean"
+          },
+          "status_code": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "redirects_to_https",
+          "same_host",
+          "message",
+          "redirects"
+        ],
+        "type": "object"
+      },
       "Ifconfig": {
         "properties": {
           "ip": {
@@ -927,6 +1735,73 @@
           "ip",
           "location",
           "network"
+        ],
+        "type": "object"
+      },
+      "InfoLeakage": {
+        "properties": {
+          "exposed_headers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "status",
+          "exposed_headers"
+        ],
+        "type": "object"
+      },
+      "InspectionError": {
+        "description": "Per-IP error detail embedded in inspection results.",
+        "properties": {
+          "code": {
+            "description": "Machine-readable error code: `HANDSHAKE_FAILED`, `HANDSHAKE_TIMEOUT` or\n`NOT_TESTED_FROM_HERE`.",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable error message.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object"
+      },
+      "InspectorMeta": {
+        "properties": {
+          "per_ip_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_ip_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_burst": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "per_target_per_minute": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "per_ip_per_minute",
+          "per_ip_burst",
+          "per_target_per_minute",
+          "per_target_burst"
         ],
         "type": "object"
       },
@@ -970,6 +1845,140 @@
           "a",
           "b",
           "equal"
+        ],
+        "type": "object"
+      },
+      "IpInfo": {
+        "description": "Metadata about a single IP address from the enrichment API.",
+        "properties": {
+          "asn": {
+            "format": "int32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "cloud": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TlsCloudInfo"
+              }
+            ]
+          },
+          "is_c2": {
+            "type": "boolean"
+          },
+          "is_datacenter": {
+            "type": "boolean"
+          },
+          "is_spamhaus": {
+            "type": "boolean"
+          },
+          "is_tor": {
+            "type": "boolean"
+          },
+          "is_vpn": {
+            "type": "boolean"
+          },
+          "network_role": {
+            "description": "ASN network role from ipverse/as-metadata (e.g. \"Midsize Transit\", \"Access Provider\").",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "description": "IP classification: \"cloud\", \"datacenter\", \"residential\", \"vpn\", etc.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "IpInspectionResult": {
+        "description": "Result of inspecting a single IP on a single port.",
+        "properties": {
+          "chain": {
+            "items": {
+              "$ref": "#/components/schemas/CertInfo"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "ct": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CtInfo"
+              }
+            ]
+          },
+          "enrichment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IpInfo"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InspectionError"
+              }
+            ]
+          },
+          "ip": {
+            "type": "string"
+          },
+          "ip_version": {
+            "type": "string"
+          },
+          "tls": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TlsParams"
+              }
+            ]
+          },
+          "validation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ValidationResult"
+              }
+            ]
+          }
+        },
+        "required": [
+          "ip",
+          "ip_version"
         ],
         "type": "object"
       },
@@ -1030,18 +2039,26 @@
           "api": {
             "$ref": "#/components/schemas/ApiLimits"
           },
+          "http": {
+            "$ref": "#/components/schemas/InspectorMeta"
+          },
           "ip": {
             "$ref": "#/components/schemas/IpMeta"
           },
           "rate_limit": {
             "$ref": "#/components/schemas/RateLimitMeta"
+          },
+          "tls": {
+            "$ref": "#/components/schemas/InspectorMeta"
           }
         },
         "required": [
           "api",
           "admission",
           "rate_limit",
-          "ip"
+          "ip",
+          "tls",
+          "http"
         ],
         "type": "object"
       },
@@ -1488,6 +2505,182 @@
         ],
         "type": "object"
       },
+      "OcspInfo": {
+        "properties": {
+          "next_update": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stapled": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "this_update": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "stapled"
+        ],
+        "type": "object"
+      },
+      "OcspRevocationResult": {
+        "description": "Result of a live OCSP revocation check via the AIA OCSP responder URL.",
+        "properties": {
+          "checked_at": {
+            "description": "ISO 8601 timestamp when this check was performed",
+            "type": "string"
+          },
+          "reason": {
+            "description": "Revocation reason string when status == \"revoked\"; \"blocked\" when the responder URL\nwas refused",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revoked_at": {
+            "description": "ISO 8601 revocation time (only set when status == \"revoked\")",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "description": "\"good\", \"revoked\", or \"unknown\"",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "checked_at"
+        ],
+        "type": "object"
+      },
+      "PortQualityResult": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            },
+            "type": "array"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "PortResult": {
+        "properties": {
+          "consistency": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConsistencyResult"
+              }
+            ]
+          },
+          "error": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InspectionError"
+              }
+            ]
+          },
+          "ips": {
+            "items": {
+              "$ref": "#/components/schemas/IpInspectionResult"
+            },
+            "type": "array"
+          },
+          "port": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PortQualityResult"
+              }
+            ]
+          },
+          "tlsa": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TlsaInfo"
+              }
+            ]
+          },
+          "validation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ValidationResult"
+              }
+            ]
+          }
+        },
+        "required": [
+          "port",
+          "ips"
+        ],
+        "type": "object"
+      },
+      "ProbeError": {
+        "description": "Why a probe got no response.",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ProbeErrorKind"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "message"
+        ],
+        "type": "object"
+      },
+      "ProbeErrorKind": {
+        "enum": [
+          "timeout",
+          "refused",
+          "reset",
+          "tls",
+          "blocked",
+          "unreachable"
+        ],
+        "type": "string"
+      },
       "Profile": {
         "description": "A parsed scoring profile.",
         "properties": {
@@ -1542,6 +2735,93 @@
           "ip"
         ],
         "type": "string"
+      },
+      "QualityCheck": {
+        "properties": {
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "status"
+        ],
+        "type": "object"
+      },
+      "QualityReport": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/QualityCheck"
+            },
+            "type": "array"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/HttpCheckStatus"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "QualityResult": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            },
+            "type": "array"
+          },
+          "hsts": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HstsInfo"
+              }
+            ]
+          },
+          "https_redirect": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RedirectInfo"
+              }
+            ]
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks"
+        ],
+        "type": "object"
       },
       "RangeResponse": {
         "properties": {
@@ -1674,6 +2954,69 @@
           "not_stored"
         ],
         "type": "string"
+      },
+      "RedirectHop": {
+        "properties": {
+          "http_version": {
+            "type": "string"
+          },
+          "location": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "status",
+          "http_version"
+        ],
+        "type": "object"
+      },
+      "RedirectInfo": {
+        "properties": {
+          "redirect_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "ReportingReport": {
+        "properties": {
+          "csp_reporting": {
+            "type": "boolean"
+          },
+          "nel": {
+            "type": "boolean"
+          },
+          "report_to": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "report_to",
+          "nel",
+          "csp_reporting"
+        ],
+        "type": "object"
       },
       "Run": {
         "description": "One scan as stored for history.",
@@ -1846,6 +3189,27 @@
         ],
         "type": "object"
       },
+      "SctEntry": {
+        "properties": {
+          "log_id": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "version": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "log_id",
+          "timestamp"
+        ],
+        "type": "object"
+      },
       "SectionKind": {
         "enum": [
           "measured",
@@ -1888,6 +3252,49 @@
           "weight",
           "checks",
           "hard_fail"
+        ],
+        "type": "object"
+      },
+      "SecurityReport": {
+        "properties": {
+          "coep": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "coop": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "corp": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "csp": {
+            "$ref": "#/components/schemas/CspReport"
+          },
+          "hsts": {
+            "$ref": "#/components/schemas/HstsCheck"
+          },
+          "permissions_policy": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "referrer_policy": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "x_content_type_options": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          },
+          "x_frame_options": {
+            "$ref": "#/components/schemas/HeaderCheck"
+          }
+        },
+        "required": [
+          "hsts",
+          "csp",
+          "x_frame_options",
+          "permissions_policy",
+          "x_content_type_options",
+          "referrer_policy",
+          "coop",
+          "coep",
+          "corp"
         ],
         "type": "object"
       },
@@ -2063,6 +3470,60 @@
         ],
         "type": "string"
       },
+      "Summary": {
+        "properties": {
+          "checks": {
+            "$ref": "#/components/schemas/SummaryChecks"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "SummaryChecks": {
+        "properties": {
+          "caa_compliant": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "chain_trusted": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "consistency": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "ct_logged": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "dane_valid": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "hostname_match": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "not_expired": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          },
+          "ocsp_stapled": {
+            "$ref": "#/components/schemas/TlsCheckStatus"
+          }
+        },
+        "required": [
+          "chain_trusted",
+          "not_expired",
+          "hostname_match",
+          "caa_compliant",
+          "dane_valid",
+          "ct_logged",
+          "ocsp_stapled",
+          "consistency"
+        ],
+        "type": "object"
+      },
       "Tcp": {
         "properties": {
           "port": {
@@ -2126,6 +3587,218 @@
         ],
         "type": "object"
       },
+      "TlsCheckStatus": {
+        "enum": [
+          "pass",
+          "warn",
+          "fail",
+          "skip"
+        ],
+        "type": "string"
+      },
+      "TlsCloudInfo": {
+        "description": "Cloud provider metadata from the enrichment API.",
+        "properties": {
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "service": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "TlsInspectRequest": {
+        "additionalProperties": false,
+        "description": "One host and port to inspect.",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "default": 443,
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "host"
+        ],
+        "type": "object"
+      },
+      "TlsInspectResponse": {
+        "properties": {
+          "dns": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsContext"
+              }
+            ]
+          },
+          "duration_ms": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "input_mode": {
+            "type": "string"
+          },
+          "ports": {
+            "items": {
+              "$ref": "#/components/schemas/PortResult"
+            },
+            "type": "array"
+          },
+          "quality": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/QualityResult"
+              }
+            ]
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "skipped_ips": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Summary"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "request_id",
+          "hostname",
+          "input_mode",
+          "summary",
+          "ports",
+          "duration_ms"
+        ],
+        "type": "object"
+      },
+      "TlsParams": {
+        "properties": {
+          "alpn": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cipher_suite": {
+            "type": "string"
+          },
+          "ech_advertised": {
+            "description": "Whether ECH (Encrypted Client Hello) is advertised via the HTTPS DNS record.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "handshake_ms": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "key_exchange_group": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ocsp": {
+            "$ref": "#/components/schemas/OcspInfo"
+          },
+          "ocsp_live": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OcspRevocationResult",
+                "description": "Live OCSP revocation check result (queried after handshake if AIA OCSP URL is present)."
+              }
+            ]
+          },
+          "sni": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "starttls": {
+            "description": "STARTTLS protocol used to upgrade the connection (e.g. \"smtp\"), if applicable.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "cipher_suite",
+          "ocsp",
+          "handshake_ms"
+        ],
+        "type": "object"
+      },
+      "TlsaInfo": {
+        "properties": {
+          "dane_valid": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "dnssec_signed": {
+            "type": "boolean"
+          },
+          "records": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "records",
+          "dnssec_signed"
+        ],
+        "type": "object"
+      },
       "UserAgent": {
         "properties": {
           "browser": {
@@ -2180,6 +3853,60 @@
         },
         "required": [
           "equal"
+        ],
+        "type": "object"
+      },
+      "ValidationResult": {
+        "properties": {
+          "any_expired": {
+            "type": "boolean"
+          },
+          "any_not_yet_valid": {
+            "type": "boolean"
+          },
+          "chain_order_correct": {
+            "type": "boolean"
+          },
+          "chain_trust_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "chain_trusted": {
+            "type": "boolean"
+          },
+          "earliest_expiry": {
+            "type": "string"
+          },
+          "earliest_expiry_days": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "ends_at_anchor": {
+            "type": "boolean"
+          },
+          "leaf_covers_hostname": {
+            "type": "boolean"
+          },
+          "terminates_at_self_signed": {
+            "type": "boolean"
+          },
+          "weakest_signature": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "chain_trusted",
+          "terminates_at_self_signed",
+          "ends_at_anchor",
+          "chain_order_correct",
+          "leaf_covers_hostname",
+          "any_expired",
+          "any_not_yet_valid",
+          "weakest_signature",
+          "earliest_expiry",
+          "earliest_expiry_days"
         ],
         "type": "object"
       },
@@ -2974,6 +4701,87 @@
         ]
       }
     },
+    "/api/v1/http/inspect": {
+      "post": {
+        "operationId": "http_inspect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HttpInspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpInspectResponse"
+                }
+              }
+            },
+            "description": "The inspection of the URL"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, unknown field, invalid URL"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The target is not a public address (`TARGET_BLOCKED`)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The HTTP module is off, the host did not resolve, or the request timed out"
+          }
+        },
+        "summary": "The security headers, redirects and content policy of a URL.",
+        "tags": [
+          "http"
+        ]
+      }
+    },
     "/api/v1/ip": {
       "get": {
         "operationId": "caller",
@@ -3461,6 +5269,87 @@
         "summary": "One scoring profile.",
         "tags": [
           "reference"
+        ]
+      }
+    },
+    "/api/v1/tls/inspect": {
+      "post": {
+        "operationId": "tls_inspect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TlsInspectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TlsInspectResponse"
+                }
+              }
+            },
+            "description": "The inspection of the host on the port"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Malformed body, unknown field, invalid host or port"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The target is not a public address (`TARGET_BLOCKED`)"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The TLS module is off, the host did not resolve, or the handshake timed out"
+          }
+        },
+        "summary": "The certificate chain, validation and quality of a host on one port.",
+        "tags": [
+          "tls"
         ]
       }
     }
