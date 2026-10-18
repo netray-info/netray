@@ -49,8 +49,6 @@ pub struct ModuleConfig {
     pub validation: ValidationConfig,
     #[serde(default = "default_quality")]
     pub quality: QualityConfig,
-    #[serde(default)]
-    pub backends: BackendsConfig,
 }
 
 /// The subset of `[limits]` that applies to the module: no per-client limit and no
@@ -116,7 +114,7 @@ impl ModuleConfig {
             ecosystem: EcosystemConfig::default(),
             quality: self.quality,
             telemetry: TelemetryConfig::default(),
-            backends: self.backends,
+            backends: BackendsConfig::default(),
         };
         cfg.validate()?;
         cfg.check_startup()?;

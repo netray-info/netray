@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use governor::{Quota, RateLimiter};
+use netray_common::enrichment::EnrichmentClient;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::{
@@ -125,7 +126,10 @@ pub struct TlsModule {
 }
 
 impl TlsModule {
-    pub async fn new(config: ModuleConfig) -> Result<Self, ConfigError> {
+    pub async fn new(
+        config: ModuleConfig,
+        enrichment: Option<Arc<EnrichmentClient>>,
+    ) -> Result<Self, ConfigError> {
         let _ = rustls::crypto::ring::default_provider().install_default();
         let check_budget = config.limits.check_budget;
         let config = config.into_config()?;
@@ -138,6 +142,7 @@ impl TlsModule {
             ),
         );
         let mut state = AppState::new(&config);
+        state.enrichment_client = enrichment;
         state.init_dns_resolver(&config).await;
         Ok(Self {
             state,

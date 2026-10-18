@@ -10,6 +10,7 @@ use mhost::resolver::lookup::LookupResult;
 use mhost::resolver::{Lookup, Lookups, MultiQuery};
 use mhost::resources::rdata::{CAA, DigestType, DnssecAlgorithm, SVCB};
 use mhost::resources::{RData, Record};
+use netray_common::enrichment::EnrichmentClient;
 use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use netray_engine::{
     BoxFuture, Domain, EvidencePath, Facts, FactsProvider, Module, ResolveError, RunContext,
@@ -114,10 +115,14 @@ pub struct DnsModule {
     circuit_breakers: Arc<CircuitBreakerRegistry>,
     query_semaphore: Arc<Semaphore>,
     per_target: KeyedLimiter<String>,
+    enrichment: Option<Arc<EnrichmentClient>>,
 }
 
 impl DnsModule {
-    pub async fn new(mut config: ModuleConfig) -> Result<Self, ConfigError> {
+    pub async fn new(
+        mut config: ModuleConfig,
+        enrichment: Option<Arc<EnrichmentClient>>,
+    ) -> Result<Self, ConfigError> {
         let servers = std::mem::take(&mut config.servers);
         let config = config.into_config()?;
         let per_target = RateLimiter::keyed(
@@ -134,6 +139,7 @@ impl DnsModule {
             per_target,
             servers,
             config,
+            enrichment,
         })
     }
 
@@ -175,7 +181,7 @@ impl DnsModule {
             breaker_keys,
             circuit_breakers: self.circuit_breakers.clone(),
             query_semaphore: self.query_semaphore.clone(),
-            ip_enrichment: None,
+            ip_enrichment: self.enrichment.clone(),
         };
         let (tx, mut rx) = mpsc::channel::<CheckEvent>(32);
         let collect = async move {

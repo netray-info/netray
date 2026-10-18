@@ -14,3 +14,15 @@ G1: C4, C12–C14, C16–C22 (`legacy.rs`) · G2: C2, C3, C9–C11 (`config.rs`)
 - **G4** `crates/netray/netray.example.toml`: table headers uncommented, every key commented at its default, `[modules.*]` commented out wholly with `deadline_ms`. `crates/netray/netray.dev.toml`: local binds, dev store, no `[modules.ip]`.
 
 CLAUDE.md stays out of the phase commit (shared prose, Phase 8).
+
+## Phase 2 — Host routing
+
+### Groups
+
+G1: C16 (`legacy.rs`) · G2: C3, C15, C1, C2, C4–C7, C9, C10, C12–C14 (enrichment and host routing share `crates/netray/src/main.rs`; enrichment steps first). C8 deferred, C11 already in place. Test call sites of the module constructors were updated beforehand (c3f0201e).
+
+### Plan
+
+- **G1** `crates/netray/src/legacy.rs`: a fate "removed in 0.30.0, enrichment calls the in-process ip module" and four rows `modules.dns.backends.ip`, `modules.tls.backends.ip`, `modules.http.enrichment`, `modules.email.backends.ip_url`, matched before descent; prism/tlsight `backends.ip.*` and beacon's `backends.ip_url`/`timeout_ms` take the same fate.
+- **G2 enrichment** `crates/common/src/enrichment.rs`: `EnrichmentSource` trait, `Transport::InProcess`, `EnrichmentClient::in_process` (base_url "", private-IP guard kept, `is_reachable` true). `crates/ip`: `enrichment` feature of netray-common; `IpModule` gains a stub variant (`testing::stub_ip_module(json)`), `impl EnrichmentSource for IpModule` (ifconfig `network` → `IpInfo`), `enrichment_client(Option<&Arc<IpModule>>)` re-exported. `crates/{http,dns,tls,email}`: `ModuleConfig` drops `enrichment`/`backends`; constructors `new(config, enrichment)`; V1 `Config`s and their own clients unchanged. `crates/netray/src/main.rs` `lens_registry`: ip module first, client to the four modules; `strip_lens_enrichment` keeps `netray lens` accepting its old tables (and its `ip_url` warning) until Phase 7.
+- **G2 host routing** `crates/web/static/{bimi-logo.svg,mta-sts.txt}` (copies; `site/` keeps its own until Phase 7). `crates/web/Cargo.toml`: `tower` (util). `crates/web/src/host/mod.rs`: `HostRouters { apex, probes, apex_router, dns/tls/http/ip: Option<Router> }`, `router()` — probes first on any Host; host from `Host` or URI authority, port stripped, ASCII-lowercased; apex: `/favicon.svg`, `/bimi-logo.svg`, 404 for `/favicon.ico`, `/.well-known/*`, bare `/r`, `/api`, `/inspect` (± `/`) and `/metrics`, then `apex_router`; inspector hosts → their router or 404; `mta-sts.` → only the policy; `email.`, `lens.`, unknown, none → 404. `crates/lens/src/lib.rs`: `prepare` (state, stores, `app(state)`), `serve` (listeners, metrics, drain), `probe_router()`; `run_config` = both. `crates/netray`: depends on netray-web; the Serve arm composes `host::router` over `lens::prepare` and calls `lens::serve`. `specs/sdd/v2.md` §5.1 (`/health`, `/ready` before host routing; `bimi-logo.svg`) and §7.3 (unknown host 404, `mta-sts.`).

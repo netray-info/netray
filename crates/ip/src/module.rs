@@ -2,6 +2,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, LazyLock};
 
 use arc_swap::ArcSwap;
+use netray_common::enrichment::{EnrichmentClient, EnrichmentSource, IpInfo};
 use netray_common::target_policy::is_allowed_target;
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::{Block, BlockId, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType};
@@ -59,9 +60,18 @@ const ADDRESSES_COLUMNS: [&str; 11] = [
 
 /// The IP enrichment as an engine module: ifconfig's lookups run in-process.
 pub struct IpModule {
-    config: Arc<Config>,
-    enrichment: Arc<ArcSwap<EnrichmentContext>>,
-    dns_cache: DnsCache,
+    source: Source,
+}
+
+enum Source {
+    Live {
+        config: Arc<Config>,
+        enrichment: Arc<ArcSwap<EnrichmentContext>>,
+        dns_cache: DnsCache,
+    },
+    /// Answers every address with the decoded ifconfig response; no GeoIP data.
+    #[cfg(feature = "testing")]
+    Stub(String),
 }
 
 impl IpModule {
@@ -69,17 +79,32 @@ impl IpModule {
         let config = Config::from_module(module);
         let ctx = EnrichmentContext::load_for_module(&config).await?;
         Ok(Self {
-            config: Arc::new(config),
-            enrichment: Arc::new(ArcSwap::from_pointee(ctx)),
-            dns_cache: new_dns_cache(),
+            source: Source::Live {
+                config: Arc::new(config),
+                enrichment: Arc::new(ArcSwap::from_pointee(ctx)),
+                dns_cache: new_dns_cache(),
+            },
         })
+    }
+
+    #[cfg(feature = "testing")]
+    pub(crate) fn stub(contract_json: &str) -> Self {
+        serde_json::from_str::<Ifconfig>(contract_json).expect("stub contract decodes as an ifconfig response");
+        Self {
+            source: Source::Stub(contract_json.to_string()),
+        }
     }
 
     /// Loads the data again; a failed load keeps the previous data.
     pub async fn reload(&self) {
-        match EnrichmentContext::load_for_module(&self.config).await {
+        let (config, enrichment) = match &self.source {
+            Source::Live { config, enrichment, .. } => (config, enrichment),
+            #[cfg(feature = "testing")]
+            Source::Stub(_) => return,
+        };
+        match EnrichmentContext::load_for_module(config).await {
             Ok(ctx) => {
-                self.enrichment.store(Arc::new(ctx));
+                enrichment.store(Arc::new(ctx));
                 tracing::info!("Enrichment data reloaded successfully");
             }
             Err(e) => {
@@ -89,7 +114,16 @@ impl IpModule {
     }
 
     async fn lookup(&self, ip: IpAddr) -> Result<Ifconfig, String> {
-        let ctx = self.enrichment.load();
+        let (enrichment, dns_cache) = match &self.source {
+            Source::Live {
+                enrichment, dns_cache, ..
+            } => (enrichment, dns_cache),
+            #[cfg(feature = "testing")]
+            Source::Stub(json) => {
+                return serde_json::from_str(json).map_err(|e| e.to_string());
+            }
+        };
+        let ctx = enrichment.load();
         let remote = SocketAddr::new(ip, 0);
         let param = IfconfigParam {
             remote: &remote,
@@ -108,12 +142,27 @@ impl IpModule {
             asn_patterns: &ctx.asn_patterns,
             asn_info: ctx.asn_info.as_deref(),
             dns_resolver: &ctx.dns_resolver,
-            dns_cache: &self.dns_cache,
+            dns_cache,
             skip_dns: true,
             lang: None,
         };
         Ok(get_ifconfig(&param).await)
     }
+}
+
+impl EnrichmentSource for IpModule {
+    fn lookup(&self, ip: IpAddr) -> futures::future::BoxFuture<'_, Option<IpInfo>> {
+        Box::pin(async move {
+            let ifconfig = IpModule::lookup(self, ip).await.ok()?;
+            let network = serde_json::to_value(&ifconfig.network).ok()?;
+            serde_json::from_value(network).ok()
+        })
+    }
+}
+
+/// The client the DNS, TLS, HTTP and email modules enrich through: `None` without an IP module.
+pub fn enrichment_client(ip: Option<&Arc<IpModule>>) -> Option<Arc<EnrichmentClient>> {
+    ip.map(|ip| Arc::new(EnrichmentClient::in_process(ip.clone())))
 }
 
 /// The public addresses among `facts` (those `is_allowed_target` accepts), at most four IPv4 and

@@ -6,6 +6,7 @@ pub mod components;
 pub mod contrast;
 pub mod entries;
 pub mod gate;
+pub mod host;
 pub mod pages;
 pub mod spectrum;
 pub mod stream;

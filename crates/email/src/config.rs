@@ -38,8 +38,6 @@ pub struct ModuleConfig {
     #[serde(default = "default_dkim")]
     pub dkim: DkimConfig,
     #[serde(default)]
-    pub backends: BackendsConfig,
-    #[serde(default)]
     pub inspections: InspectionsConfig,
 }
 
@@ -210,7 +208,7 @@ impl Config {
             dkim: module.dkim,
             telemetry: TelemetryConfig::default(),
             ecosystem: EcosystemConfig::default(),
-            backends: module.backends,
+            backends: BackendsConfig::default(),
         }
     }
 

@@ -19,6 +19,7 @@ base64 = { workspace = true }
 percent-encoding = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true }
+tower = { workspace = true, features = ["util"] }
 
 [build-dependencies]
 serde_json = { workspace = true }
@@ -26,7 +27,6 @@ serde_json = { workspace = true }
 [dev-dependencies]
 proptest = "1"
 tempfile = "3"
-tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 sqlx = { workspace = true, features = ["runtime-tokio", "sqlite"] }
 tracing-subscriber = "0.3"

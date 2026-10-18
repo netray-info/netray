@@ -30,8 +30,6 @@ pub struct ModuleConfig {
     #[serde(default = "default_inspect")]
     pub inspect: InspectConfig,
     #[serde(default)]
-    pub enrichment: EnrichmentConfig,
-    #[serde(default)]
     pub limits: ModuleLimits,
 }
 

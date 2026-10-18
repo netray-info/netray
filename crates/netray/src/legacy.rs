@@ -6,11 +6,13 @@ enum Fate {
     Now(&'static str),
     /// Removed in 0.30.0.
     Removed,
+    /// Removed in 0.30.0: enrichment calls the in-process ip module.
+    InProcess,
     /// No single destination: the CHANGELOG table gives each service's fate.
     Table,
 }
 
-use Fate::{Now, Removed, Table};
+use Fate::{InProcess, Now, Removed, Table};
 
 /// `<m>` in a path matches any one segment and is substituted into the destination.
 const ROWS: &[(&str, &str, Fate)] = &[
@@ -25,13 +27,17 @@ const ROWS: &[(&str, &str, Fate)] = &[
         Now("[modules.<m>] deadline_ms"),
     ),
     ("backends.<m>.url", "lens", Removed),
-    ("backends.ip.url", "prism, tlsight", Removed),
-    ("backends.ip.timeout_ms", "prism, tlsight", Removed),
-    ("backends.ip.max_concurrent", "prism, tlsight", Removed),
-    ("backends.ip.cache_ttl_secs", "prism, tlsight", Removed),
-    ("backends.ip.cache_capacity", "prism, tlsight", Removed),
-    ("backends.ip_url", "beacon", Removed),
-    ("backends.timeout_ms", "beacon", Removed),
+    ("backends.ip.url", "prism, tlsight", InProcess),
+    ("backends.ip.timeout_ms", "prism, tlsight", InProcess),
+    ("backends.ip.max_concurrent", "prism, tlsight", InProcess),
+    ("backends.ip.cache_ttl_secs", "prism, tlsight", InProcess),
+    ("backends.ip.cache_capacity", "prism, tlsight", InProcess),
+    ("backends.ip_url", "beacon", InProcess),
+    ("backends.timeout_ms", "beacon", InProcess),
+    ("modules.dns.backends.ip", "lens", InProcess),
+    ("modules.tls.backends.ip", "lens", InProcess),
+    ("modules.http.enrichment", "lens", InProcess),
+    ("modules.email.backends.ip_url", "lens", InProcess),
     ("cache.enabled", "lens", Now("[admission] cache_enabled")),
     ("cache.enabled", "ifconfig", Removed),
     (
@@ -227,6 +233,9 @@ fn describe(path: &str, found: &[(&str, &Fate, &str)]) -> String {
         .map(|(origin, fate, m)| match fate {
             Now(dest) => format!("{origin}: now `{}`", dest.replace("<m>", m)),
             Removed => format!("{origin}: removed in 0.30.0"),
+            InProcess => {
+                format!("{origin}: removed in 0.30.0, enrichment calls the in-process ip module")
+            }
             Table => format!("{origin}: no single destination"),
         })
         .collect();

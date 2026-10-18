@@ -16,6 +16,7 @@ lens = { path = "../lens" }
 netray-dns = { path = "../dns" }
 netray-http = { path = "../http" }
 netray-tls = { path = "../tls" }
+netray-web = { path = "../web" }
 
 axum = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs", "signal"] }

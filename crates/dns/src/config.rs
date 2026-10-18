@@ -58,8 +58,6 @@ pub struct ModuleConfig {
     pub limits: ModuleLimits,
     #[serde(default = "default_circuit_breaker")]
     pub circuit_breaker: CircuitBreakerConfig,
-    #[serde(default)]
-    pub backends: BackendsConfig,
 }
 
 /// The subset of `[limits]` that applies to the module: no per-client or global limit.
@@ -106,7 +104,7 @@ impl ModuleConfig {
             trace: default_trace(),
             telemetry: TelemetryConfig::default(),
             ecosystem: EcosystemConfig::default(),
-            backends: self.backends,
+            backends: BackendsConfig::default(),
         };
         cfg.validate()?;
         Ok(cfg)

@@ -1,8 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, LazyLock};
-use std::time::Duration;
 
-use netray_common::enrichment::{EnrichmentClient, EnrichmentMode};
+use netray_common::enrichment::EnrichmentClient;
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::evidence::{
     Block, BlockId, Fields, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType,
@@ -131,7 +130,10 @@ pub struct EmailModule {
 }
 
 impl EmailModule {
-    pub async fn new(module: ModuleConfig) -> Result<Self, MailError> {
+    pub async fn new(
+        module: ModuleConfig,
+        enrichment_client: Option<Arc<EnrichmentClient>>,
+    ) -> Result<Self, MailError> {
         let max_concurrent = module.inspections.max_concurrent;
         let config = Config::from_module(module);
 
@@ -143,18 +145,6 @@ impl EmailModule {
         let dnsbl_resolver = DnsResolver::new(&config.dnsbl.resolvers, config.dnsbl.timeout_ms)
             .await
             .map_err(|e| MailError::DnsError(e.to_string()))?;
-
-        let enrichment_client = if config.backends.ip_url.is_empty() {
-            None
-        } else {
-            Some(Arc::new(EnrichmentClient::new(
-                &config.backends.ip_url,
-                Duration::from_millis(config.backends.timeout_ms),
-                "beacon",
-                None,
-                EnrichmentMode::Backend { cache_ttl_secs: 0 },
-            )))
-        };
 
         let fetch = OutboundFetch::new(
             config.http.timeout_ms,

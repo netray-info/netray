@@ -52,9 +52,28 @@ pub async fn run_with(config_arg: Option<String>, registry: netray_engine::Regis
     run_config(config, registry).await;
 }
 
+/// What [`serve`] needs besides the app: the counters and the run registry behind it.
+pub struct Background {
+    client_runs: std::sync::Arc<metrics::ClientRunCounter>,
+    runs: std::sync::Arc<admission::Runs>,
+}
+
+/// Lens's routes with their `http_metrics` layer but without the outer layer stack: [`layers`]
+/// wraps them, alone for `netray lens` or around the host router for `netray serve`.
+pub struct Prepared {
+    pub routes: Router,
+    pub background: Background,
+}
+
 /// Serves lens's application on a loaded configuration. Like [`run_with`], it installs no
 /// subscriber.
 pub async fn run_config(config: config::Config, registry: netray_engine::Registry) {
+    let Prepared { routes, background } = prepare(&config, registry).await;
+    serve(&config, layers(routes), background).await;
+}
+
+/// Builds lens's state, its stores and its routes; binds nothing.
+pub async fn prepare(config: &config::Config, registry: netray_engine::Registry) -> Prepared {
     tracing::info!(
         bind = %config.server.bind,
         http_module = config.backends.http.is_some(),
@@ -130,7 +149,24 @@ pub async fn run_config(config: config::Config, registry: netray_engine::Registr
     let runs = std::sync::Arc::clone(&state.runs);
 
     // 4. Build the app with all routes and middleware.
-    let app = app(state);
+    Prepared {
+        routes: routes(state),
+        background: Background { client_runs, runs },
+    }
+}
+
+/// `/health` and `/ready` on lens's handlers, with no state: what answers before any host is
+/// looked at.
+pub fn probe_router() -> Router {
+    Router::new()
+        .route("/health", get(routes::health_handler))
+        .route("/ready", get(routes::ready_handler))
+}
+
+/// Binds and serves `app` until a shutdown signal, runs the metrics listener, and drains the
+/// runs in flight.
+pub async fn serve(config: &config::Config, app: Router, background: Background) {
+    let Background { client_runs, runs } = background;
 
     // 6. Graceful shutdown channel.
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
@@ -209,6 +245,12 @@ pub fn frontend_router() -> Router {
 
 /// The whole HTTP app: every router, the SPA fallback, the OpenAPI routes and the layer stack.
 pub fn app(state: state::AppState) -> Router {
+    layers(routes(state))
+}
+
+/// Every router, the SPA fallback and the OpenAPI routes, with the `http_metrics` layer, which
+/// needs the `MatchedPath` only these routes set.
+pub fn routes(state: state::AppState) -> Router {
     let config = state.config.clone();
     let shell = spa::Shell(state.rendered_html.clone());
 
@@ -261,6 +303,12 @@ pub fn app(state: state::AppState) -> Router {
         .layer(axum::middleware::from_fn(|req, next| {
             netray_common::middleware::http_metrics("lens", req, next)
         }))
+}
+
+/// The outer layer stack, outermost first: request id, security headers, CORS, body limit,
+/// compression, trace.
+pub fn layers(router: Router) -> Router {
+    router
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(|request: &axum::http::Request<axum::body::Body>| {

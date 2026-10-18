@@ -7,8 +7,10 @@
 
 use std::collections::HashMap;
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
+use futures::future::BoxFuture;
 use futures::stream::{FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
 
@@ -71,6 +73,11 @@ pub enum EnrichmentMode {
     Backend { cache_ttl_secs: u64 },
 }
 
+/// A lookup answered inside the process, in the shape the enrichment API serves.
+pub trait EnrichmentSource: Send + Sync {
+    fn lookup(&self, ip: IpAddr) -> BoxFuture<'_, Option<IpInfo>>;
+}
+
 enum Transport {
     Plain {
         client: reqwest::Client,
@@ -78,6 +85,7 @@ enum Transport {
     },
     #[cfg(feature = "backend")]
     Backend(crate::backend::BackendClient),
+    InProcess(Arc<dyn EnrichmentSource>),
 }
 
 /// HTTP client for IP enrichment lookups against an ifconfig-rs compatible API.
@@ -158,12 +166,22 @@ impl EnrichmentClient {
         }
     }
 
+    /// A client that answers from `source` with no HTTP request. It has no base URL; the
+    /// private-address guard still runs before the source.
+    pub fn in_process(source: Arc<dyn EnrichmentSource>) -> Self {
+        Self {
+            transport: Transport::InProcess(source),
+            base_url: String::new(),
+        }
+    }
+
     /// Probe reachability with a HEAD request and a 2-second timeout.
     ///
     /// Returns `true` if the service responds with an HTTP status below 500.
     /// Non-fatal: network errors and timeouts return `false`.
     pub async fn is_reachable(&self) -> bool {
         match &self.transport {
+            Transport::InProcess(_) => true,
             #[cfg(feature = "backend")]
             Transport::Backend(backend) => backend
                 .head("/")
@@ -198,6 +216,7 @@ impl EnrichmentClient {
         }
 
         match &self.transport {
+            Transport::InProcess(source) => source.lookup(ip).await,
             #[cfg(feature = "backend")]
             Transport::Backend(backend) => {
                 let path = format!("/network/json?ip={}", ip);

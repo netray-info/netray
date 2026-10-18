@@ -2830,6 +2830,7 @@ dependencies = [
  "netray-ip",
  "netray-model",
  "netray-tls",
+ "netray-web",
  "percent-encoding",
  "serde",
  "tokio",

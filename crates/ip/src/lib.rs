@@ -41,7 +41,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
 
 pub use config::{Config, ModuleConfig};
-pub use module::{IpModule, translate};
+pub use module::{IpModule, enrichment_client, translate};
 pub use state::ProjectInfo;
 
 /// Middleware that requires a valid `Authorization: Bearer <token>` header.

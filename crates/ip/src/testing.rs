@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionOutcome};
 use netray_model::{CheckId, Protocol};
 
 use crate::backend::Ifconfig;
-use crate::module::{ip_checks, sample, translate};
+use crate::module::{IpModule, ip_checks, sample, translate};
 
 struct GoldenModule(String);
 
@@ -41,4 +43,10 @@ fn decode(contract_json: &str) -> Ifconfig {
 pub fn golden_module(contract_json: &str) -> Box<dyn Module> {
     decode(contract_json);
     Box::new(GoldenModule(contract_json.to_string()))
+}
+
+/// An [`IpModule`] that answers every address with the decoded `contract_json`, an ifconfig
+/// `/json` response, and holds no GeoIP data.
+pub fn stub_ip_module(contract_json: &str) -> Arc<IpModule> {
+    Arc::new(IpModule::stub(contract_json))
 }
