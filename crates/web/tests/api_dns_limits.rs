@@ -151,7 +151,8 @@ async fn a_spent_per_target_burst_refuses_another_caller_with_retry_after() {
 /// C7 / requirement 31: a second holder of the limiter's Arc spends the caller's budget.
 #[tokio::test]
 async fn a_second_holder_of_the_dns_limiter_spends_the_callers_budget() {
-    let (app, state) = setup(ApiConfig::default());
+    // The global burst must hold the whole per-IP burst (64) for the second holder to spend it.
+    let (app, state) = setup(api_config("global_burst = 100"));
     let caller: IpAddr = "192.0.2.10".parse().unwrap();
     let other = Arc::clone(state.dns_limiter());
     drop(
