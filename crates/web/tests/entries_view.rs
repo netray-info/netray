@@ -18,7 +18,12 @@ fn id_at(i: usize) -> CheckId {
 }
 
 fn rc(id: CheckId, status: Status) -> RunCheck {
-    RunCheck { id, status }
+    RunCheck {
+        id,
+        status,
+        findings: vec![],
+        evidence: vec![],
+    }
 }
 
 async fn stored(checks: Vec<RunCheck>) -> Entry {

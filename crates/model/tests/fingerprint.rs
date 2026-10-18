@@ -36,6 +36,8 @@ fn run(blocks: Vec<Block>) -> Run {
         checks: vec![RunCheck {
             id: CheckId::parse("http.hsts").unwrap(),
             status: Status::Pass,
+            findings: vec![],
+            evidence: vec![],
         }],
         blocks,
     }

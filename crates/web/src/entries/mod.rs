@@ -5,6 +5,7 @@ pub mod render;
 mod routes;
 pub mod view;
 
+pub(crate) use routes::well_formed;
 pub use routes::{
     CardRenderer, EntriesDeps, EntryCard, NOT_FOUND_HTML, V1Lookup, privacy_router, router,
 };

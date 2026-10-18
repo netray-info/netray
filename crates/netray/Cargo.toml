@@ -9,13 +9,14 @@ description = "The netray.info suite as one binary: six services and the static 
 netray-common = { workspace = true, features = ["server"] }
 netray-engine = { workspace = true }
 netray-model = { workspace = true }
+netray-web = { workspace = true }
 
-netray-email = { path = "../email" }
-netray-ip = { path = "../ip" }
+netray-email = { workspace = true }
+netray-ip = { workspace = true }
 lens = { path = "../lens" }
-netray-dns = { path = "../dns" }
-netray-http = { path = "../http" }
-netray-tls = { path = "../tls" }
+netray-dns = { workspace = true }
+netray-http = { workspace = true }
+netray-tls = { workspace = true }
 
 axum = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "fs", "signal"] }

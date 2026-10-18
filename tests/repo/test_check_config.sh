@@ -95,6 +95,47 @@ startup_rejects=(
     "email:crates/email/tests/fixtures/beacon.production.toml:s|^metrics_bind = .*|metrics_bind = \"nope\"|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[badges]\\nttl_seconds = 0\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s/^domain_run_slots = .*/domain_run_slots = 0/"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api]\\nper_ip_burst = 0\\n\\n[site]|"
+    # specs/features/v2-api C7, C18, C25: the `[api.ip]` limits, checked below by key name
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_per_minute = 601\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 1\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_ip_burst = 101\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_per_minute = 601\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nper_target_burst = 101\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_max_size = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_max_size = 101\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_per_minute = 601\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 50\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 101\\n\\n[site]|"
+    # specs/features/v2-api Phase 5: [api.tls] / [api.http] limits
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_target_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_target_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_target_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.http]\\nper_target_burst = 0\\n\\n[site]|"
+    # specs/features/v2-api Phase 6: [api.email] limits
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.email]\\nmax_concurrent_inspections = 0\\n\\n[site]|"
+    # specs/features/v2-api Phase 7: [api.dns] limits
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_target_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_target_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_per_minute = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_burst = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_max_streams = 0\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nper_ip_burst = 17\\n\\n[site]|"
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.dns]\\nglobal_burst = 17\\n\\n[site]|"
 )
 n=0
 for row in "${startup_rejects[@]}"; do
@@ -108,6 +149,15 @@ for row in "${startup_rejects[@]}"; do
     fi
     run_check "$sub" "$tmp/$sub.reject$n.toml"
     [ "$rc" -eq 1 ] || fail "$sub: startup-rejected value ($expr) exited $rc, expected 1"
+    # An `[api.ip]`, `[api.tls]`, `[api.http]`, `[api.email]` or `[api.dns]` row must be refused by its
+    # rule, not as an unknown field: the output names the key and does not say "unknown field".
+    if [[ "$expr" =~ \[api\.(ip|tls|http|email|dns)\] ]]; then
+        section="${BASH_REMATCH[1]}"
+        key="${expr#*\\n}"
+        key="${key%% =*}"
+        grep -qF "api.$section.$key" <<<"$out" || fail "lens: [api.$section] $key row error does not name api.$section.$key ($out)"
+        ! grep -qi 'unknown field' <<<"$out" || fail "lens: [api.$section] $key row was refused as an unknown field ($out)"
+    fi
 done
 
 # specs/features/v2-admission C6: the lens fixture carries `[admission]` with both keys, and
@@ -122,6 +172,22 @@ else
     run_check lens "$tmp/lens.budget0.toml"
     [ "$rc" -eq 0 ] || fail "lens: client_budget_per_hour = 0 exited $rc, expected 0 ($out)"
 fi
+
+# specs/features/v2-api C32: an unknown key under `[api]` or `[api.ip]` fails the check and the
+# output names the key.
+api_rejects=(
+    "api bogus|[api]\nbogus = 1"
+    "api.ip bogus|[api.ip]\nbogus = 1"
+)
+n=0
+for row in "${api_rejects[@]}"; do
+    IFS='|' read -r label body <<<"$row"
+    n=$((n + 1))
+    { cat "$lens_nodata"; printf '\n%b\n' "$body"; } >"$tmp/lens.api$n.toml"
+    run_check lens "$tmp/lens.api$n.toml"
+    [ "$rc" -eq 1 ] || fail "lens: [$label] exited $rc, expected 1 ($out)"
+    grep -qF 'bogus' <<<"$out" || fail "lens: [$label] error does not name 'bogus' ($out)"
+done
 
 # Telemetry init panics on an OTLP endpoint that is not a valid URI; the check must name
 # the key, so a row cannot pass by tripping over an unknown field instead.

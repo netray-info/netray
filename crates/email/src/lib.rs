@@ -23,6 +23,7 @@ pub mod config;
 pub mod dns;
 pub mod error;
 pub mod input;
+pub mod job;
 pub mod module;
 pub mod quality;
 pub mod routes;
@@ -32,6 +33,10 @@ pub mod state;
 pub mod testing;
 
 pub use config::ModuleConfig;
+pub use job::{
+    EmailInspect, EmailInspectRequest, EmailInspectResult, EmailInspector, EmailJob, EmailRefusal,
+    EmailSummary, InspectSlots,
+};
 pub use module::{EmailModule, translate};
 pub use netray_common::middleware::RequestId;
 

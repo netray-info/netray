@@ -1,1 +1,2 @@
 {"about":"step","branch":"feature/v2-history","commit":"c74a88bca0eaf15d7c47a41b2565e429752d7043","kind":"note","repo":"v2-history","repo_path":"/Users/lukas/Documents/src/.worktrees/netray/v2-history","schema":1,"step":"implement","superseded":true,"timestamp":"2026-10-17T14:34:37Z"}
+{"about":"step","branch":"feature/v2-api","commit":"f6099277c519b3aed32003b396b51fb23d149bb2","kind":"note","repo":"netray","repo_path":"/Users/lukas/Documents/src/.worktrees/netray/v2-api","schema":1,"step":"review","superseded":true,"timestamp":"2026-10-18T12:37:58Z"}

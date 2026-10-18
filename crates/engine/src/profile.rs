@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::OnceLock;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 
 use netray_model::{CheckId, Grade, Protocol};
@@ -26,7 +26,7 @@ impl fmt::Display for ProfileError {
 impl std::error::Error for ProfileError {}
 
 /// One section's weight, its weighted checks and the checks whose failure forces `F`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub struct SectionWeights {
     pub weight: u32,
     pub checks: BTreeMap<CheckId, u32>,
@@ -34,13 +34,33 @@ pub struct SectionWeights {
 }
 
 /// A parsed scoring profile.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 pub struct Profile {
     pub name: String,
     pub version: u32,
     pub sections: BTreeMap<Protocol, SectionWeights>,
     /// Grade thresholds, highest first.
+    #[serde(serialize_with = "serialize_thresholds")]
+    #[schema(value_type = Vec<Threshold>)]
     pub thresholds: Vec<(Grade, u32)>,
+}
+
+/// One grade threshold as served: the lowest score that earns `grade`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
+pub struct Threshold {
+    pub grade: Grade,
+    pub min: u32,
+}
+
+fn serialize_thresholds<S: Serializer>(
+    thresholds: &[(Grade, u32)],
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.collect_seq(
+        thresholds
+            .iter()
+            .map(|&(grade, min)| Threshold { grade, min }),
+    )
 }
 
 #[derive(Deserialize)]
@@ -146,6 +166,10 @@ impl Profiles {
 
     pub fn get(version: u32) -> Option<&'static Profile> {
         Self::all().iter().find(|p| p.version == version)
+    }
+
+    pub fn versions() -> Vec<u32> {
+        Self::all().iter().map(|p| p.version).collect()
     }
 
     pub fn current() -> &'static Profile {

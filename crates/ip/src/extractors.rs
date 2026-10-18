@@ -116,6 +116,22 @@ pub fn filter_headers(headers: Vec<(String, String)>, filters: &regex::RegexSet)
         .collect()
 }
 
+/// The header-name filter set for `patterns`; an invalid pattern is dropped with a warning.
+pub fn header_filters(patterns: &[String]) -> regex::RegexSet {
+    let valid: Vec<&str> = patterns
+        .iter()
+        .filter(|pattern| match regex::Regex::new(pattern) {
+            Ok(_) => true,
+            Err(e) => {
+                tracing::warn!("Invalid header filter regex '{}': {}", pattern, e);
+                false
+            }
+        })
+        .map(|s| s.as_str())
+        .collect();
+    regex::RegexSet::new(&valid).expect("pre-validated regex patterns")
+}
+
 /// Middleware that extracts RequesterInfo and stores it as a request extension.
 pub async fn requester_info_middleware(
     State(state): State<AppState>,

@@ -9,7 +9,7 @@ use crate::evidence::{Block, BlockId, ShapeKind};
 use crate::run::{Run, SectionKind};
 use crate::{CheckId, Grade, Protocol, Status, canonical};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct Diff {
     pub checks: Vec<CheckChange>,
     pub evidence: Vec<BlockChange>,
@@ -18,7 +18,7 @@ pub struct Diff {
     pub engine_changed: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CheckChange {
     pub id: CheckId,
     pub class: ChangeClass,
@@ -26,7 +26,7 @@ pub struct CheckChange {
     pub to: Option<Status>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChangeClass {
     Fixed,
@@ -45,13 +45,13 @@ pub enum ChangeClass {
     RemovedByRelease,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct BlockChange {
     pub block: BlockId,
     pub kind: BlockChangeKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum BlockChangeKind {
     Added,
@@ -66,7 +66,7 @@ pub enum BlockChangeKind {
 
 /// The grade of both runs. `rescored` is the predecessor re-scored under the current profile,
 /// set only when the profile versions differ.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct GradeChange {
     pub from: Grade,
     pub rescored: Option<Grade>,

@@ -98,6 +98,44 @@ global_burst = 20
 client_budget_per_hour = 30
 domain_run_slots = 8
 
+[api]
+# API v1 at /api/v1 (read endpoints, OpenAPI document, docs page)
+enabled = true
+per_ip_per_minute = 60
+per_ip_burst = 10
+# [api.dns]
+# per_ip_per_minute = 120             # query cost per caller (types x servers; trace, dnssec 16), above 0
+# per_ip_burst = 64                   # 18 or more
+# per_target_per_minute = 60          # per DNS server (provider name or address), above 0
+# per_target_burst = 20               # above 0
+# global_per_minute = 1000            # all callers together, above 0
+# global_burst = 50                   # 18 or more
+# per_ip_max_streams = 10             # DNS jobs one caller runs at once, above 0; beyond: 429
+# [api.tls]
+# per_ip_per_minute = 30              # per caller, POST /tls/inspect, above 0
+# per_ip_burst = 10                   # above 0
+# per_target_per_minute = 60          # per inspected host, above 0
+# per_target_burst = 20               # above 0
+# [api.http]
+# per_ip_per_minute = 10              # per caller, POST /http/inspect, above 0
+# per_ip_burst = 5                    # above 0
+# per_target_per_minute = 30          # per inspected host, above 0
+# per_target_burst = 10               # above 0
+# [api.email]
+# per_ip_per_minute = 10              # per caller, POST /email/inspect, above 0
+# per_ip_burst = 10                   # above 0
+# max_concurrent_inspections = 16     # inspections at once, above 0
+# [api.ip]
+# internal_mode = false               # true: private and loopback addresses are looked up
+# filtered_headers = []               # regex patterns of request headers hidden from ?field=headers
+# per_ip_per_minute = 60              # per caller, 1..=600
+# per_ip_burst = 10                   # 2..=100
+# per_target_per_minute = 120         # per looked-up address, 1..=600
+# per_target_burst = 20               # 1..=100
+# batch_max_size = 100                # addresses per POST /ip/batch, 1..=100
+# batch_addresses_per_minute = 60     # batch addresses per caller, 1..=600
+# batch_addresses_burst = 100         # at least batch_max_size, at most 100
+
 [scoring]
 # profile_path = "my-profile.toml"   # override the built-in profile v3 (crates/engine/profiles/v3.toml)
 

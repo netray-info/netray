@@ -70,3 +70,8 @@ toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }
 http-body-util = { workspace = true }
 serde_json = { workspace = true }
+
+[[test]]
+name = "job"
+path = "tests/job.rs"
+required-features = ["testing"]

@@ -164,7 +164,6 @@ pub enum SseEvent {
     },
     /// The evidence blocks of the run, sent once right before `Summary`.
     Evidence {
-        #[schema(value_type = Vec<Object>)]
         blocks: Vec<netray_model::evidence::Block>,
     },
 }

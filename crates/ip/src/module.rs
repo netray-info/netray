@@ -7,9 +7,10 @@ use netray_engine::{BoxFuture, EvidencePath, Facts, Module, RunContext, SectionO
 use netray_model::evidence::{Block, BlockId, Register, Row, Shape, ShapeKind, Value as EvValue, ValueType};
 use netray_model::{CheckId, CheckResult, Protocol, Status};
 
-use crate::backend::{DnsCache, Ifconfig, IfconfigParam, get_ifconfig, new_dns_cache};
+use crate::backend::{DnsCache, Ifconfig, UserAgent, new_dns_cache};
 use crate::config::{Config, ModuleConfig};
 use crate::enrichment::{EnrichmentContext, LoadError};
+use crate::lookup::{AsnLookupResponse, IpLookup, IpRefusal, RangeResponse, asn_lookup, enrich, range_lookup};
 
 // ---------------------------------------------------------------------------
 // Module
@@ -87,32 +88,37 @@ impl IpModule {
             }
         }
     }
+}
 
-    async fn lookup(&self, ip: IpAddr) -> Result<Ifconfig, String> {
-        let ctx = self.enrichment.load();
-        let remote = SocketAddr::new(ip, 0);
-        let param = IfconfigParam {
-            remote: &remote,
-            user_agent_header: &None,
-            user_agent_parser: ctx.user_agent_parser.as_deref(),
-            geoip_city_db: ctx.geoip_city_db.as_deref(),
-            geoip_asn_db: ctx.geoip_asn_db.as_deref(),
-            tor_exit_nodes: &ctx.tor_exit_nodes,
-            feodo_botnet_ips: ctx.feodo_botnet_ips.as_deref(),
-            cins_army_ips: ctx.cins_army_ips.as_deref(),
-            vpn_ranges: ctx.vpn_ranges.as_deref(),
-            cloud_provider_db: ctx.cloud_provider_db.as_deref(),
-            datacenter_ranges: ctx.datacenter_ranges.as_deref(),
-            bot_db: ctx.bot_db.as_deref(),
-            spamhaus_drop: ctx.spamhaus_drop.as_deref(),
-            asn_patterns: &ctx.asn_patterns,
-            asn_info: ctx.asn_info.as_deref(),
-            dns_resolver: &ctx.dns_resolver,
-            dns_cache: &self.dns_cache,
-            skip_dns: true,
-            lang: None,
-        };
-        Ok(get_ifconfig(&param).await)
+impl IpLookup for IpModule {
+    fn lookup(&self, ip: IpAddr) -> BoxFuture<'_, Result<Ifconfig, IpRefusal>> {
+        Box::pin(async move {
+            let ctx = self.enrichment.load_full();
+            Ok(enrich(&ctx, &self.dns_cache, SocketAddr::new(ip, 0), None, true, None).await)
+        })
+    }
+
+    fn lookup_caller<'a>(
+        &'a self,
+        remote: SocketAddr,
+        user_agent: Option<&'a str>,
+    ) -> BoxFuture<'a, Result<Ifconfig, IpRefusal>> {
+        Box::pin(async move {
+            let ctx = self.enrichment.load_full();
+            let mut ifconfig = enrich(&ctx, &self.dns_cache, remote, user_agent, false, None).await;
+            if ifconfig.user_agent.is_none() {
+                ifconfig.user_agent = user_agent.map(UserAgent::unparsed);
+            }
+            Ok(ifconfig)
+        })
+    }
+
+    fn range<'a>(&'a self, cidr: &'a str) -> BoxFuture<'a, Result<RangeResponse, IpRefusal>> {
+        Box::pin(async move { range_lookup(&self.enrichment.load(), cidr) })
+    }
+
+    fn asn(&self, n: u32) -> BoxFuture<'_, Result<AsnLookupResponse, IpRefusal>> {
+        Box::pin(async move { Ok(asn_lookup(&self.enrichment.load(), n)) })
     }
 }
 
@@ -160,7 +166,7 @@ impl Module for IpModule {
         Box::pin(async move {
             let (sample, total) = sample(facts);
             let lookups = futures::future::join_all(sample.into_iter().map(|ip| async move {
-                let result = self.lookup(ip).await;
+                let result = IpLookup::lookup(self, ip).await.map_err(|refusal| refusal.to_string());
                 (ip, result)
             }))
             .await;

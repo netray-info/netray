@@ -18,6 +18,8 @@ fn run_with(status: Status) -> Run {
         checks: vec![RunCheck {
             id: CheckId::parse("tls.chain_trusted").expect("valid id"),
             status,
+            findings: vec![],
+            evidence: vec![],
         }],
         blocks: vec![],
     }

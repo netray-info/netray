@@ -74,6 +74,7 @@ fn make_state_with_cache(ttl_seconds: u64) -> AppState {
             ..BadgesConfig::default()
         },
         admission: lens::config::AdmissionConfig::default(),
+        api: Default::default(),
         og_cards: lens::config::OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),
@@ -174,6 +175,8 @@ async fn warm_cache_skips_run_check() {
         checks: vec![RunCheck {
             id: CheckId::parse("dns.dnssec_valid").unwrap(),
             status: Status::Pass,
+            findings: vec![],
+            evidence: vec![],
         }],
         blocks: vec![],
     };

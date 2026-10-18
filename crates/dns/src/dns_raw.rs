@@ -144,7 +144,7 @@ pub(crate) struct RawQueryResult {
 // Minimal DNS record representation for SSE output
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct DnsRecord {
     pub name: String,
     pub ttl: u32,

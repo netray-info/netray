@@ -326,40 +326,43 @@ async fn do_inspect_inner(
     req_headers: &axum::http::HeaderMap,
     raw_url: &str,
 ) -> Result<Json<InspectResponse>, AppError> {
-    let start = Instant::now();
-
-    // 1. Parse and normalize URL
-    let url = crate::input::parse_url(raw_url)?;
-
-    // 2. Rate limiting (before DNS to avoid unnecessary resolution for throttled clients)
     let client_ip = state.ip_extractor.extract(req_headers, peer);
     tracing::Span::current().record("client_ip", tracing::field::display(client_ip));
-    let hostname = url.host_str().unwrap_or_default();
-    state.rate_limiter.check(client_ip, hostname)?;
-
-    // 3. Resolve and validate target (SSRF check)
-    let resolved_addr = crate::input::validate_target(&url).await?;
-
-    // 4. Execute inspection
     let request_id = req_headers
         .get("x-request-id")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_string();
-    tracing::Span::current().record("request_id", request_id.as_str());
-    let response = inspect::inspect_and_assemble(
-        &url,
-        resolved_addr,
-        &state.config.inspect,
-        &state.outbound,
-        state.enrichment_client.as_deref(),
-        ip_detail_base(&state.config),
-        start,
-    )
-    .await?;
+        .unwrap_or("");
+    tracing::Span::current().record("request_id", request_id);
+    let response = crate::job::run(raw_url, client_ip, &state.rate_limiter, state).await?;
     metrics::histogram!("spectra_inspect_duration_ms").record(response.duration_ms as f64);
 
     Ok(Json(response))
+}
+
+impl crate::job::HttpInspect for AppState {
+    fn target<'a>(
+        &'a self,
+        url: &'a url::Url,
+    ) -> netray_engine::BoxFuture<'a, Result<SocketAddr, AppError>> {
+        Box::pin(crate::input::validate_target(url))
+    }
+
+    fn inspect<'a>(
+        &'a self,
+        url: &'a url::Url,
+        target: SocketAddr,
+        start: Instant,
+    ) -> netray_engine::BoxFuture<'a, Result<InspectResponse, AppError>> {
+        Box::pin(inspect::inspect_and_assemble(
+            url,
+            target,
+            &self.config.inspect,
+            &self.outbound,
+            self.enrichment_client.as_deref(),
+            ip_detail_base(&self.config),
+            start,
+        ))
+    }
 }
 
 /// Base of the public IP-detail link. Always the public `[meta] ip_base_url`,

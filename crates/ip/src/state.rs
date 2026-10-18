@@ -126,19 +126,7 @@ impl AppState {
             config.rate_limit.per_target_per_minute, config.rate_limit.per_target_burst
         );
 
-        let valid_patterns: Vec<&str> = config
-            .filtered_headers
-            .iter()
-            .filter(|pattern| match regex::Regex::new(pattern) {
-                Ok(_) => true,
-                Err(e) => {
-                    warn!("Invalid header filter regex '{}': {}", pattern, e);
-                    false
-                }
-            })
-            .map(|s| s.as_str())
-            .collect();
-        let header_filters = RegexSet::new(&valid_patterns).expect("pre-validated regex patterns");
+        let header_filters = crate::extractors::header_filters(&config.filtered_headers);
         if !header_filters.is_empty() {
             info!("Header filters loaded: {} patterns", header_filters.len());
         }

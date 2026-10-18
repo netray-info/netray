@@ -39,6 +39,8 @@ fn run(
             .map(|(i, s)| RunCheck {
                 id: cid(i),
                 status: s.clone(),
+                findings: vec![],
+                evidence: vec![],
             })
             .collect(),
         blocks,

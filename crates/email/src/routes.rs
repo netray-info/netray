@@ -10,43 +10,35 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use futures::Stream;
 use serde::{Deserialize, Serialize};
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
-use tracing::Instrument;
 use utoipa::{OpenApi, ToSchema};
 
-use crate::checks;
 use crate::error::{ErrorResponse, MailError};
+use crate::job::InspectSlots;
 use crate::quality::types::{CheckResult, Grade, SubCheck, Verdict};
 use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
-// SSE cancellation adapter
+// SSE client gauge
 // ---------------------------------------------------------------------------
 
 pin_project_lite::pin_project! {
-    /// Wraps the SSE receiver stream so that dropping the response body (client
-    /// disconnect) aborts the inspection task and releases the concurrency
-    /// permit. Axum `Sse<S>` moves the stream into its body, so `PinnedDrop`
-    /// fires exactly once when the client disconnects.
-    struct AbortOnDropStream<S> {
+    /// Wraps the SSE stream so that dropping the response body (client disconnect) lowers the
+    /// active-clients gauge exactly once; the job inside aborts its task and frees its slot.
+    struct ClientGauge<S> {
         #[pin]
         inner: S,
-        handle: JoinHandle<()>,
-        _permit: OwnedSemaphorePermit,
     }
 
-    impl<S> PinnedDrop for AbortOnDropStream<S> {
+    impl<S> PinnedDrop for ClientGauge<S> {
         fn drop(this: Pin<&mut Self>) {
-            this.handle.abort();
+            let _ = this;
             metrics::gauge!("beacon_sse_clients_active").decrement(1.0);
         }
     }
 }
 
-impl<S: Stream> Stream for AbortOnDropStream<S> {
+impl<S: Stream> Stream for ClientGauge<S> {
     type Item = S::Item;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -144,86 +136,64 @@ pub fn api_router(state: AppState) -> Router {
 // Shared inspect logic
 // ---------------------------------------------------------------------------
 
-/// Run the per-request pre-flight that is identical across the POST and GET
-/// inspect handlers: validate DKIM selectors, apply the per-IP rate limit, and
-/// return the resolved client IP.
-async fn validate_and_rate_limit(
-    state: &AppState,
-    selectors: &[String],
-    headers: &axum::http::HeaderMap,
-    peer: SocketAddr,
-) -> Result<std::net::IpAddr, MailError> {
-    crate::input::validate_selectors(selectors, state.config.dkim.max_user_selectors)?;
-
-    let client_ip = state.ip_extractor.extract(headers, peer);
-    if let Err(e) = state.rate_limiter.check(client_ip) {
-        metrics::counter!(
-            "beacon_rate_limit_rejections_total",
-            "scope" => "per_ip",
-        )
-        .increment(1);
-        return Err(e);
-    }
-
-    Ok(client_ip)
-}
-
-#[tracing::instrument(
-    skip(state),
-    fields(client_ip = tracing::field::Empty, domain = tracing::field::Empty)
-)]
-async fn do_inspect(
-    domain: String,
+fn do_inspect(
+    raw_domain: String,
     selectors: Vec<String>,
     client_ip: std::net::IpAddr,
+    method: &'static str,
     state: AppState,
 ) -> Result<
     Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>,
     MailError,
 > {
-    tracing::Span::current().record("domain", domain.as_str());
-    tracing::Span::current().record("client_ip", client_ip.to_string().as_str());
+    // The TraceLayer span carries `client_ip` (pre-declared in lib.rs) only for requests that
+    // got past the limiter.
+    let outer = tracing::Span::current();
+    let span = tracing::info_span!(
+        "do_inspect",
+        client_ip = %client_ip,
+        domain = tracing::field::Empty,
+    );
+    let _entered = span.enter();
 
-    let permit = match state.inspect_semaphore.clone().try_acquire_owned() {
-        Ok(permit) => permit,
-        Err(_) => {
+    let started = state.inspector().start(
+        &raw_domain,
+        selectors,
+        client_ip,
+        &state.rate_limiter,
+        &InspectSlots::shared(state.inspect_semaphore.clone()),
+    );
+
+    match &started {
+        Err(MailError::RateLimited { .. }) => {
+            metrics::counter!(
+                "beacon_rate_limit_rejections_total",
+                "scope" => "per_ip",
+            )
+            .increment(1);
+        }
+        Err(MailError::TooManyConcurrent) => {
             metrics::counter!(
                 "beacon_rate_limit_rejections_total",
                 "scope" => "concurrency",
             )
             .increment(1);
-            return Err(MailError::TooManyConcurrent);
         }
-    };
+        _ => {}
+    }
+    if matches!(started, Ok(_) | Err(MailError::TooManyConcurrent)) {
+        outer.record("client_ip", client_ip.to_string().as_str());
+        metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => method)
+            .increment(1);
+    }
+    let job = started?;
 
-    let (tx, rx) = tokio::sync::mpsc::channel::<crate::quality::SseEvent>(32);
-
+    span.record("domain", job.domain());
     metrics::gauge!("beacon_sse_clients_active").increment(1.0);
 
-    let span = tracing::Span::current();
-    let handle = tokio::spawn(
-        checks::run_all_checks(
-            domain,
-            selectors,
-            state.config.clone(),
-            state.dns_resolver.clone(),
-            state.dnsbl_resolver.clone(),
-            state.fetch.clone(),
-            state.enrichment_client.clone(),
-            tx,
-        )
-        .instrument(span),
-    );
-
-    let stream = AbortOnDropStream {
-        inner: ReceiverStream::new(rx),
-        handle,
-        _permit: permit,
-    }
-    .map(|event| {
-        let sse_event: axum::response::sse::Event = event.into();
-        Ok::<_, Infallible>(sse_event)
-    });
+    let stream = ClientGauge {
+        inner: job.map(|event| Ok::<_, Infallible>(axum::response::sse::Event::from(event))),
+    };
 
     Ok(Sse::new(stream).keep_alive(
         KeepAlive::new()
@@ -399,16 +369,8 @@ async fn inspect_post_handler(
     Sse<impl futures::Stream<Item = Result<axum::response::sse::Event, Infallible>>>,
     MailError,
 > {
-    let domain = crate::input::parse_domain(&body.domain)?;
-    let client_ip = validate_and_rate_limit(&state, &body.dkim_selectors, &headers, peer).await?;
-
-    // Record on the outer TraceLayer span (field is pre-declared in main.rs).
-    tracing::Span::current().record("client_ip", client_ip.to_string().as_str());
-
-    metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "post")
-        .increment(1);
-
-    do_inspect(domain, body.dkim_selectors, client_ip, state).await
+    let client_ip = state.ip_extractor.extract(&headers, peer);
+    do_inspect(body.domain, body.dkim_selectors, client_ip, "post", state)
 }
 
 // See the `inspect_post_handler` doc block above for the SSE event-type
@@ -440,16 +402,8 @@ async fn inspect_get_handler(
     let decoded = percent_encoding::percent_decode_str(&raw_domain)
         .decode_utf8_lossy()
         .to_string();
-    let domain = crate::input::parse_domain(&decoded)?;
-    let client_ip = validate_and_rate_limit(&state, &query.selector, &headers, peer).await?;
-
-    // Record on the outer TraceLayer span (field is pre-declared in main.rs).
-    tracing::Span::current().record("client_ip", client_ip.to_string().as_str());
-
-    metrics::counter!("beacon_requests_total", "endpoint" => "inspect", "method" => "get")
-        .increment(1);
-
-    do_inspect(domain, query.selector, client_ip, state).await
+    let client_ip = state.ip_extractor.extract(&headers, peer);
+    do_inspect(decoded, query.selector, client_ip, "get", state)
 }
 
 async fn openapi_handler() -> impl IntoResponse {

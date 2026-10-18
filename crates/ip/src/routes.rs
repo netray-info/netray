@@ -16,6 +16,10 @@ use crate::error::{AppError, ErrorResponse, error_response};
 use crate::extractors::{RequesterInfo, extract_headers, filter_headers};
 use crate::format::{self, OutputFormat};
 use crate::handlers;
+use crate::lookup::{
+    AsnLookupResponse, DiffRequest, RangeResponse, asn_lookup, check_address, diff, enrich, lookup_batch,
+    parse_address, parse_diff_pair, range_lookup,
+};
 use crate::negotiate::{NegotiatedFormat, negotiate};
 use crate::state::AppState;
 
@@ -251,22 +255,6 @@ fn parse_lang_param(uri: &str) -> Option<String> {
 
 // ---- Compute-once dispatch ----
 
-fn resolve_core_backends(
-    ctx: &EnrichmentContext,
-) -> (
-    Option<&UserAgentParser>,
-    Option<&GeoIpCityDb>,
-    Option<&GeoIpAsnDb>,
-    &TorExitNodes,
-) {
-    (
-        ctx.user_agent_parser.as_deref(),
-        ctx.geoip_city_db.as_deref(),
-        ctx.geoip_asn_db.as_deref(),
-        &*ctx.tor_exit_nodes,
-    )
-}
-
 async fn dispatch_standard(
     format: NegotiatedFormat,
     req_info: &RequesterInfo,
@@ -309,9 +297,9 @@ where
     let ip_param = parse_ip_param(&req_info.uri);
     let (target_addr, skip_dns) = match ip_param {
         Some(ip) => {
-            if !state.config.internal_mode && !is_global_ip(ip) {
+            if let Err(refusal) = check_address(ip, state.config.internal_mode) {
                 tracing::debug!(input = %ip, "Rejected private/loopback IP");
-                return error_response(StatusCode::BAD_REQUEST, "INVALID_IP", "private/loopback IP not allowed");
+                return error_response(StatusCode::BAD_REQUEST, "INVALID_IP", &refusal.to_string());
             }
             let skip_dns = parse_dns_param(&req_info.uri).map(|v| !v).unwrap_or(false);
             (SocketAddr::new(ip, 0), skip_dns)
@@ -325,8 +313,6 @@ where
 
     let ctx = state.enrichment.load();
 
-    let (uap, city, asn, tor) = resolve_core_backends(&ctx);
-
     let ua_opt = req_info.user_agent.as_deref();
 
     let lang = parse_lang_param(&req_info.uri);
@@ -338,27 +324,7 @@ where
             if let Some(cached) = state.ip_cache.get(&cache_key).await {
                 cached
             } else {
-                let result = handlers::make_ifconfig(
-                    &target_addr,
-                    &ua_opt,
-                    uap,
-                    city,
-                    asn,
-                    tor,
-                    ctx.feodo_botnet_ips.as_deref(),
-                    ctx.cins_army_ips.as_deref(),
-                    ctx.vpn_ranges.as_deref(),
-                    ctx.cloud_provider_db.as_deref(),
-                    ctx.datacenter_ranges.as_deref(),
-                    ctx.bot_db.as_deref(),
-                    ctx.spamhaus_drop.as_deref(),
-                    &ctx.dns_resolver,
-                    &state.dns_cache,
-                    skip_dns,
-                    ctx.asn_patterns.as_ref(),
-                    ctx.asn_info.as_deref(),
-                )
-                .await;
+                let result = enrich(&ctx, &state.dns_cache, target_addr, ua_opt, skip_dns, None).await;
                 let arc = std::sync::Arc::new(result);
                 if !skip_dns {
                     state.ip_cache.insert(cache_key, arc.clone()).await;
@@ -366,28 +332,7 @@ where
                 arc
             }
         } else {
-            let result = handlers::make_ifconfig_lang(
-                &target_addr,
-                &ua_opt,
-                uap,
-                city,
-                asn,
-                tor,
-                ctx.feodo_botnet_ips.as_deref(),
-                ctx.cins_army_ips.as_deref(),
-                ctx.vpn_ranges.as_deref(),
-                ctx.cloud_provider_db.as_deref(),
-                ctx.datacenter_ranges.as_deref(),
-                ctx.bot_db.as_deref(),
-                ctx.spamhaus_drop.as_deref(),
-                &ctx.dns_resolver,
-                &state.dns_cache,
-                skip_dns,
-                ctx.asn_patterns.as_ref(),
-                ctx.asn_info.as_deref(),
-                lang,
-            )
-            .await;
+            let result = enrich(&ctx, &state.dns_cache, target_addr, ua_opt, skip_dns, lang).await;
             std::sync::Arc::new(result)
         };
     let ifconfig: &crate::backend::Ifconfig = &ifconfig;
@@ -1051,30 +996,21 @@ async fn batch_dispatch(
 
     let fields = format::parse_fields_param(&req_info.uri);
     let skip_dns = !parse_dns_param(&req_info.uri).unwrap_or(false);
-    let ua_owned: Option<String> = req_info.user_agent.clone();
-    let dns_cache = state.dns_cache.clone();
+    let ua = req_info.user_agent.as_deref();
 
-    // Pre-validate IPs and spawn concurrent lookups
+    // Validate the addresses first; the lookups run together afterwards.
     let mut results: Vec<serde_json::Value> = vec![json!(null); ips.len()];
-    let mut set = tokio::task::JoinSet::new();
-    // Bound concurrency to avoid overwhelming the DNS resolver and GeoIP databases.
-    let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(10));
+    let mut pending: Vec<(usize, IpAddr)> = Vec::new();
 
     for (i, ip_str) in ips.iter().enumerate() {
-        let ip: IpAddr = match ip_str.parse() {
+        let ip = match parse_address(ip_str, state.config.internal_mode) {
             Ok(ip) => ip,
-            Err(_) => {
-                results[i] = json!({"error": {"code": "INVALID_IP", "message": "invalid IP address"}, "index": i});
+            Err(refusal) => {
+                tracing::debug!(input = %ip_str, index = i, "Rejected address in batch");
+                results[i] = json!({"error": {"code": "INVALID_IP", "message": refusal.to_string()}, "index": i});
                 continue;
             }
         };
-
-        if !state.config.internal_mode && !is_global_ip(ip) {
-            tracing::debug!(input = %ip, index = i, "Rejected private/loopback IP in batch");
-            results[i] =
-                json!({"error": {"code": "INVALID_IP", "message": "private/loopback IP not allowed"}, "index": i});
-            continue;
-        }
 
         if state.target_rate_limiter.check_key(&ip).is_err() {
             results[i] =
@@ -1082,62 +1018,27 @@ async fn batch_dispatch(
             continue;
         }
 
-        let ctx = std::sync::Arc::clone(&ctx);
-        let ua = ua_owned.clone();
-        let fields = fields.clone();
-        let dns_cache = dns_cache.clone();
-        let permit = std::sync::Arc::clone(&sem).acquire_owned().await.unwrap();
-        set.spawn(async move {
-            let _permit = permit;
-            let uap = ctx.user_agent_parser.as_deref();
-            let city = ctx.geoip_city_db.as_deref();
-            let asn = ctx.geoip_asn_db.as_deref();
-            let tor = &*ctx.tor_exit_nodes;
-            let ua_ref = ua.as_deref();
-            let target_addr = SocketAddr::new(ip, 0);
-
-            let lookup = handlers::make_ifconfig(
-                &target_addr,
-                &ua_ref,
-                uap,
-                city,
-                asn,
-                tor,
-                ctx.feodo_botnet_ips.as_deref(),
-                ctx.cins_army_ips.as_deref(),
-                ctx.vpn_ranges.as_deref(),
-                ctx.cloud_provider_db.as_deref(),
-                ctx.datacenter_ranges.as_deref(),
-                ctx.bot_db.as_deref(),
-                ctx.spamhaus_drop.as_deref(),
-                &ctx.dns_resolver,
-                &dns_cache,
-                skip_dns,
-                ctx.asn_patterns.as_ref(),
-                ctx.asn_info.as_deref(),
-            );
-            let ifconfig = match tokio::time::timeout(std::time::Duration::from_secs(5), lookup).await {
-                Ok(result) => result,
-                Err(_) => {
-                    return (
-                        i,
-                        json!({"error": {"code": "TIMEOUT", "message": "lookup timed out"}, "index": i}),
-                    );
-                }
-            };
-
-            let mut val = serde_json::to_value(&ifconfig).unwrap_or(json!(null));
-            if let Some(ref f) = fields {
-                val = format::filter_fields(val, f);
-            }
-            (i, val)
-        });
+        pending.push((i, ip));
     }
 
-    while let Some(res) = set.join_next().await {
-        if let Ok((i, val)) = res {
-            results[i] = val;
-        }
+    let addresses: Vec<IpAddr> = pending.iter().map(|(_, ip)| *ip).collect();
+    let (ctx_ref, dns_cache) = (&*ctx, &*state.dns_cache);
+    let answers = lookup_batch(&addresses, |ip| async move {
+        Ok(enrich(ctx_ref, dns_cache, SocketAddr::new(ip, 0), ua, skip_dns, None).await)
+    })
+    .await;
+
+    for ((i, _), answer) in pending.into_iter().zip(answers) {
+        results[i] = match answer {
+            Ok(ifconfig) => {
+                let val = serde_json::to_value(&ifconfig).unwrap_or(json!(null));
+                match &fields {
+                    Some(f) => format::filter_fields(val, f),
+                    None => val,
+                }
+            }
+            Err(refusal) => json!({"error": {"code": "TIMEOUT", "message": refusal.to_string()}, "index": i}),
+        };
     }
 
     let format = match suffix {
@@ -1273,9 +1174,9 @@ async fn ip_version_dispatch(
     // Parse ?ip= to override target IP
     let (target_addr, skip_dns) = match parse_ip_param(&req_info.uri) {
         Some(ip) => {
-            if !state.config.internal_mode && !is_global_ip(ip) {
+            if let Err(refusal) = check_address(ip, state.config.internal_mode) {
                 tracing::debug!(input = %ip, "Rejected private/loopback IP");
-                return error_response(StatusCode::BAD_REQUEST, "INVALID_IP", "private/loopback IP not allowed");
+                return error_response(StatusCode::BAD_REQUEST, "INVALID_IP", &refusal.to_string());
             }
             let skip_dns = parse_dns_param(&req_info.uri).map(|v| !v).unwrap_or(false);
             (SocketAddr::new(ip, 0), skip_dns)
@@ -1289,30 +1190,8 @@ async fn ip_version_dispatch(
 
     let ctx = state.enrichment.load();
 
-    let (uap, city, asn, tor) = resolve_core_backends(&ctx);
-
     let ua_opt = req_info.user_agent.as_deref();
-    let ifconfig = handlers::make_ifconfig(
-        &target_addr,
-        &ua_opt,
-        uap,
-        city,
-        asn,
-        tor,
-        ctx.feodo_botnet_ips.as_deref(),
-        ctx.cins_army_ips.as_deref(),
-        ctx.vpn_ranges.as_deref(),
-        ctx.cloud_provider_db.as_deref(),
-        ctx.datacenter_ranges.as_deref(),
-        ctx.bot_db.as_deref(),
-        ctx.spamhaus_drop.as_deref(),
-        &ctx.dns_resolver,
-        &state.dns_cache,
-        skip_dns,
-        ctx.asn_patterns.as_ref(),
-        ctx.asn_info.as_deref(),
-    )
-    .await;
+    let ifconfig = enrich(&ctx, &state.dns_cache, target_addr, ua_opt, skip_dns, None).await;
 
     if ifconfig.ip.version != version {
         return error_response(StatusCode::NOT_FOUND, "NOT_FOUND", "not implemented");
@@ -1613,7 +1492,11 @@ async fn asn_param_handler(
 ) -> Response {
     // If param is a number, treat it as an ASN lookup.
     if let Ok(asn_num) = param.parse::<u32>() {
-        return asn_lookup_by_number(asn_num, &state);
+        return (
+            StatusCode::OK,
+            axum::Json(asn_lookup(&state.enrichment.load(), asn_num)),
+        )
+            .into_response();
     }
     // Otherwise treat it as a format suffix — delegate to the macro-generated handler.
     asn_format_handler(State(state), Path(param), headers, extensions).await
@@ -1621,117 +1504,11 @@ async fn asn_param_handler(
 
 // ---- GET /asn/{number} — ASN lookup ----
 
-#[derive(serde::Serialize, utoipa::ToSchema)]
-struct AsnLookupResponse {
-    /// ASN number.
-    #[schema(example = 15169)]
-    asn: u32,
-    /// Organization name from MaxMind ASN database.
-    #[schema(example = "Google LLC")]
-    org: Option<String>,
-    /// ASN category from ipverse/as-metadata.
-    #[schema(example = "hosting")]
-    category: Option<String>,
-    /// Network role from ipverse/as-metadata.
-    #[schema(example = "tier1_transit")]
-    network_role: Option<String>,
-    /// Whether this ASN is known to be anycast.
-    #[schema(example = false)]
-    is_anycast: bool,
-}
-
-fn asn_lookup_by_number(asn_num: u32, state: &AppState) -> Response {
-    let ctx = state.enrichment.load();
-
-    let asn_meta = ctx.asn_info.as_deref().and_then(|db| db.lookup(asn_num));
-
-    let category = asn_meta.and_then(|m| match m.category {
-        crate::backend::asn_info::AsnCategory::Hosting => Some("hosting".to_string()),
-        crate::backend::asn_info::AsnCategory::Isp => Some("isp".to_string()),
-        crate::backend::asn_info::AsnCategory::Business => Some("business".to_string()),
-        crate::backend::asn_info::AsnCategory::EducationResearch => Some("education_research".to_string()),
-        crate::backend::asn_info::AsnCategory::GovernmentAdmin => Some("government_admin".to_string()),
-        crate::backend::asn_info::AsnCategory::Unknown => None,
-    });
-
-    let network_role = asn_meta.and_then(|m| m.network_role.clone());
-
-    // Use an arbitrary IP from the ASN to get org name from MaxMind — not possible without IP.
-    // Instead, check the asn_info for the org; MaxMind ASN DB is IP-keyed not ASN-keyed.
-    // We return the info we have from asn_info only; org from MaxMind requires an IP.
-    // TODO("MaxMind ASN DB is IP-keyed; org name not available for pure ASN lookups without a representative IP")
-    let org: Option<String> = asn_meta.and(None); // MaxMind ASN DB is not ASN-keyed
-
-    let is_anycast = crate::backend::ANYCAST_ASNS.contains(&asn_num);
-
-    let response = AsnLookupResponse {
-        asn: asn_num,
-        org,
-        category,
-        network_role,
-        is_anycast,
-    };
-
-    (StatusCode::OK, axum::Json(response)).into_response()
-}
-
 // ---- GET /range?cidr= — CIDR range lookup ----
 
 #[derive(serde::Deserialize)]
 struct RangeQuery {
     cidr: String,
-}
-
-#[derive(serde::Serialize, utoipa::ToSchema)]
-struct RangeResponse {
-    /// The CIDR prefix as provided.
-    #[schema(example = "8.8.8.0/24")]
-    cidr: String,
-    /// ASN that originates this prefix (from MaxMind lookup on the network address).
-    #[schema(example = 15169)]
-    asn: Option<u32>,
-    /// Organization name for the ASN.
-    #[schema(example = "Google LLC")]
-    org: Option<String>,
-    /// Network type classification of the network address.
-    #[schema(example = "cloud")]
-    network_type: String,
-    /// True if the network address is a cloud CIDR.
-    #[schema(example = false)]
-    is_cloud: bool,
-    /// True if the network address matches VPN ranges.
-    #[schema(example = false)]
-    is_vpn: bool,
-    /// True if the network address is a datacenter.
-    #[schema(example = false)]
-    is_datacenter: bool,
-    /// True if the network address matches Spamhaus DROP.
-    #[schema(example = false)]
-    is_spamhaus: bool,
-    /// True if the network address is a Feodo C2 node.
-    #[schema(example = false)]
-    is_c2: bool,
-}
-
-fn is_special_prefix(ip: std::net::IpAddr) -> bool {
-    if ip.is_loopback() || ip.is_unspecified() {
-        return true;
-    }
-    match ip {
-        std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
-        std::net::IpAddr::V6(v6) => {
-            let segs = v6.segments();
-            // ULA fc00::/7
-            if segs[0] & 0xfe00 == 0xfc00 {
-                return true;
-            }
-            // Link-local fe80::/10
-            if segs[0] & 0xffc0 == 0xfe80 {
-                return true;
-            }
-            false
-        }
-    }
 }
 
 #[utoipa::path(
@@ -1748,120 +1525,13 @@ fn is_special_prefix(ip: std::net::IpAddr) -> bool {
     )
 )]
 async fn range_handler(State(state): State<AppState>, Query(params): Query<RangeQuery>) -> Response {
-    // Parse as IpNetwork (ipnetwork crate via ip_network)
-    let network: ip_network::IpNetwork = match params.cidr.parse() {
-        Ok(n) => n,
-        Err(_) => return error_response(StatusCode::BAD_REQUEST, "INVALID_CIDR", "invalid CIDR notation"),
-    };
-
-    let network_addr = network.network_address();
-
-    if is_special_prefix(network_addr) {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "INVALID_CIDR",
-            "private, loopback, or link-local prefixes are not allowed",
-        );
+    match range_lookup(&state.enrichment.load(), &params.cidr) {
+        Ok(response) => (StatusCode::OK, axum::Json(response)).into_response(),
+        Err(refusal) => error_response(StatusCode::BAD_REQUEST, "INVALID_CIDR", &refusal.to_string()),
     }
-
-    let ctx = state.enrichment.load();
-
-    let (asn_number, asn_org) = ctx
-        .geoip_asn_db
-        .as_deref()
-        .and_then(|db| db.lookup(network_addr))
-        .map(|(isp, _prefix)| {
-            (
-                isp.autonomous_system_number,
-                isp.autonomous_system_organization.map(|s| s.to_owned()),
-            )
-        })
-        .unwrap_or((None, None));
-
-    let is_cloud = ctx
-        .cloud_provider_db
-        .as_deref()
-        .and_then(|db| db.lookup(network_addr))
-        .is_some();
-
-    let is_vpn = ctx
-        .vpn_ranges
-        .as_deref()
-        .map(|db| db.lookup(network_addr))
-        .unwrap_or(false);
-
-    let is_botnet_c2 = ctx
-        .feodo_botnet_ips
-        .as_deref()
-        .and_then(|db| db.lookup(&network_addr))
-        .unwrap_or(false);
-
-    let is_threat = ctx
-        .spamhaus_drop
-        .as_deref()
-        .map(|db| db.lookup(network_addr))
-        .unwrap_or(false);
-
-    let asn_class =
-        crate::backend::asn_heuristic::classify_asn(asn_number, asn_org.as_deref(), ctx.asn_patterns.as_ref());
-    let asn_hosting = asn_number
-        .and_then(|n| ctx.asn_info.as_deref().and_then(|db| db.lookup(n)))
-        .is_some_and(|m| m.category == crate::backend::asn_info::AsnCategory::Hosting);
-    let is_datacenter = is_cloud
-        || ctx
-            .datacenter_ranges
-            .as_deref()
-            .map(|db| db.lookup(network_addr))
-            .unwrap_or(false)
-        || matches!(
-            asn_class,
-            crate::backend::asn_heuristic::AsnClassification::Hosting { .. }
-        )
-        || asn_hosting;
-
-    let is_tor = ctx.tor_exit_nodes.lookup(&network_addr).unwrap_or(false);
-    let is_bot = ctx.bot_db.as_deref().and_then(|db| db.lookup(network_addr)).is_some();
-    let is_internal = !is_global_ip(network_addr);
-    let is_vpn = is_vpn || matches!(asn_class, crate::backend::asn_heuristic::AsnClassification::Vpn { .. });
-
-    let network_type = crate::backend::classify_network_type(NetworkFlags {
-        is_internal,
-        is_c2: is_botnet_c2,
-        is_bot,
-        is_cloud,
-        is_vpn,
-        is_tor,
-        is_spamhaus: is_threat,
-        is_datacenter,
-    })
-    .to_string();
-
-    let response = RangeResponse {
-        cidr: params.cidr,
-        asn: asn_number,
-        org: asn_org,
-        network_type,
-        is_cloud,
-        is_vpn,
-        is_datacenter,
-        is_spamhaus: is_threat,
-        is_c2: is_botnet_c2,
-    };
-
-    (StatusCode::OK, axum::Json(response)).into_response()
 }
 
 // ---- POST /diff — compare two IP enrichments ----
-
-#[derive(serde::Deserialize, utoipa::ToSchema)]
-struct DiffRequest {
-    /// First IP address to compare.
-    #[schema(example = "8.8.8.8")]
-    a: String,
-    /// Second IP address to compare.
-    #[schema(example = "1.1.1.1")]
-    b: String,
-}
 
 #[utoipa::path(
     post, path = "/diff",
@@ -1891,41 +1561,10 @@ async fn diff_handler(
         }
     };
 
-    let ip_a: std::net::IpAddr = match req.a.parse() {
-        Ok(ip) => ip,
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "INVALID_IP",
-                "invalid IP address in field \"a\"",
-            );
-        }
+    let (ip_a, ip_b) = match parse_diff_pair(&req, state.config.internal_mode) {
+        Ok(pair) => pair,
+        Err(refusal) => return error_response(StatusCode::BAD_REQUEST, "INVALID_IP", &refusal.to_string()),
     };
-    let ip_b: std::net::IpAddr = match req.b.parse() {
-        Ok(ip) => ip,
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "INVALID_IP",
-                "invalid IP address in field \"b\"",
-            );
-        }
-    };
-
-    if !state.config.internal_mode && !is_global_ip(ip_a) {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "INVALID_IP",
-            "IP \"a\" is not a globally routable address",
-        );
-    }
-    if !state.config.internal_mode && !is_global_ip(ip_b) {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "INVALID_IP",
-            "IP \"b\" is not a globally routable address",
-        );
-    }
 
     // Rate-limit: consume 2 tokens (two lookups)
     let req_info = get_requester_info(&headers, &extensions);
@@ -1948,111 +1587,21 @@ async fn diff_handler(
         }
     }
 
-    let ctx: std::sync::Arc<EnrichmentContext> = std::sync::Arc::clone(&*state.enrichment.load());
-    let ua_opt: Option<String> = req_info.user_agent.clone();
-    let dns_cache = state.dns_cache.clone();
+    let ctx = state.enrichment.load();
+    let ua = req_info.user_agent.as_deref();
+    let (a, b) = tokio::join!(
+        enrich(&ctx, &state.dns_cache, SocketAddr::new(ip_a, 0), ua, true, None),
+        enrich(&ctx, &state.dns_cache, SocketAddr::new(ip_b, 0), ua, true, None),
+    );
 
-    let (ifconfig_a, ifconfig_b) = {
-        let ctx_a = std::sync::Arc::clone(&ctx);
-        let ua_a = ua_opt.clone();
-        let dns_cache_a = dns_cache.clone();
-        let addr_a = std::net::SocketAddr::new(ip_a, 0);
-
-        let ctx_b = std::sync::Arc::clone(&ctx);
-        let ua_b = ua_opt.clone();
-        let dns_cache_b = dns_cache.clone();
-        let addr_b = std::net::SocketAddr::new(ip_b, 0);
-
-        let fut_a = {
-            let ctx = ctx_a;
-            let ua = ua_a;
-            let dc = dns_cache_a;
-            async move {
-                let uap = ctx.user_agent_parser.as_deref();
-                let city = ctx.geoip_city_db.as_deref();
-                let asn = ctx.geoip_asn_db.as_deref();
-                let tor = &*ctx.tor_exit_nodes;
-                let ua_ref = ua.as_deref();
-                handlers::make_ifconfig(
-                    &addr_a,
-                    &ua_ref,
-                    uap,
-                    city,
-                    asn,
-                    tor,
-                    ctx.feodo_botnet_ips.as_deref(),
-                    ctx.cins_army_ips.as_deref(),
-                    ctx.vpn_ranges.as_deref(),
-                    ctx.cloud_provider_db.as_deref(),
-                    ctx.datacenter_ranges.as_deref(),
-                    ctx.bot_db.as_deref(),
-                    ctx.spamhaus_drop.as_deref(),
-                    &ctx.dns_resolver,
-                    &dc,
-                    true, // skip_dns for diff lookups
-                    ctx.asn_patterns.as_ref(),
-                    ctx.asn_info.as_deref(),
-                )
-                .await
-            }
-        };
-
-        let fut_b = {
-            let ctx = ctx_b;
-            let ua = ua_b;
-            let dc = dns_cache_b;
-            async move {
-                let uap = ctx.user_agent_parser.as_deref();
-                let city = ctx.geoip_city_db.as_deref();
-                let asn = ctx.geoip_asn_db.as_deref();
-                let tor = &*ctx.tor_exit_nodes;
-                let ua_ref = ua.as_deref();
-                handlers::make_ifconfig(
-                    &addr_b,
-                    &ua_ref,
-                    uap,
-                    city,
-                    asn,
-                    tor,
-                    ctx.feodo_botnet_ips.as_deref(),
-                    ctx.cins_army_ips.as_deref(),
-                    ctx.vpn_ranges.as_deref(),
-                    ctx.cloud_provider_db.as_deref(),
-                    ctx.datacenter_ranges.as_deref(),
-                    ctx.bot_db.as_deref(),
-                    ctx.spamhaus_drop.as_deref(),
-                    &ctx.dns_resolver,
-                    &dc,
-                    true, // skip_dns for diff lookups
-                    ctx.asn_patterns.as_ref(),
-                    ctx.asn_info.as_deref(),
-                )
-                .await
-            }
-        };
-
-        tokio::join!(fut_a, fut_b)
-    };
-
-    let val_a = serde_json::to_value(&ifconfig_a).unwrap_or(serde_json::Value::Null);
-    let val_b = serde_json::to_value(&ifconfig_b).unwrap_or(serde_json::Value::Null);
-
-    // Build diff: for each top-level field, emit { a, b, equal }
-    let mut diff = serde_json::Map::new();
-    if let (serde_json::Value::Object(map_a), serde_json::Value::Object(map_b)) = (&val_a, &val_b) {
-        let all_keys: std::collections::BTreeSet<&String> = map_a.keys().chain(map_b.keys()).collect();
-        for key in all_keys {
-            let a_val = map_a.get(key).unwrap_or(&serde_json::Value::Null).clone();
-            let b_val = map_b.get(key).unwrap_or(&serde_json::Value::Null).clone();
-            let equal = a_val == b_val;
-            diff.insert(
-                key.clone(),
-                serde_json::json!({ "a": a_val, "b": b_val, "equal": equal }),
-            );
-        }
+    match serde_json::to_value(diff(a, b)) {
+        Ok(val) => respond_json_value(val),
+        Err(_) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "INTERNAL_ERROR",
+            "serialization failed",
+        ),
     }
-
-    respond_json_value(serde_json::Value::Object(diff))
 }
 
 // ---- OpenAPI spec handler ----

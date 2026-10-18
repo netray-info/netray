@@ -11,6 +11,11 @@ netray-common = { path = "crates/common" }
 netray-model = { path = "crates/model" }
 netray-engine = { path = "crates/engine" }
 netray-store = { path = "crates/store" }
+netray-ip = { path = "crates/ip" }
+netray-tls = { path = "crates/tls" }
+netray-http = { path = "crates/http" }
+netray-email = { path = "crates/email" }
+netray-dns = { path = "crates/dns" }
 netray-web = { path = "crates/web" }
 
 # Web framework
@@ -52,6 +57,8 @@ askama = "0.16"
 rust-embed = "8"
 mime_guess = "2"
 utoipa = "5"
+utoipa-axum = "0.2"
+utoipa-scalar = "0.3"
 
 # Shared utilities
 moka = "0.12"

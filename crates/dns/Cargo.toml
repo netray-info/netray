@@ -88,6 +88,16 @@ name = "unmeasured_inputs"
 path = "tests/unmeasured_inputs.rs"
 required-features = ["testing"]
 
+[[test]]
+name = "jobs_prism"
+path = "tests/jobs_prism.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "jobs"
+path = "tests/jobs.rs"
+required-features = ["testing"]
+
 [dev-dependencies]
 toml = { workspace = true }
 tower = { workspace = true, features = ["util"] }

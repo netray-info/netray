@@ -10,6 +10,8 @@
 
 use std::net::IpAddr;
 use std::num::NonZeroU32;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use governor::Quota;
 use governor::RateLimiter;
@@ -18,11 +20,32 @@ use netray_common::rate_limit::{KeyedLimiter, check_keyed_cost};
 use crate::config::LimitsConfig;
 use crate::error::AppError;
 
+/// Per-IP and per-target quotas, per minute with a burst.
+#[derive(Debug, Clone, Copy)]
+pub struct Quotas {
+    pub per_ip_per_minute: u32,
+    pub per_ip_burst: u32,
+    pub per_target_per_minute: u32,
+    pub per_target_burst: u32,
+}
+
+/// The metric prefix and the two scope labels a limiter reports its rejections under.
+#[derive(Debug, Clone, Copy)]
+pub struct Scopes {
+    pub metrics_prefix: &'static str,
+    pub per_ip: &'static str,
+    pub per_target: &'static str,
+}
+
+const PRUNE_EVERY: Duration = Duration::from_secs(60);
+
 /// Rate limiting state shared across all request handlers.
 pub struct RateLimitState {
     per_ip: KeyedLimiter<IpAddr>,
     per_target: KeyedLimiter<String>,
     per_ip_burst: u32,
+    scopes: Scopes,
+    last_prune: Mutex<Instant>,
 }
 
 impl RateLimitState {
@@ -32,25 +55,59 @@ impl RateLimitState {
     /// Memory grows ~50 bytes per unique IP/target key. This is acceptable for
     /// production workloads — a server restart clears all state.
     pub fn new(config: &LimitsConfig) -> Self {
+        Self::scoped(
+            &Quotas {
+                per_ip_per_minute: config.per_ip_per_minute,
+                per_ip_burst: config.per_ip_burst,
+                per_target_per_minute: config.per_target_per_minute,
+                per_target_burst: config.per_target_burst,
+            },
+            Scopes {
+                metrics_prefix: "tlsight",
+                per_ip: "per_ip",
+                per_target: "per_target",
+            },
+        )
+    }
+
+    /// Build the limiters from validated, non-zero quotas.
+    pub fn scoped(quotas: &Quotas, scopes: Scopes) -> Self {
         let per_ip = RateLimiter::keyed(
             Quota::per_minute(
-                NonZeroU32::new(config.per_ip_per_minute).expect("validated non-zero"),
+                NonZeroU32::new(quotas.per_ip_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(config.per_ip_burst).expect("validated non-zero")),
+            .allow_burst(NonZeroU32::new(quotas.per_ip_burst).expect("validated non-zero")),
         );
 
         let per_target = RateLimiter::keyed(
             Quota::per_minute(
-                NonZeroU32::new(config.per_target_per_minute).expect("validated non-zero"),
+                NonZeroU32::new(quotas.per_target_per_minute).expect("validated non-zero"),
             )
-            .allow_burst(NonZeroU32::new(config.per_target_burst).expect("validated non-zero")),
+            .allow_burst(NonZeroU32::new(quotas.per_target_burst).expect("validated non-zero")),
         );
 
         Self {
             per_ip,
             per_target,
-            per_ip_burst: config.per_ip_burst,
+            per_ip_burst: quotas.per_ip_burst,
+            scopes,
+            last_prune: Mutex::new(Instant::now()),
         }
+    }
+
+    /// Drop the keys of both maps that have refilled, at most once per minute.
+    pub fn prune_if_due(&self) {
+        let Ok(mut last) = self.last_prune.try_lock() else {
+            return;
+        };
+        if last.elapsed() < PRUNE_EVERY {
+            return;
+        }
+        *last = Instant::now();
+        self.per_ip.retain_recent();
+        self.per_ip.shrink_to_fit();
+        self.per_target.retain_recent();
+        self.per_target.shrink_to_fit();
     }
 
     /// Return the per-IP burst size as an upper bound for cap-and-warn budget calculation.
@@ -74,11 +131,16 @@ impl RateLimitState {
         let cost_nz = NonZeroU32::new(cost.max(1)).expect("max(1) is non-zero");
 
         // Per-IP check
-        check_keyed_cost(&self.per_ip, &client_ip, cost_nz, "per_ip", "tlsight").map_err(|r| {
-            AppError::RateLimited {
-                retry_after_secs: r.retry_after_secs,
-                scope: r.scope,
-            }
+        check_keyed_cost(
+            &self.per_ip,
+            &client_ip,
+            cost_nz,
+            self.scopes.per_ip,
+            self.scopes.metrics_prefix,
+        )
+        .map_err(|r| AppError::RateLimited {
+            retry_after_secs: r.retry_after_secs,
+            scope: r.scope,
         })?;
 
         // Per-target check
@@ -86,8 +148,8 @@ impl RateLimitState {
             &self.per_target,
             &hostname.to_lowercase(),
             cost_nz,
-            "per_target",
-            "tlsight",
+            self.scopes.per_target,
+            self.scopes.metrics_prefix,
         )
         .map_err(|r| AppError::RateLimited {
             retry_after_secs: r.retry_after_secs,

@@ -61,6 +61,7 @@ fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
         site: SiteConfig::default(),
         badges,
         admission: lens::config::AdmissionConfig::default(),
+        api: Default::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),
         history: lens::config::HistoryConfig::default(),
@@ -352,6 +353,8 @@ async fn known_grade_badge_has_correct_cache_headers() {
         checks: vec![RunCheck {
             id: CheckId::parse("dns.dnssec_valid").unwrap(),
             status: Status::Pass,
+            findings: vec![],
+            evidence: vec![],
         }],
         blocks: vec![],
     };

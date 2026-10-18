@@ -10,14 +10,19 @@ pub mod query;
 pub mod results;
 pub mod trace;
 
+use std::convert::Infallible;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
+use futures::StreamExt;
 use mhost::resolver::Lookups;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Semaphore;
+use tokio::sync::{Semaphore, mpsc};
+use tokio_stream::wrappers::ReceiverStream;
 use utoipa::OpenApi;
 
 pub use check::{CheckDoneEvent, CheckEvent, LintEvent};
@@ -25,8 +30,9 @@ pub use check::{CheckDoneEvent, CheckEvent, LintEvent};
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::config::Config;
 use crate::error::{ErrorInfo, ErrorResponse};
+use crate::jobs::{DnsBackend, DnsJob, DnsJobEvent, DnsJobs};
 use crate::reload::HotState;
-use crate::result_cache::ResultCache;
+use crate::result_cache::{CachedEvent, CachedResult, ResultCache};
 use crate::security::IpExtractor;
 use netray_common::enrichment::EnrichmentClient;
 
@@ -82,6 +88,112 @@ pub struct AppState {
     pub ip_enrichment: Option<Arc<EnrichmentClient>>,
     /// Semaphore bounding concurrent in-flight DNS resolver tasks.
     pub query_semaphore: Arc<Semaphore>,
+    /// How the jobs reach DNS.
+    pub backend: DnsBackend,
+}
+
+impl AppState {
+    /// prism's DNS jobs over this state.
+    pub fn jobs(&self) -> DnsJobs {
+        DnsJobs::new(
+            self.config.clone(),
+            self.circuit_breakers.clone(),
+            self.query_semaphore.clone(),
+            self.ip_enrichment.clone(),
+            self.backend.clone(),
+        )
+        .with_prism_metrics()
+    }
+}
+
+/// Where a job's events are cached for `GET /api/results/{key}`: the cache, the mode and the
+/// query string.
+type Cache = (Arc<ResultCache>, &'static str, String);
+
+/// Caches `event` as prism does: errors never, a `done` under a fresh key when there is a cache.
+async fn record<E: DnsJobEvent>(
+    event: &mut E,
+    cached: &mut Vec<CachedEvent>,
+    cache: &Option<Cache>,
+) {
+    if event.name() == "error" {
+        return;
+    }
+    let key = match cache {
+        Some(_) if event.is_done() => {
+            let key = ResultCache::generate_key();
+            event.set_cache_key(key.clone());
+            Some(key)
+        }
+        _ => None,
+    };
+    cached.push(CachedEvent {
+        event_type: event.name().to_owned(),
+        data: event.cache_value(),
+    });
+    if let (Some(key), Some((result_cache, mode, query))) = (key, cache) {
+        result_cache
+            .insert(
+                key,
+                CachedResult {
+                    query: query.clone(),
+                    mode: (*mode).to_owned(),
+                    events: cached.clone(),
+                },
+            )
+            .await;
+    }
+}
+
+/// Answers a prism job route: the events as SSE, or with `stream=false` collected into one
+/// JSON body.
+pub(crate) async fn respond<E: DnsJobEvent>(
+    mut job: DnsJob<E>,
+    cache: Option<Cache>,
+    stream: bool,
+) -> Response {
+    let mut cached: Vec<CachedEvent> = Vec::new();
+
+    if !stream {
+        let mut done = false;
+        let timeout = Duration::from_secs(STREAM_TIMEOUT_SECS + 5);
+        let finished = tokio::time::timeout(timeout, async {
+            while let Some(mut event) = job.next().await {
+                record(&mut event, &mut cached, &cache).await;
+                done |= event.is_done();
+            }
+        })
+        .await
+        .is_ok();
+        let (events, truncated) = if finished && done {
+            let vals = cached
+                .into_iter()
+                .map(|e| serde_json::json!({"type": e.event_type, "data": e.data}))
+                .collect();
+            (vals, false)
+        } else {
+            (Vec::new(), true)
+        };
+        return axum::Json(CollectedResponse { events, truncated }).into_response();
+    }
+
+    let (tx, rx) = mpsc::channel::<Result<Event, Infallible>>(32);
+    tokio::spawn(async move {
+        while let Some(mut event) = job.next().await {
+            record(&mut event, &mut cached, &cache).await;
+            if tx.send(Ok(event.sse_event())).await.is_err() {
+                return;
+            }
+        }
+    });
+
+    Sse::new(ReceiverStream::new(rx))
+        .keep_alive(
+            KeepAlive::new()
+                .interval(Duration::from_secs(15))
+                .text("keep-alive"),
+        )
+        .into_response()
 }
 
 // ---------------------------------------------------------------------------
@@ -264,6 +376,7 @@ mod tests {
             hot_state,
             ip_enrichment: None,
             query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+            backend: crate::DnsBackend::production(),
             config: Arc::new(config),
         }
     }
@@ -601,6 +714,7 @@ mod tests {
             hot_state,
             ip_enrichment: None,
             query_semaphore: Arc::new(Semaphore::new(QUERY_SEMAPHORE_PERMITS)),
+            backend: crate::DnsBackend::production(),
             config: Arc::new(config),
         };
 
