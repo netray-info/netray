@@ -1,11 +1,17 @@
 //! The generic evidence renderer: a `netray-model` block becomes the view `evidence_block`
 //! renders. One match on the shape; no module, block or key is named here.
 
-use netray_model::evidence::{Block, Fields, Node, Shape, Value};
+use askama::Template;
+use netray_engine::catalogue::catalogue;
+use netray_model::evidence::{Block, BlockId, Fields, Node, Shape, Value};
+use netray_model::run::{Run, SectionKind};
+use netray_model::{Protocol, Status};
 
 use crate::components::{
-    EvidenceBlockView, EvidenceShape, Field, RecordRow, TableColumn, TreeItem,
+    CheckRowView, EvidenceBlockView, EvidenceShape, Field, RecordRow, RunLineView, TableColumn,
+    TreeItem,
 };
+use crate::entries::view::{epoch_days_to_ymd, status_tone};
 
 /// The display text of a value: text and time verbatim, a duration in milliseconds.
 pub fn format_value(value: &Value) -> String {
@@ -83,4 +89,211 @@ pub fn block_view(block: &Block) -> EvidenceBlockView {
         feeds: Vec::new(),
         shape,
     }
+}
+
+/// The run line of a stored entry: the run's time to the minute, UTC, and the entry id.
+pub fn entry_run_line(created_at: i64, entry_id: &str) -> RunLineView {
+    let secs = created_at.max(0) as u64;
+    let (year, month, day) = epoch_days_to_ymd(secs / 86_400);
+    let hour = (secs % 86_400) / 3_600;
+    let minute = (secs % 3_600) / 60;
+    RunLineView {
+        parts: vec![
+            format!("run of {year:04}-{month:02}-{day:02} {hour:02}:{minute:02} UTC"),
+            format!("entry {entry_id}"),
+        ],
+    }
+}
+
+/// The run line of a live run that is not stored.
+pub fn incomplete_run_line() -> RunLineView {
+    RunLineView {
+        parts: vec!["incomplete, not recorded".to_string()],
+    }
+}
+
+/// The entry-view URL of a protocol, with the anchor of a block when one is given.
+pub fn href(entry_id: &str, protocol: Protocol, block: Option<&BlockId>) -> String {
+    match block {
+        Some(block) => format!("/r/{entry_id}/{}#ev-{block}", protocol.as_str()),
+        None => format!("/r/{entry_id}/{}", protocol.as_str()),
+    }
+}
+
+/// One link from a check row to the block that backs it.
+#[derive(Debug, Clone)]
+pub struct BlockLink {
+    pub label: String,
+    pub href: String,
+}
+
+/// A block of another module that a check of the view references.
+#[derive(Debug, Clone)]
+pub struct SharedLine {
+    pub title: String,
+    pub href: String,
+}
+
+/// A check row and the links to its evidence.
+#[derive(Debug, Clone)]
+pub struct EvidenceRow {
+    pub check: CheckRowView,
+    pub links: Vec<BlockLink>,
+}
+
+/// Everything one protocol's evidence section shows.
+#[derive(Debug, Clone)]
+pub struct EvidenceView {
+    pub protocol: Protocol,
+    pub run_line: RunLineView,
+    pub reason: Option<String>,
+    pub rows: Vec<EvidenceRow>,
+    pub blocks: Vec<EvidenceBlockView>,
+    pub shared: Vec<SharedLine>,
+}
+
+/// The live evidence section of `protocol` (interface I8): one row per catalogue check, the
+/// blocks of the protocol, and one line per block of another module that a row references.
+/// The section is streamed into the result page, which holds every protocol's section, so a
+/// foreign block links `#ev-<block id>` on the same page.
+pub fn section(run: &Run, protocol: Protocol, run_line: RunLineView) -> EvidenceView {
+    build_section(run, protocol, run_line, |bid| format!("#ev-{bid}"))
+}
+
+/// The evidence section of `protocol` for a stored entry. A foreign block links the owner's
+/// view of the same entry, `/r/<entry id>/<owner>#ev-<block id>`; a module that is no protocol
+/// keeps the same-page link.
+pub fn entry_section(
+    entry_id: &str,
+    created_at: i64,
+    run: &Run,
+    protocol: Protocol,
+) -> EvidenceView {
+    build_section(
+        run,
+        protocol,
+        entry_run_line(created_at, entry_id),
+        |bid| match owner_protocol(bid) {
+            Some(owner) => href(entry_id, owner, Some(bid)),
+            None => format!("#ev-{bid}"),
+        },
+    )
+}
+
+fn owner_protocol(bid: &BlockId) -> Option<Protocol> {
+    [
+        Protocol::Dns,
+        Protocol::Tls,
+        Protocol::Http,
+        Protocol::Email,
+        Protocol::Ip,
+    ]
+    .into_iter()
+    .find(|p| p.as_str() == bid.module())
+}
+
+fn build_section(
+    run: &Run,
+    protocol: Protocol,
+    run_line: RunLineView,
+    foreign_href: impl Fn(&BlockId) -> String,
+) -> EvidenceView {
+    let owner = protocol.as_str();
+    let title_of = |bid: &BlockId| {
+        run.blocks
+            .iter()
+            .find(|b| &b.id == bid)
+            .map_or_else(|| bid.to_string(), |b| b.title.clone())
+    };
+
+    let mut rows = Vec::new();
+    let mut shared: Vec<SharedLine> = Vec::new();
+    let mut feeds: Vec<(&BlockId, String)> = Vec::new();
+    for spec in catalogue().entries() {
+        let found = run.checks.iter().find(|c| c.id == spec.id);
+        let evidence = found.map_or(&[][..], |c| c.evidence.as_slice());
+        for bid in evidence.iter().filter(|bid| bid.module() == owner) {
+            feeds.push((bid, spec.short.clone()));
+        }
+        if spec.protocol != protocol {
+            continue;
+        }
+        let status = found.map(|c| c.status);
+        let flagged = matches!(status, Some(Status::Warn | Status::Fail));
+        let body = match found {
+            Some(c) if !c.findings.is_empty() => c.findings.join("; "),
+            _ if flagged => spec.finding.clone(),
+            _ => String::new(),
+        };
+        let mut links = Vec::new();
+        for bid in evidence {
+            let label = title_of(bid);
+            let href = if bid.module() == owner {
+                format!("#ev-{bid}")
+            } else {
+                foreign_href(bid)
+            };
+            if bid.module() != owner && !shared.iter().any(|line| line.href == href) {
+                shared.push(SharedLine {
+                    title: label.clone(),
+                    href: href.clone(),
+                });
+            }
+            links.push(BlockLink { label, href });
+        }
+        rows.push(EvidenceRow {
+            check: CheckRowView {
+                code: spec.short.clone(),
+                tone: status_tone(status),
+                title: spec.title.clone(),
+                since: None,
+                body,
+                fix: flagged.then(|| spec.fix_hint.clone()),
+                evidence_href: None,
+                guide_href: Some(spec.guide.clone()),
+            },
+            links,
+        });
+    }
+
+    let blocks = run
+        .blocks
+        .iter()
+        .filter(|b| b.id.module() == owner)
+        .map(|b| {
+            let mut view = block_view(b);
+            for (bid, short) in &feeds {
+                if **bid == b.id && !view.feeds.contains(short) {
+                    view.feeds.push(short.clone());
+                }
+            }
+            view
+        })
+        .collect();
+
+    let reason = run
+        .sections
+        .iter()
+        .find(|s| s.protocol == protocol && s.outcome == SectionKind::NotApplicable)
+        .and_then(|s| s.reason.clone());
+
+    EvidenceView {
+        protocol,
+        run_line,
+        reason,
+        rows,
+        blocks,
+        shared,
+    }
+}
+
+#[derive(Template)]
+#[template(path = "partials/evidence_section.html")]
+struct EvidenceSectionTemplate<'a> {
+    view: &'a EvidenceView,
+}
+
+/// Renders the evidence section of one protocol.
+pub fn render_section(view: &EvidenceView) -> askama::Result<String> {
+    EvidenceSectionTemplate { view }.render()
 }

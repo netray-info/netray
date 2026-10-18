@@ -54,7 +54,7 @@ Each is marked `(I<n>)` where a requirement uses it. If one is missing or differ
 - **I5 (X3, v2-pages requirements 28–29; contract as v2-result-page requirements 19–23 use it).** The `stream` island on a `<form data-island="stream" data-stream-url="…">` posts to the server, once on mount only when the form carries `data-stream-autostart="<trigger>"` (adding that value as the `trigger` field), reads SSE `fragment` events `{"id", "html"}` and replaces the element with that ID, ends on `end`, executes no script in inserted markup, does not post while `document.prerendering` and waits for `prerenderingchange`, and shows a refusal's one fragment (`429`, `Retry-After`, `data-retry-after`).
 - **I6 (v2-spectrum requirements 10, 15).** `netray_web::spectrum::layout(current, older, catalogue, width)` over a `&Catalogue`, each run as `CheckId → Status` with its `&Profile`; `SpectrumView` from a layout and a run index, rendered at `n × linePitchMin`. It has no per-protocol entry point; requirement 25 adds the restriction this feature needs.
 - **I7 (v2-history, v2-entries).** `HistoryStore::latest(&str)` and `HistoryStore::get(&str)` → `Result<Option<Entry>, StoreError>` (`crates/store/src/lib.rs:208`, `:214`), `Entry.created_at` in Unix seconds. `/r/<id>` precedence (v2-entries requirement 10): malformed ID (not `^[0-9A-Za-z]{8}$`) `404`, entry `200`, live V1 snapshot its V1 page, else `410`; a failed lookup `500`, never `410` (requirement 12). v2-entries' `entries::router` (`crates/web/src/entries/`, mounted by lens only when `[history] enabled`; otherwise lens's own V1 `snapshot_router`) routes `/r/{id}`, `/r/{id}/og.png`, `/r/`, `/r/{id}/` and `/r/{id}/{*rest}`, the last answering `404` with `NOT_FOUND_HTML` for everything but `og.png` (its requirements 8, 13, 14). The domain segment is normalised as v2-result-page's `/{domain}` normalises it (its requirement 2, `validate_domain`).
-- **I8 (offered to v2-result-page, operator decision "result-page").** `netray_web::evidence::href(entry_id, protocol, block: Option<&BlockId>) -> String` (`/r/<id>/<protocol>`, plus `#ev-<block id>`), the one source of the result page's evidence links into these views; and `netray_web::evidence::section(run: &netray_model::Run, protocol, run_line) -> EvidenceView` with its partial, for an incomplete run's evidence in the stream, which no URL reaches (§6.1).
+- **I8 (offered to v2-result-page, operator decision "result-page").** `netray_web::evidence::href(entry_id, protocol, block: Option<&BlockId>) -> String` (`/r/<id>/<protocol>`, plus `#ev-<block id>`), the one source of the result page's evidence links into these views; and `netray_web::evidence::section(run: &netray_model::Run, protocol, run_line) -> EvidenceView` with its partial, for an incomplete run's evidence in the stream, which no URL reaches (§6.1) A block of another module links `#ev-<block id>` on the same page there (the result page holds every protocol's section); the stored views use `entry_section(entry_id, created_at, run, protocol)`, the same partial, whose foreign-block links are `href(entry_id, <owner>, Some(block))`, the owner's view of the same entry (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Requirements
 
@@ -293,6 +293,22 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
   this branch merges main or v2-api before Phase 4 (implementer under the operator's autonomy mandate, 2026-10-18).
 - The phase defaults marked "(default, not interviewed)" are built as written, over halting on each:
   operator decision X5, no review pause (implementer under the operator's autonomy mandate, 2026-10-18).
+- Foreign-block links entry-anchored in stored views (`/r/<id>/<owner>#ev-<block id>`, via
+  `entry_section`) and same-page (`#ev-<block id>`) in the live section, over one path-relative
+  `<owner>#ev-<block id>`: a relative link from `/<domain>/tls` re-reads the latest entry and can
+  land on another entry's block, and from the result page `/<domain>` it resolves to `/<owner>`
+  (review of Phase 2; implementer under the operator's autonomy mandate, 2026-10-18).
+- A block's feeds list every referencing check of any protocol, over only the view's own checks:
+  requirement 3 says "the checks that reference it", and `dns.caa` backs `tls.caa_compliant`
+  (review of Phase 2; implementer under the operator's autonomy mandate, 2026-10-18).
+- The email view's own explore-live link is `/inspect/dns?q=<domain> MX` and the IP view's
+  `/inspect/dns?q=<domain> A`, over no view link: requirement 8 gives every view one link and names
+  none for these two; both inspect the records the view's checks start from (implementer under the
+  operator's autonomy mandate, 2026-10-18).
+- Explore-live query values percent-encoded as URI components, with `:` kept literal in `q`, `h`
+  and `ip` (requirement 8's `?h=%5B2001:db8::1%5D:443`) and encoded in `url`
+  (`url=https%3A%2F%2Fexample.com%2F`); an `email.mx` host's trailing dot is dropped (implementer
+  under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 

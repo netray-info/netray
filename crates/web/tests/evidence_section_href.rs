@@ -58,7 +58,7 @@ fn run(complete: bool) -> Run {
 fn live_run_renders_the_same_markup_as_the_stored_view() {
     let render = |complete: bool| {
         let run = run(complete);
-        let line = entry_run_line(1_778_262_240, "Ab3dE5fG");
+        let line = entry_run_line(1_791_469_920, "Ab3dE5fG");
         render_section(&section(&run, Protocol::Tls, line)).unwrap()
     };
     let stored = render(true);
