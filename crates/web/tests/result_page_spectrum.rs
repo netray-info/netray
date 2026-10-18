@@ -55,7 +55,7 @@ fn section(protocol: Protocol, outcome: SectionKind) -> RunSection {
 }
 
 /// Entry `i`: five low bits of `i` pick pass or fail on five checks, so every `i` differs in
-/// fingerprint. With `degraded`, email timed out and TLS is not applicable (no checks for either).
+/// fingerprint. With `degraded`, email timed out and TLS is not applicable (no checks for either); the run stays complete, since the store keeps only complete runs.
 fn run(i: u32, degraded: bool) -> Run {
     let s = |bit: u32| {
         if i >> bit & 1 == 1 {
@@ -83,7 +83,7 @@ fn run(i: u32, degraded: bool) -> Run {
         engine_version: "0.26.0".into(),
         evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
         grade: Grade::B,
-        complete: !degraded,
+        complete: true,
         sections: vec![
             section(Protocol::Dns, SectionKind::Measured),
             section(Protocol::Tls, tls),
