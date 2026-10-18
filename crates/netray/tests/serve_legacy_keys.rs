@@ -38,6 +38,27 @@ fn serve_refuses_legacy_keys_with_their_destination() {
             &["snapshots", "removed in 0.30.0"],
         ),
         (
+            "bare-scoring",
+            "[scoring]\n# Uses embedded default profile\n",
+            &["scoring", "[engine] profile_path"],
+        ),
+        ("bare-history", "[history]\n", &["history", "[store]"]),
+        (
+            "bare-cache",
+            "[cache]\n",
+            &["cache", "[admission] cache_enabled"],
+        ),
+        (
+            "bare-rate-limit",
+            "[rate_limit]\n",
+            &["rate_limit", "[admission]"],
+        ),
+        (
+            "bare-backends",
+            "[backends.http]\n[backends.email]\n",
+            &["backends"],
+        ),
+        (
             "c12",
             "[history]\ndb_path = \"h.db\"\n",
             &["[store] db_path"],

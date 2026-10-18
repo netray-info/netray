@@ -113,6 +113,13 @@ fn serve_check_config_env_overrides_and_validation() {
         &[],
         "deadline",
     );
+    // A module table holding only `deadline_ms` sets the section window and does not switch
+    // the module on: `[modules.ip]` without data paths stays off, as lens's `[backends.ip]` did.
+    accepted(
+        "c2-window-only",
+        "[engine]\nresolve_timeout_ms = 2500\n[modules.ip]\ndeadline_ms = 3000\n[modules.tls]\ndeadline_ms = 15000\n[modules.http]\ndeadline_ms = 15000\n",
+        &[],
+    );
     refused("c2-unknown", "[store]\nbogus = 1\n", &[], "bogus");
     accepted("c2-apex", "[server]\napex = \"localhost\"\n", &[]);
 
