@@ -1,6 +1,6 @@
 # Spec: CI check job fits the runner disk
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-18
 
 ## Goal
@@ -59,6 +59,7 @@ GIVEN the fix branch pushed WHEN the PR's `CI` run completes THEN the `check` jo
 - `line-tables-only` over `0`: keeps file and line in backtraces of failing tests at a small share of full debuginfo's size (implementer under the operator's autonomy mandate, 2026-10-18).
 - Freeing disk and bounding debuginfo together over either alone: the margin was crossed by PR #27's growth and will be again; two independent levers keep headroom (implementer under the operator's autonomy mandate, 2026-10-18).
 - Keep both target trees over merging `adlc-verify`'s offline suite into `test-rust`: the gate's content stays as the justfile defines it (R-J2).
+- Spec approved as drafted (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 
