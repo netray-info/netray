@@ -13,16 +13,21 @@ fail() { echo "FAIL: $1"; fails=1; }
 # verdict_offenders <root>: "file:line" for each line under <root>/crates/web/src/api/ naming a
 # verdict symbol. Nothing for a missing directory.
 verdict_offenders() {
-    grep -rnE 'netray_engine::score|scoring::|rescore|history::diff|netray_model::diff::diff|fingerprint|lens::score|score_run|diff::diff|netray_engine::\{[^}]*\bscore\b' \
-        --include='*.rs' "$1/crates/web/src/api" 2>/dev/null | cut -d: -f1,2
+    {
+        grep -rnE 'netray_engine::score|scoring::|rescore|history::diff|netray_model::diff::diff|fingerprint|lens::score|score_run|diff::diff|netray_engine::\{[^}]*\bscore\b' \
+            --include='*.rs' "$1/crates/web/src/api" 2>/dev/null | cut -d: -f1,2
+        # A grouped import of `score` that rustfmt wrapped over several lines.
+        find "$1/crates/web/src/api" -name '*.rs' -print0 2>/dev/null |
+            xargs -0 perl -0777 -ne 'while (/netray_engine::\{[^}]*\bscore\b/gs) { my $l = 1 + (substr($_, 0, $-[0]) =~ tr/\n//); print "$ARGV:$l\n" }' 2>/dev/null
+    } | sort -u
 }
 
 fix=tests/repo/fixtures/api_no_verdict
-for c in planted planted2 planted3 planted4 clean outside; do
+for c in planted planted2 planted3 planted4 planted5 clean outside; do
     [ -d "$fix/$c" ] || fail "$fix/$c is missing"
 done
 [ -n "$(verdict_offenders "$fix/planted")" ] || fail "self-test: the planted fixture was not flagged"
-for c in planted2 planted3 planted4; do
+for c in planted2 planted3 planted4 planted5; do
     [ -n "$(verdict_offenders "$fix/$c")" ] || fail "self-test: the $c fixture was not flagged"
 done
 [ -z "$(verdict_offenders "$fix/clean")" ] || fail "self-test: the clean fixture was flagged"
