@@ -90,3 +90,9 @@ fn null_mx_row_has_no_link() {
     // RFC 7505 null MX: the host is ".", which names no server to inspect.
     assert!(hrefs(&mx_block(&["."])).is_empty());
 }
+
+#[test]
+fn non_ascii_mx_host_has_no_link() {
+    // The producer prints IDN labels in Unicode; the TLS inspector takes ASCII names only.
+    assert!(hrefs(&mx_block(&["mx.b\u{fc}cher.example"])).is_empty());
+}
