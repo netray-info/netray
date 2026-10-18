@@ -1,7 +1,8 @@
 # Spec: admission-prefetch-race
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-18
+Finished: 2026-10-18
 
 ## Goal
 
