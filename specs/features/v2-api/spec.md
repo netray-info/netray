@@ -122,6 +122,10 @@ Every endpoint of SDD §7.1 answers under `/api/v1` in the `netray lens` process
 34. SDD §7.1 records the shapes this spec fixes: the run answer and its events, the entry and history fields, the error codes, the `?field=` names, the IP batch, range and diff shapes, `{host, port}` on `/tls/inspect` (STARTTLS by port, no `starttls` field) and the collected JSON of the streaming jobs. The Phase 3 table marks V3.1–V3.4 as built by `v2-api`.
 35. `GET /api/v1/docs` serves an interactive docs page (Scalar, through `utoipa-scalar`, as lens's `/docs` today, `crates/lens/src/api_doc.rs:8-40`) over `/api/v1/openapi.json` (architecture-rules, "OpenAPI & API Docs"). It answers `text/html`, is exempt from rate limiting, and its CSP is relaxed per route exactly as the rule allows for `/docs`, every CDN script it loads matching a `script-src` source; every other v1 path keeps the strict CSP. It is not a path of the document. With `[api] enabled = false` it is not served.
 36. The IP endpoints reach their data through one seam, `netray_ip::IpLookup` (a trait, object-safe, held in `ApiState` as `Arc<dyn IpLookup>`): `lookup(ip)`, `lookup_caller(remote, user_agent)`, `range(cidr)` and `asn(n)`, returning `Ifconfig`, `RangeResponse` and `AsnLookupResponse` or the typed refusal of requirement 31. `IpModule` implements it over its enrichment; batch and diff build on `lookup`. Under netray-ip's `testing` feature, this spec adds `netray_ip::testing::StubIpLookup`, which answers `lookup` and `lookup_caller` with `tests/fixtures/contracts/ifconfig-json.json` decoded (the decoder of `testing::golden_module`), `ip.addr` set to the asked address and, for the caller, `tcp` and `user_agent` set from the request, and answers `range` and `asn` from fixed values it holds. v1's IP tests run against the stub, need no GeoIP data and no tracked mmdb, and run in the gate; no test asserts GeoIP-derived values beyond what the stub supplies.
+37. lens's `/api/check` answers a request that races the store commit of the domain's run with that run's fresh result, never `429 THROTTLED` and never the entry the run replaces (taken over from v2-admission's review, `crates/lens/src/routes.rs:779`):
+    - when the head read finds an entry inside the cache window but the domain's run in flight has already published `Done` (it is recording), the request joins that run instead of answering the older entry;
+    - when `admit` refuses with `throttle` and the domain's head, read again, is a different entry than the one read before `admit`, inside the cache window and with its V1 rendering held, the request answers that entry as a cache hit (no rejection is counted for it);
+    - a test holds a request between its head read and its `admit` (a hook in lens's `AppState`, used only by tests) while the run records and deregisters, and asserts the fresh result.
 
 ## Phases
 
@@ -183,7 +187,7 @@ GIVEN an entry whose predecessor was swept (`predecessor_id` NULL, diff kept) WH
 ## Phase 3 — Fresh runs
 
 **Depends on:** Phase 2
-**Requirements:** 14
+**Requirements:** 14, 37
 
 `crates/web/src/api/`: `POST /domains/{domain}/runs` over `DomainRuns::start`, with the JSON and SSE answers and the refusal mapping. `crates/lens`: `DomainRuns::start` implemented over `check_limits` then `admit`, mapping the `RunStream` (read through `Recorded`) onto `RunEvents`. Tests run against stub modules on tokio's paused clock, as v2-admission's tests do.
 
@@ -353,6 +357,7 @@ GIVEN the generated document after this phase WHEN compared with §7.1 THEN ever
 - An entry ID with invalid UTF-8 answers `404` as malformed, over requirement 7's `400` for extractor rejections: v2-entries' rule answers `/r/<id>` that way, and one ID rule serves both; the domain reads document their `500` for a failed store read (implementer under the operator's autonomy mandate, 2026-10-17).
 - An `Identical` record keeps the first run's findings while `last_seen_at` moves on, over refreshing findings on every run: findings stay outside the fingerprint as X2 decided, the store has no update path for an identical run, and a finding's volatile detail (days to expiry) is the only text that can go stale (implementer under the operator's autonomy mandate, 2026-10-17).
 - v1's per-IP refusals count in `lens_rate_limit_hits_total{scope="api_v1"}` over a `netray_api_` metric: the `netray_` namespace is the cutover's (non-goal), and lens zero-initialises its own series (implementer under the operator's autonomy mandate, 2026-10-17).
+- The head-read/`admit` race of `/api/check` (v2-admission's open MAJOR) is fixed in this spec's Phase 3 as requirement 37, over leaving it open until `v2-result-page`: Phase 3 builds the other caller of `admit` and its tests use the same stubs, and the fix is a second head read after a `throttle` refusal plus a join of a recording run, no change to v2-admission's order (taken over from v2-admission; implementer under the operator's autonomy mandate, 2026-10-17).
 - **The curl root is tested in the gate with a new offline test, rather than by relying on `handle_root_plain_cli`.** That test runs only with GeoIP data (`justfile:49-66`); `negotiate`'s unit tests (`negotiate.rs:114`) are in the gate but cover the negotiation, not the route.
 - **The phases are serial.** Every phase rewrites the one committed fixture, and parallel worktrees would conflict on it.
 
