@@ -320,6 +320,14 @@ GIVEN `@live` WHEN `/inspect/tls?h=netray.info` opens with JavaScript THEN the j
   conversion would add an IDNA dependency to netray-web for a rare case; a link the inspector
   refuses is worse than none (second review of Phase 3; implementer under the operator's autonomy
   mandate, 2026-10-18).
+- origin/main (v2-pages) merged into this branch before Phase 4 over waiting for v2-api to merge
+  it: Phase 4 needs `pages::router`, the 404 page and the frame; the conflicts (lens security
+  headers, netray-web manifest, `test_web_crate.sh`) are resolved as the union of both sides
+  (implementer under the operator's autonomy mandate, 2026-10-18).
+- feature/v2-api merged at its tip `8e64fc38`, a commit of failing Phase 4 tests, over undoing the
+  merge to its last green commit: `git reset` is refused in this session, and the next merge of
+  feature/v2-api after its Phase 4 lands turns those tests green; until then this branch's gate
+  runs its own targets by name (implementer under the operator's autonomy mandate, 2026-10-18).
 
 ## Open decisions
 
