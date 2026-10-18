@@ -117,3 +117,20 @@ async fn fixture_with_extra_top_level_key_fails_naming_the_file_and_stores_nothi
     assert!(err.contains("stamped.json"), "{err}");
     assert!(entries(&db).await.is_empty());
 }
+
+#[tokio::test]
+async fn incomplete_run_fails_naming_the_file_and_stores_nothing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let fx = tmp.path().join("fx");
+    std::fs::create_dir(&fx).unwrap();
+    let db = tmp.path().join("history.db");
+    let mut incomplete = run(Status::Pass);
+    incomplete.complete = false;
+    let v = serde_json::json!({"domain": DOMAIN, "age_seconds": 0, "run": incomplete});
+    std::fs::write(fx.join("partial.json"), serde_json::to_vec(&v).unwrap()).unwrap();
+
+    let err = seed(&db, &fx, SEED_NOW).await.unwrap_err().to_string();
+
+    assert!(err.contains("partial.json"), "{err}");
+    assert!(entries(&db).await.is_empty());
+}
