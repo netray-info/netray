@@ -123,4 +123,4 @@ Requirements:
 
 ## Evidence
 
-- A check with status pass, warn or fail references at least one evidence block, and every reference resolves within the run; a block holds the fact that decided the verdict, never a placeholder. Enforced by `netray_model::evidence::check_evidence_rule`, each module's `validate` test against its `REGISTER`, and `crates/lens/tests/evidence_wire.rs` over every lens-full fixture.
+- A check with status pass, warn or fail references at least one evidence block, and every reference resolves within the run; a block holds the fact that decided the verdict, never a placeholder. Enforced by `netray_model::evidence::check_evidence_rule`, each module's `validate` test against its `REGISTER`, and `crates/lens/tests/it/evidence_wire.rs` over every lens-full fixture.

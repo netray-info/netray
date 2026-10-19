@@ -51,10 +51,13 @@ clippy:
     cargo clippy --workspace --all-features -- -D warnings
 
 # ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`), so offline only its unit tests and the module tests run.
+# adlc counts a test file as run when it is a target's src_path; each crate's `it` target also ran its
+# tests/it module files (tests/repo/test_test_binaries.sh holds every one to a mod line): ADLC-RAN names them.
 test-rust-offline:
     cargo test --workspace --exclude netray-ip
     cargo test -p netray-ip --lib
     cargo test -p netray-ip --features testing --test module --test module_data --test module_v3 --test contract_status --test evidence --test offline_routes
+    @git ls-files 'crates/*/tests/it/*.rs' 'crates/*/tests/it/**/*.rs' | grep -v '/main\.rs$' | sed 's/^/ADLC-RAN /'
 
 # The full Rust suite. Most ifconfig-rs integration tests need GeoIP data (`just ifconfig-data`,
 # MaxMind licence); without it they are skipped with a notice and run in CI with the data image.

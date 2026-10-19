@@ -98,3 +98,36 @@ CI's baseline was 127.54 s).
 
 skipped locally: no hosted runner here; the PR's CI run shows the setup-mold step and the link
 times (Phase 6).
+
+## Phase 5 — One integration-test binary per crate
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R7: web and lens integration tests build as one target it; lens's env-mutating files stay separate; other mechanical crates too; a repo check reads cargo metadata; adlc orphans not worsened | green | tests/repo/test_test_binaries.sh |
+| C2 | R8: CLAUDE.md states the tests/it convention; commands naming moved targets updated | green | CLAUDE.md, specs/rules/frontend-rules.md, moved files' --test comments (docs commit) |
+| C3 | GIVEN cargo metadata WHEN web and lens are read THEN each has target it and lens only its listed exceptions besides | green | tests/repo/test_test_binaries.sh |
+| C4 | GIVEN a new file crates/web/tests/x.rs WHEN the repo check runs THEN it fails naming the file | green | tests/repo/test_test_binaries.sh (any non-it target without required-features or a listed reason fails) |
+| C5 | GIVEN the merged tree WHEN cargo test --workspace runs THEN the passing count equals main's | green | local run: 2980 passed, 0 failed, 15 ignored (with GeoIP data); CI comparison under Phase 6 |
+| C6 | GIVEN the merged tree WHEN adlc verify and adlc gate run THEN orphans is verified | test-unwritable | orphans was already refuted on main (frontend vitest files, tests/repo shells, lens tests/common/mod.rs: 132 files); the contract now prints ADLC-RAN for every tests/it module file, so the move adds no orphan and removes lens's common/mod.rs |
+
+Merged: web 153, lens 76 (+ common), engine 20, model 10, store 6, dns 17, tls 20, email 7, http 15
+(324 files). Kept as their own targets: `required-features = ["testing"]` files (dns 11, email 13,
+tls 2, http 2), lens's `admission_config` and `history_config` (set `LENS_*`). Not merged: ip
+(harness = false benches, `admin` needs its own process for the global recorder, data-dependent
+tests) and common (mostly `required-features = ["fetch"]`). The move ran through a script
+(`git mv`, include paths one level deeper, `mod common;` to `use crate::common;`, `--test X` to
+`--test it X`), then `cargo fmt`. Comments in `crates/web/islands/test/*.ts` that cite moved paths
+were left untouched (lane A owns that tree).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 move script + justfile ADLC-RAN + docs paths (made directly) | 0 | n/a | 0 | 0 |
+
+### Behavioural verification
+
+`cargo test --workspace` with the data image's files in `crates/ip/data/`: every target green,
+2980 passed, 0 failed, 15 ignored; `Running tests/it/main.rs` once per merged crate.
