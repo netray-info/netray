@@ -271,9 +271,35 @@ async fn c13_inspector_hosts_serve_their_run_endpoint_assets_and_404s() {
     let css = get(&app, "dns.netray.info", &asset, BROWSER, &[]).await;
     assert_eq!(css.status, StatusCode::OK, "{asset} on the host");
 
-    for path in ["/guide/", "/example.com", "/inspect/dns", "/nope"] {
-        let r = get(&app, "dns.netray.info", path, BROWSER, &[]).await;
-        assert_eq!(r.status, StatusCode::NOT_FOUND, "dns.netray.info{path}");
+    // The host's pages are the apex's, links included: an apex-only path moves to the apex.
+    for path in [
+        "/guide/",
+        "/example.com",
+        "/inspect/dns?q=example.com",
+        "/nope",
+    ] {
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(path)
+                    .header(header::HOST, "dns.netray.info")
+                    .header(header::USER_AGENT, BROWSER)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::MOVED_PERMANENTLY,
+            "dns.netray.info{path}"
+        );
+        assert_eq!(
+            resp.headers()[header::LOCATION],
+            format!("https://netray.info{path}").as_str(),
+            "dns.netray.info{path}"
+        );
     }
     assert_eq!(
         get(&app, "dns.netray.info", "/health", BROWSER, &[])

@@ -238,10 +238,17 @@ fn foreign_and_missing_hosts_get_404_on_root() {
 #[test]
 fn inspector_hosts_never_serve_apex_pages() {
     let srv = start("inspector", None);
-    assert_eq!(
-        get(srv.port, Some("dns.netray.info"), "/guide/").status,
-        404
+    // An apex path moves to the apex; the inspector host never serves its page.
+    let r = get(srv.port, Some("dns.netray.info"), "/guide/");
+    assert_eq!(r.status, 301);
+    assert!(
+        r.headers
+            .lines()
+            .any(|l| l == "location: https://netray.info/guide/"),
+        "{}",
+        r.headers
     );
+    assert!(!String::from_utf8_lossy(&r.body).contains("<html"));
 }
 
 #[test]
