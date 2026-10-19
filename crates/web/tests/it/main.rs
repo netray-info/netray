@@ -4,6 +4,7 @@
 
 mod api_dns;
 mod api_dns_check;
+mod api_dns_dnssec_limit;
 mod api_dns_document;
 mod api_dns_get;
 mod api_dns_limits;
