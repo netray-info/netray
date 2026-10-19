@@ -68,17 +68,16 @@ try {
   for (const board of manifest.boards) {
     const page = await measurePage(browser, board, baseUrls, outDir);
     pages.push(page);
-    // A page that failed to answer, or a result page that would start a live run, has no state.
+    const measured = await measureBoard(exportPage, board, outDir);
+    // A page that failed to answer, or a result page that would start a live run, has no state:
+    // one `no state` row instead of its measured rows; its images are written all the same.
     if (page.status === null || page.status >= 400) {
       found.push(noStateDeviation(board, `HTTP ${page.status}`));
-      continue;
-    }
-    if (page.state !== null && page.state !== 'fresh') {
+    } else if (page.state !== null && page.state !== 'fresh') {
       found.push(noStateDeviation(board, `data-state=${page.state}`));
-      continue;
+    } else {
+      found.push(...deviations(board, measured.values, page.values));
     }
-    const measured = await measureBoard(exportPage, board, outDir);
-    found.push(...deviations(board, measured.values, page.values));
     const sbs = join(outDir, `${slug(board.title)}-sbs.png`);
     await sideBySide(browser, measured.screenshot, page.screenshot, sbs);
     sideBySides.push(sbs);

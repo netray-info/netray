@@ -180,6 +180,12 @@ GIVEN CLAUDE.md WHEN read THEN its rules table names `specs/rules/design-rules.m
   answer 200 and load their result over a stream) is deferred to the first feature whose manifest
   names an inspector board: this feature's manifest covers result boards only, where the signal is
   the HTTP status and `data-state` (implementer under the operator's autonomy mandate, 2026-10-19).
+- Final review: a blocker (spacing values mixing px and keyword tokens compared as whole
+  strings) is fixed on this branch rather than splitting the change; a board without a state still
+  gets its board image and side-by-side; the manifest's optional `export` key (the export's path,
+  relative to the manifest, default `export/canvas.html`) and the run's `target/design/page.json`
+  (the page side's raw values) are kept as named here (implementer under the operator's autonomy
+  mandate, 2026-10-19).
 - Spec drafted and approved by the implementer under the operator's mandate for features 0–7
   (operator, 2026-10-19).
 

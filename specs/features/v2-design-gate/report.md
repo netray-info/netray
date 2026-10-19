@@ -172,3 +172,12 @@ cards. These belong to the gap-closure features that use this check.
 | NIT | "class 1" unnumbered in the rules | rules: class 1 is missing or extra elements |
 | NIT | outputs for a `no state` board and `page.json` unstated | rules state them |
 | NIT | "offsets" under measured spacing | removed; distances are hierarchy |
+
+## Review fixes
+
+The final review's blocker (spacing values mixing px and keyword tokens, `gap: 16px normal`, were
+compared as whole strings) and its minors are fixed on the branch: per-token comparison with test
+rows; a board without a state still gets its board image and side-by-side; `check.spec.ts` runs
+`check.mjs` end to end against a fixture export and page server (exit 0 within tolerance, 1 with
+a row outside it, 1 with a `no state` row for HTTP 404 plus both images); `test_design_states.sh`
+removes its temporary directory. Re-run against main's pages: unchanged, 58 open deviations, exit 1.

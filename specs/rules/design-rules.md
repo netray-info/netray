@@ -24,7 +24,7 @@ inspectors the boards name) with a cache ttl no fixture outlives, renders each b
 export and its page at the board's width and theme, and writes `target/design/`:
 `report.md`, `page.json`, `<board>-board.png`, `<board>-page.png` and `<board>-sbs.png` (board
 left, page right, same scale). A board whose page answers HTTP 400 or above, or whose result page
-holds no fresh stored state, is a `no state` row and gets only its page image. Exit 0: everything
+holds no fresh stored state, is one `no state` row instead of its measured rows. Exit 0: everything
 within tolerance or accepted; 1: open deviations, a `no state` row or a stale accepted entry;
 2: manifest or setup error.
 

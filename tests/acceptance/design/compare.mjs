@@ -49,7 +49,11 @@ function pxWithin(b, p, tol) {
   for (let i = 0; i < bs.length; i++) {
     const bm = PX.exec(bs[i]);
     const pm = PX.exec(ps[i]);
-    if (!bm || !pm) return String(b) === String(p);
+    // A px token is compared within the tolerance, any other token (`normal`, `auto`) exactly.
+    if (!bm || !pm) {
+      if (bs[i] !== ps[i]) return false;
+      continue;
+    }
     if (Math.abs(parseFloat(bm[1]) - parseFloat(pm[1])) > tol) return false;
   }
   return true;
