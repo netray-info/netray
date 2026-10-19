@@ -192,6 +192,12 @@ GIVEN the inspect page with `[api.tls] per_ip_burst = 2` WHEN the TLS job runs `
   keep passing a per-target burst below 16, and a repeated server is caught up front (implementer
   under the operator's autonomy mandate, 2026-10-20).
 
+- Review b919a313..a296a78b: the spec reader's BLOCKER (bursts compared per-IP, per-target,
+  global, where R6 says per-IP, global, per-target) and the reader's MAJOR (a POST of a Unicode
+  segment got the lower-case hint) held; both are fixed on this branch, R6's order in the code and
+  the POST refusal naming the normal form, and the fix range is read again (implementer under the
+  operator's autonomy mandate, 2026-10-20).
+
 ## Open decisions
 
 None.

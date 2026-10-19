@@ -107,3 +107,13 @@ async fn c13_the_result_page_redirects_a_full_width_name_to_its_ascii_form() {
     assert_eq!(r.status, StatusCode::MOVED_PERMANENTLY, "{}", r.body);
     assert_eq!(r.location.as_deref(), Some("/example.com"));
 }
+
+#[tokio::test]
+async fn a_recheck_post_of_a_unicode_name_names_its_normal_form() {
+    let (app, _store, _dir) = app().await;
+    // "bücher.de": the page's own form posts the A-label; a stale or hand-made POST does not.
+    let r = send(&app, "POST", "/b%C3%BCcher.de/run").await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST, "{}", r.body);
+    assert!(r.body.contains("xn--bcher-kva.de"), "{}", r.body);
+    assert!(!r.body.contains("lower case"), "{}", r.body);
+}

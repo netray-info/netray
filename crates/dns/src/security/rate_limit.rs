@@ -169,8 +169,8 @@ impl RateLimitState {
             .map(|n| n.saturating_mul(per_target_cost));
         for (cost, limit) in [
             (Some(total_cost), self.quotas.per_ip_burst),
-            (per_target_charge, self.quotas.per_target_burst),
             (Some(total_cost), self.quotas.global_burst),
+            (per_target_charge, self.quotas.per_target_burst),
         ] {
             if let Some(cost) = cost
                 && cost > limit
@@ -415,6 +415,20 @@ mod cost_tests {
     fn a_request_without_targets_is_not_held_to_the_per_target_burst() {
         // trace, dnssec and check: a flat 16 against a per-target burst of 10 charges no target.
         assert!(state(10).check_query_cost(ip(), &[], 16, 16).is_ok());
+    }
+
+    #[test]
+    fn the_total_cost_is_compared_before_the_per_target_cost() {
+        // spec v2-input-edges R6: per-IP, global, then per-target.
+        let mut quotas = state(5).quotas;
+        quotas.global_burst = 20;
+        quotas.global_per_minute = 20;
+        let state = RateLimitState::scoped(&quotas, state(5).scopes);
+        let keys = vec!["cloudflare".into(), "google".into(), "quad9".into()];
+        match state.check_query_cost(ip(), &keys, 24, 8) {
+            Err(ApiError::CostExceedsLimit { cost, limit }) => assert_eq!((cost, limit), (24, 20)),
+            other => panic!("expected CostExceedsLimit, got {:?}", other.err()),
+        }
     }
 
     #[test]
