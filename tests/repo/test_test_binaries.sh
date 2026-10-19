@@ -6,7 +6,7 @@
 set -uo pipefail
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-MERGED="netray-web lens netray-engine netray-model netray-store netray-dns netray-tls netray-email netray-http"
+MERGED="netray-web lens netray-engine netray-model netray-store netray-dns netray-tls netray-email netray-http netray-common"
 # package:target -- reason
 EXCEPTIONS="lens:admission_config lens:history_config"   # set LENS_* env vars lens's loader reads as keys
 
@@ -61,11 +61,12 @@ for pkg in meta["packages"]:
                 fails.append(f"{f}: mod {name}; is not declared unconditionally in {parent}, so it never compiles")
                 break
             parent = os.path.join(itdir, *parts[: depth + 1], "mod.rs")
-# a tests/it outside the merged crates is never run by the contract, yet ADLC-RAN would name it
-for f in subprocess.run(["git", "ls-files", "crates/*/tests/it/main.rs"], capture_output=True, text=True).stdout.split():
-    pdir = f.split("/")[1]
-    if not any(os.path.relpath(os.path.dirname(p["manifest_path"]), root) == f"crates/{pdir}" and p["name"] in merged for p in meta["packages"]):
-        fails.append(f"{f}: crate is not in MERGED; add it there (and check test-rust-offline runs its it target)")
+# a tests/it outside the merged crates is never run by the contract, yet ADLC-RAN would name its files
+merged_dirs = {os.path.relpath(os.path.dirname(p["manifest_path"]), root) for p in meta["packages"] if p["name"] in merged}
+for f in subprocess.run(["git", "ls-files", "crates/*/tests/it/*"], capture_output=True, text=True).stdout.split():
+    cdir = "/".join(f.split("/")[:2])
+    if cdir not in merged_dirs:
+        fails.append(f"{f}: {cdir} is not a merged crate (MERGED), so no it target runs it, yet the contract would report it as run")
 print("\n".join(fails))
 ' <<<"$meta") || { echo "FAIL: check crashed: $out"; exit 1; }
 

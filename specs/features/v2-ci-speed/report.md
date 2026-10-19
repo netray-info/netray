@@ -183,3 +183,8 @@ Run 39282555459 (same tree before the c15 fix) failed `result_run_c15` once; rep
 | ADLC-RAN glob would name a tests/it in a non-merged crate | DEFERRED | repo check refuses tests/it outside MERGED (040d5029) |
 | stale path references | NIT | fixed in rules and comments; `crates/web/islands/test/*.ts` comments left for lane A |
 | build script without git at one build never reruns later | NIT | accepted: only a Docker build has no git |
+| final review: ADLC-RAN named tests/it files of non-merged crates | MAJOR | guard refuses any tests/it file outside MERGED |
+| final review: reftable checkout never reruns the build script | MAJOR | also watches `reftable/` |
+| final review: netray-common's four plain test files not merged | MAJOR | merged (config_loader, ip_extract_no_cf, prefetch, target_policy_results_table) |
+| final review: required-features targets pass the guard outside the listed exceptions | MAJOR | rule-based exception stated in R7 (they cannot share `it`'s features) |
+| final review: R4 and R9 text stale against the decision log | MINOR | reworded |

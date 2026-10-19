@@ -19,8 +19,12 @@ fn main() {
         git(&["rev-parse", "--path-format=absolute", "--git-path", name]).filter(|p| Path::new(p).exists())
     };
     // HEAD and its reflog are this checkout's own (a commit, checkout or reset appends to logs/HEAD,
-    // also when the branch ref is packed); the branch's loose ref when there is one.
-    let mut watched: Vec<String> = ["HEAD", "logs/HEAD"].iter().filter_map(|n| path_of(n)).collect();
+    // also when the branch ref is packed); the branch's loose ref when there is one. A reftable
+    // repository keeps HEAD as a fixed stub and writes every ref update under reftable/.
+    let mut watched: Vec<String> = ["HEAD", "logs/HEAD", "reftable"]
+        .iter()
+        .filter_map(|n| path_of(n))
+        .collect();
     if let Some(branch) = git(&["symbolic-ref", "-q", "HEAD"]) {
         watched.extend(path_of(&branch));
     }

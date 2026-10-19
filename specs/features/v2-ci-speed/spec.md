@@ -63,9 +63,10 @@ before and after.
 3. `tests/repo/test_verbs.sh` accepts `test-rust` in place of `test-rust-offline` in `check` only
    while requirement 2 holds; any other `adlc-verify` dependency missing from `check` still fails.
 4. A second `cargo build -p netray` with no source change reports `netray-ip` fresh: its build
-   script names only paths that exist (the real git dir's `HEAD`, `refs/heads` and, when present,
-   `packed-refs`), and without a git checkout it names none of them and still sets
-   `GIT_SHORT_SHA` and `BUILD_DATE` to `unknown`.
+   script names only git paths that exist and belong to this checkout's commit (the git dir's
+   `HEAD`, `logs/HEAD`, the branch's loose ref, and `reftable/` in a reftable repository), and
+   without a git checkout it names none of them and still sets `GIT_SHORT_SHA` and `BUILD_DATE` to
+   `unknown`.
 5. `crates/ip/tests/ok_handlers.rs` builds the dev-config app once per test binary and serves it
    on a fresh listener per test; a test that needs its own config (`filtered_headers`) keeps its own
    build; no assertion changes.
@@ -74,12 +75,15 @@ before and after.
 7. The integration tests of `netray-web` and `lens` each build as one test target `it`
    (`tests/it/main.rs` declaring one module per former file); lens's environment-mutating files
    stay separate targets. Every other crate whose tests merge mechanically does the same. A repo
-   check reads `cargo metadata` and fails when a merged crate has a test target other than `it`
-   and its listed exceptions; adlc's orphan check stays green.
+   check reads `cargo metadata` and fails when a merged crate has a test target other than `it`,
+   one with `required-features` or `harness = false` (exceptions by rule: they cannot share the
+   `it` target's features or harness), and its listed exceptions; it also fails on any `tests/it`
+   file outside the merged crates. adlc's orphan check gains no file from the move.
 8. `CLAUDE.md` states that new integration tests go into `tests/it/` and gives the measured CI
    duration; commands naming a moved test target (`--test lens_golden`, `--test contract_golden`
    of a merged crate) are updated.
-9. After the measured run, `timeout-minutes` drops to about twice the measured `check` duration,
+9. After the measured run, `timeout-minutes` drops to at least twice the measured `check` duration
+   with room for a cold rust-cache (20 for a 5m34s warm run, decision log),
    and the debuginfo bound and "Free runner disk" step are dropped only if the measured run shows
    the single build fits the disk without them.
 
@@ -169,7 +173,7 @@ update `test_workflows.sh` and CLAUDE.md's CI-duration bullet with the measured 
 
 ### Test Scenarios
 
-GIVEN the measured check duration D WHEN ci.yml is read THEN `timeout-minutes` is about 2·D, rounded up to a multiple of five.
+GIVEN the measured check duration D WHEN ci.yml is read THEN `timeout-minutes` is at least 2·D, rounded up to a multiple of five, with cold-cache room.
 GIVEN a CI run without the disk workarounds WHEN it completes THEN `df` after `just check` shows free space left, else the workarounds stay.
 
 ## Decision log
@@ -190,6 +194,8 @@ GIVEN a CI run without the disk workarounds WHEN it completes THEN `df` after `j
 - lens's `result_run_c15` pauses tokio's clock after the run, not before: in the shared binary under CI load the paused clock ran the run into its deadlines (CI run 39282555459); a timing fix in the test, assertions unchanged (implementer under the operator's autonomy mandate, 2026-10-19).
 - `timeout-minutes: 20` over 15 (twice the measured 5m34s, rounded up): the measured run had a warm cache; a cold one rebuilds every dependency (implementer under the operator's autonomy mandate, 2026-10-19).
 - "Free runner disk" dropped, `CARGO_PROFILE_DEV_DEBUG: line-tables-only` kept: the runner had 108G free before freeing; the debuginfo bound speeds linking and is part of the rust-cache key (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Final review (f2fe046): netray-common's four plain test files merged into its `it` target; the tests/it guard refuses `tests/it` files outside the merged crates; the build script also watches `reftable/`; R4, R7 and R9 reworded to what the decision log decided (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 
