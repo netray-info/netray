@@ -4,6 +4,7 @@
 
 mod api_dns;
 mod api_dns_check;
+mod api_dns_dnssec_limit;
 mod api_dns_document;
 mod api_dns_get;
 mod api_dns_limits;
@@ -58,6 +59,7 @@ mod entries_privacy;
 mod entries_privacy_route;
 mod entries_router;
 mod entries_view;
+mod evidence_address_domain;
 mod evidence_entry;
 mod evidence_latest;
 mod evidence_latest_missing;

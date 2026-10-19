@@ -341,3 +341,85 @@ async fn module_builds_its_jobs() {
     let module = DnsModule::new(cfg).await.expect("module builds");
     let _jobs: DnsJobs = module.jobs();
 }
+
+// spec v2-input-limits, Phase 2 (R4, R5): `+dnssec` adds DNSKEY and DS before the record-type
+// limit and the cost, so ten types plus `+dnssec` are refused, not run as twelve.
+
+const TEN_TYPES: [&str; 10] = [
+    "A", "AAAA", "MX", "TXT", "NS", "SOA", "CAA", "CNAME", "PTR", "SRV",
+];
+
+fn assert_too_many_12<T>(r: Result<T, ApiError>, what: &str) {
+    match r {
+        Err(ApiError::TooManyRecordTypes { requested, max }) => {
+            assert_eq!((requested, max), (12, 10), "{what}");
+        }
+        Err(e) => panic!("{what}: expected TooManyRecordTypes, got {e:?}"),
+        Ok(_) => panic!("{what}: expected TooManyRecordTypes, the job started"),
+    }
+}
+
+#[tokio::test]
+async fn input_limits_ten_types_plus_dnssec_query_is_refused() {
+    let jobs = testing::stub_jobs();
+    let req = post(json!({"domain": "example.com", "record_types": TEN_TYPES, "dnssec": true}));
+    assert_too_many_12(
+        jobs.query(&req, client(), &limiter(), "rid".into()).await,
+        "query",
+    );
+}
+
+#[tokio::test]
+async fn input_limits_ten_types_plus_dnssec_compare_is_refused() {
+    let jobs = testing::stub_jobs();
+    let req = post(json!({"domain": "example.com", "record_types": TEN_TYPES, "dnssec": true}));
+    assert_too_many_12(
+        jobs.compare(&req, client(), &limiter(), "rid".into()).await,
+        "compare",
+    );
+}
+
+#[tokio::test]
+async fn input_limits_ten_types_plus_dnssec_query_language_is_refused() {
+    let jobs = testing::stub_jobs();
+    let parsed =
+        netray_dns::parser::parse("example.com A AAAA MX TXT NS SOA CAA CNAME PTR SRV +dnssec")
+            .expect("query parses");
+    assert_too_many_12(
+        jobs.query_parsed(parsed, client(), &limiter(), "rid".into())
+            .await,
+        "query_parsed",
+    );
+}
+
+#[tokio::test]
+async fn input_limits_eight_types_plus_dnssec_run_ten_batches() {
+    let jobs = testing::stub_jobs();
+    let req =
+        post(json!({"domain": "example.com", "record_types": &TEN_TYPES[..8], "dnssec": true}));
+    let events = drain(
+        jobs.query(&req, client(), &limiter(), "rid".into())
+            .await
+            .expect("eight types plus DNSKEY and DS start"),
+    )
+    .await;
+    let batches = events
+        .iter()
+        .filter(|e| matches!(e, DnsQueryEvent::Batch(_)))
+        .count();
+    assert_eq!(batches, 10, "one batch per type, DNSKEY and DS included");
+}
+
+#[tokio::test]
+async fn input_limits_dnssec_types_already_requested_are_not_counted_twice() {
+    let jobs = testing::stub_jobs();
+    let mut types = TEN_TYPES[..8].to_vec();
+    types.extend(["DNSKEY", "DS"]);
+    let req = post(json!({"domain": "example.com", "record_types": types, "dnssec": true}));
+    assert!(
+        jobs.query(&req, client(), &limiter(), "rid".into())
+            .await
+            .is_ok(),
+        "ten types including DNSKEY and DS start"
+    );
+}
