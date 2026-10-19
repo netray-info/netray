@@ -312,3 +312,19 @@ async fn c12_the_idle_redirect_without_selectors_goes_to_the_bare_path() {
     assert_eq!(status, StatusCode::MOVED_PERMANENTLY);
     assert_eq!(headers.get(header::LOCATION).unwrap(), "/example.com");
 }
+
+/// The redirect to the canonical domain keeps the selector list (Phase 3 review finding).
+#[tokio::test]
+async fn the_canonical_redirect_keeps_the_selector_parameter() {
+    let (app, _runs, _dir) = app().await;
+
+    for uri in [
+        "/Example.com?dkim_selectors=s1",
+        "/example.com.?dkim_selectors=s1",
+    ] {
+        let (status, headers, _) = send(&app, get(uri)).await;
+        assert_eq!(status, StatusCode::MOVED_PERMANENTLY, "{uri}");
+        let loc = headers.get(header::LOCATION).unwrap().to_str().unwrap();
+        assert_eq!(loc, "/example.com?dkim_selectors=s1", "{uri}");
+    }
+}
