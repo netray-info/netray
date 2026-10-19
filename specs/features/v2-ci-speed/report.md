@@ -76,3 +76,25 @@ With the `ifconfig-rs-data` image's files in `crates/ip/data/` (local, gitignore
 `cargo test -p netray-ip --test ok_handlers` → before `113 passed; 0 failed; 2 ignored ... finished in 20.24s`,
 after `113 passed; 0 failed; 2 ignored ... finished in 11.44s` (macOS, while another cargo build ran;
 CI's baseline was 127.54 s).
+
+## Phase 4 — mold links in CI
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6: the check job installs mold via rui314/setup-mold pinned by SHA with an explicit mold-version, before just adlc-setup; test_workflows requires it | green | tests/repo/test_workflows.sh |
+| C2 | GIVEN ci.yml with the mold step after just adlc-setup WHEN test_workflows runs THEN it fails | green | tests/repo/test_workflows.sh (order rule) |
+| C3 | GIVEN ci.yml with the step pinned to @v1 WHEN test_workflows runs THEN it fails | green | tests/repo/test_workflows.sh (C10 pin rule, existing) |
+| C4 | GIVEN the new ci.yml WHEN test_workflows runs THEN it passes | green | tests/repo/test_workflows.sh |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 .github/workflows/ci.yml, workflow-rules §2 (made directly) | 0 | n/a | 0 | 0 |
+
+### Behavioural verification
+
+skipped locally: no hosted runner here; the PR's CI run shows the setup-mold step and the link
+times (Phase 6).
