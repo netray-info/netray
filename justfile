@@ -176,6 +176,29 @@ acceptance-local *args:
     status=$?
     exit $status
 
+# V2 pages against the private design canvas (specs/rules/design-rules.md): seeds lens's history,
+# starts lens and the manifest's inspectors on free ports, writes target/design/. Exit 0 within
+# tolerance, 1 deviations, 2 setup error. Manifest: the argument, else $NETRAY_DESIGN_DIR/manifest.json
+# (default: netray-ops beside the main checkout).
+design-check manifest="":
+    #!/usr/bin/env bash
+    set -uo pipefail
+    source tests/repo/lib/netray.sh
+    source tests/acceptance/design/stack.sh
+    main_checkout=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+    export NETRAY_DESIGN_DIR="${NETRAY_DESIGN_DIR:-$main_checkout/../netray-ops/specs/netray/design/canvas}"
+    m={{quote(manifest)}}
+    [ -n "$m" ] || m="$NETRAY_DESIGN_DIR/manifest.json"
+    loader=tests/acceptance/design/manifest.mjs
+    node "$loader" "$m" >/dev/null || exit 2
+    fixtures=$(node "$loader" --fixtures "$m") || exit 2
+    hosts=$(node "$loader" --hosts "$m") || exit 2
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"; _netray_cleanup' EXIT
+    # shellcheck disable=SC2086
+    design_stack_up "$tmp" "$fixtures" $hosts || exit 2
+    node tests/acceptance/design/check.mjs "$m" "$REPO_ROOT/target/design"
+
 # Set the workspace version, open a changelog section, commit and tag. Never pushes.
 release version:
     #!/usr/bin/env bash
