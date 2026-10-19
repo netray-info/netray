@@ -4,6 +4,7 @@
 pub mod blocks;
 pub mod events;
 pub mod reference;
+pub mod results;
 pub mod schema;
 pub mod summary;
 
@@ -54,6 +55,7 @@ pub use reference::{
     DnsParseAnswer, DnsParseRequest, DnsParsedQuery, DnsRecordTypes, DnsServerCatalogue,
     DnsServerGroup, parse_answer, record_types, server_catalogue,
 };
+pub use results::{DnsCachedJob, DnsCachedResult, DnsResultCache, is_key};
 pub use summary::{
     Agreement, AnswerOutcome, DnsJobSummary, DnsRecordDetail, DnsServerAnswer, DnsServerSummary,
     DnsTypeComparison,
@@ -1544,6 +1546,7 @@ impl DnsJobs {
                 request_id: rid,
                 duration_ms: elapsed.as_millis() as u64,
                 levels: level_count,
+                cache_key: None,
             };
             let _ = tx.send(DnsDnssecEvent::Done(done)).await;
 

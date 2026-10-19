@@ -132,7 +132,7 @@ part), 2.29 and 2.30 (per-server split), 2.48, 2.52, 2.53, 2.54, 7.79, 7.84, 7.8
 14. **Replay.** `GET /api/v1/dns/results/{key}` answers `{key, mode, query, result}`: `mode` one of
     `query`, `compare`, `authcompare`, `trace`, `dnssec`, `check`; `query` the `q` of a GET or the
     domain of a POST; `result` the stored collected result (with its `summary`). A key that is not 12
-    hex characters answers `400 INVALID_INPUT`, an unknown or expired one `404 NOT_FOUND`. Under the
+    lowercase hex characters answers `400 INVALID_INPUT`, an unknown or expired one `404 NOT_FOUND`. Under the
     `[api]` per-IP limiter.
 15. **DNS health check.** `POST /api/v1/dns/check` `{domain}` and `GET /api/v1/dns/check?q=` (the
     domain is `q`'s first token) run the DNS module alone on that name, live and not stored, and

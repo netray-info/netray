@@ -1330,6 +1330,54 @@
         ],
         "type": "object"
       },
+      "DnsCachedJob": {
+        "description": "The collected result of a job, whichever job it was.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DnsQueryResult"
+          },
+          {
+            "$ref": "#/components/schemas/DnsCompareResult"
+          },
+          {
+            "$ref": "#/components/schemas/DnsAuthCompareResult"
+          },
+          {
+            "$ref": "#/components/schemas/DnsTraceResult"
+          },
+          {
+            "$ref": "#/components/schemas/DnsDnssecResult"
+          }
+        ]
+      },
+      "DnsCachedResult": {
+        "description": "A stored job result and what produced it.",
+        "properties": {
+          "key": {
+            "description": "The 12-character hex key from the job's `done`.",
+            "type": "string"
+          },
+          "mode": {
+            "description": "The job: `query`, `compare`, `authcompare`, `trace` or `dnssec`.",
+            "type": "string"
+          },
+          "query": {
+            "description": "The `q` of the GET, or the `domain` of the POST body.",
+            "type": "string"
+          },
+          "result": {
+            "$ref": "#/components/schemas/DnsCachedJob",
+            "description": "The job's collected result, as the job answered it."
+          }
+        },
+        "required": [
+          "key",
+          "mode",
+          "query",
+          "result"
+        ],
+        "type": "object"
+      },
       "DnsChainEvent": {
         "description": "One zone level of a DNSSEC chain.",
         "properties": {
@@ -1526,6 +1574,12 @@
       "DnsDnssecDone": {
         "description": "Summary of a dnssec job.",
         "properties": {
+          "cache_key": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "duration_ms": {
             "format": "int64",
             "minimum": 0,
@@ -7151,6 +7205,78 @@
           }
         },
         "summary": "The record types a query may ask for; the blocked and internal ones are left out.",
+        "tags": [
+          "dns"
+        ]
+      }
+    },
+    "/api/v1/dns/results/{key}": {
+      "get": {
+        "operationId": "dns_result",
+        "parameters": [
+          {
+            "description": "The 12-character lowercase hex `cache_key` of a job's `done`",
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DnsCachedResult"
+                }
+              }
+            },
+            "description": "The stored result: the job's mode, its query and its collected result"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The key is not 12 lowercase hex characters"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "No result under this key: expired or never stored"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request body over the 8 KiB limit"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "summary": "The collected result of a DNS job, under the `cache_key` of its `done`, for up to an hour.",
         "tags": [
           "dns"
         ]

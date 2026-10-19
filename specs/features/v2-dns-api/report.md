@@ -160,15 +160,41 @@ a running binary is Phase 6's.
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R13: every v1 DNS job route stores its collected result at done under a fresh random 12-lowercase-hex key returned in done.cache_key; 1000 results, one hour; no done, no key; DnsDnssecDone gains an optional cache_key absent on prism's wire | open | |
-| C2 | R14: GET /dns/results/{key} answers key, mode, query, result; malformed key 400 INVALID_INPUT, unknown 404 NOT_FOUND; behind [api] | open | |
-| C3 | GIVEN POST /dns/query as JSON THEN done.cache_key is 12 lowercase hex and the replay answers mode query, query example.com and a result equal to the original body | open | |
-| C4 | GIVEN GET /dns/query?q=example.com MX streamed THEN the done event's cache_key replays with query example.com MX and the summary included | open | |
-| C5 | GIVEN compare, authcompare, trace and dnssec THEN each done carries a key that replays with its mode | open | |
-| C6 | GIVEN two runs THEN their keys differ | open | |
-| C7 | GIVEN /dns/results/XYZ or a 13-character key THEN 400 INVALID_INPUT; an unknown 12-hex key THEN 404 NOT_FOUND | open | |
-| C8 | GIVEN prism's V1 dnssec route streamed THEN its done has no cache_key | open | |
-| C9 | GIVEN a replay THEN it validates against DnsCachedResult's documented schema | open | |
+| C1 | R13: every v1 DNS job route stores its collected result at done under a fresh random 12-lowercase-hex key returned in done.cache_key; 1000 results, one hour; no done, no key; DnsDnssecDone gains an optional cache_key absent on prism's wire | green | crates/web/tests/api_dns_results.rs |
+| C2 | R14: GET /dns/results/{key} answers key, mode, query, result; malformed key 400 INVALID_INPUT, unknown 404 NOT_FOUND; behind [api] | green | crates/web/tests/api_dns_results.rs |
+| C3 | GIVEN POST /dns/query as JSON THEN done.cache_key is 12 lowercase hex and the replay answers mode query, query example.com and a result equal to the original body | green | crates/web/tests/api_dns_results.rs |
+| C4 | GIVEN GET /dns/query?q=example.com MX streamed THEN the done event's cache_key replays with query example.com MX and the summary included | green | crates/web/tests/api_dns_results.rs |
+| C5 | GIVEN compare, authcompare, trace and dnssec THEN each done carries a key that replays with its mode | green | crates/web/tests/api_dns_results.rs |
+| C6 | GIVEN two runs THEN their keys differ | green | crates/web/tests/api_dns_results.rs |
+| C7 | GIVEN /dns/results/XYZ or a 13-character key THEN 400 INVALID_INPUT; an unknown 12-hex key THEN 404 NOT_FOUND | green | crates/web/tests/api_dns_results.rs |
+| C8 | GIVEN prism's V1 dnssec route streamed THEN its done has no cache_key | already_implemented | crates/web/tests/api_dns_results.rs |
+| C9 | GIVEN a replay THEN it validates against DnsCachedResult's documented schema | green | crates/web/tests/api_dns_results.rs |
+
+C8 held before the change (prism's dnssec route never set a key) and guards the V1 wire.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 3 | sonnet (+2 test fixes by the implementer) | 83730 | 296 |
+
+Test-side gaps fixed under `ADLC-Test-Change`: `api_dns.rs` compared v1 frames, which now carry
+`cache_key`, with prism's while stripping the key from prism's only; `openapi_responses.rs` needed
+cases for `GET /dns/results/{key}` (its 2xx case runs a query first for a live key).
+
+### Review
+
+- BLOCKER (fixed): moka's default TinyLFU admission dropped an unread new result once the cache
+  was full, so a freshly handed-out key could answer 404; the cache now evicts LRU. Test:
+  `crates/dns/tests/result_cache.rs` (fails without the fix).
+- AMENDMENT (repaired): requirement 14 says "12 lowercase hex characters", as the code and the
+  document do.
+- NIT (fixed): the JSON path summarised twice (two clocks); a collected `summary` event now wins
+  over recomputing at `done`, so the answer and the stored replay hold the same summary.
+
+### Behavioural verification
+
+skipped: covered over the router; live probe in Phase 6.
 
 ## Phase 5 — DNS health check
 

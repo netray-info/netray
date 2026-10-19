@@ -6,7 +6,7 @@ use std::sync::Arc;
 use governor::{Quota, RateLimiter};
 use netray_common::ip_extract::IpExtractor;
 use netray_common::rate_limit::KeyedLimiter;
-use netray_dns::DnsJobs;
+use netray_dns::{DnsJobs, DnsResultCache};
 use netray_email::{EmailInspect, InspectSlots};
 use netray_engine::profile::{Profile, Profiles};
 use netray_http::HttpInspect;
@@ -107,6 +107,7 @@ pub struct ApiState {
     email_limiter: Arc<netray_email::security::RateLimitState>,
     email_slots: InspectSlots,
     dns_limiter: Arc<netray_dns::security::RateLimitState>,
+    dns_results: Arc<DnsResultCache>,
     header_filters: Arc<RegexSet>,
 }
 
@@ -187,6 +188,7 @@ impl ApiState {
             email_limiter,
             email_slots,
             dns_limiter,
+            dns_results: Arc::new(DnsResultCache::new()),
             header_filters,
         }
     }
@@ -267,6 +269,10 @@ impl ApiState {
 
     pub fn dns_limiter(&self) -> &Arc<netray_dns::security::RateLimitState> {
         &self.dns_limiter
+    }
+
+    pub fn dns_results(&self) -> &DnsResultCache {
+        &self.dns_results
     }
 
     pub fn dns_module(&self) -> Option<&Arc<dyn netray_engine::Module>> {

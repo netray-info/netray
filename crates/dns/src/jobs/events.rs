@@ -15,6 +15,7 @@ use crate::dns_dnssec::ChainLevel;
 use crate::dns_trace::TraceHop;
 use crate::record_format;
 
+use super::results::DnsCachedJob;
 use super::schema::DnsLookups;
 use super::summary::{DnsJobSummary, summarise};
 
@@ -116,6 +117,8 @@ pub struct DnsDnssecDone {
     pub request_id: String,
     pub duration_ms: u64,
     pub levels: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_key: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -251,7 +254,10 @@ impl Serialize for DnsBatch {
 /// An event of a DNS job.
 pub trait DnsJobEvent: Serialize + Clone + Send + 'static {
     /// What the job's events collect into.
-    type Collected: Serialize + Default + Send;
+    type Collected: Serialize + Clone + Default + Send + Into<DnsCachedJob>;
+
+    /// The job's name in the result cache and on its route.
+    const MODE: &'static str;
 
     /// The SSE event name prism emits.
     fn name(&self) -> &'static str;
@@ -286,7 +292,7 @@ fn value<T: Serialize>(payload: &T) -> serde_json::Value {
 }
 
 macro_rules! batch_job {
-    ($(#[$meta:meta])* $event:ident, $result:ident, $done:ident) => {
+    ($(#[$meta:meta])* $event:ident, $result:ident, $done:ident, $mode:literal) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Serialize, ToSchema)]
         #[serde(untagged)]
@@ -322,6 +328,7 @@ macro_rules! batch_job {
 
         impl DnsJobEvent for $event {
             type Collected = $result;
+            const MODE: &'static str = $mode;
 
             fn name(&self) -> &'static str {
                 match self {
@@ -361,7 +368,11 @@ macro_rules! batch_job {
                     Self::Summary(s) => into.summary = Some(s),
                     Self::Done(d) => {
                         into.done = Some(d);
-                        into.summary = Some(summarise(&into.batches));
+                        // A `summary` event already collected (the v1 stream's) wins: one summary
+                        // per job, the one that was stored and sent.
+                        if into.summary.is_none() {
+                            into.summary = Some(summarise(&into.batches));
+                        }
                     }
                 }
             }
@@ -377,19 +388,22 @@ batch_job!(
     /// An event of a query job.
     DnsQueryEvent,
     DnsQueryResult,
-    DnsQueryDone
+    DnsQueryDone,
+    "query"
 );
 batch_job!(
     /// An event of a compare job.
     DnsCompareEvent,
     DnsCompareResult,
-    DnsCompareDone
+    DnsCompareDone,
+    "compare"
 );
 batch_job!(
     /// An event of an authcompare job.
     DnsAuthCompareEvent,
     DnsAuthCompareResult,
-    DnsAuthCompareDone
+    DnsAuthCompareDone,
+    "authcompare"
 );
 
 /// An event of a trace job.
@@ -422,6 +436,7 @@ impl From<DnsErrorEvent> for DnsTraceEvent {
 
 impl DnsJobEvent for DnsTraceEvent {
     type Collected = DnsTraceResult;
+    const MODE: &'static str = "trace";
 
     fn name(&self) -> &'static str {
         match self {
@@ -488,6 +503,7 @@ impl From<DnsErrorEvent> for DnsDnssecEvent {
 
 impl DnsJobEvent for DnsDnssecEvent {
     type Collected = DnsDnssecResult;
+    const MODE: &'static str = "dnssec";
 
     fn name(&self) -> &'static str {
         match self {
@@ -501,7 +517,11 @@ impl DnsJobEvent for DnsDnssecEvent {
         matches!(self, Self::Done(_))
     }
 
-    fn set_cache_key(&mut self, _key: String) {}
+    fn set_cache_key(&mut self, key: String) {
+        if let Self::Done(d) = self {
+            d.cache_key = Some(key);
+        }
+    }
 
     fn cache_value(&self) -> serde_json::Value {
         match self {

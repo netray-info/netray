@@ -56,3 +56,15 @@ G1:
 - `crates/dns/src/jobs/events.rs`: `DnsDnssecDone.cache_key: Option<String>` (`skip_serializing_if = "Option::is_none"`), `DnsDnssecEvent::set_cache_key` sets it; `DnsJobEvent` gains `const MODE: &'static str` (or a `mode()` fn) per job.
 - `crates/web/src/api/state.rs`: `ApiState` holds an `Arc<DnsResultCache>` (`dns_results()`).
 - `crates/web/src/api/dns.rs`: `respond(job, headers, state, query)` — both paths run the events through one scan: on `done`, a fresh key is set on the event (`set_cache_key`), the event is collected, the collected result is stored as `DnsCachedResult {key, mode, query, result}`; the SSE path emits `summary` and the keyed `done`; the JSON path answers the collected result. `query` is the GET's `q` or the POST body's `domain`. `dns_result` handler `GET /dns/results/{key}` behind the `[api]` per-IP limiter (in `dns_read_routes`): malformed key 400 INVALID_INPUT, unknown 404 NOT_FOUND.
+
+## Phase 5 — DNS health check
+
+## Groups
+
+- G1: C1–C7 (the check result type in netray-dns, the v1 route)
+
+## Plan
+
+G1:
+- `crates/dns/src/jobs/results.rs`: `DnsCheckResult {protocol: Protocol, outcome: SectionKind, reason: Option<String>, checks: Vec<RunCheck>, blocks: Vec<Block>, cache_key: Option<String>}` (model types, so its JSON matches `RunSectionEvent`'s fields), `pub fn check_result(SectionOutcome) -> DnsCheckResult` (the mapping `RunSectionEvent::from` does), and `DnsCachedJob::Check(DnsCheckResult)`.
+- `crates/web/src/api/dns.rs`: `DnsCheckRequest {domain}`; `dns_check` (POST) and `dns_check_get` (GET `q`, first token); a shared `run_check(state, client, domain, query)`: `dns_module()` or 503 DNS_OFF; the domain is the parser's (`parsed_q`) and refused when blank or an IP address (400 INVALID_INPUT); `state.dns_limiter().check_query_cost(client, &[], 16, 16)` (refusal via `refused`), the guard held over the run; `module.run(&RunContext {deadline: now + 30 s, domain, options: default}, &Facts::default())`; key, store as mode `check`, answer JSON. In `dns_doc_routes` (not behind the `[api]` limiter, as the jobs).

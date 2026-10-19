@@ -1,21 +1,23 @@
 //! The DNS inspector jobs of v1: `POST /dns/{query,compare,authcompare,trace,dnssec}`, over the
 //! `netray_dns::DnsJobs` part. Each answers 503 first when the part is off, then reads the body,
-//! then starts the job, which charges the `[api.dns]` limiter held by `ApiState`. Nothing is
-//! stored or cached.
+//! then starts the job, which charges the `[api.dns]` limiter held by `ApiState`. A job that
+//! reaches `done` stores its collected result under the `done`'s `cache_key`, which
+//! `GET /dns/results/{key}` replays.
 use std::convert::Infallible;
 
 use axum::Json;
-use axum::extract::rejection::{JsonRejection, QueryRejection};
-use axum::extract::{Query, State};
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response, Sse};
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use netray_common::error::ErrorResponse;
 use netray_dns::parser::ParsedQuery;
 use netray_dns::{
-    DnsAuthCompareEvent, DnsAuthCompareResult, DnsCompareEvent, DnsCompareResult, DnsDnssecEvent,
-    DnsDnssecResult, DnsJob, DnsJobEvent, DnsJobs, DnsQueryEvent, DnsQueryResult, DnsRefusal,
-    DnsTraceEvent, DnsTraceResult, DnssecRequest, PostQueryRequest, TraceRequest,
+    DnsAuthCompareEvent, DnsAuthCompareResult, DnsCachedResult, DnsCompareEvent, DnsCompareResult,
+    DnsDnssecEvent, DnsDnssecResult, DnsJob, DnsJobEvent, DnsJobs, DnsQueryEvent, DnsQueryResult,
+    DnsRefusal, DnsResultCache, DnsTraceEvent, DnsTraceResult, DnssecRequest, PostQueryRequest,
+    TraceRequest,
 };
 use netray_dns::{DnsParseAnswer, DnsParseRequest, DnsRecordTypes, DnsServerCatalogue};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
@@ -62,25 +64,63 @@ fn refused(error: netray_dns::error::ApiError) -> V1Error {
     DnsRefusal::from(error).into()
 }
 
-/// Streams the job's events under their names, or collects them into one object.
-async fn respond<E: DnsJobEvent>(job: DnsJob<E>, headers: &HeaderMap) -> Response {
-    if wants_event_stream(headers) {
-        let frames = job
-            .scan(E::Collected::default(), |collected, event| {
-                event.clone().collect_into(collected);
-                let mut frames = Vec::with_capacity(2);
-                if event.is_done() {
-                    frames.extend(E::summary_event(collected).map(|e| e.sse_event()));
+/// The job's events with `summary` before `done`, and a fresh key on `done`, under which the
+/// collected result is stored before `done` is passed on.
+fn keyed_events<E: DnsJobEvent>(
+    job: DnsJob<E>,
+    cache: DnsResultCache,
+    query: String,
+) -> impl Stream<Item = E> {
+    job.scan(
+        (E::Collected::default(), query),
+        move |(collected, query), mut event| {
+            let key = event.is_done().then(DnsResultCache::fresh_key);
+            if let Some(key) = &key {
+                event.set_cache_key(key.clone());
+            }
+            event.clone().collect_into(collected);
+            let mut events = Vec::with_capacity(2);
+            let stored = key.map(|key| {
+                events.extend(E::summary_event(collected));
+                DnsCachedResult {
+                    key,
+                    mode: E::MODE.to_owned(),
+                    query: query.clone(),
+                    result: collected.clone().into(),
                 }
-                frames.push(event.sse_event());
-                std::future::ready(Some(futures::stream::iter(
-                    frames.into_iter().map(Ok::<_, Infallible>),
-                )))
-            })
-            .flatten();
+            });
+            events.push(event);
+            let cache = cache.clone();
+            async move {
+                if let Some(stored) = stored {
+                    cache.insert(stored).await;
+                }
+                Some(futures::stream::iter(events))
+            }
+        },
+    )
+    .flatten()
+}
+
+/// Streams the job's events under their names, or collects them into one object.
+async fn respond<E: DnsJobEvent>(
+    job: DnsJob<E>,
+    headers: &HeaderMap,
+    state: &ApiState,
+    query: String,
+) -> Response {
+    let events = keyed_events(job, state.dns_results().clone(), query);
+    if wants_event_stream(headers) {
+        let frames = events.map(|event| Ok::<_, Infallible>(event.sse_event()));
         return Sse::new(frames).into_response();
     }
-    Json(job.collect().await).into_response()
+    let collected = events
+        .fold(E::Collected::default(), |mut collected, event| {
+            event.collect_into(&mut collected);
+            std::future::ready(collected)
+        })
+        .await;
+    Json(collected).into_response()
 }
 
 /// Resolves a domain over the configured resolvers: one batch per provider and record type.
@@ -116,7 +156,7 @@ pub(super) async fn dns_query(
         .query(&request, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, request.domain).await)
 }
 
 /// The same query over UDP, TCP, DNS-over-TLS and DNS-over-HTTPS, to compare the transports.
@@ -151,7 +191,7 @@ pub(super) async fn dns_compare(
         .compare(&request, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, request.domain).await)
 }
 
 /// The recursive answer against the authoritative one, queried from the domain's name servers.
@@ -186,7 +226,7 @@ pub(super) async fn dns_authcompare(
         .authcompare(&request, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, request.domain).await)
 }
 
 /// The delegation path of a name from the root servers, one hop per server asked.
@@ -220,7 +260,7 @@ pub(super) async fn dns_trace(
         .trace(&request, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, request.domain).await)
 }
 
 /// The DNSSEC chain of trust of a name, one level per zone from the root.
@@ -254,7 +294,7 @@ pub(super) async fn dns_dnssec(
         .dnssec(&request, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, request.domain).await)
 }
 
 fn q_of(params: Result<Query<QParams>, QueryRejection>) -> Result<String, V1Error> {
@@ -330,7 +370,7 @@ pub(super) async fn dns_query_get(
         .query_parsed(parsed, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, q).await)
 }
 
 /// The job of `POST /dns/compare` over the query language in `q`.
@@ -357,14 +397,15 @@ pub(super) async fn dns_compare_get(
     params: Result<Query<QParams>, QueryRejection>,
 ) -> Result<Response, V1Error> {
     let jobs = jobs_of(&state)?;
-    let parsed = parsed_q(&q_of(params)?)?;
+    let q = q_of(params)?;
+    let parsed = parsed_q(&q)?;
     let client = limit::client(&state, &headers, peer_of(peer));
     state.dns_limiter().prune_if_due();
     let job = jobs
         .compare_parsed(parsed, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, q).await)
 }
 
 /// The job of `POST /dns/authcompare` over the query language in `q`.
@@ -391,14 +432,15 @@ pub(super) async fn dns_authcompare_get(
     params: Result<Query<QParams>, QueryRejection>,
 ) -> Result<Response, V1Error> {
     let jobs = jobs_of(&state)?;
-    let parsed = parsed_q(&q_of(params)?)?;
+    let q = q_of(params)?;
+    let parsed = parsed_q(&q)?;
     let client = limit::client(&state, &headers, peer_of(peer));
     state.dns_limiter().prune_if_due();
     let job = jobs
         .authcompare_parsed(parsed, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, q).await)
 }
 
 /// The job of `POST /dns/trace` over the query language in `q`: the domain and its first record type.
@@ -424,7 +466,8 @@ pub(super) async fn dns_trace_get(
     params: Result<Query<QParams>, QueryRejection>,
 ) -> Result<Response, V1Error> {
     let jobs = jobs_of(&state)?;
-    let parsed = parsed_q(&q_of(params)?)?;
+    let q = q_of(params)?;
+    let parsed = parsed_q(&q)?;
     let request = TraceRequest {
         record_type: parsed
             .record_types
@@ -439,7 +482,7 @@ pub(super) async fn dns_trace_get(
         .trace(&request, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, q).await)
 }
 
 /// The job of `POST /dns/dnssec` over the query language in `q`: the domain.
@@ -465,7 +508,8 @@ pub(super) async fn dns_dnssec_get(
     params: Result<Query<QParams>, QueryRejection>,
 ) -> Result<Response, V1Error> {
     let jobs = jobs_of(&state)?;
-    let parsed = parsed_q(&q_of(params)?)?;
+    let q = q_of(params)?;
+    let parsed = parsed_q(&q)?;
     let request = DnssecRequest {
         domain: parsed.domain,
         timeout_secs: None,
@@ -476,7 +520,7 @@ pub(super) async fn dns_dnssec_get(
         .dnssec(&request, client, state.dns_limiter(), request_id(&headers))
         .await
         .map_err(refused)?;
-    Ok(respond(job, &headers).await)
+    Ok(respond(job, &headers, &state, q).await)
 }
 
 pub(super) fn dns_doc_routes() -> OpenApiRouter<ApiState> {
@@ -551,8 +595,41 @@ pub(super) async fn dns_record_types(
     Ok(Json(netray_dns::record_types()))
 }
 
+/// The collected result of a DNS job, under the `cache_key` of its `done`, for up to an hour.
+#[utoipa::path(
+    get,
+    path = "/dns/results/{key}",
+    tag = "dns",
+    params(("key" = String, Path, description = "The 12-character lowercase hex `cache_key` of a job's `done`")),
+    responses(
+        (status = 200, description = "The stored result: the job's mode, its query and its collected result", body = DnsCachedResult),
+        (status = 400, description = "The key is not 12 lowercase hex characters", body = ErrorResponse),
+        (status = 404, description = "No result under this key: expired or never stored", body = ErrorResponse),
+        (status = 413, description = "Request body over the 8 KiB limit", body = ErrorResponse),
+        (status = 429, description = "Rate limited", body = ErrorResponse),
+    )
+)]
+pub(super) async fn dns_result(
+    State(state): State<ApiState>,
+    key: Result<Path<String>, PathRejection>,
+) -> Result<Json<DnsCachedResult>, V1Error> {
+    let Path(key) = key.map_err(|e| V1Error::InvalidInput(e.body_text()))?;
+    if !netray_dns::is_key(&key) {
+        return Err(V1Error::InvalidInput(format!(
+            "`{key}` is not a result key: 12 lowercase hex characters"
+        )));
+    }
+    state
+        .dns_results()
+        .get(&key)
+        .await
+        .map(Json)
+        .ok_or_else(|| V1Error::NotFound(format!("no result under `{key}`")))
+}
+
 pub(super) fn dns_read_routes() -> OpenApiRouter<ApiState> {
     OpenApiRouter::new()
+        .routes(routes!(dns_result))
         .routes(routes!(dns_parse))
         .routes(routes!(dns_servers))
         .routes(routes!(dns_record_types))
