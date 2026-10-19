@@ -131,3 +131,55 @@ were left untouched (lane A owns that tree).
 
 `cargo test --workspace` with the data image's files in `crates/ip/data/`: every target green,
 2980 passed, 0 failed, 15 ignored; `Running tests/it/main.rs` once per merged crate.
+
+## Phase 6 — Tune the job to the measured run
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R9: timeout-minutes about twice the measured check duration; disk workarounds dropped only if the run shows headroom | green | .github/workflows/ci.yml (timeout 20, free-disk step dropped, debuginfo bound kept); tests/repo/test_workflows.sh |
+| C2 | GIVEN the measured check duration D WHEN ci.yml is read THEN timeout-minutes is about 2·D rounded up to five | green | D = 5m34s job; 20 chosen over 15 for a cold cache (decision log) |
+| C3 | GIVEN a CI run without the disk workarounds WHEN it completes THEN free space remains | green | run 39286874346 green without the freeing step; run 39282555459's df before freeing: 145G, 108G available |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 ci.yml + test_workflows.sh (made directly) | 0 | n/a | 0 | 0 |
+
+### Behavioural verification
+
+CI `check` job, warm rust-cache hit in both runs:
+
+| step | before: run 39227670650 (main) | after: run 39286874346 (PR #35) |
+|---|---|---|
+| job total | 27m30s | 5m34s |
+| Free runner disk | 4s | dropped |
+| setup-mold | n/a | <1s |
+| rust-cache restore | 23s | 18s |
+| just adlc-setup | 15s | 16s |
+| just check | 26m23s | 4m21s |
+| test-repo | 4m10s | 1m19s |
+| fmt + clippy | 11s | 11s |
+| test-rust-offline compile + run | 7m48s + 1m10s, then ip lib/testing 29s | not run in check (contract only) |
+| test-rust compile | 8m32s | 1m18s |
+| test-rust run | 3m37s (ok_handlers 127.54s) | 1m09s (ok_handlers 8.82s) |
+| Rust tests passed / ignored (test-rust) | 2980 / 15 | 2980 / 15 |
+
+Run 39282555459 (same tree before the c15 fix) failed `result_run_c15` once; reproduced locally
+1 in 3 under CPU load, 0 in 9 after the fix.
+
+## Review fixes (independent reader, phases 1–4 and 5)
+
+| finding | class | resolution |
+|---|---|---|
+| shared ok_handlers app shares `ip_cache`, so `ip_param_dns_false_skips_dns` can read another test's PTR answer | BLOCKER | cache off in the shared config (71f75dbe) |
+| build script watched all of `refs/heads`: another worktree's commit rebuilt netray-ip mid test-repo | AMENDMENT | watches HEAD, logs/HEAD and the branch's loose ref (71f75dbe) |
+| `check` with data no longer builds the gate's narrower feature sets | DEFERRED | accepted: `adlc verify` runs them, receipt-gated push; justfile comment and spec non-goal amended |
+| verbs superset check read lines, not branches | NIT | reads the if/else shape; swapped fixture (71f75dbe) |
+| ADLC-RAN guard matched the recipe comment | AMENDMENT | greps the command, non-comment lines (040d5029) |
+| nested or cfg-gated modules passed the declaration check | AMENDMENT | each component declared unconditionally in its parent (040d5029) |
+| ADLC-RAN glob would name a tests/it in a non-merged crate | DEFERRED | repo check refuses tests/it outside MERGED (040d5029) |
+| stale path references | NIT | fixed in rules and comments; `crates/web/islands/test/*.ts` comments left for lane A |
+| build script without git at one build never reruns later | NIT | accepted: only a Docker build has no git |

@@ -187,6 +187,10 @@ GIVEN a CI run without the disk workarounds WHEN it completes THEN `df` after `j
 - netray-ip's build script watches HEAD, `logs/HEAD` and the branch's loose ref, not all of `refs/heads` or `packed-refs` (review AMENDMENT): a commit in another worktree rebuilt netray-ip and could turn `test_build_fresh.sh` red mid-run (implementer under the operator's autonomy mandate, 2026-10-19).
 - ok_handlers' shared app runs with the `?ip=` cache off (review BLOCKER): with one app per test it never hit; shared, one test's PTR answer reached `ip_param_dns_false_skips_dns`. The production path serving a cached hostname for `dns=false` (`crates/ip/src/routes.rs`) is left for its own fix (implementer under the operator's autonomy mandate, 2026-10-19).
 
+- lens's `result_run_c15` pauses tokio's clock after the run, not before: in the shared binary under CI load the paused clock ran the run into its deadlines (CI run 39282555459); a timing fix in the test, assertions unchanged (implementer under the operator's autonomy mandate, 2026-10-19).
+- `timeout-minutes: 20` over 15 (twice the measured 5m34s, rounded up): the measured run had a warm cache; a cold one rebuilds every dependency (implementer under the operator's autonomy mandate, 2026-10-19).
+- "Free runner disk" dropped, `CARGO_PROFILE_DEV_DEBUG: line-tables-only` kept: the runner had 108G free before freeing; the debuginfo bound speeds linking and is part of the rust-cache key (implementer under the operator's autonomy mandate, 2026-10-19).
+
 ## Open decisions
 
 None.

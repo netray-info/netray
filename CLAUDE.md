@@ -48,7 +48,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - A service moved in-process keeps every check its route applied to lens's calls (input validation, per-target limits, policy); only per-client limits go.
 - hickory 0.26 `Name::eq` compares `is_fqdn`: a live query name without the trailing dot never equals a wire record name; never compare owners against the query name.
 - `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.
-- CI's check job compiles the workspace tests twice (offline suite, then `test-rust` with GeoIP data); a cold-cache run took 25m51s and hit the old 30-minute limit after v2-result-page (run 39217050797); the job's `timeout-minutes` is 45.
+- CI's check job compiles the workspace tests once (`check` runs `test-rust` in place of `test-rust-offline`) and links them with mold: a warm-cache run took 5m34s, `just check` 4m21s (test-repo 1m19s, test compile 1m18s; run 39286874346, was 27m30s in 39227670650); `timeout-minutes` is 20, leaving room for a cold rust-cache. A change to the job's `CARGO*`/`RUST*` env changes the rust-cache key: expect one cold run.
 - The `ifconfig-rs-data` image also carries tracked files (`asn_patterns.toml`): never copy it over `crates/ip/data/`.
 - `adlc feature start` branches from `origin/main`: with unpushed commits on local `main`, fast-forward the new feature branch to `main` before writing the spec.
 - lens records a run after its response: a test reading `history.db` or the record-error counter after a response polls with a bound or awaits `state.runs.drain()`.
