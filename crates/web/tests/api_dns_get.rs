@@ -319,7 +319,7 @@ async fn c11_event_stream_answers_batch_summary_done() {
 /// C2, C12, C13: the other four jobs answer their result types over GET.
 #[tokio::test]
 async fn c2_c12_c13_the_other_jobs_answer_their_result_types() {
-    let (app, _) = setup(ApiConfig::default());
+    let (app, _) = setup(api_config("per_ip_burst = 200\nglobal_burst = 200"));
     let rows = [
         ("/dns/compare", "example.com%20A", "DnsCompareResult"),
         (

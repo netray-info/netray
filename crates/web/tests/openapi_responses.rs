@@ -223,6 +223,16 @@ fn dns(job: &'static str, status: u16, accept: Option<&'static str>, body: &'sta
     }
 }
 
+/// A DNS job case on the GET form: `q` in the query language, percent-encoded.
+fn dns_get(job: &'static str, status: u16, accept: Option<&'static str>, q: &str) -> Case {
+    let doc_path: &'static str = format!("/api/v1/dns/{job}").leak();
+    let uri: &'static str = format!("/dns/{job}?q={q}").leak();
+    Case {
+        accept,
+        ..ip(doc_path, "get", uri, status, None)
+    }
+}
+
 /// The SSE event names a DNS path may emit and the component of its `done` event.
 fn dns_events(doc_path: &str) -> (&'static [&'static str], &'static str) {
     match doc_path {
@@ -382,6 +392,11 @@ fn cases() -> Vec<Case> {
     v.push(dns("dnssec", 200, None, DNS_OK));
     v.push(dns("dnssec", 200, Some("text/event-stream"), DNS_OK));
     v.push(dns("dnssec", 400, None, DNSSEC_BAD));
+    for job in ["query", "compare", "authcompare", "trace", "dnssec"] {
+        v.push(dns_get(job, 200, None, "example.com"));
+        v.push(dns_get(job, 200, Some("text/event-stream"), "example.com"));
+        v.push(dns_get(job, 400, None, "example.com%20ANY"));
+    }
     v
 }
 
