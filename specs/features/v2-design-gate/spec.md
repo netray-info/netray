@@ -1,7 +1,8 @@
 # Spec: Design gate — V2 pages measured against the design canvas
 
-Status: Ready
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-19
 
 ## Goal
 

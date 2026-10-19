@@ -185,3 +185,15 @@ removes its temporary directory. Re-run against main's pages: unchanged, 58 open
 The second review pass found fractional px values exactly at the tolerance (13.6px against
 17.6px) reported as deviations by float error; the comparison now allows the tolerance plus an
 epsilon of 1e-6 px, with test rows at both boundaries.
+
+## Finish
+
+Distil decided by the implementer under the operator's autonomy mandate (2026-10-19): two
+CLAUDE.md bullets (blob: iframes via `contentFrame()`; async `spawn` beside an in-process fixture
+server), one solutions note (`2026-10-19-fixture-export-hid-the-blob-iframes.md`), no rule, no
+CLAUDE.md removal. Open follow-up from the third review: limit the four-side expansion in
+`compare.mjs` to box shorthands before a manifest names a non-box multi-value property.
+
+### Checks to build
+
+- A `test_design_compare.sh` row: a spacing `grid-template-columns` of two tracks against four is a deviation (fails today; build with the follow-up above).
