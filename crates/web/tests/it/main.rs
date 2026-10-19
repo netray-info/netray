@@ -4,6 +4,7 @@
 
 mod api_dns;
 mod api_dns_check;
+mod api_dns_cost_limit;
 mod api_dns_dnssec_limit;
 mod api_dns_document;
 mod api_dns_get;
@@ -38,6 +39,7 @@ mod api_reads;
 mod api_runs;
 mod api_runs_selectors;
 mod api_tls;
+mod api_tls_cost_limit;
 mod api_tls_limits;
 mod api_tls_policy;
 mod api_tls_ports;
