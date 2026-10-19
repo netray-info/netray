@@ -264,6 +264,34 @@ fn cases() -> Vec<Case> {
         case("/api/v1/catalogue", "get", "/catalogue", 429, 1),
         case("/api/v1/dns/servers", "get", "/dns/servers", 200, 0),
         case("/api/v1/dns/servers", "get", "/dns/servers", 429, 1),
+        ip(
+            "/api/v1/dns/check",
+            "post",
+            "/dns/check",
+            200,
+            Some(r#"{"domain":"example.com"}"#),
+        ),
+        ip(
+            "/api/v1/dns/check",
+            "post",
+            "/dns/check",
+            400,
+            Some(r#"{"domain":"192.0.2.1"}"#),
+        ),
+        ip(
+            "/api/v1/dns/check",
+            "get",
+            "/dns/check?q=example.com",
+            200,
+            None,
+        ),
+        ip(
+            "/api/v1/dns/check",
+            "get",
+            "/dns/check?q=192.0.2.1",
+            400,
+            None,
+        ),
         case(
             "/api/v1/dns/results/{key}",
             "get",
@@ -530,7 +558,13 @@ fn app(store: Option<Arc<HistoryStore>>, ip_off: bool) -> axum::Router {
             netray_email::testing::example_dns(),
         ))),
         dns: Some(netray_dns::testing::stub_jobs()),
-        dns_module: None,
+        dns_module: Some(Arc::from(netray_dns::testing::golden_module(
+            &std::fs::read_to_string(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../../tests/fixtures/contracts/prism.sse"
+            ))
+            .expect("the prism check golden"),
+        ))),
     };
     let config = ApiConfig {
         per_ip_burst: 1,

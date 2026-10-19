@@ -255,3 +255,31 @@ async fn event_stream_accept_still_answers_json() {
     let get = send(&app, "GET", "/dns/check?q=example.com", sse, None).await;
     assert_check_shape(&get, "get").await;
 }
+
+/// Phase 5 review: the check runs on exactly the name asked: an address with a trailing dot, a
+/// name with a space or a flag, and an over-long name are refused, not run on something else.
+#[tokio::test]
+async fn names_the_check_cannot_run_on_are_400() {
+    let app = app_with(ApiConfig::default(), true);
+    let long = "a".repeat(254);
+    for domain in [
+        "192.0.2.1.",
+        "example.com other",
+        "example.com +dnssec",
+        "@google",
+        long.as_str(),
+    ] {
+        let r = send(
+            &app,
+            "POST",
+            "/dns/check",
+            None,
+            Some(json!({"domain": domain})),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::BAD_REQUEST, "{domain:?}: {}", r.body);
+        assert_eq!(json_of(&r)["error"]["code"], "INVALID_INPUT", "{domain:?}");
+    }
+    let r = send(&app, "GET", "/dns/check?q=192.0.2.1.", None, None).await;
+    assert_eq!(r.status, StatusCode::BAD_REQUEST, "{}", r.body);
+}
