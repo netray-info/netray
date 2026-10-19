@@ -104,3 +104,29 @@ G1: `IssueRow.owner_label` from `owner_label(spec.fix_owner)` (views.rs); `data-
 G2: `run_date(ts)` and `Shown.date` (stored: the entry's `created_at`; not-stored and unrecorded ends: now), `GradePart.date`; `#result-grade` carries `data-grade` and `data-date` when a grade shows; `data-island="recent"` on `#result`; `islands/src/recent.ts` (fresh page writes at mount; `netray:stream-end` listener re-reads `#result-grade`; skips `incomplete`; dedupe, newest first, at most 8; idle list renders `<li>` with link, grade, date and unhides; no fetch, beacon or cookie); `register("recent", recent)`.
 Fixtures regenerated after each group (`UPDATE_GOLDEN=1`; `result-issues.html`, `result-trace.html`, `result-fresh.html`, `result-stale.html`, `result-run.sse`), each under `ADLC-Test-Change`.
 G3: none; `budget.test.ts` passes (3.5 KB of 30 KB gzipped today).
+
+## Phase 7 — OG cards on the layout
+
+### Groups
+
+G1: C3, C4 (netray-web) · G2: C6 (lens fonts) · G3: C1, C2, C5 (lens og render and handler, SDD); in that order (the lens tests compile once G3 changes the signatures).
+
+### Plan
+
+G1:
+1. `spectrum.rs` `fn px` → pub(crate).
+2. `crates/web/src/plate.rs` (new, `pub mod plate;`; outside the spectrum purity guard; no `fn label_width`, no word "Router", no `%`, no newline in output): `CARD_PLATE_WIDTH = 1104`, `CARD_PLATE_HEIGHT = 56.0`; `card_layout(run, pred)` = `spectrum::layout(layout_input_or_current(run), [pred mapped], catalogue(), 1104)`; `card_plate(layout)` = one-line `<g class="plate">`: frame rect (COLOR_DARK_PLATE, border COLOR_DARK_PLATE_BORDER, LINE_HAIR), boundaries (COLOR_DARK_GRID), 54 `<line class="plate__line" data-code data-tone x1=x x2=x y1=56 y2=56*(1-h)>` (pass STATUS_DARK_PASS_MARK/LINE_PASS, warn STATUS_DARK_WARN_MARK/LINE_WARN, fail STATUS_DARK_FAIL_MARK/LINE_FAIL, fixed STATUS_DARK_FIX_MARK/LINE_PASS plus `plate__ring` circle r 3.5, muted STATUS_DARK_UNTESTED_MARK/LINE_HAIR), per run-0 label a `plate__leader` line, a backing rect (COLOR_DARK_BG) and `<text class="plate__label" data-code data-tone font-family="JetBrains Mono" font-size=12>` (warn/fail/fix text tokens) at `label.start` (+4), rows of 14 px above the plate with an 8 px leader; numbers `{:.2}`; inline test: an all-fail run has at most 4 label rows.
+3. `entries/routes.rs`: `EntryCard.plate: String`; `entry_card` reads the predecessor after the 304 check (`Ok(None)` swept → None, `Err` → the entry lookup's 500); ETag unchanged.
+G2: `crates/lens/assets/fonts/JetBrainsMono-Regular.ttf` and `JetBrainsMono-LICENSE.txt` (OFL-1.1, from the v2.304 release); `og/fonts.rs` loads it, guard 3 faces.
+G3:
+1. `og/layout.rs`: `PLATE_X = 48`, `PLATE_Y = 72` (labels rise to y ≥ 8; text lines keep their coordinates).
+2. `og/render.rs`: `svg_for_grade(.., plate: Option<&str>)`, `svg_for_entry(.., plate: &str)`; `card_svg` inserts `<g transform="translate(48 72)">plate</g>` after the background; `None` is byte-identical; the inline tests pass `None` (`ADLC-Test-Change`).
+3. `og/handler.rs`: `entry_card_renderer` passes `&card.plate`; `Card.plate`; `head_card` reads the predecessor and draws the head entry's plate; the admitted-run branch draws the published run's plate over the head run; unscored and incomplete cards stay plain; `compute_etag` appends the plate only when present.
+4. `state.rs` doc comment names both fonts.
+5. `specs/sdd/v2.md`: §4.6 (:652–653) the spectrum card sentence keeping `grade, domain and recording time`, `V1 layout`, `no score`, `spectrum::layout`, `V4.4`, `v2-result-page`; V4.4 row (:1205) the OG cards' use built by `v2-result-page`, still naming `v2-spectrum`, `v2-result-page`, `v2-inspectors`, `og.png`; §5.4 height bullet "56 px on the OG card".
+
+Decisions (implementer under the operator's autonomy mandate, 2026-10-19):
+- The card plate is 56 px high above the existing text lines, over the page's 92 px: a 1104 px plate cannot pass the grade glyph, and the card's text lines keep their places (requirement 29).
+- `/og/<domain>.png` after an admitted run answers the plain card (no plate), over that run's plate over the head entry: an admitted run is no entry yet, and when the store records it `Identical` the run-over-head layout drops the fixed lines the head entry shows; requirement 29 draws a plate only for the entry a card shows (revised after the Phase 7 review).
+- The domain card's ETag includes the plate; the entry card's stays `"<id>-<letter>"` (an entry is immutable; a swept predecessor's fixed tones may linger for a client holding the old ETag).
+- The card's fixed line is the page's hollow 5 px outline with its ring, over a solid 2 px stroke; the card carries no axis group names (its 1104 px plate keeps the page's line geometry, §5.4) (Phase 7 review).

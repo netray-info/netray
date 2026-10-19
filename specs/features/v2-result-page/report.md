@@ -250,3 +250,37 @@ No finding: regrouping reproduces the server's owner grouping, the islands remou
 ### Behavioural verification
 
 skipped: the islands run in a browser; vitest drives them over the Rust-rendered `result-issues.html`, and Phase 8's Playwright run groups by severity and fills the idle page's recent list on the seeded stack.
+
+## Phase 7 — OG cards on the layout
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R29: /r/<id>/og.png and /og/<domain>.png draw the entry's spectrum from spectrum::layout over the entry and its predecessor at a 1104 px plate; one netray-web function turns a layout run into the card's SVG plate; labels in a mono face added to lens's OG font database with its licence; text lines unchanged; the unscored card unchanged | green | crates/web/tests/result_card_plate.rs, crates/web/tests/entries_og_plate.rs, crates/lens/tests/og_plate.rs |
+| C2 | GIVEN shop.example.com's latest entry WHEN /r/<id>/og.png's SVG is built THEN it holds 54 lines and exactly the labels of its warn, fail and fixed lines, and the PNG is 1200x630 | green | crates/web/tests/result_card_plate.rs, crates/lens/tests/og_plate.rs |
+| C3 | GIVEN an entry whose predecessor had http.hsts fail and the entry pass WHEN the card is built THEN the http.hsts line is fixed and labelled; GIVEN a swept predecessor THEN no line is fixed | green | crates/web/tests/result_card_plate.rs, crates/web/tests/entries_og_plate.rs |
+| C4 | GIVEN the same entry WHEN the page's layout run and the card's are compared THEN each line's x as a fraction of the plate width and its tone are equal | green | crates/web/tests/result_card_plate.rs |
+| C5 | GIVEN /og/shop.example.com.png with a fresh head THEN the card shows the head entry's spectrum and v2-admission's text lines; GIVEN no entry THEN the unscored card is unchanged | green | crates/lens/tests/og_plate.rs |
+| C6 | GIVEN the OG font database WHEN initialised THEN it holds the Inter faces and one mono face | green | crates/lens/tests/og_plate.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 plate, G2 fonts, G3 cards and SDD (one coder, in order) | 3 | sonnet | 93272 | 229 |
+| review fixes | 1 | sonnet | 39902 | 80 |
+
+The swept-predecessor test first swept nothing (`HistoryStore::sweep` keeps the head's predecessor); it now views the second of three entries (842d83e6).
+
+### Review
+
+- BLOCKER (fixed, plan Decisions, tests 3c4ff53b): the domain card after an admitted run drew the run over the head entry, which drops the head's fixed lines when the store records the run `Identical`; that card is now plain, and only a card showing a stored entry draws a plate.
+- AMENDMENT (repaired in phase): §4.6 said `/og/<domain>.png` always draws the head entry's plate; it now names the plain card after an admitted run.
+- AMENDMENT (repaired in phase): the card drew a fixed line as a solid 2 px stroke; it is now the page's hollow 5 px outline with its ring, and §5.4 notes the card has no axis group names.
+- DEFERRED: a failed predecessor read on the domain card is logged and the card is drawn without fixed lines under the long cache; `/r/<id>/og.png` answers 500 for the same failure.
+- NIT (kept): label backings use the page's dark background, not the card's canvas colour; the unscored card now falls back to JetBrains Mono for glyphs Inter lacks.
+
+### Behavioural verification
+
+skipped: the cards are PNG routes; `og_plate` and `og_plate_history` drive `/r/<id>/og.png` and `/og/<domain>.png` through lens's app and compare the bytes, and Phase 8 saves `og-shop.png` from the seeded stack.

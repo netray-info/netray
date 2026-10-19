@@ -13,6 +13,8 @@ use axum::routing::get;
 use netray_store::HistoryStore;
 use serde_json::json;
 
+use crate::plate::{card_layout, card_plate};
+
 use super::{
     render,
     view::{entry_view, grade_letter},
@@ -34,6 +36,8 @@ pub struct EntryCard {
     pub domain: String,
     pub grade: String,
     pub created_at: SystemTime,
+    /// The `plate::card_plate` of the entry's run over its predecessor's.
+    pub plate: String,
 }
 
 /// Entry card renderer handed in by lens: the PNG bytes, or lens's render-failure response.
@@ -155,10 +159,28 @@ async fn entry_card(
     {
         return (StatusCode::NOT_MODIFIED, [(ETAG, etag)]).into_response();
     }
+    let predecessor = match &entry.predecessor_id {
+        None => None,
+        Some(pid) => match deps.history.get(pid).await {
+            Ok(found) => found,
+            Err(e) => {
+                tracing::warn!(id = %id, error = %e, "history lookup failed");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": {"code": "INTERNAL", "message": "entry unavailable"}})),
+                )
+                    .into_response();
+            }
+        },
+    };
     let card = EntryCard {
         domain: entry.domain,
         grade: letter.to_string(),
         created_at: UNIX_EPOCH + Duration::from_secs(entry.created_at.max(0) as u64),
+        plate: card_plate(&card_layout(
+            &entry.run,
+            predecessor.as_ref().map(|p| &p.run),
+        )),
     };
     match (deps.card)(&card) {
         Ok(png) => (

@@ -57,7 +57,7 @@ pub struct AppState {
     /// `None` when the embedded `frontend/dist` has no `index.html` (test
     /// builds with a `.gitkeep`-only dist).
     pub rendered_html: Option<Arc<String>>,
-    /// Embedded Inter font database for OG card PNG rasterization.
+    /// Embedded Inter and JetBrains Mono font database for OG card PNG rasterization.
     pub font_db: Arc<Database>,
     /// When `Some`, badge_handler calls this instead of the real `run_check`.
     pub badge_check_fn: Option<BadgeCheckFn>,

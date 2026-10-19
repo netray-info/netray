@@ -7,8 +7,8 @@ use crate::badge::palette::color_for_grade;
 use crate::og::layout::{
     BG_COLOR, CANVAS_H, CANVAS_W, DOMAIN_BASELINE_Y, DOMAIN_COLOR, DOMAIN_FONT_SIZE,
     DOMAIN_MAX_CHARS, FOOTER_BASELINE_Y, FOOTER_COLOR, FOOTER_FONT_SIZE, GRADE_BASELINE_Y,
-    GRADE_CENTER_X, GRADE_FONT_SIZE, RIGHT_X, SCORE_BASELINE_Y, SCORE_FONT_SIZE, SEP_COLOR, SEP_X2,
-    SEP_Y, TIMESTAMP_BASELINE_Y, TIMESTAMP_FONT_SIZE, UNKNOWN_GRADE_COLOR,
+    GRADE_CENTER_X, GRADE_FONT_SIZE, PLATE_X, PLATE_Y, RIGHT_X, SCORE_BASELINE_Y, SCORE_FONT_SIZE,
+    SEP_COLOR, SEP_X2, SEP_Y, TIMESTAMP_BASELINE_Y, TIMESTAMP_FONT_SIZE, UNKNOWN_GRADE_COLOR,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -53,12 +53,19 @@ pub fn svg_for_grade(
     label: &str,
     score_pct: f64,
     checked_at: SystemTime,
+    plate: Option<&str>,
 ) -> String {
-    card_svg(domain, grade, label, Some(score_pct), checked_at)
+    card_svg(domain, grade, label, Some(score_pct), checked_at, plate)
 }
 
-pub fn svg_for_entry(domain: &str, grade: &str, label: &str, recorded_at: SystemTime) -> String {
-    card_svg(domain, grade, label, None, recorded_at)
+pub fn svg_for_entry(
+    domain: &str,
+    grade: &str,
+    label: &str,
+    recorded_at: SystemTime,
+    plate: &str,
+) -> String {
+    card_svg(domain, grade, label, None, recorded_at, Some(plate))
 }
 
 fn card_svg(
@@ -67,6 +74,7 @@ fn card_svg(
     label: &str,
     score_pct: Option<f64>,
     checked_at: SystemTime,
+    plate: Option<&str>,
 ) -> String {
     let grade_letter = match grade {
         "A+" | "A" | "B" | "C" | "D" | "F" => grade,
@@ -94,9 +102,13 @@ fn card_svg(
         format!("{} \u{00b7} netray.info", xml_escape(label))
     };
 
+    let plate_group = plate
+        .map(|p| format!("\n  <g transform=\"translate({PLATE_X} {PLATE_Y})\">{p}</g>"))
+        .unwrap_or_default();
+
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{CANVAS_W}" height="{CANVAS_H}">
-  <rect width="{CANVAS_W}" height="{CANVAS_H}" fill="{BG_COLOR}"/>
+  <rect width="{CANVAS_W}" height="{CANVAS_H}" fill="{BG_COLOR}"/>{plate_group}
   <text x="{GRADE_CENTER_X}" y="{GRADE_BASELINE_Y}" text-anchor="middle" font-family="Inter" font-size="{GRADE_FONT_SIZE}" font-weight="700" fill="{grade_color}">{grade_display}</text>
   <text x="{RIGHT_X}" y="{DOMAIN_BASELINE_Y}" font-family="Inter" font-size="{DOMAIN_FONT_SIZE}" font-weight="400" fill="{DOMAIN_COLOR}">{domain_display}</text>
   <line x1="{RIGHT_X}" y1="{SEP_Y}" x2="{SEP_X2}" y2="{SEP_Y}" stroke="{SEP_COLOR}" stroke-width="2"/>
@@ -189,7 +201,7 @@ mod tests {
     #[test]
     fn svg_contains_grade_letter() {
         for grade in &["A+", "A", "B", "C", "D", "F"] {
-            let svg = svg_for_grade("example.com", grade, "lens", 80.0, ts());
+            let svg = svg_for_grade("example.com", grade, "lens", 80.0, ts(), None);
             assert!(
                 svg.contains(grade),
                 "SVG for grade {grade} should contain the grade letter"
@@ -199,45 +211,45 @@ mod tests {
 
     #[test]
     fn svg_error_grade_renders_question_mark() {
-        let svg = svg_for_grade("example.com", "error", "lens", 0.0, ts());
+        let svg = svg_for_grade("example.com", "error", "lens", 0.0, ts(), None);
         assert!(svg.contains(">?<"), "error grade should render as ?");
     }
 
     #[test]
     fn svg_unknown_grade_renders_question_mark() {
-        let svg = svg_for_grade("example.com", "X", "lens", 0.0, ts());
+        let svg = svg_for_grade("example.com", "X", "lens", 0.0, ts(), None);
         assert!(svg.contains(">?<"), "unknown grade should render as ?");
     }
 
     #[test]
     fn svg_domain_is_escaped() {
-        let svg = svg_for_grade("a&b.com", "A", "lens", 80.0, ts());
+        let svg = svg_for_grade("a&b.com", "A", "lens", 80.0, ts(), None);
         assert!(svg.contains("a&amp;b.com"));
         assert!(!svg.contains("a&b.com"));
     }
 
     #[test]
     fn svg_label_is_escaped() {
-        let svg = svg_for_grade("example.com", "A", "<test>", 80.0, ts());
+        let svg = svg_for_grade("example.com", "A", "<test>", 80.0, ts(), None);
         assert!(svg.contains("&lt;test&gt;"));
     }
 
     #[test]
     fn svg_empty_label_renders_bullet_only() {
-        let svg = svg_for_grade("example.com", "A", "", 80.0, ts());
+        let svg = svg_for_grade("example.com", "A", "", 80.0, ts(), None);
         assert!(svg.contains("\u{00b7} netray.info"));
     }
 
     #[test]
     fn svg_dimensions_present() {
-        let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts());
+        let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts(), None);
         assert!(svg.contains("width=\"1200\""));
         assert!(svg.contains("height=\"630\""));
     }
 
     #[test]
     fn svg_score_shown_for_known_grade() {
-        let svg = svg_for_grade("example.com", "A", "lens", 91.7, ts());
+        let svg = svg_for_grade("example.com", "A", "lens", 91.7, ts(), None);
         assert!(
             svg.contains("91.7%"),
             "score percentage should appear in SVG"
@@ -246,7 +258,7 @@ mod tests {
 
     #[test]
     fn svg_score_hidden_for_unknown_grade() {
-        let svg = svg_for_grade("example.com", "?", "lens", 0.0, ts());
+        let svg = svg_for_grade("example.com", "?", "lens", 0.0, ts(), None);
         assert!(
             !svg.contains('%'),
             "score % must not appear for unknown grade"
@@ -255,7 +267,7 @@ mod tests {
 
     #[test]
     fn svg_timestamp_present() {
-        let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts());
+        let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts(), None);
         assert!(
             svg.contains("May 8, 2026"),
             "timestamp date must appear in SVG"
