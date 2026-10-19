@@ -92,3 +92,11 @@ skipped: no new entry point; the evidence reaches the inspector page and the dom
 ### Behavioural verification
 
 skipped: the entry points (`/inspect/tls/run`, `POST /api/v1/tls/inspect`) are driven end to end in `crates/web/tests/inspect_tls_ports.rs` and `api_tls_ports.rs` over the stub backend; a live run from a worktree build has no outbound network and DNS is blocked locally.
+
+### Checks to build
+
+- A repo test that flags a contract fixture time (`not_after`, `next_update`) compared against the wall clock in a golden: `tests/fixtures/contracts/tlsight-inspect.json` `not_after` 2030-04-01 flips `expired` in the lens goldens then (review minor); would live in `tests/repo/`.
+
+### Deferred to the UI half (lane A)
+
+Per-port bands and port tabs (from `translate_ports`), the validity bar, copy buttons, crt.sh links (`fingerprint_sha256`), the notices banner (`tls.notices`), OCSP live badge (`ocsp_live_*`), presets, history, shortcuts.

@@ -1,7 +1,8 @@
 # Spec: v2-tls-backend
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-19
 
 ## Goal
 
@@ -188,6 +189,7 @@ GIVEN the OpenAPI document WHEN generated THEN `TlsInspectRequest` lists `ports`
 
 - Amendment in Phase 2: requirement 6's one-port equality excludes `tls.notices`, which requirement 7 adds to the band port's outcome also with one port (an IP target always carries the no-SNI warning) (implementer under the operator's autonomy mandate, 2026-10-19).
 - Review of Phase 2: requirement 6 per port means OCSP, CAA and DANE come from the port itself (the summary judges the first handshake over all ports), a host-wide TLSA error spares a port whose records answered, and the host-wide blocks sit in the band port's outcome so the band keeps referencing `tls.caa` (implementer under the operator's autonomy mandate, 2026-10-19).
+- Finish: three CLAUDE.md bullets (per-port summary, STARTTLS label and day truncation, inspector part order in tests); no solutions note, no check to build beyond the report's list (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 
