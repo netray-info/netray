@@ -58,6 +58,7 @@ mod entries_privacy;
 mod entries_privacy_route;
 mod entries_router;
 mod entries_view;
+mod evidence_address_domain;
 mod evidence_entry;
 mod evidence_latest;
 mod evidence_latest_missing;
