@@ -1,6 +1,7 @@
 //! The canonical form of an evidence block, shared by the run fingerprint and the evidence diff:
 //! volatile keys dropped, unordered collections sorted, CSP nonces replaced by one token. A
-//! volatile `<block>/*` covers the whole block: [`block_volatile`].
+//! volatile `<block>/*` covers the whole block: [`block_volatile`]. A volatile row path `<row>`
+//! also covers the repeated keys `<row>#<digits>` of a table: [`row_covers`].
 
 use serde_json::{Value as Json, json};
 
@@ -12,6 +13,16 @@ const NONCE_TOKEN: &str = "'nonce-'";
 struct Volatile<'a> {
     key: &'a str,
     row: Option<&'a str>,
+}
+
+/// Whether the volatile row `row` names the table row `row_key`: the same key, or a repeat of it
+/// (`set-cookie#2`). `set-cookiex` and `set-cookie#a` are other rows.
+fn row_covers(row: &str, row_key: &str) -> bool {
+    row == row_key
+        || row_key
+            .strip_prefix(row)
+            .and_then(|rest| rest.strip_prefix('#'))
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// The paths among `paths` that name `id`'s block, whatever its qualifier. Same split as
@@ -135,7 +146,10 @@ fn table(key: &str, columns: &[String], rows: &[Vec<Value>], volatile: &[Volatil
                 .and_then(|i| row.get(i))
                 .map(key_text)
                 .unwrap_or_default();
-            if volatile.iter().any(|p| p.row == Some(row_key.as_str())) {
+            if volatile
+                .iter()
+                .any(|p| p.row.is_some_and(|row| row_covers(row, &row_key)))
+            {
                 return None;
             }
             let csp = is_csp(&row_key);
