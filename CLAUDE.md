@@ -37,6 +37,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - CI (`ci.yml`) and the release (`release.yml`) follow `specs/rules/workflow-rules.md`: one image, exact version tags, no deploy step.
 - Data: `just ifconfig-data` / `just test-ifconfig-data` (GeoIP), `just tlsight-data` (CAA table, committed).
 - Run tests that depend on feature unification with `--workspace`; `cargo test -p <crate>` resolves features for that crate alone and passes where the binary is wrong.
+- Write no file into the worktree while `adlc verify` runs: its `cargo fmt --check` reads untracked files too and refutes the receipt.
 - `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
 - `just design-check` needs the private canvas: its export serves boards as sandboxed blob: iframes; reach them with Playwright's `contentFrame()`, never `iframe.contentDocument`.
 - A Playwright test serving fixtures from its own process spawns children with async `spawn`: `spawnSync` blocks the event loop and the fixture server never answers.
@@ -99,6 +100,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Timer-run scripts fail closed**: write every file atomically (temp in the same dir, then `mv`), clean only their own files (`*.tmp.$$`, a per-run dir), and are tested with stubs that behave like the real tool (`curl` without `-f` saves the error page, exit 0).
 - **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
 - **An inspector under `/api/v1` runs on its module's `[modules.<x>]` state**; `[api.<x>]` holds only per-client limits (email adds its slots). Never build a second inspector state.
+- **An ip answer validates, then checks the seam, then charges**: a 400 or 503 costs no limiter; charge the per-IP limiter only through `charge_caller` (it feeds `X-RateLimit-Remaining` via a task-local).
+- **`netray_web::api::ip_host` serves `ip.`'s V1 paths** (`/country`, `/json`, `/ip/cidr` ...) and hands every other request back; the cutover mounts it before `ip_successor`.
 - **Compose each new inspector onto the finished v1 document** (`api/compose.rs`, one step per part): composing it with the earlier parts renames a committed component and fails `openapi_contract`.
 - **A golden over prism's routes zeroes `latency_ms` and sorts hash-map-ordered lists** (authcompare's servers); capture it twice before committing.
 - **Outbound fetches of user- or domain-controlled URLs** go only through `netray_common::fetch`; never build a `reqwest::Client` for them. Checking and pinning live in its DNS resolver; reqwest keeps redirect handling.

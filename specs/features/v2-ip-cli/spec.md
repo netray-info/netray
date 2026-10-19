@@ -1,7 +1,8 @@
 # Spec: the plain-text and structured surface of ip. (theme G, backend half)
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-19
 
 ## Goal
 
@@ -289,6 +290,11 @@ GIVEN the stub WHEN `ip_host` answers `/country` THEN it carries `X-RateLimit-Li
 - `ip_host` carries `#[allow(clippy::result_large_err)]`: the spec's `Err(Request)` hands the
   request back by value and cannot be boxed without changing the mount (implementer under the
   operator's autonomy mandate, 2026-10-19).
+
+- Finish: two `CLAUDE.md` bullets (ip charge order, `ip_host`), one verify gotcha, one check to
+  build (baseline test commits pass `cargo fmt --check`); no solutions note. Distilled without the
+  operator's confirmation under the autonomy mandate (implementer under the operator's autonomy
+  mandate, 2026-10-19).
 
 ## Open decisions
 

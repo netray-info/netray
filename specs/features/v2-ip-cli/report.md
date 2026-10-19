@@ -202,3 +202,9 @@ phase by the orchestrator, with `crates/web/tests/ip_host_review.rs`:
 skipped: `ip_host` has no route on main; the `ip.` host dispatch exists only on
 `feature/v2-cutover`, which mounts it as the spec's "How the cutover mounts `ip_host`" says. The
 entry point is exercised end to end by direct calls in `crates/web/tests/ip_host_*.rs`.
+
+### Checks to build
+
+- A test file added under an `ADLC-Baseline` commit passes `cargo fmt --check` at that commit
+  (a later rustfmt-only change otherwise needs `ADLC-Test-Change`, as `api_ip_headers.rs` did);
+  lives as an `adlc` commit check or a `tests/repo` script.
