@@ -1,6 +1,6 @@
 # Spec: CI check job in under ten minutes
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-19
 
 ## Goal
