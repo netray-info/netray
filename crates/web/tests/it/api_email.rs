@@ -247,7 +247,7 @@ async fn input_is_checked() {
 
     let cases = [
         json!({"domain": "not a domain"}),
-        json!({"domain": "example.com", "dkim_selectors": ["s1"]}),
+        json!({"domain": "example.com", "selectors": ["s1"]}),
     ];
     for case in cases {
         let r = post(stub_app(None), None, case.clone()).await;

@@ -23,15 +23,16 @@ use serde::Deserialize;
 
 use super::views::{self, Grouping, Links};
 use super::{
-    EvidenceInner, PROTOCOLS, Parts, ResultState, RunLineBody, SHOWN, Shown, assemble,
-    domain_segment, evidence_part, figure_parts, full_page, href_of, is_fresh, issues_part,
-    not_stored_shown, progress_part, recorded_entry, resolve, run_line_part, sentences_of,
-    spectrum_part, stored_parts, unrecorded_shown,
+    EvidenceInner, PROTOCOLS, Parts, ResultState, RunLineBody, SHOWN, assemble, domain_segment,
+    evidence_part, figure_parts, full_page, href_of, is_fresh, issues_part, not_stored_shown,
+    progress_part, recorded_entry, resolve, run_line_part, sentences_of, spectrum_part,
+    stored_parts, unrecorded_shown,
 };
 use crate::api::{RunEvent, RunEvents, RunRefusal, RunStart, RunTrigger, wants_event_stream};
 use crate::client::client_ip;
 use crate::components::{self, ProgressRayView, RaySegment, RunLineView};
 use crate::evidence;
+use crate::pages::errors::refused_page;
 use crate::pages::headers::secure;
 use crate::pages::server_error;
 use crate::spectrum::RunInput;
@@ -40,6 +41,9 @@ use crate::stream::{end, fragment};
 #[derive(Deserialize)]
 struct RunForm {
     trigger: String,
+    /// Custom DKIM selectors, comma-separated (spec v2-dkim-legacy-urls requirement 5).
+    #[serde(default)]
+    dkim_selectors: Option<String>,
 }
 
 type Events = futures::stream::BoxStream<'static, Result<Event, Infallible>>;
@@ -66,16 +70,23 @@ pub(super) async fn run(
     let prefetch = netray_common::prefetch::is_prefetch(&headers);
     let sse = wants_event_stream(&headers);
 
-    let trigger = match Form::<RunForm>::from_request(Request::from_parts(parts, body), &()).await {
-        Ok(Form(form)) => match form.trigger.as_str() {
-            "visit" => RunTrigger::Visit,
-            "recheck" => RunTrigger::Recheck,
-            _ => return secure(StatusCode::BAD_REQUEST.into_response()),
-        },
-        Err(_) => return secure(StatusCode::BAD_REQUEST.into_response()),
+    let (trigger, raw_selectors) =
+        match Form::<RunForm>::from_request(Request::from_parts(parts, body), &()).await {
+            Ok(Form(form)) => match form.trigger.as_str() {
+                "visit" => (RunTrigger::Visit, form.dkim_selectors),
+                "recheck" => (RunTrigger::Recheck, form.dkim_selectors),
+                _ => return secure(StatusCode::BAD_REQUEST.into_response()),
+            },
+            Err(_) => return secure(StatusCode::BAD_REQUEST.into_response()),
+        };
+    let selectors = match crate::selectors::parse_dkim_selectors(raw_selectors.as_deref()) {
+        Ok(selectors) => selectors,
+        Err(reason) => return refused_page(&domain, &reason),
     };
+    let joined = (!selectors.is_empty()).then(|| selectors.join(","));
 
-    if trigger == RunTrigger::Visit {
+    // A run with custom selectors asks what the stored head does not answer.
+    if trigger == RunTrigger::Visit && selectors.is_empty() {
         match state.store.entries(&domain).await {
             Ok(entries) if is_fresh(&entries, state.ttl_seconds) => {
                 return stored_answer(&domain, &entries, sse);
@@ -88,7 +99,11 @@ pub(super) async fn run(
         }
     }
 
-    match state.runs.start(&domain, client, trigger, prefetch).await {
+    match state
+        .runs
+        .start_with(&domain, client, trigger, prefetch, &selectors)
+        .await
+    {
         RunStart::NotStarted => secure(
             (
                 StatusCode::SERVICE_UNAVAILABLE,
@@ -96,8 +111,13 @@ pub(super) async fn run(
             )
                 .into_response(),
         ),
-        RunStart::Refused(refusal) => refused(&state, &domain, &refusal, sse).await,
+        RunStart::Refused(refusal) => {
+            refused(&state, &domain, &refusal, sse, joined.as_deref()).await
+        }
         RunStart::Admitted(events) if sse => stream(&state, domain, events).await,
+        RunStart::Admitted(events) if joined.is_some() => {
+            finished_page(&state, &domain, events, joined.as_deref()).await
+        }
         RunStart::Admitted(mut events) => {
             while events.next().await.is_some() {}
             see_other(&domain)
@@ -125,7 +145,7 @@ fn stored_answer(domain: &str, entries: &[Entry], sse: bool) -> Response {
     if !sse {
         return see_other(domain);
     }
-    match stored_parts(domain, entries, false, None, None) {
+    match stored_parts(domain, entries, false, None, None, None) {
         Some(parts) => {
             let mut events: Vec<Event> = parts
                 .fragments()
@@ -139,7 +159,13 @@ fn stored_answer(domain: &str, entries: &[Entry], sse: bool) -> Response {
     }
 }
 
-async fn refused(state: &ResultState, domain: &str, refusal: &RunRefusal, sse: bool) -> Response {
+async fn refused(
+    state: &ResultState,
+    domain: &str,
+    refusal: &RunRefusal,
+    sse: bool,
+    selectors: Option<&str>,
+) -> Response {
     let (lead, retry) = views::refusal_line(refusal);
     let body = RunLineBody::Refusal { lead, retry };
     let mut response = if sse {
@@ -165,10 +191,70 @@ async fn refused(state: &ResultState, domain: &str, refusal: &RunRefusal, sse: b
             StatusCode::TOO_MANY_REQUESTS,
             "no-store",
             Some(body),
+            selectors,
         )
     };
     response.headers_mut().insert(RETRY_AFTER, retry.into());
     response
+}
+
+/// The result page of a run read to its end, for a selector run posted without the stream island:
+/// the run is not recorded, so a redirect to the stored page would not show it.
+async fn finished_page(
+    state: &ResultState,
+    domain: &str,
+    mut events: RunEvents,
+    selectors: Option<&str>,
+) -> Response {
+    // The run is already admitted: a failed history read still shows it, as the stream does.
+    let entries = state
+        .store
+        .entries(domain)
+        .await
+        .inspect_err(|e| tracing::warn!(domain = %domain, error = %e, "history lookup failed"))
+        .unwrap_or_default();
+    let mut done = None;
+    let mut recorded = None;
+    while let Some(event) = events.next().await {
+        match event {
+            RunEvent::Section(_) => {}
+            RunEvent::Done(run) => done = Some(run),
+            RunEvent::Recorded(r) => {
+                recorded = r;
+                break;
+            }
+        }
+    }
+    let Some(done) = done else {
+        return server_error();
+    };
+    let state_word = super::state_word(&entries, state.ttl_seconds);
+    match done_parts(&state.store, domain, &entries, &done, recorded, selectors).await {
+        Some(parts) => super::result_page(StatusCode::OK, "no-store", domain, state_word, parts),
+        None => server_error(),
+    }
+}
+
+/// The parts of a finished run over the history `entries` as it was when the run started.
+async fn done_parts(
+    store: &HistoryStore,
+    domain: &str,
+    entries: &[Entry],
+    done: &Run,
+    recorded: Option<Recorded>,
+    selectors: Option<&str>,
+) -> Option<Parts> {
+    let not_stored = |recorded: &Recorded| {
+        not_stored_shown(domain, done, recorded, entries)
+            .and_then(|shown| assemble(domain, false, shown, selectors))
+    };
+    match recorded {
+        None if done.complete => unrecorded_shown(domain, done, entries)
+            .and_then(|shown| assemble(domain, false, shown, selectors)),
+        None => not_stored(&Recorded::NotStored { diff: None }),
+        Some(Recorded::NotStored { diff }) => not_stored(&Recorded::NotStored { diff }),
+        Some(stored) => Live::stored(store, domain, done, &stored, selectors).await,
+    }
 }
 
 /// The state of one streamed run between events.
@@ -322,11 +408,6 @@ impl Live {
         self.push(&format!("evidence-{}", protocol.as_str()), html);
     }
 
-    fn not_stored(&self, done: &Run, recorded: &Recorded) -> Option<Parts> {
-        let shown: Shown = not_stored_shown(&self.domain, done, recorded, &self.entries)?;
-        assemble(&self.domain, false, shown)
-    }
-
     /// The parts of the history with the recorded entry as its head; when the re-read does not
     /// return it, the finished run stands in for it.
     async fn stored(
@@ -334,6 +415,7 @@ impl Live {
         domain: &str,
         done: &Run,
         recorded: &Recorded,
+        selectors: Option<&str>,
     ) -> Option<Parts> {
         let mut entries = store
             .entries(domain)
@@ -344,7 +426,7 @@ impl Live {
         if entries.first().map(|e| &e.id) != Some(&entry.id) {
             entries.insert(0, entry);
         }
-        stored_parts(domain, &entries, false, Some(recorded), None)
+        stored_parts(domain, &entries, false, Some(recorded), None, selectors)
     }
 
     async fn finish(&mut self, recorded: Option<Recorded>) {
@@ -352,15 +434,15 @@ impl Live {
             self.queue.push_back(end());
             return;
         };
-        let parts = match recorded {
-            None if done.complete => unrecorded_shown(&self.domain, &done, &self.entries)
-                .and_then(|shown| assemble(&self.domain, false, shown)),
-            None => self.not_stored(&done, &Recorded::NotStored { diff: None }),
-            Some(Recorded::NotStored { diff }) => {
-                self.not_stored(&done, &Recorded::NotStored { diff })
-            }
-            Some(stored) => Self::stored(&self.store, &self.domain, &done, &stored).await,
-        };
+        let parts = done_parts(
+            &self.store,
+            &self.domain,
+            &self.entries,
+            &done,
+            recorded,
+            None,
+        )
+        .await;
         if let Some(parts) = parts {
             for (id, html) in parts.fragments() {
                 self.queue.push_back(fragment(&id, html));

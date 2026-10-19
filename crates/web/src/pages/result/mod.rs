@@ -11,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use askama::Template;
 use axum::Router;
 use axum::extract::rejection::PathRejection;
-use axum::extract::{Path, Request, State};
+use axum::extract::{Path, Query, Request, State};
 use axum::http::header::LOCATION;
 use axum::http::{StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
@@ -259,9 +259,18 @@ async fn show(
     let Some(segment) = domain_segment(path) else {
         return (state.fallback)(request).await;
     };
-    let domain = match resolve(&state, &segment, "", true) {
+    // The canonical redirect keeps the query: it carries `dkim_selectors`.
+    let tail = request
+        .uri()
+        .query()
+        .map_or_else(String::new, |q| format!("?{q}"));
+    let domain = match resolve(&state, &segment, &tail, true) {
         Ok(domain) => domain,
         Err(response) => return *response,
+    };
+    let selectors = match selectors_of(request.uri()) {
+        Ok(selectors) => selectors,
+        Err(reason) => return refused_page(&domain, &reason),
     };
     let entries = match state.store.entries(&domain).await {
         Ok(entries) => entries,
@@ -270,11 +279,40 @@ async fn show(
             return server_error();
         }
     };
-    full_page(&state, &domain, &entries, StatusCode::OK, "no-cache", None)
+    // A page asking for custom DKIM selectors runs them: the stored head answers another
+    // question, and the page is the viewer's own.
+    let cache = if selectors.is_some() {
+        "no-store"
+    } else {
+        "no-cache"
+    };
+    full_page(
+        &state,
+        &domain,
+        &entries,
+        StatusCode::OK,
+        cache,
+        None,
+        selectors.as_deref(),
+    )
+}
+
+/// The `dkim_selectors` query parameter of a result page, normalised (tokens joined by commas);
+/// `None` when absent or empty (spec v2-dkim-legacy-urls requirement 6).
+fn selectors_of(uri: &Uri) -> Result<Option<String>, String> {
+    #[derive(serde::Deserialize)]
+    struct SelectorQuery {
+        dkim_selectors: Option<String>,
+    }
+    let Query(SelectorQuery { dkim_selectors }) =
+        Query::<SelectorQuery>::try_from_uri(uri).map_err(|e| e.body_text())?;
+    let list = crate::selectors::parse_dkim_selectors(dkim_selectors.as_deref())?;
+    Ok((!list.is_empty()).then(|| list.join(",")))
 }
 
 /// The whole result page of `domain` from its history `entries` (newest first); `refusal` puts a
 /// refused run's line in the header and keeps the page from starting a run on its own.
+/// `selectors` (normalised) goes into the recheck form and starts a run even on a fresh head.
 fn full_page(
     state: &ResultState,
     domain: &str,
@@ -282,12 +320,24 @@ fn full_page(
     status: StatusCode,
     cache_control: &'static str,
     refusal: Option<RunLineBody>,
+    selectors: Option<&str>,
 ) -> Response {
     let state_word = state_word(entries, state.ttl_seconds);
-    let autostart = refusal.is_none() && state_word != "fresh";
-    let Some(parts) = stored_parts(domain, entries, autostart, None, refusal) else {
+    let autostart = refusal.is_none() && (state_word != "fresh" || selectors.is_some());
+    let Some(parts) = stored_parts(domain, entries, autostart, None, refusal, selectors) else {
         return server_error();
     };
+    result_page(status, cache_control, domain, state_word, parts)
+}
+
+/// The result page around rendered `parts`.
+fn result_page(
+    status: StatusCode,
+    cache_control: &'static str,
+    domain: &str,
+    state_word: &'static str,
+    parts: Parts,
+) -> Response {
     page(
         status,
         cache_control,
@@ -427,6 +477,7 @@ fn stored_parts(
     autostart: bool,
     recorded: Option<&Recorded>,
     run_line: Option<RunLineBody>,
+    selectors: Option<&str>,
 ) -> Option<Parts> {
     let mut shown = if entries.is_empty() {
         Shown::none()
@@ -436,7 +487,7 @@ fn stored_parts(
     if let Some(run_line) = run_line {
         shown.run_line = run_line;
     }
-    assemble(domain, autostart, shown)
+    assemble(domain, autostart, shown, selectors)
 }
 
 fn grade_view(grade: Grade) -> GradeView {
@@ -733,6 +784,7 @@ struct HeaderPart<'a> {
     run_line: &'a str,
     progress: &'a str,
     autostart: bool,
+    dkim_selectors: Option<&'a str>,
     button: &'a str,
     share: &'a str,
 }
@@ -832,7 +884,9 @@ fn evidence_part(protocol: Protocol, inner: &EvidenceInner) -> Option<String> {
     )
 }
 
-fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
+/// `selectors` is the recheck form's hidden `dkim_selectors` field; only the full page renders
+/// the header, so stream fragments pass `None`.
+fn assemble(domain: &str, autostart: bool, shown: Shown, selectors: Option<&str>) -> Option<Parts> {
     let href = href_of(domain);
     let (trigger, trigger_label) = if shown.recheck {
         ("recheck", "re-check now")
@@ -870,6 +924,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
             run_line: &run_line,
             progress: &progress,
             autostart,
+            dkim_selectors: selectors,
             button: &button,
             share: &share,
         }),

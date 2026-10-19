@@ -223,13 +223,13 @@ https://netray.info/?d=example.com&dkim_selectors=google,selector1
 
 # Via curl
 curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs?dkim_selectors=default,s1' \
-  | jq '.checks[] | select(.id | startswith("email.dkim"))'</code></pre>
+  | jq '.run.checks[] | select(.id | startswith("email.dkim"))'</code></pre>
 
     <p>Selector validation rules:</p>
     <ul>
       <li>Characters: <code>[a-zA-Z0-9-]</code> only</li>
       <li>Length: 1&ndash;63 characters per selector</li>
-      <li>Count: 1&ndash;10 selectors per request</li>
+      <li>Count: 1&ndash;5 selectors per request</li>
       <li>Separator: comma (whitespace around commas is trimmed)</li>
     </ul>
 
@@ -274,10 +274,11 @@ curl -s -X POST 'https://netray.info/api/v1/domains/example.com/runs?dkim_select
     <h2>Cache behaviour</h2>
 
     <p>
-      Results are cached per domain for 5 minutes. The <code>X-Cache</code> response
-      header indicates <code>HIT</code> or <code>MISS</code>.
-      Requests with <code>dkim_selectors</code> always bypass the cache, since
-      selector-specific results cannot be shared.
+      A check of a domain is stored in its history, and a visit within 5 minutes of the
+      last stored check shows that check instead of running a new one.
+      A run with <code>dkim_selectors</code> is always a fresh run: it is never joined with
+      another check of the domain and never stored in the history, since selector-specific
+      results cannot be shared (the API answers <code>"recorded": "not_stored"</code>).
     </p>
 
   </article>

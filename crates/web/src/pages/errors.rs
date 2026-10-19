@@ -13,6 +13,10 @@ use super::headers::secure;
 use super::{Frame, page};
 use crate::components::QueryInputView;
 
+/// A selector list in a `Location` query: commas stay readable, everything else that is not
+/// alphanumeric or a hyphen is encoded.
+const SELECTORS_SET: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b',');
+
 pub(super) const LOCATION_SET: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'.')
     .remove(b'-')
@@ -140,7 +144,17 @@ pub async fn query_redirect(uri: Uri) -> Response {
     };
     match normalise(raw) {
         Some(domain) => {
-            let location = format!("/{}", utf8_percent_encode(&domain, LOCATION_SET));
+            let mut location = format!("/{}", utf8_percent_encode(&domain, LOCATION_SET));
+            // lens's `?d=` with `dkim_selectors` keeps them for the run page (spec
+            // v2-dkim-legacy-urls requirement 7); the page validates them.
+            if let Some(selectors) = params
+                .get("dkim_selectors")
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+            {
+                location.push_str("?dkim_selectors=");
+                location.extend(utf8_percent_encode(selectors, SELECTORS_SET));
+            }
             secure((StatusCode::MOVED_PERMANENTLY, [(LOCATION, location)]).into_response())
         }
         None => not_found_page(StatusCode::BAD_REQUEST, Some(raw.clone()), true, None),

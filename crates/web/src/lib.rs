@@ -15,6 +15,7 @@ pub mod explore;
 pub mod gate;
 pub mod pages;
 pub mod plate;
+pub mod selectors;
 pub mod spectrum;
 pub mod stream;
 pub mod tokens;

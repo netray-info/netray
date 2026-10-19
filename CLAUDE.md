@@ -107,6 +107,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Review the paths a contract fix wakes up.** When real data first reaches a code path, it may never have run before (lens `detect_no_mx` read every MX `fail` as "no MX").
 - **Timer-run scripts fail closed**: write every file atomically (temp in the same dir, then `mv`), clean only their own files (`*.tmp.$$`, a per-run dir), and are tested with stubs that behave like the real tool (`curl` without `-f` saves the error page, exit 0).
 - **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
+- **Every production `impl DomainRuns` overrides `start_with`**: the default drops DKIM selectors (`tests/repo/test_domain_runs_selectors.sh`).
 - **An inspector under `/api/v1` runs on its module's `[modules.<x>]` state**; `[api.<x>]` holds only per-client limits (email adds its slots). Never build a second inspector state.
 - **An ip answer validates, then checks the seam, then charges**: a 400 or 503 costs no limiter; charge the per-IP limiter only through `charge_caller` (it feeds `X-RateLimit-Remaining` via a task-local).
 - **`netray_web::api::ip_host` serves `ip.`'s V1 paths** (`/country`, `/json`, `/ip/cidr` ...) and hands every other request back; the cutover mounts it before `ip_successor`.
@@ -119,6 +120,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
 - **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
 - **askama 0.16 closes every `{% call %}` with `{% endcall %}`**; without it the component macro does not compile.
+- **An optional element in a golden-tested template opens with `{%- if %}`**, so the markup without it stays byte-identical (`result_header.html`'s `dkim_selectors` field).
 - **A `base.html` block default compiles against every child**: put frame-struct fields only inside blocks a struct-less child overrides (v2-entries' pages override `meta`).
 - **Stub a third-party API with a body captured from the live endpoint**, never the shape the code reads (status island: the event feed answers `results`, not `data`).
 - **A purity guard is an allowlist.** `tests/repo/test_spectrum_module.sh` admits named imports, std paths and macros; a blocklist of I/O names let print macros and `std::process` through.

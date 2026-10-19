@@ -136,8 +136,14 @@ impl<R: DnsLookup + 'static> EmailInspect for EmailInspector<R> {
         limits: &RateLimitState,
         slots: &InspectSlots,
     ) -> Result<EmailJob, EmailRefusal> {
-        self.start(&req.domain, Vec::new(), client, limits, slots)
-            .map_err(Into::into)
+        self.start(
+            &req.domain,
+            req.dkim_selectors.clone(),
+            client,
+            limits,
+            slots,
+        )
+        .map_err(Into::into)
     }
 }
 
@@ -223,6 +229,11 @@ impl InspectSlots {
 pub struct EmailInspectRequest {
     #[schema(example = "example.com")]
     pub domain: String,
+    /// Custom DKIM selectors the DKIM check probes beside its built-in map: at most
+    /// `dkim.max_user_selectors` (default 5), each 1-63 of `[A-Za-z0-9-]`.
+    #[serde(default)]
+    #[schema(example = json!(["google"]))]
+    pub dkim_selectors: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
