@@ -1,7 +1,8 @@
 # Spec: v2-dns-api
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-19
 
 ## Goal
 
@@ -316,6 +317,11 @@ GIVEN `specs/sdd/v2.md` WHEN read THEN §7.1 lists the new endpoints and §7.3 a
   `/dns/record-types` and `/dns/parse` answer without a DNS part (parse then offers no `@system`).
   The SDD amendment landed in Phase 6's commit, not with each phase's code: a bisect onto phases
   2 to 5 reads the older §7 (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Finish: four CLAUDE.md bullets (the gate's exit through a pipe, `openapi_responses` cases per
+  operation, the query parser is no domain validation, random keys from UUID v4) and one check to
+  build (moka caches without an eviction policy); no solutions note (implementer under the
+  operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

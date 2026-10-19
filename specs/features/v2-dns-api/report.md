@@ -284,3 +284,8 @@ $ curl -s -X POST -d '{"domain":"netray.info"}' $B/dns/check
 The DNS answers themselves are blocked locally; the timeouts come out `unmeasured` (Rule M) and the
 check `timed_out`, as the code says.
 
+### Checks to build
+
+- A `moka` cache builder without `.eviction_policy(...)` (default TinyLFU refuses an unread newcomer
+  once full, so a handed-out key answers 404): a `tests/repo` check over `crates/*/src`, which
+  today would also flag prism's V1 `result_cache.rs`.
