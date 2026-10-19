@@ -35,6 +35,10 @@ pub use jobs::{
     DnsJobEvent, DnsJobs, DnsQueryDone, DnsQueryEvent, DnsQueryResult, DnsRefusal, DnsTraceDone,
     DnsTraceEvent, DnsTraceResult,
 };
+pub use jobs::{
+    DnsParseAnswer, DnsParseRequest, DnsParsedQuery, DnsRecordTypes, DnsServerCatalogue,
+    DnsServerGroup, parse_answer, record_types, server_catalogue,
+};
 pub use module::{DnsModule, facts_from_lookups, translate};
 pub use netray_common::middleware::RequestId;
 pub use netray_common::middleware::request_id as request_id_middleware;

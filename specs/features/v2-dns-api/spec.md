@@ -215,7 +215,7 @@ GIVEN `{"input": "example.com A @google +tcp"}` WHEN parsed THEN `query` is doma
 GIVEN `{"input": "example.com ANY"}` WHEN parsed THEN `query` is null and `error` names the blocked type.
 GIVEN `{"input": "", "cursor_pos": 0}` WHEN parsed THEN tokens are empty and `error` is the empty-query message.
 GIVEN a body that is not JSON WHEN posted THEN `400`.
-GIVEN the default DNS config WHEN `{"input": "example.com @"}` is parsed THEN completions do not offer `@system`.
+GIVEN `allow_system_resolvers = false` WHEN `{"input": "example.com @"}` is parsed THEN completions do not offer `@system`; GIVEN it true THEN they do.
 GIVEN `GET /dns/servers` WHEN answered THEN providers include `cloudflare`, `google`, `quad9` and `mullvad`, each with udp, tcp, tls and https configs, and groups `public` and `all` list their providers.
 GIVEN `GET /dns/record-types` WHEN answered THEN the list holds A, MX, DNSKEY, TLSA and SVCB and holds none of ANY, AXFR, IXFR, OPT, ZERO, NULL.
 GIVEN each of the three routes WHEN answered THEN the body validates against its documented schema.

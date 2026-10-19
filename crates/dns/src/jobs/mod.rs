@@ -3,6 +3,7 @@
 
 pub mod blocks;
 pub mod events;
+pub mod reference;
 pub mod schema;
 pub mod summary;
 
@@ -48,6 +49,10 @@ pub use events::{
     DnsCompareDone, DnsCompareEvent, DnsCompareResult, DnsDnssecDone, DnsDnssecEvent,
     DnsDnssecResult, DnsEnrichmentEvent, DnsErrorEvent, DnsHopEvent, DnsJobEvent, DnsQueryDone,
     DnsQueryEvent, DnsQueryResult, DnsTraceDone, DnsTraceEvent, DnsTraceResult,
+};
+pub use reference::{
+    DnsParseAnswer, DnsParseRequest, DnsParsedQuery, DnsRecordTypes, DnsServerCatalogue,
+    DnsServerGroup, parse_answer, record_types, server_catalogue,
 };
 pub use summary::{
     Agreement, AnswerOutcome, DnsJobSummary, DnsRecordDetail, DnsServerAnswer, DnsServerSummary,
@@ -318,6 +323,11 @@ impl DnsJobs {
             backend,
             prism_metrics: false,
         }
+    }
+
+    /// Whether `@system` resolvers are allowed by the configuration.
+    pub fn allows_system_resolvers(&self) -> bool {
+        self.config.dns.allow_system_resolvers
     }
 
     /// Emit prism's `prism_*` metrics from the jobs.

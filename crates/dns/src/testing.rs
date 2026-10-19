@@ -568,10 +568,13 @@ pub fn stub_state() -> AppState {
     }
 }
 
-/// The jobs over the default configuration and [`stub_backend`]: fresh circuit breakers, the
-/// query semaphore, no enrichment, no `prism_*` metrics.
+/// The jobs over the default configuration, with system resolvers off as in production, and
+/// [`stub_backend`]: fresh circuit breakers, the query semaphore, no enrichment, no `prism_*`
+/// metrics.
 pub fn stub_jobs() -> DnsJobs {
-    let config: ModuleConfig = serde_json::from_str("{}").expect("default module config");
+    let config: ModuleConfig =
+        serde_json::from_str(r#"{"dns": {"allow_system_resolvers": false}}"#)
+            .expect("default module config");
     stub_jobs_with(
         config
             .into_config()

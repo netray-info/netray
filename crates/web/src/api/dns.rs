@@ -17,6 +17,7 @@ use netray_dns::{
     DnsDnssecResult, DnsJob, DnsJobEvent, DnsJobs, DnsQueryEvent, DnsQueryResult, DnsRefusal,
     DnsTraceEvent, DnsTraceResult, DnssecRequest, PostQueryRequest, TraceRequest,
 };
+use netray_dns::{DnsParseAnswer, DnsParseRequest, DnsRecordTypes, DnsServerCatalogue};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::Deserialize;
 use utoipa_axum::router::OpenApiRouter;
@@ -485,4 +486,74 @@ pub(super) fn dns_doc_routes() -> OpenApiRouter<ApiState> {
         .routes(routes!(dns_authcompare, dns_authcompare_get))
         .routes(routes!(dns_trace, dns_trace_get))
         .routes(routes!(dns_dnssec, dns_dnssec_get))
+}
+
+/// Parses a query string: its tokens with byte ranges, the completions at the cursor, and the
+/// parsed query or the reason it does not parse.
+#[utoipa::path(
+    post,
+    path = "/dns/parse",
+    tag = "dns",
+    request_body = DnsParseRequest,
+    responses(
+        (status = 200, description = "Tokens, completions and the parsed query or its error", body = DnsParseAnswer),
+        (status = 400, description = "Malformed body", body = ErrorResponse),
+        (status = 413, description = "Request body over the 8 KiB limit", body = ErrorResponse),
+        (status = 429, description = "Rate limited", body = ErrorResponse),
+        (status = 503, description = "The DNS module is off", body = ErrorResponse),
+    )
+)]
+pub(super) async fn dns_parse(
+    State(state): State<ApiState>,
+    body: Result<Json<DnsParseRequest>, JsonRejection>,
+) -> Result<Json<DnsParseAnswer>, V1Error> {
+    let jobs = jobs_of(&state)?;
+    let request = json_body(body)?;
+    Ok(Json(netray_dns::parse_answer(
+        &request,
+        jobs.allows_system_resolvers(),
+    )))
+}
+
+/// The predefined DNS providers with their transports, and the group aliases over them.
+#[utoipa::path(
+    get,
+    path = "/dns/servers",
+    tag = "dns",
+    responses(
+        (status = 200, description = "Providers and groups", body = DnsServerCatalogue),
+        (status = 429, description = "Rate limited", body = ErrorResponse),
+        (status = 503, description = "The DNS module is off", body = ErrorResponse),
+    )
+)]
+pub(super) async fn dns_servers(
+    State(state): State<ApiState>,
+) -> Result<Json<DnsServerCatalogue>, V1Error> {
+    jobs_of(&state)?;
+    Ok(Json(netray_dns::server_catalogue()))
+}
+
+/// The record types a query may ask for; the blocked and internal ones are left out.
+#[utoipa::path(
+    get,
+    path = "/dns/record-types",
+    tag = "dns",
+    responses(
+        (status = 200, description = "The record types", body = DnsRecordTypes),
+        (status = 429, description = "Rate limited", body = ErrorResponse),
+        (status = 503, description = "The DNS module is off", body = ErrorResponse),
+    )
+)]
+pub(super) async fn dns_record_types(
+    State(state): State<ApiState>,
+) -> Result<Json<DnsRecordTypes>, V1Error> {
+    jobs_of(&state)?;
+    Ok(Json(netray_dns::record_types()))
+}
+
+pub(super) fn dns_read_routes() -> OpenApiRouter<ApiState> {
+    OpenApiRouter::new()
+        .routes(routes!(dns_parse))
+        .routes(routes!(dns_servers))
+        .routes(routes!(dns_record_types))
 }

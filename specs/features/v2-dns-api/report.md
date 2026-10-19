@@ -116,15 +116,70 @@ stub. Live probe in Phase 6.
 
 | id | criterion | status | test file |
 |---|---|---|---|
-| C1 | R10: POST /dns/parse {input, cursor_pos} answers tokens, completions, query, error without running anything; @system only when allowed; behind [api]; malformed body 400 | open | |
-| C2 | R11: GET /dns/servers answers providers with configs and the group aliases public and all, behind [api] | open | |
-| C3 | R12: GET /dns/record-types answers every type except ANY, AXFR, IXFR, OPT, ZERO, NULL, behind [api] | open | |
-| C4 | GIVEN input example.com MX @cl THEN tokens domain, record_type, server_partial with byte ranges, completions include @cloudflare, query.servers empty with a warning naming @cl | open | |
-| C5 | GIVEN input example.com A @google +tcp THEN query domain example.com, types A, servers google, transport tcp, error null | open | |
-| C6 | GIVEN input example.com ANY THEN query null and error names the blocked type | open | |
-| C7 | GIVEN empty input and cursor 0 THEN tokens empty and error the empty-query message | open | |
-| C8 | GIVEN a body that is not JSON THEN 400 | open | |
-| C9 | GIVEN the default DNS config and input example.com @ THEN completions do not offer @system | open | |
-| C10 | GIVEN GET /dns/servers THEN providers include cloudflare, google, quad9, mullvad with udp, tcp, tls, https configs, groups public and all list their providers | open | |
-| C11 | GIVEN GET /dns/record-types THEN A, MX, DNSKEY, TLSA, SVCB present, none of ANY, AXFR, IXFR, OPT, ZERO, NULL | open | |
-| C12 | GIVEN each of the three routes THEN the body validates against its documented schema | open | |
+| C1 | R10: POST /dns/parse {input, cursor_pos} answers tokens, completions, query, error without running anything; @system only when allowed; behind [api]; malformed body 400 | green | crates/web/tests/api_dns_reference.rs |
+| C2 | R11: GET /dns/servers answers providers with configs and the group aliases public and all, behind [api] | green | crates/web/tests/api_dns_reference.rs |
+| C3 | R12: GET /dns/record-types answers every type except ANY, AXFR, IXFR, OPT, ZERO, NULL, behind [api] | green | crates/web/tests/api_dns_reference.rs |
+| C4 | GIVEN input example.com MX @cl THEN tokens domain, record_type, server_partial with byte ranges, completions include @cloudflare, query.servers empty with a warning naming @cl | green | crates/web/tests/api_dns_reference.rs |
+| C5 | GIVEN input example.com A @google +tcp THEN query domain example.com, types A, servers google, transport tcp, error null | green | crates/web/tests/api_dns_reference.rs |
+| C6 | GIVEN input example.com ANY THEN query null and error names the blocked type | green | crates/web/tests/api_dns_reference.rs |
+| C7 | GIVEN empty input and cursor 0 THEN tokens empty and error the empty-query message | green | crates/web/tests/api_dns_reference.rs |
+| C8 | GIVEN a body that is not JSON THEN 400 | green | crates/web/tests/api_dns_reference.rs |
+| C9 | GIVEN the default DNS config and input example.com @ THEN completions do not offer @system | green | crates/web/tests/api_dns_reference.rs |
+| C10 | GIVEN GET /dns/servers THEN providers include cloudflare, google, quad9, mullvad with udp, tcp, tls, https configs, groups public and all list their providers | green | crates/web/tests/api_dns_reference.rs |
+| C11 | GIVEN GET /dns/record-types THEN A, MX, DNSKEY, TLSA, SVCB present, none of ANY, AXFR, IXFR, OPT, ZERO, NULL | green | crates/web/tests/api_dns_reference.rs |
+| C12 | GIVEN each of the three routes THEN the body validates against its documented schema | green | crates/web/tests/api_dns_reference.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 3 | sonnet (+1 test fix by the implementer) | 86264 | 200 |
+
+The coder ended red on `openapi_responses.rs`, which needs a 2xx and a non-2xx case per documented
+operation; the cases for the three new operations were added under `ADLC-Test-Change`. The module's
+`allow_system_resolvers` defaults to true (production sets false): the offline stub now builds its
+jobs with false, the production default is unchanged.
+
+### Review
+
+- AMENDMENT (repaired in phase): the C9 scenario is reworded to name the setting, and the `true`
+  case on the v1 route gets its own test (committed with Phase 4's tests).
+- NIT: `/dns/parse` reports `query` for an input whose first token is `@…` or `+…`, which the GET
+  job routes refuse; the parser does not validate domains, so `query` never meant "will run".
+- DEFERRED (pre-existing): the V1 tokenizer splits on ASCII whitespace, the parser on Unicode
+  whitespace; an input with U+00A0 between tokens reads differently in `tokens` and `query`.
+
+### Behavioural verification
+
+skipped: covered over the router; the live probe of `servers`, `record-types` and `parse` against
+a running binary is Phase 6's.
+
+## Phase 4 — Result cache and replay
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R13: every v1 DNS job route stores its collected result at done under a fresh random 12-lowercase-hex key returned in done.cache_key; 1000 results, one hour; no done, no key; DnsDnssecDone gains an optional cache_key absent on prism's wire | open | |
+| C2 | R14: GET /dns/results/{key} answers key, mode, query, result; malformed key 400 INVALID_INPUT, unknown 404 NOT_FOUND; behind [api] | open | |
+| C3 | GIVEN POST /dns/query as JSON THEN done.cache_key is 12 lowercase hex and the replay answers mode query, query example.com and a result equal to the original body | open | |
+| C4 | GIVEN GET /dns/query?q=example.com MX streamed THEN the done event's cache_key replays with query example.com MX and the summary included | open | |
+| C5 | GIVEN compare, authcompare, trace and dnssec THEN each done carries a key that replays with its mode | open | |
+| C6 | GIVEN two runs THEN their keys differ | open | |
+| C7 | GIVEN /dns/results/XYZ or a 13-character key THEN 400 INVALID_INPUT; an unknown 12-hex key THEN 404 NOT_FOUND | open | |
+| C8 | GIVEN prism's V1 dnssec route streamed THEN its done has no cache_key | open | |
+| C9 | GIVEN a replay THEN it validates against DnsCachedResult's documented schema | open | |
+
+## Phase 5 — DNS health check
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R15: POST /dns/check {domain} and GET /dns/check?q= run the DNS module alone, live, not stored, answering protocol, outcome, reason, checks, blocks, cache_key as JSON whatever the Accept; IP, empty or invalid name 400; flat 16 on [api.dns]; 30 s deadline; no module 503 | open | |
+| C2 | GIVEN the golden DNS module and POST /dns/check example.com THEN 200, protocol dns, outcome measured, the ten dns checks with status and findings, the evidence blocks, a cache_key replaying with mode check | open | |
+| C3 | GIVEN GET /dns/check?q=example.com THEN the same shape | open | |
+| C4 | GIVEN domain 192.0.2.1 or an empty domain THEN 400 INVALID_INPUT | open | |
+| C5 | GIVEN no DNS module THEN 503 UNAVAILABLE | open | |
+| C6 | GIVEN a caller over the [api.dns] budget THEN 429 | open | |
+| C7 | GIVEN Accept text/event-stream THEN the answer is still JSON | open | |

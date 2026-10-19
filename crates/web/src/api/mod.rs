@@ -88,7 +88,9 @@ pub fn openapi() -> utoipa::openapi::OpenApi {
     );
     let (_, email) = email::email_doc_routes().split_for_parts();
     let composed = compose::compose(composed, vec![("Email", email)]);
-    let (_, dns) = dns::dns_doc_routes().split_for_parts();
+    let (_, dns) = dns::dns_doc_routes()
+        .merge(dns::dns_read_routes())
+        .split_for_parts();
     let composed = compose::compose(composed, vec![("Dns", dns)]);
     let mut doc = ApiDoc::openapi().nest(MOUNT, composed);
     doc.info.title = "netray API".into();
@@ -102,7 +104,9 @@ pub fn router(state: ApiState) -> Router {
     if !state.config().enabled {
         return Router::new();
     }
-    let (limited, _) = read_routes().split_for_parts();
+    let (limited, _) = read_routes()
+        .merge(dns::dns_read_routes())
+        .split_for_parts();
     let (unlimited, _) = run_routes().split_for_parts();
     limited
         .route_layer(middleware::from_fn_with_state(state.clone(), limit::per_ip))
