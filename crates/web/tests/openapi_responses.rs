@@ -265,6 +265,20 @@ fn cases() -> Vec<Case> {
         case("/api/v1/dns/servers", "get", "/dns/servers", 200, 0),
         case("/api/v1/dns/servers", "get", "/dns/servers", 429, 1),
         case(
+            "/api/v1/dns/results/{key}",
+            "get",
+            "/dns/results/{dnskey}",
+            200,
+            0,
+        ),
+        case(
+            "/api/v1/dns/results/{key}",
+            "get",
+            "/dns/results/XYZ",
+            400,
+            0,
+        ),
+        case(
             "/api/v1/dns/record-types",
             "get",
             "/dns/record-types",
@@ -605,6 +619,20 @@ async fn responses_match_the_committed_document() {
                 (app(Some(store), false), Some(dir))
             }
         };
+        if uri.contains("{dnskey}") {
+            let job = app
+                .clone()
+                .oneshot(request_accepting("post", "/dns/query", None, Some(DNS_OK)))
+                .await
+                .unwrap();
+            let bytes = job.into_body().collect().await.unwrap().to_bytes();
+            let body: Value = serde_json::from_slice(&bytes).unwrap();
+            let key = body["done"]["cache_key"]
+                .as_str()
+                .expect("a cache key")
+                .to_string();
+            uri = uri.replace("{dnskey}", &key);
+        }
         for _ in 0..c.warmup {
             app.clone().oneshot(request(c.method, &uri)).await.unwrap();
         }

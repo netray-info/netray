@@ -241,7 +241,7 @@ async fn query_event_stream_names_components_and_equals_prism() {
     );
     let v1: Vec<_> = v1.into_iter().filter(|f| f.0 != "summary").collect();
     assert_eq!(
-        normalised(v1, false),
+        normalised(v1, true),
         normalised(prism_frames, true),
         "v1 frames differ from prism's"
     );
