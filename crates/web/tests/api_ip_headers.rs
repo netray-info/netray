@@ -11,8 +11,8 @@ use axum::extract::ConnectInfo;
 use axum::http::{HeaderMap, Request, StatusCode};
 use futures::future::BoxFuture;
 use http_body_util::BodyExt;
-use netray_ip::lookup::{AsnLookupResponse, IpLookup, IpRefusal, RangeResponse};
 use netray_ip::backend::Ifconfig;
+use netray_ip::lookup::{AsnLookupResponse, IpLookup, IpRefusal, RangeResponse};
 use netray_ip::testing::{STUB_GEOIP_EPOCH, StubIpLookup};
 use netray_web::api::{
     ApiConfig, ApiParts, ApiState, DomainRefusal, DomainRuns, RunStart, RunTrigger,
@@ -77,13 +77,25 @@ struct Reply {
 }
 
 async fn send(app: &Router, mut req: Request<Body>) -> Reply {
-    req.extensions_mut()
-        .insert(ConnectInfo(SocketAddr::new("192.0.2.10".parse().unwrap(), 40000)));
+    req.extensions_mut().insert(ConnectInfo(SocketAddr::new(
+        "192.0.2.10".parse().unwrap(),
+        40000,
+    )));
     let resp = app.clone().oneshot(req).await.unwrap();
     let status = resp.status();
     let headers = resp.headers().clone();
-    let body = resp.into_body().collect().await.unwrap().to_bytes().to_vec();
-    Reply { status, headers, body }
+    let body = resp
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec();
+    Reply {
+        status,
+        headers,
+        body,
+    }
 }
 
 async fn get(app: &Router, path: &str, if_none_match: Option<&str>) -> Reply {
@@ -99,7 +111,10 @@ fn h<'a>(r: &'a Reply, name: &str) -> Option<&'a str> {
 }
 
 fn now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 /// The stub epoch as an HTTP date; the literal is valid for 1_700_000_000 only.
@@ -139,7 +154,10 @@ async fn past_the_burst_answers_429_with_remaining_0_and_retry_after() {
 #[tokio::test]
 async fn stub_epoch_gives_geoip_date_and_whole_day_age() {
     // C1, C5
-    assert_eq!(STUB_GEOIP_EPOCH, 1_700_000_000, "STUB_HTTP_DATE is derived from this epoch");
+    assert_eq!(
+        STUB_GEOIP_EPOCH, 1_700_000_000,
+        "STUB_HTTP_DATE is derived from this epoch"
+    );
     let app = app();
     let before = (now() - STUB_GEOIP_EPOCH) / 86400;
     let r = get(&app, "/ip/198.51.100.1", None).await;
@@ -149,7 +167,10 @@ async fn stub_epoch_gives_geoip_date_and_whole_day_age() {
         .expect("age header")
         .parse()
         .expect("whole days");
-    assert!((before..=after).contains(&age), "age {age} not in {before}..={after}");
+    assert!(
+        (before..=after).contains(&age),
+        "age {age} not in {before}..={after}"
+    );
 }
 
 #[tokio::test]
@@ -158,7 +179,11 @@ async fn seam_without_build_epoch_has_no_geoip_header_and_no_last_modified() {
     let app = app_with(Arc::new(NoEpoch(StubIpLookup::new())));
     let r = get(&app, "/ip/198.51.100.1", None).await;
     assert_eq!(r.status, StatusCode::OK);
-    assert_eq!(h(&r, "x-ratelimit-limit"), Some("60"), "rate-limit headers stay");
+    assert_eq!(
+        h(&r, "x-ratelimit-limit"),
+        Some("60"),
+        "rate-limit headers stay"
+    );
     assert!(r.headers.get("x-geoip-database-date").is_none());
     assert!(r.headers.get("x-geoip-database-age-days").is_none());
     assert!(r.headers.get("last-modified").is_none());
@@ -171,7 +196,10 @@ async fn two_gets_carry_the_same_strong_etag_and_last_modified_is_the_geoip_date
     let a = get(&app, "/ip/198.51.100.1", None).await;
     let b = get(&app, "/ip/198.51.100.1", None).await;
     let etag = h(&a, "etag").expect("etag");
-    assert!(etag.starts_with('"') && etag.ends_with('"'), "strong etag, got {etag}");
+    assert!(
+        etag.starts_with('"') && etag.ends_with('"'),
+        "strong etag, got {etag}"
+    );
     assert!(!etag.starts_with("W/"));
     assert_eq!(h(&b, "etag"), Some(etag));
     assert_eq!(h(&a, "last-modified"), Some(STUB_HTTP_DATE));
