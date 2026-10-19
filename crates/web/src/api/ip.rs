@@ -321,7 +321,7 @@ impl Params {
                 "invalid lang `{lang}`: at most {LANG_MAX_LEN} ASCII letters, digits and `-`"
             )));
         }
-        Ok(Self {
+        let params = Self {
             options: LookupOptions {
                 reverse_dns: query.dns.as_deref().is_none_or(dns_on),
                 lang: query.lang.clone(),
@@ -338,13 +338,34 @@ impl Params {
                 None => choose_form(query.format.as_deref(), headers)?,
             },
             label: query.field.clone().unwrap_or_else(|| "document".into()),
-        })
+        };
+        // A scalar field has no TOML form; refused here, before any charge or lookup.
+        if let Some(Form::Structured(OutputFormat::Toml, name)) = &params.form
+            && TOML_LESS_FIELDS.contains(&params.label.as_str())
+        {
+            return Err(V1Error::InvalidInput(format!(
+                "{} has no {name} form",
+                params.label
+            )));
+        }
+        Ok(params)
     }
 
     fn plain_form(&self) -> bool {
         matches!(self.form, None | Some(Form::Plain))
     }
 }
+
+/// The fields whose value is a scalar: TOML serialises only a table.
+const TOML_LESS_FIELDS: [&str; 7] = [
+    "country",
+    "city",
+    "region",
+    "timezone",
+    "latitude",
+    "longitude",
+    "asn",
+];
 
 fn respond(answer: Answer, params: &Params) -> Result<Response, V1Error> {
     let Some(value) = answer.json else {
