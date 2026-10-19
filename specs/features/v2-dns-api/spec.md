@@ -57,8 +57,8 @@ part), 2.29 and 2.30 (per-server split), 2.48, 2.52, 2.53, 2.54, 7.79, 7.84, 7.8
    `DnsServerAnswer`: `server` (the name server as mhost prints it, e.g.
    `udp:8.8.8.8:53,name=Google 1`), `address` (`ip:port`), `name` (the provider label when the
    server has one), `transport` (`udp`, `tcp`, `tls`, `https`), `source` (`recursive` or
-   `authoritative`, authcompare only), `outcome`, `response_code` (for a negative or failed answer
-   that has one), `error` (the reason of an `unmeasured` answer), `response_time_ms` (absent when the
+   `authoritative`, authcompare only), `outcome`, `response_code` (of an `unmeasured` answer that
+   has one; `outcome` already names NXDOMAIN and NODATA), `error` (the reason of an `unmeasured` answer), `response_time_ms` (absent when the
    lookup has no response time) and `records`.
    - `outcome` is `answered` (records), `no_records` (NODATA), `nxdomain` (NXDOMAIN) or
      `unmeasured` (Rule M: any other negative answer, a referral, an error).
@@ -78,7 +78,7 @@ part), 2.29 and 2.30 (per-server split), 2.48, 2.52, 2.53, 2.54, 7.79, 7.84, 7.8
    - Comparisons are sorted by record type name.
 4. **Server summary.** For each distinct server (and source), a `DnsServerSummary`
    `{server, name, transport, source, lookups, measured, unmeasured, median_response_time_ms}`, the
-   median taken over that server's lookups that have a response time (the mean of the two middle
+   median taken over that server's measured lookups (the mean of the two middle
    values for an even count), absent when none has; sorted by source, transport, server.
 5. **Run summary.** `DnsJobSummary` `{record_types, lookups, agree, diverge, single, unmeasured,
    types, servers}`: the counts over requirement 3's comparisons and the lookups behind them.
@@ -292,6 +292,19 @@ GIVEN `specs/sdd/v2.md` WHEN read THEN §7.1 lists the new endpoints and §7.3 a
 - The SDD conflict (§7.1/§7.3 cut the replay, §8 no `+check` job) is resolved by the operator's
   inventory decision "D DNS depth: rebuild"; the SDD is amended with the code, not halted on
   (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Phase 1 amendment: `response_code` is set on unmeasured answers only and the server median is
+  taken over measured lookups only, as the tests pin them; a SERVFAIL's quick answer would
+  otherwise pull a server's median down (implementer under the operator's autonomy mandate,
+  2026-10-19).
+
+- Phase 1 review: a server whose query never became a lookup (an authoritative timeout, a
+  resolver error, a provider skipped by an open circuit breaker) reaches the caller in `errors`,
+  as before, and is absent from `summary`: the summary covers lookups only. An authoritative
+  referral is unmeasured; authoritative failures carry the rcode mnemonic; across sources, types
+  the two record printers write differently (DNSSEC types) compare by record count. The `summary`
+  event is a variant of each batch job's event schema (implementer under the operator's autonomy
+  mandate, 2026-10-19).
 
 ## Open decisions
 

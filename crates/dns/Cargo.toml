@@ -30,6 +30,9 @@ rand = "0.10"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
+# Dates (SOA serial age)
+chrono = { workspace = true, features = ["clock"] }
+
 # Configuration
 config = { workspace = true }
 

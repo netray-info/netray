@@ -25,6 +25,10 @@ pub use api::trace::TraceRequest;
 pub use config::ModuleConfig;
 pub use jobs::blocks;
 pub use jobs::{
+    Agreement, AnswerOutcome, DnsJobSummary, DnsRecordDetail, DnsServerAnswer, DnsServerSummary,
+    DnsTypeComparison,
+};
+pub use jobs::{
     DnsAuthCompareDone, DnsAuthCompareEvent, DnsAuthCompareResult, DnsBackend, DnsBatch,
     DnsChainEvent, DnsCompareDone, DnsCompareEvent, DnsCompareResult, DnsDnssecDone,
     DnsDnssecEvent, DnsDnssecResult, DnsEnrichmentEvent, DnsErrorEvent, DnsHopEvent, DnsJob,

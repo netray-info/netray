@@ -16,6 +16,7 @@ use crate::dns_trace::TraceHop;
 use crate::record_format;
 
 use super::schema::DnsLookups;
+use super::summary::{DnsJobSummary, summarise};
 
 /// A non-fatal error of a job, e.g. one resolver failing.
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -157,6 +158,9 @@ pub enum AuthResult {
         /// the V1 wire.
         #[serde(skip)]
         failure: Option<String>,
+        /// The response code mnemonic of a failed answer (`REFUSED`); not on the V1 wire.
+        #[serde(skip)]
+        failure_code: Option<String>,
     },
     NxDomain {
         response_time: WireDuration,
@@ -245,7 +249,7 @@ impl Serialize for DnsBatch {
 // ---------------------------------------------------------------------------
 
 /// An event of a DNS job.
-pub trait DnsJobEvent: Serialize + Send + 'static {
+pub trait DnsJobEvent: Serialize + Clone + Send + 'static {
     /// What the job's events collect into.
     type Collected: Serialize + Default + Send;
 
@@ -261,6 +265,11 @@ pub trait DnsJobEvent: Serialize + Send + 'static {
     fn cache_value(&self) -> serde_json::Value;
 
     fn collect_into(self, into: &mut Self::Collected);
+
+    /// The `summary` event that precedes `done`, when the job has one.
+    fn summary_event(_collected: &Self::Collected) -> Option<Self> {
+        None
+    }
 
     /// prism's SSE frame.
     fn sse_event(&self) -> Event {
@@ -285,6 +294,8 @@ macro_rules! batch_job {
             Batch(DnsBatch),
             Error(DnsErrorEvent),
             Enrichment(DnsEnrichmentEvent),
+            /// The job's summary, emitted by API v1 before `done`; the job never sends it.
+            Summary(DnsJobSummary),
             Done($done),
         }
 
@@ -298,6 +309,9 @@ macro_rules! batch_job {
             /// `null` when the stream ended before the job finished.
             #[schema(required = true)]
             pub done: Option<$done>,
+            /// `null` until the job is done.
+            #[schema(required = true)]
+            pub summary: Option<DnsJobSummary>,
         }
 
         impl From<DnsErrorEvent> for $event {
@@ -314,6 +328,7 @@ macro_rules! batch_job {
                     Self::Batch(_) => "batch",
                     Self::Error(_) => "error",
                     Self::Enrichment(_) => "enrichment",
+                    Self::Summary(_) => "summary",
                     Self::Done(_) => "done",
                 }
             }
@@ -333,6 +348,7 @@ macro_rules! batch_job {
                     Self::Batch(b) => b.cache_value(),
                     Self::Error(e) => value(e),
                     Self::Enrichment(e) => value(e),
+                    Self::Summary(s) => value(s),
                     Self::Done(d) => value(d),
                 }
             }
@@ -342,8 +358,16 @@ macro_rules! batch_job {
                     Self::Batch(b) => into.batches.push(b),
                     Self::Error(e) => into.errors.push(e),
                     Self::Enrichment(e) => into.enrichment = Some(e),
-                    Self::Done(d) => into.done = Some(d),
+                    Self::Summary(s) => into.summary = Some(s),
+                    Self::Done(d) => {
+                        into.done = Some(d);
+                        into.summary = Some(summarise(&into.batches));
+                    }
                 }
+            }
+
+            fn summary_event(collected: &$result) -> Option<Self> {
+                collected.summary.clone().map(Self::Summary)
             }
         }
     };

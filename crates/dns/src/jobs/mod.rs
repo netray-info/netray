@@ -4,6 +4,7 @@
 pub mod blocks;
 pub mod events;
 pub mod schema;
+pub mod summary;
 
 use std::collections::BTreeMap;
 use std::net::IpAddr;
@@ -47,6 +48,10 @@ pub use events::{
     DnsCompareDone, DnsCompareEvent, DnsCompareResult, DnsDnssecDone, DnsDnssecEvent,
     DnsDnssecResult, DnsEnrichmentEvent, DnsErrorEvent, DnsHopEvent, DnsJobEvent, DnsQueryDone,
     DnsQueryEvent, DnsQueryResult, DnsTraceDone, DnsTraceEvent, DnsTraceResult,
+};
+pub use summary::{
+    Agreement, AnswerOutcome, DnsJobSummary, DnsRecordDetail, DnsServerAnswer, DnsServerSummary,
+    DnsTypeComparison,
 };
 
 // Cost charged against the per-IP and global limiters per trace or dnssec job: trace queries
@@ -260,6 +265,24 @@ async fn enrichment_event(
             .map(|(ip, info)| (ip.to_string(), info))
             .collect(),
     })
+}
+
+/// The mnemonic of a response code (`SERVFAIL`, `REFUSED`), as mhost prints the recursive ones.
+fn rcode_mnemonic(rcode: hickory_proto::op::ResponseCode) -> String {
+    match u16::from(rcode) {
+        0 => "NOERROR".to_owned(),
+        1 => "FORMERR".to_owned(),
+        2 => "SERVFAIL".to_owned(),
+        3 => "NXDOMAIN".to_owned(),
+        4 => "NOTIMP".to_owned(),
+        5 => "REFUSED".to_owned(),
+        6 => "YXDOMAIN".to_owned(),
+        7 => "YXRRSET".to_owned(),
+        8 => "NXRRSET".to_owned(),
+        9 => "NOTAUTH".to_owned(),
+        10 => "NOTZONE".to_owned(),
+        n => format!("RCODE{n}"),
+    }
 }
 
 fn transport_label(t: Transport) -> &'static str {
@@ -1151,10 +1174,25 @@ impl DnsJobs {
                                                 AuthResult::NxDomain { response_time }
                                             } else {
                                                 let rcode = raw_resp.response_code();
+                                                let answered =
+                                                    rcode == hickory_proto::op::ResponseCode::NoError;
+                                                // A referral (NOERROR, no answer, not
+                                                // authoritative, NS in authority) is no answer
+                                                // (Rule M).
+                                                let referral = answered
+                                                    && raw_resp.answers().is_empty()
+                                                    && !raw_resp.is_authoritative()
+                                                    && !raw_resp.referral_ns_names().is_empty();
                                                 AuthResult::Response {
-                                                    failure: (rcode
-                                                        != hickory_proto::op::ResponseCode::NoError)
-                                                        .then(|| rcode.to_string()),
+                                                    failure: if !answered {
+                                                        Some(rcode.to_string())
+                                                    } else if referral {
+                                                        Some("referral, no answer".to_owned())
+                                                    } else {
+                                                        None
+                                                    },
+                                                    failure_code: (!answered)
+                                                        .then(|| rcode_mnemonic(rcode)),
                                                     records: records
                                                         .into_iter()
                                                         .map(|(r, presentation)| AuthRecord {

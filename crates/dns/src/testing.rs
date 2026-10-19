@@ -291,6 +291,11 @@ const PARTIAL_NAME: &str = "partial.example.net";
 const TYPES_NAME: &str = "types.example.com";
 /// This name's NS are the zone's; its authoritative servers answer every query REFUSED.
 const LAME_NAME: &str = "lame.example.com";
+/// This name's A lookup answers 192.0.2.10 from the server at 8.8.8.8 and 192.0.2.20 from any
+/// other.
+const DIVERGE_NAME: &str = "diverge.example.com";
+/// This name's SOA lookup answers a zone apex SOA with serial 2026101501.
+const SOA_NAME: &str = "soa.example.com";
 
 fn named(name: &str, wanted: &str) -> bool {
     name.trim_end_matches('.').eq_ignore_ascii_case(wanted)
@@ -381,6 +386,19 @@ impl ResolverLookup for ZoneLookup {
                     types_data(&record_type)
                 } else if named(&name, LAME_NAME) && record_type == "NS" {
                     zone_data("NS")
+                } else if named(&name, DIVERGE_NAME) && record_type == "A" {
+                    let address = if name_server.contains("8.8.8.8") {
+                        "192.0.2.10"
+                    } else {
+                        "192.0.2.20"
+                    };
+                    vec![serde_json::json!({ "A": address })]
+                } else if named(&name, SOA_NAME) && record_type == "SOA" {
+                    vec![serde_json::json!({ "SOA": {
+                        "mname": "ns1.example.com.", "rname": "hostmaster.example.com.",
+                        "serial": 2_026_101_501u32, "refresh": 7200, "retry": 3600,
+                        "expire": 1_209_600, "minimum": 300
+                    }})]
                 } else {
                     Vec::new()
                 };
@@ -503,7 +521,9 @@ impl RawSend for ZoneSend {
 /// A backend serving a fixed `example.com.` zone with no network: A 192.0.2.10, MX, TXT, NS
 /// (`ns1`, `ns2`) and CAA; every lookup of `dnssec-failed.org` is SERVFAIL; `partial.example.net`
 /// answers A (192.0.2.10) and SERVFAILs AAAA; `types.example.com` answers SRV, TLSA, SSHFP, NAPTR
-/// and HINFO; `lame.example.com` has the zone's NS, which answer REFUSED; every other name and
+/// and HINFO; `lame.example.com` has the zone's NS, which answer REFUSED; `diverge.example.com`
+/// answers A 192.0.2.10 from the server at 8.8.8.8 and 192.0.2.20 from any other;
+/// `soa.example.com` answers an SOA with serial 2026101501; every other name and
 /// type is NODATA. The raw outbound answers every
 /// server authoritatively from the same zone, unsigned.
 pub fn stub_backend() -> DnsBackend {

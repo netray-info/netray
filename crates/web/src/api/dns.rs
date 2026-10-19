@@ -41,7 +41,20 @@ fn refused(error: netray_dns::error::ApiError) -> V1Error {
 /// Streams the job's events under their names, or collects them into one object.
 async fn respond<E: DnsJobEvent>(job: DnsJob<E>, headers: &HeaderMap) -> Response {
     if wants_event_stream(headers) {
-        return Sse::new(job.map(|event| Ok::<_, Infallible>(event.sse_event()))).into_response();
+        let frames = job
+            .scan(E::Collected::default(), |collected, event| {
+                event.clone().collect_into(collected);
+                let mut frames = Vec::with_capacity(2);
+                if event.is_done() {
+                    frames.extend(E::summary_event(collected).map(|e| e.sse_event()));
+                }
+                frames.push(event.sse_event());
+                std::future::ready(Some(futures::stream::iter(
+                    frames.into_iter().map(Ok::<_, Infallible>),
+                )))
+            })
+            .flatten();
+        return Sse::new(frames).into_response();
     }
     Json(job.collect().await).into_response()
 }

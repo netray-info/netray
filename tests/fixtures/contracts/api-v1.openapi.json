@@ -37,6 +37,26 @@
         ],
         "type": "object"
       },
+      "Agreement": {
+        "description": "Whether the servers asked for one record type answered alike.",
+        "enum": [
+          "agree",
+          "diverge",
+          "single",
+          "unmeasured"
+        ],
+        "type": "string"
+      },
+      "AnswerOutcome": {
+        "description": "What one server answered for one record type.",
+        "enum": [
+          "answered",
+          "no_records",
+          "nxdomain",
+          "unmeasured"
+        ],
+        "type": "string"
+      },
       "ApiLimits": {
         "properties": {
           "per_ip_burst": {
@@ -1179,6 +1199,10 @@
             "$ref": "#/components/schemas/DnsEnrichmentEvent"
           },
           {
+            "$ref": "#/components/schemas/DnsJobSummary",
+            "description": "The job's summary, emitted by API v1 before `done`; the job never sends it."
+          },
+          {
             "$ref": "#/components/schemas/DnsAuthCompareDone"
           }
         ]
@@ -1218,13 +1242,25 @@
               "$ref": "#/components/schemas/DnsErrorEvent"
             },
             "type": "array"
+          },
+          "summary": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsJobSummary",
+                "description": "`null` until the job is done."
+              }
+            ]
           }
         },
         "required": [
           "batches",
           "errors",
           "enrichment",
-          "done"
+          "done",
+          "summary"
         ],
         "type": "object"
       },
@@ -1371,6 +1407,10 @@
             "$ref": "#/components/schemas/DnsEnrichmentEvent"
           },
           {
+            "$ref": "#/components/schemas/DnsJobSummary",
+            "description": "The job's summary, emitted by API v1 before `done`; the job never sends it."
+          },
+          {
             "$ref": "#/components/schemas/DnsCompareDone"
           }
         ]
@@ -1410,13 +1450,25 @@
               "$ref": "#/components/schemas/DnsErrorEvent"
             },
             "type": "array"
+          },
+          "summary": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsJobSummary",
+                "description": "`null` until the job is done."
+              }
+            ]
           }
         },
         "required": [
           "batches",
           "errors",
           "enrichment",
-          "done"
+          "done",
+          "summary"
         ],
         "type": "object"
       },
@@ -1652,6 +1704,66 @@
             ]
           }
         },
+        "type": "object"
+      },
+      "DnsJobSummary": {
+        "description": "A batch job condensed: per record type who agreed, per server how it fared.",
+        "properties": {
+          "agree": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "diverge": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lookups": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "record_types": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "servers": {
+            "description": "Sorted by source, transport, server.",
+            "items": {
+              "$ref": "#/components/schemas/DnsServerSummary"
+            },
+            "type": "array"
+          },
+          "single": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "types": {
+            "description": "Sorted by record type.",
+            "items": {
+              "$ref": "#/components/schemas/DnsTypeComparison"
+            },
+            "type": "array"
+          },
+          "unmeasured": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "record_types",
+          "lookups",
+          "agree",
+          "diverge",
+          "single",
+          "unmeasured",
+          "types",
+          "servers"
+        ],
         "type": "object"
       },
       "DnsLookup": {
@@ -1972,6 +2084,10 @@
             "$ref": "#/components/schemas/DnsEnrichmentEvent"
           },
           {
+            "$ref": "#/components/schemas/DnsJobSummary",
+            "description": "The job's summary, emitted by API v1 before `done`; the job never sends it."
+          },
+          {
             "$ref": "#/components/schemas/DnsQueryDone"
           }
         ]
@@ -2011,13 +2127,25 @@
               "$ref": "#/components/schemas/DnsErrorEvent"
             },
             "type": "array"
+          },
+          "summary": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DnsJobSummary",
+                "description": "`null` until the job is done."
+              }
+            ]
           }
         },
         "required": [
           "batches",
           "errors",
           "enrichment",
-          "done"
+          "done",
+          "summary"
         ],
         "type": "object"
       },
@@ -2090,6 +2218,41 @@
         ],
         "type": "object"
       },
+      "DnsRecordDetail": {
+        "description": "One record of a server's answer.",
+        "properties": {
+          "data": {
+            "description": "The record data in zone-file form.",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "soa_serial_age_days": {
+            "description": "Days since the date an SOA serial in `YYYYMMDDnn` form names.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ttl": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "ttl",
+          "data"
+        ],
+        "type": "object"
+      },
       "DnsResponse": {
         "properties": {
           "records": {
@@ -2123,6 +2286,129 @@
             "type": "integer"
           }
         ]
+      },
+      "DnsServerAnswer": {
+        "description": "One server's answer to one record type.",
+        "properties": {
+          "address": {
+            "description": "The server's socket address.",
+            "type": "string"
+          },
+          "error": {
+            "description": "Why an unmeasured answer is no answer.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/AnswerOutcome"
+          },
+          "records": {
+            "description": "Sorted by type, then data.",
+            "items": {
+              "$ref": "#/components/schemas/DnsRecordDetail"
+            },
+            "type": "array"
+          },
+          "response_code": {
+            "description": "The response code of an answer that is no answer, e.g. `SERVFAIL`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "response_time_ms": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "server": {
+            "description": "The server as mhost names it, e.g. `udp:8.8.8.8:53,name=Google 1`.",
+            "type": "string"
+          },
+          "source": {
+            "description": "`recursive` or `authoritative` (authcompare only).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "transport": {
+            "description": "`udp`, `tcp`, `tls` or `https`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "address",
+          "transport",
+          "outcome",
+          "records"
+        ],
+        "type": "object"
+      },
+      "DnsServerSummary": {
+        "description": "One server's lookups over the whole job.",
+        "properties": {
+          "lookups": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "measured": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "median_response_time_ms": {
+            "description": "Over the measured lookups; absent when there is none.",
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "server": {
+            "type": "string"
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "transport": {
+            "type": "string"
+          },
+          "unmeasured": {
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "server",
+          "transport",
+          "lookups",
+          "measured",
+          "unmeasured"
+        ],
+        "type": "object"
       },
       "DnsTraceDone": {
         "description": "Summary of a trace job.",
@@ -2212,6 +2498,30 @@
           "errors",
           "enrichment",
           "done"
+        ],
+        "type": "object"
+      },
+      "DnsTypeComparison": {
+        "description": "The answers of every server to one record type.",
+        "properties": {
+          "agreement": {
+            "$ref": "#/components/schemas/Agreement"
+          },
+          "answers": {
+            "description": "Sorted by source, transport, server.",
+            "items": {
+              "$ref": "#/components/schemas/DnsServerAnswer"
+            },
+            "type": "array"
+          },
+          "record_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_type",
+          "agreement",
+          "answers"
         ],
         "type": "object"
       },
