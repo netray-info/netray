@@ -14,6 +14,7 @@ declare -F design_stack_up >/dev/null || fail "stack.sh defines no design_stack_
 
 fixtures=tests/acceptance/fixtures/history
 tmp=$(mktemp -d) || fail "mktemp"
+trap 'rm -rf "$tmp"; _netray_cleanup' EXIT
 design_stack_up "$tmp" "$fixtures" || fail "design_stack_up failed"
 [ -n "${LOCAL_LENS_URL:-}" ] || fail "design_stack_up exported no LOCAL_LENS_URL"
 
