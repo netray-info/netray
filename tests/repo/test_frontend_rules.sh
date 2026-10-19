@@ -50,7 +50,7 @@ while IFS= read -r p; do
   [ -e "$p" ] || fail "$f cites a missing path: $p"
 done < <(grep -oE '`(tests/repo/[A-Za-z0-9_./-]+\.sh|crates/[A-Za-z0-9_-]+/tests/[A-Za-z0-9_./-]+\.rs|crates/web/islands/test/[A-Za-z0-9_./-]+\.ts)`' "$f" | tr -d '`' | sort -u)
 
-for need in 'tests/repo/test_no_codenames.sh' 'crates/web/tests/gate.rs' 'crates/web/islands/test/budget.test.ts'; do
+for need in 'tests/repo/test_no_codenames.sh' 'crates/web/tests/it/gate.rs' 'crates/web/islands/test/budget.test.ts'; do
   grep -qF -- "$need" "$f" || fail "$f does not cite $need"
 done
 
