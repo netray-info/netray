@@ -59,7 +59,8 @@ impl From<AppError> for TlsRefusal {
             | AppError::InvalidPort(_)
             | AppError::ParseError(_)
             | AppError::AmbiguousInput(_)
-            | AppError::TooManyPorts { .. } => Self::InvalidInput(text),
+            | AppError::TooManyPorts { .. }
+            | AppError::CostExceedsLimit { .. } => Self::InvalidInput(text),
             AppError::BlockedTarget(_) => Self::Blocked(text),
             AppError::RateLimited {
                 retry_after_secs, ..
@@ -189,15 +190,10 @@ impl TlsInspector {
                 routes::cap_to_budget(&allowed_ips, parsed.ports.len(), budget, &mut warnings);
 
             if selected.is_empty() {
-                // Even 1 IP doesn't fit — hard reject
-                tracing::warn!(
-                    client_ip = %client_ip,
-                    scope = "per_ip",
-                    "rate limited"
-                );
-                return Err(AppError::RateLimited {
-                    retry_after_secs: 60,
-                    scope: "per_ip",
+                // Not one address fits a burst: no wait admits the request.
+                return Err(AppError::CostExceedsLimit {
+                    cost: parsed.ports.len() as u32,
+                    limit: budget,
                 });
             }
 

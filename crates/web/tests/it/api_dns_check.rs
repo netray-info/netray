@@ -220,11 +220,21 @@ async fn no_dns_module_is_503_unavailable() {
     assert_eq!(json_of(&r)["error"]["code"], "UNAVAILABLE");
 }
 
-/// C1, C6: a flat cost of 16 over a burst of 10 is refused with 429 and Retry-After.
+/// C1, C6: a flat cost of 16 against a burst of 18 already spent by one check is refused with
+/// 429 and Retry-After. (A cost above the burst itself is 400 since v2-input-edges.)
 #[tokio::test]
 async fn a_caller_over_the_dns_budget_is_429() {
-    let config: ApiConfig = toml::from_str("[dns]\nper_ip_burst = 10").expect("[api.dns] parses");
+    let config: ApiConfig = toml::from_str("[dns]\nper_ip_burst = 18").expect("[api.dns] parses");
     let app = app_with(config, true);
+    let first = send(
+        &app,
+        "POST",
+        "/dns/check",
+        None,
+        Some(json!({"domain": "example.com"})),
+    )
+    .await;
+    assert_eq!(first.status, StatusCode::OK, "{}", first.body);
     let r = send(
         &app,
         "POST",

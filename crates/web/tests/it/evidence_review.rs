@@ -127,10 +127,11 @@ async fn domain_segment_follows_the_lens_validation_rule() {
 #[tokio::test]
 async fn no_entry_page_link_is_percent_encoded() {
     let (store, _dir) = open().await;
-    let (status, body) = get(&app(store, None), "/%5Cevil.example.com/dns").await;
+    // `\` no longer passes the domain rule (UTS #46's URL deny list, v2-input-edges); `"` does.
+    let (status, body) = get(&app(store, None), "/%22evil.example.com/dns").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
-    assert!(!body.contains("href=\"/\\"), "{body}");
-    assert!(body.contains("href=\"/%5Cevil.example.com\""), "{body}");
+    assert!(!body.contains("href=\"/\"evil"), "{body}");
+    assert!(body.contains("href=\"/%22evil.example.com\""), "{body}");
 }
 
 #[tokio::test]

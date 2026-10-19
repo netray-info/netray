@@ -270,14 +270,15 @@ impl InspectJobs {
         };
         let limiters = self.state.tls_limiters();
         limiters.prune_if_due();
-        limiters
-            .check_cost(client, &target, parsed.ports.len().max(1) as u32)
-            .map_err(|e| match e {
-                netray_tls::error::AppError::RateLimited {
-                    retry_after_secs, ..
-                } => Duration::from_secs(retry_after_secs),
-                _ => Duration::ZERO,
-            })
+        match limiters.check_cost(client, &target, parsed.ports.len().max(1) as u32) {
+            // Charged nothing and no wait admits it: the job start answers it as the notice.
+            Err(netray_tls::error::AppError::CostExceedsLimit { .. }) => Ok(()),
+            Err(netray_tls::error::AppError::RateLimited {
+                retry_after_secs, ..
+            }) => Err(Duration::from_secs(retry_after_secs)),
+            Err(_) => Err(Duration::ZERO),
+            Ok(()) => Ok(()),
+        }
     }
 
     fn admit_http(&self, client: IpAddr, input: &str) -> Result<(), Duration> {
@@ -332,6 +333,10 @@ impl InspectJobs {
         if starttls_port(&parsed.ports) {
             return Err(NO_STARTTLS.into());
         }
+        self.state
+            .tls_limiters()
+            .cost_within_bursts(parsed.ports.len().max(1) as u32)
+            .map_err(|e| e.to_string())?;
         let burst = self
             .state
             .config()

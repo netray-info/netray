@@ -31,6 +31,10 @@ pub enum AppError {
     #[error("blocked target: {0}")]
     BlockedTarget(String),
 
+    /// A cost above a limiter's burst: no wait admits it (v2-input-edges).
+    #[error("request cost {cost} exceeds the limit of {limit} per request")]
+    CostExceedsLimit { cost: u32, limit: u32 },
+
     #[error("rate limited ({scope})")]
     RateLimited {
         retry_after_secs: u64,
@@ -66,7 +70,9 @@ impl ApiError for AppError {
 
             Self::BlockedTarget(_) => StatusCode::FORBIDDEN,
 
-            Self::TooManyPorts { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::TooManyPorts { .. } | Self::CostExceedsLimit { .. } => {
+                StatusCode::UNPROCESSABLE_ENTITY
+            }
 
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
 
@@ -86,6 +92,7 @@ impl ApiError for AppError {
             Self::ParseError(_) => "PARSE_ERROR",
             Self::AmbiguousInput(_) => "AMBIGUOUS_INPUT",
             Self::TooManyPorts { .. } => "TOO_MANY_PORTS",
+            Self::CostExceedsLimit { .. } => "COST_EXCEEDS_LIMIT",
             Self::BlockedTarget(_) => "BLOCKED_TARGET",
             Self::RateLimited { .. } => "RATE_LIMITED",
             Self::DnsResolutionFailed(_) => "DNS_RESOLUTION_FAILED",
