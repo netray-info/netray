@@ -17,3 +17,15 @@ G2 — migration `0002_entries_duration.sql`; `Entry.duration_ms`, `record_timed
 G3 — `entry.html` keeps title/meta, drops the `styles` and `header` overrides and carries the frame's scripts so the header's Theme button works (`EntryPage` gets a `Frame`); `render.rs` keeps `stylesheet()` for gone and privacy. `entries_frame.rs`, `entries_page.rs` adjusted with `ADLC-Test-Change`; frontend-rules §1 updated in the prose commit.
 
 G4 — `just design-check`; rows into report.md; fixes go to G1's stylesheets.
+
+## Phase 2 — Spectrum figure
+
+### Groups
+
+G1: C1–C13 (one group: every criterion touches the spectrum layout, its component or stylesheet) · G2: C14 (design-check run)
+
+### Plan
+
+G1 — `crates/web/src/spectrum.rs` `run_heights`: height = 0.35 + 0.65 × w / w_max over measured lines (w the effective weight it computes today), muted lines unchanged; the view (`SpectrumView` in `crates/web/src/components.rs`) gains the tick list (N + 1, major at the ends and region bounds) and per-region left/width percentages and an optional section grade; `figure_parts` in `crates/web/src/pages/result/mod.rs` passes section grades from `score_run`'s section percentages through the profile thresholds (expose a lookup in `netray_engine::scoring`). `templates/components/spectrum.html`: ticks in `.spectrum__axis`, region label spans with `left`/`width`, `<span class="spectrum__region-grade">`, label band 56 px for up to three rows, leaders 8/22/36 px by label index. `static/spectrum.css`: plate radius, axis 32 px, ticks 4/10 px, region labels caption mono uppercase .14em centred, line labels caption mono 600 transparent. `partials/result_spectrum.html`: the legend with `.legend__mark` entries (pass, warn, fail, "fixed since run k−1" when a predecessor exists) and `.legend__note`; legend rules in `pages.css`. Catalogue short of `tls.expiry_window` "Expiry". SDD §5.4 amended (height rule). OG plate goldens regenerated if the heights move them.
+
+G2 — `just design-check` with the phase 2 manifest elements; rows into report.md.

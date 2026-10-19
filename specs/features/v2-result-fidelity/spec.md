@@ -166,8 +166,8 @@ value" means the value the gate measures on the named boards; the inventory row 
     `score_run` with the profile's thresholds; a section without a score shows its name only.
     (9.19, 1.5; boards 13–16, 25–28)
 17. **Line labels and label band.** Labels are mono 11 px weight 600 on a transparent background
-    (no plate behind the text); the label band is 56 px for up to three rows with leaders in three
-    staggered lengths, growing only when a fourth row is needed (§5.5). (9.16, 9.17; boards 13–16)
+    (no plate behind the text); the label band is 56 px for up to three rows, each row's leader one of three lengths
+    (8, 22, 36 px), growing only when a fourth row is needed (§5.5). (9.16, 9.17; boards 13–16)
 18. **Legend and key note.** The legend shows each status with its mark: pass, warn, fail as 2, 3
     and 4 px lines in their colours, "fixed since run <k−1>" as the hollow fix line with its ring,
     mono 12 px; the "muted" entry goes. Right of the legend, mono 12 px muted: "<N> checks · line
@@ -190,7 +190,8 @@ value" means the value the gate measures on the named boards; the inventory row 
     boards 25/26)
 22. **Replay gutter.** Right of the plate, a column with "Run <k>", the date in bold and "grade
     <letter>", and a 3 px marker beside the trace row being replayed; the run title reads "Run <k> ·
-    <date> · replaying history" while replaying. (9.45; boards 25/26)
+    <date> · replaying history" while replaying. While a run is replayed, the region grades and the
+    legend's fixed entry follow the replayed run (Phase 2 review). (9.45; boards 25/26)
 23. **Hover dimming.** While a run is hovered, every other trace row is at 30 % opacity and the
     hovered row is enlarged; the island switches data attributes only and the stylesheet does the
     rest. (9.47; boards 25/26)
@@ -512,6 +513,13 @@ GIVEN the side-by-side images WHEN a reader compares them THEN every finding is 
 - `/r/<id>` loads the frame's scripts, so the header's Theme button works there (implementer under the operator's autonomy mandate, 2026-10-19).
 
 - Review of Phase 1: the run number counts stored entries, so the retention sweep renumbers them; the history migration is forward-only (SDD §4.1); the hard-fail sentence follows the score's guard (hidden when `score_run`'s grade differs from the shown grade) and is built for unstored and unrecorded runs too; a history re-read failure after a record drops the run number and the first-run marker instead of claiming run 1 (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Leader lengths follow the label's row (8, 22, 36 px for rows 1–3), and rows stay the lowest free row of SDD §5.5 (operator decision S20), rather than the board's stagger by label index, which would move OG plates and break S20's property tests (implementer under the operator's autonomy mandate, 2026-10-19).
+- A label's `data-code` stays the check id (the key of the sentences and targets); its text is the short (implementer under the operator's autonomy mandate, 2026-10-19).
+- The design fixtures `shop.example.com` (three entries) and `new.example.com` now carry the boards' story (CAA, ECH, CSP, DMARC warn; HSTS fail; expiry, DKIM, MTA-STS fixed since the previous entry), each stored grade equal to `score_run`'s (A): the score guard hid the score on the old, inconsistent fixtures and their 14 labels outgrew the 56 px band (implementer under the operator's autonomy mandate, 2026-10-19).
+- A token `radius.round` (50 %) draws the legend's fix ring, the board's circle (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Review of Phase 2: region labels centre and overflow symmetrically, the last one end-aligned, so none leaves the plate; region grades follow the score guard; the key note counts the lines drawn; label widths are measured at the drawn 11 px (SDD §5.5). The phone half of requirement 16 (9 px, "MAIL") is built in Phase 6 with requirement 38. Region grades and the legend name the latest run; while replaying, Phase 3's gutter (requirement 22) names the replayed run's grade, and the region grades and the fixed entry follow the shown run (built with Phase 3). The first visit's legend has no fixed entry, as board FFirst. The design fixtures' evidence blocks are made consistent with their statuses in Phase 5 (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ### Proposals for the operator
 

@@ -246,6 +246,14 @@ impl SpectrumLabel {
     fn width_px(&self) -> String {
         format!("{:.2}", self.width)
     }
+
+    /// The leader's height: row 0 is 8, each row adds 14.
+    fn rise(&self) -> String {
+        use crate::tokens::values::{SPECTRUM_LABEL_LEADER, SPECTRUM_LABEL_ROW};
+        let rise = crate::spectrum::px(SPECTRUM_LABEL_LEADER)
+            + self.row as f64 * crate::spectrum::px(SPECTRUM_LABEL_ROW);
+        format!("{rise:.0}px")
+    }
 }
 
 /// One run's placed labels.
@@ -262,13 +270,37 @@ pub struct SpectrumRegion {
     pub label: String,
     pub x: f64,
     pub width: f64,
+    /// The section's letter grade, `None` for a section without a score.
+    pub grade: Option<String>,
 }
 
 impl SpectrumRegion {
     fn x_pct(&self) -> String {
         format!("{:.4}", self.x)
     }
+
+    fn width_pct(&self) -> String {
+        format!("{:.4}", self.width)
+    }
 }
+
+/// A tick on the spectrum axis at `x` percent of the plate; major at the ends and region bounds.
+#[derive(Debug, Clone)]
+pub struct SpectrumTick {
+    pub x: f64,
+    pub major: bool,
+    pub last: bool,
+}
+
+impl SpectrumTick {
+    fn x_pct(&self) -> String {
+        format!("{:.4}", self.x)
+    }
+}
+
+/// The label band's height in px while at most three rows are needed.
+const LABEL_BAND_PX: f64 = 56.0;
+const LABEL_BAND_ROWS: usize = 3;
 
 /// The spectrum plate; `rows` is the label band's row count, `line_count` sizes the scroll box.
 #[derive(Debug, Clone)]
@@ -293,6 +325,40 @@ pub(crate) fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
 }
 
 impl SpectrumView {
+    /// The axis ticks: one per line boundary, major at the plate's ends and the region bounds.
+    fn ticks(&self) -> Vec<SpectrumTick> {
+        let count = self.line_count;
+        let step = 100.0 / count.max(1) as f64;
+        (0..=count)
+            .map(|i| {
+                let x = i as f64 * step;
+                SpectrumTick {
+                    x,
+                    major: i == 0
+                        || i == count
+                        || self.regions.iter().any(|r| (r.x - x).abs() < 1e-6),
+                    last: i == count,
+                }
+            })
+            .collect()
+    }
+
+    /// The label band's height in px: 56 up to three rows, one row more each beyond.
+    fn band_height(&self) -> String {
+        let extra = self.rows.saturating_sub(LABEL_BAND_ROWS) as f64;
+        let row = crate::spectrum::px(crate::tokens::values::SPECTRUM_LABEL_ROW);
+        format!("{:.0}px", LABEL_BAND_PX + extra * row)
+    }
+
+    /// The view with each region labelled by its section's letter grade; `grades` maps a
+    /// protocol name to it, a protocol without an entry keeps its name only.
+    pub fn with_grades(mut self, grades: &std::collections::BTreeMap<String, String>) -> Self {
+        for region in &mut self.regions {
+            region.grade = grades.get(&region.label).cloned();
+        }
+        self
+    }
+
     /// One line's share of the plate width, the width of its hit target.
     fn pitch_pct(&self) -> String {
         format!("{:.4}", 100.0 / self.line_count.max(1) as f64)
@@ -362,6 +428,7 @@ impl SpectrumView {
                 label: layout.lines[g.first].protocol.as_str().to_string(),
                 x: g.start / plate * 100.0,
                 width: g.width / plate * 100.0,
+                grade: None,
             })
             .collect();
         SpectrumView {

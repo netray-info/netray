@@ -140,11 +140,13 @@ fn fixed_view() -> SpectrumView {
                 label: "DNS".into(),
                 x: 0.0,
                 width: 50.0,
+                grade: None,
             },
             SpectrumRegion {
                 label: "TLS".into(),
                 x: 50.0,
                 width: 50.0,
+                grade: None,
             },
         ],
     }
@@ -350,6 +352,7 @@ fn spectrum_pass_and_unmeasured_lines_carry_no_short_name_above_the_plate() {
             label: "DNS".into(),
             x: 0.0,
             width: 100.0,
+            grade: None,
         }],
     })
     .unwrap();

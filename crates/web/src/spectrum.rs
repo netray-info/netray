@@ -8,11 +8,12 @@ use netray_engine::catalogue::{Catalogue, CheckSpec};
 use netray_engine::profile::Profile;
 use netray_model::{CheckId, Protocol, Status};
 
-use crate::tokens::values::{FONT_SIZE_LABEL, SPACE_1, SPECTRUM_LINE_PITCH_MIN};
+use crate::tokens::values::{FONT_SIZE_CAPTION, SPACE_1, SPECTRUM_LINE_PITCH_MIN};
 
 const CHAR_WIDTH_EM: f64 = 0.62;
 const TOLERANCE: f64 = 1e-6;
 const MIN_ROWS: usize = 3;
+const HEIGHT_FLOOR: f64 = 0.35;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineTone {
@@ -79,7 +80,7 @@ pub fn line_pitch_min() -> f64 {
 
 /// Width of a label box of `chars` characters.
 pub fn label_width(chars: usize) -> f64 {
-    chars as f64 * CHAR_WIDTH_EM * px(FONT_SIZE_LABEL) + px(SPACE_1)
+    chars as f64 * CHAR_WIDTH_EM * px(FONT_SIZE_CAPTION) + px(SPACE_1)
 }
 
 fn overlaps(a: &Label, b: &Label) -> bool {
@@ -263,8 +264,8 @@ fn base_tone(status: Option<Status>) -> LineTone {
     }
 }
 
-/// Heights in (0, 1]: a measured line's share of its section weight, scaled to the run's largest;
-/// muted lines take the smallest measured height.
+/// Heights in (0, 1]: 0.35 + 0.65 x w / w_max for a measured line, w its effective weight in the
+/// grade and w_max the largest in the run; muted lines take the smallest measured height.
 fn run_heights(run: &RunInput, specs: &[&CheckSpec], tones: &[LineTone]) -> Vec<f64> {
     let weight = |spec: &CheckSpec| -> f64 {
         run.profile
@@ -313,7 +314,10 @@ fn run_heights(run: &RunInput, specs: &[&CheckSpec], tones: &[LineTone]) -> Vec<
     if largest <= 0.0 {
         return vec![1.0; specs.len()];
     }
-    let scaled: Vec<Option<f64>> = shares.iter().map(|e| e.map(|e| e / largest)).collect();
+    let scaled: Vec<Option<f64>> = shares
+        .iter()
+        .map(|e| e.map(|e| HEIGHT_FLOOR + (1.0 - HEIGHT_FLOOR) * e / largest))
+        .collect();
     let smallest = scaled
         .iter()
         .flatten()

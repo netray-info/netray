@@ -9,8 +9,13 @@ use netray_web::spectrum::{Layout, LineTone, RunInput, SectionState, layout};
 
 const W: u32 = 1056;
 const EPS: f64 = 1e-9;
-/// The smallest v3 height with every check measured: 2/103 x 35 / 10 (tls `san_quality` and kin).
-const SMALLEST_ALL_PASS: f64 = 7.0 / 103.0;
+/// The smallest v3 height with every check measured: 0.35 + 0.65 x 2/103 x 35 / 10 (tls `san_quality` and kin).
+const SMALLEST_ALL_PASS: f64 = 0.35 + 0.65 * 7.0 / 103.0;
+
+/// A measured line's height for its weight share `x` of the run's largest: 0.35 + 0.65 x.
+fn lift(x: f64) -> f64 {
+    0.35 + 0.65 * x
+}
 
 fn near(a: f64, b: f64, eps: f64) -> bool {
     (a - b).abs() < eps
@@ -247,9 +252,9 @@ fn r12_heights_normalised_muted_smallest() {
     // ip.reputation: e = 10 is the largest, so 1.0
     assert!(near(h[at(&l, "ip.reputation")], 1.0, EPS));
     // dns.dnssec: 5 / 30 x 20 = 10/3, normalised 1/3
-    assert!(near(h[at(&l, "dns.dnssec")], 1.0 / 3.0, EPS));
+    assert!(near(h[at(&l, "dns.dnssec")], lift(1.0 / 3.0), EPS));
     // dns.ttl: 2 / 30 x 20 / 10 = 2/15
-    assert!(near(h[at(&l, "dns.ttl")], 2.0 / 15.0, EPS));
+    assert!(near(h[at(&l, "dns.ttl")], lift(2.0 / 15.0), EPS));
     // the muted line takes the smallest measured height
     assert!(near(h[at(&l, "dns.ns_lame")], SMALLEST_ALL_PASS, EPS));
     assert!(near(smallest_measured(&l, 0), SMALLEST_ALL_PASS, EPS));
@@ -343,11 +348,11 @@ fn c11_all_pass_v3_heights() {
     let reach = h[at(&l, "tls.tls_reachable")];
     let csp = h[at(&l, "http.csp")];
     assert!(near(rep, 1.0, EPS));
-    assert!(near(reach, 10.0 / 103.0 * 35.0 / 10.0, EPS));
-    assert!(near(csp, 1.0 / 23.0 * 20.0 / 10.0, EPS));
-    // printed roundings: 1.00, 0.34, 0.09 (0.087)
-    assert!(near(reach, 0.34, 0.005));
-    assert!(near(csp, 0.087, 0.005));
+    assert!(near(reach, lift(10.0 / 103.0 * 35.0 / 10.0), EPS));
+    assert!(near(csp, lift(1.0 / 23.0 * 20.0 / 10.0), EPS));
+    // printed roundings: 1.00, 0.57, 0.41
+    assert!(near(reach, 0.571, 0.0005));
+    assert!(near(csp, 0.407, 0.0005));
 }
 
 #[test]
@@ -365,8 +370,8 @@ fn c12_lone_measured_check_in_section() {
     // e = 10/10 x 35 = 35, the run's largest
     assert!(near(h[at(&l, "tls.tls_reachable")], 1.0, EPS));
     assert_eq!(l.runs[0].tones[at(&l, "tls.tls_reachable")], LineTone::Fail);
-    assert!(near(h[at(&l, "ip.reputation")], 10.0 / 35.0, EPS));
-    assert!(near(h[at(&l, "ip.reputation")], 0.286, 0.0005));
+    assert!(near(h[at(&l, "ip.reputation")], lift(10.0 / 35.0), EPS));
+    assert!(near(h[at(&l, "ip.reputation")], 0.536, 0.0005));
 }
 
 #[test]
@@ -377,7 +382,7 @@ fn c13_not_applicable_dmarc_is_muted_small() {
     let small = smallest_measured(&l, 0);
     assert!(near(l.runs[0].heights[i], small, EPS));
     // measured, dmarc would stand at 4/22 x 15 / 10 = 0.2727
-    assert!(l.runs[0].heights[i] < 0.27);
+    assert!(l.runs[0].heights[i] < lift(0.27));
     assert!(near(small, SMALLEST_ALL_PASS, EPS));
 }
 
@@ -413,8 +418,8 @@ fn c15_older_profile_changes_heights_not_x() {
     let l = lay(&cur, &[old]);
     let i = at(&l, "dns.dnssec");
     // current: 5/35 x 20 / 10 = 2/7; older: 5/35 x 40 / 10 = 4/7
-    assert!(near(l.runs[0].heights[i], 2.0 / 7.0, EPS));
-    assert!(near(l.runs[1].heights[i], 4.0 / 7.0, EPS));
+    assert!(near(l.runs[0].heights[i], lift(2.0 / 7.0), EPS));
+    assert!(near(l.runs[1].heights[i], lift(4.0 / 7.0), EPS));
     // x is a property of the line, shared by both runs
     for (k, x) in l.lines.iter().enumerate() {
         assert!(near(x.x, (k as f64 + 0.5) * l.pitch, EPS));
@@ -506,12 +511,16 @@ fn r12_section_total_counts_checks_outside_the_catalogue() {
     let cur = run(&[]);
     let l = lay(&cur, &[old]);
     // M_dns = 35 + 5 = 40: dns.dnssec e = 5/40 × 20 = 2.5 against ip.reputation's 10
-    assert!(near(l.runs[1].heights[at(&l, "dns.dnssec")], 0.25, 1e-9));
+    assert!(near(
+        l.runs[1].heights[at(&l, "dns.dnssec")],
+        lift(0.25),
+        1e-9
+    ));
     assert!(near(l.runs[1].heights[at(&l, "ip.reputation")], 1.0, 1e-9));
     // the current run, without the legacy check, keeps 5/35 × 20 / 10
     assert!(near(
         l.runs[0].heights[at(&l, "dns.dnssec")],
-        5.0 / 35.0 * 2.0,
+        lift(5.0 / 35.0 * 2.0),
         1e-9
     ));
 }

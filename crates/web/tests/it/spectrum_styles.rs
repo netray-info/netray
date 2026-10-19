@@ -62,7 +62,7 @@ fn c15_spectrum_stylesheet_resolves_label_rules() {
     );
     assert_eq!(
         resolve(&css, ".spectrum__line-label", "font-size").as_deref(),
-        Some("var(--font-size-label)")
+        Some("var(--font-size-caption)")
     );
     assert_eq!(
         resolve(&css, ".spectrum__line-label", "font-family").as_deref(),
@@ -70,11 +70,7 @@ fn c15_spectrum_stylesheet_resolves_label_rules() {
     );
     assert_eq!(
         resolve(&css, ".spectrum__line-label", "background").as_deref(),
-        Some("var(--color-bg)")
-    );
-    assert!(
-        !css.contains("--font-size-caption"),
-        "the label no longer uses the caption size"
+        Some("transparent")
     );
     let hides = rules(&css).iter().any(|(prelude, body)| {
         prelude.contains("[data-run]:not([data-shown])")

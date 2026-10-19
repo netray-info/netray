@@ -14,7 +14,20 @@
 }
 .spectrum__axis {
   position: relative;
-  height: var(--space-5);
+  height: 32px;
+}
+.spectrum__tick {
+  position: absolute;
+  inset-block-start: 0;
+  width: var(--line-hair);
+  height: 4px;
+  background: var(--color-grid);
+}
+.spectrum__tick[data-major] {
+  height: 10px;
+}
+.spectrum__tick[data-last] {
+  transform: translateX(-100%);
 }
 .spectrum__plate {
   display: block;
@@ -22,6 +35,7 @@
   height: var(--spectrum-plate-height);
   border: var(--line-hair) solid var(--color-plate-border);
   background: var(--color-plate);
+  border-radius: var(--radius-max);
   box-sizing: border-box;
 }
 .spectrum__boundary {
@@ -60,24 +74,36 @@
   stroke: var(--status-fix-mark);
   stroke-width: var(--line-pass);
 }
-.spectrum__region-label,
-.spectrum__line-label {
-  position: absolute;
-  font-size: var(--font-size-label);
-  white-space: nowrap;
-}
 .spectrum__region-label {
-  inset-block-start: 0;
-  padding-inline-start: var(--space-1);
-  color: var(--color-muted);
-  letter-spacing: var(--font-tracking-caps);
-  text-transform: uppercase;
-}
-.spectrum__line-label {
-  padding-inline-start: var(--space-1);
-  background: var(--color-bg);
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  gap: .5em;
+  white-space: nowrap;
+  inset-block-start: 14px;
+  box-sizing: border-box;
   color: var(--color-muted);
   font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  letter-spacing: .14em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.spectrum__region-label:last-child {
+  justify-content: flex-end;
+}
+.spectrum__region-grade {
+  color: var(--color-ink);
+}
+.spectrum__line-label {
+  position: absolute;
+  white-space: nowrap;
+  padding-inline-start: var(--space-1);
+  background: transparent;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
 }
 .spectrum__leader {
   position: absolute;

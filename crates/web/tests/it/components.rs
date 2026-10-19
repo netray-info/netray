@@ -174,6 +174,7 @@ fn spectrum_renders_plate_lines_and_regions() {
             label: "Transport zone".into(),
             x: 50.0,
             width: 25.0,
+            grade: None,
         }],
     })
     .unwrap();

@@ -284,13 +284,68 @@ main td {
 #trace li {
   flex-wrap: wrap;
 }
+.legend-row {
+  margin-block-start: var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-label);
+  color: var(--color-muted);
+}
 #legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: var(--space-5);
+  margin: 0;
   padding: 0;
   list-style: none;
-  font-size: var(--font-size-small);
+  font-size: var(--font-size-label);
+  font-family: var(--font-mono);
+  color: var(--color-muted);
+}
+#legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.legend__mark {
+  display: inline-block;
+  box-sizing: border-box;
+  height: 14px;
+}
+.legend__mark[data-tone="pass"] {
+  width: var(--line-pass);
+  background: var(--status-pass-mark);
+}
+.legend__mark[data-tone="warn"] {
+  width: var(--line-warn);
+  background: var(--status-warn-mark);
+}
+.legend__mark[data-tone="fail"] {
+  width: var(--line-fail);
+  background: var(--status-fail-mark);
+}
+.legend__mark[data-tone="fix"] {
+  position: relative;
+  width: var(--line-fail);
+  border: var(--line-hair) solid var(--status-fix-mark);
+  border-bottom: 0;
+}
+.legend__mark[data-tone="fix"]::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  box-sizing: border-box;
+  width: var(--space-2);
+  height: var(--space-2);
+  border: var(--line-pass) solid var(--status-fix-mark);
+  border-radius: var(--radius-round);
+  background: var(--color-bg);
+  transform: translateX(-50%);
 }
 #issues .issue header {
   flex-wrap: wrap;

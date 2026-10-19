@@ -5,7 +5,7 @@
     "profile_version": 3,
     "engine_version": "0.26.0",
     "evidence_schema_version": 1,
-    "grade": "B",
+    "grade": "A",
     "complete": true,
     "sections": [
       {
@@ -153,7 +153,7 @@
         "id": "email.dmarc",
         "status": "warn",
         "findings": [
-          "no aggregate reports"
+          "DMARC policy is p=none: receivers report spoofed mail but still deliver it"
         ],
         "evidence": [
           "email.dmarc"
@@ -186,10 +186,7 @@
       },
       {
         "id": "email.dane",
-        "status": "warn",
-        "findings": [
-          "no TLSA records for mx1.new.example.com"
-        ],
+        "status": "pass",
         "evidence": [
           "email.mx"
         ]
@@ -210,10 +207,7 @@
       },
       {
         "id": "http.https_redirect",
-        "status": "fail",
-        "findings": [
-          "HTTP port 80 does not redirect to HTTPS"
-        ],
+        "status": "pass",
         "evidence": [
           "http.port80",
           "http.port80_probe"
@@ -258,40 +252,28 @@
       },
       {
         "id": "http.x_frame_options",
-        "status": "warn",
-        "findings": [
-          "Missing x-frame-options header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
       },
       {
         "id": "http.x_content_type_options",
-        "status": "warn",
-        "findings": [
-          "Missing x-content-type-options header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
       },
       {
         "id": "http.referrer_policy",
-        "status": "warn",
-        "findings": [
-          "Missing referrer-policy header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
       },
       {
         "id": "http.permissions_policy",
-        "status": "warn",
-        "findings": [
-          "Missing permissions-policy header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
@@ -305,20 +287,14 @@
       },
       {
         "id": "http.info_leakage",
-        "status": "warn",
-        "findings": [
-          "Info leakage headers: Server"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
       },
       {
         "id": "http.caching",
-        "status": "warn",
-        "findings": [
-          "No Cache-Control header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
@@ -492,8 +468,7 @@
         "id": "tls.ech_advertised",
         "status": "warn",
         "findings": [
-          "192.0.2.10: ECH not advertised in HTTPS DNS record",
-          "198.51.100.10: ECH not advertised in HTTPS DNS record"
+          "ECH not advertised in HTTPS DNS record"
         ],
         "evidence": [
           "tls.handshake@192.0.2.10:443",

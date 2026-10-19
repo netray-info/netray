@@ -9,11 +9,11 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use futures::future::BoxFuture;
 use http_body_util::BodyExt;
+use netray_engine::history::score_run;
+use netray_engine::profile::Profiles;
 use netray_model::diff::diff;
 use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
 use netray_model::run::{Run, RunCheck, RunSection, SectionKind};
-use netray_engine::history::score_run;
-use netray_engine::profile::Profiles;
 use netray_model::{CheckId, Grade, Protocol, Status};
 use netray_store::HistoryStore;
 use netray_web::api::{DomainRefusal, DomainRuns, RunStart, RunTrigger};
@@ -66,7 +66,13 @@ fn between<'a>(html: &'a str, from: &str, to: &str) -> &'a str {
 
 fn run_with(checks: Vec<RunCheck>, email: SectionKind) -> Run {
     let mut sections = vec![];
-    for p in [Protocol::Dns, Protocol::Tls, Protocol::Http, Protocol::Email, Protocol::Ip] {
+    for p in [
+        Protocol::Dns,
+        Protocol::Tls,
+        Protocol::Http,
+        Protocol::Email,
+        Protocol::Ip,
+    ] {
         let outcome = if p == Protocol::Email {
             email.clone()
         } else {
@@ -87,6 +93,9 @@ fn run_with(checks: Vec<RunCheck>, email: SectionKind) -> Run {
 }
 
 async fn page_of(run: &Run) -> String {
+    let mut run = run.clone();
+    run.grade = score_run(&run, Profiles::get(3).unwrap()).grade;
+    let run = &run;
     let dir = tempfile::tempdir().unwrap();
     let store = HistoryStore::open(&dir.path().join("history.db"))
         .await
@@ -162,11 +171,8 @@ fn rule<'a>(css: &'a str, selector: &str) -> &'a str {
 
 #[test]
 fn c3_region_label_css() {
-    let css = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/static/spectrum.css"
-    ))
-    .unwrap();
+    let css = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/static/spectrum.css"))
+        .unwrap();
     let r = rule(&css, ".spectrum__region-label");
     for want in [
         "font-size: var(--font-size-caption)",
@@ -185,7 +191,13 @@ async fn c3_region_labels_centred_with_left_and_width() {
     let labels = region_labels(&html);
     let names: Vec<String> = labels
         .iter()
-        .map(|(_, inner)| inner.chars().take_while(|c| c.is_ascii_alphabetic()).collect::<String>().to_uppercase())
+        .map(|(_, inner)| {
+            inner
+                .chars()
+                .take_while(|c| c.is_ascii_alphabetic())
+                .collect::<String>()
+                .to_uppercase()
+        })
         .collect();
     assert_eq!(names, ["DNS", "TLS", "HTTP", "EMAIL", "IP"], "{html}");
     for (tag, _) in &labels {
@@ -248,6 +260,13 @@ async fn c6_expiry_window_short_is_expiry() {
         SectionKind::NotApplicable,
     );
     let html = page_of(&run).await;
-    assert!(html.contains("data-code=\"Expiry\""), "{html}");
-    assert!(!html.contains("data-code=\"Renewal\""), "{html}");
+    // data-code carries the check id; the label text is the short.
+    let label = html
+        .split("class=\"spectrum__line-label\"")
+        .skip(1)
+        .find(|t| t[..t.find('>').unwrap()].contains("data-code=\"tls.expiry_window\""))
+        .unwrap_or_else(|| panic!("no tls.expiry_window label: {html}"));
+    let text = &label[label.find('>').unwrap() + 1..label.find("</span>").unwrap()];
+    assert_eq!(text, "Expiry");
+    assert!(!html.contains(">Renewal</span>"), "{html}");
 }

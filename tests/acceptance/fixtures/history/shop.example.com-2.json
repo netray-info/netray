@@ -5,7 +5,7 @@
     "profile_version": 3,
     "engine_version": "0.26.0",
     "evidence_schema_version": 1,
-    "grade": "B",
+    "grade": "A",
     "complete": true,
     "sections": [
       {
@@ -144,16 +144,19 @@
       },
       {
         "id": "email.dkim",
-        "status": "pass",
+        "status": "fail",
         "evidence": [
           "email.dkim"
+        ],
+        "findings": [
+          "No DKIM selector found among the common selectors"
         ]
       },
       {
         "id": "email.dmarc",
         "status": "warn",
         "findings": [
-          "no aggregate reports"
+          "DMARC policy is p=none: receivers report spoofed mail but still deliver it"
         ],
         "evidence": [
           "email.dmarc"
@@ -161,10 +164,13 @@
       },
       {
         "id": "email.mta_sts",
-        "status": "pass",
+        "status": "warn",
         "evidence": [
           "email.mta_sts",
           "email.mta_sts_policy"
+        ],
+        "findings": [
+          "MTA-STS policy not reachable"
         ]
       },
       {
@@ -186,10 +192,7 @@
       },
       {
         "id": "email.dane",
-        "status": "warn",
-        "findings": [
-          "no TLSA records for mx1.shop.example.com"
-        ],
+        "status": "pass",
         "evidence": [
           "email.mx"
         ]
@@ -218,10 +221,7 @@
       },
       {
         "id": "http.hsts",
-        "status": "fail",
-        "findings": [
-          "No HSTS header found"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
@@ -255,40 +255,28 @@
       },
       {
         "id": "http.x_frame_options",
-        "status": "warn",
-        "findings": [
-          "Missing x-frame-options header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
       },
       {
         "id": "http.x_content_type_options",
-        "status": "warn",
-        "findings": [
-          "Missing x-content-type-options header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
       },
       {
         "id": "http.referrer_policy",
-        "status": "warn",
-        "findings": [
-          "Missing referrer-policy header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
       },
       {
         "id": "http.permissions_policy",
-        "status": "warn",
-        "findings": [
-          "Missing permissions-policy header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
@@ -302,20 +290,14 @@
       },
       {
         "id": "http.info_leakage",
-        "status": "warn",
-        "findings": [
-          "Info leakage headers: Server"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
       },
       {
         "id": "http.caching",
-        "status": "warn",
-        "findings": [
-          "No Cache-Control header"
-        ],
+        "status": "pass",
         "evidence": [
           "http.headers"
         ]
@@ -377,10 +359,13 @@
       },
       {
         "id": "tls.expiry_window",
-        "status": "pass",
+        "status": "warn",
         "evidence": [
           "tls.chain@192.0.2.10:443",
           "tls.chain@198.51.100.10:443"
+        ],
+        "findings": [
+          "Certificate expires in 21 days"
         ]
       },
       {
@@ -489,8 +474,7 @@
         "id": "tls.ech_advertised",
         "status": "warn",
         "findings": [
-          "192.0.2.10: ECH not advertised in HTTPS DNS record",
-          "198.51.100.10: ECH not advertised in HTTPS DNS record"
+          "ECH not advertised in HTTPS DNS record"
         ],
         "evidence": [
           "tls.handshake@192.0.2.10:443",

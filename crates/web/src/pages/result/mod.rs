@@ -350,6 +350,7 @@ struct Shown {
     share: Option<String>,
     plate: String,
     trace: String,
+    legend: Legend,
     sentences: Vec<(String, String)>,
     refreshing: bool,
     diff_heading: Option<String>,
@@ -371,6 +372,7 @@ impl Shown {
             share: None,
             plate: String::new(),
             trace: String::new(),
+            legend: Legend::default(),
             sentences: Vec::new(),
             refreshing: false,
             diff_heading: None,
@@ -520,15 +522,55 @@ fn rows_of(entries: &[Entry]) -> Vec<(i64, Grade)> {
         .collect()
 }
 
-/// The spectrum plate and the trace of `current` over `older`; `live` names the bands the run
-/// on display measured.
+/// What the key under the spectrum says: the predecessor a fix is measured against, when there
+/// is one, and the number of lines the spectrum draws, 0 when it draws none.
+#[derive(Default)]
+struct Legend {
+    fixed_since: Option<String>,
+    checks: usize,
+}
+
+/// The legend text naming run `earlier`, `None` when no run precedes.
+fn fixed_since(earlier: usize) -> Option<String> {
+    (earlier > 0).then(|| format!("run {earlier}"))
+}
+
+/// Each protocol's section grade of `run`: the section percentage of `score_run` through the
+/// profile's thresholds; a section without a score has none. None at all when the profile is
+/// unknown or the engine's grade is not the letter `shown`, as for the score and the hard-fail
+/// sentence.
+fn section_grades(run: &Run, shown: Option<Grade>) -> BTreeMap<String, String> {
+    let Some(profile) = Profiles::get(run.profile_version) else {
+        return BTreeMap::new();
+    };
+    let score = score_run(run, profile);
+    if shown.is_some_and(|shown| score.grade != shown) {
+        return BTreeMap::new();
+    }
+    score
+        .sections
+        .iter()
+        .map(|(protocol, section)| {
+            let grade = netray_engine::scoring::grade_for(profile, section.percentage);
+            (
+                protocol.as_str().to_string(),
+                grade_letter(grade).to_string(),
+            )
+        })
+        .collect()
+}
+
+/// The spectrum plate, the trace and the legend of `run`, laid out as `current` over `older`;
+/// `live` names the bands the run on display measured, `fixed` the predecessor the legend names.
 fn figure_parts(
     domain: &str,
+    run: &Run,
     current: &RunInput<'static>,
     older: &[RunInput<'static>],
     rows: &[(i64, Grade)],
     live: &str,
-) -> Option<(String, String)> {
+    fixed: Option<String>,
+) -> Option<(String, String, Legend)> {
     let cat = catalogue();
     let width = (cat.entries().len() as f64 * spectrum::line_pitch_min()) as u32;
     let layout = match spectrum::layout(current, older, cat, width) {
@@ -539,15 +581,18 @@ fn figure_parts(
         }
     };
     let label = format!("Check results of {domain}");
-    let plate = warn_render(
-        "spectrum",
-        components::spectrum_live(&SpectrumView::from_layout(&layout, &label, 0), live),
-    )?;
+    let view = SpectrumView::from_layout(&layout, &label, 0)
+        .with_grades(&section_grades(run, rows.first().map(|r| r.1)));
+    let plate = warn_render("spectrum", components::spectrum_live(&view, live))?;
     let trace = warn_render(
         "trace",
         components::trace(&views::trace_view(&layout, rows)),
     )?;
-    Some((plate, trace))
+    let legend = Legend {
+        fixed_since: fixed,
+        checks: layout.lines.len(),
+    };
+    Some((plate, trace, legend))
 }
 
 /// What the latest of `entries` (newest first, not empty) shows.
@@ -565,12 +610,19 @@ fn stored_shown(
         .take(SHOWN)
         .map(|e| views::layout_input_or_current(&e.run))
         .collect();
-    let (plate, trace) = figure_parts(
+    let fixed = match (entries.len() > 1, ordinal_known) {
+        (false, _) => None,
+        (true, true) => fixed_since(entries.len() - 1),
+        (true, false) => Some("the previous run".to_string()),
+    };
+    let (plate, trace, legend) = figure_parts(
         &entry.domain,
+        &entry.run,
         &inputs[0],
         &inputs[1..],
         &rows_of(entries),
         "",
+        fixed,
     )?;
     let chosen: Vec<&Entry> = entries.iter().take(SHOWN).collect();
     let mut since: BTreeMap<CheckId, String> = BTreeMap::new();
@@ -609,6 +661,7 @@ fn stored_shown(
         share: entry.run.complete.then(|| entry.id.clone()),
         plate,
         trace,
+        legend,
         sentences: sentences_of(chosen.iter().rev().copied()),
         refreshing: false,
         diff_heading: Some(diff_heading),
@@ -643,7 +696,7 @@ fn done_figure(
     done: &Run,
     grade: Grade,
     entries: &[Entry],
-) -> Option<(String, String)> {
+) -> Option<(String, String, Legend)> {
     let current = views::layout_input_or_current(done);
     let older: Vec<RunInput<'static>> = entries
         .iter()
@@ -652,7 +705,15 @@ fn done_figure(
         .collect();
     let mut rows = vec![(now(), grade)];
     rows.extend(rows_of(entries).into_iter().take(SHOWN - 1));
-    figure_parts(domain, &current, &older, &rows, "")
+    figure_parts(
+        domain,
+        done,
+        &current,
+        &older,
+        &rows,
+        "",
+        fixed_since(entries.len()),
+    )
 }
 
 /// One evidence section per protocol over `done`.
@@ -683,7 +744,7 @@ fn not_stored_shown(
     } else {
         Grade::Incomplete
     };
-    let (plate, trace) = done_figure(domain, done, grade, entries)?;
+    let (plate, trace, legend) = done_figure(domain, done, grade, entries)?;
     let evidence = done_evidence(done, evidence::incomplete_run_line)?;
     Some(Shown {
         grade: Some(grade_view(grade, None)),
@@ -692,6 +753,7 @@ fn not_stored_shown(
         share: None,
         plate,
         trace,
+        legend,
         sentences: sentences_through(entries, done),
         refreshing: false,
         diff_heading: Some(since_heading(entries.len()).unwrap_or_else(|| "This run".to_string())),
@@ -709,7 +771,7 @@ fn not_stored_shown(
 /// share link.
 fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown> {
     let cat = catalogue();
-    let (plate, trace) = done_figure(domain, done, done.grade, entries)?;
+    let (plate, trace, legend) = done_figure(domain, done, done.grade, entries)?;
     let evidence = done_evidence(done, evidence::live_run_line)?;
     Some(Shown {
         grade: Some(grade_view(done.grade, None)),
@@ -720,6 +782,7 @@ fn unrecorded_shown(domain: &str, done: &Run, entries: &[Entry]) -> Option<Shown
         share: None,
         plate,
         trace,
+        legend,
         sentences: sentences_through(entries, done),
         refreshing: false,
         diff_heading: Some(since_heading(entries.len()).unwrap_or_else(|| "This run".to_string())),
@@ -843,6 +906,7 @@ struct RecheckButtonPart {
 struct SpectrumPart<'a> {
     plate: &'a str,
     trace: &'a str,
+    legend: &'a Legend,
     sentences: &'a [(String, String)],
     refreshing: bool,
     stepper: bool,
@@ -899,6 +963,7 @@ fn progress_part(ray: &str) -> Option<String> {
 fn spectrum_part(
     plate: &str,
     trace: &str,
+    legend: &Legend,
     sentences: &[(String, String)],
     refreshing: bool,
 ) -> Option<String> {
@@ -907,6 +972,7 @@ fn spectrum_part(
         trimmed(&SpectrumPart {
             plate,
             trace,
+            legend,
             sentences,
             refreshing,
             stepper: trace.matches("data-run=").count() >= 2,
@@ -1020,6 +1086,7 @@ fn assemble(domain: &str, autostart: bool, shown: Shown) -> Option<Parts> {
         spectrum: spectrum_part(
             &shown.plate,
             &shown.trace,
+            &shown.legend,
             &shown.sentences,
             shown.refreshing,
         )?,

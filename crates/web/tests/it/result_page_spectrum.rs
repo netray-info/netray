@@ -181,7 +181,7 @@ async fn c15_spectrum_holds_five_bands_with_one_run_group_per_entry() {
     for (k, tag) in run_tags(labels) {
         assert_eq!(tag.contains("data-shown"), k == 0, "label set {k}: {tag}");
     }
-    for word in ["pass", "warn", "fail", "fixed", "muted"] {
+    for word in ["pass", "warn", "fail", "fixed"] {
         let legend = between(spectrum, "id=\"legend\"", "</ul>");
         assert!(legend.contains(word), "legend lacks {word}: {legend}");
     }

@@ -136,7 +136,6 @@ fn between<'a>(html: &'a str, from: &str, to: &str) -> &'a str {
     &rest[..rest.find(to).unwrap_or(rest.len())]
 }
 
-
 const CSS_SRC: &str = include_str!("../../static/spectrum.css");
 const TEMPLATE: &str = include_str!("../../templates/components/spectrum.html");
 
@@ -163,11 +162,16 @@ fn declaration(body: &str, prop: &str) -> Option<String> {
 
 /// Resolves a single `var(--x)` through the generated tokens; other values pass through.
 fn resolve(value: &str) -> String {
-    match value.strip_prefix("var(--").and_then(|v| v.strip_suffix(')')) {
+    match value
+        .strip_prefix("var(--")
+        .and_then(|v| v.strip_suffix(')'))
+    {
         Some(name) => {
             let body = netray_web::tokens::CSS;
             declaration(
-                &body[body.find(&format!("--{name}:")).unwrap_or_else(|| panic!("no token {name}"))..],
+                &body[body
+                    .find(&format!("--{name}:"))
+                    .unwrap_or_else(|| panic!("no token {name}"))..],
                 &format!("--{name}"),
             )
             .unwrap()
@@ -188,7 +192,10 @@ fn c2_plate_radius_and_axis_height_come_from_tokens() {
     assert_eq!(prop(".spectrum__axis", "height"), "32px");
     assert_eq!(prop(".spectrum__tick", "height"), "4px");
     assert_eq!(prop(".spectrum__tick[data-major]", "height"), "10px");
-    assert!(TEMPLATE.contains("class=\"spectrum__tick\""), "template has no tick span");
+    assert!(
+        TEMPLATE.contains("class=\"spectrum__tick\""),
+        "template has no tick span"
+    );
 }
 
 #[tokio::test]
@@ -206,7 +213,10 @@ async fn c9_axis_has_one_tick_per_line_boundary_and_major_ticks_at_ends_and_regi
         .collect();
     assert_eq!(ticks.len(), lines + 1, "ticks vs lines: {axis}");
     for t in &ticks {
-        assert!(t.contains("style=\"left: ") && t.contains("%"), "tick without left pct: {t}");
+        assert!(
+            t.contains("style=\"left: ") && t.contains("%"),
+            "tick without left pct: {t}"
+        );
     }
     let regions = axis.matches("class=\"spectrum__region-label\"").count();
     assert_eq!(regions, 5, "regions: {axis}");

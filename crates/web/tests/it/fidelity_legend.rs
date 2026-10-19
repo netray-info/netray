@@ -135,7 +135,6 @@ fn between<'a>(html: &'a str, from: &str, to: &str) -> &'a str {
     &rest[..rest.find(to).unwrap_or(rest.len())]
 }
 
-
 const SPECTRUM_CSS: &str = include_str!("../../static/spectrum.css");
 const LEGEND_CSS: &str = concat!(
     include_str!("../../static/spectrum.css"),
@@ -170,11 +169,26 @@ fn declared(block: &str, prop: &str) -> Option<String> {
 #[test]
 fn c4_line_label_css_is_caption_mono_600_transparent() {
     let block = rule(SPECTRUM_CSS, ".spectrum__line-label");
-    assert_eq!(declared(block, "font-size").as_deref(), Some("var(--font-size-caption)"), "{block}");
-    assert_eq!(declared(block, "font-weight").as_deref(), Some("600"), "{block}");
-    assert_eq!(declared(block, "font-family").as_deref(), Some("var(--font-mono)"), "{block}");
+    assert_eq!(
+        declared(block, "font-size").as_deref(),
+        Some("var(--font-size-caption)"),
+        "{block}"
+    );
+    assert_eq!(
+        declared(block, "font-weight").as_deref(),
+        Some("600"),
+        "{block}"
+    );
+    assert_eq!(
+        declared(block, "font-family").as_deref(),
+        Some("var(--font-mono)"),
+        "{block}"
+    );
     let bg = declared(block, "background");
-    assert!(bg.is_none() || bg.as_deref() == Some("transparent"), "{block}");
+    assert!(
+        bg.is_none() || bg.as_deref() == Some("transparent"),
+        "{block}"
+    );
 }
 
 #[tokio::test]
@@ -191,25 +205,48 @@ async fn c4_label_band_is_56px_and_leaders_take_three_staggered_lengths() {
         .skip(1)
         .map(|t| {
             let t = &t[..t.find('>').unwrap()];
-            let p = t.find("height: ").unwrap_or_else(|| panic!("no height: {t}"));
+            let p = t
+                .find("height: ")
+                .unwrap_or_else(|| panic!("no height: {t}"));
             t[p + 8..].split(';').next().unwrap().trim_end_matches('"')
         })
         .collect();
+    // Rows follow the lowest free row (SDD §5.5, S20); a leader's length names its row.
     assert!(heights.len() >= 3, "leaders: {shown}");
     for (i, h) in heights.iter().enumerate() {
-        assert_eq!(*h, ["8px", "22px", "36px"][i % 3], "leader {i}: {shown}");
+        assert!(["8px", "22px", "36px"].contains(h), "leader {i}: {shown}");
     }
+    assert!(
+        heights.contains(&"8px") && heights.contains(&"22px"),
+        "stagger: {shown}"
+    );
 }
 
 #[test]
 fn c5_legend_css_is_mono_12_muted_with_line_width_marks() {
     let legend = rule(LEGEND_CSS, "#legend");
-    assert_eq!(declared(legend, "font-size").as_deref(), Some("var(--font-size-label)"), "{legend}");
-    assert_eq!(declared(legend, "font-family").as_deref(), Some("var(--font-mono)"), "{legend}");
-    assert_eq!(declared(legend, "color").as_deref(), Some("var(--color-muted)"), "{legend}");
+    assert_eq!(
+        declared(legend, "font-size").as_deref(),
+        Some("var(--font-size-label)"),
+        "{legend}"
+    );
+    assert_eq!(
+        declared(legend, "font-family").as_deref(),
+        Some("var(--font-mono)"),
+        "{legend}"
+    );
+    assert_eq!(
+        declared(legend, "color").as_deref(),
+        Some("var(--color-muted)"),
+        "{legend}"
+    );
     for (tone, w) in [("pass", "pass"), ("warn", "warn"), ("fail", "fail")] {
         let block = rule(LEGEND_CSS, &format!(".legend__mark[data-tone=\"{tone}\"]"));
-        assert_eq!(declared(block, "width"), Some(format!("var(--line-{w})")), "{tone}: {block}");
+        assert_eq!(
+            declared(block, "width"),
+            Some(format!("var(--line-{w})")),
+            "{tone}: {block}"
+        );
     }
     let mark = rule(LEGEND_CSS, ".legend__mark");
     assert_eq!(declared(mark, "height").as_deref(), Some("14px"), "{mark}");
@@ -233,10 +270,15 @@ async fn c5_legend_of_second_entry_has_marks_fixed_since_run_1_and_note() {
     assert!(lines > 0, "no lines counted: {spectrum}");
     let note = between(&html, "<span class=\"legend__note\">", "</span>");
     assert!(
-        note.ends_with(" checks · line height = weight in the grade") || note.contains("checks · line height = weight in the grade"),
+        note.ends_with(" checks · line height = weight in the grade")
+            || note.contains("checks · line height = weight in the grade"),
         "{note}"
     );
-    assert!(note.starts_with("<span class=\"legend__note\">7 checks"), "{note}");
+    let drawn = spectrum.matches("data-target=").count();
+    assert!(
+        note.starts_with(&format!("<span class=\"legend__note\">{drawn} checks")),
+        "{drawn}: {note}"
+    );
 }
 
 #[tokio::test]
@@ -245,5 +287,8 @@ async fn c12_first_entry_legend_has_no_fixed_entry() {
     let legend = between(&html, "id=\"legend\"", "</ul>");
     assert!(!legend.contains("fixed since"), "{legend}");
     assert!(!legend.contains("data-tone=\"fix\""), "{legend}");
-    assert!(legend.contains("<span class=\"legend__mark\" data-tone=\"pass\">"), "{legend}");
+    assert!(
+        legend.contains("<span class=\"legend__mark\" data-tone=\"pass\">"),
+        "{legend}"
+    );
 }

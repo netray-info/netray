@@ -238,7 +238,7 @@ fix_owner = "certificate_provider"
 severity = "high"
 source = "RFC 5280"
 guide = "/guide/certificate-management"
-short = "Renewal"
+short = "Expiry"
 
 [[check]]
 id = "tls.cert_lifetime"

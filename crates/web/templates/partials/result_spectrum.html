@@ -9,13 +9,16 @@
 </div>
 {% endif %}
 <div id="trace">{{ trace|safe }}</div>
+<div class="legend-row">
 <ul id="legend">
-<li>pass</li>
-<li>warn</li>
-<li>fail</li>
-<li>fixed</li>
-<li>muted</li>
-</ul>
+<li><span class="legend__mark" data-tone="pass"></span>pass</li>
+<li><span class="legend__mark" data-tone="warn"></span>warn</li>
+<li><span class="legend__mark" data-tone="fail"></span>fail</li>
+{% if let Some(since) = legend.fixed_since %}<li><span class="legend__mark" data-tone="fix"></span>fixed since {{ since }}</li>
+{% endif %}</ul>
+{% if legend.checks > 0 %}<span class="legend__note">{{ legend.checks }} checks · line height = weight in the grade</span>
+{% endif %}
+</div>
 <ul id="spectrum-sentences" hidden>
 {% for (code, sentence) in sentences %}
 <li data-code="{{ code }}" data-sentence="{{ sentence }}"></li>
