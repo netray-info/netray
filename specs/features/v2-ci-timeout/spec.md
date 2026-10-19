@@ -1,6 +1,6 @@
 # Spec: CI check job timeout fits the suite
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-19
 
 ## Goal
