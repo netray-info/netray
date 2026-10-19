@@ -1,0 +1,8 @@
+# A tiny hand-written uap-core regexes file: enough for a Firefox on Linux user agent.
+user_agent_parsers:
+  - regex: '(Firefox)/(\d+)\.(\d+)'
+os_parsers:
+  - regex: '(Linux)'
+device_parsers:
+  - regex: '(Linux)'
+    device_replacement: 'Desktop'
