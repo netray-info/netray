@@ -1,6 +1,6 @@
 # Spec: the plain-text and structured surface of ip. (theme G, backend half)
 
-Status: Draft
+Status: Ready for Implementation
 Created: 2026-10-19
 
 ## Goal
