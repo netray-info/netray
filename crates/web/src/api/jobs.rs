@@ -70,6 +70,44 @@ fn job(label: &str, protocol: Protocol, run: BoxFuture<'static, Measured>) -> Jo
     )
 }
 
+/// The TLS inspection split per port: one part per port in `ports` (labelled `handshake` for
+/// one port, `port <n>` for several) and the band of port 443, else the lowest port.
+fn port_jobs(
+    ports: &[u16],
+    run: BoxFuture<'static, Result<Vec<(u16, SectionOutcome)>, String>>,
+) -> Job {
+    let shared = run.shared();
+    let outcome_of = |shared: futures::future::Shared<_>, port: u16| async move {
+        let outcomes: Vec<(u16, SectionOutcome)> = shared.await?;
+        let outcome = outcomes
+            .into_iter()
+            .find(|(p, _)| *p == port)
+            .map(|(_, outcome)| outcome)
+            .ok_or_else(|| format!("port {port} was not inspected"))?;
+        measured(outcome)
+    };
+    let parts = ports
+        .iter()
+        .map(|&port| {
+            let label = if ports.len() == 1 {
+                "handshake".to_string()
+            } else {
+                format!("port {port}")
+            };
+            let output = outcome_of(shared.clone(), port);
+            JobPart {
+                label,
+                output: Box::pin(async move { output.await.map(|(blocks, _)| blocks) }),
+            }
+        })
+        .collect();
+    let band = outcome_of(shared, netray_tls::module::band_port(ports.iter().copied()));
+    Job::new(parts).with_band(
+        Protocol::Tls,
+        Box::pin(async move { band.await.map(|(_, checks)| checks) }),
+    )
+}
+
 /// A spawned module run that stops when the band is dropped unread.
 struct AbortOnDrop(tokio::task::JoinHandle<SectionOutcome>);
 
@@ -313,9 +351,8 @@ impl InspectJobs {
             },
         );
         let client = req.client;
-        Ok(job(
-            "handshake",
-            Protocol::Tls,
+        let ports = parsed.ports.clone();
+        let run: BoxFuture<'static, Result<Vec<(u16, SectionOutcome)>, String>> =
             Box::pin(async move {
                 let resp = inspector
                     .inspect_parsed(parsed, client, &limiters, String::new())
@@ -326,9 +363,9 @@ impl InspectJobs {
                         } => format!("too many requests; try again in {retry_after_secs} s"),
                         other => other.to_string(),
                     })?;
-                measured(netray_tls::module::translate(&resp))
-            }),
-        ))
+                Ok(netray_tls::module::translate_ports(&resp))
+            });
+        Ok(port_jobs(&ports, run))
     }
 
     fn start_http(&self, req: JobRequest) -> Result<Job, String> {
