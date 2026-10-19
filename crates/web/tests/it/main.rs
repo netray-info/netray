@@ -92,6 +92,8 @@ mod fidelity_cached;
 mod fidelity_clean;
 mod fidelity_diff;
 mod fidelity_entry_frame;
+mod fidelity_evidence_live;
+mod fidelity_evidence_tabs;
 mod fidelity_first_run;
 mod fidelity_frame_styles;
 mod fidelity_hard_fail;
