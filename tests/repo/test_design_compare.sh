@@ -34,6 +34,11 @@ const rows = [
   ['spacing multi-value within', 'spacing', 'padding', '0px 18px', '0px 20px', 0],
   ['spacing multi-value beyond', 'spacing', 'padding', '0px 18px', '0px 23px', 1],
   ['colour rgb vs hex', 'colour', 'color', 'rgb(255, 255, 255)', '#ffffff', 0],
+  ['spacing shorthand of three against two values', 'spacing', 'padding', '0px 18px', '0px 18px 2px', 0],
+  ['spacing gap of one against two values', 'spacing', 'gap', '36px', '36px 40px', 0],
+  ['spacing shorthand beyond after expansion', 'spacing', 'padding', '0px 18px', '0px 18px 6px', 1],
+  ['unreadable property on both sides', 'spacing', 'margin-botom', '', '', 1],
+  ['unreadable colour on both sides', 'colour', 'colr', '', '', 1],
 ];
 for (const [name, cls, prop, b, p, n] of rows) {
   test(name, () => assert.equal(one(cls, prop, b, p).length, n));
@@ -85,6 +90,13 @@ test('summary counts deviations per board', () => {
   const s = m.summary({ open: [dev()], stale: [], titles: [board.title] });
   assert.equal(s.status, 1);
   assert.ok(s.lines.some((l) => l.includes('Result page, light: 1 deviation')), s.lines.join('\n'));
+});
+
+test('accepted entry of a board without a state is not stale', () => {
+  const acc = [{ board: board.title, element: 'e', property: 'font-size', reason: 'kept' }];
+  const r = m.applyAccepted([m.noStateDeviation(board, 'HTTP 500')], acc);
+  assert.equal(r.stale.length, 0);
+  assert.equal(r.open.length, 1);
 });
 
 test('noStateDeviation criterion', () => {
