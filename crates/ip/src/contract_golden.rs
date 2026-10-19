@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     //! Golden for the body of `GET /json?ip=<addr>`, consumed by lens's contract test
-    //! (`crates/lens/tests/contract_ip.rs`). UPDATE_GOLDEN=1 rewrites it.
+    //! (`crates/lens/tests/it/contract_ip.rs`). UPDATE_GOLDEN=1 rewrites it.
 
     use crate::backend::{CloudInfo, Ifconfig, Ip, Location, Network};
     use crate::format::OutputFormat;

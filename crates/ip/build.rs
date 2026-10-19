@@ -2,8 +2,35 @@ use std::path::Path;
 
 fn main() {
     println!("cargo::rerun-if-changed=frontend/dist");
-    println!("cargo::rerun-if-changed=.git/HEAD");
-    println!("cargo::rerun-if-changed=.git/refs/heads");
+    // Rerun when this checkout's commit changes.
+    // Ask git where they are (a worktree splits HEAD from the shared refs) and name only paths that
+    // exist: a missing path makes cargo rerun the script on every call. Not all of refs/heads: a
+    // commit on another branch (another worktree) must not rebuild this one. Without a git checkout
+    // (Docker build) nothing is named.
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    };
+    let path_of = |name: &str| {
+        git(&["rev-parse", "--path-format=absolute", "--git-path", name]).filter(|p| Path::new(p).exists())
+    };
+    // HEAD and its reflog are this checkout's own (a commit, checkout or reset appends to logs/HEAD,
+    // also when the branch ref is packed); the branch's loose ref when there is one. A reftable
+    // repository keeps HEAD as a fixed stub and writes every ref update under reftable/.
+    let mut watched: Vec<String> = ["HEAD", "logs/HEAD", "reftable"]
+        .iter()
+        .filter_map(|n| path_of(n))
+        .collect();
+    if let Some(branch) = git(&["symbolic-ref", "-q", "HEAD"]) {
+        watched.extend(path_of(&branch));
+    }
+    for path in watched {
+        println!("cargo::rerun-if-changed={path}");
+    }
 
     let git_sha = std::process::Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
