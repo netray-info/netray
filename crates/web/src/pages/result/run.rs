@@ -365,10 +365,6 @@ impl Live {
             for (id, html) in parts.fragments() {
                 self.queue.push_back(fragment(&id, html));
             }
-            if parts.recheck {
-                self.queue
-                    .push_back(fragment("recheck-button", &parts.button));
-            }
         }
         self.queue.push_back(end());
     }

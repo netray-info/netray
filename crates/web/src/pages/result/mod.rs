@@ -105,7 +105,7 @@ impl ResultState {
 /// `GET /`, `GET /{domain}`, `GET /{domain}/history` and `POST /{domain}/run`.
 pub fn router(state: ResultState) -> Router {
     Router::new()
-        .route("/", get(idle))
+        .route("/", get(idle).fallback(root_wrong_method))
         .route("/{domain}", get(show).fallback(wrong_method))
         .route("/{domain}/history", get(history).fallback(wrong_method))
         .route("/{domain}/run", post(run::run).fallback(wrong_method))
@@ -126,6 +126,11 @@ async fn wrong_method(
     if domain_segment(path).is_none() {
         return (state.fallback)(request).await;
     }
+    secure(StatusCode::METHOD_NOT_ALLOWED.into_response())
+}
+
+/// An unsupported method on `/`: a 405 with the pages' headers.
+async fn root_wrong_method() -> Response {
     secure(StatusCode::METHOD_NOT_ALLOWED.into_response())
 }
 
@@ -385,7 +390,8 @@ struct Parts {
 }
 
 impl Parts {
-    /// The end fragments in the order the stream sends them.
+    /// The end fragments in the order the stream sends them; the check button last, once it
+    /// re-checks.
     fn fragments(&self) -> Vec<(String, &str)> {
         let mut out = vec![
             ("result-grade".to_string(), self.grade.as_str()),
@@ -400,6 +406,9 @@ impl Parts {
             out.push((format!("evidence-{}", p.as_str()), html.as_str()));
         }
         out.push(("passed".to_string(), self.passed.as_str()));
+        if self.recheck {
+            out.push(("recheck-button".to_string(), self.button.as_str()));
+        }
         out
     }
 }
