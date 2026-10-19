@@ -142,7 +142,6 @@ fn strip_tags(s: &str) -> String {
 #[tokio::test(flavor = "current_thread")]
 async fn result_run_c15_a_run_20s_ago_is_refused_throttle_with_the_run_line() {
     let h = harness(|_| {}).await;
-    tokio::time::pause();
     let started = tokio::time::Instant::now();
 
     let mut stream = match admit(&h.state, "example.com", client(), Trigger::Api, false) {
@@ -152,6 +151,10 @@ async fn result_run_c15_a_run_20s_ago_is_refused_throttle_with_the_run_line() {
     while stream.next().await.is_some() {}
     h.state.runs.drain().await;
     assert_eq!(h.runs.load(Ordering::SeqCst), 1);
+    // Pause only now: a paused clock auto-advances whenever the runtime idles on the history
+    // store's blocking thread, so under load the run itself reached its deadlines and came out
+    // incomplete, with the shorter throttle window (CI run 39282555459).
+    tokio::time::pause();
     tokio::time::advance(Duration::from_secs(20)).await;
 
     let (status, retry, text) = recheck(&h.app).await;
@@ -160,8 +163,7 @@ async fn result_run_c15_a_run_20s_ago_is_refused_throttle_with_the_run_line() {
     // The throttle window depends on whether the prior run was complete; the wait is the window
     // minus the 20 s that passed, and the run line names the same wait as Retry-After.
     let retry = retry.expect("Retry-After");
-    // The paused clock auto-advances through the prior run's deadlines, so "N s ago" counts from
-    // its start: the run's own duration plus the 20 s waited after it.
+    // "N s ago" counts from the run's start: its own duration plus the 20 s waited after it.
     let ago = started.elapsed().as_secs();
     assert!(ago >= 20);
     assert!(text.contains(&format!("{ago} s ago")), "run line: {text}");
