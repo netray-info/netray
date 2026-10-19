@@ -74,6 +74,14 @@ elsif ci
   end
   i_setup = csteps.index { |s| s["run"].to_s.include?("just adlc-setup") }
   fails << "ci.yml: no step frees runner disk (dotnet, ghc, android; df -h /) before just adlc-setup" unless i_free && i_setup && i_free < i_setup
+  # v2-ci-speed R6: mold links the ~400 test binaries; installed before anything compiles, version pinned.
+  i_mold = csteps.index { |s| s["uses"].to_s.start_with?("rui314/setup-mold@") }
+  if i_mold.nil?
+    fails << "ci.yml: no rui314/setup-mold step"
+  else
+    fails << "ci.yml: setup-mold does not pin mold-version to X.Y.Z" unless csteps[i_mold].dig("with", "mold-version").to_s =~ /\A\d+\.\d+\.\d+\z/
+    fails << "ci.yml: setup-mold does not come before just adlc-setup" unless i_setup && i_mold < i_setup
+  end
 end
 
 # C9 / C2: release.yml
