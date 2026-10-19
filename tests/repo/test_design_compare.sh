@@ -37,6 +37,8 @@ const rows = [
   ['spacing shorthand of three against two values', 'spacing', 'padding', '0px 18px', '0px 18px 2px', 0],
   ['spacing gap of one against two values', 'spacing', 'gap', '36px', '36px 40px', 0],
   ['spacing shorthand beyond after expansion', 'spacing', 'padding', '0px 18px', '0px 18px 6px', 1],
+  ['letter-spacing normal reads as zero', 'typography', 'letter-spacing', '-0.5px', 'normal', 0],
+  ['letter-spacing normal beyond tolerance', 'typography', 'letter-spacing', '-1.5px', 'normal', 1],
   ['unreadable property on both sides', 'spacing', 'margin-botom', '', '', 1],
   ['unreadable colour on both sides', 'colour', 'colr', '', '', 1],
 ];
