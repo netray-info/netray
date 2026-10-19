@@ -236,3 +236,51 @@ stream's `RunCheck` omits empty ones); the values are the same.
 
 skipped: covered over the router with the golden module; live probe in Phase 6.
 
+
+## Phase 6 — Contract, SDD and behavioural check
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R16: every new path, method and component is in /api/v1/openapi.json, composed onto the finished v1 document; the committed contract grows compatibly; 2xx answers validate | green | crates/web/tests/api_dns_document.rs |
+| C2 | R17: SDD 7.1 lists the new DNS endpoints and the summary event, 7.3 no longer says the replay is cut, 8 names the v1 check endpoint | green | crates/web/tests/api_dns_document.rs |
+| C3 | GIVEN the generated document WHEN compared with the committed contract THEN only added paths, methods, components and optional properties | already_implemented | crates/web/tests/openapi_contract.rs |
+| C4 | GIVEN the document THEN the new DNS operations and the components DnsJobSummary, DnsTypeComparison, DnsServerAnswer, DnsServerSummary | green | crates/web/tests/api_dns_document.rs |
+| C5 | GIVEN specs/sdd/v2.md THEN 7.1 lists the new endpoints, 7.3 and 8 no longer say the replay is cut and +check has no endpoint | green | crates/web/tests/api_dns_document.rs |
+
+C3 is `openapi_contract.rs`'s compatibility check, which every phase's regeneration passed. The SDD
+amendment adds five rows to §7.1 and rewords §7.3's `?r=` line and §8's `+check` line.
+
+A gate finding carried from Phase 2: `openapi_document.rs` required every non-2xx response to carry
+`ErrorResponse`, which the bodiless `307` of `GET /dns/query` does not; the phase 2 to 4 gate runs
+failed on it unnoticed (their exit status was the pipe's `tail`). The test now skips 3xx as it skips
+2xx (`f0b8693e`, `ADLC-Test-Change`).
+
+### Behavioural verification
+
+`netray lens lens.dev.toml` built from this branch on 127.0.0.1:18791 (outbound DNS blocked locally):
+
+```
+$ curl -s $B/dns/servers | head -c 120
+{"providers":[{"name":"cloudflare","configs":[{"description":"udp:1.1.1.1:53,name=Cloudflare 1","protocol":"udp"},...
+$ curl -s $B/dns/record-types | head -c 80
+{"record_types":[{"name":"A"},{"name":"AAAA"},{"name":"ANAME"},{"name":"CAA"},...
+$ curl -s -X POST -d '{"input":"netray.info MX @cl"}' $B/dns/parse
+{"tokens":[{"kind":"domain",...,"from":0,"to":11},{"kind":"record_type","value":"MX",...},{"kind":"server_partial","value":"@cl","from":15,"to":18}],
+ "completions":[{"label":"@cloudflare","detail":"1.1.1.1 / 1.0.0.1","category":"server"}],"query":{"domain":"netray.info","record_types":["MX"],"servers":[],...,"warnings":["unrecognized server: @cl"]},...}
+$ curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$B/dns/query?q=netray.info%20%2Btrace"
+307 http://127.0.0.1:18791/api/v1/dns/trace?q=netray.info%20%2Btrace
+$ curl -s "$B/dns/results/0123456789ab"
+{"error":{"code":"NOT_FOUND","message":"no result under `0123456789ab`"}}  (404)
+$ curl -s "$B/dns/query?q=netray.info%20A"
+... both Google lookups {"Error":"Timeout"} (blocked locally), "done":{...,"cache_key":"b25268ede86c"},
+"summary":{"record_types":1,"lookups":2,...,"unmeasured":1,"types":[{"record_type":"A","agreement":"unmeasured","answers":[{..."outcome":"unmeasured","error":"request timed out"...}]}]...}
+$ curl -s $B/dns/results/b25268ede86c   -> key b25268ede86c, mode query, query "netray.info A", the summary above
+$ curl -s -X POST -d '{"domain":"netray.info"}' $B/dns/check
+{"protocol":"dns","outcome":"timed_out","reason":null,"checks":[],"blocks":[],"cache_key":"00b7c0dba718"}
+```
+
+The DNS answers themselves are blocked locally; the timeouts come out `unmeasured` (Rule M) and the
+check `timed_out`, as the code says.
+
