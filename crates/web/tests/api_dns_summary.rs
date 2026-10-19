@@ -241,19 +241,23 @@ async fn c11_nodata_is_no_records() {
 /// C16: an SOA record carries its serial age in days.
 #[tokio::test]
 async fn c16_soa_serial_age() {
+    let day = || {
+        (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            / 86400) as i64
+    };
+    let before = day();
     let v = json_job("/dns/query", q("soa.example.com", &["SOA"])).await;
     let rec = &answers(&v, 0)[0]["records"][0];
     assert!(
         rec["data"].as_str().unwrap().contains("2026101501"),
         "{rec}"
     );
-    // 2026-10-15 is day 20741 since 1970-01-01.
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    let expected = (secs / 86400) as i64 - 20741;
-    assert_eq!(rec["soa_serial_age_days"], json!(expected), "{rec}");
+    // 2026-10-15 is day 20741 since 1970-01-01; the run may cross midnight UTC.
+    let age = rec["soa_serial_age_days"].as_i64().expect("an age");
+    assert!((before - 20741..=day() - 20741).contains(&age), "{rec}");
 }
 
 /// C17: compare queries four transports and they agree.

@@ -299,3 +299,42 @@ async fn parse_offers_system_when_the_config_allows_it() {
         .any(|c| c["label"] == "@system");
     assert!(offered, "{v}");
 }
+
+// Final review (R10-R12): the catalogue, the type list and parse answer without a DNS part; parse
+// then offers no `@system`.
+#[tokio::test]
+async fn reference_routes_answer_without_a_dns_part() {
+    let app = router(ApiState::new(ApiConfig::default(), Arc::new(NoRuns)));
+    for (method, path, body) in [
+        ("GET", "/dns/servers", None),
+        ("GET", "/dns/record-types", None),
+        (
+            "POST",
+            "/dns/parse",
+            Some(json!({"input": "example.com @", "cursor_pos": 13}).to_string()),
+        ),
+    ] {
+        let mut req = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("content-type", "application/json")
+            .body(Body::from(body.unwrap_or_default()))
+            .unwrap();
+        let peer: SocketAddr = "198.51.100.1:0".parse().unwrap();
+        req.extensions_mut().insert(ConnectInfo(peer));
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK, "{method} {path}");
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let v: Value = serde_json::from_slice(&bytes).unwrap();
+        if path == "/dns/parse" {
+            assert!(
+                v["completions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|c| c["label"] != "@system"),
+                "{v}"
+            );
+        }
+    }
+}
