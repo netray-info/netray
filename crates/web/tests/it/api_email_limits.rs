@@ -99,6 +99,7 @@ async fn a_held_slot_refuses_the_route_with_503_until_dropped() {
     let (app, state) = setup(api_config("max_concurrent_inspections = 1"));
     let req = EmailInspectRequest {
         domain: "example.com".to_string(),
+        dkim_selectors: Vec::new(),
     };
     let held = state
         .email_inspect()

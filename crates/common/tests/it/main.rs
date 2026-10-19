@@ -3,6 +3,7 @@
 //! goes here and gets its `mod` line; `tests/repo/test_test_binaries.sh` holds the layout.
 
 mod config_loader;
+mod domain_address_forms;
 mod ip_extract_no_cf;
 mod prefetch;
 mod target_policy_results_table;

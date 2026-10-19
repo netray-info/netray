@@ -40,6 +40,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Data: `just ifconfig-data` / `just test-ifconfig-data` (GeoIP), `just tlsight-data` (CAA table, committed).
 - **Integration tests go into `crates/<c>/tests/it/`** as a module with a `mod` line in `tests/it/main.rs`: each merged crate links one test binary `it` (web, lens, engine, model, store, dns, tls, email, http, common). A file stays its own target only with `required-features`, `harness = false`, or a reason in `tests/repo/test_test_binaries.sh` (lens's `LENS_*`-setting `admission_config`, `history_config`). Run one with `cargo test -p <crate> --test it <module>`; shared helpers live in `tests/it/<name>/mod.rs`, used as `use crate::<name>;`.
 - Run tests that depend on feature unification with `--workspace`; `cargo test -p <crate>` resolves features for that crate alone and passes where the binary is wrong.
+- Write no file into the worktree while `adlc verify` runs: its `cargo fmt --check` reads untracked files too and refutes the receipt.
 - `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
 - `just design-check` needs the private canvas: its export serves boards as sandboxed blob: iframes; reach them with Playwright's `contentFrame()`, never `iframe.contentDocument`.
 - A Playwright test serving fixtures from its own process spawns children with async `spawn`: `spawnSync` blocks the event loop and the fixture server never answers.
@@ -92,6 +93,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **A new check id needs its texts in the catalogue**: `crates/engine/catalogue/checks.toml` (lens reads titles, fix hints, owners and guide links from it) and `CHECK_LABELS`/`CHECK_DESCRIPTIONS` in the frontend `checkMeta.ts`, which `tests/repo/test_checkmeta_catalogue.sh` holds to the catalogue's names and titles. A catalogue text (`finding`, `fix_hint`, `fix_owner`) describes every warn and fail branch of the check's code: read the check before writing it.
 - **tlsight's `summary` judges OCSP, CAA and DANE from the first handshake over all ports**: a per-port verdict reads the port's own data (`module::port_wide`).
 - **`TlsParams.starttls` is a port label, not an upgrade**: only SMTP is upgraded (`tls/connect.rs`); `CertInfo.is_expired` truncates to whole days.
+- **Augment a request before its limit and cost checks**, never after: `+dnssec` once added DNSKEY and DS past `max_record_types`, running 12 types under a limit of 10.
 - **Narrowing a check moves its hard fail.** When a check stops failing on a condition, confirm the condition still reaches a hard fail or weight in the profile (`tls.hostname_match` left `chain_trusted`).
 - **Release notes trace to code.** Check each `CHANGELOG.md` claim against the code at the release commit, not against specs or the SDD (changelog-0-25-0: six wrong claims).
 - **report.md criteria statuses** are `green`, `already_implemented` or `test-unwritable`; any other keeps `adlc next` on implement. Drop a criterion whose scenario left the spec.
@@ -106,7 +108,10 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Review the paths a contract fix wakes up.** When real data first reaches a code path, it may never have run before (lens `detect_no_mx` read every MX `fail` as "no MX").
 - **Timer-run scripts fail closed**: write every file atomically (temp in the same dir, then `mv`), clean only their own files (`*.tmp.$$`, a per-run dir), and are tested with stubs that behave like the real tool (`curl` without `-f` saves the error page, exit 0).
 - **Shared dependencies** go in `[workspace.dependencies]` once two crates use them.
+- **Every production `impl DomainRuns` overrides `start_with`**: the default drops DKIM selectors (`tests/repo/test_domain_runs_selectors.sh`).
 - **An inspector under `/api/v1` runs on its module's `[modules.<x>]` state**; `[api.<x>]` holds only per-client limits (email adds its slots). Never build a second inspector state.
+- **An ip answer validates, then checks the seam, then charges**: a 400 or 503 costs no limiter; charge the per-IP limiter only through `charge_caller` (it feeds `X-RateLimit-Remaining` via a task-local).
+- **`netray_web::api::ip_host` serves `ip.`'s V1 paths** (`/country`, `/json`, `/ip/cidr` ...) and hands every other request back; the cutover mounts it before `ip_successor`.
 - **Compose each new inspector onto the finished v1 document** (`api/compose.rs`, one step per part): composing it with the earlier parts renames a committed component and fails `openapi_contract`.
 - **A golden over prism's routes zeroes `latency_ms` and sorts hash-map-ordered lists** (authcompare's servers); capture it twice before committing.
 - **Outbound fetches of user- or domain-controlled URLs** go only through `netray_common::fetch`; never build a `reqwest::Client` for them. Checking and pinning live in its DNS resolver; reqwest keeps redirect handling.
@@ -116,6 +121,7 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Crate docs** point at the root verbs and `netray <subcommand>`, never at per-crate build commands.
 - **Deployment policy wording** lives only in `CONTRIBUTING.md`; `tests/repo/test_no_self_host.sh` rejects it anywhere else outside history.
 - **askama 0.16 closes every `{% call %}` with `{% endcall %}`**; without it the component macro does not compile.
+- **An optional element in a golden-tested template opens with `{%- if %}`**, so the markup without it stays byte-identical (`result_header.html`'s `dkim_selectors` field).
 - **A `base.html` block default compiles against every child**: put frame-struct fields only inside blocks a struct-less child overrides (v2-entries' pages override `meta`).
 - **Stub a third-party API with a body captured from the live endpoint**, never the shape the code reads (status island: the event feed answers `results`, not `data`).
 - **A purity guard is an allowlist.** `tests/repo/test_spectrum_module.sh` admits named imports, std paths and macros; a blocklist of I/O names let print macros and `std::process` through.

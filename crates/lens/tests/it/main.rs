@@ -2,12 +2,14 @@
 //! (v2-ci-speed: one binary links once; ~400 separate ones dominated CI). A new test file
 //! goes here and gets its `mod` line; `tests/repo/test_test_binaries.sh` holds the layout.
 
+mod address_domain_routes;
 mod admission_budget;
 mod admission_head_race;
 mod admission_join;
 mod admission_metrics;
 mod admission_prefetch;
 mod admission_record;
+mod admission_selectors;
 mod admission_slots;
 mod admission_stream;
 mod admission_throttle;

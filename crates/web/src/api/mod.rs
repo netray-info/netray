@@ -10,6 +10,7 @@ mod email;
 mod error;
 mod inspectors;
 mod ip;
+mod ip_host;
 mod jobs;
 mod limit;
 mod reads;
@@ -35,7 +36,8 @@ pub use config::{
     ApiConfig, ApiDnsConfig, ApiEmailConfig, ApiHttpConfig, ApiIpConfig, ApiTlsConfig,
 };
 pub use error::V1Error;
-use ip::{AddressField, CallerField};
+use ip::{AddressField, CallerField, Format};
+pub use ip_host::ip_host;
 pub use jobs::InspectJobs;
 pub(crate) use runs::wants_event_stream;
 pub use runs::{
@@ -52,7 +54,8 @@ const MOUNT: &str = "/api/v1";
     RunAnswer,
     RunSectionEvent,
     AddressField,
-    CallerField
+    CallerField,
+    Format
 )))]
 struct ApiDoc;
 
@@ -111,7 +114,7 @@ pub fn router(state: ApiState) -> Router {
     limited
         .route_layer(middleware::from_fn_with_state(state.clone(), limit::per_ip))
         .merge(unlimited)
-        .merge(ip::ip_routes())
+        .merge(ip::ip_routes(state.clone()))
         .merge(inspectors::tls_doc_routes().split_for_parts().0)
         .merge(inspectors::http_doc_routes().split_for_parts().0)
         .merge(email::email_doc_routes().split_for_parts().0)
@@ -192,6 +195,8 @@ struct Meta {
     current_profile: u32,
     profiles: Vec<u32>,
     evidence_schema_version: u32,
+    /// The MaxMind GeoLite2 attribution text the IP data requires next to its use.
+    attribution: String,
     limits: Limits,
 }
 
@@ -284,6 +289,7 @@ async fn meta_handler(State(state): State<ApiState>) -> Json<Meta> {
         current_profile: state.current_profile(),
         profiles: state.profile_versions(),
         evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        attribution: netray_ip::GEOIP_ATTRIBUTION.into(),
         limits: Limits {
             api: ApiLimits {
                 per_ip_per_minute: config.per_ip_per_minute,

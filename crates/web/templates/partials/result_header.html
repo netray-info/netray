@@ -8,6 +8,8 @@
 <div class="result-hero__actions">
 <form id="recheck" class="recheck" method="post" action="/{{ href }}/run" data-island="stream" data-stream-url="/{{ href }}/run"{% if autostart %} data-stream-autostart="visit"{% endif %}>
 {{ button|safe }}
+{%- if let Some(selectors) = dkim_selectors %}
+<input type="hidden" name="dkim_selectors" value="{{ selectors }}">{% endif %}
 </form>
 {{ share|safe }}
 </div>

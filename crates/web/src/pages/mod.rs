@@ -31,7 +31,8 @@ pub const SPECULATION_RULES: &str = r#"{"prerender":[{"where":{"or":[{"href_matc
 
 const ROBOTS: &str = "User-agent: *\nAllow: /\nSitemap: https://netray.info/sitemap.xml\n";
 
-/// The guides, compare, status, the sitemap and the static files under `/static`.
+/// The guides, compare, status, the sitemap and the static files under `/static`, plus the 301s
+/// of V1's site paths (`/compare/`, `/status/`, `/tools`; `/guide/<slug>.html` in `guides::show`).
 pub fn router() -> Router {
     Router::new()
         .route("/guide", get(guides::index_redirect))
@@ -39,7 +40,11 @@ pub fn router() -> Router {
         .route("/guide/{slug}", get(guides::show))
         .route("/guide/{slug}/", get(errors::not_found))
         .route("/compare", get(compare::show))
+        .route("/compare/", get(|| async { guides::moved("/compare") }))
         .route("/status", get(status::show))
+        .route("/status/", get(|| async { guides::moved("/status") }))
+        .route("/tools", get(|| async { guides::moved("/") }))
+        .route("/tools/", get(|| async { guides::moved("/") }))
         .route("/sitemap.xml", get(sitemap))
         .route("/static/", get(errors::not_found))
         .route("/static/{*path}", get(assets::serve))

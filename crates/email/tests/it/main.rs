@@ -6,6 +6,7 @@ mod contract_golden;
 mod enrichment_integration;
 mod history_volatile;
 mod inspect_route;
+mod inspect_selectors;
 mod model_status;
 mod module_input;
 mod module_v3;
