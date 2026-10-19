@@ -10,6 +10,7 @@ mod email;
 mod error;
 mod inspectors;
 mod ip;
+mod jobs;
 mod limit;
 mod reads;
 mod runs;
@@ -35,6 +36,8 @@ pub use config::{
 };
 pub use error::V1Error;
 use ip::{AddressField, CallerField};
+pub use jobs::InspectJobs;
+pub(crate) use runs::wants_event_stream;
 pub use runs::{
     DomainRefusal, DomainRuns, RefusalReason, RunEvent, RunEvents, RunRefusal, RunStart, RunTrigger,
 };

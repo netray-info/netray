@@ -74,6 +74,7 @@ fn make_state_with_cache(ttl_seconds: u64) -> AppState {
             ..BadgesConfig::default()
         },
         admission: lens::config::AdmissionConfig::default(),
+        inspect: Default::default(),
         api: Default::default(),
         og_cards: lens::config::OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),

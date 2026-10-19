@@ -51,7 +51,7 @@ impl SegmentState {
 pub struct RecordRow {
     pub owner: String,
     pub rtype: String,
-    pub ttl: u32,
+    pub ttl: String,
     pub data: String,
 }
 
@@ -62,6 +62,25 @@ pub struct Field {
     pub value: String,
 }
 
+/// A table column header; `key` marks the column whose value identifies a row.
+#[derive(Debug, Clone)]
+pub struct TableColumn {
+    pub name: String,
+    pub key: bool,
+}
+
+impl From<&str> for TableColumn {
+    fn from(name: &str) -> Self {
+        TableColumn {
+            name: name.to_string(),
+            key: false,
+        }
+    }
+}
+
+/// The deepest nesting level the stylesheet has a rule for; deeper nodes render at this level.
+pub const MAX_TREE_DEPTH: u8 = 7;
+
 /// One node of a flattened tree; `depth` is its nesting level.
 #[derive(Debug, Clone)]
 pub struct TreeItem {
@@ -69,12 +88,19 @@ pub struct TreeItem {
     pub text: String,
 }
 
+impl TreeItem {
+    /// The `data-depth` value: `depth` clamped to [`MAX_TREE_DEPTH`].
+    pub fn depth_attr(&self) -> u8 {
+        self.depth.min(MAX_TREE_DEPTH)
+    }
+}
+
 /// The shape of an evidence block's content.
 #[derive(Debug, Clone)]
 pub enum EvidenceShape {
     Records(Vec<RecordRow>),
     Table {
-        columns: Vec<String>,
+        columns: Vec<TableColumn>,
         rows: Vec<Vec<String>>,
     },
     Chain(Vec<Vec<Field>>),
@@ -178,6 +204,11 @@ impl SpectrumBand {
     fn boundary_pct(&self) -> Option<String> {
         self.boundary.map(|b| format!("{b:.4}"))
     }
+
+    /// Whether `live`, a space-separated list of protocol names, names this band.
+    fn is_live(&self, live: &str) -> bool {
+        live.split(' ').any(|p| p == self.protocol)
+    }
 }
 
 /// One label: `x` the leader in percent of the plate, `width` the box width in px.
@@ -234,7 +265,7 @@ pub struct SpectrumView {
     pub regions: Vec<SpectrumRegion>,
 }
 
-fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
+pub(crate) fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
     use crate::spectrum::LineTone;
     match tone {
         LineTone::Pass => Tone::Pass,
@@ -246,6 +277,11 @@ fn line_tone(tone: crate::spectrum::LineTone) -> Tone {
 }
 
 impl SpectrumView {
+    /// One line's share of the plate width, the width of its hit target.
+    fn pitch_pct(&self) -> String {
+        format!("{:.4}", 100.0 / self.line_count.max(1) as f64)
+    }
+
     /// The view of a layout: percent positions from px, one band per protocol group, one run
     /// group and one label set per run, `shown` marking the run on display.
     pub fn from_layout(layout: &crate::spectrum::Layout, label: &str, shown: usize) -> Self {
@@ -442,8 +478,24 @@ component!(
     spectrum,
     SpectrumTemplate,
     SpectrumView,
-    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view) %}{% endcall %}"
+    "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, \"\") %}{% endcall %}"
 );
+
+#[derive(Template)]
+#[template(
+    source = "{% import \"components/spectrum.html\" as c %}{% call c::spectrum(view, live) %}{% endcall %}",
+    ext = "html"
+)]
+struct SpectrumLiveTemplate<'a> {
+    view: &'a SpectrumView,
+    live: &'a str,
+}
+
+/// Renders the `spectrum` component with the bands named in `live` (space-separated protocol
+/// names) marked as measured by the run on display.
+pub fn spectrum_live(view: &SpectrumView, live: &str) -> askama::Result<String> {
+    SpectrumLiveTemplate { view, live }.render()
+}
 component!(
     trace,
     TraceTemplate,

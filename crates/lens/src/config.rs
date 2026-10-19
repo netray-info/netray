@@ -24,6 +24,8 @@ pub struct Config {
     #[serde(default)]
     pub api: netray_web::api::ApiConfig,
     #[serde(default)]
+    pub inspect: netray_web::pages::InspectConfig,
+    #[serde(default)]
     pub scoring: ScoringConfig,
     #[serde(default)]
     pub site: SiteConfig,
@@ -541,6 +543,7 @@ impl Config {
             self.admission.domain_run_slots,
         )?;
         self.api.validate().map_err(ConfigError::Message)?;
+        self.inspect.validate().map_err(ConfigError::Message)?;
         netray_common::telemetry::validate(&self.telemetry).map_err(ConfigError::Message)?;
 
         let b = &self.backends;
@@ -636,6 +639,7 @@ mod tests {
             cache: default_cache(),
             rate_limit: default_rate_limit(),
             admission: AdmissionConfig::default(),
+            inspect: Default::default(),
             api: Default::default(),
             scoring: ScoringConfig::default(),
             site: SiteConfig::default(),

@@ -73,6 +73,7 @@ fn make_state() -> AppState {
         site: SiteConfig::default(),
         badges: BadgesConfig::default(),
         admission: lens::config::AdmissionConfig::default(),
+        inspect: Default::default(),
         api: Default::default(),
         og_cards: OgCardsConfig { enabled: true },
         snapshots: lens::config::SnapshotsConfig::default(),
@@ -276,12 +277,14 @@ async fn c6_c22_fresh_head_serves_the_og_card_without_a_run() {
     let (state, calls, _dir, seeded) = setup(Some((Grade::B, 10)), "A", true).await;
     let (run, last_seen_at) = seeded.unwrap();
     let pct = netray_engine::history::score_run(&run, &state.scoring_profile).overall_percentage;
+    let plate = netray_web::plate::card_plate(&netray_web::plate::card_layout(&run, None));
     let svg = lens::og::render::svg_for_grade(
         DOMAIN,
         "B",
         lens::og::layout::DEFAULT_LABEL,
         pct,
         UNIX_EPOCH + Duration::from_secs(last_seen_at as u64),
+        Some(&plate),
     );
     let expected = lens::og::render::svg_to_png(&svg, state.font_db.clone()).unwrap();
 

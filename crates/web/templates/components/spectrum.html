@@ -1,4 +1,4 @@
-{% macro spectrum(view) %}
+{% macro spectrum(view, live) %}
 <div class="spectrum">
   <div class="spectrum__box" style="min-width: calc({{ view.line_count }} * var(--spectrum-line-pitch-min))">
     <div class="spectrum__label-band" style="height: calc(var(--spectrum-label-leader) + {{ view.rows }} * var(--spectrum-label-row))">
@@ -15,7 +15,7 @@
     </div>
     <svg class="spectrum__plate" role="img" aria-label="{{ view.label }}">
       {% for band in view.bands %}
-      <g id="band-{{ band.protocol }}" data-protocol="{{ band.protocol }}">
+      <g id="band-{{ band.protocol }}" data-protocol="{{ band.protocol }}"{% if band.is_live(live) %} data-live{% endif %}>
         {% if let Some(b) = band.boundary_pct() %}<line class="spectrum__boundary" x1="{{ b }}%" x2="{{ b }}%" y1="0" y2="100%" />{% endif %}
         {% for run in band.runs %}
         <g class="spectrum__run" data-run="{{ run.run }}"{% if run.shown %} data-shown{% endif %}{% if run.unmeasured %} data-unmeasured{% endif %}>
@@ -34,6 +34,15 @@
       </g>
       {% endfor %}
     </svg>
+    <div class="spectrum__targets">
+      {% for band in view.bands %}
+      {% if let Some(first) = band.runs.first() %}
+      {% for line in first.lines %}
+      <span class="spectrum__target" data-target="{{ line.code }}" style="left: {{ line.x_pct() }}%; width: {{ view.pitch_pct() }}%"></span>
+      {% endfor %}
+      {% endif %}
+      {% endfor %}
+    </div>
     <div class="spectrum__axis">
       {% for region in view.regions %}
       <span class="spectrum__region-label" style="left: {{ region.x_pct() }}%">{{ region.label }}</span>

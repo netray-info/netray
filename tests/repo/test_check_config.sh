@@ -113,6 +113,8 @@ startup_rejects=(
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_per_minute = 601\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 50\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.ip]\\nbatch_addresses_burst = 101\\n\\n[site]|"
+    # specs/features/v2-inspectors C13: the `[inspect.<tool>]` limits, checked below by key name
+    "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[inspect.dns]\\nmax_concurrent = 0\\n\\n[site]|"
     # specs/features/v2-api Phase 5: [api.tls] / [api.http] limits
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_ip_per_minute = 0\\n\\n[site]|"
     "lens:crates/lens/tests/fixtures/lens.production.toml:s|^\\[site\\]\$|[api.tls]\\nper_ip_burst = 0\\n\\n[site]|"
@@ -158,6 +160,15 @@ for row in "${startup_rejects[@]}"; do
         grep -qF "api.$section.$key" <<<"$out" || fail "lens: [api.$section] $key row error does not name api.$section.$key ($out)"
         ! grep -qi 'unknown field' <<<"$out" || fail "lens: [api.$section] $key row was refused as an unknown field ($out)"
     fi
+    # An `[inspect.<tool>]` row is refused by its rule too: the output names `inspect.<tool>.<key>`.
+    if [[ "$expr" == *'[inspect.'* ]]; then
+        section="${expr#*|[}"
+        section="${section%%\]*}"
+        key="${expr#*\\n}"
+        key="${key%% =*}"
+        grep -qF "$section.$key" <<<"$out" || fail "lens: [$section] $key row error does not name $section.$key ($out)"
+        ! grep -qi 'unknown field' <<<"$out" || fail "lens: [$section] $key row was refused as an unknown field ($out)"
+    fi
 done
 
 # specs/features/v2-admission C6: the lens fixture carries `[admission]` with both keys, and
@@ -173,11 +184,12 @@ else
     [ "$rc" -eq 0 ] || fail "lens: client_budget_per_hour = 0 exited $rc, expected 0 ($out)"
 fi
 
-# specs/features/v2-api C32: an unknown key under `[api]` or `[api.ip]` fails the check and the
+# specs/features/v2-api C32, v2-inspectors C13: an unknown key under `[api]`, `[api.ip]` or `[inspect.tls]` fails the check and the
 # output names the key.
 api_rejects=(
     "api bogus|[api]\nbogus = 1"
     "api.ip bogus|[api.ip]\nbogus = 1"
+    "inspect.tls bogus|[inspect.tls]\nbogus = 1"
 )
 n=0
 for row in "${api_rejects[@]}"; do

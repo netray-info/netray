@@ -1,6 +1,7 @@
 //! The DNS jobs: prism's five fan-outs (query, compare, authcompare, trace, dnssec) as
 //! typed event streams, callable without a route, and the seam through which they reach DNS.
 
+pub mod blocks;
 pub mod events;
 pub mod schema;
 
@@ -569,11 +570,24 @@ impl DnsJobs {
         limits: &RateLimitState,
         request_id: String,
     ) -> Result<DnsJob<DnsCompareEvent>, ApiError> {
-        // Strip any transport override — we'll iterate all transports ourselves.
-        let mut parsed = convert_post_body(PostQueryRequest {
+        let parsed = convert_post_body(PostQueryRequest {
             transport: None,
             ..req.clone()
         })?;
+        self.compare_parsed(parsed, client, limits, request_id)
+            .await
+    }
+
+    /// A compare job over a parsed query; any transport override is cleared, the job iterates
+    /// all transports itself.
+    pub async fn compare_parsed(
+        &self,
+        mut parsed: ParsedQuery,
+        client: IpAddr,
+        limits: &RateLimitState,
+        request_id: String,
+    ) -> Result<DnsJob<DnsCompareEvent>, ApiError> {
+        parsed.transport = None;
 
         let policy = QueryPolicy::new(&self.config);
         policy.validate(&parsed)?;
@@ -850,7 +864,18 @@ impl DnsJobs {
         request_id: String,
     ) -> Result<DnsJob<DnsAuthCompareEvent>, ApiError> {
         let parsed = convert_post_body(req.clone())?;
+        self.authcompare_parsed(parsed, client, limits, request_id)
+            .await
+    }
 
+    /// An authcompare job over a parsed query.
+    pub async fn authcompare_parsed(
+        &self,
+        parsed: ParsedQuery,
+        client: IpAddr,
+        limits: &RateLimitState,
+        request_id: String,
+    ) -> Result<DnsJob<DnsAuthCompareEvent>, ApiError> {
         let policy = QueryPolicy::new(&self.config);
         policy.validate(&parsed)?;
 
@@ -1106,7 +1131,12 @@ impl DnsJobs {
                                             let records: Vec<_> = raw_resp
                                                 .answers()
                                                 .iter()
-                                                .map(dns_raw::record_to_dns_record)
+                                                .map(|r| {
+                                                    (
+                                                        dns_raw::record_to_dns_record(r),
+                                                        dns_raw::rdata_presentation(&r.data),
+                                                    )
+                                                })
                                                 .collect();
 
                                             // Build a synthetic lookup result.
@@ -1120,10 +1150,14 @@ impl DnsJobs {
                                             {
                                                 AuthResult::NxDomain { response_time }
                                             } else {
+                                                let rcode = raw_resp.response_code();
                                                 AuthResult::Response {
+                                                    failure: (rcode
+                                                        != hickory_proto::op::ResponseCode::NoError)
+                                                        .then(|| rcode.to_string()),
                                                     records: records
                                                         .into_iter()
-                                                        .map(|r| AuthRecord {
+                                                        .map(|(r, presentation)| AuthRecord {
                                                             data: BTreeMap::from([(
                                                                 r.record_type.clone(),
                                                                 r.rdata,
@@ -1131,6 +1165,7 @@ impl DnsJobs {
                                                             name: r.name,
                                                             record_type: r.record_type,
                                                             ttl: r.ttl,
+                                                            presentation,
                                                         })
                                                         .collect(),
                                                     response_time,

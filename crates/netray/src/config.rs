@@ -252,6 +252,7 @@ impl Config {
             badges: self.badges.clone(),
             og_cards: self.og_cards.clone(),
             api: Default::default(),
+            inspect: Default::default(),
             snapshots: lens::config::SnapshotsConfig {
                 enabled: false,
                 ..Default::default()

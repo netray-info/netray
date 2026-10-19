@@ -77,6 +77,7 @@ fn stub(
             domain: card.domain.clone(),
             grade: card.grade.clone(),
             created_at: card.created_at,
+            plate: card.plate.clone(),
         });
         result()
     });
@@ -218,7 +219,7 @@ async fn c7_malformed_id_and_other_subpaths_answer_404() {
     let (status, _, _) = send(&app, "/r/x/og.png", None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 
-    let (status, _, body) = send(&app, &format!("/r/{id}/other"), None).await;
+    let (status, _, body) = send(&app, &format!("/r/{id}/other/x"), None).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body, NOT_FOUND_HTML.as_bytes());
     assert_eq!(calls.load(Ordering::SeqCst), 0);

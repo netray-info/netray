@@ -453,6 +453,67 @@ pub(crate) fn record_to_dns_record(record: &hickory_proto::rr::Record) -> DnsRec
     }
 }
 
+/// The record data in zone-file form, exactly as `module::rdata_text` writes mhost's (whose
+/// records mhost converts from these same hickory types): TXT strings each quoted, CAA's value
+/// quoted as sent, SVCB and HTTPS parameters without hickory's trailing commas, TLSA and SSHFP
+/// numbers with upper-case hex; every other type in hickory's own form.
+pub(crate) fn rdata_presentation(data: &hickory_proto::rr::RData) -> String {
+    use hickory_proto::rr::RData;
+    let quoted = |bytes: &[u8]| format!("\"{}\"", String::from_utf8_lossy(bytes));
+    match data {
+        RData::TXT(txt) => txt
+            .txt_data
+            .iter()
+            .map(|s| quoted(s))
+            .collect::<Vec<_>>()
+            .join(" "),
+        RData::CAA(caa) => format!(
+            "{} {} {}",
+            if caa.issuer_critical { 128 } else { 0 },
+            caa.tag,
+            quoted(&caa.value)
+        ),
+        RData::HTTPS(hickory_proto::rr::rdata::HTTPS(svcb)) | RData::SVCB(svcb) => {
+            let mut rr = format!("{} {}", svcb.svc_priority, svcb.target_name);
+            for (key, value) in &svcb.svc_params {
+                rr.push_str(&format!(
+                    " {key}={}",
+                    value.to_string().trim_end_matches(',')
+                ));
+            }
+            rr
+        }
+        RData::SRV(srv) => format!(
+            "{} {} {} {}",
+            srv.priority, srv.weight, srv.port, srv.target
+        ),
+        RData::TLSA(tlsa) => format!(
+            "{} {} {} {}",
+            u8::from(tlsa.cert_usage),
+            u8::from(tlsa.selector),
+            u8::from(tlsa.matching),
+            crate::module::hex_upper(&tlsa.cert_data)
+        ),
+        RData::SSHFP(sshfp) => format!(
+            "{} {} {}",
+            u8::from(sshfp.algorithm),
+            u8::from(sshfp.fingerprint_type),
+            crate::module::hex_upper(&sshfp.fingerprint)
+        ),
+        RData::NAPTR(naptr) => format!(
+            "{} {} {} {} {} {}",
+            naptr.order,
+            naptr.preference,
+            quoted(&naptr.flags),
+            quoted(&naptr.services),
+            quoted(&naptr.regexp),
+            naptr.replacement
+        ),
+        RData::HINFO(hinfo) => format!("{} {}", quoted(&hinfo.cpu), quoted(&hinfo.os)),
+        other => other.to_string(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------

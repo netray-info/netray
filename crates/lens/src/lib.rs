@@ -300,35 +300,88 @@ pub fn routes(state: state::AppState) -> Router {
 
     let entry_routes = match &state.history_store {
         Some(history) if config.history.enabled => {
+            let v1 = (config.snapshots.enabled && state.snapshot_store.is_some())
+                .then(|| routes::v1_lookup(state.clone()));
             netray_web::entries::router(netray_web::entries::EntriesDeps {
                 history: history.clone(),
-                v1: (config.snapshots.enabled && state.snapshot_store.is_some())
-                    .then(|| routes::v1_lookup(state.clone())),
+                v1: v1.clone(),
                 card: og::handler::entry_card_renderer(&state),
             })
+            .merge(netray_web::pages::evidence_router(
+                netray_web::pages::EvidenceDeps {
+                    history: history.clone(),
+                    v1,
+                },
+            ))
         }
         _ if config.snapshots.enabled => routes::snapshot_router().with_state(state.clone()),
         _ => Router::new(),
     };
 
-    let api_routes = if config.api.enabled {
-        let limits = netray_web::api::AdmissionLimits {
-            client_budget_per_hour: config.admission.client_budget_per_hour,
-            domain_run_slots: config.admission.domain_run_slots,
-            rate_limit_per_ip_per_minute: config.rate_limit.per_ip_per_minute,
-            rate_limit_per_ip_burst: config.rate_limit.per_ip_burst,
-            rate_limit_global_per_minute: config.rate_limit.global_per_minute,
-            rate_limit_global_burst: config.rate_limit.global_burst,
-        };
-        let api_state = netray_web::api::ApiState::new(
-            config.api.clone(),
-            std::sync::Arc::new(api_v1::LensRuns::new(state.clone())),
+    let result_routes = match &state.history_store {
+        Some(history) if config.history.enabled => {
+            let spa_shell = shell.clone();
+            let fallback: std::sync::Arc<
+                dyn Fn(
+                        axum::extract::Request,
+                    )
+                        -> futures::future::BoxFuture<'static, axum::response::Response>
+                    + Send
+                    + Sync,
+            > = std::sync::Arc::new(move |req: axum::extract::Request| {
+                let spa_shell = spa_shell.clone();
+                Box::pin(async move {
+                    spa::handler(axum::extract::State(spa_shell), req.uri().clone()).await
+                })
+            });
+            netray_web::pages::result::router(
+                netray_web::pages::result::ResultState::new(
+                    history.clone(),
+                    std::sync::Arc::new(api_v1::LensRuns::new(state.clone())),
+                    config.cache.ttl_seconds,
+                )
+                .with_ip_extractor(state.ip_extractor.clone())
+                .with_fallback(fallback),
+            )
+            .layer(axum::middleware::map_response(
+                |mut response: axum::response::Response| async move {
+                    response
+                        .headers_mut()
+                        .remove("cross-origin-resource-policy");
+                    response
+                },
+            ))
+        }
+        _ => Router::new(),
+    };
+
+    let limits = netray_web::api::AdmissionLimits {
+        client_budget_per_hour: config.admission.client_budget_per_hour,
+        domain_run_slots: config.admission.domain_run_slots,
+        rate_limit_per_ip_per_minute: config.rate_limit.per_ip_per_minute,
+        rate_limit_per_ip_burst: config.rate_limit.per_ip_burst,
+        rate_limit_global_per_minute: config.rate_limit.global_per_minute,
+        rate_limit_global_burst: config.rate_limit.global_burst,
+    };
+    let api_state = netray_web::api::ApiState::new(
+        config.api.clone(),
+        std::sync::Arc::new(api_v1::LensRuns::new(state.clone())),
+    )
+    .with_store(state.history_store.clone())
+    .with_ip_extractor(state.ip_extractor.clone())
+    .with_admission_limits(limits)
+    .with_parts(state.api_parts.clone())
+    .with_profile(state.scoring_profile.clone());
+
+    let inspect_routes = netray_web::pages::inspect_router(
+        netray_web::pages::InspectDeps::new(
+            std::sync::Arc::new(netray_web::api::InspectJobs::new(api_state.clone())),
+            config.inspect.clone(),
         )
-        .with_store(state.history_store.clone())
-        .with_ip_extractor(state.ip_extractor.clone())
-        .with_admission_limits(limits)
-        .with_parts(state.api_parts.clone())
-        .with_profile(state.scoring_profile.clone());
+        .with_ip_extractor(state.ip_extractor.clone()),
+    );
+
+    let api_routes = if config.api.enabled {
         Router::new()
             .nest("/api/v1", netray_web::api::router(api_state))
             .route("/api/v1/", axum::routing::any(api_v1_not_found))
@@ -351,8 +404,10 @@ pub fn routes(state: state::AppState) -> Router {
             Router::new()
         })
         .with_state(state)
+        .merge(inspect_routes)
         .merge(frontend_router_with(shell))
         .merge(entry_routes)
+        .merge(result_routes)
         .merge(netray_web::entries::privacy_router())
         .merge(api_routes)
         .route(

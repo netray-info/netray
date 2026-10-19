@@ -101,10 +101,11 @@ fn reserved_segments_and_root_files_never_reach_the_result_page() {
 
     let (ref_status, ref_body) = get(port, "/example.com").expect("GET /example.com");
     assert_eq!(ref_status, 200, "reference /example.com status");
-    let marker = "<div id=\"root\"";
+    // The result page is server-rendered since v2-result-page; its passed-checks block is its own.
+    let marker = "<details id=\"passed\"";
     assert!(
         ref_body.contains(marker),
-        "reference body lacks the SPA shell marker {marker:?}: {ref_body}"
+        "reference body lacks the result page marker {marker:?}: {ref_body}"
     );
 
     let paths = [

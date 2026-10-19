@@ -53,7 +53,7 @@ pub fn format_utc_timestamp(t: SystemTime) -> String {
     )
 }
 
-fn epoch_days_to_ymd(mut days: u64) -> (u64, u8, u8) {
+pub(crate) fn epoch_days_to_ymd(mut days: u64) -> (u64, u8, u8) {
     let mut year = 1970u64;
     loop {
         let days_in_year = if is_leap(year) { 366 } else { 365 };
@@ -95,7 +95,7 @@ pub(crate) fn grade_letter(grade: Grade) -> &'static str {
     }
 }
 
-fn grade_tone(grade: Grade) -> Tone {
+pub(crate) fn grade_tone(grade: Grade) -> Tone {
     match grade {
         Grade::APlus | Grade::A | Grade::B => Tone::Pass,
         Grade::C | Grade::D => Tone::Warn,
@@ -104,7 +104,7 @@ fn grade_tone(grade: Grade) -> Tone {
     }
 }
 
-fn status_tone(status: Option<Status>) -> Tone {
+pub(crate) fn status_tone(status: Option<Status>) -> Tone {
     match status {
         Some(Status::Pass) => Tone::Pass,
         Some(Status::Warn) => Tone::Warn,

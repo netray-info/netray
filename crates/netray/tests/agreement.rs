@@ -450,6 +450,14 @@ async fn every_view_of_a_recorded_run_agrees_on_grade_and_statuses() {
         let png =
             |svg: String| lens::og::render::svg_to_png(&svg, w.state.font_db.clone()).unwrap();
         let label = lens::og::layout::DEFAULT_LABEL;
+        let predecessor = match &entry.predecessor_id {
+            Some(id) => w.store.get(id).await.unwrap(),
+            None => None,
+        };
+        let plate = netray_web::plate::card_plate(&netray_web::plate::card_layout(
+            &entry.run,
+            predecessor.as_ref().map(|p| &p.run),
+        ));
         assert_eq!(v.og_card.status, StatusCode::OK, "{name}: og card");
         assert!(
             v.og_card.body
@@ -458,7 +466,8 @@ async fn every_view_of_a_recorded_run_agrees_on_grade_and_statuses() {
                     want_letter,
                     label,
                     pct,
-                    seen
+                    seen,
+                    Some(&plate)
                 )),
             "{name}: the OG card does not draw the stored grade {want_letter}"
         );
@@ -469,7 +478,8 @@ async fn every_view_of_a_recorded_run_agrees_on_grade_and_statuses() {
                     DOMAIN,
                     want_letter,
                     label,
-                    recorded
+                    recorded,
+                    &plate
                 )),
             "{name}: the entry card does not draw the stored grade {want_letter}"
         );

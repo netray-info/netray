@@ -38,3 +38,10 @@
 .trace__cell[data-tone="warn"] { background: var(--status-warn-mark); }
 .trace__cell[data-tone="fail"] { background: var(--status-fail-mark); }
 .trace__cell[data-tone="fix"] { background: var(--status-fix-mark); }
+.trace__row[data-run] { cursor: pointer; }
+.trace__row--hover {
+  font-weight: var(--font-weight-strong);
+}
+.trace__row--hover .trace__cell:not([data-tone="pass"]) {
+  height: calc(var(--spectrum-trace-row) * 2);
+}

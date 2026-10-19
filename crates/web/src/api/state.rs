@@ -35,6 +35,7 @@ pub struct AdmissionLimits {
 #[derive(Clone, Default)]
 pub struct ApiParts {
     pub dns: Option<DnsJobs>,
+    pub dns_module: Option<Arc<dyn netray_engine::Module>>,
     pub ip: Option<Arc<dyn IpLookup>>,
     pub tls: Option<TlsInspector>,
     pub http: Option<Arc<dyn HttpInspect>>,
@@ -266,6 +267,10 @@ impl ApiState {
 
     pub fn dns_limiter(&self) -> &Arc<netray_dns::security::RateLimitState> {
         &self.dns_limiter
+    }
+
+    pub fn dns_module(&self) -> Option<&Arc<dyn netray_engine::Module>> {
+        self.parts.dns_module.as_ref()
     }
 
     pub fn dns_jobs(&self) -> Option<&DnsJobs> {

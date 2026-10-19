@@ -13,6 +13,8 @@ use axum::routing::get;
 use netray_store::HistoryStore;
 use serde_json::json;
 
+use crate::plate::{card_layout, card_plate};
+
 use super::{
     render,
     view::{entry_view, grade_letter},
@@ -34,6 +36,8 @@ pub struct EntryCard {
     pub domain: String,
     pub grade: String,
     pub created_at: SystemTime,
+    /// The `plate::card_plate` of the entry's run over its predecessor's.
+    pub plate: String,
 }
 
 /// Entry card renderer handed in by lens: the PNG bytes, or lens's render-failure response.
@@ -46,14 +50,17 @@ pub struct EntriesDeps {
     pub card: CardRenderer,
 }
 
-/// Serves `/r/{id}` and answers every other path under `/r/` with the 404 page.
+/// Serves `/r/{id}` and `/r/{id}/og.png`; `/r/`, `/r/{id}/`, `/r/{id}/{segment}/` and every path
+/// of three or more segments under `/r/` answer the 404 page. The two-segment
+/// `/r/{id}/{inspector}` is left to the evidence router.
 pub fn router(deps: EntriesDeps) -> axum::Router {
     axum::Router::<EntriesDeps>::new()
         .route("/r/{id}", get(entry_page))
         .route("/r/{id}/og.png", get(entry_card))
         .route("/r/", get(unmatched))
         .route("/r/{id}/", get(unmatched))
-        .route("/r/{id}/{*rest}", get(entry_rest))
+        .route("/r/{id}/{segment}/", get(unmatched))
+        .route("/r/{id}/{segment}/{*rest}", get(unmatched))
         .with_state(deps)
 }
 
@@ -73,32 +80,6 @@ async fn unmatched() -> Response {
         NOT_FOUND_HTML,
     )
         .into_response()
-}
-
-const PROTOCOLS: [&str; 5] = ["dns", "tls", "http", "email", "ip"];
-
-async fn entry_rest(
-    State(deps): State<EntriesDeps>,
-    path: Result<Path<(String, String)>, PathRejection>,
-) -> Response {
-    let Ok(Path((id, rest))) = path else {
-        return unmatched().await;
-    };
-    if !well_formed(&id) || !PROTOCOLS.contains(&rest.as_str()) {
-        return unmatched().await;
-    }
-    match deps.history.get(&id).await {
-        Ok(None) => page(StatusCode::GONE, render::gone()),
-        Ok(Some(_)) => unmatched().await,
-        Err(e) => {
-            tracing::warn!(id = %id, error = %e, "history lookup failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": {"code": "INTERNAL", "message": "entry unavailable"}})),
-            )
-                .into_response()
-        }
-    }
 }
 
 pub(crate) fn well_formed(id: &str) -> bool {
@@ -181,10 +162,28 @@ async fn entry_card(
     {
         return (StatusCode::NOT_MODIFIED, [(ETAG, etag)]).into_response();
     }
+    let predecessor = match &entry.predecessor_id {
+        None => None,
+        Some(pid) => match deps.history.get(pid).await {
+            Ok(found) => found,
+            Err(e) => {
+                tracing::warn!(id = %id, error = %e, "history lookup failed");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": {"code": "INTERNAL", "message": "entry unavailable"}})),
+                )
+                    .into_response();
+            }
+        },
+    };
     let card = EntryCard {
         domain: entry.domain,
         grade: letter.to_string(),
         created_at: UNIX_EPOCH + Duration::from_secs(entry.created_at.max(0) as u64),
+        plate: card_plate(&card_layout(
+            &entry.run,
+            predecessor.as_ref().map(|p| &p.run),
+        )),
     };
     match (deps.card)(&card) {
         Ok(png) => (

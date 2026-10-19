@@ -1,0 +1,2 @@
+{% import "components/grade.html" as grade %}
+<div id="result-grade"{% if let Some(g) = grade %} data-grade="{{ g.letter }}"{% if let Some(d) = date %} data-date="{{ d }}"{% endif %}{% endif %}>{% if let Some(g) = grade %}{% call grade::grade(g) %}{% endcall %}{% endif %}</div>

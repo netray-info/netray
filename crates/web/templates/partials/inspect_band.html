@@ -1,0 +1,3 @@
+<div id="inspect-band">
+{% if let Some(html) = html %}{{ html|safe }}{% else %}<p>{{ text }}</p>{% endif %}
+</div>

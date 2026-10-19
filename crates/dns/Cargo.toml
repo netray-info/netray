@@ -107,3 +107,23 @@ reqwest = { workspace = true, features = ["rustls"] }
 rcgen = "0.14"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 tokio-rustls = "0.26"
+
+[[test]]
+name = "job_blocks"
+path = "tests/job_blocks.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "job_blocks_review"
+path = "tests/job_blocks_review.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "job_blocks_rule_m"
+path = "tests/job_blocks_rule_m.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "job_blocks_rendering"
+path = "tests/job_blocks_rendering.rs"
+required-features = ["testing"]

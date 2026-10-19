@@ -45,6 +45,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - A service moved in-process keeps every check its route applied to lens's calls (input validation, per-target limits, policy); only per-client limits go.
 - hickory 0.26 `Name::eq` compares `is_fqdn`: a live query name without the trailing dot never equals a wire record name; never compare owners against the query name.
 - `tests/repo/test_workflows.sh` checks the workflows' shape, not their behaviour; a workflow change is verified by its first CI run or release tag.
+- CI's check job compiles the workspace tests twice (offline suite, then `test-rust` with GeoIP data); a cold-cache run took 25m51s of its 30-minute timeout.
 - The `ifconfig-rs-data` image also carries tracked files (`asn_patterns.toml`): never copy it over `crates/ip/data/`.
 - `adlc feature start` branches from `origin/main`: with unpushed commits on local `main`, fast-forward the new feature branch to `main` before writing the spec.
 - lens records a run after its response: a test reading `history.db` or the record-error counter after a response polls with a bound or awaits `state.runs.drain()`.
@@ -52,6 +53,10 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - A paused tokio clock times out sqlx pool acquires: never combine `start_paused` or `pause()` with a `HistoryStore`.
 - governor's `check` spends a token whatever follows: take a keyed limiter after every refusal that must cost nothing.
 - Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
+- lens reads every `LENS_*` variable as a config key, `LENS_EXTRA` included: `acceptance-local` unsets it after building lens's env row.
+- Node 26 defines a global `localStorage` that shadows happy-dom's: an island test installs its own storage, as `islands/test/theme.test.ts`'s `useStorage` does.
+- A golden over live-run markup carries the wall clock: normalise it (`NOW` in `crates/web/tests/result_islands_fixtures.rs`), or the golden breaks at midnight.
+- `HistoryStore::sweep` always keeps the head's predecessor: a swept-predecessor test needs a third entry as head.
 - Never put `|` in a `report.md` criteria cell, even in backticks: `adlc next` splits cells on it and keeps the phase open.
 
 The adlc working rules (receipt, baseline trailer, test changes, review) are in `AGENTS.md`.
@@ -82,7 +87,9 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Data files are checked at startup, not by `--check-config`.** Data files named in config (lens's `[modules.ip]` GeoIP databases, as `netray ip`) are read at startup; the config check parses the table and its keys only.
 - **Layer order**, outermost first: concurrency limit, `request_id`, security headers, CORS, body limit, trace, compression — so preflights and 413s carry the request id and headers.
 - **`start_bg` never in a subshell**: the EXIT trap of `tests/repo/lib/netray.sh` kills only PIDs recorded in the parent shell.
-- **`just acceptance-local`** starts the stack on free ports (`LOCAL_<NAME>_URL`); never assume 8000 or 8080 are free.
+- **`just acceptance-local`** starts the stack on free ports (`LOCAL_<NAME>_URL`); never assume 8000 or 8080 are free. It first seeds lens's `history.db` from `tests/acceptance/fixtures/history/` (`cargo run -p netray-store --example seed`); a fixture is `{"domain","age_seconds","run"}` with a complete run holding every catalogue ID once, never an absolute time. Spec paths given to it run in place of the default list; `@live` tests run only with `--grep @live`.
+- **Acceptance specs read `/api/v1` once per worker** (a module-level cache): a read per test hits API v1's per-client limit and answers `429` mid-suite.
+- **A too-wide evidence table scrolls inside `.evidence-block`** (`overflow-x: auto`); never `overflow-wrap: anywhere` on table cells: it shrinks min-content and breaks short tokens at 1280 px.
 - **Test invalid input through the router**, not the handler: extractor rejections (invalid UTF-8) and unmatched paths answer before the handler runs; in axum 0.8 `/x/{*rest}` conflicts with `/x/{id}`, while a static segment beside a catch-all (`/r/{id}/og.png` with `/r/{id}/{*rest}`) does not.
 - **Review the paths a contract fix wakes up.** When real data first reaches a code path, it may never have run before (lens `detect_no_mx` read every MX `fail` as "no MX").
 - **Timer-run scripts fail closed**: write every file atomically (temp in the same dir, then `mv`), clean only their own files (`*.tmp.$$`, a per-run dir), and are tested with stubs that behave like the real tool (`curl` without `-f` saves the error page, exit 0).

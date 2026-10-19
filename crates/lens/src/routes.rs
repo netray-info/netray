@@ -1806,6 +1806,7 @@ pub mod tests {
             site: SiteConfig::default(),
             badges: BadgesConfig::default(),
             admission: crate::config::AdmissionConfig::default(),
+            inspect: Default::default(),
             api: Default::default(),
             og_cards: OgCardsConfig::default(),
             snapshots: crate::config::SnapshotsConfig::default(),

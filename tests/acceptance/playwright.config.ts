@@ -19,6 +19,8 @@ export default defineConfig({
   projects: [
     { name: 'smoke', testDir: './smoke' },
     { name: 'api-contract', testDir: './api-contract', dependencies: ['smoke'] },
+    { name: 'local', testDir: './v2', grepInvert: process.argv.some((a) => a.includes('@live')) ? undefined : /@live/ },
+    { name: 'result-page', testDir: './result-page' },
     // Production gets only this subset: the full suite probes unknown paths and crawls the
     // sitemap, which the production host's fail2ban botsearch jail bans (2026-10-08).
     {

@@ -1,0 +1,2 @@
+{% import "components/run_line.html" as run_line %}
+<div id="run-line">{% match body %}{% when RunLineBody::Line(view) %}{% call run_line::run_line(view) %}{% endcall %}{% when RunLineBody::Text(text) %}<p>{{ text }}</p>{% when RunLineBody::Refusal with { lead, retry } %}{{ lead }}<span data-island="countdown" data-retry-after="{{ retry }}">{{ retry }}</span> s{% endmatch %}</div>

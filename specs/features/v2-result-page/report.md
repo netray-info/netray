@@ -1,0 +1,338 @@
+# Report: v2-result-page
+
+## Phase 1 — Page views from an entry
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R7: open issues hold every warn and fail once, no other status; row has title, findings or catalogue finding, fix hint, evidence link, guide link | green | crates/web/tests/result_views_issues.rs |
+| C2 | R9: issues grouped by fix_owner under §3.5's labels in FixOwner order; severity critical→low, protocol DNS,TLS,HTTP,email,IP; inside a group severity, fail before warn, catalogue order; data-owner/severity/protocol/status/order | green | crates/web/tests/result_views_grouping.rs |
+| C3 | R11: diff block rows per CheckChange labelled by class, per BlockChange, grade line with rescored steps, engine note, R19 line without diff | green | crates/web/tests/result_views_diff.rs |
+| C4 | R12: after a fresh run Changed/Identical/First/NotStored diff blocks | green | crates/web/tests/result_views_recorded.rs |
+| C5 | R13: passed-checks list pass, not_applicable (reason), not_tested, unmeasured ("could not check"); each check exactly once in issues or details | green | crates/web/tests/result_views_passed.rs |
+| C6 | R15 (run mapping): run.checks → CheckId→Status, run.sections → SectionState, Profiles::get(profile_version), one function | green | crates/web/tests/result_views_layout.rs |
+| C7 | R16: history sentence per line, spans of MM-DD, last as "since"; an issue's since when after the oldest shown entry | green | crates/web/tests/result_views_history.rs |
+| C8 | GIVEN two warns and one fail on different owners WHEN issues are built THEN three rows, each once, grouped by owner, fail before warn, each with title, body, fix hint, guide href, evidence href | green | crates/web/tests/result_views_issues.rs |
+| C9 | GIVEN a warn with stored findings THEN body is the findings; without THEN catalogue finding | green | crates/web/tests/result_views_issues.rs |
+| C10 | GIVEN entry Ab3dE5fG, tls.caa_compliant referencing dns.caa THEN href /r/Ab3dE5fG/dns#ev-dns.caa; without references /r/Ab3dE5fG/<protocol> | green | crates/web/tests/result_views_issue_links.rs |
+| C11 | GIVEN a not-stored run with the same check THEN href #ev-dns.caa | green | crates/web/tests/result_views_issue_links.rs |
+| C12 | GIVEN pass, not_applicable, not_tested, unmeasured checks THEN none is an issue, each exactly once in passed checks | green | crates/web/tests/result_views_passed.rs |
+| C13 | GIVEN a diff holding each of the 14 ChangeClass values THEN one row each with its label | green | crates/web/tests/result_views_diff.rs |
+| C14 | GIVEN GradeChange with rescored THEN two steps; without, one | green | crates/web/tests/result_views_diff.rs |
+| C15 | GIVEN an entry without a diff THEN "first state recorded — re-check after your change" | green | crates/web/tests/result_views_diff.rs |
+| C16 | GIVEN NotStored{diff: None} THEN "not recorded: this run is incomplete" | green | crates/web/tests/result_views_recorded.rs |
+| C17 | GIVEN warn,warn,pass,pass over four entries THEN "warn <d1> to <d2> · pass since <d3>" | green | crates/web/tests/result_views_history.rs |
+| C18 | GIVEN profile_version 3 THEN statuses carried and profile Profiles::get(3); sections measured/not_applicable/incomplete/timed_out → Measured/NotApplicable/Unmeasured/Unmeasured | green | crates/web/tests/result_views_layout.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 | 2 (+1 after a test-side fixture fix) | sonnet | 70383 | 121 |
+| G1 review fixes | 1 | sonnet | 35002 | 39 |
+
+The first coder run left one red test whose fixture contradicted itself (`ip.reputation` cycled to pass while five protocol groups were asserted); the fixture was fixed in `298e33a6` under `ADLC-Test-Change`.
+
+### Review
+
+- BLOCKER (fixed): findings joined with a bare space; now "; " as the evidence view joins them.
+- BLOCKER (fixed): `recorded_diff_view`'s "unchanged since" and "incomplete, not recorded" notes overwrote the stored diff's own note (engine change, first state); both are now kept, joined with "; ".
+- AMENDMENT (repaired in phase, Decision log): a warn or fail whose ID left the catalogue is not an issue and is listed last in the passed-checks details.
+- AMENDMENT (repaired in phase, Decision log): a changed block with no items reads its ID alone; one item reads "1 item".
+- NIT (fixed with the amendment): "(1 items)".
+- NIT (fixed): a one-day span printed its date twice.
+
+### Behavioural verification
+
+skipped: Phase 1 is pure view functions with no entry point; the routes arrive in Phase 2.
+
+## Phase 2 — Server-rendered pages
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R1: result::router(ResultState) serves GET /, GET /{domain}, POST /{domain}/run, GET /{domain}/history; non-domain first segments (no dot, root files, .well-known, bimi-logo.svg) are not answered; GET / with d → ?d= handler; lens merges it ahead of spa::handler; every response carries v2-pages' CSP | green | crates/web/tests/result_page_csp.rs, crates/lens/tests/result_mount.rs |
+| C2 | R2: segment validated by DomainRuns::validate; refused → 400 not-found template with reason and input; normalised differs → GET 301, POST 400 | green | crates/web/tests/result_page_domain.rs |
+| C3 | R3: GET /{domain} renders the latest entry in §5.7 order; no admission, no run, no store write; without entry 200 "not checked yet" + check button | green | crates/web/tests/result_page_render.rs |
+| C4 | R4: run line "run of <YYYY-MM-DD HH:MM> UTC · entry <id>"; data-state fresh/stale/none by [cache] ttl_seconds | green | crates/web/tests/result_page_render.rs |
+| C5 | R5: share link to /r/<id>; absent without entry and for an incomplete run | green | crates/web/tests/result_page_render.rs |
+| C6 | R14 (stored): one element per protocol id="evidence-<protocol>" linking /r/<id>/<protocol> with the section outcome; no block rendered | green | crates/web/tests/result_page_evidence.rs |
+| C7 | R15: spectrum and trace over the latest and at most 23 older entries; bands, data-run, data-shown, data-unmeasured; trace rows data-run; figure id="spectrum"; legend pass, warn, fail, fixed, muted | green | crates/web/tests/result_page_spectrum.rs |
+| C8 | R18: GET /{domain}/history lists every entry newest first with link, created, last seen, grade, profile version, changes; without entry 404 "not checked yet" with link to /<domain> | green | crates/web/tests/result_page_history.rs |
+| C9 | R24: / is the idle page: query_input action / name d, recent list, examples example.com and netray.info, tagline and scope sentence, four /inspect/<tool> links | green | crates/web/tests/result_page_idle.rs |
+| C10 | R31: test_header_parity.sh expects for lens's GET / the CSP lens answers for /guide/, without unsafe-inline/unsafe-eval; /health and the rest unchanged | green | tests/repo/test_header_parity.sh |
+| C11 | GIVEN a stored entry for shop.example.com WHEN GET THEN header, spectrum, diff, issues, evidence, details in order, run line names the id, store and admission saw no call | green | crates/web/tests/result_page_render.rs |
+| C12 | GIVEN last seen 10 min ago THEN stale + autostart visit; 1 min ago fresh, no autostart; none → none, "not checked yet", check button, autostart | green | crates/web/tests/result_page_render.rs |
+| C13 | GIVEN a stored entry THEN each evidence-<protocol> links /r/<id>/<protocol>, no evidence_block markup | green | crates/web/tests/result_page_evidence.rs |
+| C14 | GIVEN GET /Shop.Example.com. THEN 301 to /shop.example.com; GET /1.2.3.4 THEN 400 with validate's reason | green | crates/web/tests/result_page_domain.rs |
+| C15 | GIVEN a stored entry THEN five band groups, one data-run group per shown entry, data-shown only on run 0; older entry with email timed out and tls not applicable → band-email run group data-unmeasured, band-tls not | green | crates/web/tests/result_page_spectrum.rs |
+| C16 | GIVEN lens's app WHEN GET /robots.txt, /r/abcdefgh, /api/check/example.com THEN none answered by the result router | green | crates/lens/tests/result_mount.rs |
+| C17 | GIVEN 30 entries WHEN GET /shop.example.com/history THEN 30 rows link /r/<id>; the trace shows 24 | green | crates/web/tests/result_page_history.rs |
+| C18 | GIVEN GET / THEN idle page with input, examples, tagline, four inspect links; GET /?d=Example.com THEN 301 to /example.com | green | crates/web/tests/result_page_idle.rs |
+| C19 | GIVEN any response of the result routes THEN its CSP equals v2-pages' and script-src has no unsafe-inline | green | crates/web/tests/result_page_csp.rs |
+| C20 | GIVEN lens's GET / WHEN test_header_parity.sh runs THEN v2-pages' CSP there without unsafe-inline, lens's CSP on /health, passes | green | tests/repo/test_header_parity.sh |
+| C21 | GIVEN lens's app WHEN GET /favicon.svg, /favicon.ico, /bimi-logo.svg, /.well-known/mta-sts.txt THEN none answered by the result router | green | crates/lens/tests/result_mount.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 web pages | 3 (one red test was a fixture storing an incomplete run; fixed in b391ba07) | sonnet | 130446 | 275 |
+| G2 lens mount | 1 | sonnet | 32685 | 86 |
+| review fixes | 3 (one red test looked at the wrong chunk; fixed in 3cbde74b) | sonnet | 45734 | 115 |
+
+`tests/repo/test_smoke_services.sh` compared lens's `/` with its SPA fallback; lens's `/` is the idle page now, so the lens row checks the shell marker (72f8d55d, `ADLC-Test-Change`).
+
+### Review
+
+- BLOCKER (fixed): entries with a profile version this build does not embed were dropped, so the page read "not checked yet"; they are now mapped with `Profiles::current()` (Decision log).
+- AMENDMENT (repaired in phase, Decision log): `since` counts an entry lacking the check as its own state.
+- NIT (fixed, Decision log): a wrong method on a non-domain segment answered 405; it reaches lens's fallback.
+- DEFERRED: `POST /{domain}/run` answers 501 until Phase 3.
+- NIT (kept): `GET /localhost.` 301s to `/localhost`, which has no dot and falls to the SPA; `GET /?%64=…` shows the idle page.
+
+### Behavioural verification
+
+Seeded store (`cargo run -p netray-store --example seed`), `netray lens lens.dev.toml` with `LENS_HISTORY__DB_PATH`:
+
+```
+GET /                    200, CSP script-src 'self' 'sha256-FBZu…', action="/" name="d", /inspect/{dns,tls,http,ip}
+GET /example.com         200, data-state="fresh", entry 7cVwAwQZ, ids result-header spectrum diff issues evidence passed in order
+GET /Example.com.        301 → /example.com
+GET /example.com/history 200, 1 row linking /r/<id>
+GET /does-not-exist      SPA shell (id="root")
+```
+
+## Phase 3 — Run route and fragments
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R6: re-check/check form posts trigger to /<domain>/run; without SSE accept runs or joins to the end then 303 /<domain>; refused → 429 Retry-After full page with R21's line | green | crates/web/tests/result_run_form.rs |
+| C2 | R19: SSE POST reaches DomainRuns::start(domain, client, trigger, prefetch); fresh visit starts nothing; start/section/end fragments per §5.3; NotStarted 503 no-store | green | crates/web/tests/result_run_stream.rs |
+| C3 | R20: every fragment rendered by the page's templates; end fragment HTML equals the page element of the same id | green | crates/web/tests/result_run_equal.rs |
+| C4 | R21: refusal answers 429 Retry-After and one run-line fragment with reason and countdown (data-retry-after), then end; four sentences | green | crates/web/tests/result_run_refusal.rs |
+| C5 | R22: incomplete run's end fragments: grade incomplete or F, finished sections with unmeasured bands, no share link, live evidence, diff per R12 | green | crates/web/tests/result_run_incomplete.rs |
+| C6 | GIVEN stub modules finishing dns, tls, http, email, ip WHEN POSTed with SSE THEN start, five section groups in order, end fragments, end | green | crates/web/tests/result_run_stream.rs |
+| C7 | GIVEN a finished run WHEN each end fragment is compared with the page templates rendered for the same run THEN equal; end fragments include #spectrum and the open issues | green | crates/web/tests/result_run_equal.rs |
+| C8 | GIVEN any section fragment WHEN parsed in a template THEN its root is figure#spectrum, a ray, issues or evidence element, never an SVG g; finished bands carry data-live | green | crates/web/tests/result_run_stream.rs |
+| C9 | GIVEN live tls check not_tested and Done run not_applicable WHEN end fragments arrive THEN spectrum, issues and passed checks show not_applicable | green | crates/web/tests/result_run_equal.rs |
+| C10 | GIVEN Changed with a warn referencing dns.caa THEN issue links /r/<new id>/dns#ev-dns.caa as the GET page; NotStored THEN #ev-dns.caa | green | crates/web/tests/result_run_links.rs |
+| C11 | GIVEN email section times out THEN its ray segment incomplete, band's current run group data-unmeasured, email evidence the live partial, end header incomplete; with a failed hard fail F | green | crates/web/tests/result_run_incomplete.rs |
+| C12 | GIVEN a complete run recorded Changed THEN each evidence element links /r/<new id>/<protocol> | green | crates/web/tests/result_run_links.rs |
+| C13 | GIVEN a run in flight with two sections done WHEN a second request joins THEN it first receives those two sections' fragments, then the rest | green | crates/web/tests/result_run_stream.rs |
+| C14 | GIVEN a fresh head WHEN trigger=visit THEN start not called, stored end fragments and end; trigger=recheck THEN start called with recheck | green | crates/web/tests/result_run_stream.rs |
+| C15 | GIVEN lens's implementation and a run 20 s ago WHEN recheck THEN refused throttle with last_run_ago_s 20; per-IP limit spent THEN ip_limit before admit | green | crates/lens/tests/result_run_admission.rs |
+| C16 | GIVEN throttle, last_incomplete, 40 s ago, retry 20 s THEN 429, Retry-After: 20, one fragment "a run 40 s ago was incomplete; a new run is possible in 20 s" | green | crates/web/tests/result_run_refusal.rs |
+| C17 | GIVEN budget, ip_limit, global_limit, slots refusals THEN address, address, busy, busy sentences | green | crates/web/tests/result_run_refusal.rs |
+| C18 | GIVEN Sec-Purpose: prefetch and NotStarted THEN 503 Cache-Control: no-store | green | crates/web/tests/result_run_stream.rs |
+| C19 | GIVEN a form POST without SSE accept WHEN the run completes THEN 303 /<domain>; refusal THEN 429 full page with the line | green | crates/web/tests/result_run_form.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 run route | 1 | sonnet | 162763 | 391 |
+| G2 lens | 0 (no production change; the lens test's fixed 40 s / 20 s assumed a complete prior run and a stopped clock, fixed in 15613357) | — | — | — |
+| review fixes | 2 | sonnet | 58430 | 101 |
+
+### Review
+
+- AMENDMENT (repaired in phase, Decision log, tests 730d76c0): the end fragments replaced `#result-header`, detaching the stream island's form so `data-stream-state` and `netray:stream-end` landed on a detached node; they now replace `result-grade`, `run-line`, `progress` and `result-share`.
+- AMENDMENT (repaired in phase, Decision log): a complete run whose record failed (`Recorded(None)`) showed as incomplete; it keeps its grade and reads "not recorded".
+- AMENDMENT (repaired in phase, Decision log): a failed history re-read after a stored record fell back to the not-stored view; the Done run now renders as the recorded entry.
+
+### Behavioural verification
+
+Seeded store, `netray lens` with `LENS_ADMISSION__CLIENT_BUDGET_PER_HOUR=0`:
+
+```
+POST /example.com/run (SSE, trigger=recheck)  429, retry-after: 3600, v2-pages CSP, event fragment run-line, end
+POST /example.com/run (form, trigger=recheck) 429, full page, "too many checks from your address; try again in …"
+POST /example.com/run (SSE, trigger=visit, fresh head)  fragments result-grade run-line progress result-share spectrum diff issues evidence-dns…evidence-ip passed
+```
+
+## Phase 4 — Stream wiring and countdown
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R23: re-check form is the stream island with a trigger button; autostart only for stale/none; countdown island ticks data-retry-after and enables re-check at 0; CSS dims un-live bands of [data-refreshing] and the page while running; no island writes a style; spectrum, issues and countdown islands mount on end-fragment nodes | green | crates/web/islands/test/result-stream.test.ts, crates/web/islands/test/countdown.test.ts, crates/web/tests/result_islands_gate.rs |
+| C2 | GIVEN a rendered stale page and a stubbed SSE answer WHEN the islands mount THEN the stream island posts once with trigger=visit; fresh posts nothing; re-check pressed posts trigger=recheck | already_implemented | crates/web/islands/test/result-stream.test.ts |
+| C3 | GIVEN a stubbed 429 stream with one refusal fragment WHEN applied THEN the run line shows the reason and the countdown island is mounted on it | green | crates/web/islands/test/countdown.test.ts |
+| C4 | GIVEN the start fragment WHEN inserted THEN the spectrum carries data-refreshing; GIVEN the end fragment THEN it no longer does | already_implemented | crates/web/islands/test/result-stream.test.ts |
+| C5 | GIVEN a refused fragment with data-retry-after="2" WHEN two ticks pass THEN the countdown reads 0 and re-check is enabled | green | crates/web/islands/test/countdown.test.ts |
+| C6 | GIVEN the end fragments WHEN inserted THEN the spectrum, issues and countdown islands are mounted on the new nodes | green | crates/web/islands/test/result-stream.test.ts |
+| C7 | GIVEN the countdown island's source WHEN the gate runs THEN it passes rule 1 (no style writes) | green | crates/web/tests/result_islands_gate.rs |
+
+C2 and C4 held before this phase's code: the stream island (v2-pages) already posts the autostart trigger and applies the start and end fragments; their tests stay as protection.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 countdown, G2 islands markup, G3 CSS (one coder, in order) | 3 | sonnet | 34577 | 77 |
+| review fix (deadline) | 2 | sonnet | 29106 | 26 |
+
+### Review
+
+- AMENDMENT (repaired in phase, Decision log, test be443a10): the countdown counted ticks, so a hidden tab or the back-forward cache kept re-check disabled past `Retry-After`; it now counts to a deadline.
+- NIT (Decision log): the countdown reaches the re-check button outside its element; requirement 23 asks for it.
+- The run fixture carried the live run's wall-clock minute and broke after midnight; the generator writes it as NOW (60acebd0).
+
+### Behavioural verification
+
+skipped: the islands run in a browser; vitest over the Rust-rendered fixtures (`islands/test/fixtures/result-*`) drives them, and Phase 8's Playwright run covers the refusal countdown on the seeded stack.
+
+## Phase 5 — Spectrum island
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R17: the spectrum island holds hovered run, pinned run and selected line, writes only data, aria, class and text, shows a run by moving data-shown; hover enlarges a row with date and grade in the gutter; click pins with marker and aria-pressed; line hover shows its sentence; at 480 px a stepper with 44 px buttons and full-height line targets | green | crates/web/islands/test/spectrum.test.ts, crates/web/tests/result_page_trace.rs |
+| C2 | GIVEN three trace rows WHEN row 2 is hovered THEN every line's data-tone and label equal row 2's precomputed state; WHEN the pointer leaves THEN the current run's state returns | green | crates/web/islands/test/spectrum.test.ts |
+| C3 | GIVEN row 2 clicked WHEN row 3 is hovered and left THEN row 2's state returns; WHEN row 2 is clicked again THEN it is released | green | crates/web/islands/test/spectrum.test.ts |
+| C4 | GIVEN the phone width WHEN the older-run button is pressed twice THEN the run two steps older is shown; GIVEN a line tapped THEN its sentence is shown | green | crates/web/islands/test/spectrum.test.ts |
+| C5 | GIVEN any interaction WHEN the DOM is diffed THEN only data, aria, class attributes and text changed | green | crates/web/islands/test/spectrum.test.ts |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 markup and island | 2 | sonnet | 83844 | 206 |
+| review fixes | 2 | sonnet | 42248 | 89 |
+
+The line targets are HTML spans over the plate, not SVG rects: happy-dom's SVG elements have no `click()`, and the overlay tiles the plate at the line pitch.
+
+### Review
+
+- BLOCKER (fixed, Decision log, tests 5f6d8011): `aria-current` stayed on run 0 while another run was shown; the marker now follows the shown run.
+- AMENDMENT (repaired in phase, Decision log): the end page of an unstored run had sentences from the stored history alone, contradicting the shown line or empty on a first visit; the run is now the newest point.
+- NIT (fixed): a pinned row carried bold and enlarged cells besides the marker.
+- NIT (fixed, Decision log): the stepper rendered on a page with fewer than two runs.
+
+### Behavioural verification
+
+skipped: the island runs in a browser; vitest drives it over the Rust-rendered `result-trace.html`, and Phase 8's Playwright run pins and steps a run on the seeded stack.
+
+## Phase 6 — Issues and recent islands
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R10: the issues island regroups rows in place from their attributes with no request, stores the choice under netray.grouping with every access in try/catch, applies a stored choice on load, unhides the grouping switch and marks the pressed option | green | crates/web/islands/test/issues.test.ts, crates/web/tests/result_page_islands_markup.rs |
+| C2 | R25: the recent island writes domain, grade and date to netray.recent when a page shows a final grade (fresh page or stream end), newest first, one per domain, at most 8; the idle page renders the list with grade and date; it sends nothing and sets no cookie; when storage fails the list stays hidden | green | crates/web/islands/test/recent.test.ts, crates/web/tests/result_page_islands_markup.rs |
+| C3 | GIVEN the default grouping WHEN severity is pressed THEN rows regroup critical to low with no request and netray.grouping is severity; GIVEN a reload THEN severity is applied | green | crates/web/islands/test/issues.test.ts |
+| C4 | GIVEN localStorage throws WHEN the island loads THEN the default grouping stays and nothing throws | green | crates/web/islands/test/issues.test.ts |
+| C5 | GIVEN nine result pages shown WHEN the idle page loads THEN eight recent domains are listed, newest first, one per domain, and no request was made | green | crates/web/islands/test/recent.test.ts |
+| C6 | GIVEN the bundle with all islands of this feature WHEN v2-pages' size test runs THEN it passes | already_implemented | crates/web/islands/test/budget.test.ts |
+
+C6 holds by v2-pages' existing `budget.test.ts`: the bundle with every island of this feature is 4.4 KB of 30 KB gzipped.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 issues, G2 recent (one coder, in order) | 5 | sonnet | 70298 | 218 |
+
+Node 26's global `localStorage` getter shadowed happy-dom's, so both new vitest files failed in their setup; they now install per-test storage stubs as `theme.test.ts` does (fbc35a69).
+
+### Review
+
+No finding: regrouping reproduces the server's owner grouping, the islands remount on new fragments, the recent list renders through text nodes and caps at eight.
+
+### Behavioural verification
+
+skipped: the islands run in a browser; vitest drives them over the Rust-rendered `result-issues.html`, and Phase 8's Playwright run groups by severity and fills the idle page's recent list on the seeded stack.
+
+## Phase 7 — OG cards on the layout
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R29: /r/<id>/og.png and /og/<domain>.png draw the entry's spectrum from spectrum::layout over the entry and its predecessor at a 1104 px plate; one netray-web function turns a layout run into the card's SVG plate; labels in a mono face added to lens's OG font database with its licence; text lines unchanged; the unscored card unchanged | green | crates/web/tests/result_card_plate.rs, crates/web/tests/entries_og_plate.rs, crates/lens/tests/og_plate.rs |
+| C2 | GIVEN shop.example.com's latest entry WHEN /r/<id>/og.png's SVG is built THEN it holds 54 lines and exactly the labels of its warn, fail and fixed lines, and the PNG is 1200x630 | green | crates/web/tests/result_card_plate.rs, crates/lens/tests/og_plate.rs |
+| C3 | GIVEN an entry whose predecessor had http.hsts fail and the entry pass WHEN the card is built THEN the http.hsts line is fixed and labelled; GIVEN a swept predecessor THEN no line is fixed | green | crates/web/tests/result_card_plate.rs, crates/web/tests/entries_og_plate.rs |
+| C4 | GIVEN the same entry WHEN the page's layout run and the card's are compared THEN each line's x as a fraction of the plate width and its tone are equal | green | crates/web/tests/result_card_plate.rs |
+| C5 | GIVEN /og/shop.example.com.png with a fresh head THEN the card shows the head entry's spectrum and v2-admission's text lines; GIVEN no entry THEN the unscored card is unchanged | green | crates/lens/tests/og_plate.rs |
+| C6 | GIVEN the OG font database WHEN initialised THEN it holds the Inter faces and one mono face | green | crates/lens/tests/og_plate.rs |
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 plate, G2 fonts, G3 cards and SDD (one coder, in order) | 3 | sonnet | 93272 | 229 |
+| review fixes | 1 | sonnet | 39902 | 80 |
+
+The swept-predecessor test first swept nothing (`HistoryStore::sweep` keeps the head's predecessor); it now views the second of three entries (842d83e6).
+
+### Review
+
+- BLOCKER (fixed, plan Decisions, tests 3c4ff53b): the domain card after an admitted run drew the run over the head entry, which drops the head's fixed lines when the store records the run `Identical`; that card is now plain, and only a card showing a stored entry draws a plate.
+- AMENDMENT (repaired in phase): §4.6 said `/og/<domain>.png` always draws the head entry's plate; it now names the plain card after an admitted run.
+- AMENDMENT (repaired in phase): the card drew a fixed line as a solid 2 px stroke; it is now the page's hollow 5 px outline with its ring, and §5.4 notes the card has no axis group names.
+- DEFERRED: a failed predecessor read on the domain card is logged and the card is drawn without fixed lines under the long cache; `/r/<id>/og.png` answers 500 for the same failure.
+- NIT (kept): label backings use the page's dark background, not the card's canvas colour; the unscored card now falls back to JetBrains Mono for glyphs Inter lacks.
+
+### Behavioural verification
+
+skipped: the cards are PNG routes; `og_plate` and `og_plate_history` drive `/r/<id>/og.png` and `/og/<domain>.png` through lens's app and compare the bytes, and Phase 8 saves `og-shop.png` from the seeded stack.
+
+## Phase 8 — Behavioural verification and screenshots
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R26: at 390 px no sideways document scroll; header, diff and issues scrollWidth not above clientWidth; every link and button in them and in the stepper at least 44 x 44; only the spectrum plate scrolls; axis group names do not overlap | green | tests/acceptance/result-page/result-page.spec.ts |
+| C2 | R27: acceptance-local seeds lens's history with the one seed; shop (three entries 1209600, 604800, 0 s old with fixed, new and worse changes, warns and fails across owners, findings and evidence), new (0 s) and stale (7200 s) fixtures in the seed contract; LENS_EXTRA appended to lens's environment | green | crates/engine/tests/history_fixtures.rs, tests/repo/test_acceptance_seed.sh, tests/repo/test_acceptance_lens_extra.sh |
+| C3 | R28: a Playwright spec under tests/acceptance/result-page/ at 390 x 844 and 1440 x 900 asserts R26, the JS-off stale page, and writes the screenshots of every listed state plus og-shop.png | green | tests/acceptance/result-page/result-page.spec.ts |
+| C4 | R30: the SDD's Phase 4 table marks V4.5, V4.6 and V4.13 built by v2-result-page and V4.4's OG card use; §5.1 notes the mount on lens until v2-cutover; §5.2 notes trigger=visit and the fresh visit; §4.6 the spectrum card | green | tests/repo/test_result_page_sdd.sh |
+| C5 | GIVEN the seeded stack at 390 px WHEN /shop.example.com loads THEN no sideways scroll, header, diff and issues fit, every target at least 44 x 44, no two axis group names overlap | green | tests/acceptance/result-page/result-page.spec.ts |
+| C6 | GIVEN a JS-off context WHEN /stale.example.com loads THEN the stored grade shows and no POST is sent | green | tests/acceptance/result-page/result-page.spec.ts |
+| C7 | GIVEN a client budget of 0 WHEN /stale.example.com loads with JS THEN the run line shows "too many checks from your address; try again in M s" | green | tests/acceptance/result-page/result-page.spec.ts |
+| C8 | GIVEN desktop WHEN a trace row of shop.example.com is clicked THEN the spectrum shows that run and the row carries the marker | green | tests/acceptance/result-page/result-page.spec.ts |
+| C9 | GIVEN desktop WHEN an issue's evidence link on /shop.example.com is followed THEN v2-inspectors' view of the same entry opens at the referenced block | green | tests/acceptance/result-page/result-page.spec.ts |
+| C10 | GIVEN the spec finished WHEN target/screenshots/v2-result-page/ is listed THEN it holds all eight states at both widths and og-shop.png | green | tests/acceptance/result-page/result-page.spec.ts |
+| C11 | GIVEN a fixture run missing one catalogue ID WHEN the fixture test runs THEN it fails naming the ID | already_implemented | crates/engine/tests/history_fixtures.rs |
+| C12 | GIVEN the stack seeded on any day WHEN /shop.example.com and /stale.example.com load THEN data-state is fresh and stale | green | tests/acceptance/result-page/result-page.spec.ts |
+
+C11 holds by v2-inspectors' `every_history_fixture_run_holds_each_catalogue_id_exactly_once` (`crates/engine/tests/history_fixtures.rs`), which names the missing ID and the file; `crates/store/tests/seed.rs` holds the seed contract.
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| G1 justfile, config, SDD; G2 acceptance and 390 px CSS (one coder) | 3 acceptance runs | opus | 127156 | 680 |
+| review fixes | 2 acceptance runs | orchestrator | — | — |
+
+Run 1 failed to start lens: lens reads every `LENS_*` variable as a key, so the recipe unsets `LENS_EXTRA` after the row table. Run 2: `result-page/` matched every spec, because Playwright matches a filter against the absolute path and the worktree path holds `result-page/`; the recipe anchors relative spec paths.
+
+### Review
+
+- BLOCKER (fixed): the `#evidence` flex row let a live evidence section with a long record widen the document to 732–873 px at 390; only the stored link rows are inline now, measured 390/480/1440 with TXT and TLSA rows: no sideways scroll.
+- BLOCKER (fixed): absolute spec paths were prefixed with `$PWD/`; only relative spec paths that are not option values are anchored now.
+- NIT (fixed): `--project result-page` was rewritten; options and their values pass unchanged.
+- NIT (fixed): §5.1 now says the result routes mount only when lens's history store is enabled.
+
+### Behavioural verification
+
+`LENS_EXTRA="LENS_ADMISSION__CLIENT_BUDGET_PER_HOUR=0 LENS_CACHE__TTL_SECONDS=3600" just acceptance-local result-page/`:
+
+```
+21 passed (5.0s)
+```
+
+Screenshots (`target/screenshots/v2-result-page/`, copied to `/private/tmp/claude-501/-Users-lukas-Documents-src-netray/5622365d-7bd6-4968-a408-05fa2d6691a9/scratchpad/screenshots/v2-result-page/`): idle-recent, shop-fresh, shop-pinned (1440) / shop-stepped (390), issues-severity, new-first, stale-refused, stale-nojs, history, each at 390 and 1440 px, and og-shop.png; dark-scheme variants (`*-dark.png`) of idle-recent, shop-fresh, new-first, stale-refused and history at both widths, taken outside the spec with `colorScheme: 'dark'`.
+
+### Checks to build
+
+- An islands test that touches `localStorage` without installing a stub (`useStorage`) fails a lint over `crates/web/islands/test/*.test.ts` (Node 26 shadows happy-dom's storage).
+- An end fragment set of the run route never contains an element that holds `data-island="stream"` (a test over every `Parts::fragments()` variant in `crates/web/tests/`), so the stream form is never detached.

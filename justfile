@@ -120,6 +120,8 @@ acceptance-local *args:
     trap 'rm -rf "$tmp"; _netray_cleanup' EXIT
     mkdir -p "$tmp/custom_cas"
 
+    cargo run -q -p netray-store --example seed -- "$tmp/history.db" tests/acceptance/fixtures/history || { echo "seed failed" >&2; exit 1; }
+
     site_port=$(free_port)
     start_bg "$tmp/site.log" "$bin" site --bind "127.0.0.1:$site_port" --root site
     wait_http "http://127.0.0.1:$site_port/" 30 || { echo "netray site did not answer on 127.0.0.1:$site_port" >&2; exit 1; }
@@ -127,13 +129,15 @@ acceptance-local *args:
 
     # sub | crate dir | config | bind var | metrics bind var | extra env (see tests/repo/test_smoke_services.sh)
     rows=(
-      "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db LENS_HISTORY__DB_PATH=$tmp/history.db"
+      "lens|lens|lens.dev.toml|LENS_SERVER__BIND|LENS_SERVER__METRICS_BIND|LENS_SNAPSHOTS__DB_PATH=$tmp/snapshots.db LENS_HISTORY__DB_PATH=$tmp/history.db ${LENS_EXTRA:-}"
       "dns|dns|prism.dev.toml|NETRAY_DNS_SERVER__BIND|NETRAY_DNS_SERVER__METRICS_BIND|"
       "tls|tls|tlsight.dev.toml|NETRAY_TLS_SERVER__BIND|NETRAY_TLS_SERVER__METRICS_BIND|NETRAY_TLS_VALIDATION__CUSTOM_CA_DIR=$tmp/custom_cas"
       "http|http|spectra.dev.toml|NETRAY_HTTP_SERVER__BIND|NETRAY_HTTP_SERVER__METRICS_BIND|"
       "email|email|beacon.dev.toml|NETRAY_EMAIL_SERVER__BIND|NETRAY_EMAIL_SERVER__METRICS_BIND|"
       "ip|ip|$REPO_ROOT/tests/repo/fixtures/ifconfig.smoke.toml|NETRAY_IP_SERVER__BIND|NETRAY_IP_SERVER__ADMIN_BIND|"
     )
+    # lens's config loader reads every LENS_* variable as a key: LENS_EXTRA itself must not reach it.
+    unset LENS_EXTRA
     for row in "${rows[@]}"; do
         IFS='|' read -r sub dir cfg bind_var metrics_var extra <<<"$row"
         port=$(free_port)
@@ -150,8 +154,22 @@ acceptance-local *args:
         export "LOCAL_$(printf %s "$sub" | tr a-z A-Z)_URL=http://localhost:$port"
     done
 
+    specs=({{args}})
+    [ ${#specs[@]} -gt 0 ] || specs=(smoke/security-headers.spec.ts static-site/assets.spec.ts)
+    specs=("${specs[@]#tests/acceptance/}")
     cd tests/acceptance
-    TEST_ENV=local npx playwright test --no-deps {{ if args == "" { "smoke/security-headers.spec.ts static-site/assets.spec.ts" } else { args } }}
+    # Playwright matches a file filter against the absolute path: anchor an existing relative
+    # spec path here; absolute paths, options and option values pass unchanged.
+    prev=""
+    for i in "${!specs[@]}"; do
+        arg="${specs[$i]}"
+        case "$arg" in
+            /*|-*) ;;
+            *) case "$prev" in --*) ;; *) [ -e "${arg%%:*}" ] && specs[$i]="$PWD/$arg" ;; esac ;;
+        esac
+        prev="$arg"
+    done
+    TEST_ENV=local npx playwright test --no-deps "${specs[@]}"
     status=$?
     exit $status
 

@@ -32,3 +32,12 @@
   font-size: var(--font-size-body);
   cursor: pointer;
 }
+.query-input__error {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-ink);
+  font-size: var(--font-size-label);
+}
+.query-input__error[hidden] {
+  display: none;
+}

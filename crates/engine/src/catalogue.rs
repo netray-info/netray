@@ -149,6 +149,18 @@ impl Catalogue {
         &self.entries
     }
 
+    /// The checks of one protocol, in catalogue order.
+    pub fn for_protocol(&self, protocol: Protocol) -> Catalogue {
+        Catalogue {
+            entries: self
+                .entries
+                .iter()
+                .filter(|e| e.protocol == protocol)
+                .cloned()
+                .collect(),
+        }
+    }
+
     pub fn get(&self, id: &CheckId) -> Option<&CheckSpec> {
         self.entries.iter().find(|e| &e.id == id)
     }

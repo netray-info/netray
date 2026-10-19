@@ -61,6 +61,7 @@ fn make_badge_state(badges: BadgesConfig, cache_enabled: bool) -> AppState {
         site: SiteConfig::default(),
         badges,
         admission: lens::config::AdmissionConfig::default(),
+        inspect: Default::default(),
         api: Default::default(),
         og_cards: OgCardsConfig::default(),
         snapshots: lens::config::SnapshotsConfig::default(),

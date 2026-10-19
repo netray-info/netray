@@ -218,8 +218,8 @@ async fn c16_unmatched_and_malformed_paths_answer_404_with_the_not_found_body() 
         "/r/%C0".to_string(),
         "/r/".to_string(),
         "/r/AAAAAAAA/".to_string(),
-        "/r/a/b".to_string(),
-        format!("/r/{id}/other"),
+        "/r/a/b/c".to_string(),
+        format!("/r/{id}/other/x"),
     ];
     for path in paths {
         let (status, _, body) = get(&app, &path).await;
@@ -281,7 +281,8 @@ async fn c5_failed_history_lookup_answers_500_and_warns_with_the_id() {
     assert!(line.contains("WARN"), "not a warn line: {line}");
 }
 
-// v2-cutover Phase 3 review: `/r/<id>/<protocol>` treats a failed lookup like `/r/<id>`.
+// v2-cutover Phase 3 review: `/r/<id>/<protocol>` treats a failed lookup like `/r/<id>`. The
+// evidence router serves that path since v2-inspectors.
 #[tokio::test(flavor = "current_thread")]
 async fn v2_cutover_failed_history_lookup_on_a_protocol_path_answers_500_and_warns() {
     let (store, dir) = open().await;
@@ -300,7 +301,11 @@ async fn v2_cutover_failed_history_lookup_on_a_protocol_path_answers_500_and_war
         .with_ansi(false)
         .finish();
     let guard = tracing::subscriber::set_default(subscriber);
-    let (status, _, body) = get(&app(store, Some(v1)), "/r/AAAAAAAA/dns").await;
+    let evidence = netray_web::pages::evidence_router(netray_web::pages::EvidenceDeps {
+        history: store,
+        v1: Some(v1),
+    });
+    let (status, _, body) = get(&evidence, "/r/AAAAAAAA/dns").await;
     drop(guard);
 
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);

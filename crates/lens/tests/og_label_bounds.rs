@@ -63,6 +63,7 @@ fn make_state(cache_enabled: bool, og_enabled: bool) -> AppState {
             ..BadgesConfig::default()
         },
         admission: lens::config::AdmissionConfig::default(),
+        inspect: Default::default(),
         api: Default::default(),
         og_cards: OgCardsConfig {
             enabled: og_enabled,

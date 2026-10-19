@@ -1,0 +1,17 @@
+{% import "components/run_line.html" as run_line %}
+{% import "components/check_row.html" as check_row %}
+{% import "components/evidence_block.html" as evidence_block %}
+<section class="evidence-section" data-protocol="{{ view.protocol.as_str() }}">
+{% call run_line::run_line(view.run_line) %}{% endcall %}
+{% if let Some(reason) = view.reason %}<p class="evidence-section__reason">{{ reason }}</p>{% endif %}
+{% for row in view.rows %}
+{% call check_row::check_row(row.check) %}{% endcall %}
+{% for link in row.links %}<a class="evidence-section__link" href="{{ link.href }}">{{ link.label }}</a>
+{% endfor %}
+{% endfor %}
+{% for line in view.shared %}<p class="evidence-section__shared"><a href="{{ line.href }}">{{ line.title }}</a></p>
+{% endfor %}
+{% for block in view.blocks %}
+{% call evidence_block::evidence_block(block) %}{% endcall %}
+{% endfor %}
+</section>

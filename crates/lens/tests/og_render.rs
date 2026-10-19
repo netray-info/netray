@@ -79,14 +79,14 @@ fn format_utc_timestamp_epoch() {
 
 #[test]
 fn svg_contains_grade_a_plus() {
-    let svg = svg_for_grade("example.com", "A+", "lens", 95.0, ts());
+    let svg = svg_for_grade("example.com", "A+", "lens", 95.0, ts(), None);
     assert!(svg.contains(">A+<"), "A+ not found in SVG");
 }
 
 #[test]
 fn svg_all_known_grades_present() {
     for grade in &["A+", "A", "B", "C", "D", "F"] {
-        let svg = svg_for_grade("example.com", grade, "lens", 80.0, ts());
+        let svg = svg_for_grade("example.com", grade, "lens", 80.0, ts(), None);
         assert!(
             svg.contains(&format!(">{grade}<")),
             "grade {grade} not found in SVG"
@@ -96,14 +96,14 @@ fn svg_all_known_grades_present() {
 
 #[test]
 fn svg_error_grade_renders_question_mark() {
-    let svg = svg_for_grade("example.com", "error", "lens", 0.0, ts());
+    let svg = svg_for_grade("example.com", "error", "lens", 0.0, ts(), None);
     assert!(svg.contains(">?<"), "error grade should render ?");
     assert!(!svg.contains(">error<"));
 }
 
 #[test]
 fn svg_unknown_grade_renders_question_mark() {
-    let svg = svg_for_grade("example.com", "Z", "lens", 0.0, ts());
+    let svg = svg_for_grade("example.com", "Z", "lens", 0.0, ts(), None);
     assert!(svg.contains(">?<"), "unknown grade should render ?");
 }
 
@@ -113,13 +113,13 @@ fn svg_unknown_grade_renders_question_mark() {
 
 #[test]
 fn svg_score_shown_for_known_grade() {
-    let svg = svg_for_grade("example.com", "A", "lens", 91.7, ts());
+    let svg = svg_for_grade("example.com", "A", "lens", 91.7, ts(), None);
     assert!(svg.contains("91.7%"), "score must appear for known grade");
 }
 
 #[test]
 fn svg_score_hidden_for_unknown_grade() {
-    let svg = svg_for_grade("example.com", "?", "lens", 0.0, ts());
+    let svg = svg_for_grade("example.com", "?", "lens", 0.0, ts(), None);
     assert!(
         !svg.contains('%'),
         "score % must not appear for unknown grade"
@@ -132,7 +132,7 @@ fn svg_score_hidden_for_unknown_grade() {
 
 #[test]
 fn svg_timestamp_present() {
-    let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts());
+    let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts(), None);
     assert!(svg.contains("May 8, 2026"), "timestamp date must appear");
     assert!(svg.contains("17:44 UTC"), "timestamp time must appear");
 }
@@ -143,14 +143,14 @@ fn svg_timestamp_present() {
 
 #[test]
 fn svg_domain_with_ampersand_is_escaped() {
-    let svg = svg_for_grade("a&b.com", "A", "lens", 80.0, ts());
+    let svg = svg_for_grade("a&b.com", "A", "lens", 80.0, ts(), None);
     assert!(svg.contains("a&amp;b.com"));
     assert!(!svg.contains("a&b.com"));
 }
 
 #[test]
 fn svg_label_with_angle_brackets_is_escaped() {
-    let svg = svg_for_grade("example.com", "A", "<test>", 80.0, ts());
+    let svg = svg_for_grade("example.com", "A", "<test>", 80.0, ts(), None);
     assert!(svg.contains("&lt;test&gt;"));
     assert!(!svg.contains("<test>"));
 }
@@ -162,7 +162,7 @@ fn svg_label_with_angle_brackets_is_escaped() {
 #[test]
 fn svg_long_domain_truncated_in_text() {
     let domain = "a".repeat(50);
-    let svg = svg_for_grade(&domain, "A", "lens", 80.0, ts());
+    let svg = svg_for_grade(&domain, "A", "lens", 80.0, ts(), None);
     assert!(!svg.contains(&domain));
     assert!(svg.contains('\u{2026}'));
 }
@@ -173,7 +173,7 @@ fn svg_long_domain_truncated_in_text() {
 
 #[test]
 fn svg_has_correct_canvas_dimensions() {
-    let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts());
+    let svg = svg_for_grade("example.com", "A", "lens", 80.0, ts(), None);
     assert!(svg.contains("width=\"1200\""));
     assert!(svg.contains("height=\"630\""));
 }
@@ -186,7 +186,7 @@ fn svg_has_correct_canvas_dimensions() {
 fn png_is_1200x630() {
     let font_db = init_font_db();
     for grade in &["A+", "A", "B", "C", "D", "F", "error"] {
-        let svg = svg_for_grade("example.com", grade, "lens", 80.0, ts());
+        let svg = svg_for_grade("example.com", grade, "lens", 80.0, ts(), None);
         let png_bytes = svg_to_png(&svg, font_db.clone()).expect("render should succeed");
 
         use image::ImageReader;
