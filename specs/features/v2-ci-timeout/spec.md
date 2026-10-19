@@ -1,7 +1,8 @@
 # Spec: CI check job timeout fits the suite
 
-Status: Ready for Implementation
+Status: Done
 Created: 2026-10-19
+Finished: 2026-10-19
 
 ## Goal
 
@@ -51,6 +52,7 @@ GIVEN `ci.yml` before and after the change WHEN diffed THEN the only changed lin
   the operator's autonomy mandate, 2026-10-19).
 - Spec approved as drafted, independent reading skipped for a one-line change (implementer under the
   operator's autonomy mandate, 2026-10-19).
+- Finish: CLAUDE.md's CI-duration bullet updated to the 45-minute limit (review minor); no check to build, no solutions note: a tuning value, not a mechanical lesson (implementer under the operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 
