@@ -30,6 +30,9 @@ rand = "0.10"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
+# Dates (SOA serial age)
+chrono = { workspace = true, features = ["clock"] }
+
 # Configuration
 config = { workspace = true }
 
@@ -55,7 +58,7 @@ arc-swap = { workspace = true }
 
 
 # Request IDs
-uuid = { workspace = true, features = ["v7"] }
+uuid = { workspace = true, features = ["v4", "v7"] }
 
 # OpenAPI
 utoipa = { workspace = true, features = ["axum_extras"] }

@@ -25,11 +25,22 @@ pub use api::trace::TraceRequest;
 pub use config::ModuleConfig;
 pub use jobs::blocks;
 pub use jobs::{
+    Agreement, AnswerOutcome, DnsJobSummary, DnsRecordDetail, DnsServerAnswer, DnsServerSummary,
+    DnsTypeComparison,
+};
+pub use jobs::{
     DnsAuthCompareDone, DnsAuthCompareEvent, DnsAuthCompareResult, DnsBackend, DnsBatch,
     DnsChainEvent, DnsCompareDone, DnsCompareEvent, DnsCompareResult, DnsDnssecDone,
     DnsDnssecEvent, DnsDnssecResult, DnsEnrichmentEvent, DnsErrorEvent, DnsHopEvent, DnsJob,
     DnsJobEvent, DnsJobs, DnsQueryDone, DnsQueryEvent, DnsQueryResult, DnsRefusal, DnsTraceDone,
     DnsTraceEvent, DnsTraceResult,
+};
+pub use jobs::{
+    DnsCachedJob, DnsCachedResult, DnsCheckResult, DnsResultCache, check_result, is_key,
+};
+pub use jobs::{
+    DnsParseAnswer, DnsParseRequest, DnsParsedQuery, DnsRecordTypes, DnsServerCatalogue,
+    DnsServerGroup, parse_answer, record_types, server_catalogue,
 };
 pub use module::{DnsModule, facts_from_lookups, translate};
 pub use netray_common::middleware::RequestId;

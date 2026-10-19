@@ -119,7 +119,12 @@ fn protocol_str(config: &NameServerConfig) -> &'static str {
     )
 )]
 pub async fn servers() -> Json<Vec<ServerInfo>> {
-    let providers: Vec<ServerInfo> = PredefinedProvider::all()
+    Json(server_catalogue())
+}
+
+/// Every predefined DNS provider with its transport configurations.
+pub fn server_catalogue() -> Vec<ServerInfo> {
+    PredefinedProvider::all()
         .iter()
         .map(|p| {
             let configs = p
@@ -135,8 +140,7 @@ pub async fn servers() -> Json<Vec<ServerInfo>> {
                 configs,
             }
         })
-        .collect();
-    Json(providers)
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +150,7 @@ pub async fn servers() -> Json<Vec<ServerInfo>> {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct RecordTypeInfo {
     /// DNS record type name (e.g. `"A"`, `"MX"`, `"TXT"`).
-    name: String,
+    pub name: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -257,7 +261,17 @@ pub async fn client_config(State(state): State<AppState>) -> Json<ClientConfig> 
     )
 )]
 pub async fn record_types() -> Json<Vec<RecordTypeInfo>> {
-    let types: Vec<RecordTypeInfo> = RecordType::all()
+    Json(
+        record_type_names()
+            .into_iter()
+            .map(|name| RecordTypeInfo { name })
+            .collect(),
+    )
+}
+
+/// The names of every record type a query may ask for.
+pub fn record_type_names() -> Vec<String> {
+    RecordType::all()
         .into_iter()
         .filter(|rt| {
             !matches!(
@@ -270,11 +284,8 @@ pub async fn record_types() -> Json<Vec<RecordTypeInfo>> {
                     | RecordType::NULL
             )
         })
-        .map(|rt| RecordTypeInfo {
-            name: rt.to_string(),
-        })
-        .collect();
-    Json(types)
+        .map(|rt| rt.to_string())
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

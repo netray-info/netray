@@ -31,6 +31,8 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - `just adlc-verify` does not type-check the frontends; run `npx tsc --noEmit` in a frontend you changed.
 - Shared frontend types are generated (`npm run build:types -w @netray-info/common-frontend`, run by `just adlc-setup`); a fresh checkout needs it before `tsc`.
 - `just adlc-verify` is the gate: offline, no browser. `just check` adds the full Rust suite.
+- Read `adlc verify`'s `verified:` or `refuted:` line; piped into `tail`, the exit status is `tail`'s, and a refuted gate looks green.
+- `openapi_responses` needs a 2xx and a non-2xx case per documented operation: a new v1 route adds both; a 2xx needing state runs its producer first (`{dnskey}`).
 - `just build`, `just image`, `just acceptance` (network + browser), `just release X.Y.Z` (never pushes).
 - The published image never contains data files (GeoLite2 licence); `netray ip` gets `/netray/data` from the deployment's mount.
 - `just check` runs `cargo deny check bans licenses sources`; `just adlc-setup` installs cargo-deny when it is missing.
@@ -76,6 +78,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **beacon orders verdicts** Skip < Info < Pass < Warn < Fail; a category with only Info sub-checks is not applicable to lens, except `email.mx` (pass, Info as findings) and `email.dnsbl` (pass when one zone answered). A category carrying the `unmeasured` sub-check is `unmeasured`.
 - **A failed lookup is never an answer** (Rule M, `specs/features/v2-unmeasured/spec.md`): SERVFAIL, REFUSED, timeout or a policy-refused redirect is `unmeasured`; only NXDOMAIN/NODATA or a wrong answer from the target is a measured fail.
 - **An address lookup has two halves.** Keep the answered half and report the failed one (`AddressLookup { ips, error }`); never fail the whole lookup on one family.
+- **`netray_dns::parser::parse` is no domain validation**: it lowercases the first token and checks no syntax; validate names with `netray_common::domain::validate`.
+- **An unguessable key comes from `Uuid::new_v4()`**: a v7's last 48 bits hold 16 counter bits shared by every key of one millisecond.
 - **Never derive a verdict from a finding's detail text.** Carry it in a structured marker (e.g. SPF `spf_incomplete` with `ipv4`/`ipv6`/`both`/`any`).
 - **An evidence block holds the fact that decided its check.** Omit unknowns; never publish a placeholder (`0`, `""`, a guessed TTL). `check_evidence_rule` and each module's `validate` test enforce it.
 - **Carry new internal data on V1 response structs as `#[serde(skip)]` fields** so the V1 wire and its goldens stay byte-identical; test struct literals then need the field.

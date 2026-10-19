@@ -3,7 +3,13 @@
 //! goes here and gets its `mod` line; `tests/repo/test_test_binaries.sh` holds the layout.
 
 mod api_dns;
+mod api_dns_check;
+mod api_dns_document;
+mod api_dns_get;
 mod api_dns_limits;
+mod api_dns_reference;
+mod api_dns_results;
+mod api_dns_summary;
 mod api_domain_runs;
 mod api_domains;
 mod api_edges;
