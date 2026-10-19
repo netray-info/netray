@@ -120,6 +120,9 @@ async fn c29_card_plate_of_a_swept_predecessor_has_no_fixed_line() {
     let (store, _dir) = open().await;
     let first = record(&store, Status::Fail, T).await;
     let second = record(&store, Status::Pass, T + RETENTION_SECS).await;
+    // The sweep always keeps the head's predecessor, so a third entry becomes the head and
+    // `second`, whose predecessor `first` is swept, is the entry the card shows.
+    record(&store, Status::Fail, T + RETENTION_SECS + 1).await;
     assert_eq!(store.sweep(T + RETENTION_SECS + 86_400).await.unwrap(), 1);
     assert!(
         store.get(&first).await.unwrap().is_none(),
