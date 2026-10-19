@@ -110,6 +110,7 @@ mod pages_csp;
 mod pages_errors;
 mod pages_frame;
 mod pages_guides;
+mod pages_legacy_urls;
 mod pages_router;
 mod pages_sitemap;
 mod pages_static;
