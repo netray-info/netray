@@ -325,7 +325,7 @@ async fn prism_openapi_names_no_dns_component() {
 }
 
 // spec v2-input-limits, Phase 2 (R4): prism's V1 route refuses ten types plus `+dnssec` with
-// the record-type limit's refusal.
+// the record-type limit's refusal (422 TOO_MANY_RECORD_TYPES).
 #[tokio::test]
 async fn input_limits_prism_query_ten_types_plus_dnssec_is_too_many_record_types() {
     let req = Request::builder()
@@ -337,7 +337,8 @@ async fn input_limits_prism_query_ten_types_plus_dnssec_is_too_many_record_types
         .body(Body::empty())
         .unwrap();
     let resp = router().oneshot(req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    // 422: prism answers every TooManyRecordTypes so (`ApiError::status_code`).
+    assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let body: Value = serde_json::from_slice(&bytes).expect("JSON error body");
     assert_eq!(body["error"]["code"], "TOO_MANY_RECORD_TYPES", "{body}");

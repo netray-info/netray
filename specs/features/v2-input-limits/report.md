@@ -51,3 +51,52 @@ $ curl -s -X GET http://127.0.0.1:18382/badge/192.0.2.1..svg
 $ curl -s -X GET http://127.0.0.1:18382/api/v1/domains/1.2.3
 400 {"error":{"code":"DOMAIN_INVALID","message":"invalid domain: the last label is a number, so the name reads as an IP address: 1.2.3"}}
 ```
+
+## Phase 2 — DNSSEC types inside the limit
+
+### Criteria
+
+| id | criterion | status | test file |
+|---|---|---|---|
+| C1 | R4: with +dnssec, DNSKEY and DS are added before the record-type limit and the cost in query and compare | green | crates/dns/tests/jobs.rs |
+| C2 | R5: eight types plus +dnssec run; types already holding DNSKEY and DS are not counted twice | green | crates/dns/tests/jobs.rs |
+| C3 | GIVEN ten types and dnssec WHEN DnsJobs::query runs THEN TooManyRecordTypes requested 12 max 10 | green | crates/dns/tests/jobs.rs |
+| C4 | GIVEN ten types and dnssec WHEN DnsJobs::compare runs THEN the same refusal | green | crates/dns/tests/jobs.rs |
+| C5 | GIVEN ten types and +dnssec in the query language WHEN query_parsed runs THEN the same refusal | green | crates/dns/tests/jobs.rs |
+| C6 | GIVEN prism V1 GET /api/query with ten types and +dnssec WHEN answered THEN 422 TOO_MANY_RECORD_TYPES | green | crates/dns/tests/jobs_prism.rs |
+| C7 | GIVEN API v1 POST or GET /dns/query with ten types and +dnssec WHEN answered THEN 400 with the eleventh-type code | green | crates/web/tests/it/api_dns_dnssec_limit.rs |
+| C8 | GIVEN eight types and dnssec WHEN DnsJobs::query runs THEN ten batches | green | crates/dns/tests/jobs.rs |
+| C9 | GIVEN ten types including DNSKEY and DS and dnssec WHEN DnsJobs::query runs THEN the job starts | green | crates/dns/tests/jobs.rs |
+
+Tests written by the orchestrator directly; RED confirmed (every job started, the routes answered
+200). C2's no-double-count half and C8, C9 passed before the fix and protect what exists. C6's
+first draft expected 400; prism answers the limit with 422, so the test follows the existing refusal
+(spec scenario amended, Decision log).
+
+### Runs
+
+| group | coder runs | green by | tokens | seconds |
+|---|---|---|---|---|
+| 1 | 1 (orchestrator) | orchestrator | n/a | n/a |
+
+### Review
+
+- No blockers.
+- DEFERRED: compare now charges the added DNSKEY and DS (R4), so a compare over three servers with
+  `+dnssec` (6 types x 3 servers x 4 transports = 72) exceeds the default per-IP burst of 64 and
+  gets the pre-existing permanent 429 with `Retry-After: 60` (`crates/common/src/rate_limit.rs`,
+  the InsufficientCapacity case). The refusal is intended; its retryable form predates this change.
+
+### Behavioural verification
+
+`netray lens` built from this branch on 127.0.0.1:18382 (the refusal comes before any lookup, so
+the local DNS block does not matter):
+
+```
+$ curl -s -X POST -H 'content-type: application/json' -d '{"domain":"example.com","record_types":["A","AAAA","MX","TXT","NS","SOA","CAA","CNAME","PTR","SRV"],"dnssec":true}' http://127.0.0.1:18382/api/v1/dns/query
+{"error":{"code":"INVALID_INPUT","message":"too many record types: 12 exceeds limit of 10"}}
+400
+$ curl -s 'http://127.0.0.1:18382/api/v1/dns/query?q=example.com%20A%20AAAA%20MX%20TXT%20NS%20SOA%20CAA%20CNAME%20PTR%20SRV%20%2Bdnssec'
+{"error":{"code":"INVALID_INPUT","message":"too many record types: 12 exceeds limit of 10"}}
+400
+```

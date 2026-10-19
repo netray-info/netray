@@ -103,7 +103,7 @@ and `compare_parsed`; tests in a `testing`-feature target of netray-dns and in
 GIVEN ten record types and `dnssec: true` WHEN `DnsJobs::query` runs THEN `Err(TooManyRecordTypes { requested: 12, max: 10 })`.
 GIVEN ten record types and `dnssec: true` WHEN `DnsJobs::compare` runs THEN the same refusal.
 GIVEN `example.com A AAAA MX TXT NS SOA CAA CNAME PTR SRV +dnssec` WHEN `query_parsed` runs THEN the same refusal.
-GIVEN prism's V1 `GET /api/query?q=` with ten types and `+dnssec` WHEN answered THEN `400` with code `TOO_MANY_RECORD_TYPES`.
+GIVEN prism's V1 `GET /api/query?q=` with ten types and `+dnssec` WHEN answered THEN `422` with code `TOO_MANY_RECORD_TYPES`, prism's existing status for the limit.
 GIVEN API v1 `POST /dns/query` with ten types and `dnssec: true`, or `GET /dns/query?q=` with ten types and `+dnssec` WHEN answered THEN `400` with the code API v1 gives an eleventh type today.
 GIVEN eight types and `dnssec: true` WHEN `DnsJobs::query` runs THEN the job starts and answers ten batches.
 GIVEN ten types including DNSKEY and DS and `dnssec: true` WHEN `DnsJobs::query` runs THEN the job starts.
@@ -118,6 +118,10 @@ GIVEN ten types including DNSKEY and DS and `dnssec: true` WHEN `DnsJobs::query`
   2026-10-19).
 - The ip cache-key bug is not fixed here: PR #37 (v2-ip-cli) is open and its agent owns it
   (implementer under the operator's autonomy mandate, 2026-10-19).
+
+- Phase 2 amendment: prism's V1 route answers the record-type limit with `422`, not `400` as the
+  first scenario said; the scenario follows the existing refusal, as R4 asks (implementer under the
+  operator's autonomy mandate, 2026-10-19).
 
 ## Open decisions
 

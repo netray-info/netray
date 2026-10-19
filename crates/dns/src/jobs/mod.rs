@@ -303,6 +303,19 @@ fn transport_label(t: Transport) -> &'static str {
     }
 }
 
+/// With `+dnssec`, add DNSKEY and DS (each when not already requested) so DNSSEC records are
+/// visible. Runs before the policy and the cost, so the added types count against
+/// `max_record_types` and the budget.
+fn add_dnssec_types(parsed: &mut ParsedQuery) {
+    if parsed.dnssec {
+        for rt in [RecordType::DNSKEY, RecordType::DS] {
+            if !parsed.record_types.contains(&rt) {
+                parsed.record_types.push(rt);
+            }
+        }
+    }
+}
+
 // All four transports to compare.
 const ALL_TRANSPORTS: [Transport; 4] = [
     Transport::Udp,
@@ -360,23 +373,13 @@ impl DnsJobs {
         limits: &RateLimitState,
         request_id: String,
     ) -> Result<DnsJob<DnsQueryEvent>, ApiError> {
+        add_dnssec_types(&mut parsed);
         // Validate against query policy.
         let policy = QueryPolicy::new(&self.config);
         policy.validate(&parsed)?;
 
         let timeout_secs = self.config.limits.max_timeout_secs;
         let timeout = Duration::from_secs(timeout_secs);
-
-        // When DNSSEC mode is requested, ensure DNSKEY and DS are queried so
-        // DNSSEC records are visible in results. This is additive — explicit
-        // record types from the user are preserved.
-        if parsed.dnssec {
-            for rt in [RecordType::DNSKEY, RecordType::DS] {
-                if !parsed.record_types.contains(&rt) {
-                    parsed.record_types.push(rt);
-                }
-            }
-        }
 
         // Rate limiting: compute cost and check budget before building resolvers.
         // Total cost = record_types × servers (SDD §8.2 query cost model).
@@ -625,6 +628,7 @@ impl DnsJobs {
         request_id: String,
     ) -> Result<DnsJob<DnsCompareEvent>, ApiError> {
         parsed.transport = None;
+        add_dnssec_types(&mut parsed);
 
         let policy = QueryPolicy::new(&self.config);
         policy.validate(&parsed)?;
@@ -659,15 +663,6 @@ impl DnsJobs {
         let num_transports = available_transports.len() as u32;
         let total_cost = num_types * num_servers * num_transports;
         let stream_guard = limits.check_query_cost(client, &target_keys, total_cost, num_types)?;
-
-        // DNSSEC augmentation.
-        if parsed.dnssec {
-            for rt in [RecordType::DNSKEY, RecordType::DS] {
-                if !parsed.record_types.contains(&rt) {
-                    parsed.record_types.push(rt);
-                }
-            }
-        }
 
         let (tx, rx) = mpsc::channel::<DnsCompareEvent>(64);
         let rid = request_id;
