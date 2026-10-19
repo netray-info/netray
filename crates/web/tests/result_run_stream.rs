@@ -415,7 +415,8 @@ async fn c14_a_fresh_head_answers_from_the_store_on_visit_and_runs_on_recheck() 
             "evidence-http",
             "evidence-email",
             "evidence-ip",
-            "passed"
+            "passed",
+            "recheck-button"
         ]
     );
     let run_line = &frags.iter().find(|(i, _)| i == "run-line").unwrap().1;
