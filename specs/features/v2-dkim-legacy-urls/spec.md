@@ -63,7 +63,8 @@ Closes inventory rows 1.31, 5.2, 7.71 (backend half), 7.37, 7.42.
    the value is split on commas, whitespace around each token is trimmed; a value that is empty
    or only whitespace means no selectors; otherwise it holds 1 to 5 tokens, each 1-63 characters
    of ASCII letters, digits and hyphens, and no empty token. A list that breaks the rule is
-   refused before any run starts.
+   refused before any run starts. The DKIM check probes a selector given twice, or in another
+   case, once (amended after the Phase 2 review).
 2. `POST /api/v1/domains/{domain}/runs?dkim_selectors=<list>` starts a selector run (requirement
    4) with the list; a list breaking requirement 1 answers `400 INVALID_INPUT` and starts
    nothing; without the parameter the endpoint behaves as today. The OpenAPI document lists the
@@ -176,6 +177,7 @@ GIVEN `/guide/scoring` WHEN rendered THEN it says 1-5 selectors, its sample read
 - `email.` redirect (built on `feature/v2-cutover`): `/?q=<domain> <sel1> <sel2>…` with at least one selector token answers `301` to `https://<apex>/<domain>?dkim_selectors=<sel1>,<sel2>` (the run page, which can run them), not `/<domain>/email` (a stored read that cannot); without selector tokens it stays `/<domain>/email`; invalid tokens are carried and refused by the target's `400`. SDD §7.3 is amended here so the cutover implements this rule (implementer under the operator's autonomy mandate, 2026-10-19).
 - The trait method has a default that delegates to the plain start so the ~60 test stubs compile unchanged; the repo check of requirement 11 keeps production implementations, the cutover's `AdmittedRuns` included, from inheriting that default (implementer under the operator's autonomy mandate, 2026-10-19).
 - Minimal template changes, outside the brief's "no templates" rule, logged: one hidden input in `partials/result_header.html` (requirement 6 needs the form to carry the list), and the guide text in `pages/guides/scoring.html` (the task asks code and guide to agree; the guide's jq path and count are wrong in any case). Visible inputs stay with lane A, which replaces the hidden field (implementer under the operator's autonomy mandate, 2026-10-19).
+- Phase 2 review: a repeated or case-variant selector produced a second `email.dkim` row for one DNS record; the DKIM check now compares candidates case-insensitively (requirement 1 amended). The fixed limit of 5 versus a configured `max_user_selectors` below 5 is deferred: production sets 5 (implementer under the operator's autonomy mandate, 2026-10-19).
 - `/tools` goes to `/`: the home page holds the inspector links today; a `/tools` page (7.44) would take the redirect over (implementer under the operator's autonomy mandate, 2026-10-19).
 - Relative `Location` headers, as the existing `/guide` → `/guide/` redirect; the cutover's host layer may answer the same paths first with absolute apex URLs (implementer under the operator's autonomy mandate, 2026-10-19).
 

@@ -93,21 +93,25 @@ pub async fn check_dkim_measured(
     let mut candidates: Vec<(String, SelectorSource)> = Vec::new();
 
     // User-supplied selectors (capped)
+    // A selector is a DNS label: one given twice, or in another case, is probed once.
     for sel in user_selectors.iter().take(max_user_selectors) {
-        if !sel.is_empty() {
+        if !sel.is_empty() && !candidates.iter().any(|(s, _)| s.eq_ignore_ascii_case(sel)) {
             candidates.push((sel.clone(), SelectorSource::User));
         }
     }
 
     // Provider-mapped selectors
     for sel in provider_selectors(mx_hosts) {
-        if !candidates.iter().any(|(s, _)| s == &sel) {
+        if !candidates.iter().any(|(s, _)| s.eq_ignore_ascii_case(&sel)) {
             candidates.push((sel, SelectorSource::Provider));
         }
     }
 
     // Default selector
-    if !candidates.iter().any(|(s, _)| s == "default") {
+    if !candidates
+        .iter()
+        .any(|(s, _)| s.eq_ignore_ascii_case("default"))
+    {
         candidates.push(("default".to_string(), SelectorSource::Default));
     }
 

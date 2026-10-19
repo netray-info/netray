@@ -8,6 +8,9 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use futures::future::BoxFuture;
 use http_body_util::BodyExt;
+use netray_model::Grade;
+use netray_model::evidence::EVIDENCE_SCHEMA_VERSION;
+use netray_model::run::Run;
 use netray_web::api::{
     ApiConfig, ApiState, DomainRefusal, DomainRuns, RunEvent, RunStart, RunTrigger,
 };
@@ -20,8 +23,22 @@ struct StubRuns {
     calls: Mutex<Vec<Call>>,
 }
 
+/// A finished, unrecorded run: the answer a selector run gives.
 fn admitted() -> RunStart {
-    RunStart::Admitted(Box::pin(futures::stream::iter(Vec::<RunEvent>::new())))
+    let run = Run {
+        profile_version: 3,
+        engine_version: "0.26.0".into(),
+        evidence_schema_version: EVIDENCE_SCHEMA_VERSION,
+        grade: Grade::A,
+        complete: true,
+        sections: vec![],
+        checks: vec![],
+        blocks: vec![],
+    };
+    RunStart::Admitted(Box::pin(futures::stream::iter(vec![
+        RunEvent::Done(run),
+        RunEvent::Recorded(None),
+    ])))
 }
 
 impl DomainRuns for StubRuns {
