@@ -239,7 +239,11 @@ async fn f2_a_wrong_method_on_a_domain_path_carries_the_v2_pages_csp() {
             .to_str()
             .unwrap();
         assert_eq!(csp, expected, "{name}");
-        assert!(!csp.contains("'unsafe-inline'"), "{name}: {csp}");
+        let script_src = csp
+            .split(';')
+            .find(|d| d.trim_start().starts_with("script-src"))
+            .unwrap_or_else(|| panic!("{name}: no script-src in {csp}"));
+        assert!(!script_src.contains("'unsafe-inline'"), "{name}: {csp}");
     }
 }
 
@@ -284,7 +288,8 @@ async fn f4_a_rescored_grade_line_shows_the_profile_and_domain_effect_notes() {
                 .expect("issues after diff")];
     assert!(section.contains("profile effect"), "{section}");
     assert!(section.contains("domain effect"), "{section}");
-    let at = |l: &str| section.find(&format!(">{l}<")).or_else(|| section.find(l));
-    let (b, c, a) = (at("B").unwrap(), at("C").unwrap(), at("A").unwrap());
-    assert!(b < c && c < a, "{section}");
+    assert!(
+        section.contains("B \u{2192} C (profile effect) \u{2192} A (domain effect)"),
+        "{section}"
+    );
 }

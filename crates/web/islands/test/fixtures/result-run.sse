@@ -106,6 +106,9 @@ data: {"id":"evidence-ip","html":"<div id=\"evidence-ip\">\n<a href=\"/r/ENTRY0/
 event: fragment
 data: {"id":"passed","html":"<details id=\"passed\">\n<summary>Checks that passed or do not apply</summary>\n\n</details>"}
 
+event: fragment
+data: {"id":"recheck-button","html":"<button id=\"recheck-button\" type=\"submit\" name=\"trigger\" value=\"recheck\">re-check now</button>"}
+
 event: end
 data: {}
 

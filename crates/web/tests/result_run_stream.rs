@@ -293,6 +293,8 @@ fn expected_ids(order: &[usize]) -> Vec<String> {
         want.push(format!("evidence-{p}"));
     }
     want.push("passed".to_string());
+    // A first visit's recorded run turns the check button into re-check (branch review F1).
+    want.push("recheck-button".to_string());
     want
 }
 
