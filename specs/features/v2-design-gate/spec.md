@@ -184,8 +184,10 @@ GIVEN CLAUDE.md WHEN read THEN its rules table names `specs/rules/design-rules.m
   strings) is fixed on this branch rather than splitting the change; a board without a state still
   gets its board image and side-by-side; the manifest's optional `export` key (the export's path,
   relative to the manifest, default `export/canvas.html`) and the run's `target/design/page.json`
-  (the page side's raw values) are kept as named here (implementer under the operator's autonomy
-  mandate, 2026-10-19).
+  (the page side's raw values) are kept as named here; the second pass's blocker (fractional px
+  values exactly at the tolerance failing by float error) is a different defect, fixed the same
+  way, and a third pass reads the result (implementer under the operator's autonomy mandate,
+  2026-10-19).
 - Spec drafted and approved by the implementer under the operator's mandate for features 0–7
   (operator, 2026-10-19).
 
