@@ -10,6 +10,8 @@ fn c4_dotted_and_bracketed_addresses_are_refused_as_addresses() {
         "::1.",
         "[2001:db8::1]",
         "[::1]",
+        "[::1].",
+        "[2001:db8::1].",
     ] {
         let err = validate(input).expect_err(input);
         assert!(
