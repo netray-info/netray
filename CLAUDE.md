@@ -36,6 +36,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - `just check` runs `cargo deny check bans licenses sources`; `just adlc-setup` installs cargo-deny when it is missing.
 - CI (`ci.yml`) and the release (`release.yml`) follow `specs/rules/workflow-rules.md`: one image, exact version tags, no deploy step.
 - Data: `just ifconfig-data` / `just test-ifconfig-data` (GeoIP), `just tlsight-data` (CAA table, committed).
+- **Integration tests go into `crates/<c>/tests/it/`** as a module with a `mod` line in `tests/it/main.rs`: each merged crate links one test binary `it` (web, lens, engine, model, store, dns, tls, email, http). A file stays its own target only with `required-features`, `harness = false`, or a reason in `tests/repo/test_test_binaries.sh` (lens's `LENS_*`-setting `admission_config`, `history_config`). Run one with `cargo test -p <crate> --test it <module>`; shared helpers live in `tests/it/<name>/mod.rs`, used as `use crate::<name>;`.
 - Run tests that depend on feature unification with `--workspace`; `cargo test -p <crate>` resolves features for that crate alone and passes where the binary is wrong.
 - `tests/repo/*` read `git ls-files`: stage new and deleted files before running them.
 - `just design-check` needs the private canvas: its export serves boards as sandboxed blob: iframes; reach them with Playwright's `contentFrame()`, never `iframe.contentDocument`.
@@ -57,7 +58,7 @@ All verbs live in the root `justfile`; no crate or package has its own `justfile
 - Adding a field to a protected test's struct literal still needs `ADLC-Test-Change`: the gate's tamper check flags any change.
 - lens reads every `LENS_*` variable as a config key, `LENS_EXTRA` included: `acceptance-local` unsets it after building lens's env row.
 - Node 26 defines a global `localStorage` that shadows happy-dom's: an island test installs its own storage, as `islands/test/theme.test.ts`'s `useStorage` does.
-- A golden over live-run markup carries the wall clock: normalise it (`NOW` in `crates/web/tests/result_islands_fixtures.rs`), or the golden breaks at midnight.
+- A golden over live-run markup carries the wall clock: normalise it (`NOW` in `crates/web/tests/it/result_islands_fixtures.rs`), or the golden breaks at midnight.
 - `HistoryStore::sweep` always keeps the head's predecessor: a swept-predecessor test needs a third entry as head.
 - Never put `|` in a `report.md` criteria cell, even in backticks: `adlc next` splits cells on it and keeps the phase open.
 
@@ -69,8 +70,8 @@ The adlc working rules (receipt, baseline trailer, test changes, review) are in 
 - **Services are libraries.** Each service crate exposes an async `run(config)` and has no `main.rs` or `[[bin]]`; `crates/netray` only parses arguments and dispatches.
 - **Config stays per service.** Config keys, the `*_CONFIG` variable and the env prefix (`LENS_`), metrics names and log targets are unchanged by the merge; do not unify them. A module converted to the V2 engine switches hard to `NETRAY_<P>_` (`NETRAY_<P>_CONFIG` for the file, `NETRAY_<P>_SECTION__KEY` for keys) with no fallback, and refuses its old prefix at load (`netray_common::config::refuse_legacy_prefix`), naming the new one. Converted so far: http (`NETRAY_HTTP_`, was `SPECTRA__`), email (`NETRAY_EMAIL_`, was `BEACON__`; `BEACON_CONFIG` too), ip (`NETRAY_IP_`, was `IFCONFIG_`; `IFCONFIG_CONFIG` too), tls (`NETRAY_TLS_`, was `TLSIGHT_`; `TLSIGHT_CONFIG` too), dns (`NETRAY_DNS_`, was `PRISM_`; `PRISM_CONFIG` too).
 - **One config loader.** Config loads only through `netray_common::config::load`; every config struct carries `deny_unknown_fields` (`tests/repo/test_config_strict.sh`).
-- **Contract goldens.** `tests/fixtures/contracts/` holds each backend's response as written by its own tests (`contract_golden`); lens's tests parse them. A backend shape change fails its golden test: regenerate with `UPDATE_GOLDEN=1 cargo test -p <crate> --test contract_golden` (ifconfig-rs: `--lib contract_golden`), commit, and keep lens green.
-- **lens goldens.** `tests/fixtures/contracts/lens-*.json` pin lens's whole result; `UPDATE_GOLDEN=1 cargo test -p lens --test lens_golden` rewrites them, and a moved row needs `ADLC-Test-Change` naming its requirement.
+- **Contract goldens.** `tests/fixtures/contracts/` holds each backend's response as written by its own tests (`contract_golden`); lens's tests parse them. A backend shape change fails its golden test: regenerate with `UPDATE_GOLDEN=1 cargo test -p <crate> --test it contract_golden` (ifconfig-rs: `--lib contract_golden`), commit, and keep lens green.
+- **lens goldens.** `tests/fixtures/contracts/lens-*.json` pin lens's whole result; `UPDATE_GOLDEN=1 cargo test -p lens --test it lens_golden` rewrites them, and a moved row needs `ADLC-Test-Change` naming its requirement.
 - **prism's package is `netray-dns`.** Run `cargo test -p netray-dns`, not `-p prism` or `-p mhost-prism`.
 - **beacon orders verdicts** Skip < Info < Pass < Warn < Fail; a category with only Info sub-checks is not applicable to lens, except `email.mx` (pass, Info as findings) and `email.dnsbl` (pass when one zone answered). A category carrying the `unmeasured` sub-check is `unmeasured`.
 - **A failed lookup is never an answer** (Rule M, `specs/features/v2-unmeasured/spec.md`): SERVFAIL, REFUSED, timeout or a policy-refused redirect is `unmeasured`; only NXDOMAIN/NODATA or a wrong answer from the target is a measured fail.
